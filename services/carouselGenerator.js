@@ -1,0 +1,214 @@
+'use strict';
+
+const path = require('path');
+const fs = require('fs');
+const sharp = require('sharp');
+const archiver = require('archiver');
+const Anthropic = require('@anthropic-ai/sdk');
+const { getSetting } = require('../db');
+const { extractJsonFromResponse } = require('./voiceFingerprint');
+
+const GENERATED_DIR = path.join(__dirname, '..', 'generated');
+
+// Brand tokens
+const BG = '#0F1A3C';
+const ACCENT = '#0D7A5F';
+const TEXT = '#F0F4FF';
+const TEXT_MUTED = '#8A9CC0';
+const BG_CARD = '#162040';
+const W = 1080;
+const H = 1080;
+
+/**
+ * Generate a carousel (6–8 slides) from a post.
+ * 1. Claude Haiku breaks post into 6–8 slides (title + content + closing).
+ * 2. SVG rendered per slide at 1080x1080.
+ * 3. sharp converts each SVG → PNG.
+ * 4. archiver zips all PNGs.
+ *
+ * @param {object} post — { id, content }
+ * @returns {Promise<{ slides: Array<{ svg: string, png_url: string }>, zip_url: string }>}
+ */
+async function generateCarousel(post, brand = {}) {
+  const apiKey = getSetting('anthropic_api_key');
+  if (!apiKey) throw new Error('anthropic_api_key not configured');
+
+  const client = new Anthropic({ apiKey });
+
+  // Step 1: Break post into slides
+  const slideMsg = await client.messages.create({
+    model: 'claude-haiku-4-5',
+    max_tokens: 1500,
+    messages: [{
+      role: 'user',
+      content: `Break this LinkedIn post into exactly 6 to 8 slides for a carousel. Return ONLY valid JSON:
+{
+  "slides": [
+    { "type": "title", "headline": "short punchy title (max 8 words)", "body": "" },
+    { "type": "content", "headline": "short headline (max 8 words)", "body": "2-3 sentences" },
+    ...
+    { "type": "closing", "headline": "closing thought (max 8 words)", "body": "1-2 sentences with CTA or takeaway" }
+  ]
+}
+
+Rules:
+- First slide: type "title", compelling headline, no body
+- Last slide: type "closing", brief takeaway or CTA
+- Middle slides: type "content", each covers one clear idea from the post
+- Total slides: minimum 6, maximum 8
+- Each body: 2-3 short sentences max. Never paste a full paragraph.
+- Headlines: punchy, specific — not generic labels
+
+POST:
+${post.content}`,
+    }],
+  });
+
+  let slidesData;
+  const rawText = slideMsg.content[0]?.text?.trim() || '';
+  try {
+    slidesData = extractJsonFromResponse(rawText);
+  } catch (e) {
+    // Retry once
+    const retry = await client.messages.create({
+      model: 'claude-haiku-4-5',
+      max_tokens: 1500,
+      messages: [
+        { role: 'user', content: slideMsg.messages?.[0]?.content || '' },
+        { role: 'assistant', content: rawText },
+        { role: 'user', content: 'Return only valid JSON, no other text.' },
+      ],
+    });
+    slidesData = extractJsonFromResponse(retry.content[0]?.text?.trim() || '');
+  }
+
+  const slides = slidesData.slides;
+  if (!slides || slides.length < 6 || slides.length > 8) {
+    throw new Error(`Expected 6-8 slides, got ${slides?.length}`);
+  }
+
+  const timestamp = Date.now();
+  const pngPaths = [];
+  const slideResults = [];
+
+  // Step 2+3: Build SVG + convert to PNG per slide
+  for (let i = 0; i < slides.length; i++) {
+    const slide = slides[i];
+    const svg = buildSlideSvg(slide, i + 1, slides.length, brand);
+    const filename = `carousel_${post.id}_${timestamp}_slide${i + 1}.png`;
+    const outputPath = path.join(GENERATED_DIR, filename);
+    await sharp(Buffer.from(svg)).png().toFile(outputPath);
+    pngPaths.push({ path: outputPath, filename });
+    slideResults.push({ svg, png_url: `/files/${filename}` });
+  }
+
+  // Step 4: ZIP all PNGs
+  const zipFilename = `carousel_${post.id}_${timestamp}.zip`;
+  const zipPath = path.join(GENERATED_DIR, zipFilename);
+  await createZip(pngPaths, zipPath);
+
+  return { slides: slideResults, zip_url: `/files/${zipFilename}` };
+}
+
+function buildSlideSvg(slide, slideNum, totalSlides, brand = {}) {
+  const BG_SLIDE  = brand.bg     || BG;
+  const AC        = brand.accent || ACCENT;
+  const TX        = brand.text   || TEXT;
+
+  const isTitle = slide.type === 'title';
+  const isClosing = slide.type === 'closing';
+
+  const headlineLines = wrapText(slide.headline || '', 24);
+  const bodyLines = slide.body ? wrapText(slide.body, 42) : [];
+
+  const headlineFontSize = isTitle ? 72 : 56;
+  const headlineLineHeight = isTitle ? 86 : 68;
+  const bodyFontSize = 36;
+  const bodyLineHeight = 52;
+
+  const headlineBlockH = headlineLines.length * headlineLineHeight;
+  const bodyBlockH = bodyLines.length > 0 ? bodyLines.length * bodyLineHeight + 40 : 0;
+  const totalBlockH = headlineBlockH + bodyBlockH;
+  const startY = (H - totalBlockH) / 2;
+
+  const headlineXml = headlineLines.map((line, i) =>
+    `<text x="540" y="${startY + i * headlineLineHeight}" font-family="system-ui,-apple-system,'Helvetica Neue',sans-serif" font-size="${headlineFontSize}" font-weight="600" letter-spacing="-0.5" fill="${TX}" text-anchor="middle" dominant-baseline="hanging">${escapeXml(line)}</text>`
+  ).join('\n  ');
+
+  const bodyStartY = startY + headlineBlockH + 40;
+  const bodyXml = bodyLines.map((line, i) =>
+    `<text x="540" y="${bodyStartY + i * bodyLineHeight}" font-family="system-ui,-apple-system,'Helvetica Neue',sans-serif" font-size="${bodyFontSize}" font-weight="400" fill="${TEXT_MUTED}" text-anchor="middle" dominant-baseline="hanging">${escapeXml(line)}</text>`
+  ).join('\n  ');
+
+  // Accent treatment: title gets full bottom bar, others get left bar
+  const accentXml = isTitle
+    ? `<rect x="0" y="${H - 12}" width="${W}" height="12" fill="${AC}"/>`
+    : `<rect x="60" y="${startY - 20}" width="8" height="${headlineBlockH + 40}" fill="${AC}" rx="4"/>`;
+
+  // Slide counter
+  const counterXml = `<text x="540" y="${H - 48}" font-family="system-ui,-apple-system,'Helvetica Neue',sans-serif" font-size="24" fill="${TEXT_MUTED}" text-anchor="middle">${slideNum} / ${totalSlides}</text>`;
+
+  // Swipe hint on title slide
+  const swipeHint = isTitle
+    ? `<text x="540" y="${H - 90}" font-family="system-ui,-apple-system,'Helvetica Neue',sans-serif" font-size="24" fill="${TEXT_MUTED}" text-anchor="middle">Swipe →</text>`
+    : '';
+
+  // Brand mark bottom-right: logo > name > nothing (carousel has slide counter bottom-center)
+  let brandXml = '';
+  if (brand.logo) {
+    brandXml = `<image href="${brand.logo}" x="${W - 188}" y="${H - 88}" width="140" height="44" preserveAspectRatio="xMidYMid meet"/>`;
+  } else if (brand.name) {
+    brandXml = `<text x="${W - 60}" y="${H - 56}" font-family="system-ui,-apple-system,'Helvetica Neue',sans-serif" font-size="22" font-weight="600" fill="${TEXT_MUTED}" text-anchor="end">${escapeXml(brand.name)}</text>`;
+  }
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">
+  <rect width="${W}" height="${H}" fill="${BG_SLIDE}"/>
+  ${accentXml}
+  ${headlineXml}
+  ${bodyXml}
+  ${counterXml}
+  ${swipeHint}
+  ${brandXml}
+</svg>`;
+}
+
+function createZip(files, outputPath) {
+  return new Promise((resolve, reject) => {
+    const output = fs.createWriteStream(outputPath);
+    const archive = archiver('zip', { zlib: { level: 6 } });
+    output.on('close', resolve);
+    archive.on('error', reject);
+    archive.pipe(output);
+    for (const { path: filePath, filename } of files) {
+      archive.file(filePath, { name: filename });
+    }
+    archive.finalize();
+  });
+}
+
+function wrapText(text, maxChars) {
+  const words = text.split(' ');
+  const lines = [];
+  let current = '';
+  for (const word of words) {
+    if ((current + ' ' + word).trim().length <= maxChars) {
+      current = (current + ' ' + word).trim();
+    } else {
+      if (current) lines.push(current);
+      current = word;
+    }
+  }
+  if (current) lines.push(current);
+  return lines;
+}
+
+function escapeXml(str) {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+module.exports = { generateCarousel };

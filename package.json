@@ -1,0 +1,21 @@
+{
+  "name": "scouthook",
+  "version": "1.0.0",
+  "description": "LinkedIn content intelligence platform for founders and consultants",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "archiver": "^7.0.1",
+    "better-sqlite3": "^11.0.0",
+    "bullmq": "^5.0.0",
+    "dotenv": "^16.0.0",
+    "express": "^4.18.0",
+    "ioredis": "^5.0.0",
+    "sharp": "^0.33.0",
+    "uuid": "^10.0.0"
+  }
+}

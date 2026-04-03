@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Platform Settings — Scouthook Admin</title>
+  <link rel="stylesheet" href="/css/scouthook.css" />
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="container site-header__inner">
+      <a href="/" class="site-header__logo">Scout<span>hook</span> <span style="font-size:0.75rem; color: var(--color-text-muted); font-weight: 400;">Admin</span></a>
+    </div>
+  </header>
+
+  <main class="container">
+    <div style="max-width: 600px; margin: 0 auto;">
+
+      <!-- Password gate -->
+      <div id="auth-panel">
+        <h1 style="margin-bottom: var(--space-md);">Platform settings</h1>
+        <p class="text-muted mb-lg">Enter the admin password to manage API keys and platform configuration.</p>
+        <div class="field">
+          <label for="admin-password">Admin password</label>
+          <input type="password" id="admin-password" placeholder="Enter ADMIN_PASSWORD from .env" />
+        </div>
+        <div id="auth-error" class="hidden" style="color: var(--color-error); font-size:0.9rem; margin-bottom: var(--space-md);"></div>
+        <button id="auth-btn" class="btn btn--primary">Unlock settings</button>
+      </div>
+
+      <!-- Settings panel (shown after auth) -->
+      <div id="settings-panel" class="hidden">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom: var(--space-xl);">
+          <h1>Platform settings</h1>
+          <button id="save-btn" class="btn btn--primary">
+            <span id="save-btn-text">Save changes</span>
+            <span id="save-spinner" class="spinner hidden"></span>
+          </button>
+        </div>
+
+        <div id="save-success" class="hidden" style="color: var(--color-success); font-size:0.9rem; margin-bottom: var(--space-lg);">Settings saved successfully.</div>
+        <div id="save-error" class="hidden" style="color: var(--color-error); font-size:0.9rem; margin-bottom: var(--space-lg);"></div>
+
+        <h3 style="margin-bottom: var(--space-md); color: var(--color-text-muted); font-size:0.8rem; text-transform:uppercase; letter-spacing:0.08em;">AI</h3>
+
+        <div class="field">
+          <label for="anthropic_api_key">Anthropic API key</label>
+          <input type="password" id="anthropic_api_key" name="anthropic_api_key" placeholder="sk-ant-…" autocomplete="off" />
+          <div class="text-muted" style="font-size:0.8rem; margin-top:0.25rem;">Used for all Claude calls — fingerprint extraction, generation, visuals.</div>
+        </div>
+
+        <h3 style="margin: var(--space-xl) 0 var(--space-md); color: var(--color-text-muted); font-size:0.8rem; text-transform:uppercase; letter-spacing:0.08em;">LinkedIn OAuth</h3>
+
+        <div class="field">
+          <label for="linkedin_client_id">LinkedIn client ID</label>
+          <input type="text" id="linkedin_client_id" name="linkedin_client_id" placeholder="From LinkedIn Developer Portal" autocomplete="off" />
+        </div>
+
+        <div class="field">
+          <label for="linkedin_client_secret">LinkedIn client secret</label>
+          <input type="password" id="linkedin_client_secret" name="linkedin_client_secret" placeholder="From LinkedIn Developer Portal" autocomplete="off" />
+        </div>
+
+        <div class="field">
+          <label for="linkedin_redirect_uri">OAuth redirect URI</label>
+          <input type="text" id="linkedin_redirect_uri" name="linkedin_redirect_uri" placeholder="https://yourdomain.com/api/linkedin/callback" />
+        </div>
+
+        <h3 style="margin: var(--space-xl) 0 var(--space-md); color: var(--color-text-muted); font-size:0.8rem; text-transform:uppercase; letter-spacing:0.08em;">Security</h3>
+
+        <div class="field">
+          <label for="token_encryption_key">Token encryption key</label>
+          <input type="password" id="token_encryption_key" name="token_encryption_key" placeholder="32-byte hex key (64 hex chars)" autocomplete="off" />
+          <div class="text-muted" style="font-size:0.8rem; margin-top:0.25rem;">
+            AES-256 key for encrypting LinkedIn tokens at rest.
+            Generate: <code style="font-family: var(--font-mono); font-size:0.8rem;">node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"</code>
+          </div>
+        </div>
+
+        <h3 style="margin: var(--space-xl) 0 var(--space-md); color: var(--color-text-muted); font-size:0.8rem; text-transform:uppercase; letter-spacing:0.08em;">Infrastructure</h3>
+
+        <div class="field">
+          <label for="redis_url">Redis URL</label>
+          <input type="text" id="redis_url" name="redis_url" placeholder="redis://localhost:6379" />
+          <div class="text-muted" style="font-size:0.8rem; margin-top:0.25rem;">Required for BullMQ post scheduling. Leave blank to disable scheduling.</div>
+        </div>
+
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const SETTING_KEYS = [
+      'anthropic_api_key', 'linkedin_client_id', 'linkedin_client_secret',
+      'linkedin_redirect_uri', 'token_encryption_key', 'redis_url',
+    ];
+
+    let adminPassword = '';
+
+    // ---------------------------------------------------------------------------
+    // Auth
+    // ---------------------------------------------------------------------------
+    document.getElementById('auth-btn').addEventListener('click', async () => {
+      const pw = document.getElementById('admin-password').value;
+      if (!pw) return;
+
+      try {
+        const res = await fetch('/admin/settings', {
+          headers: { 'X-Admin-Password': pw }
+        });
+        if (res.status === 401) {
+          document.getElementById('auth-error').textContent = 'Incorrect password.';
+          document.getElementById('auth-error').classList.remove('hidden');
+          return;
+        }
+        const data = await res.json();
+        adminPassword = pw;
+        document.getElementById('auth-panel').classList.add('hidden');
+        document.getElementById('settings-panel').classList.remove('hidden');
+        populateSettings(data.settings);
+      } catch (e) {
+        document.getElementById('auth-error').textContent = 'Network error.';
+        document.getElementById('auth-error').classList.remove('hidden');
+      }
+    });
+
+    document.getElementById('admin-password').addEventListener('keydown', e => {
+      if (e.key === 'Enter') document.getElementById('auth-btn').click();
+    });
+
+    // ---------------------------------------------------------------------------
+    // Populate fields (masked values from API — don't overwrite with masked versions)
+    // ---------------------------------------------------------------------------
+    function populateSettings(settings) {
+      settings.forEach(({ key, is_set }) => {
+        const el = document.getElementById(key);
+        if (el && is_set) {
+          el.placeholder = el.placeholder + ' (already set — enter new value to change)';
+        }
+      });
+    }
+
+    // ---------------------------------------------------------------------------
+    // Save
+    // ---------------------------------------------------------------------------
+    document.getElementById('save-btn').addEventListener('click', async () => {
+      const btn = document.getElementById('save-btn');
+      btn.disabled = true;
+      document.getElementById('save-spinner').classList.remove('hidden');
+      document.getElementById('save-success').classList.add('hidden');
+      document.getElementById('save-error').classList.add('hidden');
+
+      const settings = {};
+      SETTING_KEYS.forEach(key => {
+        const el = document.getElementById(key);
+        if (el && el.value.trim()) settings[key] = el.value.trim();
+      });
+
+      if (Object.keys(settings).length === 0) {
+        document.getElementById('save-error').textContent = 'No changes to save.';
+        document.getElementById('save-error').classList.remove('hidden');
+        btn.disabled = false;
+        document.getElementById('save-spinner').classList.add('hidden');
+        return;
+      }
+
+      try {
+        const res = await fetch('/admin/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Admin-Password': adminPassword },
+          body: JSON.stringify({ settings }),
+        });
+        const data = await res.json();
+        if (data.ok) {
+          document.getElementById('save-success').classList.remove('hidden');
+          SETTING_KEYS.forEach(key => {
+            const el = document.getElementById(key);
+            if (el) el.value = '';
+          });
+        } else {
+          document.getElementById('save-error').textContent = data.error || 'Save failed.';
+          document.getElementById('save-error').classList.remove('hidden');
+        }
+      } catch (e) {
+        document.getElementById('save-error').textContent = 'Network error.';
+        document.getElementById('save-error').classList.remove('hidden');
+      } finally {
+        btn.disabled = false;
+        document.getElementById('save-spinner').classList.add('hidden');
+      }
+    });
+  </script>
+
+</body>
+</html>

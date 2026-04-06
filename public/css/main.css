@@ -225,6 +225,30 @@ body {
   font-weight: 600;
 }
 
+.sidebar-cta {
+  padding: var(--space-3) var(--space-3) var(--space-2);
+}
+
+.sidebar-cta-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 9px var(--space-3);
+  background: var(--teal);
+  color: var(--color-white);
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  text-decoration: none;
+  transition: background 0.12s ease;
+}
+
+.sidebar-cta-btn:hover {
+  background: var(--teal-hover);
+}
+
 .sidebar-bottom {
   padding: var(--space-3);
   border-top: 1px solid var(--border);

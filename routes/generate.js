@@ -171,10 +171,6 @@ router.post('/', async (req, res) => {
   if (genPath === 'recipe' && (!recipe_slug || !answers || !Array.isArray(answers))) {
     return res.status(400).json({ ok: false, error: 'missing_recipe_fields' });
   }
-  if (genPath === 'research') {
-    return res.status(400).json({ ok: false, error: 'research_path_phase2_only' });
-  }
-
   try {
     const baseOptions =
       genPath === 'idea'

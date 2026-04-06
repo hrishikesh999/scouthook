@@ -17,9 +17,6 @@ const app = express();
 // ---------------------------------------------------------------------------
 
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
-// Serve generated visuals (PNGs, ZIPs) — files older than 24h are cleaned periodically
-app.use('/files', express.static(path.join(__dirname, 'generated')));
 
 // Attach tenant_id and user_id to every request from headers
 app.use((req, res, next) => {
@@ -29,7 +26,7 @@ app.use((req, res, next) => {
 });
 
 // ---------------------------------------------------------------------------
-// Routes
+// Routes (API before static so /api/* is never shadowed by public files)
 // ---------------------------------------------------------------------------
 
 app.use('/api/profile', require('./routes/profile'));
@@ -38,7 +35,12 @@ app.use('/api/generate', require('./routes/generate'));
 app.use('/api/visuals', require('./routes/visuals'));
 app.use('/api/linkedin', require('./routes/linkedin'));
 app.use('/api/events', require('./routes/events'));
+app.use('/api', require('./routes/stats'));
 app.use('/admin', require('./routes/admin'));
+
+app.use(express.static(path.join(__dirname, 'public')));
+// Serve generated visuals (PNGs, ZIPs) — files older than 24h are cleaned periodically
+app.use('/files', express.static(path.join(__dirname, 'generated')));
 
 // ---------------------------------------------------------------------------
 // Clean generated files older than 24 hours (runs every hour)
@@ -73,7 +75,7 @@ initScheduler().catch(err => {
 // Start
 // ---------------------------------------------------------------------------
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
   console.log(`[scouthook] Server running on http://localhost:${PORT}`);
   console.log(`[scouthook] Admin UI: http://localhost:${PORT}/admin.html`);

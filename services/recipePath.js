@@ -13,9 +13,12 @@ const { extractJsonFromResponse } = require('./voiceFingerprint');
  * @param {string} recipeSlug — slug from recipes table
  * @param {string[]} answers — array of answer strings, indexed by question order
  * @param {object} userProfile — full profile row (includes voice_fingerprint JSON string)
+ * @param {object} [options]
+ * @param {string} [options.qualityRetryHint]
+ * @param {string} [options._regenerateHint]
  * @returns {Promise<{ synthesis, posts: Array }>}
  */
-async function recipesToPost(recipeSlug, answers, userProfile) {
+async function recipesToPost(recipeSlug, answers, userProfile, options = {}) {
   const apiKey = getSetting('anthropic_api_key');
   if (!apiKey) throw new Error('anthropic_api_key not configured');
 
@@ -103,6 +106,12 @@ Return ONLY valid JSON in this exact structure:
 
 No markdown fences. No explanation. Only the JSON object.`;
 
+  const extraHints = [
+    options.qualityRetryHint,
+    options._regenerateHint,
+  ].filter(Boolean).join('\n\n');
+  const userPromptFinal = extraHints ? `${userPrompt}\n\n${extraHints}` : userPrompt;
+
   const client = new Anthropic({ apiKey });
   let responseText = '';
 
@@ -112,7 +121,7 @@ No markdown fences. No explanation. Only the JSON object.`;
       max_tokens: 3000,
       temperature: 0.7,
       system: systemPrompt,
-      messages: [{ role: 'user', content: userPrompt }],
+      messages: [{ role: 'user', content: userPromptFinal }],
     });
 
     responseText = message.content[0]?.text?.trim() || '';
@@ -126,7 +135,7 @@ No markdown fences. No explanation. Only the JSON object.`;
           temperature: 0.7,
           system: systemPrompt,
           messages: [
-            { role: 'user', content: userPrompt },
+            { role: 'user', content: userPromptFinal },
             { role: 'assistant', content: responseText },
             { role: 'user', content: 'Return only valid JSON, no other text.' },
           ],

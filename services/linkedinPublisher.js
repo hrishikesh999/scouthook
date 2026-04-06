@@ -2,9 +2,21 @@
 
 const { db } = require('../db');
 const { getValidAccessToken } = require('./linkedinOAuth');
+const path = require('path');
+const fs = require('fs');
 
 const LINKEDIN_UGC_URL = 'https://api.linkedin.com/v2/ugcPosts';
+/** Consumer "Share on LinkedIn" image flow — not rest/images + rest/posts (Marketing). */
+const LINKEDIN_ASSETS_REGISTER_URL = 'https://api.linkedin.com/v2/assets?action=registerUpload';
+const LINKEDIN_DOC_INIT_URL = 'https://api.linkedin.com/rest/documents?action=initializeUpload';
+const LINKEDIN_REST_POSTS_URL = 'https://api.linkedin.com/rest/posts';
+const LINKEDIN_API_VERSION = '202603';
 const RATE_LIMIT_WINDOW_HOURS = 1;
+const GENERATED_DIR = path.join(__dirname, '..', 'generated');
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 // ---------------------------------------------------------------------------
 // Rate limit check — 1 published post per hour per user
@@ -27,9 +39,116 @@ function checkRateLimit(userId, tenantId) {
 // Core LinkedIn publish call
 // ---------------------------------------------------------------------------
 
-async function callLinkedInAPI(accessToken, linkedinUserId, content) {
+/**
+ * Register a feed-share image upload (consumer API). Returns digitalmediaAsset URN + upload URL.
+ * @see https://learn.microsoft.com/en-us/linkedin/consumer/integrations/self-serve/share-on-linkedin
+ */
+async function registerFeedshareImageUpload(accessToken, ownerUrn) {
+  const res = await fetch(LINKEDIN_ASSETS_REGISTER_URL, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+      'X-Restli-Protocol-Version': '2.0.0',
+      'LinkedIn-Version': LINKEDIN_API_VERSION,
+    },
+    body: JSON.stringify({
+      registerUploadRequest: {
+        recipes: ['urn:li:digitalmediaRecipe:feedshare-image'],
+        owner: ownerUrn,
+        serviceRelationships: [
+          {
+            relationshipType: 'OWNER',
+            identifier: 'urn:li:userGeneratedContent',
+          },
+        ],
+      },
+    }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`LinkedIn assets registerUpload error ${res.status}: ${text}`);
+  }
+
+  const data = await res.json();
+  const value = data.value ?? data;
+  const asset = value.asset;
+  const mechanism = value.uploadMechanism?.['com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest'];
+  const uploadUrl = mechanism?.uploadUrl;
+  const uploadHeaders = mechanism?.headers && typeof mechanism.headers === 'object' ? mechanism.headers : {};
+
+  if (!asset || !uploadUrl) {
+    throw new Error('LinkedIn registerUpload returned no asset/uploadUrl');
+  }
+  return { asset, uploadUrl, uploadHeaders };
+}
+
+async function uploadFeedshareImageBinary(accessToken, uploadUrl, buffer, extraHeaders = {}) {
+  const res = await fetch(uploadUrl, {
+    method: 'PUT',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'image/png',
+      ...extraHeaders,
+    },
+    body: buffer,
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`LinkedIn feedshare image upload error ${res.status}: ${text}`);
+  }
+}
+
+/** UGC post with image — uses urn:li:digitalmediaAsset from v2/assets (consumer flow). */
+async function createUgcPostWithImage(accessToken, linkedinUserId, content, assetUrn) {
+  const ownerUrn = `urn:li:person:${linkedinUserId}`;
   const body = {
-    author: `urn:li:person:${linkedinUserId}`,
+    author: ownerUrn,
+    lifecycleState: 'PUBLISHED',
+    specificContent: {
+      'com.linkedin.ugc.ShareContent': {
+        shareCommentary: { text: content },
+        shareMediaCategory: 'IMAGE',
+        media: [
+          {
+            status: 'READY',
+            media: assetUrn,
+          },
+        ],
+      },
+    },
+    visibility: {
+      'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC',
+    },
+  };
+
+  const res = await fetch(LINKEDIN_UGC_URL, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+      'X-Restli-Protocol-Version': '2.0.0',
+      'LinkedIn-Version': LINKEDIN_API_VERSION,
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`LinkedIn API error ${res.status}: ${text}`);
+  }
+
+  const data = await res.json();
+  return data.id;
+}
+
+/** Text-only organic post (legacy UGC endpoint; still reliable for commentary-only). */
+async function callLinkedInAPI(accessToken, linkedinUserId, content) {
+  const ownerUrn = `urn:li:person:${linkedinUserId}`;
+  const body = {
+    author: ownerUrn,
     lifecycleState: 'PUBLISHED',
     specificContent: {
       'com.linkedin.ugc.ShareContent': {
@@ -48,7 +167,7 @@ async function callLinkedInAPI(accessToken, linkedinUserId, content) {
       'Authorization': `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
       'X-Restli-Protocol-Version': '2.0.0',
-      'LinkedIn-Version': '202308',
+      'LinkedIn-Version': LINKEDIN_API_VERSION,
     },
     body: JSON.stringify(body),
   });
@@ -59,7 +178,143 @@ async function callLinkedInAPI(accessToken, linkedinUserId, content) {
   }
 
   const data = await res.json();
-  return data.id; // e.g. "urn:li:ugcPost:1234567890"
+  return data.id;
+}
+
+async function createRestPostWithMedia(accessToken, linkedinUserId, commentary, mediaPayload) {
+  const body = {
+    author: `urn:li:person:${linkedinUserId}`,
+    commentary,
+    visibility: 'PUBLIC',
+    distribution: {
+      feedDistribution: 'MAIN_FEED',
+      targetEntities: [],
+      thirdPartyDistributionChannels: [],
+    },
+    content: { media: mediaPayload },
+    lifecycleState: 'PUBLISHED',
+    isReshareDisabledByAuthor: false,
+  };
+
+  const res = await fetch(LINKEDIN_REST_POSTS_URL, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+      'X-Restli-Protocol-Version': '2.0.0',
+      'LinkedIn-Version': LINKEDIN_API_VERSION,
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`LinkedIn rest/posts error ${res.status}: ${text}`);
+  }
+
+  const restliId = res.headers.get('x-restli-id');
+  if (restliId) return restliId;
+  const raw = await res.text();
+  if (raw) {
+    try {
+      const data = JSON.parse(raw);
+      if (data.id) return data.id;
+    } catch { /* ignore */ }
+  }
+  return 'urn:li:share:unknown';
+}
+
+function readGeneratedImageBytes(imageUrlPath) {
+  // Expect /files/<filename> from our own static server.
+  if (!imageUrlPath || typeof imageUrlPath !== 'string') return null;
+  if (!imageUrlPath.startsWith('/files/')) return null;
+  const filename = imageUrlPath.slice('/files/'.length);
+  if (!filename || filename !== path.basename(filename)) return null;
+  if (!/^[a-zA-Z0-9._-]+$/.test(filename)) return null;
+
+  const filePath = path.join(GENERATED_DIR, filename);
+  if (!fs.existsSync(filePath)) return null;
+  return fs.readFileSync(filePath);
+}
+
+function readGeneratedPdfBytes(filesUrlPath) {
+  if (!filesUrlPath || typeof filesUrlPath !== 'string') return null;
+  if (!filesUrlPath.startsWith('/files/')) return null;
+  const filename = filesUrlPath.slice('/files/'.length);
+  if (!filename || filename !== path.basename(filename)) return null;
+  if (!/^[a-zA-Z0-9._-]+\.pdf$/.test(filename)) return null;
+  const filePath = path.join(GENERATED_DIR, filename);
+  if (!fs.existsSync(filePath)) return null;
+  return fs.readFileSync(filePath);
+}
+
+async function initializeDocumentUpload(accessToken, ownerUrn) {
+  const res = await fetch(LINKEDIN_DOC_INIT_URL, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+      'X-Restli-Protocol-Version': '2.0.0',
+      'LinkedIn-Version': LINKEDIN_API_VERSION,
+    },
+    body: JSON.stringify({ initializeUploadRequest: { owner: ownerUrn } }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`LinkedIn document initializeUpload error ${res.status}: ${text}`);
+  }
+
+  const data = await res.json();
+  const v = data.value ?? data;
+  const uploadUrl = v.uploadUrl;
+  const document = v.document;
+  if (!uploadUrl || !document) {
+    throw new Error('LinkedIn document initializeUpload returned no uploadUrl/document');
+  }
+  return { uploadUrl, document };
+}
+
+async function uploadDocumentPdf(accessToken, uploadUrl, buffer) {
+  const res = await fetch(uploadUrl, {
+    method: 'PUT',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/pdf',
+      'X-Restli-Protocol-Version': '2.0.0',
+      'LinkedIn-Version': LINKEDIN_API_VERSION,
+    },
+    body: buffer,
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`LinkedIn document upload error ${res.status}: ${text}`);
+  }
+}
+
+async function waitForDocumentAvailable(accessToken, documentUrn) {
+  await sleep(600);
+  const encoded = encodeURIComponent(documentUrn);
+  for (let i = 0; i < 45; i++) {
+    const res = await fetch(`https://api.linkedin.com/rest/documents/${encoded}`, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'X-Restli-Protocol-Version': '2.0.0',
+        'LinkedIn-Version': LINKEDIN_API_VERSION,
+      },
+    });
+
+    if (res.ok) {
+      const doc = await res.json();
+      if (doc.status === 'AVAILABLE') return;
+      if (doc.status === 'PROCESSING_FAILED') {
+        throw new Error('linkedin_document_processing_failed');
+      }
+    }
+    await sleep(1500);
+  }
+  throw new Error('linkedin_document_not_ready');
 }
 
 // ---------------------------------------------------------------------------
@@ -73,7 +328,7 @@ async function callLinkedInAPI(accessToken, linkedinUserId, content) {
  * @param {string} content
  * @returns {Promise<{ linkedin_post_id: string }>}
  */
-async function publishNow(userId, tenantId, content) {
+async function publishNow(userId, tenantId, content, options = {}) {
   // Rate limit — 1 post/hour
   checkRateLimit(userId, tenantId);
 
@@ -85,8 +340,35 @@ async function publishNow(userId, tenantId, content) {
   if (!tokenRow?.linkedin_user_id) throw new Error('not_connected');
 
   const accessToken = await getValidAccessToken(userId, tenantId);
-  const linkedin_post_id = await callLinkedInAPI(accessToken, tokenRow.linkedin_user_id, content);
+  const personId = tokenRow.linkedin_user_id;
+  const ownerUrn = `urn:li:person:${personId}`;
 
+  if (options.carousel_pdf_url) {
+    const pdfBytes = readGeneratedPdfBytes(options.carousel_pdf_url);
+    if (!pdfBytes) throw new Error('invalid_carousel_pdf_url');
+
+    const { uploadUrl, document } = await initializeDocumentUpload(accessToken, ownerUrn);
+    await uploadDocumentPdf(accessToken, uploadUrl, pdfBytes);
+    await waitForDocumentAvailable(accessToken, document);
+    const linkedin_post_id = await createRestPostWithMedia(accessToken, personId, content, {
+      title: 'Carousel.pdf',
+      id: document,
+    });
+    return { linkedin_post_id };
+  }
+
+  if (options.image_url) {
+    const bytes = readGeneratedImageBytes(options.image_url);
+    if (!bytes) throw new Error('invalid_image_url');
+
+    const { asset, uploadUrl, uploadHeaders } = await registerFeedshareImageUpload(accessToken, ownerUrn);
+    await uploadFeedshareImageBinary(accessToken, uploadUrl, bytes, uploadHeaders);
+    await sleep(2000);
+    const linkedin_post_id = await createUgcPostWithImage(accessToken, personId, content, asset);
+    return { linkedin_post_id };
+  }
+
+  const linkedin_post_id = await callLinkedInAPI(accessToken, personId, content);
   return { linkedin_post_id };
 }
 
@@ -119,6 +401,15 @@ async function publishScheduledPost(scheduledPostId) {
       UPDATE scheduled_posts SET status = 'published', linkedin_post_id = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `).run(linkedin_post_id, scheduledPostId);
+
+    // Stamp the originating draft as published
+    if (row.post_id) {
+      db.prepare(`
+        UPDATE generated_posts
+        SET status = 'published', published_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).run(row.post_id);
+    }
 
     console.log(`[publisher] scheduledPostId=${scheduledPostId} published as ${linkedin_post_id}`);
   } catch (err) {

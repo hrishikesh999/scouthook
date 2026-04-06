@@ -1,0 +1,1271 @@
+/* generate.js — all interaction logic for generate.html */
+
+/* ── 1. DOM References ───────────────────────────────────────── */
+const tabIdea         = document.getElementById('tab-idea');
+const tabRecipe       = document.getElementById('tab-recipe');
+const ideaFields      = document.getElementById('idea-fields');
+const recipeFields    = document.getElementById('recipe-fields');
+const ideaInput       = document.getElementById('idea-input');
+const ideaError       = document.getElementById('idea-error');
+const recipeError     = document.getElementById('recipe-error');
+const recipeTopic     = document.getElementById('recipe-topic');
+const recipeAudience  = document.getElementById('recipe-audience');
+const recipeLessonEl  = document.getElementById('recipe-lesson');
+const recipeCta       = document.getElementById('recipe-cta');
+const generateBtn     = document.getElementById('generate-btn');
+const voiceIndicator  = document.getElementById('voice-indicator-area');
+
+const toggleBar       = document.getElementById('toggle-bar');
+const tabEdit         = document.getElementById('tab-edit');
+const tabPreviewBtn   = document.getElementById('tab-preview');
+const wordCountEl     = document.getElementById('word-count');
+
+const scoreBar        = document.getElementById('score-bar');
+const scoreNumber     = document.getElementById('score-number');
+const forceRetPill    = document.getElementById('force-returned-pill');
+const archetypeBadge  = document.getElementById('archetype-badge');
+const confidenceText  = document.getElementById('confidence-text');
+const passfailPill    = document.getElementById('passfail-pill');
+const suggestionsBtn  = document.getElementById('suggestions-toggle');
+const suggestionsList = document.getElementById('suggestions-list');
+
+const alternativeStrip   = document.getElementById('alternative-strip');
+const alternativePreview = document.getElementById('alternative-preview-text');
+const switchAltBtn       = document.getElementById('switch-alternative-btn');
+
+const emptyState      = document.getElementById('empty-state');
+const skeletonState   = document.getElementById('skeleton-state');
+const postErrorState  = document.getElementById('post-error-state');
+const tryAgainLink    = document.getElementById('try-again-link');
+const postTextarea    = document.getElementById('post-textarea');
+const postEditArea    = document.getElementById('post-edit-area');
+const linkedinPreview = document.getElementById('linkedin-preview');
+const previewBody     = document.getElementById('preview-body');
+const previewName     = document.getElementById('preview-name');
+const previewHeadline = document.getElementById('preview-headline');
+const previewInitials = document.getElementById('linkedin-avatar-initials');
+
+const actionBar       = document.getElementById('action-bar');
+const actionRight     = document.getElementById('action-right');
+const regenerateBtn   = document.getElementById('regenerate-btn');
+const quoteCardBtn    = document.getElementById('quote-card-btn');
+const carouselBtn     = document.getElementById('carousel-btn');
+const brandedQuoteBtn = document.getElementById('branded-quote-btn');
+const saveDraftBtn    = document.getElementById('save-draft-btn');
+const scheduleBtn     = document.getElementById('schedule-btn');
+const publishBtn      = document.getElementById('publish-btn');
+const postPublishState = document.getElementById('post-publish-state');
+const publishedLabel  = document.getElementById('published-label');
+const followUpBtn     = document.getElementById('follow-up-btn');
+const actionBarError  = document.getElementById('action-bar-error');
+
+const slideOver       = document.getElementById('slide-over');
+const slideOverLabel  = document.getElementById('slide-over-label');
+const slideOverClose  = document.getElementById('slide-over-close');
+const slideOverContent = document.getElementById('slide-over-content');
+const slideOverSkeleton = document.getElementById('slide-over-skeleton');
+const slideOverSave   = document.getElementById('slide-over-save');
+const slideOverAdd    = document.getElementById('slide-over-add');
+const slideOverDiscard = document.getElementById('slide-over-discard');
+
+const scheduleModal   = document.getElementById('schedule-modal');
+const scheduleDateEl  = document.getElementById('schedule-date');
+const scheduleTimeEl  = document.getElementById('schedule-time');
+const scheduleCancel  = document.getElementById('schedule-cancel');
+const scheduleConfirm = document.getElementById('schedule-confirm-btn');
+const modalError      = document.getElementById('modal-error');
+
+const overlay         = document.getElementById('overlay');
+
+const scheduleLockBanner     = document.getElementById('schedule-lock-banner');
+const scheduleLockBannerText = document.getElementById('schedule-lock-banner-text');
+const schedulePauseBtn       = document.getElementById('schedule-pause-btn');
+const scheduleLockMsg        = document.getElementById('schedule-lock-banner-msg');
+
+/* ── 2. State ────────────────────────────────────────────────── */
+let currentPath       = 'idea';
+let currentPostId     = null;
+let primaryPost       = null;
+let alternativePost   = null;
+let currentAssetUrl   = null;
+let currentAssetType  = null;
+let suggestionsExpanded = false;
+let previewExpanded   = false;
+let undoTimer         = null;
+let rescoreDebounce   = null;
+let sessionDebounce   = null;
+let availableRecipeSlug = null;
+/** When true, post is scheduled — editing must wait until pause (cancel schedule). */
+let scheduleEditLocked  = false;
+/** @type {{ scheduledFor: string, scheduledPostId: number|null } | null} */
+let scheduledMeta       = null;
+
+function formatScheduledLocal(iso) {
+  if (!iso) return '';
+  try {
+    const d = new Date(iso);
+    return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  } catch {
+    return '';
+  }
+}
+
+function applyScheduleLockUi() {
+  if (!scheduleLockBanner) return;
+  scheduleLockBanner.classList.remove('hidden');
+  const when = scheduledMeta?.scheduledFor ? formatScheduledLocal(scheduledMeta.scheduledFor) : '';
+  scheduleLockBannerText.textContent = when
+    ? `This post is scheduled for ${when}. Pause scheduling to edit — the scheduled send uses a separate copy until you pause.`
+    : 'This post is scheduled. Pause scheduling to edit.';
+  if (scheduleLockMsg) scheduleLockMsg.textContent = '';
+  postTextarea.readOnly = true;
+  regenerateBtn.disabled = true;
+  generateBtn.disabled = true;
+  ideaInput.readOnly = true;
+  recipeTopic.readOnly = true;
+  recipeAudience.readOnly = true;
+  recipeLessonEl.readOnly = true;
+  recipeCta.readOnly = true;
+  scheduleBtn.disabled = true;
+  publishBtn.disabled = true;
+  quoteCardBtn.classList.add('disabled');
+  carouselBtn.classList.add('disabled');
+  brandedQuoteBtn.classList.add('disabled');
+  switchAltBtn.style.pointerEvents = 'none';
+  switchAltBtn.style.opacity = '0.5';
+}
+
+function clearScheduleLockUi() {
+  if (scheduleLockBanner) scheduleLockBanner.classList.add('hidden');
+  if (scheduleLockMsg) scheduleLockMsg.textContent = '';
+  postTextarea.readOnly = false;
+  regenerateBtn.disabled = false;
+  generateBtn.disabled = false;
+  ideaInput.readOnly = false;
+  recipeTopic.readOnly = false;
+  recipeAudience.readOnly = false;
+  recipeLessonEl.readOnly = false;
+  recipeCta.readOnly = false;
+  switchAltBtn.style.pointerEvents = '';
+  switchAltBtn.style.opacity = '';
+  postPublishState.classList.remove('visible');
+  actionRight.style.display = '';
+}
+
+function setScheduleLockFromPost(p) {
+  if (p && p.status === 'scheduled' && p.scheduled_for) {
+    scheduleEditLocked = true;
+    scheduledMeta = {
+      scheduledFor: p.scheduled_for,
+      scheduledPostId: p.scheduled_post_id,
+    };
+    applyScheduleLockUi();
+    showPublishedState(`Scheduled · ${formatScheduledLocal(p.scheduled_for)}`);
+    return;
+  }
+  const wasLocked = scheduleEditLocked;
+  scheduleEditLocked = false;
+  scheduledMeta = null;
+  if (wasLocked) {
+    clearScheduleLockUi();
+  }
+  if (p && p.status === 'draft') {
+    enableActionButtons();
+  }
+}
+
+async function refetchPostAndApplyLock() {
+  if (!currentPostId) return;
+  try {
+    const res = await fetch(`/api/posts/${encodeURIComponent(currentPostId)}`, { headers: apiHeaders() });
+    const data = await res.json();
+    if (!data.ok || !data.post) return;
+    setScheduleLockFromPost(data.post);
+    if (data.post.status === 'published') {
+      postTextarea.readOnly = true;
+      postTextarea.classList.add('published');
+      showPublishedState('Published · LinkedIn');
+      Session.clear();
+    }
+  } catch { /* ignore */ }
+}
+
+if (schedulePauseBtn) {
+  schedulePauseBtn.addEventListener('click', async () => {
+    if (!currentPostId) return;
+    schedulePauseBtn.disabled = true;
+    if (scheduleLockMsg) scheduleLockMsg.textContent = '';
+    try {
+      const res = await fetch('/api/linkedin/scheduled/pause-by-post', {
+        method: 'POST',
+        headers: apiHeaders(),
+        body: JSON.stringify({ post_id: currentPostId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) {
+        if (data.error === 'no_active_schedule') {
+          await refetchPostAndApplyLock();
+          if (scheduleLockMsg) {
+            scheduleLockMsg.textContent = 'Schedule already ended or this post was published — state refreshed.';
+          }
+          return;
+        }
+        throw new Error(data.error || 'Could not pause');
+      }
+      await refetchPostAndApplyLock();
+    } catch (e) {
+      if (scheduleLockMsg) scheduleLockMsg.textContent = e.message || 'Could not pause';
+    } finally {
+      schedulePauseBtn.disabled = false;
+    }
+  });
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && scheduleEditLocked && currentPostId) {
+    refetchPostAndApplyLock();
+  }
+});
+
+/* ── 3. Init ─────────────────────────────────────────────────── */
+(async function init() {
+  // Wire userId into the Connect LinkedIn button href
+  const connectBtn = document.getElementById('linkedin-connect-btn');
+  if (connectBtn) {
+    connectBtn.href = `/api/linkedin/connect?_uid=${encodeURIComponent(getUserId())}&_tid=${encodeURIComponent(getTenantId())}`;
+  }
+
+  checkLinkedInStatus();
+  loadProfile();
+  fetchRecipeSlug();
+
+  const _qs      = new URLSearchParams(window.location.search);
+  const urlPostId = _qs.get('postId');
+  const isNew     = _qs.has('new');
+  const session   = Session.load();
+
+  if (isNew) {
+    // Explicit "new post" navigation — wipe any in-progress session so a blank slate loads
+    Session.clear();
+  } else if (urlPostId && String(session?.postId) !== String(urlPostId)) {
+    // URL points to a specific draft that differs from (or absent in) the session —
+    // fetch it from the DB and render it directly.
+    try {
+      const res  = await fetch(`/api/posts/${encodeURIComponent(urlPostId)}`, { headers: apiHeaders() });
+      const data = await res.json();
+      if (data.ok && data.post) {
+        // Reconstruct quality object from DB integer + flags (renderScoreBar expects an object)
+        let qualityObj = null;
+        if (data.post.quality_score != null) {
+          let flags = [];
+          try { flags = JSON.parse(data.post.quality_flags || '[]'); } catch { flags = []; }
+          qualityObj = { score: data.post.quality_score, flags, forcedReturn: false };
+        }
+
+        currentPostId = data.post.id;
+        primaryPost   = {
+          post:       data.post.content,
+          postId:     data.post.id,
+          quality:    qualityObj,
+          archetype:  data.post.format_slug,
+          confidence: null,
+        };
+        if (data.post.idea_input) ideaInput.value = data.post.idea_input;
+        renderPost(data.post.content);
+        updateWordCount(data.post.content);
+        renderScoreBar(qualityObj, data.post.format_slug, null);
+        setScheduleLockFromPost(data.post);
+      }
+    } catch { /* fall through to session restore on network error */ }
+  } else if (session) {
+    restoreSession(session);
+  }
+})();
+
+/* ── 4. LinkedIn status ──────────────────────────────────────── */
+function buildLinkedInChip(name, photoUrl) {
+  const initials = name
+    ? name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
+    : '??';
+  const avatarHtml = photoUrl
+    ? `<img class="nav-linkedin-avatar" src="${photoUrl}" alt="${name || 'LinkedIn'}">`
+    : `<div class="nav-linkedin-initials">${initials}</div>`;
+  const nameHtml = name ? `<span class="nav-linkedin-name">${name}</span>` : '';
+  return `<div class="nav-linkedin-connected">${avatarHtml}${nameHtml}</div>`;
+}
+
+async function checkLinkedInStatus() {
+  try {
+    const res = await fetch('/api/linkedin/status', { headers: apiHeaders() });
+    const data = await res.json();
+    const area = document.getElementById('nav-linkedin-area');
+    if (data.connected) {
+      area.innerHTML = buildLinkedInChip(data.name, data.photo_url);
+    }
+  } catch {
+    // Leave default connect button
+  }
+}
+
+/* ── 5. Profile check ────────────────────────────────────────── */
+async function loadProfile() {
+  try {
+    const uid = getUserId();
+    const res = await fetch(`/api/profile/${uid}`, { headers: apiHeaders() });
+    const data = await res.json();
+    const profile = data.profile;
+
+    if (
+      !profile ||
+      !profile.content_niche ||
+      !profile.audience_role ||
+      !profile.audience_pain
+    ) {
+      showIncompleteProfile();
+    } else {
+      voiceIndicator.innerHTML = `
+        <div class="voice-indicator">
+          <span class="dot">●</span>
+          Writing as: ${escHtml(profile.content_niche)} · ${escHtml(profile.audience_role)}
+          <a href="/profile.html" class="edit-link">Edit →</a>
+        </div>`;
+
+      // Populate LinkedIn preview name
+      if (profile.audience_role) {
+        previewHeadline.textContent = profile.audience_role;
+      }
+    }
+  } catch {
+    showIncompleteProfile();
+  }
+}
+
+function showIncompleteProfile() {
+  voiceIndicator.innerHTML = `
+    <div class="voice-indicator-warning">
+      Your voice profile is incomplete — posts may sound generic.
+      <a href="/profile.html">Complete it →</a>
+    </div>`;
+}
+
+/* ── 6. Fetch recipe slug ────────────────────────────────────── */
+async function fetchRecipeSlug() {
+  try {
+    const res = await fetch('/api/recipes', { headers: apiHeaders() });
+    const data = await res.json();
+    if (data.ok && data.recipes) {
+      const categories = Object.values(data.recipes);
+      if (categories.length && categories[0].length) {
+        availableRecipeSlug = categories[0][0].slug;
+      }
+    }
+  } catch {
+    // Will fall back gracefully
+  }
+}
+
+/* ── 7. Path toggle ──────────────────────────────────────────── */
+tabIdea.addEventListener('click', () => switchPath('idea'));
+tabRecipe.addEventListener('click', () => switchPath('recipe'));
+
+function switchPath(path) {
+  currentPath = path;
+  if (path === 'idea') {
+    tabIdea.classList.add('active');
+    tabIdea.setAttribute('aria-selected', 'true');
+    tabRecipe.classList.remove('active');
+    tabRecipe.setAttribute('aria-selected', 'false');
+    ideaFields.classList.remove('hidden');
+    recipeFields.classList.remove('visible');
+    clearFieldErrors();
+  } else {
+    tabRecipe.classList.add('active');
+    tabRecipe.setAttribute('aria-selected', 'true');
+    tabIdea.classList.remove('active');
+    tabIdea.setAttribute('aria-selected', 'false');
+    recipeFields.classList.add('visible');
+    ideaFields.classList.add('hidden');
+    clearFieldErrors();
+  }
+}
+
+function clearFieldErrors() {
+  ideaInput.classList.remove('error');
+  ideaError.classList.remove('visible');
+  recipeError.classList.remove('visible');
+}
+
+/* ── 8. Generate button ──────────────────────────────────────── */
+generateBtn.addEventListener('click', () => triggerGenerate());
+
+async function triggerGenerate(retryData) {
+  if (scheduleEditLocked) return;
+  clearFieldErrors();
+
+  let body;
+
+  if (retryData) {
+    body = retryData;
+  } else if (currentPath === 'idea') {
+    const idea = ideaInput.value.trim();
+    if (!idea) {
+      ideaInput.classList.add('error');
+      ideaError.classList.add('visible');
+      ideaInput.focus();
+      return;
+    }
+    body = { path: 'idea', raw_idea: idea };
+  } else {
+    const topic   = recipeTopic.value.trim();
+    const lesson  = recipeLessonEl.value.trim();
+    if (!topic || !lesson) {
+      recipeError.classList.add('visible');
+      recipeTopic.focus();
+      return;
+    }
+    const slug = availableRecipeSlug || 'custom';
+    body = {
+      path: 'recipe',
+      recipe_slug: slug,
+      answers: [
+        topic,
+        recipeAudience.value.trim(),
+        lesson,
+        recipeCta.value.trim()
+      ]
+    };
+  }
+
+  setGenerating(true);
+  showSkeleton();
+
+  // Store for retry
+  const lastBody = body;
+  tryAgainLink.onclick = (e) => {
+    e.preventDefault();
+    triggerGenerate(lastBody);
+  };
+
+  // Set a 30-second timeout
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+  try {
+    const res = await fetch('/api/generate', {
+      method: 'POST',
+      headers: apiHeaders(),
+      body: JSON.stringify(body),
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+    const data = await res.json();
+
+    if (!res.ok || !data.ok) {
+      throw new Error(data.error || 'Generation failed');
+    }
+
+    handleGenerateSuccess(data, currentPath);
+
+  } catch (err) {
+    if (err.message === 'complete_profile_first') {
+      showProfileIncompleteError();
+    } else {
+      showPostError();
+    }
+  } finally {
+    setGenerating(false);
+  }
+}
+
+/* ── 9. Handle generation success ───────────────────────────── */
+function handleGenerateSuccess(data, path) {
+  let post, postId, quality, archetype, confidence, alternative;
+
+  if (path === 'recipe') {
+    const first = data.posts && data.posts[0];
+    if (!first) { showPostError(); return; }
+    post        = first.content || first.post;
+    postId      = first.id;
+    quality     = first.quality;
+    archetype   = null;
+    confidence  = null;
+    alternative = null;
+  } else {
+    post        = data.post;
+    postId      = data.id;
+    quality     = data.quality;
+    archetype   = data.archetypeUsed;
+    confidence  = data.hookConfidence;
+    alternative = data.alternative;
+  }
+
+  primaryPost     = { post, postId, quality, archetype, confidence };
+  alternativePost = alternative || null;
+  currentPostId   = postId;
+
+  scheduleEditLocked = false;
+  scheduledMeta = null;
+
+  renderPost(post);
+  renderScoreBar(quality, archetype, confidence);
+  renderAlternativeStrip(alternative, confidence);
+  enableActionButtons();
+  updateWordCount(post);
+
+  // Scroll right panel into view on mobile
+  if (window.innerWidth <= 768) {
+    document.getElementById('right-panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  const session = buildSession();
+  Session.save(session);
+}
+
+function buildSession() {
+  return {
+    path: currentPath,
+    ideaInput: ideaInput.value,
+    recipeInputs: {
+      topic:    recipeTopic.value,
+      audience: recipeAudience.value,
+      lesson:   recipeLessonEl.value,
+      cta:      recipeCta.value
+    },
+    post:        postTextarea.value,
+    postId:      currentPostId,
+    primary:     primaryPost,
+    alternative: alternativePost
+  };
+}
+
+/* ── 10. Render post ─────────────────────────────────────────── */
+function renderPost(text) {
+  hideSkeleton();
+  emptyState.classList.add('hidden');
+  postErrorState.classList.remove('visible');
+  postTextarea.value = text;
+  postTextarea.classList.add('visible');
+  postTextarea.classList.remove('published');
+  autoGrowTextarea(postTextarea);
+}
+
+/* ── 11. Score bar ───────────────────────────────────────────── */
+function renderScoreBar(quality, archetype, confidence) {
+  if (!quality) return;
+
+  scoreBar.classList.add('visible');
+
+  animateScore(quality.score || 0);
+
+  // Colour class
+  const score = quality.score || 0;
+  scoreNumber.className = '';
+  if (score >= 75)      scoreNumber.classList.add('pass');
+  else if (score >= 50) scoreNumber.classList.add('borderline');
+  else                  scoreNumber.classList.add('fail');
+
+  // Force returned
+  forceRetPill.style.display = quality.forcedReturn ? '' : 'none';
+
+  // Archetype badge
+  if (archetype) {
+    archetypeBadge.textContent = archetype.toUpperCase();
+    archetypeBadge.style.display = '';
+  } else {
+    archetypeBadge.style.display = 'none';
+  }
+
+  // Confidence
+  if (confidence !== null && confidence !== undefined) {
+    confidenceText.textContent = `${Math.round(confidence * 100)}% confident`;
+    confidenceText.style.display = '';
+  } else {
+    confidenceText.style.display = 'none';
+  }
+
+  // Pass / fail pill
+  const passed = quality.passed || quality.passed_gate;
+  passfailPill.textContent = passed ? '● Passed' : '● Failed';
+  passfailPill.className = 'passfail-pill ' + (passed ? 'pass' : 'fail');
+
+  // Suggestions
+  const allItems = [...(quality.errors || []), ...(quality.warnings || [])];
+  if (allItems.length > 0) {
+    suggestionsBtn.classList.add('visible');
+    updateSuggestionsBtn(allItems.length);
+    renderSuggestions(quality.errors || [], quality.warnings || []);
+  } else {
+    suggestionsBtn.classList.remove('visible');
+    suggestionsList.classList.remove('visible');
+    suggestionsExpanded = false;
+  }
+}
+
+function animateScore(target) {
+  const start    = performance.now();
+  const duration = 600;
+  function step(now) {
+    const progress = Math.min((now - start) / duration, 1);
+    const eased    = 1 - Math.pow(1 - progress, 3);
+    scoreNumber.textContent = Math.round(eased * target);
+    if (progress < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+function updateSuggestionsBtn(count) {
+  suggestionsBtn.textContent = suggestionsExpanded
+    ? `▾ ${count} suggestions`
+    : `▸ ${count} suggestions to review`;
+  suggestionsBtn.setAttribute('aria-expanded', String(suggestionsExpanded));
+}
+
+function renderSuggestions(errors, warnings) {
+  const items = [
+    ...errors.map(e => ({ text: e, type: 'error' })),
+    ...warnings.map(w => ({ text: w, type: 'warning' }))
+  ];
+  suggestionsList.innerHTML = items.map(item =>
+    `<div class="suggestion-item" role="listitem">${item.type === 'error' ? '⚠ ' : '· '}${escHtml(item.text)}</div>`
+  ).join('');
+}
+
+suggestionsBtn.addEventListener('click', () => {
+  suggestionsExpanded = !suggestionsExpanded;
+  const allItems = [...scoreBar.querySelectorAll('.suggestion-item')];
+  const count = allItems.length;
+  updateSuggestionsBtn(count);
+  suggestionsList.classList.toggle('visible', suggestionsExpanded);
+});
+
+/* ── 12. Alternative strip ───────────────────────────────────── */
+function renderAlternativeStrip(alternative, confidence) {
+  if (!alternative || confidence === null || confidence >= 0.7) {
+    alternativeStrip.classList.remove('visible');
+    return;
+  }
+  const words = (alternative.post || '').split(/\s+/).slice(0, 8).join(' ');
+  alternativePreview.textContent = `We also wrote an INSIGHT version — "${words}… " `;
+  alternativeStrip.classList.add('visible');
+}
+
+switchAltBtn.addEventListener('click', (e) => {
+  e.preventDefault();
+  if (scheduleEditLocked) return;
+  if (!alternativePost) return;
+
+  const prev = primaryPost;
+  primaryPost = { post: alternativePost.post, postId: alternativePost.id, quality: alternativePost.quality, archetype: alternativePost.archetypeUsed, confidence: null };
+  alternativePost = prev;
+
+  renderPost(primaryPost.post);
+  renderScoreBar(primaryPost.quality, primaryPost.archetype, primaryPost.confidence);
+  alternativeStrip.classList.remove('visible');
+  currentPostId = primaryPost.postId;
+
+  Session.save(buildSession());
+});
+
+/* ── 13. Edit / Preview tabs ─────────────────────────────────── */
+tabEdit.addEventListener('click', () => switchView('edit'));
+tabPreviewBtn.addEventListener('click', () => switchView('preview'));
+
+function switchView(view) {
+  if (view === 'edit') {
+    tabEdit.classList.add('active');
+    tabEdit.setAttribute('aria-selected', 'true');
+    tabPreviewBtn.classList.remove('active');
+    tabPreviewBtn.setAttribute('aria-selected', 'false');
+    postEditArea.style.display = '';
+    linkedinPreview.classList.remove('visible');
+    linkedinPreview.setAttribute('aria-hidden', 'true');
+    postTextarea.style.display = postTextarea.classList.contains('visible') ? '' : 'none';
+    wordCountEl.style.display = '';
+  } else {
+    tabPreviewBtn.classList.add('active');
+    tabPreviewBtn.setAttribute('aria-selected', 'true');
+    tabEdit.classList.remove('active');
+    tabEdit.setAttribute('aria-selected', 'false');
+    buildLinkedInPreview(postTextarea.value);
+    linkedinPreview.classList.add('visible');
+    linkedinPreview.setAttribute('aria-hidden', 'false');
+    wordCountEl.style.display = 'none';
+  }
+}
+
+function buildLinkedInPreview(text) {
+  const truncLimit = 210;
+  previewExpanded = false;
+
+  if (text.length > truncLimit) {
+    const truncated = escHtml(text.slice(0, truncLimit));
+    previewBody.innerHTML = truncated + `… <a class="linkedin-see-more" id="see-more-link" href="#" role="button">see more</a>`;
+    document.getElementById('see-more-link').addEventListener('click', (e) => {
+      e.preventDefault();
+      previewExpanded = true;
+      previewBody.textContent = text;
+    });
+  } else {
+    previewBody.textContent = text;
+  }
+}
+
+/* ── 14. Word count ──────────────────────────────────────────── */
+function updateWordCount(text) {
+  const count = text.trim() ? text.trim().split(/\s+/).length : 0;
+  wordCountEl.textContent = `${count} word${count !== 1 ? 's' : ''}`;
+}
+
+/* ── 15. Post textarea auto-grow + re-score ──────────────────── */
+postTextarea.addEventListener('input', () => {
+  if (scheduleEditLocked) return;
+  autoGrowTextarea(postTextarea);
+  updateWordCount(postTextarea.value);
+
+  // Debounced session + DB auto-save
+  clearTimeout(sessionDebounce);
+  sessionDebounce = setTimeout(async () => {
+    if (!currentPostId || scheduleEditLocked) return;
+    Session.save(buildSession());
+    showAutosaveState('saving');
+    try {
+      await fetch(`/api/posts/${currentPostId}`, {
+        method:  'PATCH',
+        headers: apiHeaders(),
+        body:    JSON.stringify({
+          content:    postTextarea.value.trim(),
+          idea_input: ideaInput.value.trim() || null,
+        }),
+      });
+      showAutosaveState('saved');
+    } catch {
+      showAutosaveState('hidden');
+    }
+  }, 1200);
+
+  // Debounced re-score
+  clearTimeout(rescoreDebounce);
+  rescoreDebounce = setTimeout(() => {
+    if (!scheduleEditLocked) rescorePost(postTextarea.value);
+  }, 1200);
+});
+
+function autoGrowTextarea(el) {
+  const surface  = document.getElementById('post-surface');
+  const savedTop = surface ? surface.scrollTop : 0;
+  el.style.height = 'auto';
+  el.style.height = el.scrollHeight + 'px';
+  if (surface) surface.scrollTop = savedTop;
+}
+
+async function rescorePost(text) {
+  if (!text.trim()) return;
+  try {
+    const res = await fetch('/api/generate/quality-check', {
+      method: 'POST',
+      headers: apiHeaders(),
+      body: JSON.stringify({ postText: text })
+    });
+    const data = await res.json();
+    if (data.ok && data.quality) {
+      const arch = primaryPost ? primaryPost.archetype : null;
+      const conf = primaryPost ? primaryPost.confidence : null;
+      renderScoreBar(data.quality, arch, conf);
+    }
+  } catch {
+    // Silently fail
+  }
+}
+
+/* ── 16. Regenerate ──────────────────────────────────────────── */
+regenerateBtn.addEventListener('click', async () => {
+  if (scheduleEditLocked) return;
+  if (!currentPostId) {
+    triggerGenerate();
+    return;
+  }
+
+  // Store current post for undo
+  const prevPost    = postTextarea.value;
+  const prevPrimary = primaryPost ? { ...primaryPost } : null;
+
+  regenerateBtn.textContent = 'Undo →';
+  regenerateBtn.classList.add('undo-mode');
+  regenerateBtn.setAttribute('aria-label', 'Undo regeneration');
+
+  clearTimeout(undoTimer);
+
+  const undoFn = () => {
+    if (prevPrimary) {
+      renderPost(prevPost);
+      renderScoreBar(prevPrimary.quality, prevPrimary.archetype, prevPrimary.confidence);
+      primaryPost = prevPrimary;
+      currentPostId = prevPrimary.postId;
+    }
+    resetRegenerateBtn();
+  };
+
+  regenerateBtn.onclick = (e) => {
+    e.preventDefault();
+    clearTimeout(undoTimer);
+    undoFn();
+    regenerateBtn.onclick = null;
+    regenerateBtn.addEventListener('click', () => { if (!currentPostId) triggerGenerate(); });
+  };
+
+  undoTimer = setTimeout(() => {
+    regenerateBtn.style.opacity = '0';
+    setTimeout(() => {
+      resetRegenerateBtn();
+      regenerateBtn.style.opacity = '';
+    }, 1000);
+  }, 10000);
+
+  setGenerating(true);
+  showSkeleton();
+
+  try {
+    const res = await fetch(`/api/generate/regenerate/${currentPostId}`, {
+      method: 'POST',
+      headers: apiHeaders(),
+      body: JSON.stringify({})
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error();
+
+    const p = data.post;
+    const newPost  = p.content || p.post;
+    const newQual  = p.quality;
+    const newArch  = p.archetypeUsed || null;
+    const newConf  = p.hookConfidence !== undefined ? p.hookConfidence : null;
+
+    primaryPost = { post: newPost, postId: p.id, quality: newQual, archetype: newArch, confidence: newConf };
+    currentPostId = p.id;
+
+    renderPost(newPost);
+    renderScoreBar(newQual, newArch, newConf);
+    updateWordCount(newPost);
+    Session.save(buildSession());
+
+  } catch {
+    showPostError();
+  } finally {
+    setGenerating(false);
+  }
+});
+
+function resetRegenerateBtn() {
+  regenerateBtn.textContent = 'Regenerate';
+  regenerateBtn.classList.remove('undo-mode');
+  regenerateBtn.setAttribute('aria-label', 'Regenerate post');
+  regenerateBtn.onclick = null;
+}
+
+/* ── 17. Save draft ──────────────────────────────────────────── */
+/* ── Auto-save indicator ────────────────────────────────────── */
+let _autosaveIndicatorTimer = null;
+function showAutosaveState(state) {
+  clearTimeout(_autosaveIndicatorTimer);
+  if (state === 'saving') {
+    saveDraftBtn.textContent = 'Saving…';
+    saveDraftBtn.classList.add('autosave-indicator--saving');
+    saveDraftBtn.classList.remove('autosave-indicator--saved');
+  } else if (state === 'saved') {
+    saveDraftBtn.textContent = 'Saved ✓';
+    saveDraftBtn.classList.remove('autosave-indicator--saving');
+    saveDraftBtn.classList.add('autosave-indicator--saved');
+    _autosaveIndicatorTimer = setTimeout(() => {
+      saveDraftBtn.textContent = '';
+      saveDraftBtn.classList.remove('autosave-indicator--saved');
+    }, 2500);
+  } else {
+    saveDraftBtn.textContent = '';
+    saveDraftBtn.classList.remove('autosave-indicator--saving', 'autosave-indicator--saved');
+  }
+}
+
+/* ── 18. Schedule modal ──────────────────────────────────────── */
+scheduleBtn.addEventListener('click', () => openModal());
+
+scheduleCancel.addEventListener('click', () => closeModal());
+overlay.addEventListener('click', () => {
+  if (scheduleModal.classList.contains('visible')) closeModal();
+  if (slideOver.classList.contains('open')) closeSlideOver();
+});
+
+function openModal() {
+  if (scheduleEditLocked) return;
+  scheduleModal.classList.add('visible');
+  scheduleModal.setAttribute('aria-hidden', 'false');
+  overlay.classList.add('visible');
+  overlay.setAttribute('aria-hidden', 'false');
+  modalError.classList.remove('visible');
+  const firstEl = scheduleModal.querySelector('input, button');
+  if (firstEl) firstEl.focus();
+  trapFocus(scheduleModal);
+}
+
+function closeModal() {
+  scheduleModal.classList.remove('visible');
+  scheduleModal.setAttribute('aria-hidden', 'true');
+  overlay.classList.remove('visible');
+  overlay.setAttribute('aria-hidden', 'true');
+}
+
+scheduleConfirm.addEventListener('click', async () => {
+  const dateVal = scheduleDateEl.value;
+  const timeVal = scheduleTimeEl.value;
+  if (!dateVal || !timeVal) {
+    modalError.textContent = 'Please select a date and time.';
+    modalError.classList.add('visible');
+    return;
+  }
+  const scheduledFor = new Date(`${dateVal}T${timeVal}`).toISOString();
+  const content = postTextarea.value;
+
+  scheduleConfirm.textContent = 'Scheduling…';
+  scheduleConfirm.disabled = true;
+  modalError.classList.remove('visible');
+
+  try {
+    const schedulePayload = {
+      content,
+      scheduled_for: scheduledFor,
+      ...(currentPostId ? { post_id: currentPostId } : {}),
+    };
+    const res = await fetch('/api/linkedin/schedule', {
+      method:  'POST',
+      headers: apiHeaders(),
+      body:    JSON.stringify(schedulePayload),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || 'Scheduling failed');
+
+    closeModal();
+    const dateStr = new Date(`${dateVal}T${timeVal}`).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    scheduleEditLocked = true;
+    scheduledMeta = {
+      scheduledFor: scheduledFor,
+      scheduledPostId: data.scheduled_post_id != null ? Number(data.scheduled_post_id) : null,
+    };
+    applyScheduleLockUi();
+    showPublishedState(`Scheduled · ${dateStr}`);
+  } catch (err) {
+    modalError.textContent = err.message || 'Something went wrong. Try again.';
+    modalError.classList.add('visible');
+  } finally {
+    scheduleConfirm.textContent = 'Confirm schedule';
+    scheduleConfirm.disabled = false;
+  }
+});
+
+// Escape key closes modal/slide-over
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    if (scheduleModal.classList.contains('visible')) closeModal();
+    else if (slideOver.classList.contains('open')) closeSlideOver();
+  }
+});
+
+function trapFocus(container) {
+  const focusable = container.querySelectorAll('button, input, select, textarea, [tabindex]:not([tabindex="-1"])');
+  const first = focusable[0];
+  const last  = focusable[focusable.length - 1];
+
+  function handler(e) {
+    if (e.key !== 'Tab') return;
+    if (e.shiftKey) {
+      if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+    } else {
+      if (document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+  }
+
+  container.addEventListener('keydown', handler);
+  container._trapHandler = handler;
+}
+
+/* ── 19. Publish now ─────────────────────────────────────────── */
+publishBtn.addEventListener('click', async () => {
+  if (scheduleEditLocked) return;
+  const content = postTextarea.value.trim();
+  if (!content) return;
+
+  publishBtn.textContent = 'Publishing…';
+  publishBtn.disabled = true;
+  actionBarError.classList.remove('visible');
+
+  try {
+    const res = await fetch('/api/linkedin/publish', {
+      method: 'POST',
+      headers: apiHeaders(),
+      body: JSON.stringify({ content, postId: currentPostId })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      if (data.error === 'publish_blocked_scheduled') {
+        throw new Error('Pause scheduling before publishing, or wait for the scheduled send.');
+      }
+      throw new Error(data.error || 'Publish failed');
+    }
+
+    sessionStorage.setItem('sh_just_published', '1');
+    postTextarea.classList.add('published');
+    showPublishedState('Published · just now');
+    Session.clear();
+
+  } catch (err) {
+    publishBtn.textContent = 'Publish now';
+    publishBtn.disabled = false;
+    actionBarError.textContent = err.message || 'Publish failed. Please try again.';
+    actionBarError.classList.add('visible');
+  }
+});
+
+function showPublishedState(label) {
+  publishedLabel.textContent = label;
+  actionRight.style.display = 'none';
+  postPublishState.classList.add('visible');
+}
+
+/* ── 20. Create follow-up ────────────────────────────────────── */
+followUpBtn.addEventListener('click', () => {
+  if (scheduleEditLocked) return;
+  Session.clear();
+  currentPostId   = null;
+  primaryPost     = null;
+  alternativePost = null;
+
+  ideaInput.value        = '';
+  recipeTopic.value      = '';
+  recipeAudience.value   = '';
+  recipeLessonEl.value   = '';
+  recipeCta.value        = '';
+
+  // Reset right panel
+  postTextarea.value = '';
+  postTextarea.classList.remove('visible', 'published');
+  emptyState.classList.remove('hidden');
+  scoreBar.classList.remove('visible');
+  alternativeStrip.classList.remove('visible');
+  postPublishState.classList.remove('visible');
+  actionRight.style.display = '';
+  actionBarError.classList.remove('visible');
+  wordCountEl.textContent = '0 words';
+
+  disableActionButtons();
+  switchView('edit');
+  postErrorState.classList.remove('visible');
+});
+
+/* ── 21. Slide-over ──────────────────────────────────────────── */
+quoteCardBtn.addEventListener('click',   () => openSlideOver('quote_card',     'QUOTE CARD'));
+carouselBtn.addEventListener('click',    () => openSlideOver('carousel',        'CAROUSEL'));
+brandedQuoteBtn.addEventListener('click',() => openSlideOver('branded_quote',   'BRANDED QUOTE'));
+
+slideOverClose.addEventListener('click',   closeSlideOver);
+slideOverDiscard.addEventListener('click', closeSlideOver);
+
+function openSlideOver(type, label) {
+  if (scheduleEditLocked) return;
+  if (!currentPostId) return;
+
+  currentAssetType = type;
+  currentAssetUrl  = null;
+
+  slideOverLabel.textContent  = label;
+  slideOverContent.innerHTML  = '';
+  slideOverSkeleton.style.display = '';
+  slideOverContent.appendChild(slideOverSkeleton);
+
+  slideOver.classList.add('open');
+  slideOver.setAttribute('aria-hidden', 'false');
+  overlay.classList.add('visible');
+  overlay.setAttribute('aria-hidden', 'false');
+  slideOverClose.focus();
+  trapFocus(slideOver);
+
+  generateVisual(type);
+}
+
+function closeSlideOver() {
+  slideOver.classList.remove('open');
+  slideOver.setAttribute('aria-hidden', 'true');
+  overlay.classList.remove('visible');
+  overlay.setAttribute('aria-hidden', 'true');
+}
+
+async function generateVisual(type) {
+  try {
+    const res = await fetch(`/api/visuals/${currentPostId}`, {
+      method: 'POST',
+      headers: apiHeaders(),
+      body: JSON.stringify({ visual_type: type })
+    });
+    const data = await res.json();
+    slideOverSkeleton.style.display = 'none';
+
+    if (!res.ok || !data.ok) throw new Error(data.error || 'Failed to generate visual');
+
+    if (type === 'carousel') {
+      renderCarousel(data.slides);
+      // Use zip or pdf URL for save
+      currentAssetUrl = data.pdf_url || data.zip_url;
+    } else {
+      currentAssetUrl = data.png_url;
+      const img = document.createElement('img');
+      img.src = data.png_url;
+      img.alt = '';
+      img.className = 'slide-over-image';
+      slideOverContent.appendChild(img);
+    }
+  } catch {
+    slideOverSkeleton.style.display = 'none';
+    const err = document.createElement('p');
+    err.style.cssText = 'font-size:14px;color:var(--text-secondary);text-align:center;padding-top:var(--space-8)';
+    err.textContent = 'Could not generate asset. Try again.';
+    slideOverContent.appendChild(err);
+  }
+}
+
+function renderCarousel(slides) {
+  if (!slides || !slides.length) return;
+  slides.forEach((slide, i) => {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'carousel-slide';
+    const label = document.createElement('div');
+    label.className = 'carousel-slide-label';
+    label.textContent = `Slide ${i + 1}`;
+    const img = document.createElement('img');
+    img.src = slide.png_url;
+    img.alt = '';
+    img.className = 'slide-over-image';
+    wrapper.appendChild(label);
+    wrapper.appendChild(img);
+    slideOverContent.appendChild(wrapper);
+  });
+}
+
+slideOverSave.addEventListener('click', () => {
+  if (!currentAssetUrl) return;
+  const a = document.createElement('a');
+  a.href = currentAssetUrl;
+  a.download = '';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+});
+
+slideOverAdd.addEventListener('click', () => {
+  // Attach asset reference to session and close
+  if (currentAssetUrl) {
+    const session = Session.load() || {};
+    session.assetUrl = currentAssetUrl;
+    session.assetType = currentAssetType;
+    Session.save(session);
+  }
+  closeSlideOver();
+});
+
+/* ── 22. Enable / disable action buttons ────────────────────── */
+function enableActionButtons() {
+  if (scheduleEditLocked) {
+    scheduleBtn.disabled = true;
+    publishBtn.disabled = true;
+    quoteCardBtn.classList.add('disabled');
+    carouselBtn.classList.add('disabled');
+    brandedQuoteBtn.classList.add('disabled');
+    return;
+  }
+  scheduleBtn.disabled  = false;
+  publishBtn.disabled   = false;
+  quoteCardBtn.classList.remove('disabled');
+  carouselBtn.classList.remove('disabled');
+  brandedQuoteBtn.classList.remove('disabled');
+}
+
+function disableActionButtons() {
+  showAutosaveState('hidden');
+  scheduleBtn.disabled  = true;
+  publishBtn.disabled   = true;
+  quoteCardBtn.classList.add('disabled');
+  carouselBtn.classList.add('disabled');
+  brandedQuoteBtn.classList.add('disabled');
+}
+
+/* ── 23. Loading states ──────────────────────────────────────── */
+function setGenerating(loading) {
+  generateBtn.disabled    = loading;
+  generateBtn.textContent = loading ? 'Generating…' : 'Generate';
+}
+
+function showSkeleton() {
+  emptyState.classList.add('hidden');
+  postTextarea.classList.remove('visible');
+  postErrorState.classList.remove('visible');
+  skeletonState.classList.add('visible');
+}
+
+function hideSkeleton() {
+  skeletonState.classList.remove('visible');
+}
+
+function showPostError() {
+  hideSkeleton();
+  emptyState.classList.add('hidden');
+  postTextarea.classList.remove('visible');
+  postErrorState.classList.add('visible');
+}
+
+function showProfileIncompleteError() {
+  hideSkeleton();
+  emptyState.classList.add('hidden');
+  postTextarea.classList.remove('visible');
+  postErrorState.innerHTML = `Your voice profile is incomplete — posts need it to generate. <a href="/profile.html">Complete it →</a>`;
+  postErrorState.classList.add('visible');
+}
+
+/* ── 24. Session restore ─────────────────────────────────────── */
+function restoreSession(s) {
+  if (!s || !s.post) return;
+
+  // Restore path
+  if (s.path) switchPath(s.path);
+
+  // Restore inputs
+  if (s.ideaInput) ideaInput.value = s.ideaInput;
+  if (s.recipeInputs) {
+    if (s.recipeInputs.topic)    recipeTopic.value    = s.recipeInputs.topic;
+    if (s.recipeInputs.audience) recipeAudience.value = s.recipeInputs.audience;
+    if (s.recipeInputs.lesson)   recipeLessonEl.value = s.recipeInputs.lesson;
+    if (s.recipeInputs.cta)      recipeCta.value      = s.recipeInputs.cta;
+  }
+
+  // Restore post
+  currentPostId   = s.postId || null;
+  primaryPost     = s.primary || null;
+  alternativePost = s.alternative || null;
+
+  renderPost(s.post);
+  updateWordCount(s.post);
+
+  if (primaryPost) {
+    renderScoreBar(primaryPost.quality, primaryPost.archetype, primaryPost.confidence);
+    renderAlternativeStrip(alternativePost, primaryPost.confidence);
+  }
+
+  enableActionButtons();
+  if (currentPostId) {
+    refetchPostAndApplyLock();
+  }
+}
+
+/* ── 25. Helpers ─────────────────────────────────────────────── */
+function escHtml(str) {
+  if (!str) return '';
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}

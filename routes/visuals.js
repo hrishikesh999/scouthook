@@ -5,11 +5,12 @@ const router = express.Router();
 const { db } = require('../db');
 const { generateQuoteCard } = require('../services/quoteCardGenerator');
 const { generateCarousel } = require('../services/carouselGenerator');
+const { generateBrandedQuote } = require('../services/brandedQuoteGenerator');
 
 // ---------------------------------------------------------------------------
 // POST /api/visuals/:postId
 // Generate a visual from a post.
-// Phase 1: visual_type = 'quote_card' | 'carousel'
+// visual_type = 'quote_card' | 'carousel' | 'branded_quote'
 // ---------------------------------------------------------------------------
 router.post('/:postId', async (req, res) => {
   const { postId } = req.params;
@@ -17,7 +18,7 @@ router.post('/:postId', async (req, res) => {
   const tenantId = req.tenantId;
   const userId = req.userId;
 
-  if (!['quote_card', 'carousel'].includes(visual_type)) {
+  if (!['quote_card', 'carousel', 'branded_quote'].includes(visual_type)) {
     return res.status(400).json({ ok: false, error: 'invalid_visual_type' });
   }
 
@@ -63,13 +64,45 @@ router.post('/:postId', async (req, res) => {
   }
 
   try {
+    if (visual_type === 'branded_quote') {
+      const li = db.prepare(
+        'SELECT linkedin_name, linkedin_photo FROM linkedin_tokens WHERE user_id = ? AND tenant_id = ?'
+      ).get(post.user_id, tenantId);
+
+      const photoUrl = li?.linkedin_photo?.trim();
+      const displayName = li?.linkedin_name?.trim();
+      if (!photoUrl || !displayName) {
+        return res.status(400).json({ ok: false, error: 'branded_quote_requires_linkedin' });
+      }
+
+      let photoDataUri;
+      try {
+        const photoRes = await fetch(photoUrl);
+        if (!photoRes.ok) {
+          return res.status(502).json({ ok: false, error: 'branded_quote_photo_fetch_failed' });
+        }
+        const buf = await photoRes.arrayBuffer();
+        const mime = photoRes.headers.get('content-type') || 'image/jpeg';
+        photoDataUri = `data:${mime};base64,${Buffer.from(buf).toString('base64')}`;
+      } catch (fetchErr) {
+        console.warn('[visuals] branded_quote photo fetch:', fetchErr.message);
+        return res.status(502).json({ ok: false, error: 'branded_quote_photo_fetch_failed' });
+      }
+
+      const result = await generateBrandedQuote(post, brand, {
+        photoDataUri,
+        name: displayName,
+      });
+      return res.json({ ok: true, ...result });
+    }
+
     if (visual_type === 'quote_card') {
       const result = await generateQuoteCard(post, brand);
       return res.json({ ok: true, ...result });
-    } else {
-      const result = await generateCarousel(post, brand);
-      return res.json({ ok: true, ...result });
     }
+
+    const result = await generateCarousel(post, brand);
+    return res.json({ ok: true, ...result });
   } catch (err) {
     console.error('[visuals] generation error:', err.message);
     return res.status(500).json({ ok: false, error: err.message });

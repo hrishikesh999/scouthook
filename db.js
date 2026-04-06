@@ -206,6 +206,14 @@ for (const sql of [
   "ALTER TABLE user_profiles ADD COLUMN brand_text   TEXT DEFAULT '#F0F4FF'",
   "ALTER TABLE user_profiles ADD COLUMN brand_name   TEXT",
   "ALTER TABLE user_profiles ADD COLUMN brand_logo   TEXT",
+  "ALTER TABLE generated_posts ADD COLUMN status TEXT NOT NULL DEFAULT 'draft'",
+  "ALTER TABLE generated_posts ADD COLUMN published_at DATETIME",
+  "ALTER TABLE generated_posts ADD COLUMN idea_input      TEXT",
+  "ALTER TABLE generated_posts ADD COLUMN linkedin_post_id TEXT",
+  "ALTER TABLE generated_posts ADD COLUMN likes           INTEGER DEFAULT 0",
+  "ALTER TABLE generated_posts ADD COLUMN comments        INTEGER DEFAULT 0",
+  "ALTER TABLE generated_posts ADD COLUMN reactions       INTEGER DEFAULT 0",
+  "ALTER TABLE generated_posts ADD COLUMN last_synced_at  DATETIME",
 ]) {
   try { db.exec(sql); } catch (_) { /* column already exists */ }
 }

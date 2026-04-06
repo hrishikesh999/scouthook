@@ -10,19 +10,22 @@
  * @param {object} [options.recipeAnswers] — recipe path: { slug, answers }
  * @param {Array}  [options.apifyPosts]    — Phase 2: filtered Apify posts
  * @param {object} [options.exaSignals]    — Phase 2: Exa research signals
- * @returns {Promise<{ synthesis, posts }>}
+ * @returns {Promise<
+ *   | { synthesis: object, post: string, archetypeUsed: string, hookConfidence: number }
+ *   | { synthesis: object, posts: Array<{ format_slug: string, content: string }> }
+ * >}
  */
 async function synthesise(userProfile, options = {}) {
   const { rawIdea = null, recipeAnswers = null, apifyPosts = null, exaSignals = null } = options;
 
   if (rawIdea) {
     const { ideaToPost } = require('./ideaPath');
-    return ideaToPost(rawIdea, userProfile);
+    return ideaToPost(rawIdea, userProfile, options);
   }
 
   if (recipeAnswers) {
     const { recipesToPost } = require('./recipePath');
-    return recipesToPost(recipeAnswers.slug, recipeAnswers.answers, userProfile);
+    return recipesToPost(recipeAnswers.slug, recipeAnswers.answers, userProfile, options);
   }
 
   if (apifyPosts && exaSignals) {

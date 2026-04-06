@@ -3,6 +3,7 @@
 const path = require('path');
 const fs = require('fs');
 const sharp = require('sharp');
+const { PDFDocument } = require('pdf-lib');
 const archiver = require('archiver');
 const Anthropic = require('@anthropic-ai/sdk');
 const { getSetting } = require('../db');
@@ -27,7 +28,7 @@ const H = 1080;
  * 4. archiver zips all PNGs.
  *
  * @param {object} post — { id, content }
- * @returns {Promise<{ slides: Array<{ svg: string, png_url: string }>, zip_url: string }>}
+ * @returns {Promise<{ slides: Array<{ svg: string, png_url: string }>, zip_url: string, pdf_url: string }>}
  */
 async function generateCarousel(post, brand = {}) {
   const apiKey = getSetting('anthropic_api_key');
@@ -107,7 +108,31 @@ ${post.content}`,
   const zipPath = path.join(GENERATED_DIR, zipFilename);
   await createZip(pngPaths, zipPath);
 
-  return { slides: slideResults, zip_url: `/files/${zipFilename}` };
+  const pdfFilename = `carousel_${post.id}_${timestamp}.pdf`;
+  const pdfPath = path.join(GENERATED_DIR, pdfFilename);
+  const pdfBytes = await buildCarouselPdfFromPngs(pngPaths.map(p => p.path));
+  fs.writeFileSync(pdfPath, pdfBytes);
+
+  return {
+    slides: slideResults,
+    zip_url: `/files/${zipFilename}`,
+    pdf_url: `/files/${pdfFilename}`,
+  };
+}
+
+/**
+ * One PDF page per slide PNG (LinkedIn document / swipeable PDF post).
+ */
+async function buildCarouselPdfFromPngs(pngPathsOrdered) {
+  const pdfDoc = await PDFDocument.create();
+  for (const pngPath of pngPathsOrdered) {
+    const pngBytes = fs.readFileSync(pngPath);
+    const image = await pdfDoc.embedPng(pngBytes);
+    const { width, height } = image;
+    const page = pdfDoc.addPage([width, height]);
+    page.drawImage(image, { x: 0, y: 0, width, height });
+  }
+  return Buffer.from(await pdfDoc.save());
 }
 
 function buildSlideSvg(slide, slideNum, totalSlides, brand = {}) {

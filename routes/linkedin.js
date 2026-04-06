@@ -7,6 +7,37 @@ const { db, getSetting } = require('../db');
 const { storeTokens, getValidAccessToken } = require('../services/linkedinOAuth');
 const { publishNow } = require('../services/linkedinPublisher');
 const { addScheduledJob, removeScheduledJob } = require('../services/scheduler');
+const { syncPostMetrics, RateLimitError } = require('../services/linkedinMetrics');
+
+/**
+ * Cancel a pending/processing scheduled row: DB updates + remove Bull job.
+ * @returns {Promise<{ ok: true } | { ok: false, error: string, status?: string }>}
+ */
+async function cancelScheduledPostById(userId, tenantId, scheduledPostId) {
+  const row = db.prepare(
+    'SELECT id, status, post_id FROM scheduled_posts WHERE id = ? AND user_id = ? AND tenant_id = ?'
+  ).get(scheduledPostId, userId, tenantId);
+
+  if (!row) return { ok: false, error: 'not_found' };
+  if (!['pending', 'processing'].includes(row.status)) {
+    return { ok: false, error: 'cannot_cancel', status: row.status };
+  }
+
+  db.prepare(
+    `UPDATE scheduled_posts SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP WHERE id = ?`
+  ).run(scheduledPostId);
+
+  if (row.post_id) {
+    db.prepare(`
+      UPDATE generated_posts
+      SET status = 'draft'
+      WHERE id = ? AND user_id = ? AND tenant_id = ? AND status = 'scheduled'
+    `).run(row.post_id, userId, tenantId);
+  }
+
+  await removeScheduledJob(Number(scheduledPostId));
+  return { ok: true };
+}
 
 // ---------------------------------------------------------------------------
 // In-memory OAuth state store — CSRF protection for the OAuth redirect
@@ -27,16 +58,17 @@ router.get('/status', (req, res) => {
   const userId   = req.userId;
   const tenantId = req.tenantId;
 
-  if (!userId) return res.json({ ok: true, connected: false, name: null });
+  if (!userId) return res.json({ ok: true, connected: false, name: null, photo_url: null });
 
   const row = db.prepare(
-    'SELECT linkedin_name FROM linkedin_tokens WHERE user_id = ? AND tenant_id = ?'
+    'SELECT linkedin_name, linkedin_photo FROM linkedin_tokens WHERE user_id = ? AND tenant_id = ?'
   ).get(userId, tenantId);
 
   return res.json({
     ok:        true,
     connected: !!row,
     name:      row?.linkedin_name || null,
+    photo_url: row?.linkedin_photo?.trim() || null,
   });
 });
 
@@ -80,11 +112,11 @@ router.get('/callback', async (req, res) => {
   const { code, state, error: oauthError } = req.query;
 
   if (oauthError) {
-    return res.redirect(`/?linkedin_error=${encodeURIComponent(oauthError)}`);
+    return res.redirect(`/dashboard.html?linkedin_error=${encodeURIComponent(oauthError)}`);
   }
 
   if (!state || !oauthStates.has(state)) {
-    return res.redirect('/?linkedin_error=invalid_state');
+    return res.redirect('/dashboard.html?linkedin_error=invalid_state');
   }
 
   const { userId, tenantId } = oauthStates.get(state);
@@ -113,7 +145,7 @@ router.get('/callback', async (req, res) => {
     if (!tokenRes.ok) {
       const text = await tokenRes.text();
       console.error('[linkedin/callback] Token exchange failed:', text);
-      return res.redirect('/?linkedin_error=token_exchange_failed');
+      return res.redirect('/dashboard.html?linkedin_error=token_exchange_failed');
     }
 
     const tokens = await tokenRes.json();
@@ -138,6 +170,46 @@ router.get('/callback', async (req, res) => {
       console.error('[linkedin/callback] userinfo fetch failed:', profileRes.status, text);
     }
 
+    // Fallback: some accounts/apps don't receive OIDC `picture` reliably.
+    // Try LinkedIn REST `me` with profilePicture projection and LinkedIn-Version header.
+    if (!linkedin_photo) {
+      try {
+        const meRes = await fetch(
+          'https://api.linkedin.com/v2/me?projection=(localizedFirstName,localizedLastName,profilePicture(displayImage~:playableStreams))',
+          {
+            headers: {
+              'Authorization': `Bearer ${tokens.access_token}`,
+              'LinkedIn-Version': '202308',
+            },
+          }
+        );
+
+        if (meRes.ok) {
+          const me = await meRes.json();
+          if (!linkedin_name) {
+            linkedin_name = `${me.localizedFirstName || ''} ${me.localizedLastName || ''}`.trim() || null;
+          }
+
+          const streams = me?.profilePicture?.['displayImage~']?.elements || [];
+          const best = streams
+            .map(el => ({
+              url: el?.identifiers?.[0]?.identifier || null,
+              area: (el?.data?.['com.linkedin.digitalmedia.mediaartifact.StillImage']?.storageSize?.width || 0) *
+                (el?.data?.['com.linkedin.digitalmedia.mediaartifact.StillImage']?.storageSize?.height || 0),
+            }))
+            .filter(x => !!x.url)
+            .sort((a, b) => b.area - a.area)[0];
+
+          if (best?.url) linkedin_photo = best.url;
+        } else {
+          const text = await meRes.text();
+          console.warn('[linkedin/callback] me fallback failed:', meRes.status, text);
+        }
+      } catch (e) {
+        console.warn('[linkedin/callback] me fallback error:', e.message);
+      }
+    }
+
     storeTokens(userId, tenantId, {
       access_token: tokens.access_token,
       refresh_token: tokens.refresh_token || null,
@@ -148,11 +220,11 @@ router.get('/callback', async (req, res) => {
     });
 
     console.log(`[linkedin/callback] Connected user=${userId} as ${linkedin_name} (${linkedin_user_id})`);
-    res.redirect('/?linkedin_connected=true');
+    res.redirect('/dashboard.html?linkedin_connected=true');
 
   } catch (err) {
     console.error('[linkedin/callback] Error:', err.message);
-    res.redirect(`/?linkedin_error=${encodeURIComponent(err.message)}`);
+    res.redirect(`/dashboard.html?linkedin_error=${encodeURIComponent(err.message)}`);
   }
 });
 
@@ -164,19 +236,58 @@ router.get('/callback', async (req, res) => {
 router.post('/publish', async (req, res) => {
   const userId   = req.userId;
   const tenantId = req.tenantId;
-  const { content } = req.body;
+  const { content, image_url, carousel_pdf_url, postId } = req.body;
 
   if (!userId)  return res.status(400).json({ ok: false, error: 'missing_user_id' });
   if (!content?.trim()) return res.status(400).json({ ok: false, error: 'missing_content' });
   if (content.length > 3000) return res.status(400).json({ ok: false, error: 'content_too_long' });
+  if (image_url && typeof image_url !== 'string') return res.status(400).json({ ok: false, error: 'invalid_image_url' });
+  if (carousel_pdf_url && typeof carousel_pdf_url !== 'string') {
+    return res.status(400).json({ ok: false, error: 'invalid_carousel_pdf_url' });
+  }
+
+  if (postId) {
+    const gp = db.prepare(
+      'SELECT status FROM generated_posts WHERE id = ? AND user_id = ? AND tenant_id = ?'
+    ).get(postId, userId, tenantId);
+    if (!gp) return res.status(404).json({ ok: false, error: 'post_not_found' });
+    if (gp.status === 'scheduled') {
+      return res.status(409).json({ ok: false, error: 'publish_blocked_scheduled' });
+    }
+  }
 
   try {
-    const result = await publishNow(userId, tenantId, content.trim());
+    const result = await publishNow(userId, tenantId, content.trim(), {
+      carousel_pdf_url: carousel_pdf_url?.trim() || null,
+      image_url: image_url?.trim() || null,
+    });
+
+    // Stamp the originating draft as published and persist the LinkedIn share ID
+    if (postId) {
+      db.prepare(`
+        UPDATE generated_posts
+        SET status = 'published', published_at = CURRENT_TIMESTAMP
+        WHERE id = ? AND user_id = ? AND tenant_id = ?
+      `).run(postId, userId, tenantId);
+
+      if (result.linkedin_post_id) {
+        db.prepare(`UPDATE generated_posts SET linkedin_post_id = ? WHERE id = ?`)
+          .run(result.linkedin_post_id, postId);
+      }
+    }
+
     return res.json({ ok: true, linkedin_post_id: result.linkedin_post_id });
   } catch (err) {
     if (err.message === 'not_connected')      return res.status(401).json({ ok: false, error: 'not_connected' });
     if (err.message === 'reconnect_required') return res.status(401).json({ ok: false, error: 'reconnect_required' });
     if (err.message === 'rate_limit_exceeded') return res.status(429).json({ ok: false, error: 'rate_limit_exceeded' });
+    if (err.message === 'invalid_image_url') return res.status(400).json({ ok: false, error: 'invalid_image_url' });
+    if (err.message === 'invalid_carousel_pdf_url') {
+      return res.status(400).json({ ok: false, error: 'invalid_carousel_pdf_url' });
+    }
+    if (err.message === 'linkedin_image_not_ready' || err.message === 'linkedin_image_processing_failed') {
+      return res.status(502).json({ ok: false, error: err.message });
+    }
     console.error('[linkedin/publish] Error:', err.message);
     return res.status(500).json({ ok: false, error: err.message });
   }
@@ -215,6 +326,15 @@ router.post('/schedule', async (req, res) => {
 
     const scheduledPostId = result.lastInsertRowid;
 
+    // Keep scheduled posts out of the Drafts list (GET /api/posts?status=draft)
+    if (post_id) {
+      db.prepare(`
+        UPDATE generated_posts
+        SET status = 'scheduled'
+        WHERE id = ? AND user_id = ? AND tenant_id = ? AND status = 'draft'
+      `).run(post_id, userId, tenantId);
+    }
+
     try {
       await addScheduledJob(scheduledPostId, scheduledDate);
     } catch (schedulerErr) {
@@ -240,10 +360,13 @@ router.get('/scheduled', (req, res) => {
   if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
 
   const posts = db.prepare(`
-    SELECT id, content, scheduled_for, status, linkedin_post_id, error_message, attempts, created_at
-    FROM scheduled_posts
-    WHERE user_id = ? AND tenant_id = ? AND status IN ('pending', 'processing')
-    ORDER BY scheduled_for ASC
+    SELECT sp.id, sp.content, sp.scheduled_for, sp.status,
+           sp.linkedin_post_id, sp.error_message, sp.attempts, sp.created_at,
+           sp.post_id, gp.format_slug
+    FROM   scheduled_posts sp
+    LEFT JOIN generated_posts gp ON sp.post_id = gp.id
+    WHERE  sp.user_id = ? AND sp.tenant_id = ? AND sp.status IN ('pending', 'processing')
+    ORDER  BY sp.scheduled_for ASC
   `).all(userId, tenantId);
 
   return res.json({ ok: true, posts });
@@ -260,20 +383,46 @@ router.delete('/scheduled/:id', async (req, res) => {
 
   if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
 
-  const row = db.prepare(
-    'SELECT id, status FROM scheduled_posts WHERE id = ? AND user_id = ? AND tenant_id = ?'
-  ).get(id, userId, tenantId);
-
-  if (!row) return res.status(404).json({ ok: false, error: 'not_found' });
-  if (!['pending', 'processing'].includes(row.status)) {
-    return res.status(400).json({ ok: false, error: 'cannot_cancel', status: row.status });
+  const result = await cancelScheduledPostById(userId, tenantId, Number(id));
+  if (!result.ok) {
+    if (result.error === 'not_found') return res.status(404).json({ ok: false, error: 'not_found' });
+    return res.status(400).json({ ok: false, error: result.error, status: result.status });
   }
 
-  db.prepare(
-    `UPDATE scheduled_posts SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP WHERE id = ?`
-  ).run(id);
+  return res.json({ ok: true });
+});
 
-  await removeScheduledJob(Number(id));
+// ---------------------------------------------------------------------------
+// POST /api/linkedin/scheduled/pause-by-post
+// Cancel schedule by generated_posts id — used from generate.html (Pause to edit)
+// Body: { post_id }
+// ---------------------------------------------------------------------------
+router.post('/scheduled/pause-by-post', async (req, res) => {
+  const userId   = req.userId;
+  const tenantId = req.tenantId;
+  const postId   = req.body?.post_id != null ? Number(req.body.post_id) : NaN;
+
+  if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
+  if (!Number.isFinite(postId)) return res.status(400).json({ ok: false, error: 'invalid_post_id' });
+
+  const schedRow = db.prepare(`
+    SELECT id FROM scheduled_posts
+    WHERE post_id = ? AND user_id = ? AND tenant_id = ? AND status IN ('pending', 'processing')
+  `).get(postId, userId, tenantId);
+
+  if (!schedRow) {
+    const gp = db.prepare(
+      'SELECT id, status FROM generated_posts WHERE id = ? AND user_id = ? AND tenant_id = ?'
+    ).get(postId, userId, tenantId);
+    if (!gp) return res.status(404).json({ ok: false, error: 'post_not_found' });
+    return res.status(409).json({ ok: false, error: 'no_active_schedule', status: gp.status });
+  }
+
+  const result = await cancelScheduledPostById(userId, tenantId, schedRow.id);
+  if (!result.ok) {
+    if (result.error === 'not_found') return res.status(404).json({ ok: false, error: 'not_found' });
+    return res.status(400).json({ ok: false, error: result.error, status: result.status });
+  }
 
   return res.json({ ok: true });
 });
@@ -320,6 +469,40 @@ router.delete('/user-data', (req, res) => {
 
   console.log(`[linkedin/user-data] All data deleted for user=${userId} tenant=${tenantId}`);
   return res.json({ ok: true });
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/linkedin/sync-metrics
+// Fetches fresh engagement data for a single published post from LinkedIn's
+// Social Metadata API (2026-03). Per-row, user-initiated only — never bulk.
+// ---------------------------------------------------------------------------
+router.post('/sync-metrics', async (req, res) => {
+  const userId   = req.userId;
+  const tenantId = req.tenantId || 'default';
+  const { postId } = req.body;
+
+  if (!userId)  return res.status(400).json({ ok: false, error: 'missing_user_id' });
+  if (!postId)  return res.status(400).json({ ok: false, error: 'missing_post_id' });
+
+  try {
+    const metrics = await syncPostMetrics(Number(postId), userId, tenantId);
+    return res.json({ ok: true, ...metrics });
+  } catch (err) {
+    if (err instanceof RateLimitError) {
+      return res.status(429).json({ ok: false, error: 'rate_limited' });
+    }
+    if (err.message === 'not_connected' || err.message === 'reconnect_required') {
+      return res.status(401).json({ ok: false, error: err.message });
+    }
+    if (err.message === 'post_not_found') {
+      return res.status(404).json({ ok: false, error: 'post_not_found' });
+    }
+    if (err.message === 'no_linkedin_id') {
+      return res.status(422).json({ ok: false, error: 'no_linkedin_id' });
+    }
+    console.error('[linkedin/sync-metrics] error:', err);
+    return res.status(500).json({ ok: false, error: err.message });
+  }
 });
 
 module.exports = router;

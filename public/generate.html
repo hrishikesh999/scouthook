@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Generate — Scouthook</title>
+  <link rel="stylesheet" href="/css/main.css">
+</head>
+<body>
+
+  <!-- ── Sidebar ──────────────────────────────────────────── -->
+  <aside id="sidebar" role="navigation" aria-label="Main navigation">
+    <a href="/dashboard.html" class="sidebar-logo">Scout<span>hook</span></a>
+    <nav class="sidebar-nav">
+      <a href="/dashboard.html" class="sidebar-link">Dashboard</a>
+      <a href="/drafts.html" class="sidebar-link">Drafts</a>
+      <a href="/schedule.html" class="sidebar-link">Schedule</a>
+      <a href="/Published.html" class="sidebar-link">Published</a>
+    </nav>
+    <div class="sidebar-bottom">
+      <a href="/profile.html" class="sidebar-link">Profile</a>
+    </div>
+  </aside>
+
+  <!-- ── Main content ──────────────────────────────────────── -->
+  <div id="main-content">
+
+  <!-- ── Top bar ───────────────────────────────────────────── -->
+  <div id="topbar">
+    <div id="nav-linkedin-area">
+      <!-- Populated by JS: button or connected indicator -->
+      <a href="/api/linkedin/connect" class="nav-linkedin-btn" id="linkedin-connect-btn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="#0A66C2" aria-hidden="true">
+          <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+        </svg>
+        Connect LinkedIn
+      </a>
+    </div>
+  </div>
+
+  <!-- ── Main Layout ───────────────────────────────────────── -->
+  <main id="app">
+
+    <!-- ── Left Panel ──────────────────────────────────────── -->
+    <div id="left-panel">
+
+      <!-- Path toggle -->
+      <div class="path-toggle" role="tablist" aria-label="Generation mode">
+        <button class="path-tab active" id="tab-idea" role="tab" aria-selected="true" aria-controls="idea-fields">I have an idea</button>
+        <button class="path-tab" id="tab-recipe" role="tab" aria-selected="false" aria-controls="recipe-fields">Give me a recipe</button>
+      </div>
+
+      <!-- Voice profile indicator -->
+      <div id="voice-indicator-area">
+        <!-- Populated by JS -->
+      </div>
+
+      <!-- Idea path fields -->
+      <div id="idea-fields">
+        <div class="field-group">
+          <label class="field-label" for="idea-input">Your Idea</label>
+          <textarea
+            id="idea-input"
+            class="field-textarea"
+            placeholder="A moment, lesson, or observation from this week…"
+            aria-label="Your idea"
+          ></textarea>
+          <div class="field-error" id="idea-error" role="alert">Add a thought before generating</div>
+        </div>
+      </div>
+
+      <!-- Recipe path fields -->
+      <div id="recipe-fields" role="tabpanel" aria-labelledby="tab-recipe">
+        <div class="field-group">
+          <label class="field-label" for="recipe-topic">What is the post about?</label>
+          <input
+            type="text"
+            id="recipe-topic"
+            class="field-input"
+            placeholder="e.g. Why most pricing advice is wrong"
+          />
+        </div>
+        <div class="field-group">
+          <label class="field-label" for="recipe-audience">Who is it for?</label>
+          <input
+            type="text"
+            id="recipe-audience"
+            class="field-input"
+            placeholder="e.g. B2B consultants billing by the hour"
+          />
+        </div>
+        <div class="field-group">
+          <label class="field-label" for="recipe-lesson">What is the key lesson or insight?</label>
+          <textarea
+            id="recipe-lesson"
+            class="field-textarea"
+            placeholder="e.g. Clients don't pay for time, they pay for certainty"
+          ></textarea>
+        </div>
+        <div class="field-group">
+          <label class="field-label" for="recipe-cta">What should they do or think after reading?</label>
+          <input
+            type="text"
+            id="recipe-cta"
+            class="field-input"
+            placeholder="e.g. Rethink how they position their pricing"
+          />
+        </div>
+        <div class="field-error" id="recipe-error" role="alert">Fill in at least the topic and lesson before generating</div>
+      </div>
+
+      <button id="generate-btn" aria-live="polite">Generate</button>
+    </div>
+    <!-- /left-panel -->
+
+    <!-- ── Right Panel ─────────────────────────────────────── -->
+    <div id="right-panel" aria-label="Post output">
+
+      <!-- Scheduled: pause before edit -->
+      <div id="schedule-lock-banner" class="schedule-lock-banner hidden" role="region" aria-label="Scheduled post">
+        <p class="schedule-lock-banner-text" id="schedule-lock-banner-text"></p>
+        <button type="button" id="schedule-pause-btn" class="btn-outlined-teal schedule-pause-btn">Pause to edit</button>
+        <p class="schedule-lock-banner-msg" id="schedule-lock-banner-msg" aria-live="polite"></p>
+      </div>
+
+      <!-- Zone 1: Edit / Preview toggle bar -->
+      <div id="toggle-bar" role="tablist" aria-label="View mode">
+        <button class="view-tab active" id="tab-edit" role="tab" aria-selected="true" aria-controls="post-edit-area">Edit</button>
+        <button class="view-tab" id="tab-preview" role="tab" aria-selected="false" aria-controls="linkedin-preview">LinkedIn Preview</button>
+        <div class="word-count" id="word-count" aria-live="polite">0 words</div>
+      </div>
+
+      <!-- Zone 2: Quality score bar -->
+      <div id="score-bar" role="region" aria-label="Quality score">
+        <div class="score-left">
+          <div id="score-number" class="fail" aria-live="polite" aria-label="Quality score">0</div>
+          <div class="score-label">Quality score</div>
+          <div id="force-returned-pill" class="force-returned-pill" style="display:none">FORCE RETURNED</div>
+        </div>
+        <div class="score-right">
+          <div class="score-top-row">
+            <span id="archetype-badge" class="archetype-badge" style="display:none"></span>
+            <span id="confidence-text" class="confidence-text" style="display:none"></span>
+            <span id="passfail-pill" class="passfail-pill pass"></span>
+          </div>
+          <button class="suggestions-toggle" id="suggestions-toggle" aria-expanded="false">▸ 0 suggestions to review</button>
+          <div class="suggestions-list" id="suggestions-list" role="list"></div>
+        </div>
+      </div>
+
+      <!-- Alternative post strip -->
+      <div id="alternative-strip" role="note">
+        <span id="alternative-preview-text"></span>
+        <a id="switch-alternative-btn" href="#" role="button">Switch to this →</a>
+      </div>
+
+      <!-- Zone 3: Post surface -->
+      <div id="post-surface">
+
+        <!-- Edit area -->
+        <div id="post-edit-area" role="tabpanel" aria-labelledby="tab-edit">
+
+          <!-- Empty state -->
+          <div class="empty-state" id="empty-state" aria-label="Example comparison">
+            <div class="empty-compare-grid">
+              <div>
+                <div class="empty-compare-label label-other">Other AI Tools</div>
+                <div class="empty-compare-card">
+                  <p class="empty-compare-text text-other">I'm excited to share some thoughts on strategy today!
+In today's world, many clients are struggling with their strategic direction. It's a game changer to realise that the real issue might be something deeper. Let's dive deep into this together and move the needle on what matters.
+#Strategy #Leadership #Consulting</p>
+                </div>
+              </div>
+              <div>
+                <div class="empty-compare-label label-scouthook">Scouthook</div>
+                <div class="empty-compare-card scouthook-card">
+                  <p class="empty-compare-text text-scouthook">Most clients don't have a strategy problem.
+
+They have a courage problem.
+
+They know what needs to change. They've known for months. The deck is finished. The roadmap exists.
+
+But the conversation hasn't happened yet.
+
+That's not a strategy gap. That's a different problem entirely — and it needs a different solution.
+
+What's the hardest conversation you've been avoiding?</p>
+                </div>
+              </div>
+            </div>
+            <div class="empty-stats" aria-label="Improvement stats">
+              <span class="empty-stat">Hook: 31 words → 7 words</span>
+              <span class="empty-stat">Clichés blocked: 4 → 0</span>
+              <span class="empty-stat">Sounds like you: No → Yes</span>
+            </div>
+          </div>
+
+          <!-- Skeleton (while loading) -->
+          <div class="skeleton-state" id="skeleton-state" aria-busy="true" aria-label="Generating post">
+            <div class="skeleton-line" style="width: 60%"></div>
+            <div class="skeleton-line" style="width: 90%"></div>
+            <div class="skeleton-line" style="width: 75%"></div>
+          </div>
+
+          <!-- Error state -->
+          <div class="post-error-state" id="post-error-state" role="alert">
+            Something went wrong. <a id="try-again-link" href="#" role="button">Try again →</a>
+          </div>
+
+          <!-- Post textarea -->
+          <textarea
+            id="post-textarea"
+            aria-label="Generated post — edit here"
+            aria-multiline="true"
+          ></textarea>
+
+        </div><!-- /post-edit-area -->
+
+        <!-- LinkedIn Preview -->
+        <div id="linkedin-preview" role="tabpanel" aria-labelledby="tab-preview" aria-hidden="true">
+          <div class="linkedin-card">
+            <div class="linkedin-card-header">
+              <div id="linkedin-avatar-initials" class="linkedin-avatar-initials" aria-hidden="true">SH</div>
+              <div>
+                <div class="linkedin-name" id="preview-name">Your Name</div>
+                <div class="linkedin-headline" id="preview-headline">Your headline</div>
+                <div class="linkedin-timestamp">now</div>
+              </div>
+            </div>
+            <div class="linkedin-body" id="preview-body"></div>
+            <div class="linkedin-engagement" role="list">
+              <button class="linkedin-action" aria-label="Like" role="listitem">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/><path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>
+                Like
+              </button>
+              <button class="linkedin-action" aria-label="Comment" role="listitem">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                Comment
+              </button>
+              <button class="linkedin-action" aria-label="Repost" role="listitem">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+                Repost
+              </button>
+              <button class="linkedin-action" aria-label="Send" role="listitem">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                Send
+              </button>
+            </div>
+          </div>
+        </div><!-- /linkedin-preview -->
+
+      </div><!-- /post-surface -->
+
+      <!-- Zone 4: Action bar -->
+      <div>
+        <div id="action-bar">
+          <!-- Left group -->
+          <button id="regenerate-btn" aria-label="Regenerate post">Regenerate</button>
+          <div class="action-divider" aria-hidden="true"></div>
+          <button class="pill-btn disabled" id="quote-card-btn" aria-label="Generate quote card">Quote card</button>
+          <button class="pill-btn disabled" id="carousel-btn" aria-label="Generate carousel">Carousel</button>
+          <button class="pill-btn disabled" id="branded-quote-btn" aria-label="Generate branded quote">Branded quote</button>
+
+          <!-- Right group -->
+          <div class="action-right" id="action-right">
+            <span class="autosave-indicator" id="save-draft-btn" aria-live="polite"></span>
+            <button class="btn-outlined" id="schedule-btn" disabled aria-label="Schedule post">Schedule</button>
+            <button id="publish-btn" disabled aria-label="Publish to LinkedIn">Publish now</button>
+          </div>
+
+          <!-- Post-publish state (hidden until published) -->
+          <div class="post-publish-state" id="post-publish-state" aria-live="polite">
+            <div class="published-text" id="published-text">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="#0A66C2" aria-hidden="true">
+                <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+              </svg>
+              <span id="published-label">Published · just now</span>
+            </div>
+            <div class="action-divider" aria-hidden="true"></div>
+            <button class="btn-outlined-teal" id="follow-up-btn">Create a follow-up post</button>
+          </div>
+        </div>
+        <div class="action-bar-error" id="action-bar-error" role="alert"></div>
+      </div>
+
+    </div><!-- /right-panel -->
+
+  </main>
+
+  <!-- ── Slide-over ─────────────────────────────────────────── -->
+  <div id="slide-over" class="slide-over" role="dialog" aria-modal="true" aria-label="Asset generator" aria-hidden="true">
+    <div class="slide-over-handle" aria-hidden="true"></div>
+    <div class="slide-over-header">
+      <span class="slide-over-type-label" id="slide-over-label">Asset</span>
+      <button class="slide-over-close" id="slide-over-close" aria-label="Close panel">✕</button>
+    </div>
+    <div class="slide-over-content" id="slide-over-content">
+      <div class="slide-over-skeleton" id="slide-over-skeleton" aria-label="Loading asset"></div>
+    </div>
+    <div class="slide-over-footer">
+      <button class="btn-outlined" id="slide-over-save" aria-label="Save asset">Save asset</button>
+      <button class="btn-outlined-teal" id="slide-over-add" aria-label="Add asset to post">Add to post</button>
+      <button class="slide-over-discard" id="slide-over-discard">Discard</button>
+    </div>
+  </div>
+
+  <!-- ── Schedule Modal ─────────────────────────────────────── -->
+  <div id="schedule-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="schedule-modal-heading" aria-hidden="true">
+    <h2 class="modal-heading" id="schedule-modal-heading">Schedule post</h2>
+    <div class="modal-field">
+      <label class="field-label" for="schedule-date">Date</label>
+      <input type="date" id="schedule-date" class="field-input" style="width:100%" />
+    </div>
+    <div class="modal-field">
+      <label class="field-label" for="schedule-time">Time</label>
+      <input type="time" id="schedule-time" class="field-input" style="width:100%" />
+    </div>
+    <div class="modal-footer">
+      <button class="btn-outlined" id="schedule-cancel" style="height:36px">Cancel</button>
+      <button id="schedule-confirm-btn" class="btn-teal-filled">Confirm schedule</button>
+    </div>
+    <div class="modal-error" id="modal-error" role="alert"></div>
+  </div>
+
+  <!-- ── Overlay (shared by modal + slide-over) ─────────────── -->
+  <div id="overlay" class="overlay" aria-hidden="true"></div>
+
+    <footer class="app-footer" role="contentinfo">
+      <div class="app-footer-inner">
+        <a href="#">Privacy Policy</a>
+        <span class="app-footer-sep">|</span>
+        <a href="#">Terms of Service</a>
+        <p class="app-footer-legal">© 2026 CopyPower Digital LLP. ScoutHook is an AI-powered authority engine.</p>
+      </div>
+    </footer>
+
+  </div><!-- /main-content -->
+
+  <script src="/js/session.js"></script>
+  <script src="/js/generate.js"></script>
+</body>
+</html>

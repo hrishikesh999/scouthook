@@ -3,308 +3,124 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Set Up Your Profile — Scouthook</title>
-  <link rel="stylesheet" href="/css/scouthook.css" />
+  <title>Profile — Scouthook</title>
+  <link rel="stylesheet" href="/css/main.css">
 </head>
 <body>
 
-  <header class="site-header">
-    <div class="container site-header__inner">
-      <a href="/" class="site-header__logo">Scout<span>hook</span></a>
+  <!-- ── Sidebar ──────────────────────────────────────────── -->
+  <aside id="sidebar" role="navigation" aria-label="Main navigation">
+    <a href="/dashboard.html" class="sidebar-logo">Scout<span>hook</span></a>
+    <nav class="sidebar-nav">
+      <a href="/dashboard.html" class="sidebar-link">Dashboard</a>
+      <a href="/drafts.html" class="sidebar-link">Drafts</a>
+      <a href="/schedule.html" class="sidebar-link">Schedule</a>
+      <a href="/Published.html" class="sidebar-link">Published</a>
+    </nav>
+    <div class="sidebar-bottom">
+      <a href="/profile.html" class="sidebar-link active" aria-current="page">Profile</a>
     </div>
-  </header>
+  </aside>
 
-  <main class="container">
-    <div style="max-width: 600px; margin: 0 auto;">
+  <!-- ── Main content ──────────────────────────────────────── -->
+  <div id="main-content">
 
-      <h1 style="margin-bottom: 0.5rem;">Your voice and audience profile</h1>
-      <p class="text-muted" style="margin-bottom: var(--space-xl);">
-        This is what makes your posts sound like you — not a generic AI.
-        Takes 5 minutes. Only do this once.
-      </p>
+  <!-- ── Top bar ───────────────────────────────────────────── -->
+  <div id="topbar">
+    <div id="nav-linkedin-area">
+      <a href="/api/linkedin/connect" class="nav-linkedin-btn" id="linkedin-connect-btn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="#0A66C2" aria-hidden="true">
+          <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+        </svg>
+        Connect LinkedIn
+      </a>
+    </div>
+  </div>
 
-      <!-- Profile completeness indicator -->
-      <div id="completeness" class="card mb-lg hidden">
-        <div style="font-size: 0.85rem; color: var(--color-text-muted); margin-bottom: var(--space-sm);">Profile completeness</div>
-        <div style="background: var(--color-border); border-radius: 4px; height: 6px;">
-          <div id="completeness-bar" style="background: var(--color-accent); height: 6px; border-radius: 4px; width: 0%; transition: width 0.3s;"></div>
-        </div>
+  <!-- ── Profile Page ───────────────────────────────────────── -->
+  <div class="profile-page">
+    <h1 class="profile-heading">Your voice profile</h1>
+    <p class="profile-subheading">This is how Scouthook learns to write like you.</p>
+
+    <div class="profile-card">
+
+      <!-- Content niche -->
+      <div class="profile-field">
+        <label class="field-label" for="profile-niche">Content Niche</label>
+        <input
+          type="text"
+          id="profile-niche"
+          class="field-input"
+          placeholder="e.g. SaaS growth, leadership coaching, financial advisory"
+          style="width:100%"
+        />
       </div>
 
-      <form id="profile-form">
+      <!-- Audience role -->
+      <div class="profile-field">
+        <label class="field-label" for="profile-audience">Who do you write for?</label>
+        <input
+          type="text"
+          id="profile-audience"
+          class="field-input"
+          placeholder="e.g. B2B founders doing $1M–$10M ARR"
+          style="width:100%"
+        />
+      </div>
 
-        <div class="field">
-          <label for="writing_samples">2–3 examples of your writing</label>
-          <textarea
-            id="writing_samples"
-            name="writing_samples"
-            rows="8"
-            placeholder="Paste 2–3 LinkedIn posts you've written that you're proud of. These are used to extract your voice — sentence length, how you open, how you use credibility. The more real the samples, the better the output. Don't paste generic examples."
-          ></textarea>
-          <div class="text-muted" style="font-size: 0.8rem; margin-top: 0.25rem;">Used once to extract your voice fingerprint. Never shown to others.</div>
-        </div>
+      <!-- Audience pain -->
+      <div class="profile-field">
+        <label class="field-label" for="profile-pain">What keeps your audience up at night?</label>
+        <textarea
+          id="profile-pain"
+          class="field-textarea profile-textarea-sm"
+          placeholder="e.g. They're closing deals but revenue feels unpredictable and dependent on them showing up"
+        ></textarea>
+      </div>
 
-        <div class="field">
-          <label for="contrarian_view">What most people in your field get wrong</label>
-          <textarea
-            id="contrarian_view"
-            name="contrarian_view"
-            rows="4"
-            placeholder="Write 3–5 sentences stating a position you hold that most people in your field would disagree with. Be direct — don't hedge. This feeds directly into your Hot Take posts verbatim. Example: 'Most consultants price too low because they price on time, not on value. The fix isn't to raise your rates — it's to stop quoting rates entirely and quote outcomes instead.'"
-          ></textarea>
-        </div>
+      <!-- Contrarian view -->
+      <div class="profile-field">
+        <label class="field-label" for="profile-contrarian">Your Contrarian View</label>
+        <textarea
+          id="profile-contrarian"
+          class="field-textarea profile-textarea-sm"
+          placeholder="e.g. Most founders don't have a sales problem — they have a positioning problem"
+        ></textarea>
+        <p class="field-helper">Your 'hot take'. Used to generate Contrarian archetype posts.</p>
+      </div>
 
-        <div class="field">
-          <label for="audience_role">Who you write for</label>
-          <input
-            type="text"
-            id="audience_role"
-            name="audience_role"
-            placeholder="e.g. 'Founders of B2B SaaS companies raising their Series A' or 'Senior marketing managers at enterprise companies'"
-          />
-        </div>
+      <hr class="profile-divider" aria-hidden="true" />
 
-        <div class="field">
-          <label for="audience_pain">What keeps your audience up at night</label>
-          <textarea
-            id="audience_pain"
-            name="audience_pain"
-            rows="3"
-            placeholder="Write 2–3 sentences about the specific fears, frustrations, or pressures your audience deals with. Example: 'They know they need to hire but can't afford to make a bad hire. They're being asked to do more with less. They're worried their team will burn out before the product ships.'"
-          ></textarea>
-        </div>
+      <!-- Writing samples -->
+      <div class="profile-field">
+        <label class="field-label" for="profile-samples">Writing Samples</label>
+        <textarea
+          id="profile-samples"
+          class="field-textarea profile-textarea-lg"
+          placeholder="Paste 2–3 of your best LinkedIn posts here. Scouthook uses these to learn your voice — they are never shared or returned via the API."
+        ></textarea>
+        <p class="field-helper">Minimum 2 posts for best results.</p>
+      </div>
 
-        <div class="field">
-          <label for="content_niche">Your content niche</label>
-          <input
-            type="text"
-            id="content_niche"
-            name="content_niche"
-            placeholder="e.g. 'B2B sales strategy' or 'Independent consulting pricing' or 'Product-led growth'"
-          />
-        </div>
+    </div><!-- /profile-card -->
 
-        <!-- Brand colours -->
-        <div style="margin-top: var(--space-xl); padding-top: var(--space-lg); border-top: 1px solid var(--color-border);">
-          <h3 style="margin-bottom: 0.25rem;">Visual brand colours</h3>
-          <p class="text-muted" style="font-size: 0.85rem; margin-bottom: var(--space-lg);">
-            Used for your quote cards and carousel slides. Defaults match the Scouthook dark theme.
-          </p>
-          <div style="display: flex; gap: var(--space-lg); flex-wrap: wrap;">
-            <div class="field" style="flex: 1; min-width: 140px;">
-              <label for="brand_bg">Background</label>
-              <div style="display: flex; align-items: center; gap: var(--space-sm);">
-                <input type="color" id="brand_bg" name="brand_bg" value="#0F1A3C"
-                  style="width: 48px; height: 36px; padding: 2px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: none; cursor: pointer;" />
-                <input type="text" id="brand_bg_hex" value="#0F1A3C" maxlength="7"
-                  style="width: 90px; font-family: monospace; font-size: 0.9rem;" />
-              </div>
-            </div>
-            <div class="field" style="flex: 1; min-width: 140px;">
-              <label for="brand_accent">Accent</label>
-              <div style="display: flex; align-items: center; gap: var(--space-sm);">
-                <input type="color" id="brand_accent" name="brand_accent" value="#0D7A5F"
-                  style="width: 48px; height: 36px; padding: 2px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: none; cursor: pointer;" />
-                <input type="text" id="brand_accent_hex" value="#0D7A5F" maxlength="7"
-                  style="width: 90px; font-family: monospace; font-size: 0.9rem;" />
-              </div>
-            </div>
-            <div class="field" style="flex: 1; min-width: 140px;">
-              <label for="brand_text">Text</label>
-              <div style="display: flex; align-items: center; gap: var(--space-sm);">
-                <input type="color" id="brand_text" name="brand_text" value="#F0F4FF"
-                  style="width: 48px; height: 36px; padding: 2px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: none; cursor: pointer;" />
-                <input type="text" id="brand_text_hex" value="#F0F4FF" maxlength="7"
-                  style="width: 90px; font-family: monospace; font-size: 0.9rem;" />
-              </div>
-            </div>
-          </div>
-          <!-- Brand name + logo URL -->
-          <div style="display: flex; gap: var(--space-lg); flex-wrap: wrap; margin-top: var(--space-lg);">
-            <div class="field" style="flex: 1; min-width: 180px;">
-              <label for="brand_name">Brand name</label>
-              <input type="text" id="brand_name" name="brand_name" placeholder="e.g. Copypower Media" />
-              <div class="text-muted" style="font-size: 0.8rem; margin-top: 0.25rem;">Shown in the bottom of quote cards and carousels.</div>
-            </div>
-            <div class="field" style="flex: 2; min-width: 240px;">
-              <label for="brand_logo">Brand logo URL <span style="font-weight:400;color:var(--color-text-muted);">(optional — overrides name)</span></label>
-              <input type="url" id="brand_logo" name="brand_logo" placeholder="https://yourdomain.com/logo.png" />
-              <div class="text-muted" style="font-size: 0.8rem; margin-top: 0.25rem;">PNG or SVG, transparent background recommended. Max display size ~200×56px.</div>
-            </div>
-          </div>
+    <button id="save-profile-btn" aria-live="polite">Save profile</button>
+    <p class="profile-save-error" id="profile-save-error" role="alert"></p>
 
-          <!-- Live preview swatch -->
-          <div id="brand-preview" style="margin-top: var(--space-md); height: 64px; border-radius: var(--radius-md); display: flex; align-items: center; padding: 0 var(--space-lg); gap: var(--space-md); background: #0F1A3C; border: 1px solid var(--color-border);">
-            <div id="brand-preview-accent" style="width: 6px; height: 40px; border-radius: 3px; background: #0D7A5F;"></div>
-            <span id="brand-preview-text" style="font-size: 1rem; font-weight: 500; color: #F0F4FF;">Preview text</span>
-          </div>
-        </div>
+  </div><!-- /profile-page -->
 
-        <div id="form-error" class="hidden" style="color: var(--color-error); font-size: 0.9rem; margin-bottom: var(--space-md);"></div>
+    <footer class="app-footer" role="contentinfo">
+      <div class="app-footer-inner">
+        <a href="#">Privacy Policy</a>
+        <span class="app-footer-sep">|</span>
+        <a href="#">Terms of Service</a>
+        <p class="app-footer-legal">© 2026 CopyPower Digital LLP. ScoutHook is an AI-powered authority engine.</p>
+      </div>
+    </footer>
 
-        <button type="submit" class="btn btn--primary" id="save-btn">
-          <span id="save-btn-text">Save profile</span>
-          <span id="save-spinner" class="spinner hidden"></span>
-        </button>
+  </div><!-- /main-content -->
 
-        <div id="save-success" class="hidden" style="margin-top: var(--space-md); color: var(--color-success); font-size: 0.9rem;">
-          Profile saved. Your voice fingerprint is being extracted — this takes about 10 seconds.
-          <a href="/" style="margin-left: 0.5rem;">Start generating →</a>
-        </div>
-
-      </form>
-    </div>
-  </main>
-
-  <script>
-    // ---------------------------------------------------------------------------
-    // User identity — UUID from localStorage, sent as X-User-Id header
-    // ---------------------------------------------------------------------------
-    function getUserId() {
-      let id = localStorage.getItem('scouthook_user_id');
-      if (!id) {
-        id = crypto.randomUUID();
-        localStorage.setItem('scouthook_user_id', id);
-      }
-      return id;
-    }
-
-    function getTenantId() {
-      return localStorage.getItem('scouthook_tenant_id') || 'default';
-    }
-
-    // ---------------------------------------------------------------------------
-    // Load existing profile on page load
-    // ---------------------------------------------------------------------------
-    async function loadProfile() {
-      const userId = getUserId();
-      try {
-        const res = await fetch(`/api/profile/${userId}`, {
-          headers: { 'X-User-Id': userId, 'X-Tenant-Id': getTenantId() }
-        });
-        const data = await res.json();
-        if (data.ok && data.profile) {
-          // Populate fields from saved profile
-          // (writing_samples and voice_fingerprint are never returned from the API)
-          ['audience_role', 'audience_pain', 'content_niche', 'contrarian_view'].forEach(field => {
-            const el = document.getElementById(field);
-            if (el && data.profile[field]) el.value = data.profile[field];
-          });
-          // Populate brand colours
-          if (data.profile.brand_bg)     setBrandColor('bg',     data.profile.brand_bg);
-          if (data.profile.brand_accent) setBrandColor('accent', data.profile.brand_accent);
-          if (data.profile.brand_text)   setBrandColor('text',   data.profile.brand_text);
-          if (data.profile.brand_name)   document.getElementById('brand_name').value = data.profile.brand_name;
-          if (data.profile.brand_logo)   document.getElementById('brand_logo').value = data.profile.brand_logo;
-          updateCompleteness();
-        }
-      } catch (e) {
-        console.warn('Could not load existing profile');
-      }
-    }
-
-    // ---------------------------------------------------------------------------
-    // Profile completeness indicator
-    // ---------------------------------------------------------------------------
-    function updateCompleteness() {
-      const fields = ['writing_samples', 'contrarian_view', 'audience_role', 'audience_pain', 'content_niche'];
-      const filled = fields.filter(f => document.getElementById(f)?.value.trim()).length;
-      const pct = Math.round((filled / fields.length) * 100);
-
-      document.getElementById('completeness').classList.remove('hidden');
-      document.getElementById('completeness-bar').style.width = pct + '%';
-    }
-
-    document.querySelectorAll('input, textarea').forEach(el => {
-      el.addEventListener('input', updateCompleteness);
-    });
-
-    // ---------------------------------------------------------------------------
-    // Brand colour pickers — keep color input, hex text input, and preview in sync
-    // ---------------------------------------------------------------------------
-    function setBrandColor(key, hex) {
-      document.getElementById(`brand_${key}`).value = hex;
-      document.getElementById(`brand_${key}_hex`).value = hex;
-      updateBrandPreview();
-    }
-
-    function updateBrandPreview() {
-      const bg     = document.getElementById('brand_bg').value;
-      const accent = document.getElementById('brand_accent').value;
-      const text   = document.getElementById('brand_text').value;
-      document.getElementById('brand-preview').style.background = bg;
-      document.getElementById('brand-preview-accent').style.background = accent;
-      document.getElementById('brand-preview-text').style.color = text;
-    }
-
-    ['bg', 'accent', 'text'].forEach(key => {
-      const picker = document.getElementById(`brand_${key}`);
-      const hex    = document.getElementById(`brand_${key}_hex`);
-      picker.addEventListener('input', () => { hex.value = picker.value; updateBrandPreview(); });
-      hex.addEventListener('input', () => {
-        if (/^#[0-9a-fA-F]{6}$/.test(hex.value)) { picker.value = hex.value; updateBrandPreview(); }
-      });
-    });
-
-    // ---------------------------------------------------------------------------
-    // Form submit
-    // ---------------------------------------------------------------------------
-    document.getElementById('profile-form').addEventListener('submit', async e => {
-      e.preventDefault();
-
-      const btn = document.getElementById('save-btn');
-      const spinner = document.getElementById('save-spinner');
-      const errorEl = document.getElementById('form-error');
-      const successEl = document.getElementById('save-success');
-
-      btn.disabled = true;
-      spinner.classList.remove('hidden');
-      errorEl.classList.add('hidden');
-      successEl.classList.add('hidden');
-
-      const payload = {
-        writing_samples:  document.getElementById('writing_samples').value.trim(),
-        contrarian_view:  document.getElementById('contrarian_view').value.trim(),
-        audience_role:    document.getElementById('audience_role').value.trim(),
-        audience_pain:    document.getElementById('audience_pain').value.trim(),
-        content_niche:    document.getElementById('content_niche').value.trim(),
-        brand_bg:         document.getElementById('brand_bg').value,
-        brand_accent:     document.getElementById('brand_accent').value,
-        brand_text:       document.getElementById('brand_text').value,
-        brand_name:       document.getElementById('brand_name').value.trim() || null,
-        brand_logo:       document.getElementById('brand_logo').value.trim() || null,
-      };
-
-      try {
-        const res = await fetch('/api/profile', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-User-Id': getUserId(),
-            'X-Tenant-Id': getTenantId(),
-          },
-          body: JSON.stringify(payload),
-        });
-        const data = await res.json();
-
-        if (data.ok) {
-          successEl.classList.remove('hidden');
-        } else {
-          errorEl.textContent = data.error || 'Something went wrong. Please try again.';
-          errorEl.classList.remove('hidden');
-        }
-      } catch (err) {
-        errorEl.textContent = 'Network error. Please try again.';
-        errorEl.classList.remove('hidden');
-      } finally {
-        btn.disabled = false;
-        spinner.classList.add('hidden');
-        document.getElementById('save-btn-text').textContent = 'Save profile';
-      }
-    });
-
-    loadProfile();
-  </script>
-
+  <script src="/js/session.js"></script>
+  <script src="/js/profile.js"></script>
 </body>
 </html>

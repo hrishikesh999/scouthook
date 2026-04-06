@@ -12,9 +12,6 @@ router.get('/:user_id', (req, res) => {
   const { user_id } = req.params;
   const tenantId = req.tenantId;
 
-  // TODO (Session 1): Query user_profiles filtered by user_id + tenant_id
-  // Return: { ok, profile: { audience_role, audience_pain, content_niche, contrarian_view, has_fingerprint } }
-
   const profile = db
     .prepare('SELECT audience_role, audience_pain, content_niche, contrarian_view, voice_fingerprint, brand_bg, brand_accent, brand_text, brand_name, brand_logo FROM user_profiles WHERE user_id = ? AND tenant_id = ?')
     .get(user_id, tenantId);

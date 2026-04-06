@@ -14,14 +14,16 @@ router.post('/copy', (req, res) => {
   const tenantId = req.tenantId;
   const userId = req.userId;
 
-  // TODO (Session 1): Uncomment once user_id header enforcement is decided
-  // if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
+  if (!userId) {
+    console.warn('[events/copy] Missing user_id — event not recorded');
+    return res.json({ ok: true });
+  }
 
   try {
     db.prepare(`
       INSERT INTO copy_events (user_id, tenant_id, post_id, run_id, path, format_slug)
       VALUES (?, ?, ?, ?, ?, ?)
-    `).run(userId || 'anonymous', tenantId, post_id || null, run_id || null, path || null, format_slug || null);
+    `).run(userId, tenantId, post_id || null, run_id || null, path || null, format_slug || null);
 
     return res.json({ ok: true });
   } catch (err) {

@@ -7,6 +7,28 @@ const { synthesise } = require('../services/synthesise');
 const { runQualityGate } = require('../services/qualityGate');
 const { generateInsightAlternativePost } = require('../services/ideaPath');
 
+// ---------------------------------------------------------------------------
+// In-memory sliding window rate limiter — 10 generations per hour per user.
+// Shared across /api/generate and /api/generate/regenerate/:postId.
+// Resets on server restart (acceptable for a single-server deployment).
+// ---------------------------------------------------------------------------
+const RATE_LIMIT_MAX = 10;
+const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+const generationTimestamps = new Map(); // userId → number[]
+
+function checkRateLimit(userId) {
+  const now = Date.now();
+  const cutoff = now - RATE_LIMIT_WINDOW_MS;
+  const timestamps = (generationTimestamps.get(userId) || []).filter(t => t > cutoff);
+  if (timestamps.length >= RATE_LIMIT_MAX) {
+    const retryAfterSec = Math.ceil((timestamps[0] - cutoff) / 1000);
+    return { limited: true, retryAfterSec };
+  }
+  timestamps.push(now);
+  generationTimestamps.set(userId, timestamps);
+  return { limited: false };
+}
+
 function gateOptions(post, userProfile, genPath, archetypeUsed, hookConfidence) {
   return {
     voiceProfile: userProfile,
@@ -125,6 +147,11 @@ router.post('/', async (req, res) => {
   const tenantId = req.tenantId;
 
   if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
+
+  const rl = checkRateLimit(userId);
+  if (rl.limited) {
+    return res.status(429).json({ ok: false, error: 'rate_limit_exceeded', retry_after_sec: rl.retryAfterSec });
+  }
 
   const { path: genPath, raw_idea, recipe_slug, answers } = req.body;
 
@@ -313,6 +340,11 @@ router.post('/regenerate/:postId', async (req, res) => {
   const { postId } = req.params;
 
   if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
+
+  const rl = checkRateLimit(userId);
+  if (rl.limited) {
+    return res.status(429).json({ ok: false, error: 'rate_limit_exceeded', retry_after_sec: rl.retryAfterSec });
+  }
 
   const post = db.prepare(`
     SELECT gp.*, gr.path, gr.input_data

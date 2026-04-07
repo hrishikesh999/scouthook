@@ -10,9 +10,11 @@
 
   <!-- ── Sidebar ──────────────────────────────────────────── -->
   <aside id="sidebar" role="navigation" aria-label="Main navigation">
-    <a href="/dashboard.html" class="sidebar-logo">Scout<span>hook</span></a>
+    <a href="/dashboard.html" class="sidebar-logo">
+      <img src="/images/scout-hook-logo.png" alt="ScoutHook" class="sidebar-logo-img">
+    </a>
     <div class="sidebar-cta">
-      <a href="/generate.html?new=1" class="sidebar-cta-btn">Create Post</a>
+      <a href="/generate.html?new=1" class="sidebar-cta-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Create Post</a>
     </div>
     <nav class="sidebar-nav">
       <a href="/dashboard.html" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Dashboard</a>
@@ -34,6 +36,13 @@
           </svg>
           Connect LinkedIn
         </a>
+      </div>
+    </div>
+    <div class="sidebar-profile">
+      <div class="sidebar-profile-avatar">HJ</div>
+      <div class="sidebar-profile-info">
+        <span class="sidebar-profile-name">Hrishikesh Jobanputra</span>
+        <span class="sidebar-profile-badge">Founding Member</span>
       </div>
     </div>
   </aside>
@@ -262,10 +271,22 @@ What's the hardest conversation you've been avoiding?</p>
           <!-- Left group -->
           <button id="regenerate-btn" aria-label="Regenerate post">Regenerate</button>
           <div class="action-divider" aria-hidden="true"></div>
-          <button class="pill-btn disabled" id="quote-card-btn" aria-label="Generate quote card">Quote card</button>
-          <button class="pill-btn disabled" id="carousel-btn" aria-label="Generate carousel">Carousel</button>
-          <button class="pill-btn disabled" id="branded-quote-btn" aria-label="Generate branded quote">Branded quote</button>
-          <button class="pill-btn disabled" id="media-library-btn" aria-label="Attach from media library">Media</button>
+          <button class="asset-action-btn disabled" id="quote-card-btn" aria-label="Generate quote card">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="9" y1="10" x2="15" y2="10"/><line x1="9" y1="14" x2="13" y2="14"/></svg>
+            <span class="asset-action-label">Quote card</span>
+          </button>
+          <button class="asset-action-btn disabled" id="carousel-btn" aria-label="Generate carousel">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7" y="5" width="10" height="14" rx="1.5"/><rect x="3" y="8" width="3" height="8" rx="1"/><rect x="18" y="8" width="3" height="8" rx="1"/></svg>
+            <span class="asset-action-label">Carousel</span>
+          </button>
+          <button class="asset-action-btn disabled" id="branded-quote-btn" aria-label="Generate branded quote">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M12 7l1.5 3.5L17 12l-3.5 1.5L12 17l-1.5-3.5L7 12l3.5-1.5z"/></svg>
+            <span class="asset-action-label">Branded</span>
+          </button>
+          <button class="asset-action-btn disabled" id="media-library-btn" aria-label="Attach from media library">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+            <span class="asset-action-label">Media</span>
+          </button>
 
           <!-- Right group -->
           <div class="action-right" id="action-right">

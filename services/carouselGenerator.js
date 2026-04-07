@@ -162,7 +162,7 @@ function buildSlideSvg(slide, slideNum, totalSlides, brand = {}) {
 
   const bodyStartY = startY + headlineBlockH + 40;
   const bodyXml = bodyLines.map((line, i) =>
-    `<text x="540" y="${bodyStartY + i * bodyLineHeight}" font-family="system-ui,-apple-system,'Helvetica Neue',sans-serif" font-size="${bodyFontSize}" font-weight="400" fill="${TEXT_MUTED}" text-anchor="middle" dominant-baseline="hanging">${escapeXml(line)}</text>`
+    `<text x="540" y="${bodyStartY + i * bodyLineHeight}" font-family="system-ui,-apple-system,'Helvetica Neue',sans-serif" font-size="${bodyFontSize}" font-weight="400" fill="${TX}" opacity="0.75" text-anchor="middle" dominant-baseline="hanging">${escapeXml(line)}</text>`
   ).join('\n  ');
 
   // Accent treatment: title gets full bottom bar, others get left bar
@@ -171,11 +171,11 @@ function buildSlideSvg(slide, slideNum, totalSlides, brand = {}) {
     : `<rect x="60" y="${startY - 20}" width="8" height="${headlineBlockH + 40}" fill="${AC}" rx="4"/>`;
 
   // Slide counter
-  const counterXml = `<text x="540" y="${H - 48}" font-family="system-ui,-apple-system,'Helvetica Neue',sans-serif" font-size="24" fill="${TEXT_MUTED}" text-anchor="middle">${slideNum} / ${totalSlides}</text>`;
+  const counterXml = `<text x="540" y="${H - 48}" font-family="system-ui,-apple-system,'Helvetica Neue',sans-serif" font-size="24" fill="${TX}" opacity="0.45" text-anchor="middle">${slideNum} / ${totalSlides}</text>`;
 
   // Swipe hint on title slide
   const swipeHint = isTitle
-    ? `<text x="540" y="${H - 90}" font-family="system-ui,-apple-system,'Helvetica Neue',sans-serif" font-size="24" fill="${TEXT_MUTED}" text-anchor="middle">Swipe →</text>`
+    ? `<text x="540" y="${H - 90}" font-family="system-ui,-apple-system,'Helvetica Neue',sans-serif" font-size="24" fill="${TX}" opacity="0.45" text-anchor="middle">Swipe →</text>`
     : '';
 
   // Brand mark bottom-right: logo > name > nothing (carousel has slide counter bottom-center)
@@ -183,7 +183,7 @@ function buildSlideSvg(slide, slideNum, totalSlides, brand = {}) {
   if (brand.logo) {
     brandXml = `<image href="${brand.logo}" x="${W - 188}" y="${H - 88}" width="140" height="44" preserveAspectRatio="xMidYMid meet"/>`;
   } else if (brand.name) {
-    brandXml = `<text x="${W - 60}" y="${H - 56}" font-family="system-ui,-apple-system,'Helvetica Neue',sans-serif" font-size="22" font-weight="600" fill="${TEXT_MUTED}" text-anchor="end">${escapeXml(brand.name)}</text>`;
+    brandXml = `<text x="${W - 60}" y="${H - 56}" font-family="system-ui,-apple-system,'Helvetica Neue',sans-serif" font-size="22" font-weight="600" fill="${TX}" opacity="0.45" text-anchor="end">${escapeXml(brand.name)}</text>`;
   }
 
   return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">

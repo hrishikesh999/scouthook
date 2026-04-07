@@ -32,6 +32,29 @@ const LEGACY_AI_TONE_PATTERNS = [
   /at the end of the day/i,
   /dive (deep|deeper) into/i,
   /unpack (this|that|the)/i,
+  // Em dash — should have been removed by sanitiser; flag anything that slipped through
+  /—/,
+  // Overused AI vocabulary
+  /\bdelve[sd]?\b/i,
+  /\btapestry\b/i,
+  /\bnuanced\b/i,
+  /\bmultifaceted\b/i,
+  /\bseamlessly?\b/i,
+  /\brobust\b/i,
+  /\bfoster(s|ed|ing)?\b/i,
+  /\bempower(s|ed|ing)?\b/i,
+  /\belevate[sd]?\b/i,
+  /\bshowcase[sd]?\b/i,
+  /\bactionable\b/i,
+  /\btransformative\b/i,
+  /\bundeniable\b/i,
+  /\bgroundbreaking\b/i,
+  // AI transition filler
+  /\bthat said,/i,
+  /\bhaving said that,/i,
+  /\bultimately,/i,
+  /\bin essence,/i,
+  /\bat its core,/i,
 ];
 
 const AI_TONE_FORMAT_EXCLUSIONS = {
@@ -49,6 +72,12 @@ const AI_GIVEAWAY_PHRASES = [
   'to summarize',
   'i hope this helps',
   'feel free to',
+  'it goes without saying',
+  'needless to say',
+  'in today\'s fast-paced',
+  'in the realm of',
+  'a testament to',
+  'the power of',
 ];
 
 function firstNonEmptyLine(text) {

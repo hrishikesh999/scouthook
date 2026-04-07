@@ -4,6 +4,9 @@ require('dotenv').config();
 
 const express = require('express');
 const path = require('path');
+const helmet = require('helmet');
+const cors = require('cors');
+const rateLimit = require('express-rate-limit');
 
 // Initialise DB (creates tables + runs seed on first start)
 require('./db');
@@ -11,6 +14,26 @@ const { runSeed } = require('./config/seedData');
 runSeed();
 
 const app = express();
+
+// ---------------------------------------------------------------------------
+// Security middleware
+// ---------------------------------------------------------------------------
+
+app.use(helmet());
+
+const allowedOrigin = process.env.ALLOWED_ORIGIN || null;
+if (allowedOrigin) {
+  app.use(cors({ origin: allowedOrigin, credentials: true }));
+}
+
+// General rate limit — 100 requests per 15 min per IP
+// (generation endpoints have their own tighter limits)
+app.use(rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+}));
 
 // ---------------------------------------------------------------------------
 // Middleware

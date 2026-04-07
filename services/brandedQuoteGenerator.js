@@ -102,7 +102,7 @@ async function extractBrandedQuoteText(content) {
 Rules:
 - Output exactly 1 or 2 complete sentences only (grammatical sentences ending with . ! or ?). No fragments, no bullet points, no quotation marks around the output.
 - Choose the strongest takeaway from anywhere in the post, not necessarily the opening.
-- Keep the total under 220 characters so it fits roughly four short lines on a square image.
+- Keep the total under 160 characters — it must fit in four lines of ~40 characters each on a square image.
 - Return only that text—nothing else.
 
 POST:
@@ -135,18 +135,36 @@ function fallbackBrandedQuoteText(content) {
   const sentences = firstPara.match(/[^.!?]+[.!?]+/g);
   if (sentences && sentences.length) {
     let out = sentences[0].trim();
-    if (sentences[1] && `${out} ${sentences[1].trim()}`.length <= 280) {
+    if (sentences[1] && `${out} ${sentences[1].trim()}`.length <= 160) {
       out = `${out} ${sentences[1].trim()}`;
     }
     return out;
   }
-  return firstPara.slice(0, 220).trim();
+  return trimToCompleteSentence(firstPara.slice(0, 160));
+}
+
+function trimToCompleteSentence(text) {
+  for (let i = text.length - 1; i >= 0; i--) {
+    if (text[i] === '.' || text[i] === '!' || text[i] === '?') {
+      return text.slice(0, i + 1).trim();
+    }
+  }
+  return text;
 }
 
 function linesFromQuote(text, maxLines, maxChars) {
-  const wrapped = wrapText(text.replace(/\s+/g, ' ').trim(), maxChars);
-  const lines = wrapped.slice(0, maxLines);
-  return lines.length ? lines : [''];
+  const normalized = text.replace(/\s+/g, ' ').trim();
+  const wrapped = wrapText(normalized, maxChars);
+
+  if (wrapped.length <= maxLines) {
+    return wrapped.length ? wrapped : [''];
+  }
+
+  // Text overflows — trim the candidate to the last complete sentence, then re-wrap
+  const candidate = wrapped.slice(0, maxLines).join(' ');
+  const trimmed = trimToCompleteSentence(candidate);
+  const result = wrapText(trimmed, maxChars);
+  return result.length ? result.slice(0, maxLines) : [''];
 }
 
 function wrapText(text, maxChars) {

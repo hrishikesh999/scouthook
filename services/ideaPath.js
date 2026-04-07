@@ -5,6 +5,7 @@ const { getSetting } = require('../db');
 const { extractJsonFromResponse } = require('./voiceFingerprint');
 const { selectHook, buildHookInjection } = require('./hookSelector');
 const { HOOK_ARCHETYPES } = require('./hookArchetypes');
+const { AI_TELLS_PROHIBITION, sanitiseAiTells } = require('./postSanitiser');
 
 /**
  * Idea path: one LinkedIn post driven by the hook archetype from selectHook.
@@ -90,7 +91,8 @@ AUDIENCE:
 - What keeps them up at night: ${userProfile.audience_pain || 'professional challenges in their field'}
 
 EDITORIAL CONTEXT (use where it strengthens the post):
-${userProfile.contrarian_view || 'Draw on the raw idea for tension and specificity.'}`;
+${userProfile.contrarian_view || 'Draw on the raw idea for tension and specificity.'}
+${AI_TELLS_PROHIBITION}`;
 }
 
 function buildUserPrompt(rawIdea) {
@@ -144,7 +146,7 @@ async function runSinglePostGeneration({
     const validated = validateSinglePostResponse(extractJsonFromResponse(responseText));
     return {
       synthesis: validated.synthesis,
-      post: validated.post,
+      post: sanitiseAiTells(validated.post),
       archetypeUsed,
       hookConfidence,
     };
@@ -166,7 +168,7 @@ async function runSinglePostGeneration({
         const validated = validateSinglePostResponse(extractJsonFromResponse(responseText));
         return {
           synthesis: validated.synthesis,
-          post: validated.post,
+          post: sanitiseAiTells(validated.post),
           archetypeUsed,
           hookConfidence,
         };

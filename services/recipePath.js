@@ -3,6 +3,7 @@
 const Anthropic = require('@anthropic-ai/sdk');
 const { db, getSetting } = require('../db');
 const { extractJsonFromResponse } = require('./voiceFingerprint');
+const { AI_TELLS_PROHIBITION, sanitiseAiTells } = require('./postSanitiser');
 
 /**
  * Recipe path: takes a recipe slug + user answers + user profile.
@@ -78,7 +79,7 @@ Critical rules:
 - Use the voice fingerprint strictly. The reader should not be able to tell this was AI-assisted.
 - Each post must have a distinct opening line, angle, and structure — they should not feel like variations of the same draft.
 - No hashtags. No emojis. No AI filler phrases.
-
+${AI_TELLS_PROHIBITION}
 ${fingerprintBlock}
 AUDIENCE:
 - Who they are: ${userProfile.audience_role || 'professionals in the author\'s field'}
@@ -158,6 +159,7 @@ function validateResponse(parsed, formats) {
   for (const post of parsed.posts) {
     if (!post.format_slug || !post.content) throw new SyntaxError('Post missing format_slug or content');
     if (!slugSet.has(post.format_slug)) throw new SyntaxError(`Unexpected format_slug: ${post.format_slug}`);
+    post.content = sanitiseAiTells(post.content);
   }
   return parsed;
 }

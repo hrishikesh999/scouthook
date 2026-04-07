@@ -54,36 +54,6 @@ function buildQualityPayload(gate, synthesisAttempt, isPrimary) {
   return quality;
 }
 
-/**
- * Recipe path: batch posts + optional one quality retry.
- */
-async function synthesiseWithOptionalQualityRetry(userProfile, baseOptions, genPath) {
-  let synthesisAttempt = 1;
-  let synthResult = await synthesise(userProfile, baseOptions);
-  let { synthesis, posts: rawPosts, archetypeUsed, hookConfidence } = synthResult;
-
-  const runGates = posts =>
-    posts.map(post => ({
-      post,
-      gate: runQualityGate(post.content, gateOptions(post, userProfile, genPath, archetypeUsed, hookConfidence)),
-    }));
-
-  let gated = runGates(rawPosts);
-  const anyHardFail = () => gated.some(g => !g.gate.passed);
-
-  if (anyHardFail() && synthesisAttempt === 1) {
-    const errs = [...new Set(gated.filter(g => !g.gate.passed).flatMap(g => g.gate.errors))];
-    const qualityRetryHint =
-      `The previous attempt failed these quality checks: ${errs.join(', ')}. Fix all of these in your next attempt.`;
-    synthesisAttempt = 2;
-    synthResult = await synthesise(userProfile, { ...baseOptions, qualityRetryHint });
-    ({ synthesis, posts: rawPosts, archetypeUsed, hookConfidence } = synthResult);
-    gated = runGates(rawPosts);
-  }
-
-  return { synthesis, posts: rawPosts, archetypeUsed, hookConfidence, gated, synthesisAttempt };
-}
-
 const IDEA_SLUG = 'idea';
 const IDEA_INSIGHT_SLUG = 'idea_insight';
 
@@ -153,7 +123,7 @@ router.post('/', async (req, res) => {
     return res.status(429).json({ ok: false, error: 'rate_limit_exceeded', retry_after_sec: rl.retryAfterSec });
   }
 
-  const { path: genPath, raw_idea, recipe_slug, answers } = req.body;
+  const { path: genPath, raw_idea } = req.body;
 
   if (!genPath) return res.status(400).json({ ok: false, error: 'missing_path' });
 
@@ -165,19 +135,14 @@ router.post('/', async (req, res) => {
     return res.status(400).json({ ok: false, error: 'complete_profile_first' });
   }
 
-  if (genPath === 'idea' && !raw_idea?.trim()) {
+  if (!raw_idea?.trim()) {
     return res.status(400).json({ ok: false, error: 'missing_raw_idea' });
   }
-  if (genPath === 'recipe' && (!recipe_slug || !answers || !Array.isArray(answers))) {
-    return res.status(400).json({ ok: false, error: 'missing_recipe_fields' });
-  }
-  try {
-    const baseOptions =
-      genPath === 'idea'
-        ? { rawIdea: raw_idea }
-        : { recipeAnswers: { slug: recipe_slug, answers } };
 
-    if (genPath === 'idea') {
+  try {
+    const baseOptions = { rawIdea: raw_idea };
+
+    {
       const ideaResult = await synthesiseIdeaWithOptionalQualityRetry(userProfile, baseOptions);
       const {
         synthesis,
@@ -258,69 +223,6 @@ router.post('/', async (req, res) => {
       });
     }
 
-    const {
-      synthesis,
-      archetypeUsed,
-      hookConfidence,
-      gated,
-      synthesisAttempt,
-    } = await synthesiseWithOptionalQualityRetry(userProfile, baseOptions, genPath);
-
-    const formatMap = {};
-    db.prepare("SELECT slug, name FROM post_formats WHERE is_active = 1 AND tenant_id = ?")
-      .all(tenantId)
-      .forEach(f => { formatMap[f.slug] = f.name; });
-
-    const runResult = db.prepare(`
-      INSERT INTO generation_runs (user_id, tenant_id, path, input_data, synthesis)
-      VALUES (?, ?, ?, ?, ?)
-    `).run(
-      userId,
-      tenantId,
-      genPath,
-      JSON.stringify({ recipe_slug, answers }),
-      JSON.stringify(synthesis)
-    );
-    const runId = runResult.lastInsertRowid;
-
-    const postsInsert = db.prepare(`
-      INSERT INTO generated_posts (run_id, user_id, tenant_id, format_slug, content, quality_score, quality_flags, passed_gate)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    const savedPosts = gated.map(({ post: p, gate }) => {
-      const insertResult = postsInsert.run(
-        runId,
-        userId,
-        tenantId,
-        p.format_slug,
-        p.content,
-        gate.score,
-        JSON.stringify(gate.flags),
-        gate.passed_gate ? 1 : 0
-      );
-
-      const quality = buildQualityPayload(gate, synthesisAttempt, true);
-
-      return {
-        id: insertResult.lastInsertRowid,
-        format_slug: p.format_slug,
-        format_name: formatMap[p.format_slug] || p.format_slug,
-        content: p.content,
-        quality_score: gate.score,
-        quality_flags: gate.flags,
-        passed_gate: gate.passed_gate,
-        quality,
-      };
-    });
-
-    const responseBody = { ok: true, run_id: runId, posts: savedPosts, synthesis };
-    if (genPath === 'idea' && archetypeUsed !== undefined) {
-      responseBody.archetypeUsed = archetypeUsed;
-      responseBody.hookConfidence = hookConfidence;
-    }
-    return res.json(responseBody);
-
   } catch (err) {
     console.error('[generate] Error:', err.message);
     return res.status(500).json({ ok: false, error: err.message });
@@ -364,79 +266,40 @@ router.post('/regenerate/:postId', async (req, res) => {
     const inputData = JSON.parse(post.input_data || '{}');
     const failedFlags = JSON.parse(post.quality_flags || '[]');
 
-    const baseOptions = post.path === 'idea'
-      ? { rawIdea: inputData.raw_idea }
-      : { recipeAnswers: { slug: inputData.recipe_slug, answers: inputData.answers } };
+    const baseOptions = { rawIdea: inputData.raw_idea };
 
     if (failedFlags.length) {
       baseOptions._regenerateHint = `Previous version was flagged for: ${failedFlags.join(', ')}. Avoid these patterns.`;
     }
 
-    if (post.path === 'idea') {
-      const ideaResult = await synthesiseIdeaWithOptionalQualityRetry(userProfile, baseOptions);
-      const isInsightRow = post.format_slug === IDEA_INSIGHT_SLUG;
-      const content = isInsightRow
-        ? (ideaResult.alternative?.post ?? ideaResult.post)
-        : ideaResult.post;
-      const gate = isInsightRow
-        ? (ideaResult.alternative?.gate ?? ideaResult.primaryGate)
-        : ideaResult.primaryGate;
-
-      db.prepare(`
-        UPDATE generated_posts
-        SET content = ?, quality_score = ?, quality_flags = ?, passed_gate = ?
-        WHERE id = ?
-      `).run(content, gate.score, JSON.stringify(gate.flags), gate.passed_gate ? 1 : 0, postId);
-
-      const quality = buildQualityPayload(gate, ideaResult.synthesisAttempt, true);
-
-      return res.json({
-        ok: true,
-        post: {
-          id: Number(postId),
-          format_slug: post.format_slug,
-          content,
-          quality_score: gate.score,
-          quality_flags: gate.flags,
-          passed_gate: gate.passed_gate,
-          archetypeUsed: isInsightRow ? 'INSIGHT' : ideaResult.archetypeUsed,
-          hookConfidence: isInsightRow ? null : ideaResult.hookConfidence,
-          quality,
-        },
-      });
-    }
-
-    const {
-      posts: rawPosts,
-      archetypeUsed,
-      hookConfidence,
-      gated,
-      synthesisAttempt,
-    } = await synthesiseWithOptionalQualityRetry(userProfile, baseOptions, post.path);
-
-    const newPost = rawPosts.find(p => p.format_slug === post.format_slug) || rawPosts[0];
-    const gatedOne = gated.find(g => g.post.format_slug === post.format_slug) || gated[0];
-    const gate = gatedOne.gate;
+    const ideaResult = await synthesiseIdeaWithOptionalQualityRetry(userProfile, baseOptions);
+    const isInsightRow = post.format_slug === IDEA_INSIGHT_SLUG;
+    const content = isInsightRow
+      ? (ideaResult.alternative?.post ?? ideaResult.post)
+      : ideaResult.post;
+    const gate = isInsightRow
+      ? (ideaResult.alternative?.gate ?? ideaResult.primaryGate)
+      : ideaResult.primaryGate;
 
     db.prepare(`
       UPDATE generated_posts
       SET content = ?, quality_score = ?, quality_flags = ?, passed_gate = ?
       WHERE id = ?
-    `).run(newPost.content, gate.score, JSON.stringify(gate.flags), gate.passed_gate ? 1 : 0, postId);
+    `).run(content, gate.score, JSON.stringify(gate.flags), gate.passed_gate ? 1 : 0, postId);
 
-    const quality = buildQualityPayload(gate, synthesisAttempt, true);
+    const quality = buildQualityPayload(gate, ideaResult.synthesisAttempt, true);
 
     return res.json({
       ok: true,
       post: {
         id: Number(postId),
         format_slug: post.format_slug,
-        content: newPost.content,
+        content,
         quality_score: gate.score,
         quality_flags: gate.flags,
         passed_gate: gate.passed_gate,
-        archetypeUsed,
-        hookConfidence,
+        archetypeUsed: isInsightRow ? 'INSIGHT' : ideaResult.archetypeUsed,
+        hookConfidence: isInsightRow ? null : ideaResult.hookConfidence,
         quality,
       },
     });

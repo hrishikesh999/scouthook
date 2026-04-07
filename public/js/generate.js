@@ -1,17 +1,9 @@
 /* generate.js — all interaction logic for generate.html */
 
 /* ── 1. DOM References ───────────────────────────────────────── */
-const tabIdea         = document.getElementById('tab-idea');
-const tabRecipe       = document.getElementById('tab-recipe');
 const ideaFields      = document.getElementById('idea-fields');
-const recipeFields    = document.getElementById('recipe-fields');
 const ideaInput       = document.getElementById('idea-input');
 const ideaError       = document.getElementById('idea-error');
-const recipeError     = document.getElementById('recipe-error');
-const recipeTopic     = document.getElementById('recipe-topic');
-const recipeAudience  = document.getElementById('recipe-audience');
-const recipeLessonEl  = document.getElementById('recipe-lesson');
-const recipeCta       = document.getElementById('recipe-cta');
 const generateBtn     = document.getElementById('generate-btn');
 const voiceIndicator  = document.getElementById('voice-indicator-area');
 
@@ -119,7 +111,6 @@ let previewExpanded   = false;
 let undoTimer         = null;
 let rescoreDebounce   = null;
 let sessionDebounce   = null;
-let availableRecipeSlug = null;
 /** When true, post is scheduled — editing must wait until pause (cancel schedule). */
 let scheduleEditLocked  = false;
 /** @type {{ scheduledFor: string, scheduledPostId: number|null } | null} */
@@ -159,10 +150,6 @@ function applyScheduleLockUi() {
   regenerateBtn.disabled = true;
   generateBtn.disabled = true;
   ideaInput.readOnly = true;
-  recipeTopic.readOnly = true;
-  recipeAudience.readOnly = true;
-  recipeLessonEl.readOnly = true;
-  recipeCta.readOnly = true;
   scheduleBtn.disabled = true;
   quoteCardBtn.classList.add('disabled');
   carouselBtn.classList.add('disabled');
@@ -180,10 +167,6 @@ function clearScheduleLockUi() {
   regenerateBtn.disabled = false;
   generateBtn.disabled = false;
   ideaInput.readOnly = false;
-  recipeTopic.readOnly = false;
-  recipeAudience.readOnly = false;
-  recipeLessonEl.readOnly = false;
-  recipeCta.readOnly = false;
   quoteCardBtn.classList.remove('disabled');
   carouselBtn.classList.remove('disabled');
   brandedQuoteBtn.classList.remove('disabled');
@@ -280,7 +263,6 @@ document.addEventListener('visibilitychange', () => {
 
   checkLinkedInStatus();
   loadProfile();
-  fetchRecipeSlug();
 
   const _qs      = new URLSearchParams(window.location.search);
   const urlPostId = _qs.get('postId');
@@ -399,51 +381,10 @@ function showIncompleteProfile() {
     </div>`;
 }
 
-/* ── 6. Fetch recipe slug ────────────────────────────────────── */
-async function fetchRecipeSlug() {
-  try {
-    const res = await fetch('/api/recipes', { headers: apiHeaders() });
-    const data = await res.json();
-    if (data.ok && data.recipes) {
-      const categories = Object.values(data.recipes);
-      if (categories.length && categories[0].length) {
-        availableRecipeSlug = categories[0][0].slug;
-      }
-    }
-  } catch {
-    // Will fall back gracefully
-  }
-}
-
-/* ── 7. Path toggle ──────────────────────────────────────────── */
-tabIdea.addEventListener('click', () => switchPath('idea'));
-tabRecipe.addEventListener('click', () => switchPath('recipe'));
-
-function switchPath(path) {
-  currentPath = path;
-  if (path === 'idea') {
-    tabIdea.classList.add('active');
-    tabIdea.setAttribute('aria-selected', 'true');
-    tabRecipe.classList.remove('active');
-    tabRecipe.setAttribute('aria-selected', 'false');
-    ideaFields.classList.remove('hidden');
-    recipeFields.classList.remove('visible');
-    clearFieldErrors();
-  } else {
-    tabRecipe.classList.add('active');
-    tabRecipe.setAttribute('aria-selected', 'true');
-    tabIdea.classList.remove('active');
-    tabIdea.setAttribute('aria-selected', 'false');
-    recipeFields.classList.add('visible');
-    ideaFields.classList.add('hidden');
-    clearFieldErrors();
-  }
-}
-
+/* ── 6. Field errors ─────────────────────────────────────────── */
 function clearFieldErrors() {
   ideaInput.classList.remove('error');
   ideaError.classList.remove('visible');
-  recipeError.classList.remove('visible');
 }
 
 /* ── 8. Generate button ──────────────────────────────────────── */
@@ -457,7 +398,7 @@ async function triggerGenerate(retryData) {
 
   if (retryData) {
     body = retryData;
-  } else if (currentPath === 'idea') {
+  } else {
     const idea = ideaInput.value.trim();
     if (!idea) {
       ideaInput.classList.add('error');
@@ -466,25 +407,6 @@ async function triggerGenerate(retryData) {
       return;
     }
     body = { path: 'idea', raw_idea: idea };
-  } else {
-    const topic   = recipeTopic.value.trim();
-    const lesson  = recipeLessonEl.value.trim();
-    if (!topic || !lesson) {
-      recipeError.classList.add('visible');
-      recipeTopic.focus();
-      return;
-    }
-    const slug = availableRecipeSlug || 'custom';
-    body = {
-      path: 'recipe',
-      recipe_slug: slug,
-      answers: [
-        topic,
-        recipeAudience.value.trim(),
-        lesson,
-        recipeCta.value.trim()
-      ]
-    };
   }
 
   setGenerating(true);
@@ -576,12 +498,6 @@ function buildSession() {
   return {
     path: currentPath,
     ideaInput: ideaInput.value,
-    recipeInputs: {
-      topic:    recipeTopic.value,
-      audience: recipeAudience.value,
-      lesson:   recipeLessonEl.value,
-      cta:      recipeCta.value
-    },
     post:        postTextarea.value,
     postId:      currentPostId,
     primary:     primaryPost,
@@ -1423,17 +1339,8 @@ function showProfileIncompleteError() {
 function restoreSession(s) {
   if (!s || !s.post) return;
 
-  // Restore path
-  if (s.path) switchPath(s.path);
-
   // Restore inputs
   if (s.ideaInput) ideaInput.value = s.ideaInput;
-  if (s.recipeInputs) {
-    if (s.recipeInputs.topic)    recipeTopic.value    = s.recipeInputs.topic;
-    if (s.recipeInputs.audience) recipeAudience.value = s.recipeInputs.audience;
-    if (s.recipeInputs.lesson)   recipeLessonEl.value = s.recipeInputs.lesson;
-    if (s.recipeInputs.cta)      recipeCta.value      = s.recipeInputs.cta;
-  }
 
   // Restore post
   currentPostId   = s.postId || null;

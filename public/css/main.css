@@ -633,34 +633,6 @@ body {
 }
 
 /* ── Path Toggle ────────────────────────────────────────────── */
-.path-toggle {
-  display: flex;
-  border-bottom: 1px solid var(--border-divider);
-  margin-bottom: var(--space-6);
-}
-
-.path-tab {
-  flex: 1;
-  text-align: center;
-  padding-bottom: var(--space-3);
-  font-size: 13px;
-  font-family: var(--font-sans);
-  cursor: pointer;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-  color: var(--text-tertiary);
-  font-weight: 400;
-  background: none;
-  border-top: none;
-  border-left: none;
-  border-right: none;
-}
-
-.path-tab.active {
-  border-bottom: 2px solid var(--teal);
-  color: var(--text-primary);
-  font-weight: 500;
-}
 
 /* ── Voice Profile Indicator ────────────────────────────────── */
 .voice-indicator {
@@ -1083,62 +1055,17 @@ body {
   display: none;
 }
 
-.empty-compare-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-4);
-  margin-bottom: var(--space-5);
-}
-
-.empty-compare-label {
-  font-size: 10px;
-  font-family: var(--font-sans);
+.empty-state-heading {
+  font-size: 15px;
   font-weight: 500;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  color: var(--text-secondary);
   margin-bottom: var(--space-2);
 }
 
-.empty-compare-label.label-other {
-  color: var(--text-tertiary);
-}
-
-.empty-compare-label.label-scouthook {
-  color: var(--teal);
-}
-
-.empty-compare-card {
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  padding: var(--space-4);
-}
-
-.empty-compare-card.scouthook-card {
-  border-color: var(--border-empty-scouthook);
-}
-
-.empty-compare-text {
+.empty-state-sub {
   font-size: 13px;
-  line-height: 1.7;
-}
-
-.empty-compare-text.text-other {
-  color: var(--text-secondary);
-}
-
-.empty-compare-text.text-scouthook {
-  color: var(--text-primary);
-}
-
-.empty-stats {
-  display: flex;
-  gap: var(--space-6);
-  justify-content: center;
-}
-
-.empty-stat {
-  font-size: 11px;
-  color: var(--text-secondary);
+  color: var(--text-tertiary);
+  line-height: 1.6;
 }
 
 /* Skeleton */
@@ -2453,15 +2380,6 @@ body {
     display: block;
   }
 
-  .empty-compare-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .empty-stats {
-    flex-direction: column;
-    align-items: center;
-    gap: var(--space-2);
-  }
 
   .profile-page {
     padding: var(--space-5);

@@ -49,12 +49,6 @@
     <!-- ── Left Panel ──────────────────────────────────────── -->
     <div id="left-panel">
 
-      <!-- Path toggle -->
-      <div class="path-toggle" role="tablist" aria-label="Generation mode">
-        <button class="path-tab active" id="tab-idea" role="tab" aria-selected="true" aria-controls="idea-fields">I have an idea</button>
-        <button class="path-tab" id="tab-recipe" role="tab" aria-selected="false" aria-controls="recipe-fields">Give me a recipe</button>
-      </div>
-
       <!-- Voice profile indicator -->
       <div id="voice-indicator-area">
         <!-- Populated by JS -->
@@ -72,46 +66,6 @@
           ></textarea>
           <div class="field-error" id="idea-error" role="alert">Add a thought before generating</div>
         </div>
-      </div>
-
-      <!-- Recipe path fields -->
-      <div id="recipe-fields" role="tabpanel" aria-labelledby="tab-recipe">
-        <div class="field-group">
-          <label class="field-label" for="recipe-topic">What is the post about?</label>
-          <input
-            type="text"
-            id="recipe-topic"
-            class="field-input"
-            placeholder="e.g. Why most pricing advice is wrong"
-          />
-        </div>
-        <div class="field-group">
-          <label class="field-label" for="recipe-audience">Who is it for?</label>
-          <input
-            type="text"
-            id="recipe-audience"
-            class="field-input"
-            placeholder="e.g. B2B consultants billing by the hour"
-          />
-        </div>
-        <div class="field-group">
-          <label class="field-label" for="recipe-lesson">What is the key lesson or insight?</label>
-          <textarea
-            id="recipe-lesson"
-            class="field-textarea"
-            placeholder="e.g. Clients don't pay for time, they pay for certainty"
-          ></textarea>
-        </div>
-        <div class="field-group">
-          <label class="field-label" for="recipe-cta">What should they do or think after reading?</label>
-          <input
-            type="text"
-            id="recipe-cta"
-            class="field-input"
-            placeholder="e.g. Rethink how they position their pricing"
-          />
-        </div>
-        <div class="field-error" id="recipe-error" role="alert">Fill in at least the topic and lesson before generating</div>
       </div>
 
       <button id="generate-btn" aria-live="polite">Generate</button>
@@ -166,38 +120,9 @@
         <div id="post-edit-area" role="tabpanel" aria-labelledby="tab-edit">
 
           <!-- Empty state -->
-          <div class="empty-state" id="empty-state" aria-label="Example comparison">
-            <div class="empty-compare-grid">
-              <div>
-                <div class="empty-compare-label label-other">Other AI Tools</div>
-                <div class="empty-compare-card">
-                  <p class="empty-compare-text text-other">I'm excited to share some thoughts on strategy today!
-In today's world, many clients are struggling with their strategic direction. It's a game changer to realise that the real issue might be something deeper. Let's dive deep into this together and move the needle on what matters.
-#Strategy #Leadership #Consulting</p>
-                </div>
-              </div>
-              <div>
-                <div class="empty-compare-label label-scouthook">Scouthook</div>
-                <div class="empty-compare-card scouthook-card">
-                  <p class="empty-compare-text text-scouthook">Most clients don't have a strategy problem.
-
-They have a courage problem.
-
-They know what needs to change. They've known for months. The deck is finished. The roadmap exists.
-
-But the conversation hasn't happened yet.
-
-That's not a strategy gap. That's a different problem entirely — and it needs a different solution.
-
-What's the hardest conversation you've been avoiding?</p>
-                </div>
-              </div>
-            </div>
-            <div class="empty-stats" aria-label="Improvement stats">
-              <span class="empty-stat">Hook: 31 words → 7 words</span>
-              <span class="empty-stat">Clichés blocked: 4 → 0</span>
-              <span class="empty-stat">Sounds like you: No → Yes</span>
-            </div>
+          <div class="empty-state" id="empty-state">
+            <p class="empty-state-heading">Your post will appear here</p>
+            <p class="empty-state-sub">Type a thought, lesson, or observation on the left and hit Generate.</p>
           </div>
 
           <!-- Skeleton (while loading) -->

@@ -15,13 +15,16 @@
       <a href="/generate.html?new=1" class="sidebar-cta-btn">Create Post</a>
     </div>
     <nav class="sidebar-nav">
-      <a href="/dashboard.html" class="sidebar-link">Dashboard</a>
-      <a href="/drafts.html" class="sidebar-link">Drafts</a>
-      <a href="/schedule.html" class="sidebar-link">Schedule</a>
-      <a href="/Published.html" class="sidebar-link">Published</a>
+      <a href="/dashboard.html" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Dashboard</a>
+      <a href="/drafts.html" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>Drafts</a>
+      <a href="/schedule.html" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Schedule</a>
+      <a href="/Published.html" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>Published</a>
+      <a href="/Media.html" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>Media</a>
     </nav>
     <div class="sidebar-bottom">
-      <a href="/profile.html" class="sidebar-link">Profile</a>
+      <span class="sidebar-group-label">Account Settings</span>
+      <a href="/profile.html" class="sidebar-sublink"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Voice Profile</a>
+      <a href="/brand.html" class="sidebar-sublink"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="13.5" cy="6.5" r="1" fill="currentColor" stroke="none"/><circle cx="17.5" cy="10.5" r="1" fill="currentColor" stroke="none"/><circle cx="8.5" cy="7.5" r="1" fill="currentColor" stroke="none"/><circle cx="6.5" cy="12.5" r="1" fill="currentColor" stroke="none"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>Brand Settings</a>
     </div>
     <div class="sidebar-linkedin">
       <div id="nav-linkedin-area">
@@ -220,6 +223,7 @@ What's the hardest conversation you've been avoiding?</p>
         <div id="linkedin-preview" role="tabpanel" aria-labelledby="tab-preview" aria-hidden="true">
           <div class="linkedin-card">
             <div class="linkedin-card-header">
+              <img id="linkedin-avatar-img" class="linkedin-avatar" style="display:none" alt="" aria-hidden="true">
               <div id="linkedin-avatar-initials" class="linkedin-avatar-initials" aria-hidden="true">SH</div>
               <div>
                 <div class="linkedin-name" id="preview-name">Your Name</div>
@@ -228,6 +232,7 @@ What's the hardest conversation you've been avoiding?</p>
               </div>
             </div>
             <div class="linkedin-body" id="preview-body"></div>
+            <div id="preview-asset" class="preview-asset hidden" aria-hidden="true"></div>
             <div class="linkedin-engagement" role="list">
               <button class="linkedin-action" aria-label="Like" role="listitem">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/><path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>
@@ -260,15 +265,15 @@ What's the hardest conversation you've been avoiding?</p>
           <button class="pill-btn disabled" id="quote-card-btn" aria-label="Generate quote card">Quote card</button>
           <button class="pill-btn disabled" id="carousel-btn" aria-label="Generate carousel">Carousel</button>
           <button class="pill-btn disabled" id="branded-quote-btn" aria-label="Generate branded quote">Branded quote</button>
+          <button class="pill-btn disabled" id="media-library-btn" aria-label="Attach from media library">Media</button>
 
           <!-- Right group -->
           <div class="action-right" id="action-right">
             <span class="autosave-indicator" id="save-draft-btn" aria-live="polite"></span>
-            <button class="btn-outlined" id="schedule-btn" disabled aria-label="Schedule post">Schedule</button>
-            <button id="publish-btn" disabled aria-label="Publish to LinkedIn">Publish now</button>
+            <button id="schedule-btn" disabled aria-label="Schedule or publish post">Schedule</button>
           </div>
 
-          <!-- Post-publish state (hidden until published) -->
+          <!-- Post-publish state (hidden until published/scheduled) -->
           <div class="post-publish-state" id="post-publish-state" aria-live="polite">
             <div class="published-text" id="published-text">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="#0A66C2" aria-hidden="true">
@@ -276,10 +281,15 @@ What's the hardest conversation you've been avoiding?</p>
               </svg>
               <span id="published-label">Published · just now</span>
             </div>
-            <div class="action-divider" aria-hidden="true"></div>
-            <button class="btn-outlined-teal" id="follow-up-btn">Create a follow-up post</button>
           </div>
         </div>
+
+        <!-- Attached asset chip — second row, shown only when asset is attached -->
+        <div id="asset-chip" class="asset-chip hidden" role="status" aria-live="polite">
+          <span id="asset-chip-label"></span>
+          <button id="asset-chip-remove" class="asset-chip-remove" aria-label="Remove attached asset">×</button>
+        </div>
+
         <div class="action-bar-error" id="action-bar-error" role="alert"></div>
       </div>
 
@@ -306,23 +316,73 @@ What's the hardest conversation you've been avoiding?</p>
 
   <!-- ── Schedule Modal ─────────────────────────────────────── -->
   <div id="schedule-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="schedule-modal-heading" aria-hidden="true">
-    <h2 class="modal-heading" id="schedule-modal-heading">Schedule post</h2>
-    <div class="modal-field">
-      <label class="field-label" for="schedule-date">Date</label>
-      <input type="date" id="schedule-date" class="field-input" style="width:100%" />
+    <h2 class="modal-heading" id="schedule-modal-heading">Publish post</h2>
+
+    <p class="schedule-section-label">Quick schedule</p>
+    <div class="schedule-presets" id="schedule-presets">
+      <button class="schedule-preset-btn" data-preset="2h">In 2 hours</button>
+      <button class="schedule-preset-btn" data-preset="tomorrow-9">Tomorrow 9 AM</button>
+      <button class="schedule-preset-btn" data-preset="tomorrow-12">Tomorrow noon</button>
+      <button class="schedule-preset-btn" data-preset="monday-9">Next Monday 9 AM</button>
     </div>
-    <div class="modal-field">
-      <label class="field-label" for="schedule-time">Time</label>
-      <input type="time" id="schedule-time" class="field-input" style="width:100%" />
+
+    <div class="schedule-divider">
+      <span>or pick a custom time</span>
     </div>
+
+    <div class="schedule-custom-row">
+      <div class="modal-field" style="flex:1;margin-bottom:0">
+        <label class="field-label" for="schedule-date">Date</label>
+        <input type="date" id="schedule-date" class="field-input" style="width:100%" />
+      </div>
+      <div class="modal-field" style="flex:1;margin-bottom:0">
+        <label class="field-label" for="schedule-time">Time</label>
+        <input type="time" id="schedule-time" class="field-input" style="width:100%" />
+      </div>
+    </div>
+    <p class="schedule-tz-label" id="schedule-tz-label"></p>
+
     <div class="modal-footer">
       <button class="btn-outlined" id="schedule-cancel" style="height:36px">Cancel</button>
-      <button id="schedule-confirm-btn" class="btn-teal-filled">Confirm schedule</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn-outlined" id="publish-now-btn" style="height:36px">Publish now</button>
+        <button id="schedule-confirm-btn" class="btn-teal-filled">Schedule</button>
+      </div>
     </div>
     <div class="modal-error" id="modal-error" role="alert"></div>
   </div>
 
-  <!-- ── Overlay (shared by modal + slide-over) ─────────────── -->
+  <!-- ── Media drawer ───────────────────────────────────────── -->
+  <div id="media-drawer" class="media-drawer" role="dialog" aria-modal="true" aria-label="Media library" aria-hidden="true">
+    <div class="media-drawer-header">
+      <span class="slide-over-type-label">MEDIA LIBRARY</span>
+      <button class="slide-over-close" id="media-drawer-close" aria-label="Close media library">✕</button>
+    </div>
+    <div class="media-drawer-body">
+      <!-- Upload zone -->
+      <div id="drawer-upload-zone" class="media-upload-zone media-upload-zone--compact" role="button" tabindex="0"
+           aria-label="Upload — click or drop">
+        <div class="upload-zone-icon" aria-hidden="true">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/>
+            <line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+        </div>
+        <p class="upload-zone-text">Drop or <span class="upload-zone-link">click to upload</span></p>
+        <input type="file" id="drawer-file-input" accept="image/jpeg,image/png,image/gif,image/webp,application/pdf"
+               multiple aria-hidden="true" tabindex="-1">
+      </div>
+      <!-- Media grid -->
+      <div id="drawer-media-grid" class="media-drawer-grid" aria-live="polite">
+        <!-- Rendered by generate.js -->
+      </div>
+      <p id="drawer-empty-msg" class="media-empty" style="display:none">No media yet — upload above.</p>
+      <p id="drawer-error-msg" class="media-drawer-error" style="display:none"></p>
+    </div>
+  </div>
+
+  <!-- ── Overlay (shared by modal + slide-over + media drawer) ── -->
   <div id="overlay" class="overlay" aria-hidden="true"></div>
 
     <footer class="app-footer" role="contentinfo">

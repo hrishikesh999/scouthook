@@ -16,7 +16,7 @@ const app = express();
 // Middleware
 // ---------------------------------------------------------------------------
 
-app.use(express.json());
+app.use(express.json({ limit: '30mb' }));
 
 // Attach tenant_id and user_id to every request from headers
 app.use((req, res, next) => {
@@ -35,12 +35,15 @@ app.use('/api/generate', require('./routes/generate'));
 app.use('/api/visuals', require('./routes/visuals'));
 app.use('/api/linkedin', require('./routes/linkedin'));
 app.use('/api/events', require('./routes/events'));
+app.use('/api/media', require('./routes/media'));
 app.use('/api', require('./routes/stats'));
 app.use('/admin', require('./routes/admin'));
 
 app.use(express.static(path.join(__dirname, 'public')));
 // Serve generated visuals (PNGs, ZIPs) — files older than 24h are cleaned periodically
 app.use('/files', express.static(path.join(__dirname, 'generated')));
+// Serve permanent user uploads (never auto-cleaned)
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // ---------------------------------------------------------------------------
 // Clean generated files older than 24 hours (runs every hour)

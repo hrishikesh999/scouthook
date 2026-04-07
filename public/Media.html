@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Published — Scouthook</title>
+  <title>Media — Scouthook</title>
   <link rel="stylesheet" href="/css/main.css">
 </head>
 <body>
 
-  <!-- ── Sidebar ──────────────────────────────────────────── -->
+  <!-- ── Sidebar ──────────────────────────────────────────────── -->
   <aside id="sidebar" role="navigation" aria-label="Main navigation">
     <a href="/dashboard.html" class="sidebar-logo">Scout<span>hook</span></a>
     <div class="sidebar-cta">
@@ -18,8 +18,8 @@
       <a href="/dashboard.html" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Dashboard</a>
       <a href="/drafts.html" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>Drafts</a>
       <a href="/schedule.html" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Schedule</a>
-      <a href="/Published.html" class="sidebar-link active" aria-current="page"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>Published</a>
-      <a href="/Media.html" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>Media</a>
+      <a href="/Published.html" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>Published</a>
+      <a href="/Media.html" class="sidebar-link active" aria-current="page"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>Media</a>
     </nav>
     <div class="sidebar-bottom">
       <span class="sidebar-group-label">Account Settings</span>
@@ -38,24 +38,45 @@
     </div>
   </aside>
 
-  <!-- ── Main content ──────────────────────────────────────── -->
+  <!-- ── Main content ─────────────────────────────────────────── -->
   <div id="main-content">
 
-    <!-- ── Published ───────────────────────────────────────── -->
-    <div class="published-page">
-      <div class="published-header">
-        <div>
-          <h1 class="published-title">Published</h1>
-          <p class="published-subtitle">Your LinkedIn posts and their engagement.</p>
+    <div class="media-page">
+      <div class="media-page-header">
+        <h1 class="media-title">Media</h1>
+        <p class="media-subtitle">Upload and manage images and PDFs for your LinkedIn posts.</p>
+      </div>
+
+      <!-- Upload error toast -->
+      <div id="media-toast" class="media-toast" role="alert" aria-live="assertive"></div>
+
+      <!-- 4-column grid: upload zone is always first -->
+      <div id="media-grid" class="media-grid">
+
+        <!-- Upload zone -->
+        <div id="media-upload-zone" class="media-upload-zone" role="button" tabindex="0"
+             aria-label="Upload files — click or drop here">
+          <div class="upload-zone-icon" aria-hidden="true">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/>
+              <line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+          </div>
+          <p class="upload-zone-text">Drop files here or <span class="upload-zone-link">click to upload</span></p>
+          <p class="upload-zone-sub">JPG, PNG, GIF, WebP, PDF &middot; Max 20 MB</p>
+          <div id="upload-progress" class="upload-progress" style="display:none" aria-live="polite">Uploading…</div>
+          <input type="file" id="media-file-input" accept="image/jpeg,image/png,image/gif,image/webp,application/pdf"
+                 multiple aria-hidden="true" tabindex="-1">
         </div>
-      </div>
 
-      <div id="published-stats" class="pub-stats-strip"></div>
+      </div><!-- /media-grid -->
 
-      <div id="published-list" aria-live="polite">
-        <!-- Rendered by published.js -->
-      </div>
-    </div>
+      <p id="empty-media-msg" class="media-empty" style="display:none">
+        No media yet — upload your first file above.
+      </p>
+
+    </div><!-- /media-page -->
 
     <footer class="app-footer" role="contentinfo">
       <div class="app-footer-inner">
@@ -68,10 +89,7 @@
 
   </div><!-- /main-content -->
 
-  <!-- ── Toast notification ──────────────────────────────── -->
-  <div id="published-toast" class="published-toast" role="status" aria-live="polite"></div>
-
   <script src="/js/session.js"></script>
-  <script src="/js/published.js"></script>
+  <script src="/js/media.js"></script>
 </body>
 </html>

@@ -53,10 +53,8 @@ const carouselBtn     = document.getElementById('carousel-btn');
 const brandedQuoteBtn = document.getElementById('branded-quote-btn');
 const saveDraftBtn    = document.getElementById('save-draft-btn');
 const scheduleBtn     = document.getElementById('schedule-btn');
-const publishBtn      = document.getElementById('publish-btn');
 const postPublishState = document.getElementById('post-publish-state');
 const publishedLabel  = document.getElementById('published-label');
-const followUpBtn     = document.getElementById('follow-up-btn');
 const actionBarError  = document.getElementById('action-bar-error');
 
 const slideOver       = document.getElementById('slide-over');
@@ -68,11 +66,29 @@ const slideOverSave   = document.getElementById('slide-over-save');
 const slideOverAdd    = document.getElementById('slide-over-add');
 const slideOverDiscard = document.getElementById('slide-over-discard');
 
+const mediaDrawer      = document.getElementById('media-drawer');
+const mediaDrawerClose = document.getElementById('media-drawer-close');
+const drawerUploadZone = document.getElementById('drawer-upload-zone');
+const drawerFileInput  = document.getElementById('drawer-file-input');
+const drawerGrid       = document.getElementById('drawer-media-grid');
+const drawerEmptyMsg   = document.getElementById('drawer-empty-msg');
+const drawerErrorMsg   = document.getElementById('drawer-error-msg');
+const mediaLibraryBtn  = document.getElementById('media-library-btn');
+
+const assetChip       = document.getElementById('asset-chip');
+const assetChipLabel  = document.getElementById('asset-chip-label');
+const assetChipRemove = document.getElementById('asset-chip-remove');
+
+const previewAssetEl    = document.getElementById('preview-asset');
+const previewAvatarImg  = document.getElementById('linkedin-avatar-img');
+const rightPanel        = document.getElementById('right-panel');
+
 const scheduleModal   = document.getElementById('schedule-modal');
 const scheduleDateEl  = document.getElementById('schedule-date');
 const scheduleTimeEl  = document.getElementById('schedule-time');
 const scheduleCancel  = document.getElementById('schedule-cancel');
 const scheduleConfirm = document.getElementById('schedule-confirm-btn');
+const publishNowBtn   = document.getElementById('publish-now-btn');
 const modalError      = document.getElementById('modal-error');
 
 const overlay         = document.getElementById('overlay');
@@ -89,6 +105,15 @@ let primaryPost       = null;
 let alternativePost   = null;
 let currentAssetUrl   = null;
 let currentAssetType  = null;
+/** Asset committed via "Add to post" — included in publish/schedule payloads. */
+let attachedAssetUrl  = null;
+let attachedAssetType = null;
+/** Preview image URL for committed asset (first slide for carousel, png_url for others). */
+let attachedPreviewUrl = null;
+let attachedSlideCount = 0;
+/** In-flight preview URL (populated during generateVisual, before "Add to post"). */
+let currentPreviewUrl  = null;
+let currentSlideCount  = 0;
 let suggestionsExpanded = false;
 let previewExpanded   = false;
 let undoTimer         = null;
@@ -104,10 +129,22 @@ function formatScheduledLocal(iso) {
   if (!iso) return '';
   try {
     const d = new Date(iso);
-    return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZoneName: 'short' });
   } catch {
     return '';
   }
+}
+
+function getUserTimezone() {
+  try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { return ''; }
+}
+
+function getUserTzAbbr() {
+  try {
+    return new Intl.DateTimeFormat(undefined, { timeZoneName: 'short' })
+      .formatToParts(new Date())
+      .find(p => p.type === 'timeZoneName')?.value || '';
+  } catch { return ''; }
 }
 
 function applyScheduleLockUi() {
@@ -127,10 +164,11 @@ function applyScheduleLockUi() {
   recipeLessonEl.readOnly = true;
   recipeCta.readOnly = true;
   scheduleBtn.disabled = true;
-  publishBtn.disabled = true;
   quoteCardBtn.classList.add('disabled');
   carouselBtn.classList.add('disabled');
   brandedQuoteBtn.classList.add('disabled');
+  mediaLibraryBtn.classList.add('disabled');
+  if (assetChipRemove) assetChipRemove.style.display = 'none';
   switchAltBtn.style.pointerEvents = 'none';
   switchAltBtn.style.opacity = '0.5';
 }
@@ -146,6 +184,11 @@ function clearScheduleLockUi() {
   recipeAudience.readOnly = false;
   recipeLessonEl.readOnly = false;
   recipeCta.readOnly = false;
+  quoteCardBtn.classList.remove('disabled');
+  carouselBtn.classList.remove('disabled');
+  brandedQuoteBtn.classList.remove('disabled');
+  mediaLibraryBtn.classList.remove('disabled');
+  if (assetChipRemove) assetChipRemove.style.display = '';
   switchAltBtn.style.pointerEvents = '';
   switchAltBtn.style.opacity = '';
   postPublishState.classList.remove('visible');
@@ -301,6 +344,15 @@ async function checkLinkedInStatus() {
     const area = document.getElementById('nav-linkedin-area');
     if (data.connected) {
       area.innerHTML = buildLinkedInChip(data.name, data.photo_url);
+      // Populate LinkedIn preview header
+      if (data.name) previewName.textContent = data.name;
+      if (data.photo_url) {
+        previewAvatarImg.src = data.photo_url;
+        previewAvatarImg.style.display = '';
+        previewInitials.style.display = 'none';
+      } else if (data.name) {
+        previewInitials.textContent = data.name.charAt(0).toUpperCase();
+      }
     }
   } catch {
     // Leave default connect button
@@ -326,8 +378,7 @@ async function loadProfile() {
       voiceIndicator.innerHTML = `
         <div class="voice-indicator">
           <span class="dot">●</span>
-          Writing as: ${escHtml(profile.content_niche)} · ${escHtml(profile.audience_role)}
-          <a href="/profile.html" class="edit-link">Edit →</a>
+          <a href="/profile.html" class="edit-link">Created using your voice profile</a>
         </div>`;
 
       // Populate LinkedIn preview name
@@ -534,7 +585,11 @@ function buildSession() {
     post:        postTextarea.value,
     postId:      currentPostId,
     primary:     primaryPost,
-    alternative: alternativePost
+    alternative: alternativePost,
+    attachedAssetUrl:   attachedAssetUrl,
+    attachedAssetType:  attachedAssetType,
+    attachedPreviewUrl: attachedPreviewUrl,
+    attachedSlideCount: attachedSlideCount,
   };
 }
 
@@ -676,7 +731,7 @@ function switchView(view) {
     tabEdit.setAttribute('aria-selected', 'true');
     tabPreviewBtn.classList.remove('active');
     tabPreviewBtn.setAttribute('aria-selected', 'false');
-    postEditArea.style.display = '';
+    rightPanel.classList.remove('preview-mode');
     linkedinPreview.classList.remove('visible');
     linkedinPreview.setAttribute('aria-hidden', 'true');
     postTextarea.style.display = postTextarea.classList.contains('visible') ? '' : 'none';
@@ -686,7 +741,9 @@ function switchView(view) {
     tabPreviewBtn.setAttribute('aria-selected', 'true');
     tabEdit.classList.remove('active');
     tabEdit.setAttribute('aria-selected', 'false');
+    rightPanel.classList.add('preview-mode');
     buildLinkedInPreview(postTextarea.value);
+    renderPreviewAsset();
     linkedinPreview.classList.add('visible');
     linkedinPreview.setAttribute('aria-hidden', 'false');
     wordCountEl.style.display = 'none';
@@ -900,16 +957,77 @@ function openModal() {
   overlay.classList.add('visible');
   overlay.setAttribute('aria-hidden', 'false');
   modalError.classList.remove('visible');
-  const firstEl = scheduleModal.querySelector('input, button');
+  scheduleDateEl.value = '';
+  scheduleTimeEl.value = '';
+  clearPresetSelection();
+  const tzLabel = document.getElementById('schedule-tz-label');
+  if (tzLabel) {
+    const tz = getUserTimezone();
+    const abbr = getUserTzAbbr();
+    tzLabel.textContent = tz ? `Times shown in your local timezone: ${abbr} (${tz})` : '';
+  }
+  const firstEl = scheduleModal.querySelector('button.schedule-preset-btn');
   if (firstEl) firstEl.focus();
   trapFocus(scheduleModal);
 }
+
+/* ── Schedule presets ─────────────────────────────────────────── */
+function calcPreset(key) {
+  const now = new Date();
+  let d;
+  if (key === '2h') {
+    d = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+    // round up to next 15-min slot
+    d.setMinutes(Math.ceil(d.getMinutes() / 15) * 15, 0, 0);
+  } else if (key === 'tomorrow-9') {
+    d = new Date(now); d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0);
+  } else if (key === 'tomorrow-12') {
+    d = new Date(now); d.setDate(d.getDate() + 1); d.setHours(12, 0, 0, 0);
+  } else if (key === 'monday-9') {
+    d = new Date(now);
+    const daysUntilMonday = (8 - d.getDay()) % 7 || 7;
+    d.setDate(d.getDate() + daysUntilMonday); d.setHours(9, 0, 0, 0);
+  }
+  return d;
+}
+
+function applyPreset(key) {
+  const d = calcPreset(key);
+  if (!d) return;
+  const yyyy = d.getFullYear();
+  const mm   = String(d.getMonth() + 1).padStart(2, '0');
+  const dd   = String(d.getDate()).padStart(2, '0');
+  const hh   = String(d.getHours()).padStart(2, '0');
+  const min  = String(d.getMinutes()).padStart(2, '0');
+  scheduleDateEl.value = `${yyyy}-${mm}-${dd}`;
+  scheduleTimeEl.value = `${hh}:${min}`;
+  modalError.classList.remove('visible');
+}
+
+function clearPresetSelection() {
+  document.querySelectorAll('.schedule-preset-btn').forEach(b => b.classList.remove('active'));
+}
+
+document.querySelectorAll('.schedule-preset-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    clearPresetSelection();
+    btn.classList.add('active');
+    applyPreset(btn.dataset.preset);
+  });
+});
+
+// Deselect preset if user manually edits date/time
+[scheduleDateEl, scheduleTimeEl].forEach(el => {
+  el.addEventListener('input', clearPresetSelection);
+});
 
 function closeModal() {
   scheduleModal.classList.remove('visible');
   scheduleModal.setAttribute('aria-hidden', 'true');
   overlay.classList.remove('visible');
   overlay.setAttribute('aria-hidden', 'true');
+  publishNowBtn.textContent = 'Publish now';
+  publishNowBtn.disabled = false;
 }
 
 scheduleConfirm.addEventListener('click', async () => {
@@ -942,7 +1060,7 @@ scheduleConfirm.addEventListener('click', async () => {
     if (!res.ok || !data.ok) throw new Error(data.error || 'Scheduling failed');
 
     closeModal();
-    const dateStr = new Date(`${dateVal}T${timeVal}`).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const dateStr = new Date(`${dateVal}T${timeVal}`).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZoneName: 'short' });
     scheduleEditLocked = true;
     scheduledMeta = {
       scheduledFor: scheduledFor,
@@ -954,7 +1072,7 @@ scheduleConfirm.addEventListener('click', async () => {
     modalError.textContent = err.message || 'Something went wrong. Try again.';
     modalError.classList.add('visible');
   } finally {
-    scheduleConfirm.textContent = 'Confirm schedule';
+    scheduleConfirm.textContent = 'Schedule';
     scheduleConfirm.disabled = false;
   }
 });
@@ -985,21 +1103,29 @@ function trapFocus(container) {
   container._trapHandler = handler;
 }
 
-/* ── 19. Publish now ─────────────────────────────────────────── */
-publishBtn.addEventListener('click', async () => {
+/* ── 19. Publish now (inside modal) ─────────────────────────── */
+publishNowBtn.addEventListener('click', async () => {
   if (scheduleEditLocked) return;
   const content = postTextarea.value.trim();
   if (!content) return;
 
-  publishBtn.textContent = 'Publishing…';
-  publishBtn.disabled = true;
-  actionBarError.classList.remove('visible');
+  publishNowBtn.textContent = 'Publishing…';
+  publishNowBtn.disabled = true;
+  modalError.classList.remove('visible');
 
   try {
+    const publishPayload = { content, postId: currentPostId };
+    if (attachedAssetUrl) {
+      if (attachedAssetType === 'carousel' || attachedAssetType === 'media_pdf') {
+        publishPayload.carousel_pdf_url = attachedAssetUrl;
+      } else {
+        publishPayload.image_url = attachedAssetUrl;
+      }
+    }
     const res = await fetch('/api/linkedin/publish', {
       method: 'POST',
       headers: apiHeaders(),
-      body: JSON.stringify({ content, postId: currentPostId })
+      body: JSON.stringify(publishPayload)
     });
     const data = await res.json();
     if (!res.ok || !data.ok) {
@@ -1009,16 +1135,23 @@ publishBtn.addEventListener('click', async () => {
       throw new Error(data.error || 'Publish failed');
     }
 
+    closeModal();
+    attachedAssetUrl   = null;
+    attachedAssetType  = null;
+    attachedPreviewUrl = null;
+    attachedSlideCount = 0;
+    assetChip.classList.add('hidden');
+    clearPreviewAsset();
     sessionStorage.setItem('sh_just_published', '1');
     postTextarea.classList.add('published');
     showPublishedState('Published · just now');
     Session.clear();
 
   } catch (err) {
-    publishBtn.textContent = 'Publish now';
-    publishBtn.disabled = false;
-    actionBarError.textContent = err.message || 'Publish failed. Please try again.';
-    actionBarError.classList.add('visible');
+    publishNowBtn.textContent = 'Publish now';
+    publishNowBtn.disabled = false;
+    modalError.textContent = err.message || 'Publish failed. Please try again.';
+    modalError.classList.add('visible');
   }
 });
 
@@ -1028,35 +1161,6 @@ function showPublishedState(label) {
   postPublishState.classList.add('visible');
 }
 
-/* ── 20. Create follow-up ────────────────────────────────────── */
-followUpBtn.addEventListener('click', () => {
-  if (scheduleEditLocked) return;
-  Session.clear();
-  currentPostId   = null;
-  primaryPost     = null;
-  alternativePost = null;
-
-  ideaInput.value        = '';
-  recipeTopic.value      = '';
-  recipeAudience.value   = '';
-  recipeLessonEl.value   = '';
-  recipeCta.value        = '';
-
-  // Reset right panel
-  postTextarea.value = '';
-  postTextarea.classList.remove('visible', 'published');
-  emptyState.classList.remove('hidden');
-  scoreBar.classList.remove('visible');
-  alternativeStrip.classList.remove('visible');
-  postPublishState.classList.remove('visible');
-  actionRight.style.display = '';
-  actionBarError.classList.remove('visible');
-  wordCountEl.textContent = '0 words';
-
-  disableActionButtons();
-  switchView('edit');
-  postErrorState.classList.remove('visible');
-});
 
 /* ── 21. Slide-over ──────────────────────────────────────────── */
 quoteCardBtn.addEventListener('click',   () => openSlideOver('quote_card',     'QUOTE CARD'));
@@ -1109,10 +1213,13 @@ async function generateVisual(type) {
 
     if (type === 'carousel') {
       renderCarousel(data.slides);
-      // Use zip or pdf URL for save
-      currentAssetUrl = data.pdf_url || data.zip_url;
+      currentAssetUrl    = data.pdf_url || data.zip_url;
+      currentPreviewUrl  = data.slides?.[0]?.png_url || null;
+      currentSlideCount  = data.slides?.length || 0;
     } else {
-      currentAssetUrl = data.png_url;
+      currentAssetUrl   = data.png_url;
+      currentPreviewUrl = data.png_url;
+      currentSlideCount = 0;
       const img = document.createElement('img');
       img.src = data.png_url;
       img.alt = '';
@@ -1157,40 +1264,127 @@ slideOverSave.addEventListener('click', () => {
 });
 
 slideOverAdd.addEventListener('click', () => {
-  // Attach asset reference to session and close
   if (currentAssetUrl) {
-    const session = Session.load() || {};
-    session.assetUrl = currentAssetUrl;
-    session.assetType = currentAssetType;
-    Session.save(session);
+    attachedAssetUrl   = currentAssetUrl;
+    attachedAssetType  = currentAssetType;
+    attachedPreviewUrl = currentPreviewUrl;
+    attachedSlideCount = currentSlideCount;
+    const labelMap = { quote_card: 'Quote Card', carousel: 'Carousel', branded_quote: 'Branded Quote' };
+    assetChipLabel.textContent = labelMap[attachedAssetType] || attachedAssetType;
+    assetChip.classList.remove('hidden');
+    renderPreviewAsset();
+    // Persist to media library in the background — updates attachedAssetUrl/attachedPreviewUrl
+    // with permanent /uploads/ URLs once saved
+    saveGeneratedToMedia(currentAssetUrl, currentAssetType, currentPreviewUrl);
   }
   closeSlideOver();
 });
+
+assetChipRemove.addEventListener('click', () => {
+  attachedAssetUrl   = null;
+  attachedAssetType  = null;
+  attachedPreviewUrl = null;
+  attachedSlideCount = 0;
+  assetChip.classList.add('hidden');
+  assetChipLabel.textContent = '';
+  clearPreviewAsset();
+});
+
+function renderPreviewAsset() {
+  if (!attachedPreviewUrl || !previewAssetEl) return;
+  previewAssetEl.innerHTML = '';
+  const img = document.createElement('img');
+  img.src = attachedPreviewUrl;
+  img.alt = attachedAssetType === 'carousel' ? 'Carousel preview' : 'Visual asset';
+  previewAssetEl.appendChild(img);
+  if (attachedAssetType === 'carousel' && attachedSlideCount > 1) {
+    const badge = document.createElement('div');
+    badge.className = 'preview-asset-badge';
+    badge.textContent = `Document \u00b7 ${attachedSlideCount} slides`;
+    previewAssetEl.appendChild(badge);
+  }
+  previewAssetEl.classList.remove('hidden');
+  previewAssetEl.setAttribute('aria-hidden', 'false');
+}
+
+function clearPreviewAsset() {
+  if (!previewAssetEl) return;
+  previewAssetEl.innerHTML = '';
+  previewAssetEl.classList.add('hidden');
+  previewAssetEl.setAttribute('aria-hidden', 'true');
+}
+
+/* ── Save generated visual to media library ─────────────────── */
+async function saveGeneratedToMedia(assetUrl, assetType, previewUrl) {
+  if (!assetUrl || !assetUrl.startsWith('/files/')) return;
+
+  // Determine what to save and with what metadata
+  const saves = [];
+
+  if (assetType === 'carousel') {
+    saves.push({
+      fileUrl:  assetUrl,
+      filename: `carousel_${Date.now()}.pdf`,
+      mimeType: 'application/pdf',
+      role:     'asset',   // updates attachedAssetUrl
+    });
+  } else {
+    // quote_card or branded_quote — save the PNG
+    const prefix = assetType === 'branded_quote' ? 'branded_quote' : 'quote_card';
+    saves.push({
+      fileUrl:  assetUrl,
+      filename: `${prefix}_${Date.now()}.png`,
+      mimeType: 'image/png',
+      role:     'asset',   // updates both attachedAssetUrl and attachedPreviewUrl
+    });
+  }
+
+  for (const save of saves) {
+    try {
+      const res  = await fetch('/api/media/save-generated', {
+        method:  'POST',
+        headers: apiHeaders(),
+        body:    JSON.stringify({ fileUrl: save.fileUrl, filename: save.filename, mimeType: save.mimeType }),
+      });
+      const data = await res.json();
+      if (!data.ok) continue;
+
+      // Upgrade temporary /files/ URLs to permanent /uploads/ URLs
+      if (save.role === 'asset') {
+        attachedAssetUrl = data.file.url;
+        if (assetType !== 'carousel') attachedPreviewUrl = data.file.url;
+      }
+
+      // Persist session with updated permanent URLs
+      if (currentPostId) Session.save(buildSession());
+    } catch { /* non-fatal — temporary URL still works for 24 h */ }
+  }
+}
 
 /* ── 22. Enable / disable action buttons ────────────────────── */
 function enableActionButtons() {
   if (scheduleEditLocked) {
     scheduleBtn.disabled = true;
-    publishBtn.disabled = true;
     quoteCardBtn.classList.add('disabled');
     carouselBtn.classList.add('disabled');
     brandedQuoteBtn.classList.add('disabled');
+    mediaLibraryBtn.classList.add('disabled');
     return;
   }
   scheduleBtn.disabled  = false;
-  publishBtn.disabled   = false;
   quoteCardBtn.classList.remove('disabled');
   carouselBtn.classList.remove('disabled');
   brandedQuoteBtn.classList.remove('disabled');
+  mediaLibraryBtn.classList.remove('disabled');
 }
 
 function disableActionButtons() {
   showAutosaveState('hidden');
   scheduleBtn.disabled  = true;
-  publishBtn.disabled   = true;
   quoteCardBtn.classList.add('disabled');
   carouselBtn.classList.add('disabled');
   brandedQuoteBtn.classList.add('disabled');
+  mediaLibraryBtn.classList.add('disabled');
 }
 
 /* ── 23. Loading states ──────────────────────────────────────── */
@@ -1255,9 +1449,207 @@ function restoreSession(s) {
   }
 
   enableActionButtons();
+
+  // Restore attached visual asset
+  if (s.attachedAssetUrl) {
+    attachedAssetUrl   = s.attachedAssetUrl;
+    attachedAssetType  = s.attachedAssetType  || null;
+    attachedPreviewUrl = s.attachedPreviewUrl || null;
+    attachedSlideCount = s.attachedSlideCount || 0;
+    const labelMap = { quote_card: 'Quote Card', carousel: 'Carousel', branded_quote: 'Branded Quote' };
+    assetChipLabel.textContent = labelMap[attachedAssetType] || attachedAssetType;
+    assetChip.classList.remove('hidden');
+  }
+
   if (currentPostId) {
     refetchPostAndApplyLock();
   }
+}
+
+/* ── 26. Media drawer ────────────────────────────────────────── */
+mediaLibraryBtn.addEventListener('click', () => {
+  if (scheduleEditLocked || !currentPostId) return;
+  openMediaDrawer();
+});
+
+mediaDrawerClose.addEventListener('click', closeMediaDrawer);
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && mediaDrawer.classList.contains('open')) closeMediaDrawer();
+});
+
+overlay.addEventListener('click', () => {
+  if (mediaDrawer.classList.contains('open')) closeMediaDrawer();
+});
+
+function openMediaDrawer() {
+  // Close visual slide-over if open
+  if (slideOver.classList.contains('open')) closeSlideOver();
+
+  mediaDrawer.classList.add('open');
+  mediaDrawer.setAttribute('aria-hidden', 'false');
+  overlay.classList.add('visible');
+  overlay.setAttribute('aria-hidden', 'false');
+  mediaDrawerClose.focus();
+  loadDrawerMedia();
+}
+
+function closeMediaDrawer() {
+  mediaDrawer.classList.remove('open');
+  mediaDrawer.setAttribute('aria-hidden', 'true');
+  overlay.classList.remove('visible');
+  overlay.setAttribute('aria-hidden', 'true');
+}
+
+async function loadDrawerMedia() {
+  drawerGrid.innerHTML = '';
+  if (drawerEmptyMsg) drawerEmptyMsg.style.display = 'none';
+  if (drawerErrorMsg) drawerErrorMsg.style.display = 'none';
+
+  try {
+    const res  = await fetch('/api/media', { headers: apiHeaders() });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+
+    if (data.files.length === 0) {
+      if (drawerEmptyMsg) drawerEmptyMsg.style.display = '';
+    } else {
+      data.files.forEach(f => drawerGrid.appendChild(buildDrawerCard(f)));
+    }
+  } catch {
+    if (drawerErrorMsg) {
+      drawerErrorMsg.textContent = 'Could not load media. Try again.';
+      drawerErrorMsg.style.display = '';
+    }
+  }
+}
+
+function buildDrawerCard(file) {
+  const isPdf = file.mime_type === 'application/pdf';
+  const card  = document.createElement('div');
+  card.className  = 'media-card';
+  card.dataset.id = file.id;
+  card.setAttribute('role', 'button');
+  card.setAttribute('tabindex', '0');
+  card.setAttribute('aria-label', `Attach ${file.filename}`);
+
+  card.innerHTML = `
+    <div class="media-thumb">
+      ${isPdf
+        ? `<div class="media-pdf-thumb" aria-hidden="true">
+             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+               <polyline points="14 2 14 8 20 8"/>
+             </svg>
+             <span>PDF</span>
+           </div>`
+        : `<img src="${file.url}" alt="${escHtml(file.filename)}" loading="lazy">`
+      }
+    </div>
+    <div class="media-card-info">
+      <span class="media-filename" title="${escHtml(file.filename)}">${escHtml(truncMediaName(file.filename))}</span>
+      <span class="media-format-tag">${escHtml(file.format_tag || 'File')}</span>
+    </div>
+  `;
+
+  const attach = () => {
+    const assetType = isPdf ? 'media_pdf' : 'media_image';
+    attachedAssetUrl   = file.url;
+    attachedAssetType  = assetType;
+    attachedPreviewUrl = isPdf ? null : file.url;
+    attachedSlideCount = 0;
+
+    assetChipLabel.textContent = isPdf ? 'PDF' : (file.format_tag || 'Image');
+    assetChip.classList.remove('hidden');
+    renderPreviewAsset();
+
+    // Persist to session so it survives navigation
+    if (currentPostId) Session.save(buildSession());
+
+    closeMediaDrawer();
+  };
+
+  card.addEventListener('click', attach);
+  card.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); attach(); } });
+  return card;
+}
+
+/* ── Drawer upload zone ──────────────────────────────────────── */
+drawerUploadZone.addEventListener('click', () => drawerFileInput.click());
+
+drawerFileInput.addEventListener('change', () => {
+  if (drawerFileInput.files.length) drawerProcessFiles(Array.from(drawerFileInput.files));
+  drawerFileInput.value = '';
+});
+
+drawerUploadZone.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  drawerUploadZone.classList.add('dragover');
+});
+drawerUploadZone.addEventListener('dragleave', () => drawerUploadZone.classList.remove('dragover'));
+drawerUploadZone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  drawerUploadZone.classList.remove('dragover');
+  const files = Array.from(e.dataTransfer.files);
+  if (files.length) drawerProcessFiles(files);
+});
+
+async function drawerProcessFiles(files) {
+  drawerUploadZone.classList.add('uploading');
+  for (const file of files) {
+    try {
+      await drawerUploadFile(file);
+    } catch (err) {
+      if (drawerErrorMsg) {
+        drawerErrorMsg.textContent = err.message || 'Upload failed';
+        drawerErrorMsg.style.display = '';
+      }
+    }
+  }
+  drawerUploadZone.classList.remove('uploading');
+}
+
+async function drawerUploadFile(file) {
+  const ALLOWED = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
+  if (!ALLOWED.includes(file.type)) throw new Error(`${file.name}: unsupported type`);
+  if (file.size > 20 * 1024 * 1024) throw new Error(`${file.name}: exceeds 20 MB`);
+
+  const headers = {
+    'Content-Type': file.type,
+    'X-Filename':   encodeURIComponent(file.name),
+    'X-User-Id':    getUserId(),
+    'X-Tenant-Id':  getTenantId(),
+  };
+
+  let res;
+  try {
+    res = await fetch('/api/media/upload', { method: 'POST', headers, body: file });
+  } catch {
+    throw new Error('Network error — could not reach server');
+  }
+
+  let data;
+  try {
+    data = await res.json();
+  } catch {
+    throw new Error(`Upload failed (HTTP ${res.status})`);
+  }
+
+  if (!data.ok) throw new Error(data.error || 'Upload failed');
+
+  const card = buildDrawerCard(data.file);
+  drawerGrid.prepend(card);
+  if (drawerEmptyMsg) drawerEmptyMsg.style.display = 'none';
+}
+
+function truncMediaName(name, max = 18) {
+  if (name.length <= max) return name;
+  const ext = name.lastIndexOf('.');
+  if (ext > 0) {
+    const base = name.slice(0, ext), suffix = name.slice(ext);
+    return base.slice(0, max - suffix.length - 1) + '…' + suffix;
+  }
+  return name.slice(0, max - 1) + '…';
 }
 
 /* ── 25. Helpers ─────────────────────────────────────────────── */

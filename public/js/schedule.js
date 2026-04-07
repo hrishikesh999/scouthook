@@ -31,8 +31,18 @@ function formatTime(isoString) {
   return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
 }
 
-function formatDayHeading(date) {
-  return date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+function formatDayParts(date) {
+  const today    = todayMidnight();
+  const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
+  const isToday    = date.getTime() === today.getTime();
+  const isTomorrow = date.getTime() === tomorrow.getTime();
+
+  const weekday = date.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase();
+  const num     = date.getDate();
+  const month   = date.toLocaleDateString('en-US', { month: 'short' }).toUpperCase();
+  const label   = isToday ? 'TODAY' : isTomorrow ? 'TOMORROW' : null;
+
+  return { weekday, num, month, label };
 }
 
 function todayMidnight() {
@@ -67,7 +77,6 @@ function groupByDate(posts) {
     if (!map.has(key)) map.set(key, []);
     map.get(key).push(post);
   }
-  // Sort each day's posts by scheduled_for ascending
   for (const [, dayPosts] of map) {
     dayPosts.sort((a, b) => new Date(a.scheduled_for) - new Date(b.scheduled_for));
   }
@@ -81,77 +90,102 @@ function groupByDate(posts) {
 function renderStream(posts) {
   const stream = document.getElementById('schedule-stream');
   if (!stream) return;
+
   const list   = Array.isArray(posts) ? posts : [];
   const days   = buildDayRange();
   const byDate = groupByDate(list);
 
-  stream.innerHTML = days.map(date => {
-    const key      = localDateKeyFromDate(date);
-    const dayPosts = byDate.get(key) || [];
-    return renderDayGroup(date, dayPosts);
+  // Day keys covered by the 7-day window
+  const windowKeys = new Set(days.map(localDateKeyFromDate));
+
+  // "Next 7 days" section — always show all 7 days
+  const weekHtml = days.map(date => {
+    const key = localDateKeyFromDate(date);
+    return renderDayGroup(date, byDate.get(key) || []);
   }).join('');
+
+  // "Coming up" section — scheduled posts beyond the 7-day window
+  const laterEntries = [...byDate.entries()]
+    .filter(([key]) => !windowKeys.has(key))
+    .sort(([a], [b]) => a.localeCompare(b));
+
+  let laterHtml = '';
+  if (laterEntries.length > 0) {
+    const groups = laterEntries.map(([key, dayPosts]) => {
+      const [y, m, d] = key.split('-').map(Number);
+      const date = new Date(y, m - 1, d);
+      return renderDayGroup(date, dayPosts);
+    }).join('');
+    laterHtml = `
+      <div class="sched-section-divider">
+        <span class="sched-section-label">Coming up</span>
+      </div>
+      ${groups}`;
+  }
+
+  stream.innerHTML = weekHtml + laterHtml;
 }
 
 function renderDayGroup(date, posts) {
-  const heading = formatDayHeading(date);
-  const subtitle = posts.length === 0
-    ? 'No posts scheduled'
-    : posts.length === 1 ? '1 post' : `${posts.length} posts`;
+  const { weekday, num, month, label } = formatDayParts(date);
+  const countLabel = posts.length === 1 ? '1 post' : posts.length > 1 ? `${posts.length} posts` : '';
+  const isToday    = label === 'TODAY';
 
   const bodyHtml = posts.length > 0
-    ? `<div class="sched-day-body"><div class="sched-thread">${posts.map(renderPostRow).join('')}</div></div>`
-    : '';
+    ? `<div class="sched-tiles">${posts.map(renderPostTile).join('')}</div>`
+    : `<p class="sched-empty-day">No posts scheduled</p>`;
 
   return `
     <div class="sched-day-group">
-      <div class="sched-day-card">
-        <div class="sched-day-header">
-          <h2 class="sched-day-heading">${heading}</h2>
-          <p class="sched-day-subtitle">${subtitle}</p>
+      <div class="sched-day-header">
+        <div class="sched-day-date${isToday ? ' sched-day-date--today' : ''}">
+          <span class="sched-day-weekday">${label || weekday}</span>
+          <span class="sched-day-num">${num}</span>
         </div>
-        ${bodyHtml}
+        <span class="sched-day-month">${month}</span>
+        ${countLabel ? `<span class="sched-day-count">${countLabel}</span>` : ''}
       </div>
+      ${bodyHtml}
     </div>`;
 }
 
-function renderPostRow(post) {
+function renderPostTile(post) {
   const time      = formatTime(post.scheduled_for);
   const archetype = toTitleCase(post.format_slug);
-  const words     = (post.content || '').trim().split(/\s+/);
-  const preview   = words.slice(0, 30).join(' ') + (words.length > 30 ? '…' : '');
-
-  const badgeHtml = archetype
-    ? `<span class="sched-archetype-badge">${archetype}</span>`
-    : '';
+  const lines     = (post.content || '').trim().split('\n').map(l => l.trim()).filter(Boolean);
+  const hook      = lines[0] || '';
+  const second    = lines[1] || '';
 
   const editHref = post.post_id
     ? `/generate.html?postId=${encodeURIComponent(post.post_id)}`
     : null;
-  const editHtml = editHref
-    ? `<a href="${editHref}" class="sched-action-edit" title="Opens compose — use Pause to edit while still scheduled">Edit</a>`
-    : '';
-
-  const actionsHtml = editHtml
-    ? `<div class="sched-post-actions">${editHtml}</div>`
-    : '';
 
   return `
-    <div class="sched-post-card" data-id="${post.id}">
-      <span class="sched-dot" aria-hidden="true"></span>
-      <div class="sched-post-inner">
-        <div class="sched-post-meta">
-          <span class="sched-post-time">${time}</span>
-          ${badgeHtml}
-        </div>
-        <p class="sched-post-content text-post">${preview}</p>
-        ${actionsHtml}
+    <div class="sched-post-tile" data-id="${post.id}">
+      <div class="sched-tile-top">
+        <span class="sched-post-time">${time}</span>
+        ${archetype ? `<span class="sched-archetype-badge">${archetype}</span>` : ''}
       </div>
+      <p class="sched-tile-hook">${hook}</p>
+      ${second ? `<p class="sched-tile-second">${second}</p>` : ''}
+      ${editHref ? `<a href="${editHref}" class="sched-action-edit">Edit →</a>` : ''}
     </div>`;
 }
 
 // ---------------------------------------------------------------------------
-// LinkedIn status (topbar)
+// LinkedIn status (sidebar)
 // ---------------------------------------------------------------------------
+
+function buildLinkedInChip(name, photoUrl) {
+  const initials = name
+    ? name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
+    : '??';
+  const avatarHtml = photoUrl
+    ? `<img class="nav-linkedin-avatar" src="${photoUrl}" alt="${name || 'LinkedIn'}">`
+    : `<div class="nav-linkedin-initials">${initials}</div>`;
+  const nameHtml = name ? `<span class="nav-linkedin-name">${name}</span>` : '';
+  return `<div class="nav-linkedin-connected">${avatarHtml}${nameHtml}</div>`;
+}
 
 async function checkLinkedInStatus() {
   const connectBtn = document.getElementById('linkedin-connect-btn');
@@ -161,12 +195,10 @@ async function checkLinkedInStatus() {
   try {
     const res  = await fetch('/api/linkedin/status', { headers: apiHeaders() });
     const data = await res.json();
-    const btn  = document.getElementById('linkedin-connect-btn');
-    if (!btn) return;
+    const area = document.getElementById('nav-linkedin-area');
+    if (!area) return;
     if (data.connected) {
-      btn.textContent = `✓ ${data.name || 'LinkedIn Connected'}`;
-      btn.style.color = 'var(--accent)';
-      btn.style.pointerEvents = 'none';
+      area.innerHTML = buildLinkedInChip(data.name, data.photo_url);
     }
   } catch { /* non-fatal */ }
 }

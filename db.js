@@ -197,6 +197,28 @@ function setTenantSetting(tenantId, key, value) {
 }
 
 // ---------------------------------------------------------------------------
+// Media library table
+// ---------------------------------------------------------------------------
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS media_files (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id      TEXT NOT NULL,
+    tenant_id    TEXT NOT NULL DEFAULT 'default',
+    filename     TEXT NOT NULL,
+    stored_name  TEXT NOT NULL,
+    mime_type    TEXT NOT NULL,
+    file_size    INTEGER,
+    width        INTEGER,
+    height       INTEGER,
+    format_tag   TEXT,
+    url          TEXT NOT NULL,
+    created_at   DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+  CREATE INDEX IF NOT EXISTS idx_media_files_user ON media_files (user_id, tenant_id);
+`);
+
+// ---------------------------------------------------------------------------
 // Migrations — add columns that didn't exist in the initial schema
 // SQLite throws "duplicate column name" if the column already exists; ignore it.
 // ---------------------------------------------------------------------------
@@ -214,6 +236,7 @@ for (const sql of [
   "ALTER TABLE generated_posts ADD COLUMN comments        INTEGER DEFAULT 0",
   "ALTER TABLE generated_posts ADD COLUMN reactions       INTEGER DEFAULT 0",
   "ALTER TABLE generated_posts ADD COLUMN last_synced_at  DATETIME",
+  "ALTER TABLE generated_posts ADD COLUMN asset_type      TEXT",
 ]) {
   try { db.exec(sql); } catch (_) { /* column already exists */ }
 }

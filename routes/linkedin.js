@@ -264,11 +264,12 @@ router.post('/publish', async (req, res) => {
 
     // Stamp the originating draft as published and persist the LinkedIn share ID
     if (postId) {
+      const assetType = carousel_pdf_url ? 'carousel' : image_url ? 'image' : null;
       db.prepare(`
         UPDATE generated_posts
-        SET status = 'published', published_at = CURRENT_TIMESTAMP
+        SET status = 'published', published_at = CURRENT_TIMESTAMP, asset_type = ?
         WHERE id = ? AND user_id = ? AND tenant_id = ?
-      `).run(postId, userId, tenantId);
+      `).run(assetType, postId, userId, tenantId);
 
       if (result.linkedin_post_id) {
         db.prepare(`UPDATE generated_posts SET linkedin_post_id = ? WHERE id = ?`)

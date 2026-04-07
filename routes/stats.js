@@ -293,7 +293,7 @@ router.get('/posts', (req, res) => {
     if (status === 'published') {
       posts = db.prepare(`
         SELECT id, content, format_slug, likes, comments, reactions,
-               published_at, last_synced_at, linkedin_post_id
+               published_at, last_synced_at, linkedin_post_id, asset_type
         FROM   generated_posts
         WHERE  user_id = ? AND tenant_id = ? AND status = 'published'
         ORDER  BY published_at DESC

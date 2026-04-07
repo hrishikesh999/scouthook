@@ -632,7 +632,25 @@ body {
   box-shadow: var(--shadow-sm);
 }
 
-/* ── Path Toggle ────────────────────────────────────────────── */
+/* ── Idea prompt header ─────────────────────────────────────── */
+.idea-prompt-header {
+  margin-bottom: var(--space-5);
+}
+
+.idea-prompt-heading {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--text-primary);
+  line-height: 1.2;
+  margin-bottom: 6px;
+}
+
+.idea-prompt-sub {
+  font-size: 13px;
+  color: var(--text-tertiary);
+  line-height: 1.55;
+}
 
 /* ── Voice Profile Indicator ────────────────────────────────── */
 .voice-indicator {

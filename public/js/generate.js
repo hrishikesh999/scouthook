@@ -349,36 +349,16 @@ async function loadProfile() {
     const data = await res.json();
     const profile = data.profile;
 
-    if (
-      !profile ||
-      !profile.content_niche ||
-      !profile.audience_role ||
-      !profile.audience_pain
-    ) {
-      showIncompleteProfile();
+    const complete = profile && profile.content_niche && profile.audience_role && profile.audience_pain;
+    if (complete) {
+      voiceIndicator.innerHTML = `<div class="voice-indicator"><span class="voice-indicator-dot voice-indicator-dot--green"></span><a href="/profile.html" class="edit-link">Created using your voice profile</a></div>`;
+      if (profile.audience_role) previewHeadline.textContent = profile.audience_role;
     } else {
-      voiceIndicator.innerHTML = `
-        <div class="voice-indicator">
-          <span class="dot">●</span>
-          <a href="/profile.html" class="edit-link">Created using your voice profile</a>
-        </div>`;
-
-      // Populate LinkedIn preview name
-      if (profile.audience_role) {
-        previewHeadline.textContent = profile.audience_role;
-      }
+      voiceIndicator.innerHTML = `<div class="voice-indicator"><span class="voice-indicator-dot voice-indicator-dot--red"></span><a href="/profile.html" class="edit-link">Voice profile incomplete — complete it for better results</a></div>`;
     }
   } catch {
-    showIncompleteProfile();
+    voiceIndicator.innerHTML = `<div class="voice-indicator"><span class="voice-indicator-dot voice-indicator-dot--red"></span><a href="/profile.html" class="edit-link">Voice profile incomplete — complete it for better results</a></div>`;
   }
-}
-
-function showIncompleteProfile() {
-  voiceIndicator.innerHTML = `
-    <div class="voice-indicator-warning">
-      Your voice profile is incomplete — posts may sound generic.
-      <a href="/profile.html">Complete it →</a>
-    </div>`;
 }
 
 /* ── 6. Field errors ─────────────────────────────────────────── */

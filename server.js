@@ -19,7 +19,20 @@ const app = express();
 // Security middleware
 // ---------------------------------------------------------------------------
 
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc:  ["'self'", "'unsafe-inline'"],   // inline scripts in HTML pages
+      styleSrc:   ["'self'", "'unsafe-inline'"],
+      imgSrc:     ["'self'", "data:", "*.licdn.com", "media.licdn.com"],
+      connectSrc: ["'self'"],
+      fontSrc:    ["'self'"],
+      objectSrc:  ["'none'"],
+      frameAncestors: ["'none'"],
+    },
+  },
+}));
 
 const allowedOrigin = process.env.ALLOWED_ORIGIN || null;
 if (allowedOrigin) {

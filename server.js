@@ -143,6 +143,56 @@ app.use((req, res, next) => {
   next();
 });
 
+// ---------------------------------------------------------------------------
+// Review-mode auth gate
+// - Redirect unauthenticated users to /login.html for internal HTML pages
+// - Return 401 for protected API endpoints
+// ---------------------------------------------------------------------------
+function isProbablyHtmlRequest(req) {
+  const accept = (req.headers.accept || '').toLowerCase();
+  if (accept.includes('text/html')) return true;
+  return req.path === '/' || req.path.endsWith('.html');
+}
+
+function isPublicReviewPath(req) {
+  const p = req.path;
+  // Public pages
+  if (p === '/' || p === '/index.html' || p === '/login.html' || p === '/privacy.html' || p === '/terms.html') return true;
+
+  // Static assets (served from /public, /files, /uploads)
+  if (
+    p.startsWith('/css/') ||
+    p.startsWith('/js/') ||
+    p.startsWith('/images/') ||
+    p.startsWith('/uploads/') ||
+    p.startsWith('/files/') ||
+    p === '/favicon.ico'
+  ) return true;
+
+  // Public review-mode API endpoints needed for sign-in + UI boot
+  if (p === '/api/config') return true;
+  if (p === '/api/linkedin/connect') return true;
+  if (p === '/api/linkedin/callback') return true;
+  if (p === '/api/linkedin/status') return true;
+
+  return false;
+}
+
+app.use((req, res, next) => {
+  if (!REVIEW_MODE) return next();
+  if (req.userId) return next();
+  if (isPublicReviewPath(req)) return next();
+
+  // If someone hits the app without a LinkedIn session, force login.
+  if (req.path.startsWith('/api/')) {
+    return res.status(401).json({ ok: false, error: 'not_authenticated' });
+  }
+  if (isProbablyHtmlRequest(req)) {
+    return res.redirect('/login.html');
+  }
+  return res.status(401).send('Not authenticated');
+});
+
 // Expose config to the frontend (used to toggle review-mode UI)
 app.get('/api/config', (req, res) => {
   return res.json({ ok: true, review_mode: REVIEW_MODE });

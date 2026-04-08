@@ -5,6 +5,44 @@ const router = express.Router();
 const { db } = require('../db');
 
 // ---------------------------------------------------------------------------
+// GET /api/profile/me
+// Returns current user's profile fields (from session/headers).
+// Never returns writing_samples or voice_fingerprint.
+// ---------------------------------------------------------------------------
+router.get('/me', (req, res) => {
+  const userId = req.userId;
+  const tenantId = req.tenantId;
+
+  if (!userId) {
+    return res.status(400).json({ ok: false, error: 'missing_user_id' });
+  }
+
+  const profile = db
+    .prepare('SELECT audience_role, audience_pain, content_niche, contrarian_view, voice_fingerprint, brand_bg, brand_accent, brand_text, brand_name, brand_logo FROM user_profiles WHERE user_id = ? AND tenant_id = ?')
+    .get(userId, tenantId);
+
+  if (!profile) {
+    return res.json({ ok: true, profile: null });
+  }
+
+  return res.json({
+    ok: true,
+    profile: {
+      audience_role:   profile.audience_role,
+      audience_pain:   profile.audience_pain,
+      content_niche:   profile.content_niche,
+      contrarian_view: profile.contrarian_view,
+      has_fingerprint: !!profile.voice_fingerprint,
+      brand_bg:        profile.brand_bg     || '#0F1A3C',
+      brand_accent:    profile.brand_accent || '#0D7A5F',
+      brand_text:      profile.brand_text   || '#F0F4FF',
+      brand_name:      profile.brand_name   || null,
+      brand_logo:      profile.brand_logo   || null,
+    },
+  });
+});
+
+// ---------------------------------------------------------------------------
 // GET /api/profile/:user_id
 // Returns profile fields. Never returns writing_samples or voice_fingerprint.
 // ---------------------------------------------------------------------------

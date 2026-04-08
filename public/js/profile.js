@@ -7,6 +7,17 @@ const contrarianEl = document.getElementById('profile-contrarian');
 const samplesEl    = document.getElementById('profile-samples');
 const saveBtn      = document.getElementById('save-profile-btn');
 const saveError    = document.getElementById('profile-save-error');
+let reviewMode     = false;
+
+async function loadConfig() {
+  try {
+    const res = await fetch('/api/config', { headers: apiHeaders() });
+    const data = await res.json();
+    reviewMode = !!data.review_mode;
+  } catch {
+    reviewMode = false;
+  }
+}
 
 /* ── LinkedIn status in nav ──────────────────────────────────── */
 function buildLinkedInChip(name, photoUrl) {
@@ -42,8 +53,8 @@ function buildLinkedInChip(name, photoUrl) {
 /* ── Load existing profile ───────────────────────────────────── */
 (async function loadProfile() {
   try {
-    const uid = getUserId();
-    const res  = await fetch(`/api/profile/${uid}`, { headers: apiHeaders() });
+    await loadConfig();
+    const res  = await fetch(reviewMode ? '/api/profile/me' : `/api/profile/${getUserId()}`, { headers: apiHeaders() });
     const data = await res.json();
     if (!data.ok || !data.profile) return;
 

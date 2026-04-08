@@ -172,11 +172,13 @@ async function handleCopyToLinkedIn() {
   }
 }
 
-// Boot config early so UI is correct before interaction
-(async function bootConfig() {
+let _configLoaded = false;
+async function ensureConfigLoaded() {
+  if (_configLoaded) return;
   await loadConfig();
   applyReviewModeUi();
-})();
+  _configLoaded = true;
+}
 
 function formatScheduledLocal(iso) {
   if (!iso) return '';
@@ -317,6 +319,9 @@ document.addEventListener('visibilitychange', () => {
 
 /* ── 3. Init ─────────────────────────────────────────────────── */
 (async function init() {
+  // Ensure review-mode is known before any dependent calls (profile load, schedule CTA text, etc.)
+  await ensureConfigLoaded();
+
   // Wire userId into the Connect LinkedIn button href
   const connectBtn = document.getElementById('linkedin-connect-btn');
   if (connectBtn) {
@@ -324,7 +329,7 @@ document.addEventListener('visibilitychange', () => {
   }
 
   checkLinkedInStatus();
-  loadProfile();
+  await loadProfile();
 
   const _qs      = new URLSearchParams(window.location.search);
   const urlPostId = _qs.get('postId');
@@ -432,6 +437,7 @@ async function checkLinkedInStatus() {
 /* ── 5. Profile check ────────────────────────────────────────── */
 async function loadProfile() {
   try {
+    await ensureConfigLoaded();
     const uid = getUserId();
     const url = reviewMode ? '/api/profile/me' : `/api/profile/${uid}`;
     const res = await fetch(url, { headers: apiHeaders() });

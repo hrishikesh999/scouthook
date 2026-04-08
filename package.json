@@ -1,7 +1,7 @@
 {
   "name": "scouthook",
   "version": "1.0.0",
-  "description": "LinkedIn content intelligence platform for founders and consultants",
+  "description": "AI writing and content optimization tool for LinkedIn posts",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

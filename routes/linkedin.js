@@ -9,6 +9,49 @@ const { publishNow } = require('../services/linkedinPublisher');
 const { addScheduledJob, removeScheduledJob } = require('../services/scheduler');
 const { syncPostMetrics, RateLimitError } = require('../services/linkedinMetrics');
 
+const REVIEW_MODE = process.env.REVIEW_MODE === '1';
+
+function setReviewSessionCookie(res, payload) {
+  // Must match the signer in server.js (HMAC SHA-256 with SESSION_SECRET)
+  const crypto = require('crypto');
+  const secret = process.env.SESSION_SECRET || null;
+  if (!secret) throw new Error('SESSION_SECRET not set');
+
+  function base64urlEncode(input) {
+    return Buffer.from(input).toString('base64').replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+  }
+
+  const body = base64urlEncode(JSON.stringify(payload));
+  const sig = base64urlEncode(crypto.createHmac('sha256', secret).update(body).digest());
+  const token = `${body}.${sig}`;
+
+  const isProd = process.env.NODE_ENV === 'production';
+  const cookie = [
+    `sh_session=${encodeURIComponent(token)}`,
+    'Path=/',
+    'HttpOnly',
+    'SameSite=Lax',
+    isProd ? 'Secure' : null,
+    // 30 days
+    `Max-Age=${60 * 60 * 24 * 30}`,
+  ].filter(Boolean).join('; ');
+
+  res.setHeader('Set-Cookie', cookie);
+}
+
+function clearReviewSessionCookie(res) {
+  const isProd = process.env.NODE_ENV === 'production';
+  const cookie = [
+    'sh_session=',
+    'Path=/',
+    'HttpOnly',
+    'SameSite=Lax',
+    isProd ? 'Secure' : null,
+    'Max-Age=0',
+  ].filter(Boolean).join('; ');
+  res.setHeader('Set-Cookie', cookie);
+}
+
 /**
  * Cancel a pending/processing scheduled row: DB updates + remove Bull job.
  * @returns {Promise<{ ok: true } | { ok: false, error: string, status?: string }>}
@@ -58,6 +101,17 @@ router.get('/status', (req, res) => {
   const userId   = req.userId;
   const tenantId = req.tenantId;
 
+  if (REVIEW_MODE) {
+    const prof = req.linkedinProfile || null;
+    if (!prof?.sub) return res.json({ ok: true, connected: false, name: null, photo_url: null });
+    return res.json({
+      ok: true,
+      connected: true,
+      name: prof.name || null,
+      photo_url: prof.picture || null,
+    });
+  }
+
   if (!userId) return res.json({ ok: true, connected: false, name: null, photo_url: null });
 
   const row = db.prepare(
@@ -81,8 +135,6 @@ router.get('/connect', (req, res) => {
   const userId   = req.userId   || req.query._uid;
   const tenantId = req.tenantId || req.query._tid || 'default';
 
-  if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
-
   const clientId    = getSetting('linkedin_client_id');
   const redirectUri = getSetting('linkedin_redirect_uri');
 
@@ -91,14 +143,15 @@ router.get('/connect', (req, res) => {
   }
 
   const state = crypto.randomUUID();
-  setOAuthState(state, { userId, tenantId });
+  setOAuthState(state, { userId: userId || null, tenantId });
 
   const params = new URLSearchParams({
     response_type: 'code',
     client_id:     clientId,
     redirect_uri:  redirectUri,
     state,
-    scope:         'openid profile email w_member_social',
+    // Review-mode is sign-in only (no posting scope)
+    scope:         REVIEW_MODE ? 'openid profile' : 'openid profile email w_member_social',
   });
 
   res.redirect(`https://www.linkedin.com/oauth/v2/authorization?${params}`);
@@ -170,6 +223,21 @@ router.get('/callback', async (req, res) => {
       console.error('[linkedin/callback] userinfo fetch failed:', profileRes.status, text);
     }
 
+    if (REVIEW_MODE) {
+      // In review-mode we do NOT persist access/refresh tokens (no posting).
+      // We only create a signed session for the browser.
+      setReviewSessionCookie(res, {
+        sub: linkedin_user_id,
+        name: linkedin_name,
+        picture: linkedin_photo,
+        tid: tenantId || 'default',
+        iat: Date.now(),
+      });
+
+      console.log(`[linkedin/callback] Review-mode sign-in user=${linkedin_user_id} name=${linkedin_name}`);
+      return res.redirect('/dashboard.html?linkedin_signed_in=true');
+    }
+
     // Fallback: some accounts/apps don't receive OIDC `picture` reliably.
     // Try LinkedIn REST `me` with profilePicture projection and LinkedIn-Version header.
     if (!linkedin_photo) {
@@ -179,7 +247,7 @@ router.get('/callback', async (req, res) => {
           {
             headers: {
               'Authorization': `Bearer ${tokens.access_token}`,
-              'LinkedIn-Version': '202308',
+              'LinkedIn-Version': '202603',
             },
           }
         );
@@ -229,11 +297,19 @@ router.get('/callback', async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// Review-mode: block automation/analytics endpoints
+// ---------------------------------------------------------------------------
+function blockedInReviewMode(req, res, next) {
+  if (!REVIEW_MODE) return next();
+  return res.status(404).json({ ok: false, error: 'not_available_in_review_mode' });
+}
+
+// ---------------------------------------------------------------------------
 // POST /api/linkedin/publish
 // Publish a post immediately
 // Body: { content }
 // ---------------------------------------------------------------------------
-router.post('/publish', async (req, res) => {
+router.post('/publish', blockedInReviewMode, async (req, res) => {
   const userId   = req.userId;
   const tenantId = req.tenantId;
   const { content, image_url, carousel_pdf_url, postId } = req.body;
@@ -299,7 +375,7 @@ router.post('/publish', async (req, res) => {
 // Schedule a post for future publishing
 // Body: { content, scheduled_for (ISO datetime string) }
 // ---------------------------------------------------------------------------
-router.post('/schedule', async (req, res) => {
+router.post('/schedule', blockedInReviewMode, async (req, res) => {
   const userId   = req.userId;
   const tenantId = req.tenantId;
   const { content, scheduled_for, post_id } = req.body;
@@ -354,7 +430,7 @@ router.post('/schedule', async (req, res) => {
 // GET /api/linkedin/scheduled
 // List pending scheduled posts for the current user
 // ---------------------------------------------------------------------------
-router.get('/scheduled', (req, res) => {
+router.get('/scheduled', blockedInReviewMode, (req, res) => {
   const userId   = req.userId;
   const tenantId = req.tenantId;
 
@@ -377,7 +453,7 @@ router.get('/scheduled', (req, res) => {
 // DELETE /api/linkedin/scheduled/:id
 // Cancel a scheduled post
 // ---------------------------------------------------------------------------
-router.delete('/scheduled/:id', async (req, res) => {
+router.delete('/scheduled/:id', blockedInReviewMode, async (req, res) => {
   const userId   = req.userId;
   const tenantId = req.tenantId;
   const { id }   = req.params;
@@ -398,7 +474,7 @@ router.delete('/scheduled/:id', async (req, res) => {
 // Cancel schedule by generated_posts id — used from generate.html (Pause to edit)
 // Body: { post_id }
 // ---------------------------------------------------------------------------
-router.post('/scheduled/pause-by-post', async (req, res) => {
+router.post('/scheduled/pause-by-post', blockedInReviewMode, async (req, res) => {
   const userId   = req.userId;
   const tenantId = req.tenantId;
   const postId   = req.body?.post_id != null ? Number(req.body.post_id) : NaN;
@@ -433,6 +509,11 @@ router.post('/scheduled/pause-by-post', async (req, res) => {
 // Remove LinkedIn connection for the current user
 // ---------------------------------------------------------------------------
 router.post('/disconnect', (req, res) => {
+  if (REVIEW_MODE) {
+    clearReviewSessionCookie(res);
+    return res.json({ ok: true });
+  }
+
   const userId   = req.userId;
   const tenantId = req.tenantId;
 
@@ -477,7 +558,7 @@ router.delete('/user-data', (req, res) => {
 // Fetches fresh engagement data for a single published post from LinkedIn's
 // Social Metadata API (2026-03). Per-row, user-initiated only — never bulk.
 // ---------------------------------------------------------------------------
-router.post('/sync-metrics', async (req, res) => {
+router.post('/sync-metrics', blockedInReviewMode, async (req, res) => {
   const userId   = req.userId;
   const tenantId = req.tenantId || 'default';
   const { postId } = req.body;

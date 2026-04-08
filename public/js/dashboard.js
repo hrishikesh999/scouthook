@@ -15,11 +15,9 @@ function buildLinkedInChip(name, photoUrl) {
 /* ── DOM References ──────────────────────────────────────────── */
 const statPostsMonth   = document.getElementById('stat-posts-month');
 const statAvgScore     = document.getElementById('stat-avg-score');
-const statScheduled    = document.getElementById('stat-scheduled');
 const statLinkedIn     = document.getElementById('stat-linkedin-value');
 const statLinkedInSub  = document.getElementById('stat-linkedin-sublabel');
 const recentList       = document.getElementById('recent-posts-list');
-const scheduledList    = document.getElementById('scheduled-posts-list');
 
 /* ── Init ────────────────────────────────────────────────────── */
 (async function init() {
@@ -32,7 +30,6 @@ const scheduledList    = document.getElementById('scheduled-posts-list');
   await checkLinkedInStatus();
   loadStats();
   loadRecentPosts();
-  loadScheduledPosts();
 })();
 
 /* ── LinkedIn status ─────────────────────────────────────────── */
@@ -83,27 +80,11 @@ async function loadStats() {
       statAvgScore.className   = 'stat-value ' + scoreClass(score);
     }
 
-    if (data.scheduled_count !== undefined) {
-      statScheduled.textContent = data.scheduled_count;
-    }
   } catch {
     // Graceful — leave '—' placeholders
-    // Try to get scheduled count from the LinkedIn scheduled endpoint as a fallback
-    loadScheduledCount();
   }
 }
 
-async function loadScheduledCount() {
-  try {
-    const res  = await fetch('/api/linkedin/scheduled', { headers: apiHeaders() });
-    const data = await res.json();
-    if (data.ok && Array.isArray(data.posts)) {
-      statScheduled.textContent = data.posts.length;
-    }
-  } catch {
-    // Leave '—'
-  }
-}
 
 /* ── Recent posts ────────────────────────────────────────────── */
 async function loadRecentPosts() {
@@ -128,57 +109,6 @@ function showEmptyRecent() {
   recentList.innerHTML = `
     <div class="card-empty-state">
       No posts yet — <a href="/generate.html?new=1">Generate →</a>
-    </div>`;
-}
-
-/* ── Scheduled posts ─────────────────────────────────────────── */
-async function loadScheduledPosts() {
-  try {
-    // Try primary endpoint first, fall back to linkedin/scheduled
-    let posts = null;
-
-    try {
-      const res  = await fetch('/api/posts/scheduled', { headers: apiHeaders() });
-      if (res.ok) {
-        const data = await res.json();
-        posts = data.posts || data;
-      }
-    } catch {
-      // Fall through to LinkedIn scheduled
-    }
-
-    if (!posts) {
-      const res  = await fetch('/api/linkedin/scheduled', { headers: apiHeaders() });
-      const data = await res.json();
-      if (data.ok && Array.isArray(data.posts)) {
-        posts = data.posts.map(p => ({
-          content:       p.content,
-          scheduled_for: p.scheduled_for,
-          quality_score: null,
-          status:        'scheduled'
-        }));
-      }
-    }
-
-    if (!Array.isArray(posts) || posts.length === 0) {
-      showEmptyScheduled();
-      return;
-    }
-
-    renderPostRows(scheduledList, posts.slice(0, 5), 'scheduled');
-
-    // Update scheduled stat card
-    statScheduled.textContent = posts.length;
-
-  } catch {
-    showEmptyScheduled();
-  }
-}
-
-function showEmptyScheduled() {
-  scheduledList.innerHTML = `
-    <div class="card-empty-state">
-      Nothing scheduled — <a href="/generate.html?new=1">Schedule a post →</a>
     </div>`;
 }
 

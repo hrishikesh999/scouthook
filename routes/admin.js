@@ -5,6 +5,9 @@ const router = express.Router();
 const { getSetting, setSetting, getAllSettings } = require('../db');
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'changeme';
+if (!process.env.ADMIN_PASSWORD) {
+  console.warn('[admin] WARNING: ADMIN_PASSWORD env var not set — using insecure default. Set it before going live.');
+}
 
 // Simple password check middleware for admin routes
 function requireAdminPassword(req, res, next) {

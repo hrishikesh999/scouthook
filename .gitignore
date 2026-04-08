@@ -8,3 +8,4 @@ generated/*.png
 generated/*.pdf
 generated/*.zip
 .cursor/
+.DS_Store

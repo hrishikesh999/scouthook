@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Connect LinkedIn — Scouthook</title>
+  <title>Sign in with LinkedIn — Scouthook</title>
   <link rel="stylesheet" href="/css/scouthook.css" />
   <link rel="stylesheet" href="/css/main.css" />
 </head>
@@ -26,10 +26,10 @@
         </svg>
       </div>
 
-      <h1 style="margin-bottom: 0.5rem;">Connect your LinkedIn account</h1>
+      <h1 style="margin-bottom: 0.5rem;">Sign in with LinkedIn</h1>
       <p class="text-muted" style="margin-bottom: var(--space-xl);">
-        Scouthook will request permission to publish posts on your behalf.
-        Here is exactly what that means.
+        Scouthook uses LinkedIn sign-in to identify your account and save your drafts.
+        Posting happens manually on LinkedIn via copy/paste.
       </p>
 
       <!-- Will do -->
@@ -40,15 +40,15 @@
         <ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: var(--space-sm);">
           <li style="display: flex; gap: var(--space-sm); align-items: flex-start;">
             <span style="color: var(--color-accent); font-size: 1.1rem; line-height: 1.4;">✓</span>
-            <span>Publish posts to LinkedIn <strong>only when you explicitly click Publish</strong> or confirm a scheduled time</span>
+            <span>Help you draft and refine LinkedIn posts inside Scouthook, then let you copy them to LinkedIn</span>
           </li>
           <li style="display: flex; gap: var(--space-sm); align-items: flex-start;">
             <span style="color: var(--color-accent); font-size: 1.1rem; line-height: 1.4;">✓</span>
-            <span>Store your access token encrypted with AES-256-GCM — never in plain text</span>
+            <span>Use standard OAuth sign-in with CSRF protection</span>
           </li>
           <li style="display: flex; gap: var(--space-sm); align-items: flex-start;">
             <span style="color: var(--color-accent); font-size: 1.1rem; line-height: 1.4;">✓</span>
-            <span>Delete your token immediately when you disconnect</span>
+            <span>Let you disconnect at any time</span>
           </li>
         </ul>
       </div>
@@ -65,7 +65,7 @@
           </li>
           <li style="display: flex; gap: var(--space-sm); align-items: flex-start;">
             <span style="color: var(--color-error, #e05252); font-size: 1.1rem; line-height: 1.4;">✕</span>
-            <span>Post without your knowledge or explicit confirmation</span>
+            <span>Post to LinkedIn on your behalf</span>
           </li>
           <li style="display: flex; gap: var(--space-sm); align-items: flex-start;">
             <span style="color: var(--color-error, #e05252); font-size: 1.1rem; line-height: 1.4;">✕</span>
@@ -73,15 +73,14 @@
           </li>
           <li style="display: flex; gap: var(--space-sm); align-items: flex-start;">
             <span style="color: var(--color-error, #e05252); font-size: 1.1rem; line-height: 1.4;">✕</span>
-            <span>Retain your access token after you disconnect</span>
+            <span>Request unnecessary permissions</span>
           </li>
         </ul>
       </div>
 
       <!-- Scope note -->
       <p class="text-muted" style="font-size: 0.8rem; margin-bottom: var(--space-xl); line-height: 1.6;">
-        Scouthook requests the <code style="background: var(--color-card); padding: 2px 6px; border-radius: 4px;">w_member_social</code> scope only —
-        the minimum required to publish posts on your behalf.
+        Scouthook requests only the minimum LinkedIn sign-in scopes required to identify you.
         You can revoke this access at any time from
         <a href="https://www.linkedin.com/psettings/permitted-services" target="_blank" rel="noopener" style="color: var(--color-accent);">LinkedIn's permitted services settings</a>.
       </p>
@@ -92,7 +91,7 @@
             <rect width="40" height="40" rx="8" fill="white" fill-opacity="0.15"/>
             <path d="M13 16h-4v12h4V16zm-2-6a2 2 0 100 4 2 2 0 000-4zm18 6c-2.2 0-3.7.9-4.5 2V16h-4v12h4v-6.5c0-1.8 1-2.5 2.5-2.5 1.4 0 2.5.7 2.5 2.5V28h4v-7c0-3.3-2.1-5-4.5-5z" fill="white"/>
           </svg>
-          Connect LinkedIn
+          Sign in with LinkedIn
         </button>
         <a href="/" style="color: var(--color-text-muted); font-size: 0.9rem; text-decoration: none;">
           Cancel — go back
@@ -100,8 +99,8 @@
       </div>
 
       <p class="text-muted" style="font-size: 0.8rem; margin-top: var(--space-lg);">
-        By connecting, you agree to our
-        <a href="https://scouthook.com/privacy" target="_blank" rel="noopener" style="color: var(--color-text-muted);">Privacy Policy</a>.
+        By signing in, you agree to our
+        <a href="/privacy.html" target="_blank" rel="noopener noreferrer" style="color: var(--color-text-muted);">Privacy Policy</a>.
       </p>
 
     </div>
@@ -109,25 +108,16 @@
 
   <footer class="app-footer" role="contentinfo" style="margin-top: var(--space-12);">
     <div class="app-footer-inner">
-      <a href="#">Privacy Policy</a>
+      <a href="/privacy.html" target="_blank" rel="noopener noreferrer">Privacy Policy</a>
       <span class="app-footer-sep">|</span>
-      <a href="#">Terms of Service</a>
+      <a href="/terms.html" target="_blank" rel="noopener noreferrer">Terms of Service</a>
       <p class="app-footer-legal">© 2026 CopyPower Digital LLP. ScoutHook is an AI-powered authority engine.</p>
     </div>
   </footer>
 
   <script>
-    function getUserId() {
-      let id = localStorage.getItem('scouthook_user_id');
-      if (!id) { id = crypto.randomUUID(); localStorage.setItem('scouthook_user_id', id); }
-      return id;
-    }
-
     document.getElementById('connect-btn').addEventListener('click', () => {
-      const userId = getUserId();
-      // Redirect to OAuth initiation — server reads userId from X-User-Id header via query param fallback
-      // We pass it as a query param since this is a full redirect (no fetch)
-      window.location.href = `/api/linkedin/connect?_uid=${encodeURIComponent(userId)}`;
+      window.location.href = `/api/linkedin/connect`;
     });
   </script>
 

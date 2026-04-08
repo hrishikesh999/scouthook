@@ -97,6 +97,7 @@ let primaryPost       = null;
 let alternativePost   = null;
 let currentAssetUrl   = null;
 let currentAssetType  = null;
+let reviewMode        = false;
 /** Asset committed via "Add to post" — included in publish/schedule payloads. */
 let attachedAssetUrl  = null;
 let attachedAssetType = null;
@@ -115,6 +116,69 @@ let sessionDebounce   = null;
 let scheduleEditLocked  = false;
 /** @type {{ scheduledFor: string, scheduledPostId: number|null } | null} */
 let scheduledMeta       = null;
+
+async function loadConfig() {
+  try {
+    const res = await fetch('/api/config', { headers: apiHeaders() });
+    const data = await res.json();
+    reviewMode = !!data.review_mode;
+  } catch {
+    reviewMode = false;
+  }
+}
+
+function applyReviewModeUi() {
+  if (!reviewMode) return;
+
+  // Repurpose scheduling UI into a manual publish helper.
+  if (scheduleBtn) {
+    scheduleBtn.textContent = 'Copy to LinkedIn';
+    scheduleBtn.setAttribute('aria-label', 'Copy post for LinkedIn');
+  }
+  if (scheduleModal) {
+    scheduleModal.classList.remove('visible');
+    scheduleModal.setAttribute('aria-hidden', 'true');
+    scheduleModal.style.display = 'none';
+  }
+  const tzLabel = document.getElementById('schedule-tz-label');
+  if (tzLabel) tzLabel.textContent = '';
+}
+
+async function copyPostToClipboard() {
+  const text = (postTextarea?.value || '').trim();
+  if (!text) return false;
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    try {
+      window.prompt('Copy this post:', text);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+}
+
+async function handleCopyToLinkedIn() {
+  const ok = await copyPostToClipboard();
+  if (actionBarError) {
+    actionBarError.textContent = ok
+      ? 'Copied. Open LinkedIn and paste into the composer.'
+      : 'Could not copy. Please select the post text and copy manually.';
+  }
+  if (ok) {
+    try { window.open('https://www.linkedin.com/feed/', '_blank', 'noopener'); } catch { /* ignore */ }
+  }
+}
+
+let _configLoaded = false;
+async function ensureConfigLoaded() {
+  if (_configLoaded) return;
+  await loadConfig();
+  applyReviewModeUi();
+  _configLoaded = true;
+}
 
 function formatScheduledLocal(iso) {
   if (!iso) return '';
@@ -255,6 +319,9 @@ document.addEventListener('visibilitychange', () => {
 
 /* ── 3. Init ─────────────────────────────────────────────────── */
 (async function init() {
+  // Ensure review-mode is known before any dependent calls (profile load, schedule CTA text, etc.)
+  await ensureConfigLoaded();
+
   // Wire userId into the Connect LinkedIn button href
   const connectBtn = document.getElementById('linkedin-connect-btn');
   if (connectBtn) {
@@ -262,7 +329,7 @@ document.addEventListener('visibilitychange', () => {
   }
 
   checkLinkedInStatus();
-  loadProfile();
+  await loadProfile();
 
   const _qs      = new URLSearchParams(window.location.search);
   const urlPostId = _qs.get('postId');
@@ -316,7 +383,28 @@ function buildLinkedInChip(name, photoUrl) {
     ? `<img class="nav-linkedin-avatar" src="${photoUrl}" alt="${name || 'LinkedIn'}">`
     : `<div class="nav-linkedin-initials">${initials}</div>`;
   const nameHtml = name ? `<span class="nav-linkedin-name">${name}</span>` : '';
-  return `<div class="nav-linkedin-connected">${avatarHtml}${nameHtml}</div>`;
+  return `
+    <div class="nav-linkedin-connected" style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+      <div style="display:flex;align-items:center;gap:8px;min-width:0;">
+        ${avatarHtml}
+        ${nameHtml}
+      </div>
+      <button
+        type="button"
+        class="nav-linkedin-disconnect"
+        style="border:0;background:transparent;color:var(--text-muted);font-size:12px;padding:6px 6px;cursor:pointer;"
+        aria-label="Disconnect LinkedIn"
+        title="Disconnect"
+      >Disconnect</button>
+    </div>`;
+}
+
+async function disconnectLinkedIn() {
+  try {
+    await fetch('/api/linkedin/disconnect', { method: 'POST', headers: apiHeaders() });
+  } catch { /* ignore */ }
+  try { Session?.clear?.(); } catch { /* ignore */ }
+  window.location.href = '/login.html';
 }
 
 async function checkLinkedInStatus() {
@@ -326,6 +414,11 @@ async function checkLinkedInStatus() {
     const area = document.getElementById('nav-linkedin-area');
     if (data.connected) {
       area.innerHTML = buildLinkedInChip(data.name, data.photo_url);
+      area.querySelector('.nav-linkedin-disconnect')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        disconnectLinkedIn();
+      });
       // Populate LinkedIn preview header
       if (data.name) previewName.textContent = data.name;
       if (data.photo_url) {
@@ -344,8 +437,10 @@ async function checkLinkedInStatus() {
 /* ── 5. Profile check ────────────────────────────────────────── */
 async function loadProfile() {
   try {
+    await ensureConfigLoaded();
     const uid = getUserId();
-    const res = await fetch(`/api/profile/${uid}`, { headers: apiHeaders() });
+    const url = reviewMode ? '/api/profile/me' : `/api/profile/${uid}`;
+    const res = await fetch(url, { headers: apiHeaders() });
     const data = await res.json();
     const profile = data.profile;
 
@@ -838,7 +933,10 @@ function showAutosaveState(state) {
 }
 
 /* ── 18. Schedule modal ──────────────────────────────────────── */
-scheduleBtn.addEventListener('click', () => openModal());
+scheduleBtn.addEventListener('click', () => {
+  if (reviewMode) return handleCopyToLinkedIn();
+  return openModal();
+});
 
 scheduleCancel.addEventListener('click', () => closeModal());
 overlay.addEventListener('click', () => {
@@ -847,6 +945,7 @@ overlay.addEventListener('click', () => {
 });
 
 function openModal() {
+  if (reviewMode) return;
   if (scheduleEditLocked) return;
   scheduleModal.classList.add('visible');
   scheduleModal.setAttribute('aria-hidden', 'false');

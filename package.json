@@ -1,11 +1,13 @@
 {
   "name": "scouthook",
   "version": "1.0.0",
-  "description": "LinkedIn content intelligence platform for founders and consultants",
+  "description": "AI writing and content optimization tool for LinkedIn posts",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node --watch server.js"
+    "start": "REVIEW_MODE=1 node server.js",
+    "start:full": "node server.js",
+    "dev": "REVIEW_MODE=1 node --watch server.js",
+    "dev:full": "node --watch server.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",

@@ -20,7 +20,28 @@ function buildLinkedInChip(name, photoUrl) {
     ? `<img class="nav-linkedin-avatar" src="${photoUrl}" alt="${name || 'LinkedIn'}">`
     : `<div class="nav-linkedin-initials">${initials}</div>`;
   const nameHtml = name ? `<span class="nav-linkedin-name">${name}</span>` : '';
-  return `<div class="nav-linkedin-connected">${avatarHtml}${nameHtml}</div>`;
+  return `
+    <div class="nav-linkedin-connected" style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+      <div style="display:flex;align-items:center;gap:8px;min-width:0;">
+        ${avatarHtml}
+        ${nameHtml}
+      </div>
+      <button
+        type="button"
+        class="nav-linkedin-disconnect"
+        style="border:0;background:transparent;color:var(--text-muted);font-size:12px;padding:6px 6px;cursor:pointer;"
+        aria-label="Disconnect LinkedIn"
+        title="Disconnect"
+      >Disconnect</button>
+    </div>`;
+}
+
+async function disconnectLinkedIn() {
+  try {
+    await fetch('/api/linkedin/disconnect', { method: 'POST', headers: apiHeaders() });
+  } catch { /* ignore */ }
+  try { Session?.clear?.(); } catch { /* ignore */ }
+  window.location.href = '/login.html';
 }
 
 /* ── LinkedIn status ─────────────────────────────────────────── */
@@ -35,6 +56,11 @@ async function checkLinkedInStatus() {
     const area = document.getElementById('nav-linkedin-area');
     if (data.connected) {
       area.innerHTML = buildLinkedInChip(data.name, data.photo_url);
+      area.querySelector('.nav-linkedin-disconnect')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        disconnectLinkedIn();
+      });
     }
   } catch {
     // Leave default connect button
@@ -138,7 +164,7 @@ function renderEmpty() {
   const container = document.getElementById('drafts-container');
   container.innerHTML = `
     <div class="drafts-empty">
-      <a href="/generate.html?new=1" class="btn-teal-filled" style="display:inline-flex;text-decoration:none;">
+      <a href="/generate.html?new=1" class="btn-teal-filled">
         Create Your First Post
       </a>
       <p class="drafts-empty-sub">You are one click away from an authoritative post.</p>

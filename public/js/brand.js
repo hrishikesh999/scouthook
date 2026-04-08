@@ -17,6 +17,17 @@ const logoUploading     = document.getElementById('brand-logo-uploading');
 const logoClearBtn      = document.getElementById('brand-logo-clear-btn');
 const saveBtn           = document.getElementById('brand-save-btn');
 const saveStatus        = document.getElementById('brand-save-status');
+let reviewMode          = false;
+
+async function loadConfig() {
+  try {
+    const res = await fetch('/api/config', { headers: apiHeaders() });
+    const data = await res.json();
+    reviewMode = !!data.review_mode;
+  } catch {
+    reviewMode = false;
+  }
+}
 
 const previewVisual     = document.getElementById('brand-preview-visual');
 const previewAccentBar  = document.getElementById('brand-preview-accent-bar');
@@ -37,7 +48,28 @@ function buildLinkedInChip(name, photoUrl) {
     ? `<img class="nav-linkedin-avatar" src="${photoUrl}" alt="${name || 'LinkedIn'}">`
     : `<div class="nav-linkedin-initials">${initials}</div>`;
   const nameHtml = name ? `<span class="nav-linkedin-name">${name}</span>` : '';
-  return `<div class="nav-linkedin-connected">${avatarHtml}${nameHtml}</div>`;
+  return `
+    <div class="nav-linkedin-connected" style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+      <div style="display:flex;align-items:center;gap:8px;min-width:0;">
+        ${avatarHtml}
+        ${nameHtml}
+      </div>
+      <button
+        type="button"
+        class="nav-linkedin-disconnect"
+        style="border:0;background:transparent;color:var(--text-muted);font-size:12px;padding:6px 6px;cursor:pointer;"
+        aria-label="Disconnect LinkedIn"
+        title="Disconnect"
+      >Disconnect</button>
+    </div>`;
+}
+
+async function disconnectLinkedIn() {
+  try {
+    await fetch('/api/linkedin/disconnect', { method: 'POST', headers: apiHeaders() });
+  } catch { /* ignore */ }
+  try { Session?.clear?.(); } catch { /* ignore */ }
+  window.location.href = '/login.html';
 }
 
 async function checkLinkedInStatus() {
@@ -50,20 +82,28 @@ async function checkLinkedInStatus() {
     const data = await res.json();
     const area = document.getElementById('nav-linkedin-area');
     if (!area) return;
-    if (data.connected) area.innerHTML = buildLinkedInChip(data.name, data.photo_url);
+    if (data.connected) {
+      area.innerHTML = buildLinkedInChip(data.name, data.photo_url);
+      area.querySelector('.nav-linkedin-disconnect')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        disconnectLinkedIn();
+      });
+    }
   } catch { /* non-fatal */ }
 }
 
 /* ── Init ─────────────────────────────────────────────────────── */
 (async function init() {
   await checkLinkedInStatus();
+  await loadConfig();
   await loadBrand();
 })();
 
 /* ── Load saved brand ─────────────────────────────────────────── */
 async function loadBrand() {
   try {
-    const res  = await fetch(`/api/profile/${encodeURIComponent(getUserId())}`, { headers: apiHeaders() });
+    const res  = await fetch(reviewMode ? '/api/profile/me' : `/api/profile/${encodeURIComponent(getUserId())}`, { headers: apiHeaders() });
     const data = await res.json();
     if (!data.ok || !data.profile) return;
     const p = data.profile;
@@ -293,6 +333,8 @@ saveBtn.addEventListener('click', async () => {
     if (!res.ok || !data.ok) throw new Error(data.error || 'Save failed');
 
     saveBtn.textContent = 'Saved ✓';
+    // Re-fetch to ensure the UI reflects persisted server state in review-mode.
+    try { await loadBrand(); } catch { /* ignore */ }
     setTimeout(() => {
       saveBtn.textContent = origText;
       saveBtn.disabled = false;

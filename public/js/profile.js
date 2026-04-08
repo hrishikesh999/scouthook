@@ -7,6 +7,19 @@ const contrarianEl = document.getElementById('profile-contrarian');
 const samplesEl    = document.getElementById('profile-samples');
 const saveBtn      = document.getElementById('save-profile-btn');
 const saveError    = document.getElementById('profile-save-error');
+let reviewMode     = false;
+
+const WRITING_SAMPLES_CACHE_KEY = 'scouthook_writing_samples';
+
+async function loadConfig() {
+  try {
+    const res = await fetch('/api/config', { headers: apiHeaders() });
+    const data = await res.json();
+    reviewMode = !!data.review_mode;
+  } catch {
+    reviewMode = false;
+  }
+}
 
 /* ── LinkedIn status in nav ──────────────────────────────────── */
 function buildLinkedInChip(name, photoUrl) {
@@ -17,7 +30,29 @@ function buildLinkedInChip(name, photoUrl) {
     ? `<img class="nav-linkedin-avatar" src="${photoUrl}" alt="${name || 'LinkedIn'}">`
     : `<div class="nav-linkedin-initials">${initials}</div>`;
   const nameHtml = name ? `<span class="nav-linkedin-name">${name}</span>` : '';
-  return `<div class="nav-linkedin-connected">${avatarHtml}${nameHtml}</div>`;
+  return `
+    <div class="nav-linkedin-connected" style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+      <div style="display:flex;align-items:center;gap:8px;min-width:0;">
+        ${avatarHtml}
+        ${nameHtml}
+      </div>
+      <button
+        type="button"
+        class="nav-linkedin-disconnect"
+        style="border:0;background:transparent;color:var(--text-muted);font-size:12px;padding:6px 6px;cursor:pointer;"
+        aria-label="Disconnect LinkedIn"
+        title="Disconnect"
+      >Disconnect</button>
+    </div>`;
+}
+
+async function disconnectLinkedIn() {
+  try {
+    await fetch('/api/linkedin/disconnect', { method: 'POST', headers: apiHeaders() });
+  } catch { /* ignore */ }
+  try { localStorage.removeItem(WRITING_SAMPLES_CACHE_KEY); } catch { /* ignore */ }
+  try { Session?.clear?.(); } catch { /* ignore */ }
+  window.location.href = '/login.html';
 }
 
 (async function checkLinkedIn() {
@@ -33,6 +68,11 @@ function buildLinkedInChip(name, photoUrl) {
     const area = document.getElementById('nav-linkedin-area');
     if (data.connected) {
       area.innerHTML = buildLinkedInChip(data.name, data.photo_url);
+      area.querySelector('.nav-linkedin-disconnect')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        disconnectLinkedIn();
+      });
     }
   } catch {
     // Leave default button
@@ -42,8 +82,15 @@ function buildLinkedInChip(name, photoUrl) {
 /* ── Load existing profile ───────────────────────────────────── */
 (async function loadProfile() {
   try {
-    const uid = getUserId();
-    const res  = await fetch(`/api/profile/${uid}`, { headers: apiHeaders() });
+    // Writing samples are intentionally not returned by the API for privacy.
+    // Cache them locally so users don't think they were lost.
+    try {
+      const cached = localStorage.getItem(WRITING_SAMPLES_CACHE_KEY);
+      if (cached && samplesEl && !samplesEl.value) samplesEl.value = cached;
+    } catch { /* ignore */ }
+
+    await loadConfig();
+    const res  = await fetch(reviewMode ? '/api/profile/me' : `/api/profile/${getUserId()}`, { headers: apiHeaders() });
     const data = await res.json();
     if (!data.ok || !data.profile) return;
 
@@ -52,7 +99,7 @@ function buildLinkedInChip(name, photoUrl) {
     if (p.audience_role)    audienceEl.value   = p.audience_role;
     if (p.audience_pain)    painEl.value       = p.audience_pain;
     if (p.contrarian_view)  contrarianEl.value = p.contrarian_view;
-    // writing_samples is not returned by the API for privacy; leave blank
+    // writing_samples is not returned by the API for privacy; keep cached value
   } catch {
     // Leave fields blank
   }
@@ -94,6 +141,8 @@ saveBtn.addEventListener('click', async () => {
     if (!res.ok || !data.ok) {
       throw new Error(data.error || 'Save failed');
     }
+
+    try { localStorage.setItem(WRITING_SAMPLES_CACHE_KEY, body.writing_samples); } catch { /* ignore */ }
 
     saveBtn.textContent = 'Saved ✓';
     setTimeout(() => {

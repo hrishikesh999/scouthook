@@ -115,6 +115,7 @@
         <div id="linkedin-status-area" style="display:flex;align-items:center;gap:12px;margin-top:6px">
           <span id="linkedin-status-text" class="field-helper" style="margin:0">Checking…</span>
           <button id="linkedin-disconnect-btn" class="btn-secondary" style="display:none;padding:6px 12px;font-size:13px" type="button">Disconnect</button>
+          <button id="linkedin-delete-data-btn" class="btn-secondary" style="display:none;padding:6px 12px;font-size:13px" type="button">Delete my data</button>
           <a id="linkedin-connect-link" href="/api/linkedin/connect" class="btn-secondary" style="display:none;padding:6px 12px;font-size:13px;text-decoration:none">Sign in with LinkedIn</a>
         </div>
       </div>
@@ -143,6 +144,7 @@
     (async () => {
       const statusText = document.getElementById('linkedin-status-text');
       const disconnectBtn = document.getElementById('linkedin-disconnect-btn');
+      const deleteBtn = document.getElementById('linkedin-delete-data-btn');
       const connectLink = document.getElementById('linkedin-connect-link');
 
       async function refreshStatus() {
@@ -153,11 +155,13 @@
             statusText.textContent = `Connected as ${d.name || 'LinkedIn user'}`;
             statusText.style.color = 'var(--teal)';
             disconnectBtn.style.display = '';
+            deleteBtn.style.display = '';
             connectLink.style.display = 'none';
           } else {
             statusText.textContent = 'Not connected';
             statusText.style.color = '';
             disconnectBtn.style.display = 'none';
+            deleteBtn.style.display = 'none';
             connectLink.style.display = '';
           }
         } catch {
@@ -166,15 +170,26 @@
       }
 
       disconnectBtn.addEventListener('click', async () => {
-        if (!confirm('Disconnect LinkedIn? This removes your access token from ScoutHook.')) return;
+        if (!confirm('Disconnect LinkedIn?')) return;
         disconnectBtn.disabled = true;
         disconnectBtn.textContent = 'Disconnecting…';
         try {
+          await fetch('/api/linkedin/disconnect', { method: 'POST' });
+        } catch { /* ignore */ }
+        window.location.href = '/login.html';
+      });
+
+      deleteBtn.addEventListener('click', async () => {
+        if (!confirm('Delete all ScoutHook data for this LinkedIn account? This cannot be undone.')) return;
+        deleteBtn.disabled = true;
+        deleteBtn.textContent = 'Deleting…';
+        try {
           await fetch('/api/linkedin/user-data', { method: 'DELETE' });
         } catch { /* ignore */ }
-        await refreshStatus();
-        disconnectBtn.disabled = false;
-        disconnectBtn.textContent = 'Disconnect';
+        try {
+          await fetch('/api/linkedin/disconnect', { method: 'POST' });
+        } catch { /* ignore */ }
+        window.location.href = '/login.html';
       });
 
       await refreshStatus();

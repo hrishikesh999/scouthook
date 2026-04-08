@@ -157,7 +157,7 @@ function isProbablyHtmlRequest(req) {
 function isPublicReviewPath(req) {
   const p = req.path;
   // Public pages
-  if (p === '/' || p === '/index.html' || p === '/login.html' || p === '/privacy.html' || p === '/terms.html') return true;
+  if (p === '/' || p === '/index.html' || p === '/login.html' || p === '/privacy.html' || p === '/terms.html' || p === '/connect-linkedin.html') return true;
 
   // Static assets (served from /public, /files, /uploads)
   if (

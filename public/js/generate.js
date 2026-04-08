@@ -433,7 +433,8 @@ async function checkLinkedInStatus() {
 async function loadProfile() {
   try {
     const uid = getUserId();
-    const res = await fetch(`/api/profile/${uid}`, { headers: apiHeaders() });
+    const url = reviewMode ? '/api/profile/me' : `/api/profile/${uid}`;
+    const res = await fetch(url, { headers: apiHeaders() });
     const data = await res.json();
     const profile = data.profile;
 

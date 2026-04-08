@@ -1754,6 +1754,9 @@ body {
 }
 
 .btn-teal-filled {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   height: 40px;
   padding: 0 var(--space-5);
   background: linear-gradient(180deg, #0D9488 0%, #0F766E 100%);
@@ -1767,6 +1770,8 @@ body {
   font-family: var(--font-sans);
   cursor: pointer;
   transition: opacity 0.2s ease, box-shadow 0.2s ease;
+  text-decoration: none;
+  line-height: 1;
 }
 
 .btn-teal-filled:hover:not(:disabled) {

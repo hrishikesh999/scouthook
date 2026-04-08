@@ -9,6 +9,8 @@ const saveBtn      = document.getElementById('save-profile-btn');
 const saveError    = document.getElementById('profile-save-error');
 let reviewMode     = false;
 
+const WRITING_SAMPLES_CACHE_KEY = 'scouthook_writing_samples';
+
 async function loadConfig() {
   try {
     const res = await fetch('/api/config', { headers: apiHeaders() });
@@ -48,6 +50,7 @@ async function disconnectLinkedIn() {
   try {
     await fetch('/api/linkedin/disconnect', { method: 'POST', headers: apiHeaders() });
   } catch { /* ignore */ }
+  try { localStorage.removeItem(WRITING_SAMPLES_CACHE_KEY); } catch { /* ignore */ }
   try { Session?.clear?.(); } catch { /* ignore */ }
   window.location.href = '/login.html';
 }
@@ -79,6 +82,13 @@ async function disconnectLinkedIn() {
 /* ── Load existing profile ───────────────────────────────────── */
 (async function loadProfile() {
   try {
+    // Writing samples are intentionally not returned by the API for privacy.
+    // Cache them locally so users don't think they were lost.
+    try {
+      const cached = localStorage.getItem(WRITING_SAMPLES_CACHE_KEY);
+      if (cached && samplesEl && !samplesEl.value) samplesEl.value = cached;
+    } catch { /* ignore */ }
+
     await loadConfig();
     const res  = await fetch(reviewMode ? '/api/profile/me' : `/api/profile/${getUserId()}`, { headers: apiHeaders() });
     const data = await res.json();
@@ -89,7 +99,7 @@ async function disconnectLinkedIn() {
     if (p.audience_role)    audienceEl.value   = p.audience_role;
     if (p.audience_pain)    painEl.value       = p.audience_pain;
     if (p.contrarian_view)  contrarianEl.value = p.contrarian_view;
-    // writing_samples is not returned by the API for privacy; leave blank
+    // writing_samples is not returned by the API for privacy; keep cached value
   } catch {
     // Leave fields blank
   }
@@ -131,6 +141,8 @@ saveBtn.addEventListener('click', async () => {
     if (!res.ok || !data.ok) {
       throw new Error(data.error || 'Save failed');
     }
+
+    try { localStorage.setItem(WRITING_SAMPLES_CACHE_KEY, body.writing_samples); } catch { /* ignore */ }
 
     saveBtn.textContent = 'Saved ✓';
     setTimeout(() => {

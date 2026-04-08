@@ -17,6 +17,17 @@ const logoUploading     = document.getElementById('brand-logo-uploading');
 const logoClearBtn      = document.getElementById('brand-logo-clear-btn');
 const saveBtn           = document.getElementById('brand-save-btn');
 const saveStatus        = document.getElementById('brand-save-status');
+let reviewMode          = false;
+
+async function loadConfig() {
+  try {
+    const res = await fetch('/api/config', { headers: apiHeaders() });
+    const data = await res.json();
+    reviewMode = !!data.review_mode;
+  } catch {
+    reviewMode = false;
+  }
+}
 
 const previewVisual     = document.getElementById('brand-preview-visual');
 const previewAccentBar  = document.getElementById('brand-preview-accent-bar');
@@ -57,13 +68,14 @@ async function checkLinkedInStatus() {
 /* ── Init ─────────────────────────────────────────────────────── */
 (async function init() {
   await checkLinkedInStatus();
+  await loadConfig();
   await loadBrand();
 })();
 
 /* ── Load saved brand ─────────────────────────────────────────── */
 async function loadBrand() {
   try {
-    const res  = await fetch(`/api/profile/${encodeURIComponent(getUserId())}`, { headers: apiHeaders() });
+    const res  = await fetch(reviewMode ? '/api/profile/me' : `/api/profile/${encodeURIComponent(getUserId())}`, { headers: apiHeaders() });
     const data = await res.json();
     if (!data.ok || !data.profile) return;
     const p = data.profile;
@@ -293,6 +305,8 @@ saveBtn.addEventListener('click', async () => {
     if (!res.ok || !data.ok) throw new Error(data.error || 'Save failed');
 
     saveBtn.textContent = 'Saved ✓';
+    // Re-fetch to ensure the UI reflects persisted server state in review-mode.
+    try { await loadBrand(); } catch { /* ignore */ }
     setTimeout(() => {
       saveBtn.textContent = origText;
       saveBtn.disabled = false;

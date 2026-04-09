@@ -70,16 +70,16 @@ router.post('/', async (req, res) => {
     INSERT INTO user_profiles (user_id, tenant_id, writing_samples, contrarian_view, audience_role, audience_pain, content_niche, brand_bg, brand_accent, brand_text, brand_name, brand_logo, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     ON CONFLICT(user_id, tenant_id) DO UPDATE SET
-      writing_samples = COALESCE(excluded.writing_samples, writing_samples),
-      contrarian_view = COALESCE(excluded.contrarian_view, contrarian_view),
-      audience_role   = COALESCE(excluded.audience_role, audience_role),
-      audience_pain   = COALESCE(excluded.audience_pain, audience_pain),
-      content_niche   = COALESCE(excluded.content_niche, content_niche),
-      brand_bg        = COALESCE(excluded.brand_bg, brand_bg),
-      brand_accent    = COALESCE(excluded.brand_accent, brand_accent),
-      brand_text      = COALESCE(excluded.brand_text, brand_text),
-      brand_name      = COALESCE(excluded.brand_name, brand_name),
-      brand_logo      = COALESCE(excluded.brand_logo, brand_logo),
+      writing_samples = COALESCE(excluded.writing_samples, user_profiles.writing_samples),
+      contrarian_view = COALESCE(excluded.contrarian_view, user_profiles.contrarian_view),
+      audience_role   = COALESCE(excluded.audience_role, user_profiles.audience_role),
+      audience_pain   = COALESCE(excluded.audience_pain, user_profiles.audience_pain),
+      content_niche   = COALESCE(excluded.content_niche, user_profiles.content_niche),
+      brand_bg        = COALESCE(excluded.brand_bg, user_profiles.brand_bg),
+      brand_accent    = COALESCE(excluded.brand_accent, user_profiles.brand_accent),
+      brand_text      = COALESCE(excluded.brand_text, user_profiles.brand_text),
+      brand_name      = COALESCE(excluded.brand_name, user_profiles.brand_name),
+      brand_logo      = COALESCE(excluded.brand_logo, user_profiles.brand_logo),
       updated_at      = CURRENT_TIMESTAMP
   RETURNING id
   `).run(userId, tenantId, writing_samples || null, contrarian_view || null, audience_role || null, audience_pain || null, content_niche || null,

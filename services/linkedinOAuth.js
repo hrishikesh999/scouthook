@@ -68,11 +68,11 @@ async function storeTokens(userId, tenantId, tokenData) {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     ON CONFLICT(user_id, tenant_id) DO UPDATE SET
       access_token_enc  = excluded.access_token_enc,
-      refresh_token_enc = COALESCE(excluded.refresh_token_enc, refresh_token_enc),
+      refresh_token_enc = COALESCE(excluded.refresh_token_enc, linkedin_tokens.refresh_token_enc),
       expires_at        = excluded.expires_at,
       linkedin_user_id  = excluded.linkedin_user_id,
       linkedin_name     = excluded.linkedin_name,
-      linkedin_photo    = COALESCE(excluded.linkedin_photo, linkedin_photo),
+      linkedin_photo    = COALESCE(excluded.linkedin_photo, linkedin_tokens.linkedin_photo),
       updated_at        = CURRENT_TIMESTAMP
   `).run(userId, tenantId, accessTokenEnc, refreshTokenEnc, expiresAt, linkedin_user_id, linkedin_name, linkedin_photo);
 }

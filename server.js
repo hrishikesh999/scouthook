@@ -243,7 +243,7 @@ app.use((err, req, res, next) => {
     const status = Number(err.status) || Number(err.statusCode) || 500;
     return res.status(status).json({
       ok: false,
-      error: err.code || err.message || 'server_error',
+      error: err.message || err.code || 'server_error',
     });
   }
   return next(err);

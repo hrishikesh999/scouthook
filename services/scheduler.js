@@ -6,6 +6,11 @@ let postQueue = null;
 let schedulerEnabled = false;
 let schedulingEnabledCache = true;
 
+/** BullMQ disallows ':' in custom job ids. */
+function scheduledJobId(scheduledPostId) {
+  return `scheduled-${scheduledPostId}`;
+}
+
 /**
  * Initialise BullMQ queue and worker.
  * Only starts if redis_url is configured in platform_settings.
@@ -65,7 +70,7 @@ async function initScheduler() {
     const scheduledFor = new Date(row.scheduled_for);
     const delay = Math.max(0, scheduledFor.getTime() - Date.now()); // 0 = fire immediately if past-due
     const job = await postQueue.add('publish', { scheduledPostId: row.id }, {
-      jobId: `scheduled:${row.id}`,
+      jobId: scheduledJobId(row.id),
       delay,
       attempts: 1,
       removeOnComplete: true,
@@ -143,7 +148,7 @@ async function addScheduledJob(scheduledPostId, scheduledFor) {
     'publish',
     { scheduledPostId },
     {
-      jobId: `scheduled:${scheduledPostId}`,
+      jobId: scheduledJobId(scheduledPostId),
       delay,
       attempts: 1,
       removeOnComplete: true,

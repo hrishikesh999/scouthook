@@ -43,15 +43,6 @@ if (allowedOrigin) {
   app.use(cors({ origin: allowedOrigin, credentials: true }));
 }
 
-// General rate limit — 100 requests per 15 min per IP
-// (generation endpoints have their own tighter limits)
-app.use(rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
-  standardHeaders: true,
-  legacyHeaders: false,
-}));
-
 // ---------------------------------------------------------------------------
 // Middleware
 // ---------------------------------------------------------------------------
@@ -137,6 +128,24 @@ app.use((req, res, next) => {
   req.userId = sessionUserId || headerUser;
   next();
 });
+
+// API-only rate limit (do not apply globally — static JS/CSS/HTML each count as a request
+// and 100/15min per IP breaks normal use). Tighter limits exist on /api/generate.
+const apiRateLimitMax = Number(process.env.API_RATE_LIMIT_MAX || 2000);
+app.use('/api', rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: Number.isFinite(apiRateLimitMax) && apiRateLimitMax > 0 ? apiRateLimitMax : 2000,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => {
+    const uid = req.userId || req.headers['x-user-id'];
+    if (uid && String(uid).trim()) return `api:${String(uid).trim()}`;
+    return `ip:${req.ip || 'unknown'}`;
+  },
+  handler: (req, res) => {
+    res.status(429).json({ ok: false, error: 'rate_limited' });
+  },
+}));
 
 app.get('/auth/google', (req, res, next) => {
   if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {

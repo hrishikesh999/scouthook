@@ -127,7 +127,7 @@ router.post('/', async (req, res) => {
 
   if (!genPath) return res.status(400).json({ ok: false, error: 'missing_path' });
 
-  const userProfile = db
+  const userProfile = await db
     .prepare('SELECT * FROM user_profiles WHERE user_id = ? AND tenant_id = ?')
     .get(userId, tenantId);
 
@@ -158,9 +158,10 @@ router.post('/', async (req, res) => {
         throw new Error('idea path returned no post content');
       }
 
-      const runResult = db.prepare(`
+      const runResult = await db.prepare(`
         INSERT INTO generation_runs (user_id, tenant_id, path, input_data, synthesis)
         VALUES (?, ?, ?, ?, ?)
+        RETURNING id
       `).run(
         userId,
         tenantId,
@@ -173,9 +174,10 @@ router.post('/', async (req, res) => {
       const postsInsert = db.prepare(`
         INSERT INTO generated_posts (run_id, user_id, tenant_id, format_slug, content, quality_score, quality_flags, passed_gate)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        RETURNING id
       `);
 
-      const primaryInsert = postsInsert.run(
+      const primaryInsert = await postsInsert.run(
         runId,
         userId,
         tenantId,
@@ -191,7 +193,7 @@ router.post('/', async (req, res) => {
 
       let altPayload = null;
       if (alternative) {
-        const altInsert = postsInsert.run(
+        const altInsert = await postsInsert.run(
           runId,
           userId,
           tenantId,
@@ -244,7 +246,7 @@ router.post('/regenerate/:postId', async (req, res) => {
     return res.status(429).json({ ok: false, error: 'rate_limit_exceeded', retry_after_sec: rl.retryAfterSec });
   }
 
-  const post = db.prepare(`
+  const post = await db.prepare(`
     SELECT gp.*, gr.path, gr.input_data
     FROM generated_posts gp
     JOIN generation_runs gr ON gp.run_id = gr.id
@@ -281,7 +283,7 @@ router.post('/regenerate/:postId', async (req, res) => {
       ? (ideaResult.alternative?.gate ?? ideaResult.primaryGate)
       : ideaResult.primaryGate;
 
-    db.prepare(`
+    await db.prepare(`
       UPDATE generated_posts
       SET content = ?, quality_score = ?, quality_flags = ?, passed_gate = ?
       WHERE id = ?
@@ -315,7 +317,7 @@ router.post('/regenerate/:postId', async (req, res) => {
 // Re-scores post text after manual client-side edits. No generation.
 // Body: { postText, archetypeUsed, hookConfidence }
 // ---------------------------------------------------------------------------
-router.post('/quality-check', (req, res) => {
+router.post('/quality-check', async (req, res) => {
   const userId = req.userId;
   const tenantId = req.tenantId;
   const { postText, archetypeUsed = null, hookConfidence = null } = req.body;
@@ -325,7 +327,7 @@ router.post('/quality-check', (req, res) => {
   }
 
   const userProfile = userId
-    ? db.prepare('SELECT * FROM user_profiles WHERE user_id = ? AND tenant_id = ?').get(userId, tenantId)
+    ? await db.prepare('SELECT * FROM user_profiles WHERE user_id = ? AND tenant_id = ?').get(userId, tenantId)
     : null;
 
   const quality = runQualityGate(postText, {

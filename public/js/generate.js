@@ -947,13 +947,40 @@ scheduleConfirm.addEventListener('click', async () => {
       scheduled_for: scheduledFor,
       ...(currentPostId ? { post_id: currentPostId } : {}),
     };
+    if (attachedAssetUrl) {
+      if (attachedAssetType === 'carousel' || attachedAssetType === 'media_pdf') {
+        schedulePayload.carousel_pdf_url = attachedAssetUrl;
+      } else {
+        schedulePayload.image_url = attachedAssetUrl;
+      }
+    }
     const res = await fetch('/api/linkedin/schedule', {
       method:  'POST',
       headers: apiHeaders(),
       body:    JSON.stringify(schedulePayload),
     });
     const data = await res.json();
-    if (!res.ok || !data.ok) throw new Error(data.error || 'Scheduling failed');
+    if (!res.ok || !data.ok) {
+      if (data.error === 'scheduling_unavailable') {
+        throw new Error('Scheduling is temporarily unavailable. Please try again in a few minutes.');
+      }
+      if (data.error === 'scheduled_for_too_soon') {
+        throw new Error('Please schedule at least 5 minutes from now.');
+      }
+      if (data.error === 'scheduled_for_too_far') {
+        throw new Error('Please pick a time within the next 30 days.');
+      }
+      if (data.error === 'too_many_scheduled') {
+        throw new Error('You have too many posts scheduled already. Publish/cancel one before adding more.');
+      }
+      if (data.error === 'scheduled_too_close') {
+        throw new Error('Please space scheduled posts at least 60 minutes apart.');
+      }
+      if (data.error === 'content_too_long') {
+        throw new Error('Your post is too long for LinkedIn. Please keep it under 3000 characters.');
+      }
+      throw new Error(data.error || 'Scheduling failed');
+    }
 
     closeModal();
     const dateStr = new Date(`${dateVal}T${timeVal}`).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZoneName: 'short' });

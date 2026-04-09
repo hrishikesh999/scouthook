@@ -33,7 +33,7 @@ class RateLimitError extends Error {
 //   persisting linkedin_post_id (pre-migration publish).
 // ---------------------------------------------------------------------------
 async function syncPostMetrics(postId, userId, tenantId) {
-  const row = db.prepare(`
+  const row = await db.prepare(`
     SELECT id, likes, comments, reactions, linkedin_post_id, last_synced_at
     FROM   generated_posts
     WHERE  id = ? AND user_id = ? AND tenant_id = ? AND status = 'published'
@@ -109,7 +109,7 @@ async function syncPostMetrics(postId, userId, tenantId) {
 
   const lastSynced = new Date().toISOString();
 
-  db.prepare(`
+  await db.prepare(`
     UPDATE generated_posts
     SET    likes = ?, comments = ?, reactions = ?, last_synced_at = ?
     WHERE  id = ?

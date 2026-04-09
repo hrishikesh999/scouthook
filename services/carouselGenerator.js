@@ -31,7 +31,7 @@ const H = 1080;
  * @returns {Promise<{ slides: Array<{ svg: string, png_url: string }>, zip_url: string, pdf_url: string }>}
  */
 async function generateCarousel(post, brand = {}) {
-  const apiKey = getSetting('anthropic_api_key');
+  const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
   if (!apiKey) throw new Error('anthropic_api_key not configured');
 
   const client = new Anthropic({ apiKey });

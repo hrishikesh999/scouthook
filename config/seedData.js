@@ -140,33 +140,31 @@ const RECIPES = [
   },
 ];
 
-const insertFormat = db.prepare(`
-  INSERT OR IGNORE INTO post_formats (tenant_id, slug, name, description, prompt_instructions, is_active, sort_order)
+const insertFormat = `
+  INSERT INTO post_formats (tenant_id, slug, name, description, prompt_instructions, is_active, sort_order)
   VALUES ('default', ?, ?, ?, ?, ?, ?)
-`);
+  ON CONFLICT (slug, tenant_id) DO NOTHING
+`;
 
-const insertRecipe = db.prepare(`
-  INSERT OR IGNORE INTO recipes (tenant_id, slug, name, category, description, questions, suggested_visual, suitable_formats, is_active, sort_order)
+const insertRecipe = `
+  INSERT INTO recipes (tenant_id, slug, name, category, description, questions, suggested_visual, suitable_formats, is_active, sort_order)
   VALUES ('default', ?, ?, ?, ?, ?, ?, ?, 1, ?)
-`);
+  ON CONFLICT (slug, tenant_id) DO NOTHING
+`;
 
-function runSeed() {
-  const seedFormats = db.transaction(() => {
+async function runSeed() {
+  await db.transaction(async tx => {
+    const fmt = tx.prepare(insertFormat);
+    const rec = tx.prepare(insertRecipe);
     for (const f of POST_FORMATS) {
-      insertFormat.run(f.slug, f.name, f.description, f.prompt_instructions, f.is_active, f.sort_order);
+      await fmt.run(f.slug, f.name, f.description, f.prompt_instructions, f.is_active, f.sort_order);
     }
-  });
-
-  const seedRecipes = db.transaction(() => {
     for (const r of RECIPES) {
-      insertRecipe.run(r.slug, r.name, r.category, r.description, r.questions, r.suggested_visual, r.suitable_formats, r.sort_order);
+      await rec.run(r.slug, r.name, r.category, r.description, r.questions, r.suggested_visual, r.suitable_formats, r.sort_order);
     }
   });
 
-  seedFormats();
-  seedRecipes();
-
-  console.log('[seed] post_formats and recipes seeded (INSERT OR IGNORE)');
+  console.log('[seed] post_formats and recipes seeded');
 }
 
 module.exports = { runSeed };

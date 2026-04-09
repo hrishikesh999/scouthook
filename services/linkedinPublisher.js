@@ -1,6 +1,6 @@
 'use strict';
 
-const { db } = require('../db');
+const { db, backendKind } = require('../db');
 const { getValidAccessToken } = require('./linkedinOAuth');
 const path = require('path');
 const fs = require('fs');
@@ -13,6 +13,11 @@ const LINKEDIN_REST_POSTS_URL = 'https://api.linkedin.com/rest/posts';
 const LINKEDIN_API_VERSION = '202603';
 const RATE_LIMIT_WINDOW_HOURS = 1;
 const GENERATED_DIR = path.join(__dirname, '..', 'generated');
+const crypto = require('crypto');
+
+function sha256Hex(s) {
+  return crypto.createHash('sha256').update(String(s || ''), 'utf8').digest('hex');
+}
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -23,16 +28,29 @@ function sleep(ms) {
 // ---------------------------------------------------------------------------
 
 function checkRateLimit(userId, tenantId) {
-  const { cnt } = db.prepare(`
-    SELECT COUNT(*) AS cnt FROM scheduled_posts
-    WHERE user_id = ? AND tenant_id = ?
-      AND status = 'published'
-      AND updated_at > datetime('now', ?)
-  `).get(userId, tenantId, `-${RATE_LIMIT_WINDOW_HOURS} hours`);
+  const sql = backendKind === 'sqlite'
+    ? `
+      SELECT COUNT(*) AS cnt FROM scheduled_posts
+      WHERE user_id = ? AND tenant_id = ?
+        AND status = 'published'
+        AND updated_at > datetime('now', ?)
+    `
+    : `
+      SELECT COUNT(*)::int AS cnt FROM scheduled_posts
+      WHERE user_id = ? AND tenant_id = ?
+        AND status = 'published'
+        AND updated_at > (now() - ($3::text)::interval)
+    `;
 
-  if (cnt > 0) {
-    throw Object.assign(new Error('rate_limit_exceeded'), { statusCode: 429 });
-  }
+  return db.prepare(sql).get(
+    userId,
+    tenantId,
+    backendKind === 'sqlite' ? `-${RATE_LIMIT_WINDOW_HOURS} hours` : `${RATE_LIMIT_WINDOW_HOURS} hours`
+  ).then(({ cnt } = {}) => {
+    if ((cnt ?? 0) > 0) {
+      throw Object.assign(new Error('rate_limit_exceeded'), { statusCode: 429 });
+    }
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -330,10 +348,10 @@ async function waitForDocumentAvailable(accessToken, documentUrn) {
  */
 async function publishNow(userId, tenantId, content, options = {}) {
   // Rate limit — 1 post/hour
-  checkRateLimit(userId, tenantId);
+  await checkRateLimit(userId, tenantId);
 
   // Get LinkedIn user ID (needed for author URN)
-  const tokenRow = db.prepare(
+  const tokenRow = await db.prepare(
     'SELECT linkedin_user_id FROM linkedin_tokens WHERE user_id = ? AND tenant_id = ?'
   ).get(userId, tenantId);
 
@@ -378,33 +396,93 @@ async function publishNow(userId, tenantId, content, options = {}) {
  * @param {number} scheduledPostId
  */
 async function publishScheduledPost(scheduledPostId) {
-  const row = db.prepare(
-    'SELECT * FROM scheduled_posts WHERE id = ? AND status = ?'
-  ).get(scheduledPostId, 'pending');
-
-  if (!row) {
-    // Already cancelled, published, or doesn't exist — silently skip
-    console.log(`[publisher] scheduledPostId=${scheduledPostId} not pending — skipping`);
+  const current = await db.prepare('SELECT * FROM scheduled_posts WHERE id = ?').get(scheduledPostId);
+  if (!current) {
+    console.log(`[publisher] scheduledPostId=${scheduledPostId} not found — skipping`);
     return;
   }
 
-  // Mark as processing
-  db.prepare(`
-    UPDATE scheduled_posts SET status = 'processing', attempts = attempts + 1, updated_at = CURRENT_TIMESTAMP
-    WHERE id = ?
-  `).run(scheduledPostId);
+  if (!['pending', 'processing'].includes(current.status)) {
+    console.log(`[publisher] scheduledPostId=${scheduledPostId} status=${current.status} — skipping`);
+    return;
+  }
+
+  // If already published, don't attempt again (idempotency guard).
+  if (current.status === 'published' || current.linkedin_post_id) {
+    console.log(`[publisher] scheduledPostId=${scheduledPostId} already published — skipping`);
+    return;
+  }
+
+  // Claim the job if it's pending. For retries, we may see it pending again.
+  if (current.status === 'pending') {
+    const claim = await db.prepare(`
+      UPDATE scheduled_posts
+      SET status = 'processing',
+          attempts = attempts + 1,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND status = 'pending'
+    `).run(scheduledPostId);
+
+    if (claim.changes === 0) {
+      // Another worker claimed it or it was cancelled between reads.
+      console.log(`[publisher] scheduledPostId=${scheduledPostId} could not be claimed — skipping`);
+      return;
+    }
+  }
 
   try {
-    const { linkedin_post_id } = await publishNow(row.user_id, row.tenant_id, row.content);
+    // Re-fetch after claiming to get updated attempts/status.
+    const row = await db.prepare('SELECT * FROM scheduled_posts WHERE id = ?').get(scheduledPostId);
+    if (!row || row.status !== 'processing') {
+      console.log(`[publisher] scheduledPostId=${scheduledPostId} not processing — skipping`);
+      return;
+    }
 
-    db.prepare(`
+    // Integrity check: ensure the scheduled payload hasn't been mutated.
+    // (Defends against accidental writes or tampering.)
+    if (row.payload_hash) {
+      const computed = sha256Hex(JSON.stringify({
+        content: row.content,
+        asset_type: row.asset_type || null,
+        asset_url: row.asset_url || null,
+        scheduled_for: row.scheduled_for,
+      }));
+      if (computed !== row.payload_hash) {
+        throw new Error('scheduled_payload_mismatch');
+      }
+    }
+
+    try {
+      await db.prepare(`
+        INSERT INTO scheduled_post_events (scheduled_post_id, user_id, tenant_id, event_type, message)
+        VALUES (?, ?, ?, 'started', ?)
+      `).run(scheduledPostId, row.user_id, row.tenant_id, `attempt=${row.attempts}`);
+    } catch { /* non-fatal */ }
+
+    const publishOpts = {};
+    if (row.asset_type === 'carousel' && row.asset_url) {
+      publishOpts.carousel_pdf_url = row.asset_url;
+    } else if (row.asset_type === 'image' && row.asset_url) {
+      publishOpts.image_url = row.asset_url;
+    }
+
+    const { linkedin_post_id } = await publishNow(row.user_id, row.tenant_id, row.content, publishOpts);
+
+    await db.prepare(`
       UPDATE scheduled_posts SET status = 'published', linkedin_post_id = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `).run(linkedin_post_id, scheduledPostId);
 
+    try {
+      await db.prepare(`
+        INSERT INTO scheduled_post_events (scheduled_post_id, user_id, tenant_id, event_type, message)
+        VALUES (?, ?, ?, 'published', ?)
+      `).run(scheduledPostId, row.user_id, row.tenant_id, linkedin_post_id);
+    } catch { /* non-fatal */ }
+
     // Stamp the originating draft as published
     if (row.post_id) {
-      db.prepare(`
+      await db.prepare(`
         UPDATE generated_posts
         SET status = 'published', published_at = CURRENT_TIMESTAMP
         WHERE id = ?
@@ -413,13 +491,41 @@ async function publishScheduledPost(scheduledPostId) {
 
     console.log(`[publisher] scheduledPostId=${scheduledPostId} published as ${linkedin_post_id}`);
   } catch (err) {
-    db.prepare(`
-      UPDATE scheduled_posts SET status = 'failed', error_message = ?, updated_at = CURRENT_TIMESTAMP
+    await db.prepare(`
+      UPDATE scheduled_posts
+      SET status = ?,
+          error_message = ?,
+          updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
-    `).run(err.message, scheduledPostId);
+    `).run('not_sent', err.message, scheduledPostId);
 
-    // Re-throw so BullMQ retries
-    throw err;
+    try {
+      const r = await db.prepare('SELECT user_id, tenant_id, post_id FROM scheduled_posts WHERE id = ?').get(scheduledPostId);
+      if (r) {
+        // Unlock the originating draft for manual publishing.
+        if (r.post_id) {
+          await db.prepare(`
+            UPDATE generated_posts
+            SET status = 'draft'
+            WHERE id = ? AND user_id = ? AND tenant_id = ? AND status = 'scheduled'
+          `).run(r.post_id, r.user_id, r.tenant_id);
+        }
+
+        await db.prepare(`
+          INSERT INTO scheduled_post_events (scheduled_post_id, user_id, tenant_id, event_type, message)
+          VALUES (?, ?, ?, ?, ?)
+        `).run(
+          scheduledPostId,
+          r.user_id,
+          r.tenant_id,
+          'not_sent',
+          err.message
+        );
+      }
+    } catch { /* non-fatal */ }
+
+    // Single-attempt policy: do not throw (no retries).
+    console.warn(`[publisher] scheduledPostId=${scheduledPostId} not_sent:`, err.message);
   }
 }
 

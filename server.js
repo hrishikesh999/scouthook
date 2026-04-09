@@ -8,10 +8,9 @@ const helmet = require('helmet');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 
-// Initialise DB (creates tables + runs seed on first start)
+// Initialise DB adapter (schema is managed by migrations)
 require('./db');
 const { runSeed } = require('./config/seedData');
-runSeed();
 
 const app = express();
 
@@ -59,6 +58,19 @@ app.use((req, res, next) => {
   req.tenantId = req.headers['x-tenant-id'] || 'default';
   req.userId = req.headers['x-user-id'] || null;
   next();
+});
+
+// ---------------------------------------------------------------------------
+// Health check (Render)
+// ---------------------------------------------------------------------------
+app.get('/healthz', async (req, res) => {
+  try {
+    const { db } = require('./db');
+    await db.prepare('SELECT 1 AS ok').get();
+    return res.json({ ok: true });
+  } catch (e) {
+    return res.status(503).json({ ok: false, error: 'db_unhealthy' });
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -115,7 +127,15 @@ initScheduler().catch(err => {
 // ---------------------------------------------------------------------------
 
 const PORT = process.env.PORT || 4000;
-app.listen(PORT, () => {
+(async () => {
+  try {
+    await runSeed();
+  } catch (e) {
+    console.warn('[seed] skipped/failed:', e.message);
+  }
+
+  app.listen(PORT, () => {
   console.log(`[scouthook] Server running on http://localhost:${PORT}`);
   console.log(`[scouthook] Admin UI: http://localhost:${PORT}/admin.html`);
-});
+  });
+})();

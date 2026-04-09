@@ -51,7 +51,7 @@ async function selectHook(rawThought, voiceProfile) {
   }
 
   try {
-    const apiKey = getSetting('anthropic_api_key');
+    const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
     if (!apiKey) {
       return insightFallback('anthropic_api_key not configured');
     }

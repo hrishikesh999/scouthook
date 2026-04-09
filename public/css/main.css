@@ -1672,6 +1672,15 @@ body {
   margin-bottom: var(--space-6);
 }
 
+/* Schedule consent copy */
+.schedule-consent-note {
+  margin: -8px 0 var(--space-5);
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--text-body);
+  opacity: .92;
+}
+
 /* Schedule presets */
 .schedule-section-label {
   font-size: 11px;

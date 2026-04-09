@@ -1,7 +1,7 @@
 'use strict';
 
 const crypto = require('crypto');
-const { db, getSetting } = require('../db');
+const { db, getSettingSync } = require('../db');
 
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 12; // 96-bit IV — recommended for GCM
@@ -12,7 +12,7 @@ const IV_LENGTH = 12; // 96-bit IV — recommended for GCM
 // ---------------------------------------------------------------------------
 
 function getEncryptionKey() {
-  const key = getSetting('token_encryption_key');
+  const key = (process.env.TOKEN_ENCRYPTION_KEY || '').trim() || getSettingSync('token_encryption_key');
   if (!key) throw new Error('token_encryption_key not set in platform_settings');
   if (key.length !== 64) throw new Error('token_encryption_key must be a 64-char hex string (32 bytes)');
   return Buffer.from(key, 'hex');
@@ -48,7 +48,7 @@ function decrypt(encryptedStr) {
  * @param {string} tenantId
  * @param {{ access_token, refresh_token?, expires_in, linkedin_user_id, linkedin_name, linkedin_photo? }} tokenData
  */
-function storeTokens(userId, tenantId, tokenData) {
+async function storeTokens(userId, tenantId, tokenData) {
   const {
     access_token,
     refresh_token,
@@ -62,7 +62,7 @@ function storeTokens(userId, tenantId, tokenData) {
   const refreshTokenEnc = refresh_token ? encrypt(refresh_token) : null;
   const expiresAt = new Date(Date.now() + (expires_in || 5184000) * 1000).toISOString(); // default 60 days
 
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO linkedin_tokens
       (user_id, tenant_id, access_token_enc, refresh_token_enc, expires_at, linkedin_user_id, linkedin_name, linkedin_photo, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
@@ -88,7 +88,7 @@ function storeTokens(userId, tenantId, tokenData) {
  * @returns {Promise<string>} plaintext access token
  */
 async function getValidAccessToken(userId, tenantId) {
-  const row = db.prepare(
+  const row = await db.prepare(
     'SELECT * FROM linkedin_tokens WHERE user_id = ? AND tenant_id = ?'
   ).get(userId, tenantId);
 
@@ -102,7 +102,7 @@ async function getValidAccessToken(userId, tenantId) {
     try {
       await refreshLinkedInToken(userId, tenantId, row.refresh_token_enc);
       // Re-fetch the updated row
-      const updated = db.prepare(
+      const updated = await db.prepare(
         'SELECT access_token_enc FROM linkedin_tokens WHERE user_id = ? AND tenant_id = ?'
       ).get(userId, tenantId);
       return decrypt(updated.access_token_enc);
@@ -125,8 +125,8 @@ async function getValidAccessToken(userId, tenantId) {
  * @param {string} encryptedRefreshToken
  */
 async function refreshLinkedInToken(userId, tenantId, encryptedRefreshToken) {
-  const clientId     = getSetting('linkedin_client_id');
-  const clientSecret = getSetting('linkedin_client_secret');
+  const clientId     = (process.env.LINKEDIN_CLIENT_ID || '').trim();
+  const clientSecret = (process.env.LINKEDIN_CLIENT_SECRET || '').trim();
   if (!clientId || !clientSecret) throw new Error('linkedin_credentials_not_configured');
 
   const refreshToken = decrypt(encryptedRefreshToken);
@@ -152,11 +152,11 @@ async function refreshLinkedInToken(userId, tenantId, encryptedRefreshToken) {
   const tokens = await res.json();
 
   // Keep existing linkedin_user_id / linkedin_name — only tokens change on refresh
-  const existing = db.prepare(
+  const existing = await db.prepare(
     'SELECT linkedin_user_id, linkedin_name, linkedin_photo FROM linkedin_tokens WHERE user_id = ? AND tenant_id = ?'
   ).get(userId, tenantId);
 
-  storeTokens(userId, tenantId, {
+  await storeTokens(userId, tenantId, {
     access_token:    tokens.access_token,
     refresh_token:   tokens.refresh_token || null,
     expires_in:      tokens.expires_in,

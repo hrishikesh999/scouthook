@@ -9,7 +9,7 @@ const { removeScheduledJob } = require('../services/scheduler');
 // GET /api/stats
 // Returns post count this month, avg quality score, scheduled count
 // ---------------------------------------------------------------------------
-router.get('/stats', (req, res) => {
+router.get('/stats', async (req, res) => {
   if (!req.userId) {
     return res.status(400).json({ ok: false, error: 'missing_user_id' });
   }
@@ -21,21 +21,21 @@ router.get('/stats', (req, res) => {
     monthStart.setHours(0, 0, 0, 0);
     const monthStartIso = monthStart.toISOString();
 
-    const postsThisMonth = db.prepare(`
+    const postsThisMonth = await db.prepare(`
       SELECT COUNT(*) AS cnt
       FROM generated_posts
       WHERE user_id = ? AND tenant_id = ? AND created_at >= ?
     `).get(req.userId, req.tenantId, monthStartIso);
 
     // Average quality score across all posts
-    const avgScore = db.prepare(`
+    const avgScore = await db.prepare(`
       SELECT AVG(quality_score) AS avg
       FROM generated_posts
       WHERE user_id = ? AND tenant_id = ?
     `).get(req.userId, req.tenantId);
 
     // Count of pending scheduled posts
-    const scheduledCount = db.prepare(`
+    const scheduledCount = await db.prepare(`
       SELECT COUNT(*) AS cnt
       FROM scheduled_posts
       WHERE user_id = ? AND tenant_id = ? AND status = 'pending'
@@ -57,13 +57,13 @@ router.get('/stats', (req, res) => {
 // GET /api/posts/recent
 // Returns last 5 generated posts for the user
 // ---------------------------------------------------------------------------
-router.get('/posts/recent', (req, res) => {
+router.get('/posts/recent', async (req, res) => {
   if (!req.userId) {
     return res.status(400).json({ ok: false, error: 'missing_user_id' });
   }
 
   try {
-    const posts = db.prepare(`
+    const posts = await db.prepare(`
       SELECT id, content, quality_score, passed_gate, created_at, status
       FROM generated_posts
       WHERE user_id = ? AND tenant_id = ? AND status != 'scheduled'
@@ -91,7 +91,7 @@ router.get('/posts/recent', (req, res) => {
 // GET /api/posts/scheduled
 // Returns upcoming scheduled posts (status = pending, scheduled_for > now)
 // ---------------------------------------------------------------------------
-router.get('/posts/scheduled', (req, res) => {
+router.get('/posts/scheduled', async (req, res) => {
   if (!req.userId) {
     return res.status(400).json({ ok: false, error: 'missing_user_id' });
   }
@@ -99,7 +99,7 @@ router.get('/posts/scheduled', (req, res) => {
   try {
     const nowIso = new Date().toISOString();
 
-    const posts = db.prepare(`
+    const posts = await db.prepare(`
       SELECT id, content, scheduled_for, created_at
       FROM scheduled_posts
       WHERE user_id = ? AND tenant_id = ? AND status = 'pending' AND scheduled_for > ?
@@ -126,7 +126,7 @@ router.get('/posts/scheduled', (req, res) => {
 // GET /api/posts/:id
 // Fetches a single post by ID — used by generate.html when opened via ?postId=
 // ---------------------------------------------------------------------------
-router.get('/posts/:id', (req, res) => {
+router.get('/posts/:id', async (req, res) => {
   const userId   = req.userId;
   const tenantId = req.tenantId || 'default';
   const postId   = req.params.id;
@@ -134,7 +134,7 @@ router.get('/posts/:id', (req, res) => {
   if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
 
   try {
-    const post = db.prepare(`
+    const post = await db.prepare(`
       SELECT id, content, format_slug, quality_score, quality_flags, passed_gate, status, created_at, idea_input
       FROM   generated_posts
       WHERE  id = ? AND user_id = ? AND tenant_id = ?
@@ -142,7 +142,7 @@ router.get('/posts/:id', (req, res) => {
 
     if (!post) return res.status(404).json({ ok: false, error: 'post_not_found' });
 
-    const sched = db.prepare(`
+    const sched = await db.prepare(`
       SELECT id AS scheduled_post_id, scheduled_for, status AS scheduled_status
       FROM   scheduled_posts
       WHERE  post_id = ? AND user_id = ? AND tenant_id = ? AND status IN ('pending', 'processing')
@@ -166,7 +166,7 @@ router.get('/posts/:id', (req, res) => {
 // PATCH /api/posts/:id
 // Updates the content of a generated post (for Save Draft)
 // ---------------------------------------------------------------------------
-router.patch('/posts/:id', (req, res) => {
+router.patch('/posts/:id', async (req, res) => {
   const userId   = req.userId;
   const tenantId = req.tenantId || 'default';
   const postId   = req.params.id;
@@ -176,7 +176,7 @@ router.patch('/posts/:id', (req, res) => {
   if (!content) return res.status(400).json({ ok: false, error: 'missing_content' });
 
   try {
-    const existing = db.prepare(`
+    const existing = await db.prepare(`
       SELECT status FROM generated_posts
       WHERE id = ? AND user_id = ? AND tenant_id = ?
     `).get(postId, userId, tenantId);
@@ -186,7 +186,7 @@ router.patch('/posts/:id', (req, res) => {
       return res.status(409).json({ ok: false, error: 'post_not_editable', status: existing.status });
     }
 
-    const result = db.prepare(`
+    const result = await db.prepare(`
       UPDATE generated_posts
       SET content = ?, idea_input = COALESCE(?, idea_input)
       WHERE id = ? AND user_id = ? AND tenant_id = ? AND status = 'draft'
@@ -216,7 +216,7 @@ async function handleDeleteDraft(req, res) {
   if (!Number.isFinite(postId)) return res.status(400).json({ ok: false, error: 'invalid_id' });
 
   try {
-    const existing = db.prepare(`
+    const existing = await db.prepare(`
       SELECT id, status FROM generated_posts
       WHERE id = ? AND user_id = ? AND tenant_id = ?
     `).get(postId, userId, tenantId);
@@ -227,7 +227,7 @@ async function handleDeleteDraft(req, res) {
       return res.status(409).json({ ok: false, error: 'cannot_delete_scheduled_post' });
     }
 
-    const activeSchedule = db.prepare(`
+    const activeSchedule = await db.prepare(`
       SELECT id FROM scheduled_posts
       WHERE post_id = ? AND user_id = ? AND tenant_id = ? AND status IN ('pending', 'processing')
     `).get(postId, userId, tenantId);
@@ -240,7 +240,7 @@ async function handleDeleteDraft(req, res) {
       return res.status(400).json({ ok: false, error: 'only_drafts_deletable' });
     }
 
-    const schedRows = db.prepare(`
+    const schedRows = await db.prepare(`
       SELECT id FROM scheduled_posts
       WHERE post_id = ? AND user_id = ? AND tenant_id = ?
     `).all(postId, userId, tenantId);
@@ -253,19 +253,18 @@ async function handleDeleteDraft(req, res) {
       }
     }
 
-    const deleteTx = db.transaction(() => {
-      db.prepare('DELETE FROM copy_events WHERE post_id = ?').run(postId);
-      db.prepare(`
+    await db.transaction(async tx => {
+      await tx.prepare('DELETE FROM copy_events WHERE post_id = ?').run(postId);
+      await tx.prepare(`
         DELETE FROM scheduled_posts
         WHERE post_id = ? AND user_id = ? AND tenant_id = ?
       `).run(postId, userId, tenantId);
-      const r = db.prepare(`
+      const r = await tx.prepare(`
         DELETE FROM generated_posts
         WHERE id = ? AND user_id = ? AND tenant_id = ? AND status = ?
       `).run(postId, userId, tenantId, 'draft');
       if (r.changes === 0) throw new Error('delete_failed');
     });
-    deleteTx();
 
     return res.json({ ok: true });
   } catch (err) {
@@ -282,7 +281,7 @@ router.post('/posts/:id/delete', handleDeleteDraft);
 // Returns generated posts for the user filtered by status (default: draft).
 // When status=published, also returns metrics and linkedin_post_id columns.
 // ---------------------------------------------------------------------------
-router.get('/posts', (req, res) => {
+router.get('/posts', async (req, res) => {
   const userId   = req.userId;
   const tenantId = req.tenantId || 'default';
   const status   = req.query.status === 'published' ? 'published' : 'draft';
@@ -291,7 +290,7 @@ router.get('/posts', (req, res) => {
   try {
     let posts;
     if (status === 'published') {
-      posts = db.prepare(`
+      posts = await db.prepare(`
         SELECT id, content, format_slug, likes, comments, reactions,
                published_at, last_synced_at, linkedin_post_id, asset_type
         FROM   generated_posts
@@ -299,7 +298,7 @@ router.get('/posts', (req, res) => {
         ORDER  BY published_at DESC
       `).all(userId, tenantId);
     } else {
-      posts = db.prepare(`
+      posts = await db.prepare(`
         SELECT id, content, quality_score, passed_gate, format_slug, status, created_at
         FROM   generated_posts
         WHERE  user_id = ? AND tenant_id = ? AND status = 'draft'

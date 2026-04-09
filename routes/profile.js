@@ -59,14 +59,14 @@ router.post('/', async (req, res) => {
   }
 
   // Check if writing_samples changed (to decide whether to re-extract fingerprint)
-  const existing = db
+  const existing = await db
     .prepare('SELECT id, writing_samples FROM user_profiles WHERE user_id = ? AND tenant_id = ?')
     .get(userId, tenantId);
 
   const samplesChanged = writing_samples && writing_samples !== existing?.writing_samples;
 
   // Upsert profile row
-  const result = db.prepare(`
+  const result = await db.prepare(`
     INSERT INTO user_profiles (user_id, tenant_id, writing_samples, contrarian_view, audience_role, audience_pain, content_niche, brand_bg, brand_accent, brand_text, brand_name, brand_logo, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     ON CONFLICT(user_id, tenant_id) DO UPDATE SET
@@ -81,6 +81,7 @@ router.post('/', async (req, res) => {
       brand_name      = COALESCE(excluded.brand_name, brand_name),
       brand_logo      = COALESCE(excluded.brand_logo, brand_logo),
       updated_at      = CURRENT_TIMESTAMP
+  RETURNING id
   `).run(userId, tenantId, writing_samples || null, contrarian_view || null, audience_role || null, audience_pain || null, content_niche || null,
          brand_bg || null, brand_accent || null, brand_text || null, brand_name || null, brand_logo || null);
 
@@ -90,9 +91,9 @@ router.post('/', async (req, res) => {
   if (samplesChanged) {
     const { extractFingerprint } = require('../services/voiceFingerprint');
     extractFingerprint(writing_samples)
-      .then(fingerprint => {
+      .then(async fingerprint => {
         if (fingerprint) {
-          db.prepare('UPDATE user_profiles SET voice_fingerprint = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND tenant_id = ?')
+          await db.prepare('UPDATE user_profiles SET voice_fingerprint = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND tenant_id = ?')
             .run(JSON.stringify(fingerprint), userId, tenantId);
         }
       })

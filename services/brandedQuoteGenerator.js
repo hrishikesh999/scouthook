@@ -87,7 +87,7 @@ async function generateBrandedQuote(post, brand = {}, linkedin = {}) {
  * One or two complete sentences — strongest idea from the full post (Haiku).
  */
 async function extractBrandedQuoteText(content) {
-  const apiKey = getSetting('anthropic_api_key');
+  const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
   if (!apiKey) return fallbackBrandedQuoteText(content);
 
   const client = new Anthropic({ apiKey });

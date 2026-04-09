@@ -6,15 +6,30 @@ const router  = express.Router();
 const { db, getSetting } = require('../db');
 const { storeTokens, getValidAccessToken } = require('../services/linkedinOAuth');
 const { publishNow } = require('../services/linkedinPublisher');
-const { addScheduledJob, removeScheduledJob } = require('../services/scheduler');
+const { addScheduledJob, removeScheduledJob, isSchedulerEnabled } = require('../services/scheduler');
 const { syncPostMetrics, RateLimitError } = require('../services/linkedinMetrics');
+
+function sha256Hex(s) {
+  return crypto.createHash('sha256').update(String(s || ''), 'utf8').digest('hex');
+}
+
+function logScheduledEvent({ scheduledPostId, userId, tenantId, eventType, message = null }) {
+  try {
+    db.prepare(`
+      INSERT INTO scheduled_post_events (scheduled_post_id, user_id, tenant_id, event_type, message)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(scheduledPostId, userId, tenantId, eventType, message);
+  } catch (e) {
+    console.warn('[scheduled_post_events] insert failed:', e.message);
+  }
+}
 
 /**
  * Cancel a pending/processing scheduled row: DB updates + remove Bull job.
  * @returns {Promise<{ ok: true } | { ok: false, error: string, status?: string }>}
  */
 async function cancelScheduledPostById(userId, tenantId, scheduledPostId) {
-  const row = db.prepare(
+  const row = await db.prepare(
     'SELECT id, status, post_id FROM scheduled_posts WHERE id = ? AND user_id = ? AND tenant_id = ?'
   ).get(scheduledPostId, userId, tenantId);
 
@@ -23,12 +38,19 @@ async function cancelScheduledPostById(userId, tenantId, scheduledPostId) {
     return { ok: false, error: 'cannot_cancel', status: row.status };
   }
 
-  db.prepare(
+  await db.prepare(
     `UPDATE scheduled_posts SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP WHERE id = ?`
   ).run(scheduledPostId);
 
+  logScheduledEvent({
+    scheduledPostId,
+    userId,
+    tenantId,
+    eventType: 'cancelled',
+  });
+
   if (row.post_id) {
-    db.prepare(`
+    await db.prepare(`
       UPDATE generated_posts
       SET status = 'draft'
       WHERE id = ? AND user_id = ? AND tenant_id = ? AND status = 'scheduled'
@@ -60,16 +82,18 @@ router.get('/status', (req, res) => {
 
   if (!userId) return res.json({ ok: true, connected: false, name: null, photo_url: null });
 
-  const row = db.prepare(
-    'SELECT linkedin_name, linkedin_photo FROM linkedin_tokens WHERE user_id = ? AND tenant_id = ?'
-  ).get(userId, tenantId);
+  (async () => {
+    const row = await db.prepare(
+      'SELECT linkedin_name, linkedin_photo FROM linkedin_tokens WHERE user_id = ? AND tenant_id = ?'
+    ).get(userId, tenantId);
 
-  return res.json({
-    ok:        true,
-    connected: !!row,
-    name:      row?.linkedin_name || null,
-    photo_url: row?.linkedin_photo?.trim() || null,
-  });
+    return res.json({
+      ok:        true,
+      connected: !!row,
+      name:      row?.linkedin_name || null,
+      photo_url: row?.linkedin_photo?.trim() || null,
+    });
+  })().catch(() => res.json({ ok: true, connected: false, name: null, photo_url: null }));
 });
 
 // ---------------------------------------------------------------------------
@@ -83,8 +107,8 @@ router.get('/connect', (req, res) => {
 
   if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
 
-  const clientId    = getSetting('linkedin_client_id');
-  const redirectUri = getSetting('linkedin_redirect_uri');
+  const clientId    = (process.env.LINKEDIN_CLIENT_ID || '').trim();
+  const redirectUri = (process.env.LINKEDIN_REDIRECT_URI || '').trim();
 
   if (!clientId || !redirectUri) {
     return res.status(500).json({ ok: false, error: 'linkedin_not_configured' });
@@ -123,9 +147,9 @@ router.get('/callback', async (req, res) => {
   oauthStates.delete(state);
 
   try {
-    const clientId     = getSetting('linkedin_client_id');
-    const clientSecret = getSetting('linkedin_client_secret');
-    const redirectUri  = getSetting('linkedin_redirect_uri');
+    const clientId     = (process.env.LINKEDIN_CLIENT_ID || '').trim();
+    const clientSecret = (process.env.LINKEDIN_CLIENT_SECRET || '').trim();
+    const redirectUri  = (process.env.LINKEDIN_REDIRECT_URI || '').trim();
 
     // Exchange code for tokens
     const tokenParams = new URLSearchParams({
@@ -210,7 +234,7 @@ router.get('/callback', async (req, res) => {
       }
     }
 
-    storeTokens(userId, tenantId, {
+    await storeTokens(userId, tenantId, {
       access_token: tokens.access_token,
       refresh_token: tokens.refresh_token || null,
       expires_in: tokens.expires_in,
@@ -265,14 +289,14 @@ router.post('/publish', async (req, res) => {
     // Stamp the originating draft as published and persist the LinkedIn share ID
     if (postId) {
       const assetType = carousel_pdf_url ? 'carousel' : image_url ? 'image' : null;
-      db.prepare(`
+      await db.prepare(`
         UPDATE generated_posts
         SET status = 'published', published_at = CURRENT_TIMESTAMP, asset_type = ?
         WHERE id = ? AND user_id = ? AND tenant_id = ?
       `).run(assetType, postId, userId, tenantId);
 
       if (result.linkedin_post_id) {
-        db.prepare(`UPDATE generated_posts SET linkedin_post_id = ? WHERE id = ?`)
+        await db.prepare(`UPDATE generated_posts SET linkedin_post_id = ? WHERE id = ?`)
           .run(result.linkedin_post_id, postId);
       }
     }
@@ -302,34 +326,140 @@ router.post('/publish', async (req, res) => {
 router.post('/schedule', async (req, res) => {
   const userId   = req.userId;
   const tenantId = req.tenantId;
-  const { content, scheduled_for, post_id } = req.body;
+  const { content, scheduled_for, post_id, image_url, carousel_pdf_url } = req.body;
 
   if (!userId)         return res.status(400).json({ ok: false, error: 'missing_user_id' });
   if (!content?.trim()) return res.status(400).json({ ok: false, error: 'missing_content' });
+  if (content.length > 3000) return res.status(400).json({ ok: false, error: 'content_too_long' });
   if (!scheduled_for)  return res.status(400).json({ ok: false, error: 'missing_scheduled_for' });
+  if (image_url && typeof image_url !== 'string') return res.status(400).json({ ok: false, error: 'invalid_image_url' });
+  if (carousel_pdf_url && typeof carousel_pdf_url !== 'string') {
+    return res.status(400).json({ ok: false, error: 'invalid_carousel_pdf_url' });
+  }
+  if (image_url && carousel_pdf_url) {
+    return res.status(400).json({ ok: false, error: 'multiple_assets_not_supported' });
+  }
+
+  // Global kill-switch
+  const schedulingEnabled = String((await getSetting('scheduling_enabled')) ?? '1').trim();
+  if (schedulingEnabled === '0' || schedulingEnabled.toLowerCase() === 'false') {
+    return res.status(503).json({ ok: false, error: 'scheduling_disabled' });
+  }
+
+  // Don't allow "fake scheduled" rows when the scheduler isn't running.
+  // Scheduling relies on BullMQ + Redis; without it, posts won't auto-publish.
+  if (!isSchedulerEnabled()) {
+    return res.status(503).json({ ok: false, error: 'scheduling_unavailable' });
+  }
 
   const scheduledDate = new Date(scheduled_for);
-  if (isNaN(scheduledDate) || scheduledDate <= new Date()) {
-    return res.status(400).json({ ok: false, error: 'scheduled_for_must_be_future' });
+  if (isNaN(scheduledDate)) {
+    return res.status(400).json({ ok: false, error: 'scheduled_for_invalid' });
+  }
+
+  // Guardrails: must be at least 5 minutes in the future, and not more than 30 days out.
+  const now = Date.now();
+  const minLeadMs = 5 * 60 * 1000;
+  const maxHorizonMs = 30 * 24 * 60 * 60 * 1000;
+  const when = scheduledDate.getTime();
+  if (when <= now + minLeadMs) {
+    return res.status(400).json({ ok: false, error: 'scheduled_for_too_soon' });
+  }
+  if (when > now + maxHorizonMs) {
+    return res.status(400).json({ ok: false, error: 'scheduled_for_too_far' });
   }
 
   // Verify user is connected
-  const tokenRow = db.prepare(
+  const tokenRow = await db.prepare(
     'SELECT id FROM linkedin_tokens WHERE user_id = ? AND tenant_id = ?'
   ).get(userId, tenantId);
   if (!tokenRow) return res.status(401).json({ ok: false, error: 'not_connected' });
 
-  try {
-    const result = db.prepare(`
-      INSERT INTO scheduled_posts (user_id, tenant_id, post_id, content, scheduled_for, status)
-      VALUES (?, ?, ?, ?, ?, 'pending')
-    `).run(userId, tenantId, post_id || null, content.trim(), scheduledDate.toISOString());
+  // Guardrails: cap pending scheduled posts per user
+  const { cnt } = await db.prepare(`
+    SELECT COUNT(*) AS cnt
+    FROM scheduled_posts
+    WHERE user_id = ? AND tenant_id = ? AND status IN ('pending', 'processing')
+  `).get(userId, tenantId);
+  // For true auto-posting, keep active schedules conservative.
+  if ((cnt ?? 0) >= 3) {
+    return res.status(429).json({ ok: false, error: 'too_many_scheduled' });
+  }
 
-    const scheduledPostId = result.lastInsertRowid;
+  // Guardrails: cap scheduled sends per day (based on scheduled_for date)
+  const { daily } = await db.prepare(`
+    SELECT COUNT(*) AS daily
+    FROM scheduled_posts
+    WHERE user_id = ? AND tenant_id = ?
+      AND date(scheduled_for) = date(?)
+      AND status IN ('pending', 'processing', 'published')
+  `).get(userId, tenantId, scheduledDate.toISOString());
+  if ((daily ?? 0) >= 2) {
+    return res.status(429).json({ ok: false, error: 'daily_schedule_limit' });
+  }
+
+  // Guardrails: enforce a minimum spacing between scheduled posts per user
+  // (keeps usage conservative and aligned with publish rate limits)
+  const MIN_GAP_MINUTES = 60;
+  // Cross-DB: avoid SQLite-only strftime/extract functions; compute spacing in JS.
+  const activeTimes = await db.prepare(`
+    SELECT scheduled_for
+    FROM scheduled_posts
+    WHERE user_id = ? AND tenant_id = ?
+      AND status IN ('pending', 'processing')
+    ORDER BY scheduled_for ASC
+  `).all(userId, tenantId);
+  let nearest = null;
+  for (const r of activeTimes || []) {
+    const t = new Date(r.scheduled_for).getTime();
+    if (!Number.isFinite(t)) continue;
+    const delta = Math.abs(t - scheduledDate.getTime());
+    if (!nearest || delta < nearest.delta) nearest = { when: r.scheduled_for, delta };
+  }
+
+  if (nearest?.when) {
+    if (nearest.delta < MIN_GAP_MINUTES * 60 * 1000) {
+      return res.status(400).json({ ok: false, error: 'scheduled_too_close' });
+    }
+  }
+
+  try {
+    // Create DB row first, then enqueue; if enqueue fails, clean up the DB row.
+    const payloadHash = sha256Hex(JSON.stringify({
+      content: content.trim(),
+      asset_type: carousel_pdf_url ? 'carousel' : image_url ? 'image' : null,
+      asset_url: (carousel_pdf_url || image_url)?.trim() || null,
+      scheduled_for: scheduledDate.toISOString(),
+    }));
+
+    const result = await db.prepare(`
+      INSERT INTO scheduled_posts (user_id, tenant_id, post_id, content, scheduled_for, status, asset_type, asset_url, payload_hash)
+      VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?)
+      RETURNING id
+    `).run(
+      userId,
+      tenantId,
+      post_id || null,
+      content.trim(),
+      scheduledDate.toISOString(),
+      carousel_pdf_url ? 'carousel' : image_url ? 'image' : null,
+      (carousel_pdf_url || image_url)?.trim() || null,
+      payloadHash
+    );
+
+    const scheduledPostId = Number(result.lastInsertRowid);
+
+    logScheduledEvent({
+      scheduledPostId,
+      userId,
+      tenantId,
+      eventType: 'created',
+      message: `scheduled_for=${scheduledDate.toISOString()}`,
+    });
 
     // Keep scheduled posts out of the Drafts list (GET /api/posts?status=draft)
     if (post_id) {
-      db.prepare(`
+      await db.prepare(`
         UPDATE generated_posts
         SET status = 'scheduled'
         WHERE id = ? AND user_id = ? AND tenant_id = ? AND status = 'draft'
@@ -337,15 +467,42 @@ router.post('/schedule', async (req, res) => {
     }
 
     try {
-      await addScheduledJob(scheduledPostId, scheduledDate);
-    } catch (schedulerErr) {
-      // Scheduler not available — post is still saved, won't auto-publish
-      console.warn('[linkedin/schedule] Scheduler unavailable:', schedulerErr.message);
+      const bullJobId = await addScheduledJob(scheduledPostId, scheduledDate);
+      await db.prepare(`
+        UPDATE scheduled_posts
+        SET bull_job_id = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ? AND user_id = ? AND tenant_id = ?
+      `).run(String(bullJobId), scheduledPostId, userId, tenantId);
+
+      logScheduledEvent({
+        scheduledPostId,
+        userId,
+        tenantId,
+        eventType: 'enqueued',
+        message: `bull_job_id=${bullJobId}`,
+      });
+    } catch (e) {
+      // Cleanup to avoid orphan "scheduled" state in UI.
+      await db.transaction(async tx => {
+        await tx.prepare('DELETE FROM scheduled_posts WHERE id = ? AND user_id = ? AND tenant_id = ?')
+          .run(scheduledPostId, userId, tenantId);
+        if (post_id) {
+          await tx.prepare(`
+            UPDATE generated_posts
+            SET status = 'draft'
+            WHERE id = ? AND user_id = ? AND tenant_id = ? AND status = 'scheduled'
+          `).run(post_id, userId, tenantId);
+        }
+      });
+      throw e;
     }
 
     return res.json({ ok: true, scheduled_post_id: scheduledPostId });
   } catch (err) {
     console.error('[linkedin/schedule] Error:', err.message);
+    if (err.message?.includes('scheduler_not_initialized')) {
+      return res.status(503).json({ ok: false, error: 'scheduling_unavailable' });
+    }
     return res.status(500).json({ ok: false, error: err.message });
   }
 });
@@ -360,17 +517,19 @@ router.get('/scheduled', (req, res) => {
 
   if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
 
-  const posts = db.prepare(`
-    SELECT sp.id, sp.content, sp.scheduled_for, sp.status,
-           sp.linkedin_post_id, sp.error_message, sp.attempts, sp.created_at,
-           sp.post_id, gp.format_slug
-    FROM   scheduled_posts sp
-    LEFT JOIN generated_posts gp ON sp.post_id = gp.id
-    WHERE  sp.user_id = ? AND sp.tenant_id = ? AND sp.status IN ('pending', 'processing')
-    ORDER  BY sp.scheduled_for ASC
-  `).all(userId, tenantId);
+  (async () => {
+    const posts = await db.prepare(`
+      SELECT sp.id, sp.content, sp.scheduled_for, sp.status,
+             sp.linkedin_post_id, sp.error_message, sp.attempts, sp.created_at,
+             sp.post_id, gp.format_slug
+      FROM   scheduled_posts sp
+      LEFT JOIN generated_posts gp ON sp.post_id = gp.id
+      WHERE  sp.user_id = ? AND sp.tenant_id = ? AND sp.status IN ('pending', 'processing')
+      ORDER  BY sp.scheduled_for ASC
+    `).all(userId, tenantId);
 
-  return res.json({ ok: true, posts });
+    return res.json({ ok: true, posts });
+  })().catch(err => res.status(500).json({ ok: false, error: err.message }));
 });
 
 // ---------------------------------------------------------------------------
@@ -406,13 +565,13 @@ router.post('/scheduled/pause-by-post', async (req, res) => {
   if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
   if (!Number.isFinite(postId)) return res.status(400).json({ ok: false, error: 'invalid_post_id' });
 
-  const schedRow = db.prepare(`
+  const schedRow = await db.prepare(`
     SELECT id FROM scheduled_posts
     WHERE post_id = ? AND user_id = ? AND tenant_id = ? AND status IN ('pending', 'processing')
   `).get(postId, userId, tenantId);
 
   if (!schedRow) {
-    const gp = db.prepare(
+    const gp = await db.prepare(
       'SELECT id, status FROM generated_posts WHERE id = ? AND user_id = ? AND tenant_id = ?'
     ).get(postId, userId, tenantId);
     if (!gp) return res.status(404).json({ ok: false, error: 'post_not_found' });
@@ -438,11 +597,46 @@ router.post('/disconnect', (req, res) => {
 
   if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
 
-  db.prepare(
-    'DELETE FROM linkedin_tokens WHERE user_id = ? AND tenant_id = ?'
-  ).run(userId, tenantId);
+  // Cancel any pending/processing scheduled posts to avoid publishing after disconnect.
+  (async () => {
+    const active = await db.prepare(`
+      SELECT id, post_id
+      FROM scheduled_posts
+      WHERE user_id = ? AND tenant_id = ? AND status IN ('pending', 'processing')
+    `).all(userId, tenantId);
 
-  return res.json({ ok: true });
+    for (const row of active) {
+      await db.prepare(`
+        UPDATE scheduled_posts
+        SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).run(row.id);
+
+      if (row.post_id) {
+        await db.prepare(`
+          UPDATE generated_posts
+          SET status = 'draft'
+          WHERE id = ? AND user_id = ? AND tenant_id = ? AND status = 'scheduled'
+        `).run(row.post_id, userId, tenantId);
+      }
+
+      // Best-effort job removal (non-fatal if scheduler isn't running)
+      removeScheduledJob(Number(row.id)).catch(() => {});
+
+      logScheduledEvent({
+        scheduledPostId: row.id,
+        userId,
+        tenantId,
+        eventType: 'cancelled_disconnect',
+      });
+    }
+
+    await db.prepare(
+      'DELETE FROM linkedin_tokens WHERE user_id = ? AND tenant_id = ?'
+    ).run(userId, tenantId);
+
+    return res.json({ ok: true });
+  })().catch(err => res.status(500).json({ ok: false, error: err.message }));
 });
 
 // ---------------------------------------------------------------------------
@@ -456,20 +650,20 @@ router.delete('/user-data', (req, res) => {
 
   if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
 
-  const deleteAll = db.transaction(() => {
-    db.prepare('DELETE FROM generated_posts  WHERE user_id = ? AND tenant_id = ?').run(userId, tenantId);
-    db.prepare('DELETE FROM generation_runs  WHERE user_id = ? AND tenant_id = ?').run(userId, tenantId);
-    db.prepare('DELETE FROM copy_events      WHERE user_id = ? AND tenant_id = ?').run(userId, tenantId);
-    db.prepare('DELETE FROM linkedin_tokens  WHERE user_id = ? AND tenant_id = ?').run(userId, tenantId);
-    db.prepare('DELETE FROM scheduled_posts  WHERE user_id = ? AND tenant_id = ?').run(userId, tenantId);
-    db.prepare('DELETE FROM user_profiles    WHERE user_id = ? AND tenant_id = ?').run(userId, tenantId);
-    db.prepare('DELETE FROM tenant_settings  WHERE tenant_id = ?').run(tenantId);
-  });
+  (async () => {
+    await db.transaction(async tx => {
+      await tx.prepare('DELETE FROM generated_posts  WHERE user_id = ? AND tenant_id = ?').run(userId, tenantId);
+      await tx.prepare('DELETE FROM generation_runs  WHERE user_id = ? AND tenant_id = ?').run(userId, tenantId);
+      await tx.prepare('DELETE FROM copy_events      WHERE user_id = ? AND tenant_id = ?').run(userId, tenantId);
+      await tx.prepare('DELETE FROM linkedin_tokens  WHERE user_id = ? AND tenant_id = ?').run(userId, tenantId);
+      await tx.prepare('DELETE FROM scheduled_posts  WHERE user_id = ? AND tenant_id = ?').run(userId, tenantId);
+      await tx.prepare('DELETE FROM user_profiles    WHERE user_id = ? AND tenant_id = ?').run(userId, tenantId);
+      await tx.prepare('DELETE FROM tenant_settings  WHERE tenant_id = ?').run(tenantId);
+    });
 
-  deleteAll();
-
-  console.log(`[linkedin/user-data] All data deleted for user=${userId} tenant=${tenantId}`);
-  return res.json({ ok: true });
+    console.log(`[linkedin/user-data] All data deleted for user=${userId} tenant=${tenantId}`);
+    return res.json({ ok: true });
+  })().catch(err => res.status(500).json({ ok: false, error: err.message }));
 });
 
 // ---------------------------------------------------------------------------

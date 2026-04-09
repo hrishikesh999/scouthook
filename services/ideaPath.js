@@ -19,7 +19,7 @@ const { AI_TELLS_PROHIBITION, sanitiseAiTells } = require('./postSanitiser');
  * @returns {Promise<{ synthesis: object, post: string, archetypeUsed: string, hookConfidence: number }>}
  */
 async function ideaToPost(rawIdea, userProfile, options = {}) {
-  const apiKey = getSetting('anthropic_api_key');
+  const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
   if (!apiKey) throw new Error('anthropic_api_key not configured');
 
   const hookResult = await selectHook(rawIdea, userProfile);
@@ -40,7 +40,7 @@ async function ideaToPost(rawIdea, userProfile, options = {}) {
  * @returns {Promise<{ synthesis: object, post: string, archetypeUsed: 'INSIGHT', hookConfidence: null }>}
  */
 async function generateInsightAlternativePost(rawIdea, userProfile, options = {}) {
-  const apiKey = getSetting('anthropic_api_key');
+  const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
   if (!apiKey) throw new Error('anthropic_api_key not configured');
 
   const insightInjection = buildHookInjection(HOOK_ARCHETYPES.INSIGHT);
@@ -120,7 +120,9 @@ async function runSinglePostGeneration({
   archetypeUsed,
   hookConfidence,
 }) {
-  const client = new Anthropic({ apiKey: getSetting('anthropic_api_key') });
+  const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
+  if (!apiKey) throw new Error('anthropic_api_key not configured');
+  const client = new Anthropic({ apiKey });
 
   const systemPrompt = buildSystemPrompt(userProfile, hookInjection);
   let userPrompt = buildUserPrompt(rawIdea);

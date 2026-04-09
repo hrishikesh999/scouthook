@@ -35,14 +35,16 @@ router.get('/', (req, res) => {
   const { userId, tenantId } = req;
   if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
 
-  const files = db.prepare(`
-    SELECT id, filename, mime_type, file_size, width, height, format_tag, url, created_at
-    FROM   media_files
-    WHERE  user_id = ? AND tenant_id = ?
-    ORDER  BY created_at DESC
-  `).all(userId, tenantId);
+  (async () => {
+    const files = await db.prepare(`
+      SELECT id, filename, mime_type, file_size, width, height, format_tag, url, created_at
+      FROM   media_files
+      WHERE  user_id = ? AND tenant_id = ?
+      ORDER  BY created_at DESC
+    `).all(userId, tenantId);
 
-  return res.json({ ok: true, files });
+    return res.json({ ok: true, files });
+  })().catch(err => res.status(500).json({ ok: false, error: err.message }));
 });
 
 // ---------------------------------------------------------------------------
@@ -91,10 +93,11 @@ router.post('/upload', express.raw({ type: '*/*', limit: '25mb' }), async (req, 
 
   fs.writeFileSync(filePath, buffer);
 
-  const row = db.prepare(`
+  const row = await db.prepare(`
     INSERT INTO media_files
       (user_id, tenant_id, filename, stored_name, mime_type, file_size, width, height, format_tag, url)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    RETURNING id
   `).run(userId, tenantId, filename, storedName, mimeType, buffer.length, width, height, formatTag, url);
 
   return res.json({
@@ -163,10 +166,11 @@ router.post('/save-generated', async (req, res) => {
 
   fs.copyFileSync(srcPath, destPath);
 
-  const row = db.prepare(`
+  const row = await db.prepare(`
     INSERT INTO media_files
       (user_id, tenant_id, filename, stored_name, mime_type, file_size, width, height, format_tag, url)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    RETURNING id
   `).run(userId, tenantId, filename, storedName, mimeType, buffer.length, width, height, formatTag, url);
 
   return res.json({
@@ -188,18 +192,18 @@ router.post('/save-generated', async (req, res) => {
 // ---------------------------------------------------------------------------
 // DELETE /api/media/:id  —  remove a file (disk + DB)
 // ---------------------------------------------------------------------------
-router.delete('/:id', (req, res) => {
+router.delete('/:id', async (req, res) => {
   const { userId, tenantId } = req;
   if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
 
-  const file = db.prepare(
+  const file = await db.prepare(
     'SELECT id, stored_name FROM media_files WHERE id = ? AND user_id = ? AND tenant_id = ?'
   ).get(req.params.id, userId, tenantId);
 
   if (!file) return res.status(404).json({ ok: false, error: 'not_found' });
 
   try { fs.unlinkSync(path.join(UPLOADS_DIR, file.stored_name)); } catch { /* already gone */ }
-  db.prepare('DELETE FROM media_files WHERE id = ?').run(file.id);
+  await db.prepare('DELETE FROM media_files WHERE id = ?').run(file.id);
 
   return res.json({ ok: true });
 });

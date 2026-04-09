@@ -23,7 +23,7 @@ router.post('/:postId', async (req, res) => {
   }
 
   // Load post and verify ownership
-  const post = db.prepare(
+  const post = await db.prepare(
     'SELECT * FROM generated_posts WHERE id = ? AND tenant_id = ?'
   ).get(postId, tenantId);
 
@@ -37,7 +37,7 @@ router.post('/:postId', async (req, res) => {
   }
 
   // Load brand settings from the post owner's profile (fall back to defaults)
-  const profile = db.prepare(
+  const profile = await db.prepare(
     'SELECT brand_bg, brand_accent, brand_text, brand_name, brand_logo FROM user_profiles WHERE user_id = ? AND tenant_id = ?'
   ).get(post.user_id, tenantId);
 
@@ -65,7 +65,7 @@ router.post('/:postId', async (req, res) => {
 
   try {
     if (visual_type === 'branded_quote') {
-      const li = db.prepare(
+      const li = await db.prepare(
         'SELECT linkedin_name, linkedin_photo FROM linkedin_tokens WHERE user_id = ? AND tenant_id = ?'
       ).get(post.user_id, tenantId);
 

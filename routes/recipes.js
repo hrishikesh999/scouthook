@@ -9,10 +9,10 @@ const { db } = require('../db');
 // Returns all active recipes for the tenant, grouped by category.
 // Questions are parsed from JSON so the UI never hardcodes them.
 // ---------------------------------------------------------------------------
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   const tenantId = req.tenantId;
 
-  const rows = db.prepare(`
+  const rows = await db.prepare(`
     SELECT slug, name, category, description, questions, suggested_visual, suitable_formats, sort_order
     FROM recipes
     WHERE is_active = 1 AND tenant_id = ?

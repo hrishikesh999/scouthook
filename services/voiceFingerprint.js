@@ -13,7 +13,7 @@ const { getSetting } = require('../db');
  *          Returns null if extraction fails — never throws (profile save must not be blocked)
  */
 async function extractFingerprint(writingSamples) {
-  const apiKey = getSetting('anthropic_api_key');
+  const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
   if (!apiKey) {
     console.error('[voiceFingerprint] anthropic_api_key not set in platform_settings');
     return null;

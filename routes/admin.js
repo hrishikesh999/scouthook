@@ -26,15 +26,19 @@ router.get('/settings', requireAdminPassword, (req, res) => {
     'token_encryption_key',
   ];
 
-  const settings = getAllSettings().map(row => ({
-    key: row.key,
-    value: SENSITIVE_KEYS.includes(row.key) && row.value
-      ? row.value.slice(0, 6) + '…' + row.value.slice(-4)
-      : row.value,
-    is_set: !!row.value,
-  }));
-
-  return res.json({ ok: true, settings });
+  (async () => {
+    const rows = await getAllSettings();
+    const settings = rows.map(row => ({
+      key: row.key,
+      value: SENSITIVE_KEYS.includes(row.key) && row.value
+        ? row.value.slice(0, 6) + '…' + row.value.slice(-4)
+        : row.value,
+      is_set: !!row.value,
+    }));
+    return res.json({ ok: true, settings });
+  })().catch(err => {
+    return res.status(500).json({ ok: false, error: err.message });
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -56,16 +60,20 @@ router.post('/settings', requireAdminPassword, (req, res) => {
     'linkedin_redirect_uri',
     'token_encryption_key',
     'redis_url',
+    'scheduling_enabled',
   ];
 
-  const updated = [];
-  for (const [key, value] of Object.entries(settings)) {
-    if (!ALLOWED_KEYS.includes(key)) continue;
-    setSetting(key, value);
-    updated.push(key);
-  }
-
-  return res.json({ ok: true, updated });
+  (async () => {
+    const updated = [];
+    for (const [key, value] of Object.entries(settings)) {
+      if (!ALLOWED_KEYS.includes(key)) continue;
+      await setSetting(key, value);
+      updated.push(key);
+    }
+    return res.json({ ok: true, updated });
+  })().catch(err => {
+    return res.status(500).json({ ok: false, error: err.message });
+  });
 });
 
 module.exports = router;

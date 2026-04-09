@@ -7,7 +7,7 @@ const { getSetting } = require('../db');
 const Anthropic = require('@anthropic-ai/sdk');
 
 async function ping() {
-  const apiKey = getSetting('anthropic_api_key');
+  const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
   if (!apiKey) {
     console.error('[pingClaude] anthropic_api_key not set in platform_settings.');
     console.error('  → Go to http://localhost:3000/admin.html and save your Anthropic API key first.');

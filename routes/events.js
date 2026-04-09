@@ -9,7 +9,7 @@ const { db } = require('../db');
 // Feedback loop — one line on the copy button. Fire and forget from client.
 // Never blocks the copy action on failure.
 // ---------------------------------------------------------------------------
-router.post('/copy', (req, res) => {
+router.post('/copy', async (req, res) => {
   const { post_id, run_id, path, format_slug } = req.body;
   const tenantId = req.tenantId;
   const userId = req.userId;
@@ -20,7 +20,7 @@ router.post('/copy', (req, res) => {
   }
 
   try {
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO copy_events (user_id, tenant_id, post_id, run_id, path, format_slug)
       VALUES (?, ?, ?, ?, ?, ?)
     `).run(userId, tenantId, post_id || null, run_id || null, path || null, format_slug || null);

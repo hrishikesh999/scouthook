@@ -258,7 +258,7 @@ router.post('/regenerate/:postId', async (req, res) => {
     return res.status(409).json({ ok: false, error: 'post_not_editable', status: post.status });
   }
 
-  const userProfile = db
+  const userProfile = await db
     .prepare('SELECT * FROM user_profiles WHERE user_id = ? AND tenant_id = ?')
     .get(userId, tenantId);
 

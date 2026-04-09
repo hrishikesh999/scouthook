@@ -8,11 +8,11 @@ const { db } = require('../db');
 // GET /api/profile/:user_id
 // Returns profile fields. Never returns writing_samples or voice_fingerprint.
 // ---------------------------------------------------------------------------
-router.get('/:user_id', (req, res) => {
+router.get('/:user_id', async (req, res) => {
   const { user_id } = req.params;
   const tenantId = req.tenantId;
 
-  const profile = db
+  const profile = await db
     .prepare('SELECT audience_role, audience_pain, content_niche, contrarian_view, voice_fingerprint, brand_bg, brand_accent, brand_text, brand_name, brand_logo FROM user_profiles WHERE user_id = ? AND tenant_id = ?')
     .get(user_id, tenantId);
 

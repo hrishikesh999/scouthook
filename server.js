@@ -3,6 +3,7 @@
 require('dotenv').config();
 
 const express = require('express');
+require('express-async-errors');
 const path = require('path');
 const helmet = require('helmet');
 const cors = require('cors');
@@ -199,6 +200,12 @@ app.use('/api/linkedin', require('./routes/linkedin'));
 app.use('/api/events', require('./routes/events'));
 app.use('/api/media', require('./routes/media'));
 app.use('/api', require('./routes/stats'));
+
+// Unmatched /api/* — avoid falling through to static/HTML 404
+app.use('/api', (req, res) => {
+  res.status(404).json({ ok: false, error: 'api_not_found' });
+});
+
 app.use('/admin', require('./routes/admin'));
 
 // ---------------------------------------------------------------------------
@@ -226,6 +233,21 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use('/files', express.static(path.join(__dirname, 'generated')));
 // Serve permanent user uploads (never auto-cleaned)
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// JSON errors for API routes (Express 4 does not catch async throws without express-async-errors)
+app.use((err, req, res, next) => {
+  if (res.headersSent) return next(err);
+  const path = req.originalUrl || req.url || '';
+  if (path.startsWith('/api') || path.startsWith('/auth')) {
+    console.error('[http]', req.method, path, err);
+    const status = Number(err.status) || Number(err.statusCode) || 500;
+    return res.status(status).json({
+      ok: false,
+      error: err.code || err.message || 'server_error',
+    });
+  }
+  return next(err);
+});
 
 // ---------------------------------------------------------------------------
 // Clean generated files older than 24 hours (runs every hour)

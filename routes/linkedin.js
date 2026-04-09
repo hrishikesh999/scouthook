@@ -14,14 +14,11 @@ function sha256Hex(s) {
 }
 
 function logScheduledEvent({ scheduledPostId, userId, tenantId, eventType, message = null }) {
-  try {
-    db.prepare(`
+  void db.prepare(`
       INSERT INTO scheduled_post_events (scheduled_post_id, user_id, tenant_id, event_type, message)
       VALUES (?, ?, ?, ?, ?)
-    `).run(scheduledPostId, userId, tenantId, eventType, message);
-  } catch (e) {
-    console.warn('[scheduled_post_events] insert failed:', e.message);
-  }
+    `).run(scheduledPostId, userId, tenantId, eventType, message)
+    .catch((e) => console.warn('[scheduled_post_events] insert failed:', e.message));
 }
 
 /**
@@ -271,7 +268,7 @@ router.post('/publish', async (req, res) => {
   }
 
   if (postId) {
-    const gp = db.prepare(
+    const gp = await db.prepare(
       'SELECT status FROM generated_posts WHERE id = ? AND user_id = ? AND tenant_id = ?'
     ).get(postId, userId, tenantId);
     if (!gp) return res.status(404).json({ ok: false, error: 'post_not_found' });

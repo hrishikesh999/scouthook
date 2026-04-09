@@ -254,6 +254,13 @@ async function handleDeleteDraft(req, res) {
     }
 
     await db.transaction(async tx => {
+      await tx.prepare(`
+        DELETE FROM scheduled_post_events
+        WHERE scheduled_post_id IN (
+          SELECT id FROM scheduled_posts
+          WHERE post_id = ? AND user_id = ? AND tenant_id = ?
+        )
+      `).run(postId, userId, tenantId);
       await tx.prepare('DELETE FROM copy_events WHERE post_id = ?').run(postId);
       await tx.prepare(`
         DELETE FROM scheduled_posts

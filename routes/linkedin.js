@@ -481,6 +481,8 @@ router.post('/schedule', async (req, res) => {
     } catch (e) {
       // Cleanup to avoid orphan "scheduled" state in UI.
       await db.transaction(async tx => {
+        await tx.prepare('DELETE FROM scheduled_post_events WHERE scheduled_post_id = ?')
+          .run(scheduledPostId);
         await tx.prepare('DELETE FROM scheduled_posts WHERE id = ? AND user_id = ? AND tenant_id = ?')
           .run(scheduledPostId, userId, tenantId);
         if (post_id) {
@@ -649,13 +651,19 @@ router.delete('/user-data', (req, res) => {
 
   (async () => {
     await db.transaction(async tx => {
-      await tx.prepare('DELETE FROM generated_posts  WHERE user_id = ? AND tenant_id = ?').run(userId, tenantId);
-      await tx.prepare('DELETE FROM generation_runs  WHERE user_id = ? AND tenant_id = ?').run(userId, tenantId);
-      await tx.prepare('DELETE FROM copy_events      WHERE user_id = ? AND tenant_id = ?').run(userId, tenantId);
-      await tx.prepare('DELETE FROM linkedin_tokens  WHERE user_id = ? AND tenant_id = ?').run(userId, tenantId);
-      await tx.prepare('DELETE FROM scheduled_posts  WHERE user_id = ? AND tenant_id = ?').run(userId, tenantId);
-      await tx.prepare('DELETE FROM user_profiles    WHERE user_id = ? AND tenant_id = ?').run(userId, tenantId);
-      await tx.prepare('DELETE FROM tenant_settings  WHERE tenant_id = ?').run(tenantId);
+      await tx.prepare(`
+        DELETE FROM scheduled_post_events
+        WHERE scheduled_post_id IN (
+          SELECT id FROM scheduled_posts WHERE user_id = ? AND tenant_id = ?
+        )
+      `).run(userId, tenantId);
+      await tx.prepare('DELETE FROM scheduled_posts WHERE user_id = ? AND tenant_id = ?').run(userId, tenantId);
+      await tx.prepare('DELETE FROM copy_events WHERE user_id = ? AND tenant_id = ?').run(userId, tenantId);
+      await tx.prepare('DELETE FROM generated_posts WHERE user_id = ? AND tenant_id = ?').run(userId, tenantId);
+      await tx.prepare('DELETE FROM generation_runs WHERE user_id = ? AND tenant_id = ?').run(userId, tenantId);
+      await tx.prepare('DELETE FROM linkedin_tokens WHERE user_id = ? AND tenant_id = ?').run(userId, tenantId);
+      await tx.prepare('DELETE FROM user_profiles WHERE user_id = ? AND tenant_id = ?').run(userId, tenantId);
+      await tx.prepare('DELETE FROM tenant_settings WHERE tenant_id = ?').run(tenantId);
     });
 
     console.log(`[linkedin/user-data] All data deleted for user=${userId} tenant=${tenantId}`);

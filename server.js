@@ -57,17 +57,6 @@ app.use(rateLimit({
 
 app.use(express.json({ limit: '30mb' }));
 
-// Attach tenant_id and user_id to every request from headers
-app.use((req, res, next) => {
-  const headerTenant = req.headers['x-tenant-id'] || 'default';
-  const headerUser = req.headers['x-user-id'] || null;
-  // Prefer authenticated session identity when present (Google OAuth)
-  const sessionUserId = req.user?.user_id || null;
-  req.tenantId = headerTenant;
-  req.userId = sessionUserId || headerUser;
-  next();
-});
-
 // ---------------------------------------------------------------------------
 // Auth (Google OAuth) + session
 // ---------------------------------------------------------------------------
@@ -137,6 +126,16 @@ if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
 
 app.use(passport.initialize());
 app.use(passport.session());
+
+// After passport restores req.user — attach tenant_id and user_id for API routes
+app.use((req, res, next) => {
+  const headerTenant = req.headers['x-tenant-id'] || 'default';
+  const headerUser = req.headers['x-user-id'] || null;
+  const sessionUserId = req.user?.user_id || null;
+  req.tenantId = headerTenant;
+  req.userId = sessionUserId || headerUser;
+  next();
+});
 
 app.get('/auth/google', (req, res, next) => {
   if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
@@ -210,8 +209,17 @@ app.get('/', (req, res) => {
   return res.redirect('/login.html');
 });
 
-// Protect the main dashboard UI (add more pages here if desired)
-app.get(['/dashboard.html'], requireLoginHtml);
+// Protect main app HTML (session + account UI)
+app.get([
+  '/dashboard.html',
+  '/generate.html',
+  '/drafts.html',
+  '/schedule.html',
+  '/Published.html',
+  '/Media.html',
+  '/profile.html',
+  '/brand.html',
+], requireLoginHtml);
 
 app.use(express.static(path.join(__dirname, 'public')));
 // Serve generated visuals (PNGs, ZIPs) — files older than 24h are cleaned periodically

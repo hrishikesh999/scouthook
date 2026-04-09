@@ -255,14 +255,16 @@ document.addEventListener('visibilitychange', () => {
 
 /* ── 3. Init ─────────────────────────────────────────────────── */
 (async function init() {
+  await window.scouthookAuthReady;
+
   // Wire userId into the Connect LinkedIn button href
   const connectBtn = document.getElementById('linkedin-connect-btn');
   if (connectBtn) {
     connectBtn.href = `/api/linkedin/connect?_uid=${encodeURIComponent(getUserId())}&_tid=${encodeURIComponent(getTenantId())}`;
   }
 
-  checkLinkedInStatus();
-  loadProfile();
+  await checkLinkedInStatus();
+  await loadProfile();
 
   const _qs      = new URLSearchParams(window.location.search);
   const urlPostId = _qs.get('postId');

@@ -56,6 +56,7 @@ async function checkLinkedInStatus() {
 
 /* ── Init ─────────────────────────────────────────────────────── */
 (async function init() {
+  await window.scouthookAuthReady;
   await checkLinkedInStatus();
   await loadBrand();
 })();

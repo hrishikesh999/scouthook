@@ -45,3 +45,24 @@ function apiHeaders() {
     'X-Tenant-Id': getTenantId()
   };
 }
+
+/**
+ * Resolves after /api/auth/me so localStorage scouthook_uid matches the signed-in Google user.
+ * Await this before load/save flows that use getUserId() in URLs or headers.
+ */
+window.scouthookAuthReady = (async () => {
+  try {
+    const r = await fetch('/api/auth/me', { credentials: 'same-origin' });
+    const d = await r.json();
+    if (d && d.user && d.user.user_id) {
+      try {
+        localStorage.setItem('scouthook_uid', d.user.user_id);
+      } catch (e) {
+        /* ignore */
+      }
+    }
+    return d;
+  } catch {
+    return { ok: true, user: null };
+  }
+})();

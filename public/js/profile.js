@@ -20,39 +20,36 @@ function buildLinkedInChip(name, photoUrl) {
   return `<div class="nav-linkedin-connected">${avatarHtml}${nameHtml}</div>`;
 }
 
-(async function checkLinkedIn() {
-  // Wire userId into the Connect LinkedIn button href
+(async function bootProfilePage() {
+  await window.scouthookAuthReady;
+
   const connectBtn = document.getElementById('linkedin-connect-btn');
   if (connectBtn) {
     connectBtn.href = `/api/linkedin/connect?_uid=${encodeURIComponent(getUserId())}&_tid=${encodeURIComponent(getTenantId())}`;
   }
 
   try {
-    const res  = await fetch('/api/linkedin/status', { headers: apiHeaders() });
+    const res = await fetch('/api/linkedin/status', { headers: apiHeaders() });
     const data = await res.json();
     const area = document.getElementById('nav-linkedin-area');
-    if (data.connected) {
+    if (data.connected && area) {
       area.innerHTML = buildLinkedInChip(data.name, data.photo_url);
     }
   } catch {
     // Leave default button
   }
-})();
 
-/* ── Load existing profile ───────────────────────────────────── */
-(async function loadProfile() {
   try {
     const uid = getUserId();
-    const res  = await fetch(`/api/profile/${uid}`, { headers: apiHeaders() });
+    const res = await fetch(`/api/profile/${encodeURIComponent(uid)}`, { headers: apiHeaders() });
     const data = await res.json();
     if (!data.ok || !data.profile) return;
 
     const p = data.profile;
-    if (p.content_niche)    nicheEl.value      = p.content_niche;
-    if (p.audience_role)    audienceEl.value   = p.audience_role;
-    if (p.audience_pain)    painEl.value       = p.audience_pain;
-    if (p.contrarian_view)  contrarianEl.value = p.contrarian_view;
-    // writing_samples is not returned by the API for privacy; leave blank
+    if (p.content_niche) nicheEl.value = p.content_niche;
+    if (p.audience_role) audienceEl.value = p.audience_role;
+    if (p.audience_pain) painEl.value = p.audience_pain;
+    if (p.contrarian_view) contrarianEl.value = p.contrarian_view;
   } catch {
     // Leave fields blank
   }

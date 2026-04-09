@@ -23,6 +23,8 @@ const scheduledList    = document.getElementById('scheduled-posts-list');
 
 /* ── Init ────────────────────────────────────────────────────── */
 (async function init() {
+  await window.scouthookAuthReady;
+
   // Wire userId into the Connect LinkedIn button href so the OAuth redirect carries it
   const connectBtn = document.getElementById('linkedin-connect-btn');
   if (connectBtn) {

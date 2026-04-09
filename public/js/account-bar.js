@@ -125,18 +125,15 @@
     return escapeHtml(str).replace(/'/g, '&#39;');
   }
 
-  fetch('/api/auth/me', { credentials: 'same-origin' })
-    .then((r) => r.json())
-    .then((data) => {
-      const user = data && data.user;
-      if (!user || !user.user_id) return;
-
-      try {
-        localStorage.setItem('scouthook_uid', user.user_id);
-      } catch { /* ignore */ }
-
-      renderFloatingBar(user);
-      renderSidebarFoot(user);
-    })
-    .catch(() => { /* anonymous / offline */ });
+  const auth = window.scouthookAuthReady;
+  if (auth && typeof auth.then === 'function') {
+    auth
+      .then((data) => {
+        const user = data && data.user;
+        if (!user || !user.user_id) return;
+        renderFloatingBar(user);
+        renderSidebarFoot(user);
+      })
+      .catch(() => { /* offline */ });
+  }
 })();

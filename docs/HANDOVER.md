@@ -85,19 +85,18 @@ BullMQ Worker ──► publishScheduledPost()
 │   ├── redis.js               # Shared IORedis client with fallback helpers
 │   ├── hookSelector.js        # 8-archetype hook classification
 │   ├── qualityGate.js         # Quality scoring + retry enforcement
-│   ├── voiceFingerprint.js    # Extract writing voice from profile text
-│   └── ...                    # Additional generation services
+│   └── voiceFingerprint.js    # Extract writing voice from profile text
 ├── migrations/
 │   ├── 001_initial.sql        # Core tables
-│   ├── 002_*.sql              # Schema evolution
+│   ├── 002_scheduled_post_events_cascade.sql  # Schema evolution
 │   ├── 003_publish_notifications.sql  # Notifications table
 │   └── 004_metrics_retention.sql      # Retention index + policy record
 ├── public/                    # Static frontend assets
 │   ├── *.html                 # App pages (auth-gated)
 │   ├── css/
 │   └── js/
-├── uploads/                   # Permanent user file uploads
-├── generated/                 # Ephemeral generated visuals (cleaned after 24h)
+├── uploads/                   # Permanent user file uploads (local mode only; S3 mode uses bucket)
+├── generated/                 # Ephemeral generated visuals (local mode only; S3 mode uses lifecycle rule)
 └── docs/
     └── HANDOVER.md            # This file
 ```
@@ -308,7 +307,7 @@ Rate limit: 10 generations/hour per user (Redis sliding window, in-memory fallba
 |--------|------|-------------|
 | `POST` | `/api/visuals/:postId` | Generate visual; body: `{ type: 'quote_card'\|'carousel'\|'branded_quote' }` |
 
-Generated files are served at `/files/*` (auth-gated, cleaned after 24h). Permanent uploads at `/uploads/*` (auth-gated, never cleaned).
+Generated files are served at `/files/*` (auth-gated, cleaned after 24h). Permanent uploads at `/uploads/*` (auth-gated, never cleaned). These are URL paths, not filesystem paths — in S3 mode both are streamed from S3 via `storage.stream()`.
 
 ### Notifications
 
@@ -501,6 +500,8 @@ On `SIGTERM` (Render deploy): HTTP server drains in-flight requests, BullMQ work
 | `AWS_SECRET_ACCESS_KEY` | ⬜* | IAM secret key (required for s3 backend) |
 | `S3_KEY_PREFIX` | ⬜ | Optional key prefix, e.g. `dev/` for path-based env isolation within a bucket |
 | `S3_ENDPOINT` | ⬜ | Custom S3-compatible endpoint (MinIO, LocalStack) |
+
+> ✅ = required &nbsp;·&nbsp; ⬜ = optional &nbsp;·&nbsp; ⬜* = optional unless `STORAGE_BACKEND=s3`
 
 ### S3 Bucket Configuration
 

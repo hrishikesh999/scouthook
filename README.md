@@ -42,6 +42,8 @@ AI-powered LinkedIn content tool. Generate posts, schedule them, and track engag
 | `S3_KEY_PREFIX` | ⬜ | Optional key prefix for path-based env isolation (e.g. `dev/`) |
 | `S3_ENDPOINT` | ⬜ | Custom endpoint for MinIO / LocalStack |
 
+> ✅ = required &nbsp;·&nbsp; ⬜ = optional &nbsp;·&nbsp; ⬜* = optional unless `STORAGE_BACKEND=s3`
+
 ### Admin UI settings (`/admin.html`)
 
 Sensitive keys can be stored in the database via the admin panel instead of env vars:

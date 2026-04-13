@@ -3,7 +3,6 @@
 const sharp = require('sharp');
 const Anthropic = require('@anthropic-ai/sdk');
 const { getSetting } = require('../db');
-const { extractJsonFromResponse } = require('./voiceFingerprint');
 const storage = require('./storage');
 
 // Brand tokens

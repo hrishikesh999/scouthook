@@ -3,6 +3,7 @@
 const express = require('express');
 const router = express.Router();
 const { db } = require('../db');
+const storage = require('../services/storage');
 const { generateQuoteCard } = require('../services/quoteCardGenerator');
 const { generateCarousel } = require('../services/carouselGenerator');
 const { generateBrandedQuote } = require('../services/brandedQuoteGenerator');
@@ -49,17 +50,32 @@ router.post('/:postId', async (req, res) => {
     logo:   null, // populated below if logo URL is set
   };
 
-  // If a logo URL is stored, fetch it and convert to base64 data URI for SVG embedding
+  // If a logo URL is stored, convert it to a base64 data URI for SVG embedding.
+  // Relative URLs (e.g. /uploads/...) are read directly from storage; absolute URLs are fetched.
   if (profile?.brand_logo) {
     try {
-      const logoRes = await fetch(profile.brand_logo);
-      if (logoRes.ok) {
-        const buf = await logoRes.arrayBuffer();
-        const mime = logoRes.headers.get('content-type') || 'image/png';
-        brand.logo = `data:${mime};base64,${Buffer.from(buf).toString('base64')}`;
+      const logoUrl = profile.brand_logo;
+      let buf;
+      if (/^https?:\/\//i.test(logoUrl)) {
+        // External URL — fetch over HTTP
+        const logoRes = await fetch(logoUrl);
+        if (logoRes.ok) {
+          const ab = await logoRes.arrayBuffer();
+          const rawMime = logoRes.headers.get('content-type') || 'image/png';
+          const mime = rawMime.split(';')[0].trim(); // strip charset etc.
+          brand.logo = `data:${mime};base64,${Buffer.from(ab).toString('base64')}`;
+        }
+      } else {
+        // Internal relative URL — derive storage key from the path basename
+        const storedName = require('path').basename(logoUrl);
+        const key = storage.buildKey(tenantId, userId, 'uploads', storedName);
+        buf = await storage.download(key);
+        const ext = storedName.split('.').pop().toLowerCase();
+        const mime = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif' }[ext] || 'image/png';
+        brand.logo = `data:${mime};base64,${buf.toString('base64')}`;
       }
     } catch (err) {
-      console.warn('[visuals] Could not fetch brand logo:', err.message);
+      console.warn('[visuals] Could not load brand logo:', err.message);
     }
   }
 
@@ -82,7 +98,8 @@ router.post('/:postId', async (req, res) => {
           return res.status(502).json({ ok: false, error: 'branded_quote_photo_fetch_failed' });
         }
         const buf = await photoRes.arrayBuffer();
-        const mime = photoRes.headers.get('content-type') || 'image/jpeg';
+        const rawMime = photoRes.headers.get('content-type') || 'image/jpeg';
+        const mime = rawMime.split(';')[0].trim();
         photoDataUri = `data:${mime};base64,${Buffer.from(buf).toString('base64')}`;
       } catch (fetchErr) {
         console.warn('[visuals] branded_quote photo fetch:', fetchErr.message);

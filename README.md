@@ -11,13 +11,11 @@ AI-powered LinkedIn content tool. Generate posts, schedule them, and track engag
 - **Queue / Scheduling:** BullMQ + Redis
 - **AI:** Anthropic Claude (`@anthropic-ai/sdk`)
 - **Auth:** Google OAuth (login), LinkedIn OAuth (publishing)
-- **Storage:** Local disk (`/uploads`) for media files
+- **Storage:** Local disk (`/uploads`) for media files; `/generated` for ephemeral visuals
 
 ---
 
 ## Environment Variables
-
-These must be set before starting the server. API keys that change at runtime (Anthropic, Redis) can also be set via the admin UI at `/admin.html` and take precedence over env vars.
 
 | Variable | Required | Description |
 |---|---|---|
@@ -30,10 +28,12 @@ These must be set before starting the server. API keys that change at runtime (A
 | `LINKEDIN_CLIENT_SECRET` | ✅ | LinkedIn OAuth app client secret |
 | `ANTHROPIC_API_KEY` | ✅* | Anthropic API key (* can be set via admin UI instead) |
 | `REDIS_URL` | ⬜ | Redis connection string — required for scheduled post delivery |
-| `ADMIN_PASSWORD` | ⬜ | Password for `/admin.html` settings page (default: `changeme`) |
+| `TOKEN_ENCRYPTION_KEY` | ⬜ | 64-char hex AES key for LinkedIn token encryption. Set once, never rotate. Can be set via admin UI. Generate with: `openssl rand -hex 32` |
+| `ADMIN_PASSWORD` | ⬜ | Password for `/admin.html` (default: `changeme`) |
 | `PORT` | ⬜ | HTTP port (default: `4000`) |
-| `NODE_ENV` | ⬜ | Set to `production` for secure cookies and suppressed dev warnings |
+| `NODE_ENV` | ⬜ | Set to `production` for secure cookies |
 | `ALLOWED_ORIGIN` | ⬜ | CORS allowed origin if serving from a separate domain |
+| `API_RATE_LIMIT_MAX` | ⬜ | Override default 2000 req/15min API rate limit |
 
 ### Admin UI settings (`/admin.html`)
 
@@ -41,7 +41,7 @@ Sensitive keys can be stored in the database via the admin panel instead of env 
 
 - `anthropic_api_key` — Anthropic API key
 - `redis_url` — Redis connection string
-- `token_encryption_key` — AES-256-GCM key used to encrypt stored LinkedIn tokens (generate once, never change)
+- `token_encryption_key` — AES-256-GCM key for LinkedIn token encryption
 
 ---
 
@@ -61,32 +61,48 @@ Open `http://localhost:4000` — you'll be redirected to login.
 
 ### Auth
 - Google OAuth login with server-side sessions
-- All app routes require authentication
+- All app HTML routes require an active session; API routes return 401 if unauthenticated
 
 ### LinkedIn Integration
-- Connect/disconnect LinkedIn via OAuth (`/api/linkedin/status`, `routes/linkedin.js`)
-- Publish posts (text, image, PDF carousel) with a 1 post/hour rate limit
-- Encrypted token storage in Postgres
+- Connect/disconnect LinkedIn via OAuth with an explicit consent screen
+- Publish posts (text, single image, PDF carousel) via `POST /api/linkedin/publish`
+- LinkedIn tokens stored encrypted (AES-256-GCM); auto-refreshed 24h before expiry
+- Token revoked on LinkedIn's auth server on disconnect and GDPR deletion
+- Minimal scopes: `openid profile w_member_social` only
 
 ### AI Generation Pipeline
-- Generate LinkedIn posts from a topic/idea (`routes/generate.js`)
-- Hook classification across 8 archetypes (`services/hookSelector.js`)
-- Quality gate with retries enforces format rules (`services/qualityGate.js`)
-- Per-user in-memory rate limit: 10 generations/hour
+- Generate LinkedIn posts from a topic/idea (`POST /api/generate`)
+- Hook classification across 8 archetypes (contrarian, story, how-to, listicle, etc.)
+- Quality gate with retries enforces format rules
+- Per-user rate limit: 10 generations/hour (Redis sliding window, in-memory fallback)
 
 ### Scheduling
-- Schedule posts via BullMQ + Redis (`services/scheduler.js`)
-- Pending jobs are re-enqueued on worker startup
-- **Scheduling is disabled if `REDIS_URL` is not configured** — posts insert to DB but won't publish automatically
+- Schedule posts for future delivery via BullMQ + Redis
+- 3-attempt exponential backoff (1 → 2 → 4 min) for transient failures
+- Permanent failures (invalid token, invalid media URL, etc.) are marked `not_sent` without retry
+- Pending jobs are re-enqueued on worker startup (crash recovery)
+- **Scheduling is disabled if `REDIS_URL` is not configured** — posts save to DB but won't publish automatically
+
+### Notifications
+- In-app notification bell for publish success, publish failure, and LinkedIn reconnection reminders
+- `GET /api/notifications` + `POST /api/notifications/read`
 
 ### Media Library
-- Upload images and PDFs (`routes/media.js`)
+- Upload images and PDFs (`POST /api/media/upload`, 20MB max)
 - Files stored in `/uploads`, metadata in `media_files` table
-- List and delete media via API
+- Generated visuals auto-cleaned after 24h; uploaded files retained permanently
+
+### Visual Generation
+- Generate quote cards, carousels, and branded quote images from post content
+- Served at `/files/*` (auth-gated)
 
 ### Stats & Dashboard
-- Post engagement stats via `routes/stats.js`
-- Dashboard fetches and renders stats client-side
+- Monthly post count, average quality score, scheduled post count
+- Recent and scheduled post lists
+
+### Metrics & Retention
+- Sync LinkedIn engagement metrics via `POST /api/linkedin/sync-metrics`
+- Engagement data (likes, comments, reactions) is nulled after 90 days per LinkedIn API ToS
 
 ---
 
@@ -95,14 +111,23 @@ Open `http://localhost:4000` — you'll be redirected to login.
 1. Set all required env vars in the Render dashboard (Environment tab).
 2. Add a Redis instance (Render Redis or Upstash) and set `REDIS_URL` — required for scheduled delivery.
 3. Set `NODE_ENV=production` and a strong `SESSION_SECRET`.
-4. Run migrations on first deploy: add `npm run migrate` as a pre-deploy command or run it manually via the Render shell.
+4. Run migrations on first deploy: add `npm run migrate` as a pre-deploy command, or run it manually via the Render shell.
+5. Set `token_encryption_key` via `/admin.html` — generate once with `openssl rand -hex 32` and never change it.
+
+The server handles `SIGTERM` gracefully: drains in-flight HTTP requests, closes the BullMQ worker, and disconnects the Redis client.
+
+---
+
+## Architecture & Detailed Docs
+
+See [`docs/HANDOVER.md`](docs/HANDOVER.md) for the full technical reference: data model, all API endpoints, services, security model, LinkedIn compliance measures, and a complete list of recent audit fixes.
 
 ---
 
 ## Known Limitations
 
-- **No shared rate limit store:** The in-memory API rate limiter doesn't sync across multiple Render instances. Use Redis-backed rate limiting if you scale horizontally.
-- **No server-side retry for 429s:** Anthropic or LinkedIn 429/concurrency errors surface as generic failures. Backoff retries are not yet implemented.
-- **Scheduling requires Redis:** Without Redis, posts are saved but never published automatically.
-- **Multi-tenancy audit needed:** Endpoints derive user/tenant from session; confirm all DB queries are scoped by `user_id`/`tenant_id` before multi-user production use.
-- **`token_encryption_key` is permanent:** Set it once and never rotate it, or stored LinkedIn tokens will become unreadable.
+- **Requires Redis for scheduling:** Without `REDIS_URL`, posts save but are never auto-published.
+- **Local file storage:** Not compatible with multi-instance horizontal scaling — move to S3/R2 before running multiple replicas.
+- **`token_encryption_key` is permanent:** No rotation mechanism exists. Rotating the key orphans all stored LinkedIn tokens.
+- **Single-tenant in practice:** Multi-tenancy scaffolding (all tables have `user_id` + `tenant_id`) is in place, but tenant provisioning is not implemented — all users share `tenant_id = 'default'`.
+- **Manual metrics sync:** Engagement metrics must be fetched explicitly; there is no background polling.

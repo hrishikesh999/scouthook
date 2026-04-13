@@ -4,7 +4,7 @@ const { db } = require('../db');
 const { getValidAccessToken } = require('./linkedinOAuth');
 
 const LINKEDIN_API_BASE    = 'https://api.linkedin.com';
-const LINKEDIN_API_VERSION = '2026-03';
+const LINKEDIN_API_VERSION = '202501';
 // Minimum gap between live API calls for the same post (milliseconds)
 const COOLDOWN_MS = 15 * 60 * 1000;
 
@@ -112,8 +112,8 @@ async function syncPostMetrics(postId, userId, tenantId) {
   await db.prepare(`
     UPDATE generated_posts
     SET    likes = ?, comments = ?, reactions = ?, last_synced_at = ?
-    WHERE  id = ?
-  `).run(likes, comments, reactions, lastSynced, postId);
+    WHERE  id = ? AND user_id = ? AND tenant_id = ?
+  `).run(likes, comments, reactions, lastSynced, postId, userId, tenantId);
 
   console.log(`[linkedinMetrics] synced post=${postId} likes=${likes} comments=${comments} reactions=${reactions}`);
 

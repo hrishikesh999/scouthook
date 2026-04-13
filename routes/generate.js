@@ -8,16 +8,46 @@ const { runQualityGate } = require('../services/qualityGate');
 const { generateInsightAlternativePost } = require('../services/ideaPath');
 
 // ---------------------------------------------------------------------------
-// In-memory sliding window rate limiter — 10 generations per hour per user.
-// Shared across /api/generate and /api/generate/regenerate/:postId.
-// Resets on server restart (acceptable for a single-server deployment).
+// Sliding window rate limiter — 10 generations per hour per user.
+// Uses Redis when available (consistent across multiple instances); falls back
+// to an in-process Map on single-server deployments without Redis.
 // ---------------------------------------------------------------------------
+const { getRedis } = require('../services/redis');
 const RATE_LIMIT_MAX = 10;
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 1 hour
-const generationTimestamps = new Map(); // userId → number[]
+const generationTimestamps = new Map(); // fallback: userId → number[]
 
-function checkRateLimit(userId) {
-  const now = Date.now();
+async function checkRateLimit(userId) {
+  const redis = getRedis();
+
+  if (redis) {
+    // Redis sliding window: store timestamps as a sorted set keyed by userId.
+    const key    = `gen_ratelimit:${userId}`;
+    const now    = Date.now();
+    const cutoff = now - RATE_LIMIT_WINDOW_MS;
+    try {
+      const pipe = redis.pipeline();
+      pipe.zremrangebyscore(key, '-inf', cutoff);          // evict old entries
+      pipe.zadd(key, now, String(now));                    // add current timestamp
+      pipe.zrange(key, 0, -1);                             // fetch all in window
+      pipe.expire(key, Math.ceil(RATE_LIMIT_WINDOW_MS / 1000));
+      const results = await pipe.exec();
+      const members = results[2][1]; // zrange result
+      if (members.length > RATE_LIMIT_MAX) {
+        // Remove the entry we just added (don't count this attempt)
+        await redis.zrem(key, String(now));
+        const oldest = Number(members[0]);
+        const retryAfterSec = Math.ceil((oldest + RATE_LIMIT_WINDOW_MS - now) / 1000);
+        return { limited: true, retryAfterSec };
+      }
+      return { limited: false };
+    } catch {
+      // Redis error — fall through to in-memory fallback
+    }
+  }
+
+  // In-memory fallback
+  const now    = Date.now();
   const cutoff = now - RATE_LIMIT_WINDOW_MS;
   const timestamps = (generationTimestamps.get(userId) || []).filter(t => t > cutoff);
   if (timestamps.length >= RATE_LIMIT_MAX) {
@@ -118,7 +148,7 @@ router.post('/', async (req, res) => {
 
   if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
 
-  const rl = checkRateLimit(userId);
+  const rl = await checkRateLimit(userId);
   if (rl.limited) {
     return res.status(429).json({ ok: false, error: 'rate_limit_exceeded', retry_after_sec: rl.retryAfterSec });
   }
@@ -241,7 +271,7 @@ router.post('/regenerate/:postId', async (req, res) => {
 
   if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
 
-  const rl = checkRateLimit(userId);
+  const rl = await checkRateLimit(userId);
   if (rl.limited) {
     return res.status(429).json({ ok: false, error: 'rate_limit_exceeded', retry_after_sec: rl.retryAfterSec });
   }

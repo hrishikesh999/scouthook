@@ -107,6 +107,7 @@ if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
       provider: 'google',
       id: googleId,
       user_id: userId,
+      tenant_id: 'default',
       displayName: profile?.displayName || email || 'User',
       email,
       photo,
@@ -119,13 +120,12 @@ if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
 app.use(passport.initialize());
 app.use(passport.session());
 
-// After passport restores req.user — attach tenant_id and user_id for API routes
+// After passport restores req.user — attach tenant_id and user_id for API routes.
+// Both values are derived exclusively from the authenticated session; headers are
+// never trusted for identity or tenant resolution.
 app.use((req, res, next) => {
-  const headerTenant = req.headers['x-tenant-id'] || 'default';
-  const headerUser = req.headers['x-user-id'] || null;
-  const sessionUserId = req.user?.user_id || null;
-  req.tenantId = headerTenant;
-  req.userId = sessionUserId || headerUser;
+  req.tenantId = req.user?.tenant_id || 'default';
+  req.userId   = req.user?.user_id   || null;
   next();
 });
 
@@ -138,7 +138,7 @@ app.use('/api', rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => {
-    const uid = req.userId || req.headers['x-user-id'];
+    const uid = req.userId;
     if (uid && String(uid).trim()) return `api:${String(uid).trim()}`;
     return `ip:${req.ip || 'unknown'}`;
   },
@@ -208,6 +208,7 @@ app.use('/api/visuals', require('./routes/visuals'));
 app.use('/api/linkedin', require('./routes/linkedin'));
 app.use('/api/events', require('./routes/events'));
 app.use('/api/media', require('./routes/media'));
+app.use('/api/notifications', require('./routes/notifications'));
 app.use('/api', require('./routes/stats'));
 
 // Unmatched /api/* — avoid falling through to static/HTML 404
@@ -238,10 +239,27 @@ app.get([
 ], requireLoginHtml);
 
 app.use(express.static(path.join(__dirname, 'public')));
+
+// Serve generated visuals and uploads behind session auth.
+// Static middleware can't check auth, so we use a thin gating route instead.
+function serveAuthenticatedFile(dir) {
+  return (req, res, next) => {
+    if (!req.user) return res.status(401).send('Unauthorized');
+    // Prevent path traversal — express.static normalises the path, but be explicit.
+    const safePath = path.normalize(req.path).replace(/^(\.\.(\/|\\|$))+/, '');
+    res.sendFile(path.join(dir, safePath), err => {
+      if (err) next();
+    });
+  };
+}
+
+const GENERATED_DIR_SERVE = path.join(__dirname, 'generated');
+const UPLOADS_DIR_SERVE   = path.join(__dirname, 'uploads');
+
 // Serve generated visuals (PNGs, ZIPs) — files older than 24h are cleaned periodically
-app.use('/files', express.static(path.join(__dirname, 'generated')));
+app.use('/files',   serveAuthenticatedFile(GENERATED_DIR_SERVE));
 // Serve permanent user uploads (never auto-cleaned)
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/uploads', serveAuthenticatedFile(UPLOADS_DIR_SERVE));
 
 // JSON errors for API routes (Express 4 does not catch async throws without express-async-errors)
 app.use((err, req, res, next) => {
@@ -287,6 +305,11 @@ initScheduler().catch(err => {
   console.warn('[scheduler] Redis not configured or unavailable — scheduling disabled:', err.message);
 });
 
+const { initRedis } = require('./services/redis');
+initRedis().catch(err => {
+  console.warn('[redis] shared client init failed:', err.message);
+});
+
 // ---------------------------------------------------------------------------
 // Start
 // ---------------------------------------------------------------------------
@@ -299,8 +322,29 @@ const PORT = process.env.PORT || 4000;
     console.warn('[seed] skipped/failed:', e.message);
   }
 
-  app.listen(PORT, () => {
-  console.log(`[scouthook] Server running on http://localhost:${PORT}`);
-  console.log(`[scouthook] Admin UI: http://localhost:${PORT}/admin.html`);
+  const httpServer = app.listen(PORT, () => {
+    console.log(`[scouthook] Server running on http://localhost:${PORT}`);
+    console.log(`[scouthook] Admin UI: http://localhost:${PORT}/admin.html`);
   });
+
+  // Graceful shutdown — drain in-flight requests and close the BullMQ worker
+  // before the process exits. Render (and most PaaS hosts) send SIGTERM on deploy.
+  async function shutdown(signal) {
+    console.log(`[scouthook] ${signal} received — shutting down gracefully`);
+    httpServer.close(() => console.log('[scouthook] HTTP server closed'));
+    try {
+      const { getWorker } = require('./services/scheduler');
+      const worker = getWorker();
+      if (worker) await worker.close();
+    } catch { /* scheduler may not be running */ }
+    try {
+      const { getRedis } = require('./services/redis');
+      const redis = getRedis();
+      if (redis) await redis.quit();
+    } catch { /* non-fatal */ }
+    process.exit(0);
+  }
+
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT',  () => shutdown('SIGINT'));
 })();

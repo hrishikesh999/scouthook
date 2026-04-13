@@ -59,14 +59,32 @@ async function cancelScheduledPostById(userId, tenantId, scheduledPostId) {
 }
 
 // ---------------------------------------------------------------------------
-// In-memory OAuth state store — CSRF protection for the OAuth redirect
-// Each entry: { userId, tenantId } keyed by random UUID, auto-expires after 10min
+// OAuth state store — CSRF protection for the OAuth redirect.
+// Uses Redis when available (required for multi-instance); falls back to an
+// in-process Map on single-server deployments where Redis is not configured.
+// Each entry: { userId, tenantId } keyed by random UUID, TTL = 10 minutes.
 // ---------------------------------------------------------------------------
-const oauthStates = new Map();
+const { redisSet, redisGet, redisDel } = require('../services/redis');
+const oauthStates = new Map(); // fallback for when Redis is unavailable
 
-function setOAuthState(state, data) {
-  oauthStates.set(state, data);
-  setTimeout(() => oauthStates.delete(state), 10 * 60 * 1000);
+async function setOAuthState(state, data) {
+  const stored = await redisSet(`oauth_state:${state}`, data, 600); // 10 min TTL
+  if (!stored) {
+    // Redis unavailable — fall back to in-memory with auto-expiry
+    oauthStates.set(state, data);
+    setTimeout(() => oauthStates.delete(state), 10 * 60 * 1000);
+  }
+}
+
+async function getOAuthState(state) {
+  const data = await redisGet(`oauth_state:${state}`);
+  if (data !== null) return data;
+  return oauthStates.get(state) || null;
+}
+
+async function deleteOAuthState(state) {
+  await redisDel(`oauth_state:${state}`);
+  oauthStates.delete(state);
 }
 
 // ---------------------------------------------------------------------------
@@ -97,12 +115,11 @@ router.get('/status', (req, res) => {
 // GET /api/linkedin/connect
 // Initiates OAuth flow — redirects to LinkedIn authorization page
 // ---------------------------------------------------------------------------
-router.get('/connect', (req, res) => {
-  // Accept userId from header middleware OR _uid query param (browser redirect can't set headers)
-  const userId   = req.userId   || req.query._uid;
-  const tenantId = req.tenantId || req.query._tid || 'default';
+router.get('/connect', async (req, res) => {
+  const userId   = req.userId;
+  const tenantId = req.tenantId;
 
-  if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
+  if (!userId) return res.status(401).json({ ok: false, error: 'unauthenticated' });
 
   const clientId    = (process.env.LINKEDIN_CLIENT_ID || '').trim();
   const redirectUri = (process.env.LINKEDIN_REDIRECT_URI || '').trim();
@@ -112,14 +129,14 @@ router.get('/connect', (req, res) => {
   }
 
   const state = crypto.randomUUID();
-  setOAuthState(state, { userId, tenantId });
+  await setOAuthState(state, { userId, tenantId });
 
   const params = new URLSearchParams({
     response_type: 'code',
     client_id:     clientId,
     redirect_uri:  redirectUri,
     state,
-    scope:         'openid profile email w_member_social',
+    scope:         'openid profile w_member_social',
   });
 
   res.redirect(`https://www.linkedin.com/oauth/v2/authorization?${params}`);
@@ -136,12 +153,13 @@ router.get('/callback', async (req, res) => {
     return res.redirect(`/dashboard.html?linkedin_error=${encodeURIComponent(oauthError)}`);
   }
 
-  if (!state || !oauthStates.has(state)) {
+  const stateData = state ? await getOAuthState(state) : null;
+  if (!stateData) {
     return res.redirect('/dashboard.html?linkedin_error=invalid_state');
   }
+  await deleteOAuthState(state);
 
-  const { userId, tenantId } = oauthStates.get(state);
-  oauthStates.delete(state);
+  const { userId, tenantId } = stateData;
 
   try {
     const clientId     = (process.env.LINKEDIN_CLIENT_ID || '').trim();
@@ -293,8 +311,8 @@ router.post('/publish', async (req, res) => {
       `).run(assetType, postId, userId, tenantId);
 
       if (result.linkedin_post_id) {
-        await db.prepare(`UPDATE generated_posts SET linkedin_post_id = ? WHERE id = ?`)
-          .run(result.linkedin_post_id, postId);
+        await db.prepare(`UPDATE generated_posts SET linkedin_post_id = ? WHERE id = ? AND user_id = ? AND tenant_id = ?`)
+          .run(result.linkedin_post_id, postId, userId, tenantId);
       }
     }
 
@@ -421,7 +439,6 @@ router.post('/schedule', async (req, res) => {
   }
 
   try {
-    // Create DB row first, then enqueue; if enqueue fails, clean up the DB row.
     const payloadHash = sha256Hex(JSON.stringify({
       content: content.trim(),
       asset_type: carousel_pdf_url ? 'carousel' : image_url ? 'image' : null,
@@ -429,22 +446,34 @@ router.post('/schedule', async (req, res) => {
       scheduled_for: scheduledDate.toISOString(),
     }));
 
-    const result = await db.prepare(`
-      INSERT INTO scheduled_posts (user_id, tenant_id, post_id, content, scheduled_for, status, asset_type, asset_url, payload_hash)
-      VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?)
-      RETURNING id
-    `).run(
-      userId,
-      tenantId,
-      post_id || null,
-      content.trim(),
-      scheduledDate.toISOString(),
-      carousel_pdf_url ? 'carousel' : image_url ? 'image' : null,
-      (carousel_pdf_url || image_url)?.trim() || null,
-      payloadHash
-    );
+    // Atomically insert the scheduled_posts row and update generated_posts status.
+    // If either DB write fails the transaction rolls back — no orphaned rows.
+    let scheduledPostId;
+    await db.transaction(async tx => {
+      const result = await tx.prepare(`
+        INSERT INTO scheduled_posts (user_id, tenant_id, post_id, content, scheduled_for, status, asset_type, asset_url, payload_hash)
+        VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?)
+        RETURNING id
+      `).run(
+        userId,
+        tenantId,
+        post_id || null,
+        content.trim(),
+        scheduledDate.toISOString(),
+        carousel_pdf_url ? 'carousel' : image_url ? 'image' : null,
+        (carousel_pdf_url || image_url)?.trim() || null,
+        payloadHash
+      );
+      scheduledPostId = Number(result.lastInsertRowid);
 
-    const scheduledPostId = Number(result.lastInsertRowid);
+      if (post_id) {
+        await tx.prepare(`
+          UPDATE generated_posts
+          SET status = 'scheduled'
+          WHERE id = ? AND user_id = ? AND tenant_id = ? AND status = 'draft'
+        `).run(post_id, userId, tenantId);
+      }
+    });
 
     logScheduledEvent({
       scheduledPostId,
@@ -453,15 +482,6 @@ router.post('/schedule', async (req, res) => {
       eventType: 'created',
       message: `scheduled_for=${scheduledDate.toISOString()}`,
     });
-
-    // Keep scheduled posts out of the Drafts list (GET /api/posts?status=draft)
-    if (post_id) {
-      await db.prepare(`
-        UPDATE generated_posts
-        SET status = 'scheduled'
-        WHERE id = ? AND user_id = ? AND tenant_id = ? AND status = 'draft'
-      `).run(post_id, userId, tenantId);
-    }
 
     try {
       const bullJobId = await addScheduledJob(scheduledPostId, scheduledDate);
@@ -479,7 +499,7 @@ router.post('/schedule', async (req, res) => {
         message: `bull_job_id=${bullJobId}`,
       });
     } catch (e) {
-      // Cleanup to avoid orphan "scheduled" state in UI.
+      // BullMQ enqueue failed — roll back the DB row so there's no orphan.
       await db.transaction(async tx => {
         await tx.prepare('DELETE FROM scheduled_post_events WHERE scheduled_post_id = ?')
           .run(scheduledPostId);

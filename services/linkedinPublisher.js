@@ -10,7 +10,7 @@ const LINKEDIN_UGC_URL = 'https://api.linkedin.com/v2/ugcPosts';
 const LINKEDIN_ASSETS_REGISTER_URL = 'https://api.linkedin.com/v2/assets?action=registerUpload';
 const LINKEDIN_DOC_INIT_URL = 'https://api.linkedin.com/rest/documents?action=initializeUpload';
 const LINKEDIN_REST_POSTS_URL = 'https://api.linkedin.com/rest/posts';
-const LINKEDIN_API_VERSION = '202603';
+const LINKEDIN_API_VERSION = '202501';
 const RATE_LIMIT_WINDOW_HOURS = 1;
 const GENERATED_DIR = path.join(__dirname, '..', 'generated');
 const crypto = require('crypto');
@@ -390,12 +390,27 @@ async function publishNow(userId, tenantId, content, options = {}) {
   return { linkedin_post_id };
 }
 
+// Errors that should NOT be retried — user action is needed to resolve them.
+const NON_RETRIABLE_ERRORS = new Set([
+  'not_connected',
+  'rate_limit_exceeded',
+  'scheduled_payload_mismatch',
+  'invalid_carousel_pdf_url',
+  'invalid_image_url',
+  'reconnect_required',
+  'scheduler_not_initialized',
+]);
+
 /**
  * BullMQ job handler — publish a scheduled post.
- * Throws on failure so BullMQ can retry (up to 3 attempts with exponential backoff).
+ * For transient failures (LinkedIn 429, network errors) the function resets
+ * the row to 'pending' and throws so BullMQ retries with exponential backoff.
+ * For non-retriable errors it marks the row 'not_sent' without throwing.
  * @param {number} scheduledPostId
+ * @param {{ attemptsMade: number, maxAttempts: number }} [attemptInfo]
  */
-async function publishScheduledPost(scheduledPostId) {
+async function publishScheduledPost(scheduledPostId, { attemptsMade = 0, maxAttempts = 3 } = {}) {
+  const isFinalAttempt = (attemptsMade + 1) >= maxAttempts;
   const current = await db.prepare('SELECT * FROM scheduled_posts WHERE id = ?').get(scheduledPostId);
   if (!current) {
     console.log(`[publisher] scheduledPostId=${scheduledPostId} not found — skipping`);
@@ -466,7 +481,15 @@ async function publishScheduledPost(scheduledPostId) {
       publishOpts.image_url = row.asset_url;
     }
 
-    const { linkedin_post_id } = await publishNow(row.user_id, row.tenant_id, row.content, publishOpts);
+    // Idempotency guard: if a previous attempt already obtained a linkedin_post_id
+    // but failed to persist the 'published' status, skip the API call to avoid
+    // publishing the same post twice.
+    let linkedin_post_id = row.linkedin_post_id || null;
+    if (linkedin_post_id) {
+      console.log(`[publisher] scheduledPostId=${scheduledPostId} linkedin_post_id already set (${linkedin_post_id}) — skipping API call`);
+    } else {
+      ({ linkedin_post_id } = await publishNow(row.user_id, row.tenant_id, row.content, publishOpts));
+    }
 
     await db.prepare(`
       UPDATE scheduled_posts SET status = 'published', linkedin_post_id = ?, updated_at = CURRENT_TIMESTAMP
@@ -485,47 +508,91 @@ async function publishScheduledPost(scheduledPostId) {
       await db.prepare(`
         UPDATE generated_posts
         SET status = 'published', published_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-      `).run(row.post_id);
+        WHERE id = ? AND user_id = ? AND tenant_id = ?
+      `).run(row.post_id, row.user_id, row.tenant_id);
     }
+
+    // Notify the user that their scheduled post was published.
+    try {
+      await db.prepare(`
+        INSERT INTO notifications (user_id, tenant_id, type, title, body, ref_id, ref_type)
+        VALUES (?, ?, 'publish_succeeded', 'Post published', ?, ?, 'scheduled_post')
+      `).run(
+        row.user_id,
+        row.tenant_id,
+        `Your scheduled post has been published to LinkedIn.`,
+        scheduledPostId
+      );
+    } catch { /* non-fatal */ }
 
     console.log(`[publisher] scheduledPostId=${scheduledPostId} published as ${linkedin_post_id}`);
   } catch (err) {
-    await db.prepare(`
-      UPDATE scheduled_posts
-      SET status = ?,
-          error_message = ?,
-          updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `).run('not_sent', err.message, scheduledPostId);
+    const isNonRetriable = NON_RETRIABLE_ERRORS.has(err.message) || isFinalAttempt;
 
-    try {
-      const r = await db.prepare('SELECT user_id, tenant_id, post_id FROM scheduled_posts WHERE id = ?').get(scheduledPostId);
-      if (r) {
-        // Unlock the originating draft for manual publishing.
-        if (r.post_id) {
+    if (isNonRetriable) {
+      // Permanent failure — mark not_sent and unlock the draft.
+      await db.prepare(`
+        UPDATE scheduled_posts
+        SET status = 'not_sent', error_message = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).run(err.message, scheduledPostId);
+
+      try {
+        const r = await db.prepare('SELECT user_id, tenant_id, post_id FROM scheduled_posts WHERE id = ?').get(scheduledPostId);
+        if (r) {
+          if (r.post_id) {
+            await db.prepare(`
+              UPDATE generated_posts
+              SET status = 'draft'
+              WHERE id = ? AND user_id = ? AND tenant_id = ? AND status = 'scheduled'
+            `).run(r.post_id, r.user_id, r.tenant_id);
+          }
           await db.prepare(`
-            UPDATE generated_posts
-            SET status = 'draft'
-            WHERE id = ? AND user_id = ? AND tenant_id = ? AND status = 'scheduled'
-          `).run(r.post_id, r.user_id, r.tenant_id);
+            INSERT INTO scheduled_post_events (scheduled_post_id, user_id, tenant_id, event_type, message)
+            VALUES (?, ?, ?, 'not_sent', ?)
+          `).run(scheduledPostId, r.user_id, r.tenant_id, err.message);
         }
+      } catch { /* non-fatal */ }
 
-        await db.prepare(`
-          INSERT INTO scheduled_post_events (scheduled_post_id, user_id, tenant_id, event_type, message)
-          VALUES (?, ?, ?, ?, ?)
-        `).run(
-          scheduledPostId,
-          r.user_id,
-          r.tenant_id,
-          'not_sent',
-          err.message
-        );
-      }
-    } catch { /* non-fatal */ }
+      // Notify the user that their scheduled post could not be sent.
+      try {
+        const meta = await db.prepare('SELECT user_id, tenant_id FROM scheduled_posts WHERE id = ?').get(scheduledPostId);
+        if (meta) {
+          await db.prepare(`
+            INSERT INTO notifications (user_id, tenant_id, type, title, body, ref_id, ref_type)
+            VALUES (?, ?, 'publish_failed', 'Scheduled post failed', ?, ?, 'scheduled_post')
+          `).run(
+            meta.user_id,
+            meta.tenant_id,
+            `Your scheduled post could not be published: ${err.message}`,
+            scheduledPostId
+          );
+        }
+      } catch { /* non-fatal */ }
 
-    // Single-attempt policy: do not throw (no retries).
-    console.warn(`[publisher] scheduledPostId=${scheduledPostId} not_sent:`, err.message);
+      console.warn(`[publisher] scheduledPostId=${scheduledPostId} not_sent (final):`, err.message);
+      // Do not throw — BullMQ should not retry non-retriable failures.
+    } else {
+      // Transient failure — reset to pending so the next BullMQ attempt can claim it.
+      await db.prepare(`
+        UPDATE scheduled_posts
+        SET status = 'pending', error_message = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).run(err.message, scheduledPostId);
+
+      try {
+        const r = await db.prepare('SELECT user_id, tenant_id FROM scheduled_posts WHERE id = ?').get(scheduledPostId);
+        if (r) {
+          await db.prepare(`
+            INSERT INTO scheduled_post_events (scheduled_post_id, user_id, tenant_id, event_type, message)
+            VALUES (?, ?, ?, 'retry', ?)
+          `).run(scheduledPostId, r.user_id, r.tenant_id, `attempt=${attemptsMade + 1}/${maxAttempts}: ${err.message}`);
+        }
+      } catch { /* non-fatal */ }
+
+      console.warn(`[publisher] scheduledPostId=${scheduledPostId} will retry (attempt ${attemptsMade + 1}/${maxAttempts}):`, err.message);
+      throw err; // Let BullMQ apply backoff and retry.
+    }
   }
 }
 

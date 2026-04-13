@@ -3,6 +3,7 @@
 const { getSetting, db, backendKind } = require('../db');
 
 let postQueue = null;
+let workerInstance = null;
 let schedulerEnabled = false;
 let schedulingEnabledCache = true;
 
@@ -40,22 +41,25 @@ async function initScheduler() {
   postQueue = new Queue('linkedin-posts', { connection });
   schedulerEnabled = true;
 
-  const worker = new Worker('linkedin-posts', async job => {
+  workerInstance = new Worker('linkedin-posts', async job => {
     const { scheduledPostId } = job.data;
-    // Single-attempt policy: publishScheduledPost is responsible for marking
-    // rows not_sent on any failure. We don't retry/reschedule here.
-    await publishScheduledPost(scheduledPostId);
+    // Pass BullMQ attempt metadata so publishScheduledPost can distinguish
+    // a transient retry from a final failure.
+    await publishScheduledPost(scheduledPostId, {
+      attemptsMade: job.attemptsMade,
+      maxAttempts: job.opts?.attempts ?? 3,
+    });
   }, {
     connection,
     // Conservative default to reduce bursty automation.
     concurrency: 1,
   });
 
-  worker.on('failed', (job, err) => {
+  workerInstance.on('failed', (job, err) => {
     console.error(`[scheduler] Job ${job?.id} failed after ${job?.attemptsMade} attempts:`, err.message);
   });
 
-  worker.on('completed', job => {
+  workerInstance.on('completed', job => {
     console.log(`[scheduler] Job ${job.id} completed (scheduledPostId=${job.data.scheduledPostId})`);
   });
 
@@ -72,9 +76,10 @@ async function initScheduler() {
     const job = await postQueue.add('publish', { scheduledPostId: row.id }, {
       jobId: scheduledJobId(row.id),
       delay,
-      attempts: 1,
+      attempts: 3,
+      backoff: { type: 'exponential', delay: 60_000 }, // 1 min → 2 min → 4 min
       removeOnComplete: true,
-      removeOnFail: true,
+      removeOnFail: false, // keep failed jobs visible for debugging
     });
     await db.prepare(`
       UPDATE scheduled_posts
@@ -150,9 +155,10 @@ async function addScheduledJob(scheduledPostId, scheduledFor) {
     {
       jobId: scheduledJobId(scheduledPostId),
       delay,
-      attempts: 1,
+      attempts: 3,
+      backoff: { type: 'exponential', delay: 60_000 }, // 1 min → 2 min → 4 min
       removeOnComplete: true,
-      removeOnFail: true,
+      removeOnFail: false, // keep failed jobs visible for debugging
     }
   );
 
@@ -194,4 +200,8 @@ function isSchedulerEnabled() {
   return schedulingEnabledCache && schedulerEnabled && !!postQueue;
 }
 
-module.exports = { initScheduler, addScheduledJob, removeScheduledJob, isSchedulerEnabled };
+function getWorker() {
+  return workerInstance;
+}
+
+module.exports = { initScheduler, addScheduledJob, removeScheduledJob, isSchedulerEnabled, getWorker };

@@ -4,7 +4,7 @@ const crypto  = require('crypto');
 const express = require('express');
 const router  = express.Router();
 const { db, getSetting } = require('../db');
-const { storeTokens, getValidAccessToken } = require('../services/linkedinOAuth');
+const { storeTokens, getValidAccessToken, revokeLinkedInToken } = require('../services/linkedinOAuth');
 const { publishNow } = require('../services/linkedinPublisher');
 const { addScheduledJob, removeScheduledJob, isSchedulerEnabled } = require('../services/scheduler');
 const { syncPostMetrics, RateLimitError } = require('../services/linkedinMetrics');
@@ -650,6 +650,9 @@ router.post('/disconnect', (req, res) => {
       });
     }
 
+    // Revoke the token on LinkedIn's auth server before deleting it locally.
+    await revokeLinkedInToken(userId, tenantId);
+
     await db.prepare(
       'DELETE FROM linkedin_tokens WHERE user_id = ? AND tenant_id = ?'
     ).run(userId, tenantId);
@@ -670,6 +673,9 @@ router.delete('/user-data', (req, res) => {
   if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
 
   (async () => {
+    // Revoke the LinkedIn token before the transaction deletes the encrypted row we need to read.
+    await revokeLinkedInToken(userId, tenantId);
+
     await db.transaction(async tx => {
       await tx.prepare(`
         DELETE FROM scheduled_post_events

@@ -117,17 +117,8 @@
   </footer>
 
   <script>
-    function getUserId() {
-      let id = localStorage.getItem('scouthook_user_id');
-      if (!id) { id = crypto.randomUUID(); localStorage.setItem('scouthook_user_id', id); }
-      return id;
-    }
-
     document.getElementById('connect-btn').addEventListener('click', () => {
-      const userId = getUserId();
-      // Redirect to OAuth initiation — server reads userId from X-User-Id header via query param fallback
-      // We pass it as a query param since this is a full redirect (no fetch)
-      window.location.href = `/api/linkedin/connect?_uid=${encodeURIComponent(userId)}`;
+      window.location.href = '/api/linkedin/connect';
     });
   </script>
 

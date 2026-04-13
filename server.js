@@ -297,6 +297,28 @@ function cleanGeneratedFiles() {
 setInterval(cleanGeneratedFiles, 60 * 60 * 1000);
 
 // ---------------------------------------------------------------------------
+// Metrics retention — clear LinkedIn engagement data older than 90 days.
+// Per LinkedIn API ToS data minimisation requirements.
+// ---------------------------------------------------------------------------
+async function metricsRetentionCleanup() {
+  try {
+    const result = await db.prepare(`
+      UPDATE generated_posts
+      SET    likes = NULL, comments = NULL, reactions = NULL, last_synced_at = NULL
+      WHERE  last_synced_at < (now() - interval '90 days')
+    `).run();
+    if (result.changes > 0) {
+      console.log(`[retention] Cleared metrics for ${result.changes} posts older than 90 days`);
+    }
+  } catch (e) {
+    console.warn('[retention] Metrics cleanup failed (non-fatal):', e.message);
+  }
+}
+// Run once on startup, then daily
+metricsRetentionCleanup();
+setInterval(metricsRetentionCleanup, 24 * 60 * 60 * 1000);
+
+// ---------------------------------------------------------------------------
 // Scheduler (BullMQ worker — only starts if Redis is configured)
 // ---------------------------------------------------------------------------
 

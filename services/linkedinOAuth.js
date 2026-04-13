@@ -3,6 +3,25 @@
 const crypto = require('crypto');
 const { db, getSettingSync } = require('../db');
 
+async function createReconnectNotification(userId, tenantId) {
+  try {
+    // Only create one unread reconnect notification at a time.
+    const existing = await db.prepare(`
+      SELECT id FROM notifications
+      WHERE user_id = ? AND tenant_id = ? AND type = 'reconnect_required' AND read_at IS NULL
+      LIMIT 1
+    `).get(userId, tenantId);
+    if (existing) return;
+
+    await db.prepare(`
+      INSERT INTO notifications (user_id, tenant_id, type, title, body, ref_type)
+      VALUES (?, ?, 'reconnect_required', 'LinkedIn reconnection needed',
+              'Your LinkedIn connection has expired. Please reconnect to continue publishing.',
+              'linkedin_token')
+    `).run(userId, tenantId);
+  } catch { /* non-fatal */ }
+}
+
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 12; // 96-bit IV — recommended for GCM
 
@@ -98,7 +117,10 @@ async function getValidAccessToken(userId, tenantId) {
   const hoursUntilExpiry = (expiresAt - Date.now()) / 3_600_000;
 
   if (hoursUntilExpiry < 24) {
-    if (!row.refresh_token_enc) throw new Error('reconnect_required');
+    if (!row.refresh_token_enc) {
+      await createReconnectNotification(userId, tenantId);
+      throw new Error('reconnect_required');
+    }
     try {
       await refreshLinkedInToken(userId, tenantId, row.refresh_token_enc);
       // Re-fetch the updated row
@@ -107,6 +129,7 @@ async function getValidAccessToken(userId, tenantId) {
       ).get(userId, tenantId);
       return decrypt(updated.access_token_enc);
     } catch {
+      await createReconnectNotification(userId, tenantId);
       throw new Error('reconnect_required');
     }
   }
@@ -166,4 +189,49 @@ async function refreshLinkedInToken(userId, tenantId, encryptedRefreshToken) {
   });
 }
 
-module.exports = { encrypt, decrypt, storeTokens, getValidAccessToken, refreshLinkedInToken };
+// ---------------------------------------------------------------------------
+// Token revocation
+// ---------------------------------------------------------------------------
+
+/**
+ * Revoke the stored LinkedIn access token on LinkedIn's auth server.
+ * Best-effort — logs a warning on failure but never throws.
+ * Must be called before deleting the token row from the DB.
+ */
+async function revokeLinkedInToken(userId, tenantId) {
+  const row = await db.prepare(
+    'SELECT access_token_enc FROM linkedin_tokens WHERE user_id = ? AND tenant_id = ?'
+  ).get(userId, tenantId);
+  if (!row) return; // already gone
+
+  const clientId     = (process.env.LINKEDIN_CLIENT_ID || '').trim();
+  const clientSecret = (process.env.LINKEDIN_CLIENT_SECRET || '').trim();
+  if (!clientId || !clientSecret) {
+    console.warn('[linkedinOAuth] revokeLinkedInToken: credentials not configured, skipping revocation');
+    return;
+  }
+
+  try {
+    const accessToken = decrypt(row.access_token_enc);
+    const params = new URLSearchParams({
+      client_id:     clientId,
+      client_secret: clientSecret,
+      token:         accessToken,
+    });
+    const res = await fetch('https://www.linkedin.com/oauth/v2/revoke', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body:    params.toString(),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      console.warn(`[linkedinOAuth] Token revocation returned ${res.status}: ${text}`);
+    } else {
+      console.log(`[linkedinOAuth] Token revoked for user=${userId}`);
+    }
+  } catch (err) {
+    console.warn('[linkedinOAuth] Token revocation failed (non-fatal):', err.message);
+  }
+}
+
+module.exports = { encrypt, decrypt, storeTokens, getValidAccessToken, refreshLinkedInToken, revokeLinkedInToken };

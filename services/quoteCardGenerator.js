@@ -1,12 +1,10 @@
 'use strict';
 
-const path = require('path');
 const sharp = require('sharp');
 const Anthropic = require('@anthropic-ai/sdk');
 const { getSetting } = require('../db');
 const { extractJsonFromResponse } = require('./voiceFingerprint');
-
-const GENERATED_DIR = path.join(__dirname, '..', 'generated');
+const storage = require('./storage');
 
 // Brand tokens
 const BG = '#0F1A3C';
@@ -23,9 +21,11 @@ const H = 1080;
  * 3. sharp converts SVG buffer → PNG.
  *
  * @param {object} post — { id, content }
+ * @param {{ userId: string, tenantId: string }} [ctx]
  * @returns {Promise<{ svg: string, png_url: string }>}
  */
-async function generateQuoteCard(post, brand = {}) {
+async function generateQuoteCard(post, brand = {}, ctx = {}) {
+  const { userId, tenantId } = ctx;
   const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
   if (!apiKey) throw new Error('anthropic_api_key not configured');
 
@@ -45,10 +45,10 @@ async function generateQuoteCard(post, brand = {}) {
   // Step 2: Build SVG
   const svg = buildQuoteCardSvg(quoteLine, brand);
 
-  // Step 3: Convert to PNG
+  // Step 3: Convert to PNG and store
   const filename = `quote_${post.id}_${Date.now()}.png`;
-  const outputPath = path.join(GENERATED_DIR, filename);
-  await sharp(Buffer.from(svg)).png().toFile(outputPath);
+  const pngBuffer = await sharp(Buffer.from(svg)).png().toBuffer();
+  await storage.upload(pngBuffer, { tenantId, userId, type: 'generated', filename, mimeType: 'image/png' });
 
   return { svg, png_url: `/files/${filename}` };
 }

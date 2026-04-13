@@ -1,11 +1,9 @@
 'use strict';
 
-const path = require('path');
 const sharp = require('sharp');
 const Anthropic = require('@anthropic-ai/sdk');
 const { getSetting } = require('../db');
-
-const GENERATED_DIR = path.join(__dirname, '..', 'generated');
+const storage = require('./storage');
 
 const TEXT_MUTED = '#8A9CC0';
 const W = 1080;
@@ -66,9 +64,11 @@ function computeLayoutYs(lines, hasBrandHeader) {
  * @param {object} post — { id, content }
  * @param {object} brand — { bg, text, name?, logo? }
  * @param {object} linkedin — { photoDataUri: string, name: string }
+ * @param {{ userId: string, tenantId: string }} [ctx]
  * @returns {Promise<{ svg: string, png_url: string }>}
  */
-async function generateBrandedQuote(post, brand = {}, linkedin = {}) {
+async function generateBrandedQuote(post, brand = {}, linkedin = {}, ctx = {}) {
+  const { userId, tenantId } = ctx;
   const bg = brand.bg || '#0F1A3C';
   const text = brand.text || '#F0F4FF';
 
@@ -77,8 +77,8 @@ async function generateBrandedQuote(post, brand = {}, linkedin = {}) {
   const svg = buildBrandedQuoteSvg(previewLines, brand, linkedin, bg, text);
 
   const filename = `branded_quote_${post.id}_${Date.now()}.png`;
-  const outputPath = path.join(GENERATED_DIR, filename);
-  await sharp(Buffer.from(svg)).png().toFile(outputPath);
+  const pngBuffer = await sharp(Buffer.from(svg)).png().toBuffer();
+  await storage.upload(pngBuffer, { tenantId, userId, type: 'generated', filename, mimeType: 'image/png' });
 
   return { svg, png_url: `/files/${filename}` };
 }

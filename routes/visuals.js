@@ -92,16 +92,16 @@ router.post('/:postId', async (req, res) => {
       const result = await generateBrandedQuote(post, brand, {
         photoDataUri,
         name: displayName,
-      });
+      }, { userId, tenantId });
       return res.json({ ok: true, ...result });
     }
 
     if (visual_type === 'quote_card') {
-      const result = await generateQuoteCard(post, brand);
+      const result = await generateQuoteCard(post, brand, { userId, tenantId });
       return res.json({ ok: true, ...result });
     }
 
-    const result = await generateCarousel(post, brand);
+    const result = await generateCarousel(post, brand, { userId, tenantId });
     return res.json({ ok: true, ...result });
   } catch (err) {
     console.error('[visuals] generation error:', err.message);

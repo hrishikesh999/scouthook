@@ -2,16 +2,13 @@
 
 const express  = require('express');
 const router   = express.Router();
-const fs       = require('fs');
-const path     = require('path');
 const crypto   = require('crypto');
 const sharp    = require('sharp');
+const path     = require('path');
 const { db }   = require('../db');
+const storage  = require('../services/storage');
 
-const UPLOADS_DIR = path.join(__dirname, '..', 'uploads');
-if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
-
-const MAX_BYTES    = 20 * 1024 * 1024; // 20 MB original
+const MAX_BYTES    = 20 * 1024 * 1024; // 20 MB
 const ALLOWED_MIME = new Set([
   'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf',
 ]);
@@ -88,10 +85,9 @@ router.post('/upload', express.raw({ type: '*/*', limit: '25mb' }), async (req, 
   const formatTag  = detectFormat(mimeType, width, height);
   const rawExt     = path.extname(filename).toLowerCase() || (mimeType === 'application/pdf' ? '.pdf' : '.bin');
   const storedName = `${Date.now()}_${crypto.randomBytes(6).toString('hex')}${rawExt}`;
-  const filePath   = path.join(UPLOADS_DIR, storedName);
   const url        = `/uploads/${storedName}`;
 
-  fs.writeFileSync(filePath, buffer);
+  await storage.upload(buffer, { tenantId, userId, type: 'uploads', filename: storedName, mimeType });
 
   const row = await db.prepare(`
     INSERT INTO media_files
@@ -120,8 +116,6 @@ router.post('/upload', express.raw({ type: '*/*', limit: '25mb' }), async (req, 
 // POST /api/media/save-generated  —  copy a generated visual into the permanent library
 // Body (JSON): { fileUrl: '/files/xxx.png', filename: 'quote_card.png', mimeType: 'image/png' }
 // ---------------------------------------------------------------------------
-const GENERATED_DIR = path.join(__dirname, '..', 'generated');
-
 router.post('/save-generated', async (req, res) => {
   const { userId, tenantId } = req;
   if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
@@ -131,20 +125,20 @@ router.post('/save-generated', async (req, res) => {
     return res.status(400).json({ ok: false, error: 'missing_fields' });
   }
 
-  // Resolve to local path — fileUrl must start with /files/
+  // fileUrl must start with /files/ and contain only a bare filename
   if (!fileUrl.startsWith('/files/')) {
     return res.status(400).json({ ok: false, error: 'invalid_file_url' });
   }
   const relativeName = fileUrl.slice('/files/'.length);
-  // Prevent path traversal
   if (relativeName.includes('..') || relativeName.includes('/') || relativeName.includes('\0')) {
     return res.status(400).json({ ok: false, error: 'invalid_file_url' });
   }
 
-  const srcPath = path.join(GENERATED_DIR, relativeName);
+  const srcKey = storage.buildKey(tenantId, userId, 'generated', relativeName);
+
   let buffer;
   try {
-    buffer = fs.readFileSync(srcPath);
+    buffer = await storage.download(srcKey);
   } catch {
     return res.status(404).json({ ok: false, error: 'source_file_not_found' });
   }
@@ -161,10 +155,10 @@ router.post('/save-generated', async (req, res) => {
   const formatTag  = detectFormat(mimeType, width, height);
   const ext        = path.extname(filename).toLowerCase() || '.bin';
   const storedName = `${Date.now()}_${crypto.randomBytes(6).toString('hex')}${ext}`;
-  const destPath   = path.join(UPLOADS_DIR, storedName);
   const url        = `/uploads/${storedName}`;
 
-  fs.copyFileSync(srcPath, destPath);
+  const dstKey = storage.buildKey(tenantId, userId, 'uploads', storedName);
+  await storage.copy(srcKey, dstKey);
 
   const row = await db.prepare(`
     INSERT INTO media_files
@@ -190,7 +184,7 @@ router.post('/save-generated', async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
-// DELETE /api/media/:id  —  remove a file (disk + DB)
+// DELETE /api/media/:id  —  remove a file (storage + DB)
 // ---------------------------------------------------------------------------
 router.delete('/:id', async (req, res) => {
   const { userId, tenantId } = req;
@@ -202,7 +196,7 @@ router.delete('/:id', async (req, res) => {
 
   if (!file) return res.status(404).json({ ok: false, error: 'not_found' });
 
-  try { fs.unlinkSync(path.join(UPLOADS_DIR, file.stored_name)); } catch { /* already gone */ }
+  await storage.delete(storage.buildKey(tenantId, userId, 'uploads', file.stored_name));
   await db.prepare('DELETE FROM media_files WHERE id = ?').run(file.id);
 
   return res.json({ ok: true });

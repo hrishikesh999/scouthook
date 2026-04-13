@@ -1,15 +1,12 @@
 'use strict';
 
-const path = require('path');
-const fs = require('fs');
 const sharp = require('sharp');
 const { PDFDocument } = require('pdf-lib');
 const archiver = require('archiver');
 const Anthropic = require('@anthropic-ai/sdk');
 const { getSetting } = require('../db');
 const { extractJsonFromResponse } = require('./voiceFingerprint');
-
-const GENERATED_DIR = path.join(__dirname, '..', 'generated');
+const storage = require('./storage');
 
 // Brand tokens
 const BG = '#0F1A3C';
@@ -28,9 +25,11 @@ const H = 1080;
  * 4. archiver zips all PNGs.
  *
  * @param {object} post — { id, content }
+ * @param {{ userId: string, tenantId: string }} [ctx]
  * @returns {Promise<{ slides: Array<{ svg: string, png_url: string }>, zip_url: string, pdf_url: string }>}
  */
-async function generateCarousel(post, brand = {}) {
+async function generateCarousel(post, brand = {}, ctx = {}) {
+  const { userId, tenantId } = ctx;
   const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
   if (!apiKey) throw new Error('anthropic_api_key not configured');
 
@@ -89,29 +88,29 @@ ${post.content}`,
   }
 
   const timestamp = Date.now();
-  const pngPaths = [];
+  const pngBuffers = [];  // { buffer, filename } — kept in memory for ZIP + PDF
   const slideResults = [];
 
-  // Step 2+3: Build SVG + convert to PNG per slide
+  // Step 2+3: Build SVG + convert to PNG per slide (in memory)
   for (let i = 0; i < slides.length; i++) {
     const slide = slides[i];
     const svg = buildSlideSvg(slide, i + 1, slides.length, brand);
     const filename = `carousel_${post.id}_${timestamp}_slide${i + 1}.png`;
-    const outputPath = path.join(GENERATED_DIR, filename);
-    await sharp(Buffer.from(svg)).png().toFile(outputPath);
-    pngPaths.push({ path: outputPath, filename });
+    const pngBuffer = await sharp(Buffer.from(svg)).png().toBuffer();
+    await storage.upload(pngBuffer, { tenantId, userId, type: 'generated', filename, mimeType: 'image/png' });
+    pngBuffers.push({ buffer: pngBuffer, filename });
     slideResults.push({ svg, png_url: `/files/${filename}` });
   }
 
-  // Step 4: ZIP all PNGs
+  // Step 4: ZIP all PNGs (buffered in memory)
   const zipFilename = `carousel_${post.id}_${timestamp}.zip`;
-  const zipPath = path.join(GENERATED_DIR, zipFilename);
-  await createZip(pngPaths, zipPath);
+  const zipBuffer = await buildZipBuffer(pngBuffers);
+  await storage.upload(zipBuffer, { tenantId, userId, type: 'generated', filename: zipFilename, mimeType: 'application/zip' });
 
+  // Step 5: PDF (one page per PNG buffer)
   const pdfFilename = `carousel_${post.id}_${timestamp}.pdf`;
-  const pdfPath = path.join(GENERATED_DIR, pdfFilename);
-  const pdfBytes = await buildCarouselPdfFromPngs(pngPaths.map(p => p.path));
-  fs.writeFileSync(pdfPath, pdfBytes);
+  const pdfBytes = await buildCarouselPdfFromBuffers(pngBuffers.map(p => p.buffer));
+  await storage.upload(Buffer.from(pdfBytes), { tenantId, userId, type: 'generated', filename: pdfFilename, mimeType: 'application/pdf' });
 
   return {
     slides: slideResults,
@@ -121,12 +120,12 @@ ${post.content}`,
 }
 
 /**
- * One PDF page per slide PNG (LinkedIn document / swipeable PDF post).
+ * One PDF page per slide PNG buffer (LinkedIn document / swipeable PDF post).
+ * @param {Buffer[]} pngBuffers
  */
-async function buildCarouselPdfFromPngs(pngPathsOrdered) {
+async function buildCarouselPdfFromBuffers(pngBuffers) {
   const pdfDoc = await PDFDocument.create();
-  for (const pngPath of pngPathsOrdered) {
-    const pngBytes = fs.readFileSync(pngPath);
+  for (const pngBytes of pngBuffers) {
     const image = await pdfDoc.embedPng(pngBytes);
     const { width, height } = image;
     const page = pdfDoc.addPage([width, height]);
@@ -197,15 +196,19 @@ function buildSlideSvg(slide, slideNum, totalSlides, brand = {}) {
 </svg>`;
 }
 
-function createZip(files, outputPath) {
+/**
+ * Build a ZIP from in-memory PNG buffers. Returns a Buffer.
+ * @param {Array<{ buffer: Buffer, filename: string }>} files
+ */
+function buildZipBuffer(files) {
   return new Promise((resolve, reject) => {
-    const output = fs.createWriteStream(outputPath);
+    const chunks = [];
     const archive = archiver('zip', { zlib: { level: 6 } });
-    output.on('close', resolve);
+    archive.on('data', chunk => chunks.push(chunk));
+    archive.on('end', () => resolve(Buffer.concat(chunks)));
     archive.on('error', reject);
-    archive.pipe(output);
-    for (const { path: filePath, filename } of files) {
-      archive.file(filePath, { name: filename });
+    for (const { buffer, filename } of files) {
+      archive.append(buffer, { name: filename });
     }
     archive.finalize();
   });

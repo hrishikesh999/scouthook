@@ -472,6 +472,40 @@ On `SIGTERM` (Render deploy): HTTP server drains in-flight requests, BullMQ work
 | `NODE_ENV` | ⬜ | Set to `production` for secure cookies |
 | `ALLOWED_ORIGIN` | ⬜ | CORS allowed origin for cross-domain setups |
 | `API_RATE_LIMIT_MAX` | ⬜ | Override default 2000 req/15min API rate limit |
+| `STORAGE_BACKEND` | ⬜ | `local` (default) or `s3` |
+| `S3_BUCKET_NAME` | ⬜* | Required when `STORAGE_BACKEND=s3`. Dev: `scout-hook-dev`, Prod: `scout-hook-prod` |
+| `S3_REGION` | ⬜* | AWS region, e.g. `us-east-1` |
+| `AWS_ACCESS_KEY_ID` | ⬜* | IAM access key (required for s3 backend) |
+| `AWS_SECRET_ACCESS_KEY` | ⬜* | IAM secret key (required for s3 backend) |
+| `S3_KEY_PREFIX` | ⬜ | Optional key prefix, e.g. `dev/` for path-based env isolation within a bucket |
+| `S3_ENDPOINT` | ⬜ | Custom S3-compatible endpoint (MinIO, LocalStack) |
+
+### S3 Bucket Configuration
+
+| Environment | Bucket | ARN |
+|---|---|---|
+| Development | `scout-hook-dev` | `arn:aws:s3:::scout-hook-dev` |
+| Production | `scout-hook-prod` | `arn:aws:s3:::scout-hook-prod` |
+
+**One-time bucket setup (per environment):**
+
+1. Block all public access: **ON**
+2. Attach IAM policy to the app's IAM user:
+   ```json
+   {
+     "Effect": "Allow",
+     "Action": ["s3:GetObject","s3:PutObject","s3:DeleteObject","s3:CopyObject"],
+     "Resource": "arn:aws:s3:::scout-hook-{dev|prod}/*"
+   }
+   ```
+3. Add S3 **Lifecycle rule**: expire objects matching prefix `tenants/*/users/*/generated/*` after **1 day** — replaces the server-side hourly cleanup job (which only runs in local mode).
+4. Optionally enable SSE-S3 or SSE-KMS server-side encryption.
+
+**Object key structure:**
+```
+tenants/{tenant_id}/users/{user_id}/uploads/{stored_name}    ← permanent
+tenants/{tenant_id}/users/{user_id}/generated/{filename}     ← ephemeral (24h)
+```
 
 ### Admin UI settings (`/admin.html`)
 

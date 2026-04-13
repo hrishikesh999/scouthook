@@ -3,7 +3,8 @@
 const { db, backendKind } = require('../db');
 const { getValidAccessToken } = require('./linkedinOAuth');
 const path = require('path');
-const fs = require('fs');
+const storage = require('./storage');
+const crypto = require('crypto');
 
 const LINKEDIN_UGC_URL = 'https://api.linkedin.com/v2/ugcPosts';
 /** Consumer "Share on LinkedIn" image flow — not rest/images + rest/posts (Marketing). */
@@ -12,8 +13,6 @@ const LINKEDIN_DOC_INIT_URL = 'https://api.linkedin.com/rest/documents?action=in
 const LINKEDIN_REST_POSTS_URL = 'https://api.linkedin.com/rest/posts';
 const LINKEDIN_API_VERSION = '202501';
 const RATE_LIMIT_WINDOW_HOURS = 1;
-const GENERATED_DIR = path.join(__dirname, '..', 'generated');
-const crypto = require('crypto');
 
 function sha256Hex(s) {
   return crypto.createHash('sha256').update(String(s || ''), 'utf8').digest('hex');
@@ -242,28 +241,37 @@ async function createRestPostWithMedia(accessToken, linkedinUserId, commentary, 
   return 'urn:li:share:unknown';
 }
 
-function readGeneratedImageBytes(imageUrlPath) {
-  // Expect /files/<filename> from our own static server.
-  if (!imageUrlPath || typeof imageUrlPath !== 'string') return null;
-  if (!imageUrlPath.startsWith('/files/')) return null;
-  const filename = imageUrlPath.slice('/files/'.length);
+/**
+ * Read asset bytes from storage for LinkedIn upload.
+ * Supports /files/ (generated) and /uploads/ (media library) URL paths.
+ * @param {string} urlPath  — e.g. '/files/foo.png' or '/uploads/bar.pdf'
+ * @param {string} userId
+ * @param {string} tenantId
+ * @returns {Promise<Buffer|null>}
+ */
+async function readStoredFileBytes(urlPath, userId, tenantId) {
+  if (!urlPath || typeof urlPath !== 'string') return null;
+
+  let type, filename;
+  if (urlPath.startsWith('/files/')) {
+    type = 'generated';
+    filename = urlPath.slice('/files/'.length);
+  } else if (urlPath.startsWith('/uploads/')) {
+    type = 'uploads';
+    filename = urlPath.slice('/uploads/'.length);
+  } else {
+    return null;
+  }
+
+  // Validate bare filename — no path separators, safe chars only
   if (!filename || filename !== path.basename(filename)) return null;
   if (!/^[a-zA-Z0-9._-]+$/.test(filename)) return null;
 
-  const filePath = path.join(GENERATED_DIR, filename);
-  if (!fs.existsSync(filePath)) return null;
-  return fs.readFileSync(filePath);
-}
-
-function readGeneratedPdfBytes(filesUrlPath) {
-  if (!filesUrlPath || typeof filesUrlPath !== 'string') return null;
-  if (!filesUrlPath.startsWith('/files/')) return null;
-  const filename = filesUrlPath.slice('/files/'.length);
-  if (!filename || filename !== path.basename(filename)) return null;
-  if (!/^[a-zA-Z0-9._-]+\.pdf$/.test(filename)) return null;
-  const filePath = path.join(GENERATED_DIR, filename);
-  if (!fs.existsSync(filePath)) return null;
-  return fs.readFileSync(filePath);
+  try {
+    return await storage.download(storage.buildKey(tenantId, userId, type, filename));
+  } catch {
+    return null;
+  }
 }
 
 async function initializeDocumentUpload(accessToken, ownerUrn) {
@@ -362,7 +370,7 @@ async function publishNow(userId, tenantId, content, options = {}) {
   const ownerUrn = `urn:li:person:${personId}`;
 
   if (options.carousel_pdf_url) {
-    const pdfBytes = readGeneratedPdfBytes(options.carousel_pdf_url);
+    const pdfBytes = await readStoredFileBytes(options.carousel_pdf_url, userId, tenantId);
     if (!pdfBytes) throw new Error('invalid_carousel_pdf_url');
 
     const { uploadUrl, document } = await initializeDocumentUpload(accessToken, ownerUrn);
@@ -376,7 +384,7 @@ async function publishNow(userId, tenantId, content, options = {}) {
   }
 
   if (options.image_url) {
-    const bytes = readGeneratedImageBytes(options.image_url);
+    const bytes = await readStoredFileBytes(options.image_url, userId, tenantId);
     if (!bytes) throw new Error('invalid_image_url');
 
     const { asset, uploadUrl, uploadHeaders } = await registerFeedshareImageUpload(accessToken, ownerUrn);

@@ -241,25 +241,30 @@ app.get([
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Serve generated visuals and uploads behind session auth.
-// Static middleware can't check auth, so we use a thin gating route instead.
-function serveAuthenticatedFile(dir) {
-  return (req, res, next) => {
+// In local mode: sendFile from disk.  In S3 mode: stream from S3 using the
+// authenticated user's tenant/user prefix (only the owner's session resolves the correct key).
+const storage = require('./services/storage');
+
+function serveStoredFile(type) {
+  return async (req, res, next) => {
     if (!req.user) return res.status(401).send('Unauthorized');
-    // Prevent path traversal — express.static normalises the path, but be explicit.
+
+    // Extract bare filename — prevent path traversal
     const safePath = path.normalize(req.path).replace(/^(\.\.(\/|\\|$))+/, '');
-    res.sendFile(path.join(dir, safePath), err => {
-      if (err) next();
-    });
+    const filename = path.basename(safePath);
+    if (!filename || filename !== safePath.replace(/^\//, '')) {
+      return res.status(400).end();
+    }
+
+    const key = storage.buildKey(req.tenantId, req.userId, type, filename);
+    await storage.stream(key, res, next);
   };
 }
 
-const GENERATED_DIR_SERVE = path.join(__dirname, 'generated');
-const UPLOADS_DIR_SERVE   = path.join(__dirname, 'uploads');
-
-// Serve generated visuals (PNGs, ZIPs) — files older than 24h are cleaned periodically
-app.use('/files',   serveAuthenticatedFile(GENERATED_DIR_SERVE));
+// Serve generated visuals (PNGs, ZIPs, PDFs) — ephemeral, 24h lifetime
+app.use('/files',   serveStoredFile('generated'));
 // Serve permanent user uploads (never auto-cleaned)
-app.use('/uploads', serveAuthenticatedFile(UPLOADS_DIR_SERVE));
+app.use('/uploads', serveStoredFile('uploads'));
 
 // JSON errors for API routes (Express 4 does not catch async throws without express-async-errors)
 app.use((err, req, res, next) => {
@@ -277,24 +282,27 @@ app.use((err, req, res, next) => {
 });
 
 // ---------------------------------------------------------------------------
-// Clean generated files older than 24 hours (runs every hour)
+// Clean generated files older than 24 hours (local backend only, runs every hour)
+// In S3 mode this is handled by a bucket Lifecycle rule on the */generated/* prefix.
 // ---------------------------------------------------------------------------
 const fs = require('fs');
 const GENERATED_DIR = path.join(__dirname, 'generated');
-function cleanGeneratedFiles() {
-  const cutoff = Date.now() - 24 * 60 * 60 * 1000;
-  try {
-    for (const file of fs.readdirSync(GENERATED_DIR)) {
-      if (file === '.gitkeep') continue;
-      const filePath = path.join(GENERATED_DIR, file);
-      const stat = fs.statSync(filePath);
-      if (stat.mtimeMs < cutoff) {
-        fs.unlinkSync(filePath);
+if (storage.getBackend() === 'local') {
+  function cleanGeneratedFiles() {
+    const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+    try {
+      for (const file of fs.readdirSync(GENERATED_DIR)) {
+        if (file === '.gitkeep') continue;
+        const filePath = path.join(GENERATED_DIR, file);
+        const stat = fs.statSync(filePath);
+        if (stat.mtimeMs < cutoff) {
+          fs.unlinkSync(filePath);
+        }
       }
-    }
-  } catch (e) { /* non-fatal */ }
+    } catch (e) { /* non-fatal */ }
+  }
+  setInterval(cleanGeneratedFiles, 60 * 60 * 1000);
 }
-setInterval(cleanGeneratedFiles, 60 * 60 * 1000);
 
 // ---------------------------------------------------------------------------
 // Metrics retention — clear LinkedIn engagement data older than 90 days.

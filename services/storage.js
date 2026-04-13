@@ -40,6 +40,7 @@ function getS3Client() {
   const { S3Client } = require('@aws-sdk/client-s3');
   const config = {
     region: process.env.S3_REGION || 'us-east-1',
+    followRegionRedirects: true, // handles region mismatch automatically
   };
   if (process.env.S3_ENDPOINT) {
     config.endpoint = process.env.S3_ENDPOINT;

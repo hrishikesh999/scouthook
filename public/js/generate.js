@@ -1124,17 +1124,39 @@ function closeSlideOver() {
   overlay.setAttribute('aria-hidden', 'true');
 }
 
+function visualErrorMessage(code) {
+  if (!code) return 'Failed to generate visual';
+  if (code === 'branded_quote_requires_linkedin') {
+    return 'Connect LinkedIn in the sidebar to use branded quotes.';
+  }
+  if (code === 'branded_quote_photo_fetch_failed') {
+    return 'Could not load your LinkedIn photo. Try reconnecting LinkedIn.';
+  }
+  if (code === 'post_not_found' || code === 'forbidden') {
+    return 'Post not found or access denied. Refresh the page and try again.';
+  }
+  return String(code);
+}
+
 async function generateVisual(type) {
   try {
-    const res = await fetch(`/api/visuals/${currentPostId}`, {
+    const res = await fetch(`/api/visuals/${encodeURIComponent(String(currentPostId))}`, {
       method: 'POST',
       headers: apiHeaders(),
-      body: JSON.stringify({ visual_type: type })
+      credentials: 'include',
+      body: JSON.stringify({ visual_type: type }),
     });
-    const data = await res.json();
+    let data;
+    try {
+      data = await res.json();
+    } catch {
+      throw new Error('Could not read server response.');
+    }
     slideOverSkeleton.style.display = 'none';
 
-    if (!res.ok || !data.ok) throw new Error(data.error || 'Failed to generate visual');
+    if (!res.ok || !data.ok) {
+      throw new Error(visualErrorMessage(data.error));
+    }
 
     if (type === 'carousel') {
       renderCarousel(data.slides);
@@ -1151,11 +1173,12 @@ async function generateVisual(type) {
       img.className = 'slide-over-image';
       slideOverContent.appendChild(img);
     }
-  } catch {
+  } catch (e) {
     slideOverSkeleton.style.display = 'none';
     const err = document.createElement('p');
     err.style.cssText = 'font-size:14px;color:var(--text-secondary);text-align:center;padding-top:var(--space-8)';
-    err.textContent = 'Could not generate asset. Try again.';
+    err.textContent =
+      e instanceof Error && e.message ? e.message : 'Could not generate asset. Try again.';
     slideOverContent.appendChild(err);
   }
 }

@@ -4,6 +4,7 @@ const sharp = require('sharp');
 const Anthropic = require('@anthropic-ai/sdk');
 const { getSetting } = require('../db');
 const storage = require('./storage');
+const { getAnthropicMessageText } = require('./voiceFingerprint');
 
 // Brand tokens
 const BG = '#0F1A3C';
@@ -39,7 +40,7 @@ async function generateQuoteCard(post, brand = {}, ctx = {}) {
       content: `Extract the single most impactful, memorable sentence from this post. Return only that sentence — nothing else, no punctuation changes, no explanation.\n\n${post.content}`,
     }],
   });
-  const quoteLine = extractMsg.content[0]?.text?.trim() || post.content.split('\n')[0];
+  const quoteLine = getAnthropicMessageText(extractMsg) || post.content.split('\n')[0];
 
   // Step 2: Build SVG
   const svg = buildQuoteCardSvg(quoteLine, brand);

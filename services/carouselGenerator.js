@@ -5,7 +5,7 @@ const { PDFDocument } = require('pdf-lib');
 const archiver = require('archiver');
 const Anthropic = require('@anthropic-ai/sdk');
 const { getSetting } = require('../db');
-const { extractJsonFromResponse } = require('./voiceFingerprint');
+const { extractJsonFromResponse, getAnthropicMessageText } = require('./voiceFingerprint');
 const storage = require('./storage');
 
 // Brand tokens
@@ -35,13 +35,7 @@ async function generateCarousel(post, brand = {}, ctx = {}) {
 
   const client = new Anthropic({ apiKey });
 
-  // Step 1: Break post into slides
-  const slideMsg = await client.messages.create({
-    model: 'claude-haiku-4-5',
-    max_tokens: 1500,
-    messages: [{
-      role: 'user',
-      content: `Break this LinkedIn post into exactly 6 to 8 slides for a carousel. Return ONLY valid JSON:
+  const carouselUserPrompt = `Break this LinkedIn post into exactly 6 to 8 slides for a carousel. Return ONLY valid JSON:
 {
   "slides": [
     { "type": "title", "headline": "short punchy title (max 8 words)", "body": "" },
@@ -60,26 +54,31 @@ Rules:
 - Headlines: punchy, specific — not generic labels
 
 POST:
-${post.content}`,
-    }],
+${post.content}`;
+
+  // Step 1: Break post into slides
+  const slideMsg = await client.messages.create({
+    model: 'claude-haiku-4-5',
+    max_tokens: 1500,
+    messages: [{ role: 'user', content: carouselUserPrompt }],
   });
 
   let slidesData;
-  const rawText = slideMsg.content[0]?.text?.trim() || '';
+  const rawText = getAnthropicMessageText(slideMsg);
   try {
     slidesData = extractJsonFromResponse(rawText);
   } catch (e) {
-    // Retry once
+    // Retry once with full assistant payload for the Messages API
     const retry = await client.messages.create({
       model: 'claude-haiku-4-5',
       max_tokens: 1500,
       messages: [
-        { role: 'user', content: slideMsg.messages?.[0]?.content || '' },
-        { role: 'assistant', content: rawText },
+        { role: 'user', content: carouselUserPrompt },
+        { role: 'assistant', content: slideMsg.content },
         { role: 'user', content: 'Return only valid JSON, no other text.' },
       ],
     });
-    slidesData = extractJsonFromResponse(retry.content[0]?.text?.trim() || '');
+    slidesData = extractJsonFromResponse(getAnthropicMessageText(retry));
   }
 
   const slides = slidesData.slides;

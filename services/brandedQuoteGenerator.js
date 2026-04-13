@@ -4,6 +4,7 @@ const sharp = require('sharp');
 const Anthropic = require('@anthropic-ai/sdk');
 const { getSetting } = require('../db');
 const storage = require('./storage');
+const { getAnthropicMessageText } = require('./voiceFingerprint');
 
 const TEXT_MUTED = '#8A9CC0';
 const W = 1080;
@@ -109,7 +110,7 @@ POST:
 ${content}`,
       }],
     });
-    const raw = extractMsg.content[0]?.text?.trim() || '';
+    const raw = getAnthropicMessageText(extractMsg);
     if (raw) return sanitizeExtractedQuote(raw);
   } catch (err) {
     console.warn('[brandedQuote] extract failed:', err.message);

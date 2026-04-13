@@ -38,18 +38,19 @@ ${writingSamples}
 Return only the JSON object. No explanation, no markdown fences.`;
 
   let responseText = '';
+  let assistantMessage = null;
 
   try {
-    const message = await client.messages.create({
+    assistantMessage = await client.messages.create({
       model: 'claude-haiku-4-5',
       max_tokens: 600,
       messages: [{ role: 'user', content: prompt }],
     });
 
-    responseText = message.content[0]?.text?.trim() || '';
+    responseText = getAnthropicMessageText(assistantMessage);
     return parseAndValidateFingerprint(responseText);
   } catch (firstErr) {
-    if (firstErr instanceof SyntaxError && responseText) {
+    if (firstErr instanceof SyntaxError && responseText && assistantMessage) {
       // Retry once with explicit instruction
       try {
         const retry = await client.messages.create({
@@ -57,11 +58,11 @@ Return only the JSON object. No explanation, no markdown fences.`;
           max_tokens: 600,
           messages: [
             { role: 'user', content: prompt },
-            { role: 'assistant', content: responseText },
+            { role: 'assistant', content: assistantMessage.content },
             { role: 'user', content: 'Return only valid JSON, no other text.' },
           ],
         });
-        responseText = retry.content[0]?.text?.trim() || '';
+        responseText = getAnthropicMessageText(retry);
         return parseAndValidateFingerprint(responseText);
       } catch (retryErr) {
         console.error('[voiceFingerprint] Retry failed:', retryErr.message);
@@ -83,6 +84,21 @@ function parseAndValidateFingerprint(text) {
 }
 
 /**
+ * Concatenate all `text` blocks from an Anthropic message (skips thinking, tool_use, etc.).
+ * @param {{ content?: Array<{ type?: string, text?: string }> }} message
+ * @returns {string}
+ */
+function getAnthropicMessageText(message) {
+  const blocks = message?.content;
+  if (!Array.isArray(blocks)) return '';
+  return blocks
+    .filter((b) => b && b.type === 'text' && typeof b.text === 'string')
+    .map((b) => b.text)
+    .join('\n')
+    .trim();
+}
+
+/**
  * Parse JSON from a Claude text response, handling markdown code fences.
  * Reuse this in all services that parse Claude JSON output.
  *
@@ -90,8 +106,20 @@ function parseAndValidateFingerprint(text) {
  * @returns {object}
  */
 function extractJsonFromResponse(text) {
-  const cleaned = text.replace(/^```(?:json)?\s*/m, '').replace(/\s*```\s*$/m, '').trim();
-  return JSON.parse(cleaned);
+  let cleaned = String(text || '')
+    .replace(/^```(?:json)?\s*/m, '')
+    .replace(/\s*```\s*$/m, '')
+    .trim();
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    const start = cleaned.indexOf('{');
+    const end = cleaned.lastIndexOf('}');
+    if (start >= 0 && end > start) {
+      return JSON.parse(cleaned.slice(start, end + 1));
+    }
+    throw new SyntaxError('No JSON object found in model response');
+  }
 }
 
-module.exports = { extractFingerprint, extractJsonFromResponse };
+module.exports = { extractFingerprint, extractJsonFromResponse, getAnthropicMessageText };

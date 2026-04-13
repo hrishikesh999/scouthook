@@ -2,7 +2,7 @@
 
 **Product:** AI-powered LinkedIn content tool  
 **Stack:** Node.js + Express, PostgreSQL (Neon), Redis/BullMQ, Anthropic Claude, Google OAuth + LinkedIn OAuth  
-**Last updated:** 2026-04-13
+**Last updated:** 2026-04-13 (S3 storage sprint)
 
 ---
 
@@ -30,7 +30,8 @@ ScoutHook is a single-process Node.js server that:
 2. Allows users to connect a **LinkedIn account** (OAuth, encrypted token storage)
 3. Generates LinkedIn posts via **Anthropic Claude** — hook selection, quality gating, format enforcement
 4. Publishes posts to LinkedIn immediately or via a **BullMQ/Redis job queue** (scheduled delivery)
-5. Syncs engagement metrics back from LinkedIn and enforces a **90-day data retention** policy
+5. Stores user uploads and generated visuals on **Amazon S3** (or local disk in dev)
+6. Syncs engagement metrics back from LinkedIn and enforces a **90-day data retention** policy
 
 ```
 Browser ──► Express (server.js)
@@ -76,6 +77,7 @@ BullMQ Worker ──► publishScheduledPost()
 │   ├── notifications.js       # In-app notifications
 │   └── admin.js               # Admin settings panel
 ├── services/
+│   ├── storage.js             # Storage abstraction (local disk or Amazon S3)
 │   ├── linkedinOAuth.js       # Token encrypt/decrypt/store/refresh/revoke
 │   ├── linkedinPublisher.js   # Post composition + LinkedIn API calls
 │   ├── linkedinMetrics.js     # Metrics sync from LinkedIn API
@@ -327,6 +329,26 @@ Generated files are served at `/files/*` (auth-gated, cleaned after 24h). Perman
 
 ## Services Reference
 
+### `services/storage.js`
+Abstraction over local disk and Amazon S3. All file I/O in the app routes through this service.
+
+- **`getBackend()`** — Returns `'local'` or `'s3'` based on `STORAGE_BACKEND` env var.
+- **`buildKey(tenantId, userId, type, filename)`** — Constructs the storage key: `{S3_KEY_PREFIX}tenants/{tenant_id}/users/{user_id}/{type}/{filename}`. `type` is `uploads` (permanent) or `generated` (ephemeral).
+- **`upload(buffer, { tenantId, userId, type, filename, mimeType })`** — Writes to S3 (`PutObjectCommand`) or local disk.
+- **`download(key)`** — Returns a `Buffer` from S3 (`GetObjectCommand`) or local disk.
+- **`delete(key)`** — Removes from S3 or local disk (non-throwing).
+- **`copy(srcKey, dstKey)`** — Server-side S3 copy (`CopyObjectCommand`) or `fs.copyFileSync`. Used by `save-generated` to promote ephemeral visuals to the permanent library.
+- **`stream(key, res, next)`** — Pipes an object directly to an HTTP response. In S3 mode, streams the `GetObjectCommand` body; in local mode, uses `res.sendFile()`.
+
+**S3 bucket configuration:**
+
+| Environment | Bucket | ARN |
+|---|---|---|
+| Development | `scout-hook-dev` | `arn:aws:s3:::scout-hook-dev` |
+| Production | `scout-hook-prod` | `arn:aws:s3:::scout-hook-prod` |
+
+The S3 client is lazy-initialised — `STORAGE_BACKEND=local` requires no AWS credentials.
+
 ### `services/linkedinOAuth.js`
 Handles all LinkedIn token lifecycle:
 - **`storeTokens(userId, tenantId, tokenData)`** — AES-256-GCM encrypt and upsert into `linkedin_tokens`
@@ -521,7 +543,7 @@ tenants/{tenant_id}/users/{user_id}/generated/{filename}     ← ephemeral (24h)
 
 ### Architecture
 - **Single-process:** BullMQ worker runs in the same process as the HTTP server. Under high load, consider splitting into a dedicated worker process.
-- **Local file storage:** Uploads and generated visuals are stored on local disk — not compatible with multi-instance horizontal scaling. Move to S3/R2/Cloudflare for multi-replica deployments.
+- **S3 required for multi-instance scaling:** Set `STORAGE_BACKEND=s3` before running multiple replicas. The default local mode stores files on the process's filesystem and is incompatible with horizontal scaling.
 - **Single tenant in practice:** Multi-tenancy scaffolding (user_id + tenant_id on all tables) is in place, but the `tenant_id` is hardcoded to `'default'` for all users. A tenant provisioning layer would be needed to support true multi-tenant SaaS.
 
 ### Security
@@ -560,3 +582,4 @@ These changes were applied during a security and compliance audit in April 2026.
 | No graceful shutdown | SIGTERM/SIGINT handlers drain HTTP server, BullMQ worker, Redis client |
 | No in-app notifications | `notifications` table + `routes/notifications.js` added |
 | Redis client not shared | `services/redis.js` added as shared client with fallback helpers |
+| Local disk storage blocks horizontal scaling | `services/storage.js` abstraction added; S3 backend routes all file I/O through per-tenant S3 keys (`tenants/{t}/users/{u}/{type}/{file}`); local backend preserved as default for dev |

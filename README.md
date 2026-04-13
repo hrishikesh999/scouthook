@@ -11,7 +11,7 @@ AI-powered LinkedIn content tool. Generate posts, schedule them, and track engag
 - **Queue / Scheduling:** BullMQ + Redis
 - **AI:** Anthropic Claude (`@anthropic-ai/sdk`)
 - **Auth:** Google OAuth (login), LinkedIn OAuth (publishing)
-- **Storage:** Local disk (`/uploads`) for media files; `/generated` for ephemeral visuals
+- **Storage:** Amazon S3 (`scout-hook-dev` / `scout-hook-prod`) or local disk in dev
 
 ---
 
@@ -34,6 +34,13 @@ AI-powered LinkedIn content tool. Generate posts, schedule them, and track engag
 | `NODE_ENV` | ⬜ | Set to `production` for secure cookies |
 | `ALLOWED_ORIGIN` | ⬜ | CORS allowed origin if serving from a separate domain |
 | `API_RATE_LIMIT_MAX` | ⬜ | Override default 2000 req/15min API rate limit |
+| `STORAGE_BACKEND` | ⬜ | `local` (default) or `s3` |
+| `S3_BUCKET_NAME` | ⬜* | Required when `STORAGE_BACKEND=s3`. Dev: `scout-hook-dev`, Prod: `scout-hook-prod` |
+| `S3_REGION` | ⬜* | AWS region (e.g. `us-east-1`) |
+| `AWS_ACCESS_KEY_ID` | ⬜* | IAM access key |
+| `AWS_SECRET_ACCESS_KEY` | ⬜* | IAM secret key |
+| `S3_KEY_PREFIX` | ⬜ | Optional key prefix for path-based env isolation (e.g. `dev/`) |
+| `S3_ENDPOINT` | ⬜ | Custom endpoint for MinIO / LocalStack |
 
 ### Admin UI settings (`/admin.html`)
 
@@ -89,12 +96,13 @@ Open `http://localhost:4000` — you'll be redirected to login.
 
 ### Media Library
 - Upload images and PDFs (`POST /api/media/upload`, 20MB max)
-- Files stored in `/uploads`, metadata in `media_files` table
-- Generated visuals auto-cleaned after 24h; uploaded files retained permanently
+- Files stored in S3 (or local disk in dev) under a per-tenant/per-user prefix; metadata in `media_files` table
+- Generated visuals auto-cleaned after 24h (S3 lifecycle rule in prod; hourly job in local mode); uploaded files retained permanently
 
 ### Visual Generation
 - Generate quote cards, carousels, and branded quote images from post content
-- Served at `/files/*` (auth-gated)
+- Visuals rendered fully in memory (no temp disk writes) and stored via the storage abstraction
+- Served at `/files/*` (auth-gated; owner-session-locked in S3 mode)
 
 ### Stats & Dashboard
 - Monthly post count, average quality score, scheduled post count
@@ -113,6 +121,7 @@ Open `http://localhost:4000` — you'll be redirected to login.
 3. Set `NODE_ENV=production` and a strong `SESSION_SECRET`.
 4. Run migrations on first deploy: add `npm run migrate` as a pre-deploy command, or run it manually via the Render shell.
 5. Set `token_encryption_key` via `/admin.html` — generate once with `openssl rand -hex 32` and never change it.
+6. Set `STORAGE_BACKEND=s3`, `S3_BUCKET_NAME=scout-hook-prod`, `S3_REGION`, `AWS_ACCESS_KEY_ID`, and `AWS_SECRET_ACCESS_KEY` for S3 file storage. See [`docs/HANDOVER.md`](docs/HANDOVER.md) for the required IAM policy and S3 lifecycle rule.
 
 The server handles `SIGTERM` gracefully: drains in-flight HTTP requests, closes the BullMQ worker, and disconnects the Redis client.
 
@@ -127,7 +136,7 @@ See [`docs/HANDOVER.md`](docs/HANDOVER.md) for the full technical reference: dat
 ## Known Limitations
 
 - **Requires Redis for scheduling:** Without `REDIS_URL`, posts save but are never auto-published.
-- **Local file storage:** Not compatible with multi-instance horizontal scaling — move to S3/R2 before running multiple replicas.
+- **S3 required for multi-instance scaling:** Set `STORAGE_BACKEND=s3` before running multiple replicas. Local disk mode stores files on the process's filesystem and is incompatible with horizontal scaling.
 - **`token_encryption_key` is permanent:** No rotation mechanism exists. Rotating the key orphans all stored LinkedIn tokens.
 - **Single-tenant in practice:** Multi-tenancy scaffolding (all tables have `user_id` + `tenant_id`) is in place, but tenant provisioning is not implemented — all users share `tenant_id = 'default'`.
 - **Manual metrics sync:** Engagement metrics must be fetched explicitly; there is no background polling.

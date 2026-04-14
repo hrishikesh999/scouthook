@@ -213,8 +213,7 @@ function useSeedIdea(ideaId, seedText, sourceRef) {
     vaultSourceBadge.textContent = sourceRef || '';
     vaultSourceBadge.style.display = sourceRef ? '' : 'none';
   }
-  switchToTab('write');
-  ideaInput.focus();
+  triggerGenerate();
 }
 
 // ── Mini funnel widget ────────────────────────────────────────

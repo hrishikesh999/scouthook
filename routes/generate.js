@@ -5,7 +5,7 @@ const router = express.Router();
 const { db } = require('../db');
 const { synthesise } = require('../services/synthesise');
 const { runQualityGate } = require('../services/qualityGate');
-const { generateInsightAlternativePost } = require('../services/ideaPath');
+const { generateInsightAlternativePost, vaultSeedToPost } = require('../services/ideaPath');
 const { classifyContent } = require('../services/funnelClassifier');
 
 // ---------------------------------------------------------------------------
@@ -140,6 +140,35 @@ async function synthesiseIdeaWithOptionalQualityRetry(userProfile, baseOptions) 
   };
 }
 
+/**
+ * Vault path: quality-gate loop around vaultSeedToPost.
+ * No INSIGHT alternative — vault seeds have a pre-classified archetype.
+ */
+async function synthesiseVaultWithQualityRetry(userProfile, vaultIdea, chunkText, baseOptions) {
+  let synthesisAttempt = 1;
+  let synthResult = await vaultSeedToPost(vaultIdea, chunkText, userProfile, baseOptions);
+  let { synthesis, post, archetypeUsed, hookConfidence } = synthResult;
+
+  const gate = () =>
+    runQualityGate(
+      post,
+      gateOptions({ format_slug: IDEA_SLUG, content: post }, userProfile, 'idea', archetypeUsed, hookConfidence)
+    );
+
+  let primaryGate = gate();
+
+  if (!primaryGate.passed) {
+    const qualityRetryHint =
+      `The previous attempt failed these quality checks: ${primaryGate.errors.join(', ')}. Fix all of these in your next attempt.`;
+    synthesisAttempt = 2;
+    synthResult = await vaultSeedToPost(vaultIdea, chunkText, userProfile, { ...baseOptions, qualityRetryHint });
+    ({ synthesis, post, archetypeUsed, hookConfidence } = synthResult);
+    primaryGate = gate();
+  }
+
+  return { synthesis, post, archetypeUsed, hookConfidence, primaryGate, synthesisAttempt };
+}
+
 // ---------------------------------------------------------------------------
 // POST /api/generate
 // ---------------------------------------------------------------------------
@@ -170,31 +199,44 @@ router.post('/', async (req, res) => {
     return res.status(400).json({ ok: false, error: 'missing_raw_idea' });
   }
 
-  // Resolve vault idea context if the post is grown from a seed
+  // Resolve vault idea + source chunk when growing from a seed
   let vaultIdea = null;
+  let vaultChunkText = null;
   if (vault_idea_id) {
     vaultIdea = await db.prepare(`
-      SELECT id, seed_text, source_ref, funnel_type, hook_archetype
+      SELECT id, seed_text, source_ref, funnel_type, hook_archetype, chunk_id
       FROM   vault_ideas
       WHERE  id = ? AND user_id = ? AND tenant_id = ?
     `).get(vault_idea_id, userId, tenantId);
+
+    if (vaultIdea?.chunk_id) {
+      const chunk = await db.prepare(
+        'SELECT content FROM vault_chunks WHERE id = ? AND user_id = ? AND tenant_id = ?'
+      ).get(vaultIdea.chunk_id, userId, tenantId);
+      vaultChunkText = chunk?.content || null;
+    }
   }
 
   try {
-    const baseOptions = { rawIdea: raw_idea };
+    let ideaResult;
 
-    // Inject funnel intent into generation prompt when a seed is the source
-    if (vaultIdea?.funnel_type) {
+    if (vaultIdea) {
+      // Vault path — uses pre-classified archetype + source chunk context
       const funnelHints = {
         reach:   'This post should maximise reach — use a broad, relatable angle that resonates with a wide audience.',
         trust:   'This post should build authority — demonstrate expertise, share a proprietary framework, or offer a counterintuitive perspective.',
         convert: 'This post should drive inbound — be specific about who you help and what transformation you create. Include a subtle but clear call to action.',
       };
-      baseOptions._funnelHint = funnelHints[vaultIdea.funnel_type] || '';
+      const vaultOptions = vaultIdea.funnel_type
+        ? { _funnelHint: funnelHints[vaultIdea.funnel_type] || '' }
+        : {};
+      ideaResult = await synthesiseVaultWithQualityRetry(userProfile, vaultIdea, vaultChunkText, vaultOptions);
+    } else {
+      // Standard idea path
+      ideaResult = await synthesiseIdeaWithOptionalQualityRetry(userProfile, { rawIdea: raw_idea });
     }
 
     {
-      const ideaResult = await synthesiseIdeaWithOptionalQualityRetry(userProfile, baseOptions);
       const {
         synthesis,
         post,
@@ -206,8 +248,13 @@ router.post('/', async (req, res) => {
       } = ideaResult;
 
       if (typeof post !== 'string' || !post.trim()) {
-        throw new Error('idea path returned no post content');
+        throw new Error('generation returned no post content');
       }
+
+      // For vault posts store seed_text as the canonical input so regenerate works correctly
+      const inputData = vaultIdea
+        ? { raw_idea: vaultIdea.seed_text, vault_idea_id: vaultIdea.id }
+        : { raw_idea };
 
       const runResult = await db.prepare(`
         INSERT INTO generation_runs (user_id, tenant_id, path, input_data, synthesis)
@@ -217,7 +264,7 @@ router.post('/', async (req, res) => {
         userId,
         tenantId,
         genPath,
-        JSON.stringify({ raw_idea }),
+        JSON.stringify(inputData),
         JSON.stringify(synthesis)
       );
       const runId = runResult.lastInsertRowid;
@@ -334,14 +381,40 @@ router.post('/regenerate/:postId', async (req, res) => {
   try {
     const inputData = JSON.parse(post.input_data || '{}');
     const failedFlags = JSON.parse(post.quality_flags || '[]');
+    const regenHint = failedFlags.length
+      ? `Previous version was flagged for: ${failedFlags.join(', ')}. Avoid these patterns.`
+      : undefined;
 
-    const baseOptions = { rawIdea: inputData.raw_idea };
+    let ideaResult;
 
-    if (failedFlags.length) {
-      baseOptions._regenerateHint = `Previous version was flagged for: ${failedFlags.join(', ')}. Avoid these patterns.`;
+    if (inputData.vault_idea_id) {
+      // Re-grow from the original vault seed using the vault path
+      const regenVaultIdea = await db.prepare(`
+        SELECT id, seed_text, source_ref, funnel_type, hook_archetype, chunk_id
+        FROM   vault_ideas
+        WHERE  id = ? AND user_id = ? AND tenant_id = ?
+      `).get(inputData.vault_idea_id, userId, tenantId);
+
+      if (regenVaultIdea) {
+        let regenChunkText = null;
+        if (regenVaultIdea.chunk_id) {
+          const chunk = await db.prepare(
+            'SELECT content FROM vault_chunks WHERE id = ? AND user_id = ? AND tenant_id = ?'
+          ).get(regenVaultIdea.chunk_id, userId, tenantId);
+          regenChunkText = chunk?.content || null;
+        }
+        const vaultOpts = regenHint ? { _regenerateHint: regenHint } : {};
+        ideaResult = await synthesiseVaultWithQualityRetry(userProfile, regenVaultIdea, regenChunkText, vaultOpts);
+      }
     }
 
-    const ideaResult = await synthesiseIdeaWithOptionalQualityRetry(userProfile, baseOptions);
+    if (!ideaResult) {
+      // Standard idea path (free-typed ideas, or vault idea no longer exists)
+      const baseOptions = { rawIdea: inputData.raw_idea };
+      if (regenHint) baseOptions._regenerateHint = regenHint;
+      ideaResult = await synthesiseIdeaWithOptionalQualityRetry(userProfile, baseOptions);
+    }
+
     const isInsightRow = post.format_slug === IDEA_INSIGHT_SLUG;
     const content = isInsightRow
       ? (ideaResult.alternative?.post ?? ideaResult.post)

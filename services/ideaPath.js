@@ -112,6 +112,38 @@ Return ONLY valid JSON in this exact structure:
 No markdown fences. No explanation. Only the JSON object.`;
 }
 
+/**
+ * User prompt for vault-sourced posts. Frames the input as expert source material
+ * so Claude preserves depth and specificity rather than genericising.
+ */
+function buildVaultUserPrompt(vaultIdea, chunkText) {
+  const sourceNote = vaultIdea.source_ref ? `\nSOURCE: ${vaultIdea.source_ref}` : '';
+
+  const chunkSection = chunkText
+    ? `\n\nORIGINAL PASSAGE (the source text this insight was extracted from — draw on it to preserve depth and specificity):\n${chunkText.slice(0, 2000)}`
+    : '';
+
+  return `VAULT SEED (distilled insight from the author's own expert source material):
+${vaultIdea.seed_text}${sourceNote}${chunkSection}
+
+This insight was mined from the author's own documents. Expand it into a LinkedIn post that:
+- Preserves the depth, specificity, and any proprietary framing from the source
+- Does NOT genericise, water down, or replace concrete details with vague language
+- Reads as the author sharing hard-won, specific knowledge — not a summary of it
+
+Return ONLY valid JSON in this exact structure:
+{
+  "synthesis": {
+    "suggested_angle": "one sentence on the strongest angle for this idea",
+    "recommended_structure": "one sentence on the best structure given the audience",
+    "supporting_insight": "one sentence of editorial context that makes this idea stronger"
+  },
+  "post": "full text of the single LinkedIn post"
+}
+
+No markdown fences. No explanation. Only the JSON object.`;
+}
+
 async function runSinglePostGeneration({
   rawIdea,
   userProfile,
@@ -119,13 +151,14 @@ async function runSinglePostGeneration({
   hookInjection,
   archetypeUsed,
   hookConfidence,
+  userPromptOverride,
 }) {
   const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
   if (!apiKey) throw new Error('anthropic_api_key not configured');
   const client = new Anthropic({ apiKey });
 
   const systemPrompt = buildSystemPrompt(userProfile, hookInjection);
-  let userPrompt = buildUserPrompt(rawIdea);
+  let userPrompt = userPromptOverride || buildUserPrompt(rawIdea);
 
   const extraHints = [
     options._funnelHint,
@@ -194,4 +227,36 @@ function validateSinglePostResponse(parsed) {
   return { synthesis: parsed.synthesis, post: parsed.post.trim() };
 }
 
-module.exports = { ideaToPost, generateInsightAlternativePost };
+/**
+ * Vault path: generate a LinkedIn post from a pre-classified vault seed.
+ *
+ * Differences from ideaToPost:
+ * - Skips Haiku hook reclassification — uses stored hook_archetype directly.
+ * - Uses buildVaultUserPrompt so Claude knows the input is expert source material.
+ * - Optionally includes the original chunk text for deeper context.
+ *
+ * @param {object} vaultIdea  — row from vault_ideas (seed_text, hook_archetype, funnel_type, source_ref)
+ * @param {string|null} chunkText — raw text of the source chunk, or null
+ * @param {object} userProfile
+ * @param {object} [options]
+ */
+async function vaultSeedToPost(vaultIdea, chunkText, userProfile, options = {}) {
+  const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
+  if (!apiKey) throw new Error('anthropic_api_key not configured');
+
+  const archetype = vaultIdea.hook_archetype || 'INSIGHT';
+  const archetypeRecord = HOOK_ARCHETYPES[archetype] || HOOK_ARCHETYPES.INSIGHT;
+  const hookInjection = buildHookInjection(archetypeRecord);
+
+  return runSinglePostGeneration({
+    rawIdea: vaultIdea.seed_text,   // used only for quality-retry hint text
+    userProfile,
+    options,
+    hookInjection,
+    archetypeUsed: archetype,
+    hookConfidence: 1.0,            // pre-classified; treat as high confidence
+    userPromptOverride: buildVaultUserPrompt(vaultIdea, chunkText),
+  });
+}
+
+module.exports = { ideaToPost, generateInsightAlternativePost, vaultSeedToPost };

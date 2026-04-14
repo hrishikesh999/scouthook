@@ -138,11 +138,13 @@ function switchToTab(tab) {
     inputTabVault.classList.remove('active'); inputTabVault.setAttribute('aria-selected', 'false');
     document.getElementById('idea-fields').style.display = '';
     vaultPanel.style.display = 'none';
+    generateBtn.style.display = '';
   } else {
     inputTabVault.classList.add('active');    inputTabVault.setAttribute('aria-selected', 'true');
     inputTabWrite.classList.remove('active'); inputTabWrite.setAttribute('aria-selected', 'false');
     document.getElementById('idea-fields').style.display = 'none';
     vaultPanel.style.display = '';
+    generateBtn.style.display = 'none';
     loadVaultSeeds();
     loadMiniFunnel();
   }
@@ -191,17 +193,17 @@ function renderSeedList() {
         <div class="seed-card-badges">${fBadge}${aBadge}</div>
         <p class="seed-card-text">${escHtmlG(seed.seed_text)}</p>
         ${seed.source_ref ? `<p class="seed-card-source">${escHtmlG(seed.source_ref)}</p>` : ''}
-        <button class="seed-use-btn" data-use-id="${seed.id}" data-seed-text="${escAttrG(seed.seed_text)}" data-source-ref="${escAttrG(seed.source_ref || '')}">Use this idea</button>
+        <button class="seed-use-btn" data-use-id="${seed.id}">Generate post</button>
       </div>`;
   }).join('');
 
   vaultSeedList.querySelectorAll('.seed-use-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
-      const id        = Number(btn.dataset.useId);
-      const seedText  = btn.dataset.seedText || '';
-      const sourceRef = btn.dataset.sourceRef || '';
-      useSeedIdea(id, seedText, sourceRef);
+      const id   = Number(btn.dataset.useId);
+      const seed = allVaultSeeds.find(s => s.id === id);
+      if (!seed) return;
+      useSeedIdea(id, seed.seed_text, seed.source_ref || '');
     });
   });
 }

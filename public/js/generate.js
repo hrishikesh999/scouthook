@@ -193,7 +193,7 @@ function renderSeedList() {
         <div class="seed-card-badges">${fBadge}${aBadge}</div>
         <p class="seed-card-text">${escHtmlG(seed.seed_text)}</p>
         ${seed.source_ref ? `<p class="seed-card-source">${escHtmlG(seed.source_ref)}</p>` : ''}
-        <button class="seed-use-btn" data-use-id="${seed.id}">Generate post</button>
+        <button type="button" class="seed-use-btn" data-use-id="${seed.id}">Generate post</button>
       </div>`;
   }).join('');
 
@@ -201,21 +201,16 @@ function renderSeedList() {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       const id   = Number(btn.dataset.useId);
-      const seed = allVaultSeeds.find(s => s.id === id);
+      const seed = allVaultSeeds.find(s => Number(s.id) === id);
       if (!seed) return;
-      useSeedIdea(id, seed.seed_text, seed.source_ref || '');
+      useSeedIdea(Number(seed.id), seed.seed_text, seed.source_ref || '');
     });
   });
 }
 
 function useSeedIdea(ideaId, seedText, sourceRef) {
   currentVaultIdeaId = ideaId;
-  ideaInput.value    = seedText;
-  if (vaultSourceBadge) {
-    vaultSourceBadge.textContent = sourceRef || '';
-    vaultSourceBadge.style.display = sourceRef ? '' : 'none';
-  }
-  triggerGenerate();
+  triggerGenerate({ path: 'idea', raw_idea: seedText, vault_idea_id: ideaId });
 }
 
 // ── Mini funnel widget ────────────────────────────────────────

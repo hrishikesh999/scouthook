@@ -1008,6 +1008,36 @@ body {
 .input-tab:hover  { color: var(--text-secondary); }
 .input-tab.active { color: var(--brand); border-bottom-color: var(--brand); }
 
+/* ── Page-level tab bar (Idea Vault: centered, prominent) ─────── */
+.page-tab-bar {
+  display: flex;
+  justify-content: center;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-surface);
+  padding: 0 var(--space-8);
+  gap: var(--space-4);
+}
+.page-tab {
+  font-family: var(--font-sans);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  padding: 14px var(--space-6);
+  border: none;
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -1px;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  letter-spacing: -0.01em;
+  transition: color 0.15s, border-color 0.15s;
+}
+.page-tab:hover  { color: var(--text-heading); }
+.page-tab.active { color: var(--brand); border-bottom-color: var(--brand); }
+
 .word-count {
   margin-left: auto;
   display: flex;

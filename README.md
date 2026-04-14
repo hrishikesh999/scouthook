@@ -1,6 +1,6 @@
 # ScoutHook
 
-AI-powered LinkedIn content tool. Generate posts, schedule them, and track engagement — all from a single web UI.
+AI-powered LinkedIn content intelligence platform. Mine ideas from your own documents, generate posts, schedule them, and track engagement — all from a single web UI.
 
 ---
 
@@ -72,18 +72,36 @@ Open `http://localhost:4000` — you'll be redirected to login.
 - Google OAuth login with server-side sessions
 - All app HTML routes require an active session; API routes return 401 if unauthenticated
 
+### Intelligence Vault
+- Upload PDFs, DOCX, TXT files or paste URLs (`POST /api/vault/upload`)
+- Documents are indexed asynchronously (chunked into ~500-word segments with overlap)
+- **On-demand mining:** click "Generate Ideas" to extract seed ideas from all indexed documents via Claude Sonnet — contrarian views, frameworks, case studies, hard-won lessons
+- Seeds stored in `vault_ideas` with source references (e.g. "From: Q3 Strategy PDF · p.4")
+- Vault page (`/vault.html`): dropzone + document list with live status badges (`indexing → ready`)
+- Ideas page (`/ideas.html`): Fresh / Saved / Discarded kanban for curating the seed library
+
+### Funnel Intelligence
+- Every generated post and every mined seed is classified into one of three funnel types:
+  - **Reach** (70%): broad observations, hot takes, personal moments — maximize impressions
+  - **Trust** (20%): frameworks, methodologies, expertise demonstrations — build authority
+  - **Convert** (10%): offers, client results, case studies — drive inbound
+- Hook archetype also classified per seed (8 archetypes: `NUMBER`, `CONTRARIAN`, `CONFESSION`, etc.)
+- `GET /api/funnel/health` returns 30-day counts vs. targets + next-post suggestion
+- Funnel health widget surfaced in `/ideas.html` and in the generate page Vault tab
+
+### AI Generation Pipeline
+- Generate LinkedIn posts from a topic/idea (`POST /api/generate`)
+- **Tab A / Tab B input toggle in generate.html:** write a free-form idea (existing) or pick a seed from the Vault and grow it into a post in one click
+- Vault seed path: `vault_idea_id` is passed with the generate request → funnel type injected as a system-prompt hint → post tagged with `vault_source_ref` → seed marked `used`
+- Hook classification across 8 archetypes; quality gate with retries enforces format rules
+- Per-user rate limit: 10 generations/hour (Redis sliding window, in-memory fallback)
+
 ### LinkedIn Integration
 - Connect/disconnect LinkedIn via OAuth with an explicit consent screen
 - Publish posts (text, single image, PDF carousel) via `POST /api/linkedin/publish`
 - LinkedIn tokens stored encrypted (AES-256-GCM); auto-refreshed 24h before expiry
 - Token revoked on LinkedIn's auth server on disconnect and GDPR deletion
 - Minimal scopes: `openid profile w_member_social` only
-
-### AI Generation Pipeline
-- Generate LinkedIn posts from a topic/idea (`POST /api/generate`)
-- Hook classification across 8 archetypes (contrarian, story, how-to, listicle, etc.)
-- Quality gate with retries enforces format rules
-- Per-user rate limit: 10 generations/hour (Redis sliding window, in-memory fallback)
 
 ### Scheduling
 - Schedule posts for future delivery via BullMQ + Redis
@@ -142,3 +160,5 @@ See [`docs/HANDOVER.md`](docs/HANDOVER.md) for the full technical reference: dat
 - **`token_encryption_key` is permanent:** No rotation mechanism exists. Rotating the key orphans all stored LinkedIn tokens.
 - **Single-tenant in practice:** Multi-tenancy scaffolding (all tables have `user_id` + `tenant_id`) is in place, but tenant provisioning is not implemented — all users share `tenant_id = 'default'`.
 - **Manual metrics sync:** Engagement metrics must be fetched explicitly; there is no background polling.
+- **Vault mining is user-triggered:** There is no automatic re-mining on new uploads. Users click "Generate Ideas" when they want seeds from a document.
+- **No vector search:** Vault chunks are stored as plain text in Postgres and passed directly to Claude Sonnet in context. This works well for consultant-scale documents (10–100 pages) but would need a vector index (e.g. pgvector) for large document libraries.

@@ -30,7 +30,9 @@ const TOP_INSET_MIN = 118;
 /** Space reserved at bottom for brand mark + padding. */
 const FOOTER_RESERVE = 150;
 /** Gap between header cluster (name / brand) and quote body. */
-const GAP_HEADER_TO_BODY = 60;
+const GAP_HEADER_TO_BODY = 72;
+/** Minimum vertical gap between avatar bottom and first quote line. */
+const MIN_AVATAR_TO_BODY_GAP = 52;
 /** Shift the whole header + quote block upward vs pure vertical center. */
 const LAYOUT_UPWARD_BIAS = 44;
 /** Floor so the block does not clip the top of the canvas. */
@@ -90,7 +92,8 @@ function computeLayoutYs(lines, hasBrandHeader) {
   const avatarY = blockTop;
   const nameY = blockTop + NAME_Y_OFFSET;
   const brandY = blockTop + BRAND_Y_OFFSET;
-  const bodyStartY = blockTop + bodyStartOffset;
+  const minBodyStartY = blockTop + AVATAR + MIN_AVATAR_TO_BODY_GAP;
+  const bodyStartY = Math.max(blockTop + bodyStartOffset, minBodyStartY);
   const fadeTop = Math.min(
     H - 100,
     bodyStartY + (n - 1) * LINE_HEIGHT + FONT_SIZE + 32

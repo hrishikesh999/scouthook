@@ -254,6 +254,8 @@ function escAttrG(str) {
     if (vaultSourceBadge) vaultSourceBadge.style.display = 'none';
     // Clean URL so refreshing doesn't re-seed
     window.history.replaceState({}, '', '/generate.html');
+    // Auto-trigger generation immediately — no manual click needed
+    triggerGenerate();
   }
 })();
 

@@ -35,10 +35,12 @@ async function extractText(buffer, sourceType, filename) {
 }
 
 async function extractPdf(buffer) {
-  // pdf-parse: lightweight, pure-JS, returns text + page count.
-  const pdfParse = require('pdf-parse');
-  const data = await pdfParse(buffer);
-  return { text: data.text || '', pages: data.numpages || null };
+  // pdf-parse v2: class-based API — pass buffer via { data }, call getText() + getInfo().
+  const { PDFParse } = require('pdf-parse');
+  const parser = new PDFParse({ data: buffer });
+  const [textResult, infoResult] = await Promise.all([parser.getText(), parser.getInfo()]);
+  await parser.destroy();
+  return { text: textResult.text || '', pages: infoResult.total || null };
 }
 
 async function extractDocx(buffer) {

@@ -12,19 +12,23 @@ const H = 1080;
 
 const AVATAR = 88;
 const AVATAR_X = 72;
-const TEXT_LEFT = 184;
-const BODY_X = 80;
+/** Left edge for name, brand, and quote — clears avatar (72+88) with comfortable gap. */
+const TEXT_LEFT = AVATAR_X + AVATAR + 40;
 const FONT_SIZE = 40;
 const LINE_HEIGHT = 58;
 const MAX_CHARS = 48;
 const MAX_LINES = 4;
 
-/** Minimum padding from top edge (increased for breathing room). */
-const TOP_INSET_MIN = 140;
+/** Minimum padding from top edge — used for vertical centering window. */
+const TOP_INSET_MIN = 118;
 /** Space reserved at bottom for brand mark + padding. */
 const FOOTER_RESERVE = 150;
-/** Gap between header cluster and quote body. */
-const GAP_HEADER_TO_BODY = 52;
+/** Gap between header cluster (name / brand) and quote body. */
+const GAP_HEADER_TO_BODY = 60;
+/** Shift the whole header + quote block upward vs pure vertical center. */
+const LAYOUT_UPWARD_BIAS = 44;
+/** Floor so the block does not clip the top of the canvas. */
+const MIN_BLOCK_TOP = 96;
 /** Vertical offsets within the content block (relative to block top = avatar top). */
 const NAME_Y_OFFSET = 36;
 const BRAND_Y_OFFSET = 80;
@@ -45,7 +49,8 @@ function computeLayoutYs(lines, hasBrandHeader) {
   const blockHeight = Math.max(AVATAR, quoteTextBottomOffset);
 
   const available = H - TOP_INSET_MIN - FOOTER_RESERVE;
-  const blockTop = TOP_INSET_MIN + Math.max(0, (available - blockHeight) / 2);
+  const centeredTop = TOP_INSET_MIN + Math.max(0, (available - blockHeight) / 2);
+  const blockTop = Math.max(MIN_BLOCK_TOP, centeredTop - LAYOUT_UPWARD_BIAS);
 
   const avatarY = blockTop;
   const nameY = blockTop + NAME_Y_OFFSET;
@@ -207,7 +212,7 @@ function buildBrandedQuoteSvg(lines, brand, linkedin, bg, text) {
     : '';
 
   const bodyXml = lines.map((line, i) =>
-    `<text x="${BODY_X}" y="${bodyStartY + i * LINE_HEIGHT}" font-family="system-ui,-apple-system,'Helvetica Neue',sans-serif" font-size="${FONT_SIZE}" font-weight="500" letter-spacing="-0.2" fill="${text}" dominant-baseline="hanging">${escapeXml(line)}</text>`
+    `<text x="${TEXT_LEFT}" y="${bodyStartY + i * LINE_HEIGHT}" font-family="system-ui,-apple-system,'Helvetica Neue',sans-serif" font-size="${FONT_SIZE}" font-weight="500" letter-spacing="-0.2" fill="${text}" dominant-baseline="hanging">${escapeXml(line)}</text>`
   ).join('\n  ');
 
   const fadeXml = `<defs>

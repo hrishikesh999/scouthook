@@ -124,6 +124,7 @@ CREATE TABLE IF NOT EXISTS linkedin_tokens (
   linkedin_user_id  text,
   linkedin_name     text,
   linkedin_photo    text,
+  linkedin_headline text,
   created_at        timestamptz NOT NULL DEFAULT now(),
   updated_at        timestamptz NOT NULL DEFAULT now(),
   UNIQUE (user_id, tenant_id)

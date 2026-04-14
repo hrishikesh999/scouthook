@@ -94,8 +94,15 @@ function bindDeleteButtons(container) {
         const titleEl = document.getElementById('drafts-title');
         if (titleEl) titleEl.textContent = `Drafts (${remaining})`;
         if (remaining === 0) renderEmpty();
+        if (window.toast && typeof window.toast.success === 'function') {
+          window.toast.success('Draft deleted.');
+        }
       } catch (err) {
-        window.alert(err.message || 'Could not delete draft');
+        if (window.toast && typeof window.toast.error === 'function') {
+          window.toast.error(err.message || 'Couldn’t delete draft. Please try again.');
+        } else {
+          window.alert(err.message || 'Could not delete draft');
+        }
         btn.disabled = false;
         btn.dataset.deleting = '';
       }
@@ -152,10 +159,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Show publish toast if navigated here after a successful publish
   if (sessionStorage.getItem('sh_just_published') === '1') {
     sessionStorage.removeItem('sh_just_published');
-    const banner = document.getElementById('publish-banner');
-    if (banner) {
-      banner.classList.remove('hidden');
-      setTimeout(() => banner.classList.add('hidden'), 5000);
+    if (window.toast && typeof window.toast.success === 'function') {
+      window.toast.success('Post published successfully.');
+    } else {
+      const banner = document.getElementById('publish-banner');
+      if (banner) {
+        banner.classList.remove('hidden');
+        setTimeout(() => banner.classList.add('hidden'), 5000);
+      }
     }
   }
 

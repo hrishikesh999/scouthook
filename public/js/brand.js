@@ -175,11 +175,15 @@ logoFileInput.addEventListener('change', async () => {
 
   const ALLOWED = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
   if (!ALLOWED.includes(file.type)) {
-    alert('Please upload a JPG, PNG, WebP, or GIF image.');
+    if (window.toast && typeof window.toast.error === 'function') {
+      window.toast.error('Logo upload failed: unsupported file type.');
+    }
     return;
   }
   if (file.size > 20 * 1024 * 1024) {
-    alert('File exceeds the 20 MB limit.');
+    if (window.toast && typeof window.toast.error === 'function') {
+      window.toast.error('Logo upload failed: file exceeds 20 MB.');
+    }
     return;
   }
 
@@ -200,8 +204,13 @@ logoFileInput.addEventListener('change', async () => {
     const data = await res.json();
     if (!data.ok) throw new Error(data.error || 'Upload failed');
     setLogo(data.file.url);
+    if (window.toast && typeof window.toast.success === 'function') {
+      window.toast.success('Logo uploaded successfully.');
+    }
   } catch (err) {
-    alert(err.message || 'Upload failed. Please try again.');
+    if (window.toast && typeof window.toast.error === 'function') {
+      window.toast.error(err.message || 'Logo upload failed. Please try again.');
+    }
   } finally {
     logoUploadBtn.disabled = false;
     logoUploading.style.display = 'none';
@@ -294,6 +303,9 @@ saveBtn.addEventListener('click', async () => {
     if (!res.ok || !data.ok) throw new Error(data.error || 'Save failed');
 
     saveBtn.textContent = 'Saved ✓';
+    if (window.toast && typeof window.toast.success === 'function') {
+      window.toast.success('Brand settings updated successfully.');
+    }
     setTimeout(() => {
       saveBtn.textContent = origText;
       saveBtn.disabled = false;
@@ -303,6 +315,9 @@ saveBtn.addEventListener('click', async () => {
     saveBtn.disabled = false;
     saveStatus.textContent = err.message || 'Could not save. Try again.';
     saveStatus.classList.add('error');
+    if (window.toast && typeof window.toast.error === 'function') {
+      window.toast.error('Couldn’t update brand settings. Please try again.');
+    }
   }
 });
 

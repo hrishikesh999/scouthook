@@ -150,12 +150,12 @@ router.get('/callback', async (req, res) => {
   const { code, state, error: oauthError } = req.query;
 
   if (oauthError) {
-    return res.redirect(`/dashboard.html?linkedin_error=${encodeURIComponent(oauthError)}`);
+    return res.redirect(`/account.html?linkedin_error=${encodeURIComponent(oauthError)}`);
   }
 
   const stateData = state ? await getOAuthState(state) : null;
   if (!stateData) {
-    return res.redirect('/dashboard.html?linkedin_error=invalid_state');
+    return res.redirect('/account.html?linkedin_error=invalid_state');
   }
   await deleteOAuthState(state);
 
@@ -184,7 +184,7 @@ router.get('/callback', async (req, res) => {
     if (!tokenRes.ok) {
       const text = await tokenRes.text();
       console.error('[linkedin/callback] Token exchange failed:', text);
-      return res.redirect('/dashboard.html?linkedin_error=token_exchange_failed');
+      return res.redirect('/account.html?linkedin_error=token_exchange_failed');
     }
 
     const tokens = await tokenRes.json();
@@ -259,11 +259,11 @@ router.get('/callback', async (req, res) => {
     });
 
     console.log(`[linkedin/callback] Connected user=${userId} as ${linkedin_name} (${linkedin_user_id})`);
-    res.redirect('/dashboard.html?linkedin_connected=true');
+    res.redirect('/account.html?linkedin_connected=true');
 
   } catch (err) {
     console.error('[linkedin/callback] Error:', err.message);
-    res.redirect(`/dashboard.html?linkedin_error=${encodeURIComponent(err.message)}`);
+    res.redirect(`/account.html?linkedin_error=${encodeURIComponent(err.message)}`);
   }
 });
 

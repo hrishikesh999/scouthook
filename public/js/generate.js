@@ -376,13 +376,22 @@ if (schedulePauseBtn) {
           if (scheduleLockMsg) {
             scheduleLockMsg.textContent = 'Schedule already ended or this post was published — state refreshed.';
           }
+          if (window.toast && typeof window.toast.info === 'function') {
+            window.toast.info('Schedule already ended — refreshed the post state.');
+          }
           return;
         }
         throw new Error(data.error || 'Could not pause');
       }
       await refetchPostAndApplyLock();
+      if (window.toast && typeof window.toast.success === 'function') {
+        window.toast.success('Scheduling paused. You can edit this post now.');
+      }
     } catch (e) {
       if (scheduleLockMsg) scheduleLockMsg.textContent = e.message || 'Could not pause';
+      if (window.toast && typeof window.toast.error === 'function') {
+        window.toast.error('Couldn’t pause scheduling. Please try again.');
+      }
     } finally {
       schedulePauseBtn.disabled = false;
     }
@@ -1149,9 +1158,15 @@ scheduleConfirm.addEventListener('click', async () => {
     };
     applyScheduleLockUi();
     showPublishedState(`Scheduled · ${dateStr}`);
+    if (window.toast && typeof window.toast.success === 'function') {
+      window.toast.success('Post scheduled successfully.');
+    }
   } catch (err) {
     modalError.textContent = err.message || 'Something went wrong. Try again.';
     modalError.classList.add('visible');
+    if (window.toast && typeof window.toast.error === 'function') {
+      window.toast.error('Couldn’t schedule post. Please check the date/time and try again.');
+    }
   } finally {
     scheduleConfirm.textContent = 'Schedule';
     scheduleConfirm.disabled = false;
@@ -1227,12 +1242,18 @@ publishNowBtn.addEventListener('click', async () => {
     postTextarea.classList.add('published');
     showPublishedState('Published · just now');
     Session.clear();
+    if (window.toast && typeof window.toast.success === 'function') {
+      window.toast.success('Post published successfully.');
+    }
 
   } catch (err) {
     publishNowBtn.textContent = 'Publish now';
     publishNowBtn.disabled = false;
     modalError.textContent = err.message || 'Publish failed. Please try again.';
     modalError.classList.add('visible');
+    if (window.toast && typeof window.toast.error === 'function') {
+      window.toast.error('Couldn’t publish post. Please try again.');
+    }
   }
 });
 

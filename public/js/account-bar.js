@@ -1,4 +1,4 @@
-/* account-bar.js — signed-in user strip (bottom-right) + sidebar account footer */
+/* account-bar.js — sidebar signed-in user + logout (no floating widget) */
 
 (function () {
   function initials(name, email) {
@@ -35,81 +35,39 @@
     }
   }
 
-  function renderFloatingBar(user) {
+  function renderSidebarAccount(user) {
+    const sidebar = document.getElementById('sidebar');
+    if (!sidebar) return;
+
+    const slot = sidebar.querySelector('#sidebar-account-slot');
+    if (!slot) return;
+
     const label = user.displayName || user.email || 'Google user';
     const email = user.email && user.email !== label ? user.email : '';
     const photoUrl = safeImageUrl(user.photo);
 
-    const bar = document.createElement('div');
-    bar.id = 'app-user-bar';
-    bar.className = 'app-user-bar';
-    bar.setAttribute('role', 'region');
-    bar.setAttribute('aria-label', 'Your account');
-
-    bar.innerHTML = `
-      <div class="app-user-bar-main">
-        <div class="app-user-bar-avatar"></div>
-        <div class="app-user-bar-text">
-          <div class="app-user-bar-kicker">Signed in as</div>
-          <div class="app-user-bar-name">${escapeHtml(label)}</div>
-          ${email ? `<div class="app-user-bar-email">${escapeHtml(email)}</div>` : ''}
-        </div>
-      </div>
-      <div class="app-user-bar-actions">
-        <a href="/profile.html" class="app-user-bar-link">Voice profile</a>
-        <span class="app-user-bar-sep" aria-hidden="true">·</span>
-        <a href="/brand.html" class="app-user-bar-link">Brand</a>
-        <span class="app-user-bar-sep" aria-hidden="true">·</span>
-        <button type="button" class="app-user-bar-logout">Log out</button>
-      </div>
-    `;
-
-    const avWrap = bar.querySelector('.app-user-bar-avatar');
-    if (photoUrl) {
-      const img = document.createElement('img');
-      img.className = 'app-user-bar-avatar-img';
-      img.src = photoUrl;
-      img.alt = '';
-      img.width = 40;
-      img.height = 40;
-      avWrap.appendChild(img);
-    } else {
-      const sp = document.createElement('span');
-      sp.className = 'app-user-bar-avatar-fallback';
-      sp.setAttribute('aria-hidden', 'true');
-      sp.textContent = initials(label, user.email);
-      avWrap.appendChild(sp);
-    }
-
-    bar.querySelector('.app-user-bar-logout').addEventListener('click', logOut);
-    document.body.appendChild(bar);
-  }
-
-  function renderSidebarFoot(user) {
-    const sidebar = document.getElementById('sidebar');
-    if (!sidebar) return;
-
-    const linkedin = sidebar.querySelector('.sidebar-linkedin');
-    if (!linkedin) return;
-
-    let foot = document.getElementById('sidebar-account-foot');
-    if (!foot) {
-      foot = document.createElement('div');
-      foot.id = 'sidebar-account-foot';
-      foot.className = 'sidebar-account-foot';
-      linkedin.before(foot);
-    }
-
-    const label = user.displayName || user.email || 'Google user';
-    foot.innerHTML = `
+    slot.innerHTML = `
       <div class="sidebar-account-foot-inner">
         <span class="sidebar-account-foot-label">Account</span>
-        <span class="sidebar-account-foot-name" title="${escapeAttr(user.email || '')}">${escapeHtml(label)}</span>
-        <a href="/profile.html" class="sidebar-account-foot-link">Account settings</a>
+        <div class="sidebar-account-foot-row">
+          <span class="sidebar-account-foot-avatar" aria-hidden="true"></span>
+          <span class="sidebar-account-foot-name" title="${escapeAttr(user.email || '')}">${escapeHtml(label)}</span>
+        </div>
+        ${email ? `<span class="sidebar-account-foot-email" title="${escapeAttr(email)}">${escapeHtml(email)}</span>` : ''}
         <button type="button" class="sidebar-account-foot-logout">Log out</button>
       </div>
     `;
-    foot.querySelector('.sidebar-account-foot-logout').addEventListener('click', logOut);
+
+    const av = slot.querySelector('.sidebar-account-foot-avatar');
+    if (av) {
+      if (photoUrl) {
+        av.innerHTML = `<img class="sidebar-account-foot-avatar-img" src="${escapeAttr(photoUrl)}" alt="" />`;
+      } else {
+        av.textContent = initials(label, user.email);
+      }
+    }
+
+    slot.querySelector('.sidebar-account-foot-logout').addEventListener('click', logOut);
   }
 
   function escapeHtml(str) {
@@ -131,8 +89,7 @@
       .then((data) => {
         const user = data && data.user;
         if (!user || !user.user_id) return;
-        renderFloatingBar(user);
-        renderSidebarFoot(user);
+        renderSidebarAccount(user);
       })
       .catch(() => { /* offline */ });
   }

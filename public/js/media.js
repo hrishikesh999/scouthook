@@ -219,8 +219,15 @@ async function deleteMedia(id, cardEl) {
     // Show empty state if no cards left
     const remaining = mediaGrid.querySelectorAll('.media-card');
     if (emptyMediaMsg && remaining.length === 0) emptyMediaMsg.style.display = '';
+    if (window.toast && typeof window.toast.success === 'function') {
+      window.toast.success('File deleted.');
+    }
   } catch (err) {
-    alert(err.message || 'Could not delete file');
+    if (window.toast && typeof window.toast.error === 'function') {
+      window.toast.error(err.message || 'Couldn’t delete file. Please try again.');
+    } else {
+      alert(err.message || 'Could not delete file');
+    }
   }
 }
 
@@ -231,6 +238,9 @@ async function copyToClipboard(text, btn) {
     const orig = btn.innerHTML;
     btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>`;
     setTimeout(() => { btn.innerHTML = orig; }, 1500);
+    if (window.toast && typeof window.toast.success === 'function') {
+      window.toast.success('Link copied to clipboard.');
+    }
   } catch {
     prompt('Copy this link:', text);
   }
@@ -238,11 +248,8 @@ async function copyToClipboard(text, btn) {
 
 /* ── Error toast ──────────────────────────────────────────────── */
 function showUploadError(msg) {
-  const toast = document.getElementById('media-toast');
-  if (!toast) return;
-  toast.textContent = msg;
-  toast.classList.add('visible');
-  setTimeout(() => toast.classList.remove('visible'), 4000);
+  if (!window.toast || typeof window.toast.error !== 'function') return;
+  window.toast.error(msg);
 }
 
 /* ── Helpers ──────────────────────────────────────────────────── */

@@ -34,14 +34,9 @@ function timeAgo(isoString) {
 }
 
 function showToast(message, isError = false) {
-  const toast = document.getElementById('published-toast');
-  if (!toast) return;
-  toast.textContent = message;
-  toast.className = 'published-toast published-toast--visible' + (isError ? ' published-toast--error' : '');
-  clearTimeout(toast._timer);
-  toast._timer = setTimeout(() => {
-    toast.className = 'published-toast';
-  }, 5000);
+  if (!window.toast) return;
+  const fn = isError ? window.toast.error : window.toast.success;
+  if (typeof fn === 'function') fn(message);
 }
 
 // ---------------------------------------------------------------------------

@@ -93,6 +93,9 @@ saveBtn.addEventListener('click', async () => {
     }
 
     saveBtn.textContent = 'Saved ✓';
+    if (window.toast && typeof window.toast.success === 'function') {
+      window.toast.success('Voice profile updated successfully.');
+    }
     setTimeout(() => {
       saveBtn.textContent = origText;
       saveBtn.disabled = false;
@@ -103,5 +106,8 @@ saveBtn.addEventListener('click', async () => {
     saveBtn.disabled = false;
     saveError.textContent = err.message || 'Something went wrong. Try again.';
     saveError.classList.add('visible');
+    if (window.toast && typeof window.toast.error === 'function') {
+      window.toast.error('Couldn’t update voice profile. Please try again.');
+    }
   }
 });

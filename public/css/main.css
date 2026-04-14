@@ -255,6 +255,41 @@ body {
   border-top: 1px solid var(--border);
 }
 
+.account-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-surface);
+  margin-bottom: var(--space-5);
+}
+
+.account-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  color: var(--text-secondary);
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.account-tab:hover {
+  background: var(--bg-pill);
+  color: var(--text-heading);
+}
+
+.account-tab.active {
+  background: var(--sidebar-active-bg);
+  color: var(--text-heading);
+}
+
 .sidebar-accordion {
   border-radius: var(--radius-md);
   overflow: hidden;

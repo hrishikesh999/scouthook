@@ -99,7 +99,7 @@ router.get('/status', (req, res) => {
 
   (async () => {
     const row = await db.prepare(
-      'SELECT linkedin_name, linkedin_photo FROM linkedin_tokens WHERE user_id = ? AND tenant_id = ?'
+      'SELECT linkedin_name, linkedin_photo, linkedin_headline FROM linkedin_tokens WHERE user_id = ? AND tenant_id = ?'
     ).get(userId, tenantId);
 
     return res.json({
@@ -107,6 +107,7 @@ router.get('/status', (req, res) => {
       connected: !!row,
       name:      row?.linkedin_name || null,
       photo_url: row?.linkedin_photo?.trim() || null,
+      headline:  row?.linkedin_headline || null,
     });
   })().catch(() => res.json({ ok: true, connected: false, name: null, photo_url: null }));
 });
@@ -197,6 +198,7 @@ router.get('/callback', async (req, res) => {
     let linkedin_user_id = null;
     let linkedin_name    = null;
     let linkedin_photo   = null;
+    let linkedin_headline = null;
 
     if (profileRes.ok) {
       const profile = await profileRes.json();
@@ -209,26 +211,26 @@ router.get('/callback', async (req, res) => {
       console.error('[linkedin/callback] userinfo fetch failed:', profileRes.status, text);
     }
 
-    // Fallback: some accounts/apps don't receive OIDC `picture` reliably.
-    // Try LinkedIn REST `me` with profilePicture projection and LinkedIn-Version header.
-    if (!linkedin_photo) {
-      try {
-        const meRes = await fetch(
-          'https://api.linkedin.com/v2/me?projection=(localizedFirstName,localizedLastName,profilePicture(displayImage~:playableStreams))',
-          {
-            headers: {
-              'Authorization': `Bearer ${tokens.access_token}`,
-              'LinkedIn-Version': '202308',
-            },
-          }
-        );
+    // Always fetch /v2/me for headline; also used as fallback for name and photo.
+    try {
+      const meRes = await fetch(
+        'https://api.linkedin.com/v2/me?projection=(localizedFirstName,localizedLastName,localizedHeadline,profilePicture(displayImage~:playableStreams))',
+        {
+          headers: {
+            'Authorization': `Bearer ${tokens.access_token}`,
+            'LinkedIn-Version': '202308',
+          },
+        }
+      );
 
-        if (meRes.ok) {
-          const me = await meRes.json();
-          if (!linkedin_name) {
-            linkedin_name = `${me.localizedFirstName || ''} ${me.localizedLastName || ''}`.trim() || null;
-          }
+      if (meRes.ok) {
+        const me = await meRes.json();
+        if (!linkedin_name) {
+          linkedin_name = `${me.localizedFirstName || ''} ${me.localizedLastName || ''}`.trim() || null;
+        }
+        if (me.localizedHeadline) linkedin_headline = me.localizedHeadline;
 
+        if (!linkedin_photo) {
           const streams = me?.profilePicture?.['displayImage~']?.elements || [];
           const best = streams
             .map(el => ({
@@ -238,15 +240,14 @@ router.get('/callback', async (req, res) => {
             }))
             .filter(x => !!x.url)
             .sort((a, b) => b.area - a.area)[0];
-
           if (best?.url) linkedin_photo = best.url;
-        } else {
-          const text = await meRes.text();
-          console.warn('[linkedin/callback] me fallback failed:', meRes.status, text);
         }
-      } catch (e) {
-        console.warn('[linkedin/callback] me fallback error:', e.message);
+      } else {
+        const text = await meRes.text();
+        console.warn('[linkedin/callback] me fetch failed:', meRes.status, text);
       }
+    } catch (e) {
+      console.warn('[linkedin/callback] me fetch error:', e.message);
     }
 
     await storeTokens(userId, tenantId, {
@@ -256,6 +257,7 @@ router.get('/callback', async (req, res) => {
       linkedin_user_id,
       linkedin_name,
       linkedin_photo,
+      linkedin_headline,
     });
 
     console.log(`[linkedin/callback] Connected user=${userId} as ${linkedin_name} (${linkedin_user_id})`);

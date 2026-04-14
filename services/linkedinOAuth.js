@@ -65,7 +65,7 @@ function decrypt(encryptedStr) {
  * Encrypt and upsert LinkedIn tokens into linkedin_tokens.
  * @param {string} userId
  * @param {string} tenantId
- * @param {{ access_token, refresh_token?, expires_in, linkedin_user_id, linkedin_name, linkedin_photo? }} tokenData
+ * @param {{ access_token, refresh_token?, expires_in, linkedin_user_id, linkedin_name, linkedin_photo?, linkedin_headline? }} tokenData
  */
 async function storeTokens(userId, tenantId, tokenData) {
   const {
@@ -74,7 +74,8 @@ async function storeTokens(userId, tenantId, tokenData) {
     expires_in,
     linkedin_user_id,
     linkedin_name,
-    linkedin_photo = null,
+    linkedin_photo    = null,
+    linkedin_headline = null,
   } = tokenData;
 
   const accessTokenEnc  = encrypt(access_token);
@@ -83,8 +84,8 @@ async function storeTokens(userId, tenantId, tokenData) {
 
   await db.prepare(`
     INSERT INTO linkedin_tokens
-      (user_id, tenant_id, access_token_enc, refresh_token_enc, expires_at, linkedin_user_id, linkedin_name, linkedin_photo, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      (user_id, tenant_id, access_token_enc, refresh_token_enc, expires_at, linkedin_user_id, linkedin_name, linkedin_photo, linkedin_headline, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     ON CONFLICT(user_id, tenant_id) DO UPDATE SET
       access_token_enc  = excluded.access_token_enc,
       refresh_token_enc = COALESCE(excluded.refresh_token_enc, linkedin_tokens.refresh_token_enc),
@@ -92,8 +93,9 @@ async function storeTokens(userId, tenantId, tokenData) {
       linkedin_user_id  = excluded.linkedin_user_id,
       linkedin_name     = excluded.linkedin_name,
       linkedin_photo    = COALESCE(excluded.linkedin_photo, linkedin_tokens.linkedin_photo),
+      linkedin_headline = COALESCE(excluded.linkedin_headline, linkedin_tokens.linkedin_headline),
       updated_at        = CURRENT_TIMESTAMP
-  `).run(userId, tenantId, accessTokenEnc, refreshTokenEnc, expiresAt, linkedin_user_id, linkedin_name, linkedin_photo);
+  `).run(userId, tenantId, accessTokenEnc, refreshTokenEnc, expiresAt, linkedin_user_id, linkedin_name, linkedin_photo, linkedin_headline);
 }
 
 // ---------------------------------------------------------------------------

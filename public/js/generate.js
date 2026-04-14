@@ -391,19 +391,7 @@ document.addEventListener('visibilitychange', () => {
 
 /* ── 3. Init ─────────────────────────────────────────────────── */
 (async function init() {
-  const authData = await window.scouthookAuthReady;
-
-  // Pre-populate LinkedIn preview with Google auth data as fallback
-  if (authData?.user) {
-    if (authData.user.displayName) previewName.textContent = authData.user.displayName;
-    if (authData.user.photo) {
-      previewAvatarImg.src = authData.user.photo;
-      previewAvatarImg.style.display = '';
-      previewInitials.style.display = 'none';
-    } else if (authData.user.displayName) {
-      previewInitials.textContent = authData.user.displayName.charAt(0).toUpperCase();
-    }
-  }
+  await window.scouthookAuthReady;
 
   // Wire userId into the Connect LinkedIn button href
   const connectBtn = document.getElementById('linkedin-connect-btn');
@@ -411,7 +399,7 @@ document.addEventListener('visibilitychange', () => {
     connectBtn.href = `/api/linkedin/connect?_uid=${encodeURIComponent(getUserId())}&_tid=${encodeURIComponent(getTenantId())}`;
   }
 
-  await checkLinkedInStatus(); // overrides preview with LinkedIn data if connected
+  await checkLinkedInStatus();
   await loadProfile();
 
   const _qs      = new URLSearchParams(window.location.search);
@@ -489,8 +477,9 @@ async function checkLinkedInStatus() {
     const area = document.getElementById('nav-linkedin-area');
     if (data.connected) {
       area.innerHTML = buildLinkedInChip(data.name, data.photo_url);
-      // Populate LinkedIn preview header
+      // Populate LinkedIn preview header from LinkedIn account data
       if (data.name) previewName.textContent = data.name;
+      if (data.headline) previewHeadline.textContent = data.headline;
       if (data.photo_url) {
         previewAvatarImg.src = data.photo_url;
         previewAvatarImg.style.display = '';
@@ -513,8 +502,6 @@ async function loadProfile() {
     const profile = data.profile;
 
     const complete = profile && profile.content_niche && profile.audience_role && profile.audience_pain;
-    const headline = profile?.content_niche || profile?.audience_role;
-    if (headline) previewHeadline.textContent = headline;
     if (complete) {
       voiceIndicator.innerHTML = `<div class="voice-indicator"><span class="voice-indicator-dot voice-indicator-dot--green"></span><a href="/profile.html" class="edit-link">Created using your voice profile</a></div>`;
     } else {

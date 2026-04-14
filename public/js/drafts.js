@@ -33,7 +33,7 @@ async function checkLinkedInStatus() {
     const res  = await fetch('/api/linkedin/status', { headers: apiHeaders() });
     const data = await res.json();
     const area = document.getElementById('nav-linkedin-area');
-    if (data.connected) {
+    if (data.connected && area) {
       area.innerHTML = buildLinkedInChip(data.name, data.photo_url);
     }
   } catch {

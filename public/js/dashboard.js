@@ -45,8 +45,7 @@ async function checkLinkedInStatus() {
     const area = document.getElementById('nav-linkedin-area');
 
     if (data.connected) {
-      // Update nav
-      area.innerHTML = buildLinkedInChip(data.name, data.photo_url);
+      if (area) area.innerHTML = buildLinkedInChip(data.name, data.photo_url);
 
       // Update stat card
       statLinkedIn.textContent = 'Connected';

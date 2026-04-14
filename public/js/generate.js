@@ -472,20 +472,26 @@ function buildLinkedInChip(name, photoUrl) {
 
 async function checkLinkedInStatus() {
   try {
-    const res = await fetch('/api/linkedin/status', { headers: apiHeaders() });
+    const res = await fetch('/api/linkedin/status', { headers: apiHeaders(), credentials: 'same-origin' });
     const data = await res.json();
     const area = document.getElementById('nav-linkedin-area');
     if (data.connected) {
-      area.innerHTML = buildLinkedInChip(data.name, data.photo_url);
-      // Populate LinkedIn preview header from LinkedIn account data
-      if (data.name) previewName.textContent = data.name;
-      if (data.headline) previewHeadline.textContent = data.headline;
+      if (area) area.innerHTML = buildLinkedInChip(data.name, data.photo_url);
+      // Populate LinkedIn preview header (generate.html has no nav-linkedin-area; must not throw)
+      previewName.textContent = data.name || 'Your Name';
+      previewHeadline.textContent = data.headline || '';
       if (data.photo_url) {
         previewAvatarImg.src = data.photo_url;
+        previewAvatarImg.alt = data.name ? `Photo of ${data.name}` : '';
         previewAvatarImg.style.display = '';
         previewInitials.style.display = 'none';
-      } else if (data.name) {
-        previewInitials.textContent = data.name.charAt(0).toUpperCase();
+      } else {
+        previewAvatarImg.removeAttribute('src');
+        previewAvatarImg.style.display = 'none';
+        previewInitials.style.display = 'flex';
+        previewInitials.textContent = data.name
+          ? data.name.charAt(0).toUpperCase()
+          : (previewName.textContent || 'U').charAt(0).toUpperCase();
       }
     }
   } catch {
@@ -805,6 +811,7 @@ function switchView(view) {
     rightPanel.classList.add('preview-mode');
     buildLinkedInPreview(postTextarea.value);
     renderPreviewAsset();
+    void checkLinkedInStatus();
     linkedinPreview.classList.add('visible');
     linkedinPreview.setAttribute('aria-hidden', 'false');
     wordCountEl.style.display = 'none';

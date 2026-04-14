@@ -128,6 +128,7 @@ async function runSinglePostGeneration({
   let userPrompt = buildUserPrompt(rawIdea);
 
   const extraHints = [
+    options._funnelHint,
     options.qualityRetryHint,
     options._regenerateHint,
   ].filter(Boolean).join('\n\n');

@@ -209,6 +209,8 @@ app.use('/api/linkedin', require('./routes/linkedin'));
 app.use('/api/events', require('./routes/events'));
 app.use('/api/media', require('./routes/media'));
 app.use('/api/notifications', require('./routes/notifications'));
+app.use('/api/vault', require('./routes/vault'));
+app.use('/api/funnel', require('./routes/funnel'));
 app.use('/api', require('./routes/stats'));
 
 // Unmatched /api/* — avoid falling through to static/HTML 404
@@ -236,6 +238,8 @@ app.get([
   '/Media.html',
   '/profile.html',
   '/brand.html',
+  '/vault.html',
+  '/ideas.html',
 ], requireLoginHtml);
 
 app.use(express.static(path.join(__dirname, 'public')));

@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vault — ScoutHook</title>
+  <link rel="stylesheet" href="/css/main.css">
+  <style>
+    /* ── Vault page layout ──────────────────────────────────────── */
+    .vault-page {
+      display: grid;
+      grid-template-columns: 1fr 1.4fr;
+      gap: var(--space-8);
+      padding: var(--space-8);
+      max-width: 1100px;
+      margin: 0 auto;
+      height: 100%;
+      box-sizing: border-box;
+    }
+
+    /* ── Left: Upload panel ─────────────────────────────────────── */
+    .vault-upload-panel {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-6);
+    }
+
+    .vault-panel-heading {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--text-heading);
+      margin: 0 0 var(--space-1) 0;
+    }
+
+    .vault-panel-sub {
+      font-size: 0.875rem;
+      color: var(--text-muted);
+      margin: 0;
+      line-height: 1.5;
+    }
+
+    /* Dropzone */
+    .vault-dropzone {
+      border: 2px dashed var(--border);
+      border-radius: var(--radius-lg);
+      background: var(--bg-subtle);
+      padding: var(--space-10) var(--space-8);
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+      position: relative;
+    }
+    .vault-dropzone:hover,
+    .vault-dropzone.dragging {
+      border-color: var(--brand);
+      background: #F0FDF9;
+    }
+    .vault-dropzone input[type="file"] {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+      width: 100%;
+      height: 100%;
+    }
+    .vault-dropzone-icon {
+      width: 40px;
+      height: 40px;
+      margin: 0 auto var(--space-3);
+      color: var(--text-muted);
+    }
+    .vault-dropzone-label {
+      font-size: 0.9375rem;
+      font-weight: 600;
+      color: var(--text-heading);
+      margin: 0 0 var(--space-1) 0;
+    }
+    .vault-dropzone-hint {
+      font-size: 0.8125rem;
+      color: var(--text-muted);
+      margin: 0;
+    }
+
+    /* Divider */
+    .vault-divider {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      color: var(--text-muted);
+      font-size: 0.8125rem;
+    }
+    .vault-divider::before,
+    .vault-divider::after {
+      content: '';
+      flex: 1;
+      border-top: 1px solid var(--border);
+    }
+
+    /* URL input */
+    .vault-url-row {
+      display: flex;
+      gap: var(--space-2);
+    }
+    .vault-url-input {
+      flex: 1;
+      font-family: var(--font-sans);
+      font-size: 0.875rem;
+      padding: 10px var(--space-3);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      color: var(--text-heading);
+      background: var(--bg-surface);
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .vault-url-input:focus { border-color: var(--brand); }
+    .vault-url-input::placeholder { color: var(--text-muted); }
+
+    .vault-url-btn {
+      font-family: var(--font-sans);
+      font-size: 0.875rem;
+      font-weight: 600;
+      padding: 10px var(--space-4);
+      border: none;
+      border-radius: var(--radius-md);
+      background: var(--brand);
+      color: #fff;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.15s;
+    }
+    .vault-url-btn:hover { background: var(--brand-hover); }
+    .vault-url-btn:disabled { background: var(--teal-disabled); cursor: not-allowed; }
+
+    /* Upload feedback */
+    .vault-upload-status {
+      font-size: 0.8125rem;
+      padding: var(--space-3) var(--space-4);
+      border-radius: var(--radius-md);
+      display: none;
+    }
+    .vault-upload-status.info  { background: #EFF6FF; color: #1D4ED8; display: block; }
+    .vault-upload-status.error { background: #FEF2F2; color: #DC2626; display: block; }
+    .vault-upload-status.ok    { background: #ECFDF5; color: #065F46; display: block; }
+
+    /* ── Right: Document list panel ─────────────────────────────── */
+    .vault-docs-panel {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-4);
+      min-width: 0;
+    }
+
+    .vault-docs-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-4);
+    }
+
+    .vault-mine-btn {
+      font-family: var(--font-sans);
+      font-size: 0.875rem;
+      font-weight: 600;
+      padding: 9px var(--space-5);
+      border: none;
+      border-radius: var(--radius-md);
+      background: var(--brand);
+      color: #fff;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      transition: background 0.15s;
+      white-space: nowrap;
+    }
+    .vault-mine-btn:hover  { background: var(--brand-hover); }
+    .vault-mine-btn:disabled { background: var(--teal-disabled); cursor: not-allowed; }
+
+    .vault-mine-btn svg { flex-shrink: 0; }
+
+    /* Empty state */
+    .vault-empty {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: var(--space-12) var(--space-8);
+      text-align: center;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      background: var(--bg-subtle);
+    }
+    .vault-empty-icon { color: var(--text-muted); margin-bottom: var(--space-3); }
+    .vault-empty-label { font-size: 0.9375rem; font-weight: 600; color: var(--text-secondary); margin: 0 0 var(--space-1) 0; }
+    .vault-empty-sub   { font-size: 0.8125rem; color: var(--text-muted); margin: 0; }
+
+    /* Document list */
+    .vault-doc-list {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-3);
+      overflow-y: auto;
+      max-height: calc(100vh - 200px);
+    }
+
+    .vault-doc-card {
+      display: flex;
+      align-items: flex-start;
+      gap: var(--space-3);
+      padding: var(--space-4);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      background: var(--bg-surface);
+      box-shadow: var(--shadow-sm);
+      transition: box-shadow 0.15s;
+    }
+    .vault-doc-card:hover { box-shadow: var(--shadow-md); }
+
+    .vault-doc-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: var(--radius-md);
+      background: var(--bg-pill);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      color: var(--text-secondary);
+    }
+
+    .vault-doc-body { flex: 1; min-width: 0; }
+    .vault-doc-name {
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: var(--text-heading);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin: 0 0 2px 0;
+    }
+    .vault-doc-meta {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin: 0 0 var(--space-2) 0;
+    }
+
+    /* Status badge */
+    .vault-status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 0.6875rem;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: var(--radius-pill);
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    .vault-status-badge.pending  { background: var(--bg-pill);         color: var(--text-muted); }
+    .vault-status-badge.indexing { background: #EFF6FF;                color: #1D4ED8; }
+    .vault-status-badge.ready    { background: var(--bg-pill-pass);    color: #065F46; }
+    .vault-status-badge.error    { background: var(--bg-pill-fail);    color: var(--text-danger); }
+
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+      animation: none;
+    }
+    .vault-status-badge.indexing .status-dot {
+      animation: pulse-dot 1.2s ease-in-out infinite;
+    }
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.3; }
+    }
+
+    .vault-doc-ideas {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+
+    .vault-doc-delete {
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: var(--space-1);
+      color: var(--text-muted);
+      border-radius: var(--radius-sm);
+      transition: color 0.15s, background 0.15s;
+      flex-shrink: 0;
+    }
+    .vault-doc-delete:hover { color: var(--text-danger); background: var(--bg-pill-fail); }
+
+    /* Mine status bar */
+    .vault-mine-status {
+      font-size: 0.8125rem;
+      padding: var(--space-3) var(--space-4);
+      border-radius: var(--radius-md);
+      display: none;
+    }
+    .vault-mine-status.info  { background: #EFF6FF; color: #1D4ED8; display: block; }
+    .vault-mine-status.ok    { background: #ECFDF5; color: #065F46; display: block; }
+    .vault-mine-status.error { background: #FEF2F2; color: var(--text-danger); display: block; }
+
+    /* View ideas link */
+    .vault-ideas-link {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: var(--brand);
+      text-decoration: none;
+      margin-top: var(--space-2);
+    }
+    .vault-ideas-link:hover { color: var(--brand-hover); }
+  </style>
+</head>
+<body>
+
+  <!-- ── Sidebar ──────────────────────────────────────────────── -->
+  <aside id="sidebar" role="navigation" aria-label="Main navigation">
+    <a href="/dashboard.html" class="sidebar-logo">
+      <img src="/images/scout-hook-logo.png" alt="ScoutHook" class="sidebar-logo-img">
+    </a>
+    <div class="sidebar-cta">
+      <a href="/generate.html?new=1" class="sidebar-cta-btn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Create Post
+      </a>
+    </div>
+    <nav class="sidebar-nav">
+      <a href="/dashboard.html" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Dashboard</a>
+      <a href="/generate.html" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>Generate</a>
+      <a href="/vault.html" class="sidebar-link active"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>Vault</a>
+      <a href="/ideas.html" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>Ideas</a>
+      <a href="/drafts.html" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>Drafts</a>
+      <a href="/schedule.html" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Schedule</a>
+      <a href="/Published.html" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>Published</a>
+      <a href="/Media.html" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>Media</a>
+    </nav>
+    <div class="sidebar-bottom">
+      <span class="sidebar-group-label">Account Settings</span>
+      <a href="/profile.html" class="sidebar-sublink"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Voice Profile</a>
+      <a href="/brand.html" class="sidebar-sublink"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="13.5" cy="6.5" r="1" fill="currentColor" stroke="none"/><circle cx="17.5" cy="10.5" r="1" fill="currentColor" stroke="none"/><circle cx="8.5" cy="7.5" r="1" fill="currentColor" stroke="none"/><circle cx="6.5" cy="12.5" r="1" fill="currentColor" stroke="none"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>Brand Settings</a>
+    </div>
+    <div class="sidebar-linkedin">
+      <div id="nav-linkedin-area">
+        <a href="/api/linkedin/connect" class="nav-linkedin-btn" id="linkedin-connect-btn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="#0A66C2" aria-hidden="true"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+          Connect LinkedIn
+        </a>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ── Main content ──────────────────────────────────────────── -->
+  <div id="main-content">
+    <main id="app" style="padding: 0; overflow-y: auto;">
+      <div class="vault-page">
+
+        <!-- ── Left: Upload panel ──────────────────────────────── -->
+        <section class="vault-upload-panel" aria-label="Upload documents">
+          <div>
+            <h1 class="vault-panel-heading">Your Vault</h1>
+            <p class="vault-panel-sub">Upload your expertise — PDFs, decks, newsletters — and ScoutHook will mine them for post ideas grounded in your actual thinking.</p>
+          </div>
+
+          <!-- File dropzone -->
+          <label class="vault-dropzone" id="vault-dropzone" aria-label="Drop files here or click to browse">
+            <input type="file" id="vault-file-input" accept=".pdf,.docx,.txt" multiple aria-label="Choose file">
+            <svg class="vault-dropzone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            <p class="vault-dropzone-label">Drop files here or click to browse</p>
+            <p class="vault-dropzone-hint">PDF, DOCX, or TXT · Up to 25 MB each</p>
+          </label>
+
+          <div id="vault-upload-status" class="vault-upload-status" role="status" aria-live="polite"></div>
+
+          <!-- URL divider -->
+          <div class="vault-divider">or paste a URL</div>
+
+          <!-- URL input -->
+          <div class="vault-url-row">
+            <input
+              type="url"
+              id="vault-url-input"
+              class="vault-url-input"
+              placeholder="https://your-newsletter.com/article…"
+              aria-label="Article or newsletter URL"
+            >
+            <button id="vault-url-btn" class="vault-url-btn">Add URL</button>
+          </div>
+        </section>
+
+        <!-- ── Right: Documents panel ──────────────────────────── -->
+        <section class="vault-docs-panel" aria-label="Vault documents">
+          <div class="vault-docs-header">
+            <h2 class="vault-panel-heading" style="margin:0">Documents</h2>
+            <button id="vault-mine-btn" class="vault-mine-btn" disabled>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+              Generate Ideas
+            </button>
+          </div>
+
+          <div id="vault-mine-status" class="vault-mine-status" role="status" aria-live="polite"></div>
+
+          <!-- Empty state -->
+          <div id="vault-empty" class="vault-empty" aria-label="No documents yet">
+            <svg class="vault-empty-icon" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+            <p class="vault-empty-label">Your vault is empty</p>
+            <p class="vault-empty-sub">Upload a PDF, DOCX, or paste a URL to get started.</p>
+          </div>
+
+          <!-- Document list -->
+          <div id="vault-doc-list" class="vault-doc-list" style="display:none"></div>
+
+          <!-- View ideas link -->
+          <a href="/ideas.html" class="vault-ideas-link" id="vault-ideas-link" style="display:none">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+            View your Ideas →
+          </a>
+        </section>
+
+      </div>
+    </main>
+  </div>
+
+  <script>
+  'use strict';
+
+  // ── State ─────────────────────────────────────────────────────
+  let documents = [];
+
+  // ── DOM refs ──────────────────────────────────────────────────
+  const dropzone       = document.getElementById('vault-dropzone');
+  const fileInput      = document.getElementById('vault-file-input');
+  const urlInput       = document.getElementById('vault-url-input');
+  const urlBtn         = document.getElementById('vault-url-btn');
+  const uploadStatus   = document.getElementById('vault-upload-status');
+  const mineBtn        = document.getElementById('vault-mine-btn');
+  const mineStatus     = document.getElementById('vault-mine-status');
+  const docList        = document.getElementById('vault-doc-list');
+  const emptyState     = document.getElementById('vault-empty');
+  const ideasLink      = document.getElementById('vault-ideas-link');
+
+  // ── Helpers ───────────────────────────────────────────────────
+  function setUploadStatus(msg, type) {
+    uploadStatus.textContent = msg;
+    uploadStatus.className   = `vault-upload-status ${type}`;
+  }
+  function clearUploadStatus() {
+    uploadStatus.textContent = '';
+    uploadStatus.className   = 'vault-upload-status';
+  }
+  function setMineStatus(msg, type) {
+    mineStatus.textContent = msg;
+    mineStatus.className   = `vault-mine-status ${type}`;
+  }
+
+  // ── Drag-and-drop ─────────────────────────────────────────────
+  dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('dragging'); });
+  dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragging'));
+  dropzone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropzone.classList.remove('dragging');
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length) uploadFiles(files);
+  });
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files.length) uploadFiles(Array.from(fileInput.files));
+    fileInput.value = '';
+  });
+
+  // ── File upload ───────────────────────────────────────────────
+  async function uploadFiles(files) {
+    for (const file of files) {
+      const mime = file.type || guessMime(file.name);
+      if (!['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain'].includes(mime)) {
+        setUploadStatus(`"${file.name}" is not a supported file type (PDF, DOCX, TXT only).`, 'error');
+        continue;
+      }
+      setUploadStatus(`Uploading "${file.name}"…`, 'info');
+      try {
+        const buffer = await file.arrayBuffer();
+        const res    = await fetch('/api/vault/upload', {
+          method:  'POST',
+          headers: { 'Content-Type': mime, 'X-Filename': encodeURIComponent(file.name) },
+          body:    buffer,
+        });
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || 'Upload failed');
+        setUploadStatus(`"${file.name}" uploaded — indexing…`, 'ok');
+        prependDocument(data.document);
+        pollDocumentStatus(data.document.id);
+      } catch (err) {
+        setUploadStatus(`Upload failed: ${err.message}`, 'error');
+      }
+    }
+  }
+
+  function guessMime(filename) {
+    if (/\.pdf$/i.test(filename))  return 'application/pdf';
+    if (/\.docx$/i.test(filename)) return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    if (/\.txt$/i.test(filename))  return 'text/plain';
+    return 'application/octet-stream';
+  }
+
+  // ── URL upload ────────────────────────────────────────────────
+  urlBtn.addEventListener('click', async () => {
+    const url = urlInput.value.trim();
+    if (!url) return;
+    urlBtn.disabled = true;
+    setUploadStatus('Adding URL…', 'info');
+    try {
+      const res  = await fetch('/api/vault/upload', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ url }),
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || 'Failed to add URL');
+      urlInput.value = '';
+      setUploadStatus('URL added — indexing…', 'ok');
+      prependDocument(data.document);
+      pollDocumentStatus(data.document.id);
+    } catch (err) {
+      setUploadStatus(`Failed: ${err.message}`, 'error');
+    } finally {
+      urlBtn.disabled = false;
+    }
+  });
+
+  // ── Load documents ────────────────────────────────────────────
+  async function loadDocuments() {
+    try {
+      const res  = await fetch('/api/vault/documents');
+      const data = await res.json();
+      if (!data.ok) return;
+      documents = data.documents || [];
+      renderDocuments();
+      // Poll any that are still indexing
+      for (const doc of documents) {
+        if (doc.status === 'indexing' || doc.status === 'pending') {
+          pollDocumentStatus(doc.id);
+        }
+      }
+    } catch { /* non-fatal */ }
+  }
+
+  function renderDocuments() {
+    if (!documents.length) {
+      emptyState.style.display = '';
+      docList.style.display    = 'none';
+      mineBtn.disabled         = true;
+      ideasLink.style.display  = 'none';
+      return;
+    }
+    emptyState.style.display = 'none';
+    docList.style.display    = '';
+    ideasLink.style.display  = '';
+    const hasReady = documents.some(d => d.status === 'ready');
+    mineBtn.disabled = !hasReady;
+    docList.innerHTML = documents.map(renderDocCard).join('');
+    docList.querySelectorAll('.vault-doc-delete').forEach(btn => {
+      btn.addEventListener('click', () => deleteDocument(Number(btn.dataset.id)));
+    });
+  }
+
+  function renderDocCard(doc) {
+    const icon  = docIcon(doc.source_type);
+    const badge = statusBadge(doc.status);
+    const date  = new Date(doc.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    const ideas = doc.ideas_mined > 0 ? `<span class="vault-doc-ideas">${doc.ideas_mined} idea${doc.ideas_mined !== 1 ? 's' : ''} mined</span>` : '';
+    const errMsg = doc.status === 'error' && doc.error_message
+      ? `<p style="font-size:0.75rem;color:var(--text-danger);margin:4px 0 0 0">${escHtml(doc.error_message)}</p>` : '';
+    return `
+      <div class="vault-doc-card" data-id="${doc.id}">
+        <div class="vault-doc-icon">${icon}</div>
+        <div class="vault-doc-body">
+          <p class="vault-doc-name" title="${escHtml(doc.filename)}">${escHtml(doc.filename)}</p>
+          <p class="vault-doc-meta">${escHtml(doc.source_type.toUpperCase())} · ${date}${doc.chunk_count ? ` · ${doc.chunk_count} sections` : ''}</p>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">${badge}${ideas}</div>
+          ${errMsg}
+        </div>
+        <button class="vault-doc-delete" data-id="${doc.id}" aria-label="Delete ${escHtml(doc.filename)}">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+        </button>
+      </div>`;
+  }
+
+  function statusBadge(status) {
+    const labels = { pending: 'Pending', indexing: 'Indexing…', ready: 'Ready', error: 'Error' };
+    return `<span class="vault-status-badge ${status}"><span class="status-dot"></span>${labels[status] || status}</span>`;
+  }
+
+  function docIcon(type) {
+    if (type === 'pdf')  return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`;
+    if (type === 'docx') return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>`;
+    if (type === 'url')  return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>`;
+    return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`;
+  }
+
+  function escHtml(str) {
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // ── Prepend a newly uploaded document ─────────────────────────
+  function prependDocument(doc) {
+    documents.unshift(doc);
+    renderDocuments();
+  }
+
+  // ── Poll document until it leaves indexing state ───────────────
+  function pollDocumentStatus(docId) {
+    const interval = setInterval(async () => {
+      try {
+        const res  = await fetch('/api/vault/documents');
+        const data = await res.json();
+        if (!data.ok) return;
+        const updated = data.documents.find(d => d.id === docId);
+        if (!updated) { clearInterval(interval); return; }
+        // Update in local array
+        const idx = documents.findIndex(d => d.id === docId);
+        if (idx !== -1) { documents[idx] = updated; renderDocuments(); }
+        if (updated.status !== 'indexing' && updated.status !== 'pending') {
+          clearInterval(interval);
+          if (updated.status === 'ready') {
+            clearUploadStatus();
+          }
+        }
+      } catch { /* non-fatal */ }
+    }, 3000);
+  }
+
+  // ── Delete document ───────────────────────────────────────────
+  async function deleteDocument(docId) {
+    if (!confirm('Remove this document from your vault? All mined ideas from this document will also be deleted.')) return;
+    try {
+      const res  = await fetch(`/api/vault/documents/${docId}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error);
+      documents = documents.filter(d => d.id !== docId);
+      renderDocuments();
+    } catch (err) {
+      alert(`Could not delete: ${err.message}`);
+    }
+  }
+
+  // ── Mine ideas ─────────────────────────────────────────────────
+  mineBtn.addEventListener('click', async () => {
+    mineBtn.disabled = true;
+    setMineStatus('Mining your documents for ideas… this may take a minute.', 'info');
+    try {
+      const res  = await fetch('/api/vault/mine', { method: 'POST' });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error);
+      if (data.chunks_queued === 0) {
+        setMineStatus('No new content to mine — all documents have already been processed.', 'ok');
+      } else {
+        setMineStatus(`Mining ${data.chunks_queued} sections in the background. Check Ideas when done.`, 'ok');
+      }
+    } catch (err) {
+      setMineStatus(`Mining failed: ${err.message}`, 'error');
+    } finally {
+      setTimeout(() => { mineBtn.disabled = false; loadDocuments(); }, 3000);
+    }
+  });
+
+  // ── Init ──────────────────────────────────────────────────────
+  loadDocuments();
+  </script>
+</body>
+</html>

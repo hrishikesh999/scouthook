@@ -5,6 +5,166 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Generate — Scouthook</title>
   <link rel="stylesheet" href="/css/main.css">
+  <style>
+    /* ── Input tab bar ──────────────────────────────────────────── */
+    .input-tab-bar {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: var(--space-4);
+      gap: 0;
+    }
+    .input-tab {
+      font-family: var(--font-sans);
+      font-size: 0.8125rem;
+      font-weight: 600;
+      padding: 8px var(--space-4);
+      border: none;
+      background: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .input-tab:hover  { color: var(--text-secondary); }
+    .input-tab.active { color: var(--brand); border-bottom-color: var(--brand); }
+
+    /* ── Source badge ───────────────────────────────────────────── */
+    .vault-source-badge {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      font-style: italic;
+      padding: var(--space-2) 0 0 0;
+    }
+    .vault-source-badge::before { content: '📎 '; font-style: normal; }
+
+    /* ── Mini funnel widget ─────────────────────────────────────── */
+    .mini-funnel-widget {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: var(--space-3) var(--space-4);
+      margin-bottom: var(--space-3);
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+    }
+    .mini-funnel-row {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      flex-wrap: wrap;
+    }
+    .mini-funnel-label { font-weight: 600; color: var(--text-muted); white-space: nowrap; }
+    .mini-funnel-pills { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+    .mini-funnel-pill {
+      font-size: 0.6875rem;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: var(--radius-pill);
+      text-transform: uppercase;
+    }
+    .mini-funnel-pill.reach   { background: #EEF2FF; color: #4338CA; }
+    .mini-funnel-pill.trust   { background: #F0FDF4; color: #166534; }
+    .mini-funnel-pill.convert { background: #ECFDF5; color: #065F46; }
+    .mini-funnel-next { color: var(--text-muted); font-size: 0.75rem; margin-top: var(--space-1); }
+    .mini-funnel-next strong { color: var(--text-heading); }
+
+    /* ── Seed filter bar ────────────────────────────────────────── */
+    .vault-seed-filters {
+      display: flex;
+      gap: var(--space-2);
+      margin-bottom: var(--space-3);
+      flex-wrap: wrap;
+    }
+    .seed-filter-btn {
+      font-family: var(--font-sans);
+      font-size: 0.75rem;
+      font-weight: 500;
+      padding: 4px 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-pill);
+      background: var(--bg-surface);
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: border-color 0.15s, color 0.15s, background 0.15s;
+    }
+    .seed-filter-btn:hover { border-color: var(--brand); color: var(--brand); }
+    .seed-filter-btn.active { border-color: var(--brand); background: #F0FDF9; color: var(--brand); font-weight: 600; }
+
+    /* ── Seed list ──────────────────────────────────────────────── */
+    .vault-seed-list {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-3);
+      overflow-y: auto;
+      flex: 1;
+      max-height: calc(100vh - 320px);
+    }
+    .seed-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: var(--space-3) var(--space-4);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
+      cursor: pointer;
+      transition: box-shadow 0.15s, border-color 0.15s;
+    }
+    .seed-card:hover { box-shadow: var(--shadow-md); border-color: var(--brand); }
+    .seed-card-badges { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+    .seed-badge {
+      font-size: 0.6875rem;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: var(--radius-pill);
+      text-transform: uppercase;
+    }
+    .seed-badge.reach   { background: #EEF2FF; color: #4338CA; }
+    .seed-badge.trust   { background: #F0FDF4; color: #166534; }
+    .seed-badge.convert { background: #ECFDF5; color: #065F46; }
+    .seed-badge.arch    { background: var(--bg-pill); color: var(--text-secondary); }
+    .seed-card-text {
+      font-size: 0.8125rem;
+      color: var(--text-body);
+      line-height: 1.5;
+      margin: 0;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .seed-card-source {
+      font-size: 0.6875rem;
+      color: var(--text-muted);
+      font-style: italic;
+      margin: 0;
+    }
+    .seed-use-btn {
+      font-family: var(--font-sans);
+      font-size: 0.8125rem;
+      font-weight: 600;
+      padding: 6px var(--space-4);
+      border: none;
+      border-radius: var(--radius-md);
+      background: var(--brand);
+      color: #fff;
+      cursor: pointer;
+      align-self: flex-start;
+      transition: background 0.15s;
+    }
+    .seed-use-btn:hover { background: var(--brand-hover); }
+
+    .seed-list-empty {
+      text-align: center;
+      padding: var(--space-8) var(--space-4);
+      color: var(--text-muted);
+      font-size: 0.8125rem;
+      border: 1px dashed var(--border-light);
+      border-radius: var(--radius-lg);
+    }
+    .seed-list-empty a { color: var(--brand); font-weight: 600; }
+  </style>
 </head>
 <body>
 
@@ -18,6 +178,8 @@
     </div>
     <nav class="sidebar-nav">
       <a href="/dashboard.html" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Dashboard</a>
+      <a href="/vault.html" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>Vault</a>
+      <a href="/ideas.html" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>Ideas</a>
       <a href="/drafts.html" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>Drafts</a>
       <a href="/schedule.html" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Schedule</a>
       <a href="/Published.html" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>Published</a>
@@ -49,8 +211,14 @@
     <!-- ── Left Panel ──────────────────────────────────────── -->
     <div id="left-panel">
 
-      <!-- Idea path fields -->
-      <div id="idea-fields">
+      <!-- Input tabs: Write an idea | From your Vault -->
+      <div class="input-tab-bar" role="tablist" aria-label="Input source">
+        <button class="input-tab active" id="input-tab-write" role="tab" aria-selected="true" aria-controls="idea-fields">Write an idea</button>
+        <button class="input-tab" id="input-tab-vault" role="tab" aria-selected="false" aria-controls="vault-ideas-panel">From your Vault</button>
+      </div>
+
+      <!-- Tab A: Idea path fields (existing — unchanged) -->
+      <div id="idea-fields" role="tabpanel" aria-labelledby="input-tab-write">
         <div class="idea-prompt-header">
           <h2 class="idea-prompt-heading">What's on your mind?</h2>
           <div id="voice-indicator-area"><!-- Populated by JS --></div>
@@ -65,6 +233,25 @@
           ></textarea>
           <div class="field-error" id="idea-error" role="alert">Add a thought before generating</div>
         </div>
+        <!-- Source badge: shown when post grown from vault idea -->
+        <div id="vault-source-badge" class="vault-source-badge" style="display:none" aria-live="polite"></div>
+      </div>
+
+      <!-- Tab B: Vault seed panel -->
+      <div id="vault-ideas-panel" role="tabpanel" aria-labelledby="input-tab-vault" style="display:none">
+        <!-- Mini funnel widget -->
+        <div id="mini-funnel-widget" class="mini-funnel-widget" style="display:none" aria-label="30-day funnel health"></div>
+
+        <!-- Funnel filter -->
+        <div class="vault-seed-filters" role="group" aria-label="Filter seeds by funnel type">
+          <button class="seed-filter-btn active" data-funnel="">All</button>
+          <button class="seed-filter-btn" data-funnel="reach">Reach</button>
+          <button class="seed-filter-btn" data-funnel="trust">Trust</button>
+          <button class="seed-filter-btn" data-funnel="convert">Convert</button>
+        </div>
+
+        <!-- Seed list -->
+        <div id="vault-seed-list" class="vault-seed-list" aria-label="Vault seed ideas"></div>
       </div>
 
       <button id="generate-btn" aria-live="polite">Generate</button>

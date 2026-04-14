@@ -6,6 +6,7 @@ const { db } = require('../db');
 const { synthesise } = require('../services/synthesise');
 const { runQualityGate } = require('../services/qualityGate');
 const { generateInsightAlternativePost } = require('../services/ideaPath');
+const { classifyContent } = require('../services/funnelClassifier');
 
 // ---------------------------------------------------------------------------
 // Sliding window rate limiter — 10 generations per hour per user.
@@ -153,7 +154,7 @@ router.post('/', async (req, res) => {
     return res.status(429).json({ ok: false, error: 'rate_limit_exceeded', retry_after_sec: rl.retryAfterSec });
   }
 
-  const { path: genPath, raw_idea } = req.body;
+  const { path: genPath, raw_idea, vault_idea_id } = req.body;
 
   if (!genPath) return res.status(400).json({ ok: false, error: 'missing_path' });
 
@@ -169,8 +170,28 @@ router.post('/', async (req, res) => {
     return res.status(400).json({ ok: false, error: 'missing_raw_idea' });
   }
 
+  // Resolve vault idea context if the post is grown from a seed
+  let vaultIdea = null;
+  if (vault_idea_id) {
+    vaultIdea = await db.prepare(`
+      SELECT id, seed_text, source_ref, funnel_type, hook_archetype
+      FROM   vault_ideas
+      WHERE  id = ? AND user_id = ? AND tenant_id = ?
+    `).get(vault_idea_id, userId, tenantId);
+  }
+
   try {
     const baseOptions = { rawIdea: raw_idea };
+
+    // Inject funnel intent into generation prompt when a seed is the source
+    if (vaultIdea?.funnel_type) {
+      const funnelHints = {
+        reach:   'This post should maximise reach — use a broad, relatable angle that resonates with a wide audience.',
+        trust:   'This post should build authority — demonstrate expertise, share a proprietary framework, or offer a counterintuitive perspective.',
+        convert: 'This post should drive inbound — be specific about who you help and what transformation you create. Include a subtle but clear call to action.',
+      };
+      baseOptions._funnelHint = funnelHints[vaultIdea.funnel_type] || '';
+    }
 
     {
       const ideaResult = await synthesiseIdeaWithOptionalQualityRetry(userProfile, baseOptions);
@@ -201,9 +222,14 @@ router.post('/', async (req, res) => {
       );
       const runId = runResult.lastInsertRowid;
 
+      // Classify funnel type (non-blocking — uses Haiku, fast)
+      const { funnelType, hookArchetype: _ha } = await classifyContent(post);
+      const vaultSourceRef = vaultIdea?.source_ref || null;
+
       const postsInsert = db.prepare(`
-        INSERT INTO generated_posts (run_id, user_id, tenant_id, format_slug, content, quality_score, quality_flags, passed_gate)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO generated_posts
+          (run_id, user_id, tenant_id, format_slug, content, quality_score, quality_flags, passed_gate, funnel_type, vault_source_ref)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         RETURNING id
       `);
 
@@ -215,9 +241,18 @@ router.post('/', async (req, res) => {
         post,
         primaryGate.score,
         JSON.stringify(primaryGate.flags),
-        primaryGate.passed_gate ? 1 : 0
+        primaryGate.passed_gate ? 1 : 0,
+        funnelType,
+        vaultSourceRef
       );
       const primaryId = primaryInsert.lastInsertRowid;
+
+      // Link vault idea to this post and mark as used
+      if (vaultIdea) {
+        await db.prepare(`
+          UPDATE vault_ideas SET status = 'used', generated_post_id = ? WHERE id = ?
+        `).run(primaryId, vaultIdea.id);
+      }
 
       const primaryQuality = buildQualityPayload(primaryGate, synthesisAttempt, true);
 
@@ -252,6 +287,8 @@ router.post('/', async (req, res) => {
         hookConfidence,
         quality: primaryQuality,
         alternative: altPayload == null ? null : altPayload,
+        funnel_type: funnelType,
+        vault_source_ref: vaultSourceRef,
       });
     }
 

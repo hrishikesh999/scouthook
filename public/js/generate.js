@@ -116,6 +116,148 @@ let scheduleEditLocked  = false;
 /** @type {{ scheduledFor: string, scheduledPostId: number|null } | null} */
 let scheduledMeta       = null;
 
+/* ── Vault Tab B state ───────────────────────────────────────── */
+/** ID of the vault_idea currently selected (null = free-type mode). */
+let currentVaultIdeaId  = null;
+let allVaultSeeds       = [];
+let activeSeedFunnel    = '';
+
+// ── Vault Tab DOM refs ────────────────────────────────────────
+const inputTabWrite    = document.getElementById('input-tab-write');
+const inputTabVault    = document.getElementById('input-tab-vault');
+const vaultPanel       = document.getElementById('vault-ideas-panel');
+const vaultSeedList    = document.getElementById('vault-seed-list');
+const miniFunnelWidget = document.getElementById('mini-funnel-widget');
+const vaultSourceBadge = document.getElementById('vault-source-badge');
+const seedFilterBtns   = document.querySelectorAll('.seed-filter-btn');
+
+// ── Tab switching ─────────────────────────────────────────────
+function switchToTab(tab) {
+  if (tab === 'write') {
+    inputTabWrite.classList.add('active');    inputTabWrite.setAttribute('aria-selected', 'true');
+    inputTabVault.classList.remove('active'); inputTabVault.setAttribute('aria-selected', 'false');
+    document.getElementById('idea-fields').style.display = '';
+    vaultPanel.style.display = 'none';
+  } else {
+    inputTabVault.classList.add('active');    inputTabVault.setAttribute('aria-selected', 'true');
+    inputTabWrite.classList.remove('active'); inputTabWrite.setAttribute('aria-selected', 'false');
+    document.getElementById('idea-fields').style.display = 'none';
+    vaultPanel.style.display = '';
+    loadVaultSeeds();
+    loadMiniFunnel();
+  }
+}
+
+inputTabWrite.addEventListener('click', () => switchToTab('write'));
+inputTabVault.addEventListener('click', () => switchToTab('vault'));
+
+// ── Seed funnel filter ────────────────────────────────────────
+seedFilterBtns.forEach(btn => {
+  btn.addEventListener('click', () => {
+    seedFilterBtns.forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    activeSeedFunnel = btn.dataset.funnel || '';
+    renderSeedList();
+  });
+});
+
+// ── Load seeds from vault ─────────────────────────────────────
+async function loadVaultSeeds() {
+  try {
+    const res  = await fetch('/api/vault/ideas?status=fresh&status=saved');
+    const data = await res.json();
+    if (!data.ok) return;
+    // Fetch all non-discarded ideas (both fresh and saved)
+    const res2  = await fetch('/api/vault/ideas');
+    const data2 = await res2.json();
+    allVaultSeeds = (data2.ideas || []).filter(i => i.status === 'fresh' || i.status === 'saved');
+    renderSeedList();
+  } catch { /* non-fatal */ }
+}
+
+function renderSeedList() {
+  const visible = allVaultSeeds.filter(s => !activeSeedFunnel || s.funnel_type === activeSeedFunnel);
+  if (!visible.length) {
+    vaultSeedList.innerHTML = `<div class="seed-list-empty">No seeds yet. <a href="/vault.html">Upload documents</a> and click "Generate Ideas".</div>`;
+    return;
+  }
+  vaultSeedList.innerHTML = visible.map(seed => {
+    const fBadge = seed.funnel_type
+      ? `<span class="seed-badge ${seed.funnel_type}">${seed.funnel_type.toUpperCase()}</span>` : '';
+    const aBadge = seed.hook_archetype
+      ? `<span class="seed-badge arch">${seed.hook_archetype}</span>` : '';
+    return `
+      <div class="seed-card" data-seed-id="${seed.id}">
+        <div class="seed-card-badges">${fBadge}${aBadge}</div>
+        <p class="seed-card-text">${escHtmlG(seed.seed_text)}</p>
+        ${seed.source_ref ? `<p class="seed-card-source">${escHtmlG(seed.source_ref)}</p>` : ''}
+        <button class="seed-use-btn" data-use-id="${seed.id}" data-seed-text="${escAttrG(seed.seed_text)}" data-source-ref="${escAttrG(seed.source_ref || '')}">Use this idea</button>
+      </div>`;
+  }).join('');
+
+  vaultSeedList.querySelectorAll('.seed-use-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const id        = Number(btn.dataset.useId);
+      const seedText  = btn.dataset.seedText || '';
+      const sourceRef = btn.dataset.sourceRef || '';
+      useSeedIdea(id, seedText, sourceRef);
+    });
+  });
+}
+
+function useSeedIdea(ideaId, seedText, sourceRef) {
+  currentVaultIdeaId = ideaId;
+  ideaInput.value    = seedText;
+  if (vaultSourceBadge) {
+    vaultSourceBadge.textContent = sourceRef || '';
+    vaultSourceBadge.style.display = sourceRef ? '' : 'none';
+  }
+  switchToTab('write');
+  ideaInput.focus();
+}
+
+// ── Mini funnel widget ────────────────────────────────────────
+async function loadMiniFunnel() {
+  try {
+    const res  = await fetch('/api/funnel/health');
+    const data = await res.json();
+    if (!data.ok || data.total === 0) return;
+    miniFunnelWidget.style.display = '';
+    const pills = ['reach', 'trust', 'convert'].map(t =>
+      `<span class="mini-funnel-pill ${t}">${t.toUpperCase()} ${data.counts[t]}</span>`
+    ).join('');
+    const next = data.nextSuggested;
+    miniFunnelWidget.innerHTML = `
+      <div class="mini-funnel-row">
+        <span class="mini-funnel-label">30d</span>
+        <div class="mini-funnel-pills">${pills}</div>
+      </div>
+      <p class="mini-funnel-next">You need more <strong>${next}</strong> content</p>`;
+  } catch { /* non-fatal */ }
+}
+
+function escHtmlG(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function escAttrG(str) {
+  return String(str).replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// ── Handle URL params (from ideas.html "Grow this idea") ─────
+(function handleVaultUrlParams() {
+  const params   = new URLSearchParams(window.location.search);
+  const seedText = params.get('seed');
+  const ideaId   = params.get('vault_idea_id');
+  if (seedText && ideaId) {
+    currentVaultIdeaId = Number(ideaId);
+    ideaInput.value    = decodeURIComponent(seedText);
+    if (vaultSourceBadge) vaultSourceBadge.style.display = 'none';
+    // Clean URL so refreshing doesn't re-seed
+    window.history.replaceState({}, '', '/generate.html');
+  }
+})();
+
 function formatScheduledLocal(iso) {
   if (!iso) return '';
   try {
@@ -389,6 +531,10 @@ async function triggerGenerate(retryData) {
       return;
     }
     body = { path: 'idea', raw_idea: idea };
+    // Attach vault idea context if the idea came from the Vault tab
+    if (currentVaultIdeaId) {
+      body.vault_idea_id = currentVaultIdeaId;
+    }
   }
 
   setGenerating(true);
@@ -420,6 +566,16 @@ async function triggerGenerate(retryData) {
     }
 
     handleGenerateSuccess(data, currentPath);
+
+    // Show source badge if post came from vault idea
+    if (data.vault_source_ref && vaultSourceBadge) {
+      vaultSourceBadge.textContent = data.vault_source_ref;
+      vaultSourceBadge.style.display = '';
+    } else if (vaultSourceBadge) {
+      vaultSourceBadge.style.display = 'none';
+    }
+    // Reset vault idea ID after use so next generation is a fresh slate
+    currentVaultIdeaId = null;
 
   } catch (err) {
     if (err.message === 'complete_profile_first') {

@@ -38,7 +38,8 @@ async function extractPdf(buffer) {
   // pdf-parse v2: class-based API — pass buffer via { data }, call getText() + getInfo().
   const { PDFParse } = require('pdf-parse');
   const parser = new PDFParse({ data: buffer });
-  const [textResult, infoResult] = await Promise.all([parser.getText(), parser.getInfo()]);
+  const textResult = await parser.getText();
+  const infoResult = await parser.getInfo();
   await parser.destroy();
   return { text: textResult.text || '', pages: infoResult.total || null };
 }

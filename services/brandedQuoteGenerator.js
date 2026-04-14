@@ -12,11 +12,13 @@ const H = 1080;
 
 const AVATAR = 88;
 const AVATAR_X = 72;
-/** Horizontal gap between avatar circle and text column (name + quote). */
+/** Horizontal gap between avatar and name (name must not overlap the circle). */
 const AVATAR_TEXT_GAP = 36;
-/** Left edge of name / brand / quote — starts after avatar, not under it. */
-const TEXT_LEFT = AVATAR_X + AVATAR + AVATAR_TEXT_GAP;
-/** Keep body copy off the right edge of the square canvas. */
+/** Name + optional brand line — to the right of the avatar. */
+const HEADER_TEXT_LEFT = AVATAR_X + AVATAR + AVATAR_TEXT_GAP;
+/** Quote body — flush with the avatar’s left edge (same x as the photo box). */
+const QUOTE_TEXT_LEFT = AVATAR_X;
+/** Keep copy off the right edge of the square canvas. */
 const CONTENT_RIGHT_MARGIN = 88;
 const FONT_SIZE = 40;
 const NAME_FONT_SIZE = 32;
@@ -46,16 +48,20 @@ function approxCharsPerLine(fontSize, availablePx) {
   return Math.max(26, Math.floor(availablePx / unit));
 }
 
-function bodyTextAvailableWidth() {
-  return W - TEXT_LEFT - CONTENT_RIGHT_MARGIN;
+function headerTextAvailableWidth() {
+  return W - HEADER_TEXT_LEFT - CONTENT_RIGHT_MARGIN;
+}
+
+function quoteTextAvailableWidth() {
+  return W - QUOTE_TEXT_LEFT - CONTENT_RIGHT_MARGIN;
 }
 
 function getBodyMaxChars() {
-  return approxCharsPerLine(FONT_SIZE, bodyTextAvailableWidth());
+  return approxCharsPerLine(FONT_SIZE, quoteTextAvailableWidth());
 }
 
 function getNameMaxChars() {
-  return approxCharsPerLine(NAME_FONT_SIZE, bodyTextAvailableWidth());
+  return approxCharsPerLine(NAME_FONT_SIZE, headerTextAvailableWidth());
 }
 
 function truncatePlain(str, maxLen) {
@@ -232,7 +238,7 @@ function wrapText(text, maxChars) {
 
 function buildBrandedQuoteSvg(lines, brand, linkedin, bg, text) {
   const nameMax = getNameMaxChars();
-  const brandMax = approxCharsPerLine(24, bodyTextAvailableWidth());
+  const brandMax = approxCharsPerLine(24, headerTextAvailableWidth());
   const memberName = escapeXml(truncatePlain(linkedin.name || '', nameMax));
   const brandLabelRaw = brand.name ? truncatePlain(brand.name, brandMax) : '';
   const brandLabel = brandLabelRaw ? escapeXml(brandLabelRaw) : '';
@@ -242,28 +248,32 @@ function buildBrandedQuoteSvg(lines, brand, linkedin, bg, text) {
   const cx = AVATAR_X + AVATAR / 2;
   const cy = avatarY + AVATAR / 2;
 
-  const clipW = bodyTextAvailableWidth();
-  const textColumnClipDef = `<clipPath id="textColumnClip"><rect x="${TEXT_LEFT}" y="0" width="${clipW}" height="${H}"/></clipPath>`;
+  const headerClipW = headerTextAvailableWidth();
+  const quoteClipW = quoteTextAvailableWidth();
+  const headerClipDef = `<clipPath id="headerTextClip"><rect x="${HEADER_TEXT_LEFT}" y="0" width="${headerClipW}" height="${H}"/></clipPath>`;
+  const quoteClipDef = `<clipPath id="quoteTextClip"><rect x="${QUOTE_TEXT_LEFT}" y="0" width="${quoteClipW}" height="${H}"/></clipPath>`;
 
   const avatarXml = linkedin.photoDataUri
     ? `<defs>
   <clipPath id="avatarClip"><circle cx="${cx}" cy="${cy}" r="${AVATAR / 2}"/></clipPath>
-  ${textColumnClipDef}
+  ${headerClipDef}
+  ${quoteClipDef}
 </defs>
 <image href="${linkedin.photoDataUri}" x="${AVATAR_X}" y="${avatarY}" width="${AVATAR}" height="${AVATAR}" clip-path="url(#avatarClip)" preserveAspectRatio="xMidYMid slice"/>`
     : `<defs>
-  ${textColumnClipDef}
+  ${headerClipDef}
+  ${quoteClipDef}
 </defs>
 <circle cx="${cx}" cy="${cy}" r="${AVATAR / 2}" fill="${TEXT_MUTED}" opacity="0.35"/>`;
 
-  const nameXml = `<text x="${TEXT_LEFT}" y="${nameY}" font-family="system-ui,-apple-system,'Helvetica Neue',sans-serif" font-size="${NAME_FONT_SIZE}" font-weight="600" fill="${text}" dominant-baseline="middle" clip-path="url(#textColumnClip)">${memberName}</text>`;
+  const nameXml = `<text x="${HEADER_TEXT_LEFT}" y="${nameY}" font-family="system-ui,-apple-system,'Helvetica Neue',sans-serif" font-size="${NAME_FONT_SIZE}" font-weight="600" fill="${text}" dominant-baseline="middle" clip-path="url(#headerTextClip)">${memberName}</text>`;
 
   const brandHeaderXml = brandLabel
-    ? `<text x="${TEXT_LEFT}" y="${brandY}" font-family="system-ui,-apple-system,'Helvetica Neue',sans-serif" font-size="24" font-weight="500" fill="${TEXT_MUTED}" dominant-baseline="middle" clip-path="url(#textColumnClip)">${brandLabel}</text>`
+    ? `<text x="${HEADER_TEXT_LEFT}" y="${brandY}" font-family="system-ui,-apple-system,'Helvetica Neue',sans-serif" font-size="24" font-weight="500" fill="${TEXT_MUTED}" dominant-baseline="middle" clip-path="url(#headerTextClip)">${brandLabel}</text>`
     : '';
 
   const bodyXml = lines.map((line, i) =>
-    `<text x="${TEXT_LEFT}" y="${bodyStartY + i * LINE_HEIGHT}" font-family="system-ui,-apple-system,'Helvetica Neue',sans-serif" font-size="${FONT_SIZE}" font-weight="500" fill="${text}" dominant-baseline="hanging" clip-path="url(#textColumnClip)">${escapeXml(line)}</text>`
+    `<text x="${QUOTE_TEXT_LEFT}" y="${bodyStartY + i * LINE_HEIGHT}" font-family="system-ui,-apple-system,'Helvetica Neue',sans-serif" font-size="${FONT_SIZE}" font-weight="500" fill="${text}" dominant-baseline="hanging" clip-path="url(#quoteTextClip)">${escapeXml(line)}</text>`
   ).join('\n  ');
 
   const fadeXml = `<defs>

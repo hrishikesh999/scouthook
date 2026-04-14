@@ -244,20 +244,7 @@ function escAttrG(str) {
 }
 
 // ── Handle URL params (from ideas.html "Grow this idea") ─────
-(function handleVaultUrlParams() {
-  const params   = new URLSearchParams(window.location.search);
-  const seedText = params.get('seed');
-  const ideaId   = params.get('vault_idea_id');
-  if (seedText && ideaId) {
-    currentVaultIdeaId = Number(ideaId);
-    ideaInput.value    = decodeURIComponent(seedText);
-    if (vaultSourceBadge) vaultSourceBadge.style.display = 'none';
-    // Clean URL so refreshing doesn't re-seed
-    window.history.replaceState({}, '', '/generate.html');
-    // Auto-trigger generation immediately — no manual click needed
-    triggerGenerate();
-  }
-})();
+// Vault URL params are handled inside init() after auth is ready.
 
 function formatScheduledLocal(iso) {
   if (!iso) return '';
@@ -422,6 +409,19 @@ document.addEventListener('visibilitychange', () => {
   const urlPostId = _qs.get('postId');
   const isNew     = _qs.has('new');
   const session   = Session.load();
+
+  // ── Vault seed from ideas page ("Generate post" button) ──────
+  // Checked first: if present, skip session restore and auto-generate.
+  const vaultSeedText = _qs.get('seed');
+  const vaultIdeaId   = _qs.get('vault_idea_id');
+  if (vaultSeedText && vaultIdeaId) {
+    currentVaultIdeaId = Number(vaultIdeaId);
+    ideaInput.value    = decodeURIComponent(vaultSeedText);
+    if (vaultSourceBadge) vaultSourceBadge.style.display = 'none';
+    window.history.replaceState({}, '', '/generate.html');
+    triggerGenerate();
+    return;
+  }
 
   if (isNew) {
     // Explicit "new post" navigation — wipe any in-progress session so a blank slate loads

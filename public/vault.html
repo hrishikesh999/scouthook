@@ -14,7 +14,7 @@
       padding: var(--space-8);
       max-width: 1100px;
       margin: 0 auto;
-      height: 100%;
+      flex: 1;
       box-sizing: border-box;
     }
 
@@ -341,17 +341,16 @@
       <a href="/schedule.html" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Schedule</a>
       <a href="/Published.html" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>Published</a>
       <a href="/Media.html" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>Media</a>
-      <a href="/account.html" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Account Settings</a>
     </nav>
     <div class="sidebar-bottom">
+      <a href="/account.html" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Account Settings</a>
       <div id="sidebar-account-slot" aria-label="Signed-in account"></div>
     </div>
   </aside>
 
   <!-- ── Main content ──────────────────────────────────────────── -->
   <div id="main-content">
-    <main id="app" style="padding: 0; overflow-y: auto; flex-direction: column; gap: 0; max-width: none; margin: 0;">
-      <div class="page-tab-bar" role="tablist" aria-label="Idea Vault">
+    <div class="page-tab-bar" role="tablist" aria-label="Idea Vault">
         <a href="/vault.html" class="page-tab active" role="tab" aria-selected="true">Vault</a>
         <a href="/ideas.html" class="page-tab" role="tab" aria-selected="false">Ideas</a>
       </div>
@@ -419,10 +418,22 @@
           </a>
         </section>
 
-      </div>
-    </main>
-  </div>
+    </div>
 
+    <footer class="app-footer" role="contentinfo">
+      <div class="app-footer-inner">
+        <a href="#">Privacy Policy</a>
+        <span class="app-footer-sep">|</span>
+        <a href="#">Terms of Service</a>
+        <p class="app-footer-legal">© 2026 CopyPower Digital LLP. ScoutHook is an AI-powered authority engine.</p>
+      </div>
+    </footer>
+
+  </div><!-- /main-content -->
+
+  <script src="/js/session.js"></script>
+  <script src="/js/ui-toast.js"></script>
+  <script src="/js/account-bar.js"></script>
   <script>
   'use strict';
 

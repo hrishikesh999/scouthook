@@ -134,12 +134,24 @@ router.get('/posts/:id', async (req, res) => {
   if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
 
   try {
-    const post = await db.prepare(`
-      SELECT id, content, format_slug, quality_score, quality_flags, passed_gate, status, created_at,
-             idea_input, funnel_type, asset_url, asset_preview_url, asset_type, asset_slide_count
-      FROM   generated_posts
-      WHERE  id = ? AND user_id = ? AND tenant_id = ?
-    `).get(postId, userId, tenantId);
+    // Try full query including asset columns (added in migration 007).
+    // Fall back to the pre-migration column set if those columns don't exist yet.
+    let post;
+    try {
+      post = await db.prepare(`
+        SELECT id, content, format_slug, quality_score, quality_flags, passed_gate, status, created_at,
+               idea_input, funnel_type, asset_url, asset_preview_url, asset_type, asset_slide_count
+        FROM   generated_posts
+        WHERE  id = ? AND user_id = ? AND tenant_id = ?
+      `).get(postId, userId, tenantId);
+    } catch {
+      post = await db.prepare(`
+        SELECT id, content, format_slug, quality_score, quality_flags, passed_gate, status, created_at,
+               idea_input, funnel_type
+        FROM   generated_posts
+        WHERE  id = ? AND user_id = ? AND tenant_id = ?
+      `).get(postId, userId, tenantId);
+    }
 
     if (!post) return res.status(404).json({ ok: false, error: 'post_not_found' });
 

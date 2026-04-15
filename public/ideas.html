@@ -84,20 +84,24 @@
       color: var(--text-heading);
     }
 
-    /* ── Header + filters ───────────────────────────────────────── */
-    .ideas-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: var(--space-4);
-      flex-wrap: wrap;
-    }
-    .ideas-heading {
-      font-size: 1.25rem;
-      font-weight: 700;
+    /* ── Page header ────────────────────────────────────────────── */
+    .ideas-page-header { margin-bottom: var(--space-2); }
+
+    .ideas-page-title {
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -0.04em;
       color: var(--text-heading);
+      margin: 0 0 var(--space-1);
+    }
+
+    .ideas-page-subtitle {
+      font-size: 14px;
+      color: var(--text-secondary);
       margin: 0;
     }
+
+    /* ── Filters row ────────────────────────────────────────────── */
     .ideas-filters {
       display: flex;
       gap: var(--space-2);
@@ -310,15 +314,18 @@
           <div class="funnel-suggestion" id="funnel-suggestion"></div>
         </div>
 
-        <!-- ── Header + filters ───────────────────────────────── -->
-        <div class="ideas-header">
-          <h1 class="ideas-heading">Your Ideas</h1>
-          <div class="ideas-filters" role="group" aria-label="Filter by funnel type">
-            <button class="filter-btn active" data-funnel="">All</button>
-            <button class="filter-btn" data-funnel="reach">Reach</button>
-            <button class="filter-btn" data-funnel="trust">Trust</button>
-            <button class="filter-btn" data-funnel="convert">Convert</button>
-          </div>
+        <!-- ── Page header ────────────────────────────────────── -->
+        <div class="ideas-page-header">
+          <h1 class="ideas-page-title">Your Ideas</h1>
+          <p class="ideas-page-subtitle">Post ideas mined from your vault, ready to grow into drafts.</p>
+        </div>
+
+        <!-- ── Filters ────────────────────────────────────────── -->
+        <div class="ideas-filters" role="group" aria-label="Filter by funnel type">
+          <button class="filter-btn active" data-funnel="">All</button>
+          <button class="filter-btn" data-funnel="reach">Reach</button>
+          <button class="filter-btn" data-funnel="trust">Trust</button>
+          <button class="filter-btn" data-funnel="convert">Convert</button>
         </div>
 
         <!-- ── Columns (Fresh / Saved / Discarded) ────────────── -->

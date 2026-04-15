@@ -8,14 +8,37 @@
   <style>
     /* ── Vault page layout ──────────────────────────────────────── */
     .vault-page {
-      display: grid;
-      grid-template-columns: 1fr 1.4fr;
-      gap: var(--space-8);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-6);
       padding: var(--space-8);
       max-width: 1100px;
       margin: 0 auto;
       flex: 1;
       box-sizing: border-box;
+    }
+
+    .vault-page-header { margin-bottom: var(--space-2); }
+
+    .vault-page-title {
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -0.04em;
+      color: var(--text-heading);
+      margin: 0 0 var(--space-1);
+    }
+
+    .vault-page-subtitle {
+      font-size: 14px;
+      color: var(--text-secondary);
+      margin: 0;
+    }
+
+    .vault-grid {
+      display: grid;
+      grid-template-columns: 1fr 1.4fr;
+      gap: var(--space-8);
+      flex: 1;
     }
 
     /* ── Left: Upload panel ─────────────────────────────────────── */
@@ -356,12 +379,15 @@
       </div>
       <div class="vault-page">
 
+        <div class="vault-page-header">
+          <h1 class="vault-page-title">Idea Vault</h1>
+          <p class="vault-page-subtitle">Upload your expertise — PDFs, decks, newsletters — and ScoutHook will mine them for post ideas.</p>
+        </div>
+
+        <div class="vault-grid">
+
         <!-- ── Left: Upload panel ──────────────────────────────── -->
         <section class="vault-upload-panel" aria-label="Upload documents">
-          <div>
-            <h1 class="vault-panel-heading">Your Vault</h1>
-            <p class="vault-panel-sub">Upload your expertise — PDFs, decks, newsletters — and ScoutHook will mine them for post ideas grounded in your actual thinking.</p>
-          </div>
 
           <!-- File dropzone -->
           <label class="vault-dropzone" id="vault-dropzone" aria-label="Drop files here or click to browse">
@@ -418,7 +444,8 @@
           </a>
         </section>
 
-    </div>
+        </div><!-- /vault-grid -->
+    </div><!-- /vault-page -->
 
     <footer class="app-footer" role="contentinfo">
       <div class="app-footer-inner">

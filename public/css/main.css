@@ -1108,6 +1108,20 @@ body {
   flex-wrap: wrap;
 }
 
+.funnel-type-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.funnel-type-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
 .archetype-badge {
   background: var(--bg-pill);
   color: var(--text-heading);

@@ -831,12 +831,15 @@ function switchView(view) {
 }
 
 function renderFunnelBadge() {
-  const el = document.getElementById('funnel-type-badge');
-  if (!el) return;
+  const badge = document.getElementById('funnel-type-badge');
+  const row   = document.getElementById('funnel-type-row');
+  if (!badge || !row) return;
   if (currentFunnelType) {
-    el.innerHTML = `<span class="seed-badge ${currentFunnelType}">${currentFunnelType.toUpperCase()}</span>`;
+    badge.innerHTML = `<span class="seed-badge ${currentFunnelType}">${currentFunnelType.toUpperCase()}</span>`;
+    row.style.display = 'flex';
   } else {
-    el.innerHTML = '';
+    badge.innerHTML = '';
+    row.style.display = 'none';
   }
 }
 

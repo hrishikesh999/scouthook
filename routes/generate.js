@@ -269,8 +269,10 @@ router.post('/', async (req, res) => {
       );
       const runId = runResult.lastInsertRowid;
 
-      // Classify funnel type (non-blocking — uses Haiku, fast)
-      const { funnelType, hookArchetype: _ha } = await classifyContent(post);
+      // Funnel type: honour the source vault idea's classification when available.
+      // Reclassifying the generated post text causes drift (well-written posts
+      // read as "trust" even when the seed idea was explicitly reach/convert).
+      const funnelType = vaultIdea?.funnel_type || (await classifyContent(post)).funnelType;
       const vaultSourceRef = vaultIdea?.source_ref || null;
 
       const postsInsert = db.prepare(`

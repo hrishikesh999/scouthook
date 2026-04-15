@@ -37,8 +37,16 @@ const LINKEDIN_RULES = {
   },
   post: {
     maxHashtags: 3,
-    minWords: 50,
-    maxWords: 300,
+    minWords: 150,
+    maxWords: 500,
+  },
+
+  /** Target word counts by funnel type — injected into generation prompts */
+  postLengthTargets: {
+    reach:   { min: 100, max: 200, guidance: 'Keep it punchy and conversational — 100 to 200 words. Reach posts lose tension when they run long.' },
+    trust:   { min: 280, max: 420, guidance: 'Develop the idea fully — 280 to 420 words. Trust posts earn authority by showing the reasoning, not just stating the conclusion. Do not wrap up before the argument is complete.' },
+    convert: { min: 180, max: 320, guidance: 'Be specific enough to paint the transformation clearly — 180 to 320 words. Long enough to be credible, tight enough to stay focused.' },
+    default: { min: 150, max: 350, guidance: 'Develop the idea fully — 150 to 350 words. Do not truncate before the idea is complete.' },
   },
 };
 

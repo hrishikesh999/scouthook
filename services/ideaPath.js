@@ -6,6 +6,12 @@ const { extractJsonFromResponse } = require('./voiceFingerprint');
 const { selectHook, buildHookInjection } = require('./hookSelector');
 const { HOOK_ARCHETYPES } = require('./hookArchetypes');
 const { AI_TELLS_PROHIBITION, sanitiseAiTells } = require('./postSanitiser');
+const { LINKEDIN_RULES } = require('../modules/formatIntelligence/rules');
+
+function getLengthGuidance(funnelType) {
+  const targets = LINKEDIN_RULES.postLengthTargets;
+  return (targets[funnelType] || targets.default).guidance;
+}
 
 /**
  * Idea path: one LinkedIn post driven by the hook archetype from selectHook.
@@ -99,6 +105,8 @@ function buildUserPrompt(rawIdea) {
   return `RAW IDEA:
 ${rawIdea}
 
+LENGTH: ${getLengthGuidance('default')}
+
 Return ONLY valid JSON in this exact structure:
 {
   "synthesis": {
@@ -131,6 +139,8 @@ This insight was mined from the author's own documents. Expand it into a LinkedI
 - Does NOT genericise, water down, or replace concrete details with vague language
 - Reads as the author sharing hard-won, specific knowledge — not a summary of it
 
+LENGTH: ${getLengthGuidance(vaultIdea.funnel_type)}
+
 Return ONLY valid JSON in this exact structure:
 {
   "synthesis": {
@@ -162,6 +172,8 @@ Write a post that:
 - Has a clear point of view; does not hedge or stay neutral
 - Sounds like a person talking, not a professional presenting
 - Does NOT lecture, summarise, or explain — it provokes and connects
+
+LENGTH: ${getLengthGuidance('reach')}
 
 Return ONLY valid JSON in this exact structure:
 {

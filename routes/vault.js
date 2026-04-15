@@ -17,6 +17,7 @@ const { db }      = require('../db');
 const storage     = require('../services/storage');
 const { extractAndChunk, extractAndChunkUrl, mineChunks } = require('../services/vaultMiner');
 const { classifyContent } = require('../services/funnelClassifier');
+const { brainstorm }     = require('../services/reachBrainstormer');
 
 const ALLOWED_MIME = new Set(['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain']);
 const MIME_TO_TYPE = {
@@ -320,6 +321,59 @@ router.get('/ideas', async (req, res) => {
 
   const ideas = await db.prepare(sql).all(...args);
   return res.json({ ok: true, ideas });
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/vault/brainstorm — generate reach ideas from a topic
+// Body: { topic: string }
+// ---------------------------------------------------------------------------
+router.post('/brainstorm', async (req, res) => {
+  const { userId, tenantId } = req;
+  if (!requireUser(req, res)) return;
+
+  const { topic } = req.body || {};
+  if (!topic || typeof topic !== 'string' || !topic.trim()) {
+    return res.status(400).json({ ok: false, error: 'missing_topic' });
+  }
+  if (topic.trim().length > 300) {
+    return res.status(400).json({ ok: false, error: 'topic_too_long', message: 'Topic must be 300 characters or fewer.' });
+  }
+
+  // Require a complete enough profile to produce niche-specific ideas
+  const profile = await db.prepare(
+    'SELECT * FROM user_profiles WHERE user_id = ? AND tenant_id = ?'
+  ).get(userId, tenantId);
+
+  if (!profile?.content_niche) {
+    return res.status(400).json({
+      ok:      false,
+      error:   'profile_incomplete',
+      message: 'Add your content niche in Account Settings so ideas are specific to your field.',
+    });
+  }
+
+  try {
+    const ideas = await brainstorm(topic.trim(), profile);
+
+    const topicLabel = topic.trim().length > 60
+      ? topic.trim().slice(0, 57) + '…'
+      : topic.trim();
+
+    const insert = db.prepare(`
+      INSERT INTO vault_ideas
+        (user_id, tenant_id, document_id, chunk_id, seed_text, source_ref, funnel_type, hook_archetype)
+      VALUES (?, ?, NULL, NULL, ?, ?, 'reach', ?)
+    `);
+
+    for (const idea of ideas) {
+      insert.run(userId, tenantId, idea.seed_text, `Brainstormed: "${topicLabel}"`, idea.hook_archetype);
+    }
+
+    return res.json({ ok: true, count: ideas.length });
+  } catch (err) {
+    console.error('[vault/brainstorm] failed:', err.message);
+    return res.status(500).json({ ok: false, error: 'brainstorm_failed', message: err.message });
+  }
 });
 
 // ---------------------------------------------------------------------------

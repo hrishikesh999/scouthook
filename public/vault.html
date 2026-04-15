@@ -330,6 +330,46 @@
     .vault-mine-status.ok    { background: #ECFDF5; color: #065F46; display: block; }
     .vault-mine-status.error { background: #FEF2F2; color: var(--text-danger); display: block; }
 
+    /* Topic brainstorm */
+    .vault-topic-row {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
+    }
+    .vault-topic-input {
+      font-family: var(--font-sans);
+      font-size: 0.875rem;
+      padding: 10px var(--space-3);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      color: var(--text-heading);
+      background: var(--bg-surface);
+      outline: none;
+      resize: vertical;
+      min-height: 68px;
+      transition: border-color 0.15s;
+      line-height: 1.5;
+    }
+    .vault-topic-input:focus { border-color: var(--brand); }
+    .vault-topic-input::placeholder { color: var(--text-muted); }
+
+    .vault-topic-btn {
+      font-family: var(--font-sans);
+      font-size: 0.875rem;
+      font-weight: 600;
+      padding: 10px var(--space-4);
+      border: none;
+      border-radius: var(--radius-md);
+      background: var(--brand);
+      color: #fff;
+      cursor: pointer;
+      align-self: flex-end;
+      white-space: nowrap;
+      transition: background 0.15s;
+    }
+    .vault-topic-btn:hover    { background: var(--brand-hover); }
+    .vault-topic-btn:disabled { background: var(--teal-disabled); cursor: not-allowed; }
+
     /* View ideas link */
     .vault-ideas-link {
       display: inline-flex;
@@ -413,6 +453,24 @@
             >
             <button id="vault-url-btn" class="vault-url-btn">Add URL</button>
           </div>
+
+          <!-- Brainstorm from a topic -->
+          <div class="vault-divider">or brainstorm from a topic</div>
+
+          <div class="vault-topic-row">
+            <textarea
+              id="vault-topic-input"
+              class="vault-topic-input"
+              rows="2"
+              maxlength="300"
+              placeholder="e.g. why most onboarding processes fail, lessons from a bad client, the myth of work-life balance…"
+              aria-label="Topic to brainstorm ideas about"
+            ></textarea>
+            <button id="vault-topic-btn" class="vault-topic-btn">Brainstorm Ideas</button>
+          </div>
+
+          <div id="vault-topic-status" class="vault-upload-status" role="status" aria-live="polite"></div>
+
         </section>
 
         <!-- ── Right: Documents panel ──────────────────────────── -->
@@ -478,6 +536,9 @@
   const docList        = document.getElementById('vault-doc-list');
   const emptyState     = document.getElementById('vault-empty');
   const ideasLink      = document.getElementById('vault-ideas-link');
+  const topicInput     = document.getElementById('vault-topic-input');
+  const topicBtn       = document.getElementById('vault-topic-btn');
+  const topicStatus    = document.getElementById('vault-topic-status');
 
   // ── Helpers ───────────────────────────────────────────────────
   function setUploadStatus(msg, type) {
@@ -699,6 +760,40 @@
       setMineStatus(`Mining failed: ${err.message}`, 'error');
     } finally {
       setTimeout(() => { mineBtn.disabled = false; loadDocuments(); }, 3000);
+    }
+  });
+
+  // ── Brainstorm from a topic ───────────────────────────────────
+  topicBtn.addEventListener('click', async () => {
+    const topic = topicInput.value.trim();
+    if (!topic) return;
+    topicBtn.disabled = true;
+    topicStatus.textContent = 'Brainstorming ideas…';
+    topicStatus.className   = 'vault-upload-status info';
+    try {
+      const res  = await fetch('/api/vault/brainstorm', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ topic }),
+      });
+      const data = await res.json();
+      if (!data.ok) {
+        const msg = data.error === 'profile_incomplete'
+          ? 'Add your content niche in Account Settings so ideas are specific to your field.'
+          : (data.message || 'Brainstorm failed.');
+        topicStatus.textContent = msg;
+        topicStatus.className   = 'vault-upload-status error';
+        return;
+      }
+      topicInput.value        = '';
+      topicStatus.textContent = `${data.count} ideas added — view them on the Ideas tab.`;
+      topicStatus.className   = 'vault-upload-status ok';
+      ideasLink.style.display = '';
+    } catch (err) {
+      topicStatus.textContent = `Failed: ${err.message}`;
+      topicStatus.className   = 'vault-upload-status error';
+    } finally {
+      topicBtn.disabled = false;
     }
   });
 

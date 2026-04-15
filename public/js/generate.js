@@ -26,6 +26,10 @@ const alternativeStrip   = document.getElementById('alternative-strip');
 const alternativePreview = document.getElementById('alternative-preview-text');
 const switchAltBtn       = document.getElementById('switch-alternative-btn');
 
+const hookBStrip   = document.getElementById('hook-b-strip');
+const hookBText    = document.getElementById('hook-b-text');
+const hookBUseBtn  = document.getElementById('hook-b-use-btn');
+
 const emptyState      = document.getElementById('empty-state');
 const skeletonState   = document.getElementById('skeleton-state');
 const postErrorState  = document.getElementById('post-error-state');
@@ -97,6 +101,7 @@ let currentPostId     = null;
 let currentFunnelType = null;
 let primaryPost       = null;
 let alternativePost   = null;
+let currentHookB      = null;
 let currentAssetUrl   = null;
 let currentAssetType  = null;
 /** Asset committed via "Add to post" — included in publish/schedule payloads. */
@@ -620,7 +625,7 @@ async function triggerGenerate(retryData) {
 
 /* ── 9. Handle generation success ───────────────────────────── */
 function handleGenerateSuccess(data, path) {
-  let post, postId, quality, archetype, confidence, alternative;
+  let post, postId, quality, archetype, confidence, alternative, hookB;
 
   if (path === 'recipe') {
     const first = data.posts && data.posts[0];
@@ -631,6 +636,7 @@ function handleGenerateSuccess(data, path) {
     archetype   = null;
     confidence  = null;
     alternative = null;
+    hookB       = null;
   } else {
     post        = data.post;
     postId      = data.id;
@@ -638,10 +644,12 @@ function handleGenerateSuccess(data, path) {
     archetype   = data.archetypeUsed;
     confidence  = data.hookConfidence;
     alternative = data.alternative;
+    hookB       = data.hookB || null;
   }
 
   primaryPost       = { post, postId, quality, archetype, confidence };
   alternativePost   = alternative || null;
+  currentHookB      = hookB;
   currentPostId     = postId;
   currentFunnelType = (path === 'recipe') ? null : (data.funnel_type || null);
 
@@ -652,6 +660,7 @@ function handleGenerateSuccess(data, path) {
   renderScoreBar(quality, archetype, confidence);
   renderFunnelBadge();
   renderAlternativeStrip(alternative, confidence);
+  renderHookBStrip(hookB);
   enableActionButtons();
   updateWordCount(post);
 
@@ -673,6 +682,7 @@ function buildSession() {
     funnelType:  currentFunnelType,
     primary:     primaryPost,
     alternative: alternativePost,
+    hookB:       currentHookB,
     attachedAssetUrl:   attachedAssetUrl,
     attachedAssetType:  attachedAssetType,
     attachedPreviewUrl: attachedPreviewUrl,
@@ -809,6 +819,36 @@ switchAltBtn.addEventListener('click', (e) => {
   renderScoreBar(primaryPost.quality, primaryPost.archetype, primaryPost.confidence);
   alternativeStrip.classList.remove('visible');
   currentPostId = primaryPost.postId;
+
+  Session.save(buildSession());
+});
+
+/* ── 12b. Hook B strip ───────────────────────────────────────── */
+function renderHookBStrip(hookB) {
+  if (!hookB) {
+    hookBStrip.classList.remove('visible');
+    return;
+  }
+  hookBText.textContent = hookB;
+  hookBStrip.classList.add('visible');
+}
+
+hookBUseBtn.addEventListener('click', (e) => {
+  e.preventDefault();
+  if (scheduleEditLocked) return;
+  if (!currentHookB) return;
+
+  // Replace the first line of the post with the alternative hook
+  const current = postTextarea.value;
+  const lines = current.split('\n');
+  lines[0] = currentHookB;
+  const updated = lines.join('\n');
+  postTextarea.value = updated;
+  postTextarea.dispatchEvent(new Event('input'));
+
+  // Dismiss the strip so it can't be applied twice
+  currentHookB = null;
+  hookBStrip.classList.remove('visible');
 
   Session.save(buildSession());
 });
@@ -1589,6 +1629,9 @@ function showSkeleton() {
   postTextarea.classList.remove('visible');
   postErrorState.classList.remove('visible');
   skeletonState.classList.add('visible');
+  // Clear hook B from previous generation
+  currentHookB = null;
+  hookBStrip.classList.remove('visible');
 }
 
 function hideSkeleton() {
@@ -1622,6 +1665,7 @@ function restoreSession(s) {
   currentFunnelType = s.funnelType || null;
   primaryPost       = s.primary || null;
   alternativePost   = s.alternative || null;
+  currentHookB      = s.hookB || null;
 
   renderPost(s.post);
   updateWordCount(s.post);
@@ -1629,6 +1673,7 @@ function restoreSession(s) {
   if (primaryPost) {
     renderScoreBar(primaryPost.quality, primaryPost.archetype, primaryPost.confidence);
     renderAlternativeStrip(alternativePost, primaryPost.confidence);
+    renderHookBStrip(currentHookB);
   }
   renderFunnelBadge();
 

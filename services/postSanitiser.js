@@ -20,6 +20,13 @@ Banned filler transitions — cut entirely:
 - "That said," / "Having said that," / "It's worth noting"
 - "Ultimately," / "In essence," / "At its core," / "At the end of the day"
 - "It goes without saying" / "Needless to say"
+
+CONVICTION — commit to a point of view. Hedged posts feel timid and get scrolled past:
+- Never use "might", "may", "perhaps", "possibly", "potentially" when stating a position
+- Never use "some people", "many people", "a lot of people" — say what YOU observe
+- Never use "in many cases", "often times", "it depends" as a conclusion — those are non-answers
+- Never soften a strong claim with "I think" or "in my opinion" — state it as true
+- If the post challenges a belief, do so directly — not with "you might want to consider"
 `;
 
 /**

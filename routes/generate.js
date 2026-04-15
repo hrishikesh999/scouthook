@@ -94,7 +94,7 @@ const IDEA_INSIGHT_SLUG = 'idea_insight';
 async function synthesiseIdeaWithOptionalQualityRetry(userProfile, baseOptions) {
   let synthesisAttempt = 1;
   let synthResult = await synthesise(userProfile, baseOptions);
-  let { synthesis, post, archetypeUsed, hookConfidence } = synthResult;
+  let { synthesis, post, hookB, archetypeUsed, hookConfidence } = synthResult;
 
   const gatePrimary = () =>
     runQualityGate(
@@ -109,7 +109,7 @@ async function synthesiseIdeaWithOptionalQualityRetry(userProfile, baseOptions) 
       `The previous attempt failed these quality checks: ${primaryGate.errors.join(', ')}. Fix all of these in your next attempt.`;
     synthesisAttempt = 2;
     synthResult = await synthesise(userProfile, { ...baseOptions, qualityRetryHint });
-    ({ synthesis, post, archetypeUsed, hookConfidence } = synthResult);
+    ({ synthesis, post, hookB, archetypeUsed, hookConfidence } = synthResult);
     primaryGate = gatePrimary();
   }
 
@@ -132,6 +132,7 @@ async function synthesiseIdeaWithOptionalQualityRetry(userProfile, baseOptions) 
   return {
     synthesis,
     post,
+    hookB: hookB || null,
     archetypeUsed,
     hookConfidence,
     primaryGate,
@@ -147,7 +148,7 @@ async function synthesiseIdeaWithOptionalQualityRetry(userProfile, baseOptions) 
 async function synthesiseVaultWithQualityRetry(userProfile, vaultIdea, chunkText, baseOptions) {
   let synthesisAttempt = 1;
   let synthResult = await vaultSeedToPost(vaultIdea, chunkText, userProfile, baseOptions);
-  let { synthesis, post, archetypeUsed, hookConfidence } = synthResult;
+  let { synthesis, post, hookB, archetypeUsed, hookConfidence } = synthResult;
 
   const gate = () =>
     runQualityGate(
@@ -162,11 +163,11 @@ async function synthesiseVaultWithQualityRetry(userProfile, vaultIdea, chunkText
       `The previous attempt failed these quality checks: ${primaryGate.errors.join(', ')}. Fix all of these in your next attempt.`;
     synthesisAttempt = 2;
     synthResult = await vaultSeedToPost(vaultIdea, chunkText, userProfile, { ...baseOptions, qualityRetryHint });
-    ({ synthesis, post, archetypeUsed, hookConfidence } = synthResult);
+    ({ synthesis, post, hookB, archetypeUsed, hookConfidence } = synthResult);
     primaryGate = gate();
   }
 
-  return { synthesis, post, archetypeUsed, hookConfidence, primaryGate, synthesisAttempt };
+  return { synthesis, post, hookB: hookB || null, archetypeUsed, hookConfidence, primaryGate, synthesisAttempt };
 }
 
 // ---------------------------------------------------------------------------
@@ -240,6 +241,7 @@ router.post('/', async (req, res) => {
       const {
         synthesis,
         post,
+        hookB,
         archetypeUsed,
         hookConfidence,
         primaryGate,
@@ -277,8 +279,8 @@ router.post('/', async (req, res) => {
 
       const postsInsert = db.prepare(`
         INSERT INTO generated_posts
-          (run_id, user_id, tenant_id, format_slug, content, quality_score, quality_flags, passed_gate, funnel_type, vault_source_ref)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          (run_id, user_id, tenant_id, format_slug, content, quality_score, quality_flags, passed_gate, funnel_type, vault_source_ref, hook_b)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         RETURNING id
       `);
 
@@ -292,7 +294,8 @@ router.post('/', async (req, res) => {
         JSON.stringify(primaryGate.flags),
         primaryGate.passed_gate ? 1 : 0,
         funnelType,
-        vaultSourceRef
+        vaultSourceRef,
+        hookB || null
       );
       const primaryId = primaryInsert.lastInsertRowid;
 
@@ -331,6 +334,7 @@ router.post('/', async (req, res) => {
         run_id: runId,
         synthesis,
         post,
+        hookB: hookB || null,
         id: primaryId,
         archetypeUsed,
         hookConfidence,

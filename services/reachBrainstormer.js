@@ -70,6 +70,8 @@ Reach posts that perform well:
 - State an observation that is specific enough to be surprising, not generic enough to be forgettable
 - Surface an inconvenient truth the niche avoids talking about
 
+Every seed_text must be anchored to at least one concrete detail — a specific number, timeframe, dollar amount, client scenario, or named situation. "Why client relationships fail" is forgettable. "Why I lost a $180k client on day 3" is not.
+
 BANNED — these patterns are scroll-past clichés that kill reach:
 - "Unpopular opinion:" as an opener
 - "Here are N tips/lessons/things…" listicle framing
@@ -77,6 +79,7 @@ BANNED — these patterns are scroll-past clichés that kill reach:
 - "Most people think X, but actually X is fine" — non-take takes
 - Generic motivation or hustle content with no niche specificity
 - Any idea that could apply equally well to any industry
+- Observations with no concrete anchor ("many people struggle with X")
 
 Every idea must be rooted in the ${niche} context. Vague ideas are rejected.`;
 }

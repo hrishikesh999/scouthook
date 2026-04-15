@@ -8,9 +8,34 @@ const { HOOK_ARCHETYPES } = require('./hookArchetypes');
 const { AI_TELLS_PROHIBITION, sanitiseAiTells } = require('./postSanitiser');
 const { LINKEDIN_RULES } = require('../modules/formatIntelligence/rules');
 
+const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
+
 function getLengthGuidance(funnelType) {
   const targets = LINKEDIN_RULES.postLengthTargets;
   return (targets[funnelType] || targets.default).guidance;
+}
+
+/**
+ * Generate a single alternative first line (hook B) using Haiku.
+ * Gives the user a second hook option without regenerating the whole post.
+ * Returns null on any failure — hook B is always non-blocking.
+ */
+async function generateAlternativeHook(post, usedArchetype, client) {
+  try {
+    const response = await client.messages.create({
+      model:      HAIKU_MODEL,
+      max_tokens: 80,
+      system:     'You are a LinkedIn hook writer. Write one alternative opening line for a post. Under 12 words. No explanation. Plain text only.',
+      messages:   [{
+        role:    'user',
+        content: `This post opens with a ${usedArchetype} hook:\n\n${post.split('\n').slice(0, 3).join('\n')}\n\nWrite one alternative first line using a completely different angle. Make it punchy, specific, and scroll-stopping. Plain text only — no quotes, no labels.`,
+      }],
+    });
+    const line = response.content?.[0]?.text?.trim() || null;
+    return line && line.length > 0 ? line : null;
+  } catch {
+    return null; // non-blocking
+  }
 }
 
 /**
@@ -98,6 +123,18 @@ AUDIENCE:
 
 EDITORIAL CONTEXT (use where it strengthens the post):
 ${userProfile.contrarian_view || 'Draw on the raw idea for tension and specificity.'}
+
+LINKEDIN FORMATTING (non-negotiable):
+- One sentence per line. Never write paragraph blocks. Every sentence gets its own line.
+- Put a blank line between every 2–3 lines to create visual breathing room.
+- The post must be visually scannable — a wall of text kills engagement before anyone reads it.
+
+ABOVE THE FOLD (critical for reach):
+- LinkedIn shows only the first 2–3 lines before the "see more" truncation.
+- Line 1 is the hook — handled by the archetype instruction above.
+- Lines 2–3 must deepen the tension from the hook, not explain or contextualise it.
+- Lines 2–3 should make the reader feel they will miss something if they do not click "see more".
+- Never use lines 2–3 for background, setup, or "let me tell you about X" framing.
 ${AI_TELLS_PROHIBITION}`;
 }
 
@@ -224,9 +261,12 @@ async function runSinglePostGeneration({
 
     responseText = message.content[0]?.text?.trim() || '';
     const validated = validateSinglePostResponse(extractJsonFromResponse(responseText));
+    const cleanPost = sanitiseAiTells(validated.post);
+    const hookB = await generateAlternativeHook(cleanPost, archetypeUsed, client);
     return {
       synthesis: validated.synthesis,
-      post: sanitiseAiTells(validated.post),
+      post:      cleanPost,
+      hookB,
       archetypeUsed,
       hookConfidence,
     };
@@ -246,9 +286,12 @@ async function runSinglePostGeneration({
         });
         responseText = retry.content[0]?.text?.trim() || '';
         const validated = validateSinglePostResponse(extractJsonFromResponse(responseText));
+        const cleanPost = sanitiseAiTells(validated.post);
+        const hookB = await generateAlternativeHook(cleanPost, archetypeUsed, client);
         return {
           synthesis: validated.synthesis,
-          post: sanitiseAiTells(validated.post),
+          post:      cleanPost,
+          hookB,
           archetypeUsed,
           hookConfidence,
         };

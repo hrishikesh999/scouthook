@@ -113,7 +113,7 @@ No markdown fences. No explanation. Only the JSON object.`;
 }
 
 /**
- * User prompt for vault-sourced posts. Frames the input as expert source material
+ * User prompt for trust/convert vault posts. Frames the input as expert source material
  * so Claude preserves depth and specificity rather than genericising.
  */
 function buildVaultUserPrompt(vaultIdea, chunkText) {
@@ -130,6 +130,38 @@ This insight was mined from the author's own documents. Expand it into a LinkedI
 - Preserves the depth, specificity, and any proprietary framing from the source
 - Does NOT genericise, water down, or replace concrete details with vague language
 - Reads as the author sharing hard-won, specific knowledge — not a summary of it
+
+Return ONLY valid JSON in this exact structure:
+{
+  "synthesis": {
+    "suggested_angle": "one sentence on the strongest angle for this idea",
+    "recommended_structure": "one sentence on the best structure given the audience",
+    "supporting_insight": "one sentence of editorial context that makes this idea stronger"
+  },
+  "post": "full text of the single LinkedIn post"
+}
+
+No markdown fences. No explanation. Only the JSON object.`;
+}
+
+/**
+ * User prompt for reach vault posts. Frames the input as an angle or observation
+ * to develop into a broad, relatable post — not expert material to preserve.
+ */
+function buildReachUserPrompt(vaultIdea) {
+  return `REACH ANGLE:
+${vaultIdea.seed_text}
+
+Develop this into a LinkedIn post optimised for reach — designed to attract new audiences and spark broad engagement.
+
+A reach post works by making the reader feel seen, surprised, or compelled to respond. It succeeds through resonance, not credentials.
+
+Write a post that:
+- Opens with a hook that stops the scroll — a tension, contradiction, or observation the reader instantly recognises
+- Stays relatable and human throughout — no jargon, no credentials-flaunting, no listicle structure
+- Has a clear point of view; does not hedge or stay neutral
+- Sounds like a person talking, not a professional presenting
+- Does NOT lecture, summarise, or explain — it provokes and connects
 
 Return ONLY valid JSON in this exact structure:
 {
@@ -248,6 +280,12 @@ async function vaultSeedToPost(vaultIdea, chunkText, userProfile, options = {}) 
   const archetypeRecord = HOOK_ARCHETYPES[archetype] || HOOK_ARCHETYPES.INSIGHT;
   const hookInjection = buildHookInjection(archetypeRecord);
 
+  // Reach ideas have no source document — use a prompt focused on resonance and
+  // relatability rather than depth/specificity preservation.
+  const userPromptOverride = vaultIdea.funnel_type === 'reach'
+    ? buildReachUserPrompt(vaultIdea)
+    : buildVaultUserPrompt(vaultIdea, chunkText);
+
   return runSinglePostGeneration({
     rawIdea: vaultIdea.seed_text,   // used only for quality-retry hint text
     userProfile,
@@ -255,7 +293,7 @@ async function vaultSeedToPost(vaultIdea, chunkText, userProfile, options = {}) 
     hookInjection,
     archetypeUsed: archetype,
     hookConfidence: 1.0,            // pre-classified; treat as high confidence
-    userPromptOverride: buildVaultUserPrompt(vaultIdea, chunkText),
+    userPromptOverride,
   });
 }
 

@@ -18,6 +18,7 @@ const forceRetPill    = document.getElementById('force-returned-pill');
 const archetypeBadge  = document.getElementById('archetype-badge');
 const confidenceText  = document.getElementById('confidence-text');
 const passfailPill    = document.getElementById('passfail-pill');
+const passfailTooltip = document.getElementById('passfail-tooltip');
 const suggestionsBtn  = document.getElementById('suggestions-toggle');
 const suggestionsList = document.getElementById('suggestions-list');
 
@@ -715,6 +716,11 @@ function renderScoreBar(quality, archetype, confidence) {
   const passed = quality.passed || quality.passed_gate;
   passfailPill.textContent = passed ? '● Passed' : '● Failed';
   passfailPill.className = 'passfail-pill ' + (passed ? 'pass' : 'fail');
+  if (passfailTooltip) {
+    passfailTooltip.textContent = passed
+      ? 'The post passed our quality check. It\'s ready to publish.'
+      : 'The post did not pass our quality check. It needs refinement.';
+  }
 
   // Suggestions
   const allItems = [...(quality.errors || []), ...(quality.warnings || [])];

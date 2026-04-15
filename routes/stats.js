@@ -135,7 +135,8 @@ router.get('/posts/:id', async (req, res) => {
 
   try {
     const post = await db.prepare(`
-      SELECT id, content, format_slug, quality_score, quality_flags, passed_gate, status, created_at, idea_input, funnel_type
+      SELECT id, content, format_slug, quality_score, quality_flags, passed_gate, status, created_at,
+             idea_input, funnel_type, asset_url, asset_preview_url, asset_type, asset_slide_count
       FROM   generated_posts
       WHERE  id = ? AND user_id = ? AND tenant_id = ?
     `).get(postId, userId, tenantId);
@@ -170,7 +171,8 @@ router.patch('/posts/:id', async (req, res) => {
   const userId   = req.userId;
   const tenantId = req.tenantId || 'default';
   const postId   = req.params.id;
-  const { content, idea_input } = req.body;
+  const { content, idea_input,
+          asset_url, asset_preview_url, asset_type, asset_slide_count } = req.body;
 
   if (!userId)  return res.status(400).json({ ok: false, error: 'missing_user_id' });
   if (!content) return res.status(400).json({ ok: false, error: 'missing_content' });
@@ -186,11 +188,29 @@ router.patch('/posts/:id', async (req, res) => {
       return res.status(409).json({ ok: false, error: 'post_not_editable', status: existing.status });
     }
 
-    const result = await db.prepare(`
-      UPDATE generated_posts
-      SET content = ?, idea_input = COALESCE(?, idea_input)
-      WHERE id = ? AND user_id = ? AND tenant_id = ? AND status = 'draft'
-    `).run(content, idea_input ?? null, postId, userId, tenantId);
+    // Asset fields are passed explicitly (including null to clear them).
+    // Only update when the caller included them in the request body.
+    const hasAsset = 'asset_url' in req.body;
+
+    const result = hasAsset
+      ? await db.prepare(`
+          UPDATE generated_posts
+          SET content           = ?,
+              idea_input        = COALESCE(?, idea_input),
+              asset_url         = ?,
+              asset_preview_url = ?,
+              asset_type        = ?,
+              asset_slide_count = ?
+          WHERE id = ? AND user_id = ? AND tenant_id = ? AND status = 'draft'
+        `).run(content, idea_input ?? null,
+               asset_url ?? null, asset_preview_url ?? null,
+               asset_type ?? null, asset_slide_count ?? null,
+               postId, userId, tenantId)
+      : await db.prepare(`
+          UPDATE generated_posts
+          SET content = ?, idea_input = COALESCE(?, idea_input)
+          WHERE id = ? AND user_id = ? AND tenant_id = ? AND status = 'draft'
+        `).run(content, idea_input ?? null, postId, userId, tenantId);
 
     if (result.changes === 0) {
       return res.status(409).json({ ok: false, error: 'post_not_editable' });

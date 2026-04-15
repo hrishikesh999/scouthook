@@ -455,6 +455,19 @@ document.addEventListener('visibilitychange', () => {
         renderScoreBar(qualityObj, data.post.format_slug, null);
         renderFunnelBadge();
         setScheduleLockFromPost(data.post);
+
+        // Restore attached visual asset from DB
+        if (data.post.asset_url) {
+          attachedAssetUrl   = data.post.asset_url;
+          attachedAssetType  = data.post.asset_type  || null;
+          attachedPreviewUrl = data.post.asset_preview_url || null;
+          attachedSlideCount = data.post.asset_slide_count || 0;
+          const labelMap = { quote_card: 'Quote Card', carousel: 'Carousel',
+                             branded_quote: 'Branded Quote', media_image: 'Image', media_pdf: 'PDF' };
+          assetChipLabel.textContent = labelMap[attachedAssetType] || attachedAssetType || '';
+          assetChip.classList.remove('hidden');
+          renderPreviewAsset();
+        }
       }
     } catch { /* fall through to session restore on network error */ }
   } else if (session) {
@@ -1443,6 +1456,7 @@ assetChipRemove.addEventListener('click', () => {
   assetChip.classList.add('hidden');
   assetChipLabel.textContent = '';
   clearPreviewAsset();
+  saveAssetToDB();
 });
 
 function renderPreviewAsset() {
@@ -1510,10 +1524,32 @@ async function saveGeneratedToMedia(assetUrl, assetType, previewUrl) {
         if (assetType !== 'carousel') attachedPreviewUrl = data.file.url;
       }
 
-      // Persist session with updated permanent URLs
-      if (currentPostId) Session.save(buildSession());
+      // Persist session + DB with updated permanent URLs
+      if (currentPostId) {
+        Session.save(buildSession());
+        saveAssetToDB();
+      }
     } catch { /* non-fatal — temporary URL still works for 24 h */ }
   }
+}
+
+/* ── Persist attached asset to DB ───────────────────────────── */
+async function saveAssetToDB() {
+  if (!currentPostId || scheduleEditLocked) return;
+  try {
+    await fetch(`/api/posts/${currentPostId}`, {
+      method:  'PATCH',
+      headers: apiHeaders(),
+      body: JSON.stringify({
+        content:           postTextarea.value.trim(),
+        idea_input:        ideaInput.value.trim() || null,
+        asset_url:         attachedAssetUrl   || null,
+        asset_preview_url: attachedPreviewUrl || null,
+        asset_type:        attachedAssetType  || null,
+        asset_slide_count: attachedSlideCount || null,
+      }),
+    });
+  } catch { /* non-fatal */ }
 }
 
 /* ── 22. Enable / disable action buttons ────────────────────── */
@@ -1711,8 +1747,9 @@ function buildDrawerCard(file) {
     assetChip.classList.remove('hidden');
     renderPreviewAsset();
 
-    // Persist to session so it survives navigation
+    // Persist to session + DB so it survives navigation
     if (currentPostId) Session.save(buildSession());
+    saveAssetToDB();
 
     closeMediaDrawer();
   };

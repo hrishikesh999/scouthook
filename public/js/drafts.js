@@ -121,11 +121,15 @@ function renderGrid(posts) {
     const text  = (post.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const pid   = String(post.id);
 
+    const funnelBadge = post.funnel_type
+      ? `<span class="funnel-badge ${post.funnel_type}">${post.funnel_type}</span>` : '';
+
     return `
       <div class="draft-card-wrap">
         <a class="draft-card" href="${url}" aria-label="Refine post">
           <div class="draft-card-top">
             <span class="draft-archetype">${label}</span>
+            ${funnelBadge}
             <span class="draft-score ${cls}">${score}</span>
           </div>
           <p class="draft-preview">${text}</p>

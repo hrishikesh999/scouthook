@@ -542,7 +542,7 @@ router.get('/scheduled', (req, res) => {
     const posts = await db.prepare(`
       SELECT sp.id, sp.content, sp.scheduled_for, sp.status,
              sp.linkedin_post_id, sp.error_message, sp.attempts, sp.created_at,
-             sp.post_id, gp.format_slug
+             sp.post_id, gp.format_slug, gp.funnel_type
       FROM   scheduled_posts sp
       LEFT JOIN generated_posts gp ON sp.post_id = gp.id
       WHERE  sp.user_id = ? AND sp.tenant_id = ? AND sp.status IN ('pending', 'processing')

@@ -93,6 +93,7 @@ const scheduleLockMsg        = document.getElementById('schedule-lock-banner-msg
 /* ── 2. State ────────────────────────────────────────────────── */
 let currentPath       = 'idea';
 let currentPostId     = null;
+let currentFunnelType = null;
 let primaryPost       = null;
 let alternativePost   = null;
 let currentAssetUrl   = null;
@@ -438,8 +439,9 @@ document.addEventListener('visibilitychange', () => {
           qualityObj = { score: data.post.quality_score, flags, forcedReturn: false };
         }
 
-        currentPostId = data.post.id;
-        primaryPost   = {
+        currentPostId     = data.post.id;
+        currentFunnelType = data.post.funnel_type || null;
+        primaryPost       = {
           post:       data.post.content,
           postId:     data.post.id,
           quality:    qualityObj,
@@ -623,9 +625,10 @@ function handleGenerateSuccess(data, path) {
     alternative = data.alternative;
   }
 
-  primaryPost     = { post, postId, quality, archetype, confidence };
-  alternativePost = alternative || null;
-  currentPostId   = postId;
+  primaryPost       = { post, postId, quality, archetype, confidence };
+  alternativePost   = alternative || null;
+  currentPostId     = postId;
+  currentFunnelType = (path === 'recipe') ? null : (data.funnel_type || null);
 
   scheduleEditLocked = false;
   scheduledMeta = null;
@@ -651,6 +654,7 @@ function buildSession() {
     ideaInput: ideaInput.value,
     post:        postTextarea.value,
     postId:      currentPostId,
+    funnelType:  currentFunnelType,
     primary:     primaryPost,
     alternative: alternativePost,
     attachedAssetUrl:   attachedAssetUrl,
@@ -818,7 +822,18 @@ function switchView(view) {
   }
 }
 
+function renderFunnelBadge() {
+  const el = document.getElementById('preview-funnel-badge');
+  if (!el) return;
+  if (currentFunnelType) {
+    el.innerHTML = `<span class="seed-badge ${currentFunnelType}">${currentFunnelType.toUpperCase()}</span>`;
+  } else {
+    el.innerHTML = '';
+  }
+}
+
 function buildLinkedInPreview(text) {
+  renderFunnelBadge();
   const truncLimit = 210;
   previewExpanded = false;
 
@@ -1557,9 +1572,10 @@ function restoreSession(s) {
   if (s.ideaInput) ideaInput.value = s.ideaInput;
 
   // Restore post
-  currentPostId   = s.postId || null;
-  primaryPost     = s.primary || null;
-  alternativePost = s.alternative || null;
+  currentPostId     = s.postId || null;
+  currentFunnelType = s.funnelType || null;
+  primaryPost       = s.primary || null;
+  alternativePost   = s.alternative || null;
 
   renderPost(s.post);
   updateWordCount(s.post);

@@ -165,6 +165,7 @@ function renderPostTile(post) {
       <div class="sched-tile-top">
         <span class="sched-post-time">${time}</span>
         ${archetype ? `<span class="sched-archetype-badge">${archetype}</span>` : ''}
+        ${post.funnel_type ? `<span class="funnel-badge ${post.funnel_type}">${post.funnel_type}</span>` : ''}
       </div>
       <p class="sched-tile-hook">${hook}</p>
       ${second ? `<p class="sched-tile-second">${second}</p>` : ''}

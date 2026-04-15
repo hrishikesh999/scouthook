@@ -114,6 +114,7 @@ function renderList(posts) {
             <div class="pub-card-top">
               <span class="pub-card-date">${dateStr}</span>
               ${archetype ? `<span class="pub-archetype-badge">${archetype}</span>` : ''}
+              ${post.funnel_type ? `<span class="funnel-badge ${post.funnel_type}">${post.funnel_type}</span>` : ''}
               ${assetLabel ? `<span class="pub-asset-badge">${assetLabel}</span>` : ''}
             </div>
             ${hook ? `<p class="pub-card-hook">${hook}</p>` : ''}

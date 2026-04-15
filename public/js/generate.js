@@ -452,6 +452,7 @@ document.addEventListener('visibilitychange', () => {
         renderPost(data.post.content);
         updateWordCount(data.post.content);
         renderScoreBar(qualityObj, data.post.format_slug, null);
+        renderFunnelBadge();
         setScheduleLockFromPost(data.post);
       }
     } catch { /* fall through to session restore on network error */ }
@@ -635,6 +636,7 @@ function handleGenerateSuccess(data, path) {
 
   renderPost(post);
   renderScoreBar(quality, archetype, confidence);
+  renderFunnelBadge();
   renderAlternativeStrip(alternative, confidence);
   enableActionButtons();
   updateWordCount(post);
@@ -823,7 +825,7 @@ function switchView(view) {
 }
 
 function renderFunnelBadge() {
-  const el = document.getElementById('preview-funnel-badge');
+  const el = document.getElementById('funnel-type-badge');
   if (!el) return;
   if (currentFunnelType) {
     el.innerHTML = `<span class="seed-badge ${currentFunnelType}">${currentFunnelType.toUpperCase()}</span>`;
@@ -833,7 +835,6 @@ function renderFunnelBadge() {
 }
 
 function buildLinkedInPreview(text) {
-  renderFunnelBadge();
   const truncLimit = 210;
   previewExpanded = false;
 
@@ -1584,6 +1585,7 @@ function restoreSession(s) {
     renderScoreBar(primaryPost.quality, primaryPost.archetype, primaryPost.confidence);
     renderAlternativeStrip(alternativePost, primaryPost.confidence);
   }
+  renderFunnelBadge();
 
   enableActionButtons();
 

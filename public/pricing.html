@@ -281,7 +281,7 @@
         <input type="checkbox" id="annual-toggle">
         <span class="toggle-track"></span>
       </label>
-      <span id="annual-label">Annual <span class="save-badge">Save 20%</span></span>
+      <span id="annual-label">Annual <span class="save-badge">Save 17%</span></span>
     </div>
 
     <div class="pricing-cards">
@@ -329,13 +329,13 @@
 
         <!-- Monthly price -->
         <div id="price-monthly">
-          <div class="plan-price"><sup>$</sup><span id="price-monthly-amount">29</span></div>
+          <div class="plan-price"><sup>$</sup>49</div>
           <div class="plan-price-period">/ month</div>
         </div>
         <!-- Annual price -->
         <div id="price-annual" style="display:none">
-          <div class="plan-price"><sup>$</sup><span id="price-annual-amount">23</span></div>
-          <div class="plan-price-period">/ month &nbsp;<span class="plan-price-sub">billed $276/year</span></div>
+          <div class="plan-price"><sup>$</sup>490</div>
+          <div class="plan-price-period">/ year &nbsp;<span class="plan-price-sub">($40.83 / month)</span></div>
         </div>
 
         <hr class="plan-divider">
@@ -369,147 +369,106 @@
 
   </main>
 
-  <!-- Paddle.js -->
-  <script src="https://cdn.paddle.com/paddle/v2/paddle.js"></script>
-
   <script src="/js/session.js"></script>
   <script>
-    (async () => {
-      // ── Paddle initialisation ───────────────────────────────
-      // PADDLE_CLIENT_TOKEN and PADDLE_ENV are injected by the pricing config endpoint
-      // or can be set directly here. We fetch them from the server to avoid
-      // hardcoding them in HTML.
-      let paddleClientToken = '';
-      let paddleEnv = 'sandbox';
-      let priceIdMonthly = '';
-      let priceIdYearly  = '';
+    // Billing toggle
+    const annualToggle = document.getElementById('annual-toggle');
+    const monthlyLabel = document.getElementById('monthly-label');
+    const annualLabel  = document.getElementById('annual-label');
+    const priceMonthly = document.getElementById('price-monthly');
+    const priceAnnual  = document.getElementById('price-annual');
 
-      try {
-        const cfgRes = await fetch('/api/billing/config');
-        if (cfgRes.ok) {
-          const cfg = await cfgRes.json();
-          paddleClientToken = cfg.clientToken || '';
-          paddleEnv         = cfg.env || 'sandbox';
-          priceIdMonthly    = cfg.priceIdMonthly || '';
-          priceIdYearly     = cfg.priceIdYearly  || '';
-        }
-      } catch { /* ignore — checkout button will stay disabled if no config */ }
+    function setBillingInterval(isAnnual) {
+      priceMonthly.style.display = isAnnual ? 'none' : '';
+      priceAnnual.style.display  = isAnnual ? '' : 'none';
+      monthlyLabel.classList.toggle('active', !isAnnual);
+      annualLabel.classList.toggle('active', isAnnual);
+    }
 
-      if (paddleClientToken) {
-        if (paddleEnv === 'production') {
-          Paddle.Environment.set('production');
-        } else {
-          Paddle.Environment.set('sandbox');
-        }
-        Paddle.Initialize({ token: paddleClientToken });
+    annualToggle.addEventListener('change', () => setBillingInterval(annualToggle.checked));
+    monthlyLabel.addEventListener('click', () => { annualToggle.checked = false; setBillingInterval(false); });
+    annualLabel.addEventListener('click',  () => { annualToggle.checked = true;  setBillingInterval(true);  });
+
+    // Price IDs + subscription state (loaded async, won't block button wiring)
+    let priceIdMonthly = '';
+    let priceIdYearly  = '';
+
+    const upgradeBtn  = document.getElementById('upgrade-btn');
+    const errEl       = document.getElementById('checkout-error');
+    const freeCurrChip = document.getElementById('free-current-chip');
+    const proCurrChip  = document.getElementById('pro-current-chip');
+
+    function showError(msg) { errEl.textContent = msg; errEl.style.display = ''; }
+    function hideError()    { errEl.style.display = 'none'; }
+
+    // Wire upgrade button immediately — no Paddle.js dependency
+    upgradeBtn.addEventListener('click', async function () {
+      hideError();
+      const priceId = annualToggle.checked ? priceIdYearly : priceIdMonthly;
+      if (!priceId) {
+        showError('Pricing is not configured yet. Please contact support.');
+        return;
       }
-
-      // ── Billing toggle ─────────────────────────────────────
-      const annualToggle  = document.getElementById('annual-toggle');
-      const monthlyLabel  = document.getElementById('monthly-label');
-      const annualLabel   = document.getElementById('annual-label');
-      const priceMonthly  = document.getElementById('price-monthly');
-      const priceAnnual   = document.getElementById('price-annual');
-
-      function setInterval(isAnnual) {
-        priceMonthly.style.display = isAnnual ? 'none' : '';
-        priceAnnual.style.display  = isAnnual ? '' : 'none';
-        monthlyLabel.classList.toggle('active', !isAnnual);
-        annualLabel.classList.toggle('active', isAnnual);
-      }
-
-      annualToggle.addEventListener('change', () => setInterval(annualToggle.checked));
-      monthlyLabel.addEventListener('click', () => { annualToggle.checked = false; setInterval(false); });
-      document.querySelector('#annual-label').addEventListener('click', () => { annualToggle.checked = true; setInterval(true); });
-
-      // ── Subscription status ─────────────────────────────────
-      let currentPlan = 'free';
+      upgradeBtn.disabled    = true;
+      upgradeBtn.textContent = 'Loading…';
       try {
-        const r = await fetch('/api/billing/subscription');
-        if (r.ok) {
-          const d = await r.json();
-          currentPlan = d.plan || 'free';
-        }
-      } catch { /* user not logged in or API error */ }
-
-      const freeCurrChip = document.getElementById('free-current-chip');
-      const proCurrChip  = document.getElementById('pro-current-chip');
-      const upgradeBtn   = document.getElementById('upgrade-btn');
-
-      if (currentPlan === 'pro') {
-        proCurrChip.style.display = '';
-        upgradeBtn.textContent = 'Manage subscription';
-        upgradeBtn.addEventListener('click', async () => {
-          upgradeBtn.disabled = true;
-          upgradeBtn.textContent = 'Loading…';
-          try {
-            const r = await fetch('/api/billing/portal');
-            const d = await r.json();
-            if (d.portalUrl) {
-              window.location.href = d.portalUrl;
-            } else {
-              showError('Unable to open billing portal.');
-              upgradeBtn.disabled = false;
-              upgradeBtn.textContent = 'Manage subscription';
-            }
-          } catch {
-            showError('Unable to open billing portal.');
-            upgradeBtn.disabled = false;
-            upgradeBtn.textContent = 'Manage subscription';
-          }
+        const r = await fetch('/api/billing/checkout', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ priceId }),
         });
-      } else {
-        freeCurrChip.style.display = '';
-        upgradeBtn.addEventListener('click', handleUpgrade);
-      }
-
-      async function handleUpgrade() {
-        const priceId = annualToggle.checked ? priceIdYearly : priceIdMonthly;
-        if (!priceId) {
-          showError('Pricing is not configured yet. Please contact support.');
+        const d = await r.json();
+        if (d.checkoutUrl) {
+          window.location.href = d.checkoutUrl;
           return;
         }
-        upgradeBtn.disabled = true;
-        upgradeBtn.textContent = 'Loading…';
-        hideError();
+        showError(d.error === 'unauthenticated' ? 'Please sign in first.' : 'Unable to start checkout. Please try again.');
+      } catch {
+        showError('Unable to start checkout. Please try again.');
+      }
+      upgradeBtn.disabled    = false;
+      upgradeBtn.textContent = 'Upgrade to Pro';
+    });
 
-        try {
-          const r = await fetch('/api/billing/checkout', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ priceId }),
-          });
-          const d = await r.json();
-          if (d.checkoutUrl) {
-            window.location.href = d.checkoutUrl;
-          } else {
-            showError(d.error === 'unauthenticated'
-              ? 'Please sign in first.'
-              : 'Unable to start checkout. Please try again.');
-            upgradeBtn.disabled = false;
-            upgradeBtn.textContent = 'Upgrade to Pro';
-          }
-        } catch {
-          showError('Unable to start checkout. Please try again.');
-          upgradeBtn.disabled = false;
-          upgradeBtn.textContent = 'Upgrade to Pro';
+    // Load config + subscription state async (updates chips + price IDs when ready)
+    (async () => {
+      try {
+        const [cfgRes, subRes] = await Promise.allSettled([
+          fetch('/api/billing/config').then(r => r.json()),
+          fetch('/api/billing/subscription').then(r => r.json()),
+        ]);
+
+        if (cfgRes.status === 'fulfilled') {
+          priceIdMonthly = cfgRes.value.priceIdMonthly || '';
+          priceIdYearly  = cfgRes.value.priceIdYearly  || '';
         }
-      }
 
-      function showError(msg) {
-        const el = document.getElementById('checkout-error');
-        el.textContent = msg;
-        el.style.display = '';
-      }
-      function hideError() {
-        document.getElementById('checkout-error').style.display = 'none';
-      }
+        const plan = subRes.status === 'fulfilled' ? (subRes.value.plan || 'free') : 'free';
+        if (plan === 'pro') {
+          proCurrChip.style.display = '';
+          upgradeBtn.textContent = 'Manage subscription';
+          // Replace click handler for Pro (portal instead of checkout)
+          upgradeBtn.replaceWith(upgradeBtn.cloneNode(true)); // remove old listener
+          const btn = document.getElementById('upgrade-btn');
+          btn.addEventListener('click', async function () {
+            btn.disabled = true; btn.textContent = 'Loading…';
+            try {
+              const r = await fetch('/api/billing/portal');
+              const d = await r.json();
+              if (d.portalUrl) { window.location.href = d.portalUrl; return; }
+            } catch { /* fall through */ }
+            showError('Unable to open billing portal.');
+            btn.disabled = false; btn.textContent = 'Manage subscription';
+          });
+        } else {
+          freeCurrChip.style.display = '';
+        }
+      } catch { /* silent — chips stay hidden, button still works */ }
 
-      // ── Success banner ──────────────────────────────────────
+      // Success banner after checkout redirect
       const params = new URLSearchParams(window.location.search);
       if (params.get('checkout') === 'success') {
         document.getElementById('success-banner').style.display = '';
-        // Remove the query param without reloading
         window.history.replaceState({}, '', '/pricing.html');
       }
     })();

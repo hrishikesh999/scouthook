@@ -93,14 +93,23 @@
       if (!r.ok) return;
       const d = await r.json();
       if (d.plan !== 'free') return;
-      // Insert upgrade link above the account slot
-      const pill = document.createElement('a');
-      pill.href = '/pricing.html';
+      // Insert upgrade button above the account slot
+      const pill = document.createElement('button');
+      pill.type = 'button';
       pill.className = 'sidebar-link';
-      pill.style.cssText = 'color:var(--brand);font-weight:600;font-size:13px;margin-bottom:4px';
+      pill.style.cssText = 'color:var(--brand);font-weight:600;font-size:13px;margin-bottom:4px;background:none;border:none;cursor:pointer;width:100%;text-align:left;';
       pill.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>Upgrade to Pro`;
+      pill.addEventListener('click', () => window.PricingModal?.open());
       bottom.insertBefore(pill, bottom.firstChild);
     } catch { /* ignore */ }
+  }
+
+  // Load pricing modal on all protected pages
+  if (!document.getElementById('pricing-modal-script')) {
+    const s = document.createElement('script');
+    s.id  = 'pricing-modal-script';
+    s.src = '/js/pricing-modal.js';
+    document.head.appendChild(s);
   }
 
   const auth = window.scouthookAuthReady;

@@ -236,11 +236,12 @@
           genBar.style.width   = `${Math.min(100, ((gen.current   ?? 0) / genLimit)   * 100)}%`;
           vaultBar.style.width = `${Math.min(100, ((vault.current ?? 0) / vaultLimit) * 100)}%`;
 
-          const upgradeBtn = document.createElement('a');
-          upgradeBtn.href = '/pricing.html';
+          const upgradeBtn = document.createElement('button');
+          upgradeBtn.type = 'button';
           upgradeBtn.className = 'btn-primary';
-          upgradeBtn.style.cssText = 'padding:7px 16px;font-size:13px;text-decoration:none;display:inline-flex;align-items:center';
+          upgradeBtn.style.cssText = 'padding:7px 16px;font-size:13px';
           upgradeBtn.textContent = 'Upgrade to Pro';
+          upgradeBtn.addEventListener('click', () => window.PricingModal?.open());
           actionsEl.appendChild(upgradeBtn);
         }
       } catch {

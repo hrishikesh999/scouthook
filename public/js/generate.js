@@ -1665,9 +1665,8 @@ function showPlanLimitError(current, limit) {
   emptyState.classList.add('hidden');
   postTextarea.classList.remove('visible');
   const used = (current !== undefined && limit !== undefined)
-    ? ` You've used ${current} of ${limit} this month.`
-    : '';
-  postErrorState.innerHTML = `You've reached the free plan generation limit.${used} <a href="/pricing.html">Upgrade to Pro for unlimited generations →</a>`;
+    ? ` You've used ${current} of ${limit} this month.` : '';
+  postErrorState.innerHTML = `You've reached the free plan generation limit.${used} <button type="button" onclick="window.PricingModal?.open()" style="background:none;border:none;padding:0;color:var(--brand);font-weight:600;cursor:pointer;font-size:inherit">Upgrade to Pro →</button>`;
   postErrorState.classList.add('visible');
 }
 

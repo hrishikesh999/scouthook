@@ -596,7 +596,7 @@
       } catch (err) {
         if (err.message === 'plan_limit_exceeded') {
           setUploadStatus(
-            `Free plan: you've used your 1 vault document. <a href="/pricing.html" style="color:var(--brand);font-weight:600">Upgrade to Pro →</a>`,
+            `Free plan: you've used your 1 vault document. <button type="button" onclick="window.PricingModal?.open()" style="background:none;border:none;padding:0;color:var(--brand);font-weight:600;cursor:pointer;font-size:inherit">Upgrade to Pro →</button>`,
             'error',
             true
           );
@@ -635,7 +635,7 @@
     } catch (err) {
       if (err.message === 'plan_limit_exceeded') {
         setUploadStatus(
-          `Free plan: you've used your 1 vault document. <a href="/pricing.html" style="color:var(--brand);font-weight:600">Upgrade to Pro →</a>`,
+          `Free plan: you've used your 1 vault document. <button type="button" onclick="window.PricingModal?.open()" style="background:none;border:none;padding:0;color:var(--brand);font-weight:600;cursor:pointer;font-size:inherit">Upgrade to Pro →</button>`,
           'error',
           true
         );

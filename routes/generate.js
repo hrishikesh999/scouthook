@@ -7,6 +7,7 @@ const { synthesise } = require('../services/synthesise');
 const { runQualityGate } = require('../services/qualityGate');
 const { generateInsightAlternativePost, vaultSeedToPost } = require('../services/ideaPath');
 const { classifyContent } = require('../services/funnelClassifier');
+const { canGeneratePost } = require('../services/subscription');
 
 // ---------------------------------------------------------------------------
 // Sliding window rate limiter — 10 generations per hour per user.
@@ -182,6 +183,18 @@ router.post('/', async (req, res) => {
   const rl = await checkRateLimit(userId);
   if (rl.limited) {
     return res.status(429).json({ ok: false, error: 'rate_limit_exceeded', retry_after_sec: rl.retryAfterSec });
+  }
+
+  const planCheck = await canGeneratePost(userId);
+  if (!planCheck.allowed) {
+    return res.status(403).json({
+      ok: false,
+      error: 'plan_limit_exceeded',
+      plan: planCheck.plan,
+      current: planCheck.current,
+      limit: planCheck.limit,
+      upgrade_url: '/pricing.html',
+    });
   }
 
   const { path: genPath, raw_idea, vault_idea_id } = req.body;
@@ -364,6 +377,18 @@ router.post('/regenerate/:postId', async (req, res) => {
   const rl = await checkRateLimit(userId);
   if (rl.limited) {
     return res.status(429).json({ ok: false, error: 'rate_limit_exceeded', retry_after_sec: rl.retryAfterSec });
+  }
+
+  const planCheck = await canGeneratePost(userId);
+  if (!planCheck.allowed) {
+    return res.status(403).json({
+      ok: false,
+      error: 'plan_limit_exceeded',
+      plan: planCheck.plan,
+      current: planCheck.current,
+      limit: planCheck.limit,
+      upgrade_url: '/pricing.html',
+    });
   }
 
   const post = await db.prepare(`

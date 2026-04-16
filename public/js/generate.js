@@ -597,7 +597,12 @@ async function triggerGenerate(retryData) {
     const data = await res.json();
 
     if (!res.ok || !data.ok) {
-      throw new Error(data.error || 'Generation failed');
+      const err = new Error(data.error || 'Generation failed');
+      if (data.error === 'plan_limit_exceeded') {
+        err.planCurrent = data.current;
+        err.planLimit   = data.limit;
+      }
+      throw err;
     }
 
     handleGenerateSuccess(data, currentPath);
@@ -615,6 +620,8 @@ async function triggerGenerate(retryData) {
   } catch (err) {
     if (err.message === 'complete_profile_first') {
       showProfileIncompleteError();
+    } else if (err.message === 'plan_limit_exceeded') {
+      showPlanLimitError(err.planCurrent, err.planLimit);
     } else {
       showPostError();
     }
@@ -1650,6 +1657,17 @@ function showProfileIncompleteError() {
   emptyState.classList.add('hidden');
   postTextarea.classList.remove('visible');
   postErrorState.innerHTML = `Your voice profile is incomplete — posts need it to generate. <a href="/profile.html">Complete it →</a>`;
+  postErrorState.classList.add('visible');
+}
+
+function showPlanLimitError(current, limit) {
+  hideSkeleton();
+  emptyState.classList.add('hidden');
+  postTextarea.classList.remove('visible');
+  const used = (current !== undefined && limit !== undefined)
+    ? ` You've used ${current} of ${limit} this month.`
+    : '';
+  postErrorState.innerHTML = `You've reached the free plan generation limit.${used} <a href="/pricing.html">Upgrade to Pro for unlimited generations →</a>`;
   postErrorState.classList.add('visible');
 }
 

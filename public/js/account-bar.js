@@ -83,6 +83,26 @@
     return escapeHtml(str).replace(/'/g, '&#39;');
   }
 
+  async function renderUpgradePill() {
+    const sidebar = document.getElementById('sidebar');
+    if (!sidebar) return;
+    const bottom = sidebar.querySelector('.sidebar-bottom');
+    if (!bottom) return;
+    try {
+      const r = await fetch('/api/billing/subscription');
+      if (!r.ok) return;
+      const d = await r.json();
+      if (d.plan !== 'free') return;
+      // Insert upgrade link above the account slot
+      const pill = document.createElement('a');
+      pill.href = '/pricing.html';
+      pill.className = 'sidebar-link';
+      pill.style.cssText = 'color:var(--brand);font-weight:600;font-size:13px;margin-bottom:4px';
+      pill.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>Upgrade to Pro`;
+      bottom.insertBefore(pill, bottom.firstChild);
+    } catch { /* ignore */ }
+  }
+
   const auth = window.scouthookAuthReady;
   if (auth && typeof auth.then === 'function') {
     auth
@@ -90,6 +110,7 @@
         const user = data && data.user;
         if (!user || !user.user_id) return;
         renderSidebarAccount(user);
+        renderUpgradePill();
       })
       .catch(() => { /* offline */ });
   }

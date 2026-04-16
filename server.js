@@ -26,14 +26,15 @@ const app = express();
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc:  ["'self'", "'unsafe-inline'"],   // inline scripts in HTML pages
-      styleSrc:   ["'self'", "'unsafe-inline'"],
-      imgSrc:     ["'self'", "data:", "*.licdn.com", "media.licdn.com"],
-      connectSrc: ["'self'"],
-      fontSrc:    ["'self'"],
-      objectSrc:  ["'none'"],
+      defaultSrc:     ["'self'"],
+      scriptSrc:      ["'self'", "'unsafe-inline'", "https://cdn.paddle.com"],
+      styleSrc:       ["'self'", "'unsafe-inline'"],
+      imgSrc:         ["'self'", "data:", "*.licdn.com", "media.licdn.com"],
+      connectSrc:     ["'self'", "https://sandbox-api.paddle.com", "https://api.paddle.com"],
+      fontSrc:        ["'self'"],
+      objectSrc:      ["'none'"],
       frameAncestors: ["'none'"],
+      frameSrc:       ["https://sandbox-buy.paddle.com", "https://buy.paddle.com"],
     },
   },
 }));
@@ -42,6 +43,13 @@ const allowedOrigin = process.env.ALLOWED_ORIGIN || null;
 if (allowedOrigin) {
   app.use(cors({ origin: allowedOrigin, credentials: true }));
 }
+
+// ---------------------------------------------------------------------------
+// Webhook routes — MUST be registered before express.json() so that raw body
+// is preserved for Paddle HMAC signature verification.
+// ---------------------------------------------------------------------------
+
+app.use('/webhooks/paddle', require('./routes/webhooks/paddle'));
 
 // ---------------------------------------------------------------------------
 // Middleware
@@ -211,6 +219,7 @@ app.use('/api/media', require('./routes/media'));
 app.use('/api/notifications', require('./routes/notifications'));
 app.use('/api/vault', require('./routes/vault'));
 app.use('/api/funnel', require('./routes/funnel'));
+app.use('/api/billing', require('./routes/billing'));
 app.use('/api', require('./routes/stats'));
 
 // Unmatched /api/* — avoid falling through to static/HTML 404

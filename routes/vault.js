@@ -18,6 +18,7 @@ const storage     = require('../services/storage');
 const { extractAndChunk, extractAndChunkUrl, mineChunks } = require('../services/vaultMiner');
 const { classifyContent } = require('../services/funnelClassifier');
 const { brainstorm }     = require('../services/reachBrainstormer');
+const { canUploadVaultDoc } = require('../services/subscription');
 
 const ALLOWED_MIME = new Set(['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain']);
 const MIME_TO_TYPE = {
@@ -46,6 +47,18 @@ function requireUser(req, res) {
 router.post('/upload', async (req, res) => {
   const { userId, tenantId } = req;
   if (!requireUser(req, res)) return;
+
+  const planCheck = await canUploadVaultDoc(userId);
+  if (!planCheck.allowed) {
+    return res.status(403).json({
+      ok: false,
+      error: 'plan_limit_exceeded',
+      plan: planCheck.plan,
+      current: planCheck.current,
+      limit: planCheck.limit,
+      upgrade_url: '/pricing.html',
+    });
+  }
 
   const contentType = (req.headers['content-type'] || '').split(';')[0].trim();
 

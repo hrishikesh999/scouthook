@@ -39,9 +39,46 @@
         <a href="/account.html" class="account-tab active" aria-current="page">My account</a>
         <a href="/profile.html" class="account-tab">Voice profile</a>
         <a href="/brand.html" class="account-tab">Brand settings</a>
+        <a href="/pricing.html" class="account-tab">Subscription</a>
       </nav>
       <h1 class="profile-heading">My account</h1>
       <p class="profile-subheading">Manage sign-in and connected accounts.</p>
+
+      <!-- Subscription / plan status -->
+      <div class="profile-card" id="subscription-card">
+        <div class="profile-field" style="margin-bottom:0">
+          <label class="field-label">Subscription Plan</label>
+          <div id="subscription-loading" class="field-helper" style="margin-top:6px">Loading…</div>
+          <div id="subscription-info" style="display:none;margin-top:8px">
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+              <span id="plan-badge" style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;padding:3px 10px;border-radius:20px;background:var(--bg-pill);color:var(--text-muted)">Free</span>
+              <span id="plan-period" class="field-helper" style="margin:0;font-size:12px"></span>
+            </div>
+            <!-- Usage meters (free users only) -->
+            <div id="usage-meters" style="display:none;margin-bottom:14px">
+              <div style="margin-bottom:8px">
+                <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-muted);margin-bottom:4px">
+                  <span>Post generations this month</span>
+                  <span id="gen-usage-text">0 / 5</span>
+                </div>
+                <div style="height:4px;background:var(--border);border-radius:4px;overflow:hidden">
+                  <div id="gen-usage-bar" style="height:100%;background:var(--brand);transition:width 0.3s;width:0%"></div>
+                </div>
+              </div>
+              <div>
+                <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-muted);margin-bottom:4px">
+                  <span>Vault documents</span>
+                  <span id="vault-usage-text">0 / 1</span>
+                </div>
+                <div style="height:4px;background:var(--border);border-radius:4px;overflow:hidden">
+                  <div id="vault-usage-bar" style="height:100%;background:var(--brand);transition:width 0.3s;width:0%"></div>
+                </div>
+              </div>
+            </div>
+            <div id="subscription-actions" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+          </div>
+        </div>
+      </div>
 
       <!-- LinkedIn connection status -->
       <div class="profile-card" id="linkedin-connection-card">
@@ -103,6 +140,112 @@
       }
 
       window.setTimeout(() => { banner.style.display = 'none'; }, 7000);
+    })();
+
+    // Subscription card
+    (async () => {
+      const loadingEl  = document.getElementById('subscription-loading');
+      const infoEl     = document.getElementById('subscription-info');
+      const planBadge  = document.getElementById('plan-badge');
+      const planPeriod = document.getElementById('plan-period');
+      const usageEl    = document.getElementById('usage-meters');
+      const genText    = document.getElementById('gen-usage-text');
+      const genBar     = document.getElementById('gen-usage-bar');
+      const vaultText  = document.getElementById('vault-usage-text');
+      const vaultBar   = document.getElementById('vault-usage-bar');
+      const actionsEl  = document.getElementById('subscription-actions');
+
+      try {
+        const r = await fetch('/api/billing/subscription');
+        const d = await r.json();
+
+        loadingEl.style.display = 'none';
+        infoEl.style.display = '';
+
+        if (d.plan === 'pro') {
+          planBadge.textContent = 'Pro';
+          planBadge.style.background = 'rgba(15,118,110,0.1)';
+          planBadge.style.color = 'var(--brand)';
+
+          if (d.status === 'canceled' && d.current_period_end) {
+            const end = new Date(d.current_period_end);
+            planPeriod.textContent = `Access ends ${end.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`;
+          } else if (d.current_period_end) {
+            const end = new Date(d.current_period_end);
+            planPeriod.textContent = `Renews ${end.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`;
+          }
+
+          // Pro actions: manage billing (portal) + cancel
+          const manageBtn = document.createElement('button');
+          manageBtn.className = 'btn-secondary';
+          manageBtn.style.cssText = 'padding:7px 14px;font-size:13px';
+          manageBtn.textContent = 'Manage billing';
+          manageBtn.addEventListener('click', async () => {
+            manageBtn.disabled = true;
+            manageBtn.textContent = 'Loading…';
+            try {
+              const pr = await fetch('/api/billing/portal');
+              const pd = await pr.json();
+              if (pd.portalUrl) window.location.href = pd.portalUrl;
+            } catch { /* ignore */ }
+            manageBtn.disabled = false;
+            manageBtn.textContent = 'Manage billing';
+          });
+          actionsEl.appendChild(manageBtn);
+
+          if (d.status !== 'canceled') {
+            const cancelBtn = document.createElement('button');
+            cancelBtn.className = 'btn-secondary';
+            cancelBtn.style.cssText = 'padding:7px 14px;font-size:13px;color:var(--score-fail)';
+            cancelBtn.textContent = 'Cancel subscription';
+            cancelBtn.addEventListener('click', async () => {
+              if (!confirm('Cancel your Pro subscription? You\'ll keep access until the end of the current billing period.')) return;
+              cancelBtn.disabled = true;
+              cancelBtn.textContent = 'Canceling…';
+              try {
+                const cr = await fetch('/api/billing/cancel', { method: 'POST' });
+                const cd = await cr.json();
+                if (cd.ok) {
+                  if (window.toast) window.toast.success('Subscription canceled. Access continues until end of billing period.');
+                  cancelBtn.style.display = 'none';
+                } else {
+                  if (window.toast) window.toast.error('Could not cancel subscription. Please try again.');
+                  cancelBtn.disabled = false;
+                  cancelBtn.textContent = 'Cancel subscription';
+                }
+              } catch {
+                if (window.toast) window.toast.error('Could not cancel subscription. Please try again.');
+                cancelBtn.disabled = false;
+                cancelBtn.textContent = 'Cancel subscription';
+              }
+            });
+            actionsEl.appendChild(cancelBtn);
+          }
+
+        } else {
+          // Free plan
+          usageEl.style.display = '';
+
+          const gen  = d.generations  || {};
+          const vault = d.vault_docs  || {};
+          const genLimit   = gen.limit   ?? 5;
+          const vaultLimit = vault.limit ?? 1;
+
+          genText.textContent   = `${gen.current ?? 0} / ${genLimit}`;
+          vaultText.textContent = `${vault.current ?? 0} / ${vaultLimit}`;
+          genBar.style.width   = `${Math.min(100, ((gen.current   ?? 0) / genLimit)   * 100)}%`;
+          vaultBar.style.width = `${Math.min(100, ((vault.current ?? 0) / vaultLimit) * 100)}%`;
+
+          const upgradeBtn = document.createElement('a');
+          upgradeBtn.href = '/pricing.html';
+          upgradeBtn.className = 'btn-primary';
+          upgradeBtn.style.cssText = 'padding:7px 16px;font-size:13px;text-decoration:none;display:inline-flex;align-items:center';
+          upgradeBtn.textContent = 'Upgrade to Pro';
+          actionsEl.appendChild(upgradeBtn);
+        }
+      } catch {
+        loadingEl.textContent = 'Unable to load subscription info.';
+      }
     })();
 
     // LinkedIn connection card

@@ -60,7 +60,8 @@ async function getUserSubscription(userId) {
 async function getUserPlan(userId) {
   const sub = await getUserSubscription(userId);
   if (sub.plan !== 'pro') return 'free';
-  if (!['active', 'trialing', 'canceled'].includes(sub.status)) return 'free';
+  // Treat these statuses as “still Pro”. Only `canceled` needs a grace check.
+  if (!['active', 'trialing', 'canceled', 'past_due', 'paused'].includes(sub.status)) return 'free';
   // For canceled subs, check the grace period
   if (sub.status === 'canceled') {
     if (!sub.current_period_end) return 'free';
@@ -154,7 +155,10 @@ async function upsertSubscription({
       paddle_subscription_id = COALESCE(excluded.paddle_subscription_id, user_subscriptions.paddle_subscription_id),
       plan                   = excluded.plan,
       status                 = excluded.status,
-      current_period_end     = excluded.current_period_end,
+      -- Paddle webhook payloads sometimes omit currentBillingPeriod.endsAt
+      -- on subscription.updated. Preserve the existing value so we don't
+      -- revoke Pro access early.
+      current_period_end     = COALESCE(excluded.current_period_end, user_subscriptions.current_period_end),
       canceled_at            = COALESCE(excluded.canceled_at, user_subscriptions.canceled_at),
       updated_at             = now()
   `).run(

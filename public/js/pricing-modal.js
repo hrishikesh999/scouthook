@@ -341,7 +341,38 @@
   // ── DOM refs (resolved lazily after injection) ────────────────────────────
   function $id(id) { return document.getElementById(id); }
 
+  // ── Paddle.js lazy loader ────────────────────────────────────────────────────
+  let paddleInitialized = false;
+  let paddleInitPromise = null;
+
+  function loadPaddleScript() {
+    return new Promise((resolve, reject) => {
+      if (window.Paddle) { resolve(); return; }
+      const s = document.createElement('script');
+      s.src = 'https://cdn.paddle.com/paddle/v2/paddle.js';
+      s.onload  = resolve;
+      s.onerror = reject;
+      document.head.appendChild(s);
+    });
+  }
+
+  async function ensurePaddle(clientToken, env) {
+    if (paddleInitialized) return;
+    if (paddleInitPromise) { await paddleInitPromise; return; }
+    paddleInitPromise = (async () => {
+      await loadPaddleScript();
+      if (env !== 'production') {
+        window.Paddle.Environment.set('sandbox');
+      }
+      window.Paddle.Initialize({ token: clientToken });
+      paddleInitialized = true;
+    })();
+    await paddleInitPromise;
+  }
+
   // ── Config fetch ────────────────────────────────────────────────────────────
+  let paddleConfig = null;
+
   async function loadConfig() {
     if (configLoaded) return;
     try {
@@ -350,6 +381,7 @@
       const d = await r.json();
       priceIdMonthly = d.priceIdMonthly || '';
       priceIdYearly  = d.priceIdYearly  || '';
+      paddleConfig   = d;
       configLoaded   = true;
     } catch { /* no-op */ }
   }
@@ -397,27 +429,39 @@
     btn.textContent = 'Loading…';
 
     try {
-      const r = await fetch('/api/billing/checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ priceId }),
-      });
-      const d = await r.json();
-
-      if (d.checkoutUrl) {
-        window.location.href = d.checkoutUrl;
-        return;
+      // Ensure Paddle.js is loaded and initialised with the client token
+      if (!paddleConfig) await loadConfig();
+      if (!paddleConfig || !paddleConfig.clientToken) {
+        showError('Checkout unavailable. Please try again later.');
+        btn.disabled = false; btn.textContent = 'Upgrade to Pro'; return;
       }
+      await ensurePaddle(paddleConfig.clientToken, paddleConfig.env);
 
-      showError(d.error === 'unauthenticated'
-        ? 'Please sign in first.'
-        : 'Unable to start checkout. Please try again.');
-    } catch {
+      // Resolve the current user for customData (userId is required by webhooks)
+      let userId = null;
+      try {
+        const authData = await window.scouthookAuthReady;
+        userId = authData?.user?.user_id ?? null;
+      } catch { /* proceed without userId — webhook will try fallback */ }
+
+      // Open Paddle overlay checkout
+      window.Paddle.Checkout.open({
+        items: [{ priceId, quantity: 1 }],
+        customData: userId ? { userId } : undefined,
+        settings: {
+          successUrl: window.location.origin + window.location.pathname + '?checkout=success',
+        },
+      });
+
+      // Reset button — user may close the overlay without completing
+      btn.disabled    = false;
+      btn.textContent = 'Upgrade to Pro';
+    } catch (err) {
+      console.error('[pricing-modal] checkout error:', err);
       showError('Unable to start checkout. Please try again.');
+      btn.disabled    = false;
+      btn.textContent = 'Upgrade to Pro';
     }
-
-    btn.disabled    = false;
-    btn.textContent = 'Upgrade to Pro';
   });
 
   function showError(msg) {

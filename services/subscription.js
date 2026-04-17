@@ -77,25 +77,8 @@ async function getUserPlan(userId) {
 // ---------------------------------------------------------------------------
 async function canGeneratePost(userId) {
   const plan = await getUserPlan(userId);
-  if (plan === 'pro') {
-    return { allowed: true, current: 0, limit: Infinity, plan: 'pro' };
-  }
-
-  const row = await db.prepare(`
-    SELECT COUNT(*) AS cnt
-    FROM generation_runs
-    WHERE user_id = ?
-      AND created_at >= date_trunc('month', now())
-      AND created_at <  date_trunc('month', now()) + interval '1 month'
-  `).get(userId);
-
-  const current = parseInt(row?.cnt ?? 0, 10);
-  return {
-    allowed: current < FREE_GENERATION_LIMIT,
-    current,
-    limit: FREE_GENERATION_LIMIT,
-    plan: 'free',
-  };
+  // Pre-launch: unlimited generations for all users
+  return { allowed: true, current: 0, limit: Infinity, plan };
 }
 
 // ---------------------------------------------------------------------------

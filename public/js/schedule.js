@@ -128,24 +128,22 @@ function renderStream(posts) {
 
 function renderDayGroup(date, posts) {
   const { weekday, num, month, label } = formatDayParts(date);
-  const countLabel = posts.length === 1 ? '1 post' : posts.length > 1 ? `${posts.length} posts` : '';
-  const isToday    = label === 'TODAY';
+  const isToday = label === 'TODAY';
 
   const bodyHtml = posts.length > 0
     ? `<div class="sched-tiles">${posts.map(renderPostTile).join('')}</div>`
-    : `<p class="sched-empty-day">No posts scheduled</p>`;
+    : `<p class="sched-empty-day">No events</p>`;
 
   return `
-    <div class="sched-day-group">
-      <div class="sched-day-header">
-        <div class="sched-day-date${isToday ? ' sched-day-date--today' : ''}">
-          <span class="sched-day-weekday">${label || weekday}</span>
-          <span class="sched-day-num">${num}</span>
-        </div>
+    <div class="sched-day-group${isToday ? ' sched-day-group--today' : ''}${posts.length === 0 ? ' sched-day-group--empty' : ''}">
+      <div class="sched-day-aside">
+        <span class="sched-day-weekday">${label || weekday}</span>
+        <span class="sched-day-num">${num}</span>
         <span class="sched-day-month">${month}</span>
-        ${countLabel ? `<span class="sched-day-count">${countLabel}</span>` : ''}
       </div>
-      ${bodyHtml}
+      <div class="sched-day-main">
+        ${bodyHtml}
+      </div>
     </div>`;
 }
 

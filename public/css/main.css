@@ -3579,114 +3579,235 @@ body {
    Schedule page — Editorial Agenda (per-day cards + timeline)
    =========================================================================== */
 
-/* Match .published-page — full app content width */
-/* ── Schedule page — mirrors Published page layout ─────────────── */
+/* ── Schedule page — Apple Calendar list-view ──────────────────── */
 .schedule-page {
-  padding: var(--space-8);
+  padding: 20px 28px 28px;
 }
 
 .schedule-header {
-  margin-bottom: var(--space-6);
+  margin-bottom: 16px;
 }
 
 .schedule-title {
-  font-size: 28px;
+  font-size: 22px;
   font-family: var(--font-sans);
   font-weight: 700;
   color: var(--text-heading);
-  margin: 0 0 var(--space-1);
+  margin: 0 0 2px;
 }
 
 .schedule-subtitle {
-  font-size: 14px;
+  font-size: 13px;
   color: var(--text-secondary);
   margin: 0;
 }
 
-/* One card per calendar day */
-.sched-day-group {
+/* ── Day rows — 2-column list layout ──────────────────────────── */
+/* Outer wrapper keeps all rows together with a shared border */
+#schedule-stream {
   background: var(--bg-surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
-  margin-bottom: var(--space-4);
   overflow: hidden;
 }
 
-/* Day header — inside the card */
-.sched-day-header {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  padding: var(--space-4) var(--space-5);
-  border-bottom: 1px solid var(--border);
+.sched-day-group {
+  display: grid;
+  grid-template-columns: 52px 1fr;
+  border-top: 1px solid var(--border-divider, #F4F4F5);
+  background: none;
+  overflow: visible;
 }
+.sched-day-group:first-child { border-top: none; }
+.sched-day-group--today { background: rgba(15, 118, 110, 0.03); }
 
-/* Apple Calendar-style date block: weekday above, big number below */
-.sched-day-date {
+/* Left gutter — date column */
+.sched-day-aside {
   display: flex;
   flex-direction: column;
   align-items: center;
-  line-height: 1;
-  gap: 2px;
+  justify-content: flex-start;
+  padding: 10px 0 10px 0;
+  gap: 0;
+  border-right: 1px solid var(--border-divider, #F4F4F5);
 }
 
 .sched-day-weekday {
   font-family: var(--font-sans);
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.1em;
   color: var(--text-muted);
+  line-height: 1;
+  margin-bottom: 3px;
 }
 
 .sched-day-num {
   font-family: var(--font-sans);
-  font-size: 28px;
+  font-size: 19px;
   font-weight: 700;
   color: var(--text-heading);
-  letter-spacing: -0.03em;
+  letter-spacing: -0.02em;
   line-height: 1;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
 }
 
-/* Today — highlight the number in teal */
-.sched-day-date--today .sched-day-weekday {
-  color: var(--teal);
-}
-
-.sched-day-date--today .sched-day-num {
-  color: var(--teal);
-}
-
-/* Month label beside the date block */
 .sched-day-month {
   font-family: var(--font-sans);
-  font-size: 11px;
+  font-size: 9px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--text-muted);
-  align-self: flex-end;
-  padding-bottom: 3px;
+  margin-top: 3px;
+  line-height: 1;
 }
 
-.sched-day-count {
+/* Today — Apple-style filled teal circle on the number */
+.sched-day-group--today .sched-day-weekday { color: var(--teal); }
+.sched-day-group--today .sched-day-num {
+  background: var(--teal);
+  color: #fff;
+  font-size: 15px;
+}
+
+/* Right column — event content */
+.sched-day-main {
+  padding: 0;
+  min-height: 44px;
+  display: flex;
+  align-items: stretch;
+}
+
+/* Empty day */
+.sched-empty-day {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0;
+  padding: 0 14px;
+  font-style: normal;
+  opacity: 0.45;
+  align-self: center;
+}
+.sched-day-group--empty .sched-day-main { min-height: 38px; }
+
+/* Tiles stack vertically in the right column */
+.sched-tiles {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 12px;
+  width: 100%;
+}
+
+/* Tile — compact event row with teal left accent */
+.sched-post-tile {
+  background: var(--bg-app);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--teal);
+  border-radius: var(--radius-md);
+  padding: 7px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  transition: box-shadow 0.15s ease;
+  min-width: 0;
+}
+
+.sched-post-tile:hover { box-shadow: var(--shadow-sm); }
+
+/* Time + badge row */
+.sched-tile-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.sched-post-time {
+  font-family: var(--font-sans);
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.sched-archetype-badge {
+  display: inline-block;
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
   color: var(--text-teal);
   background: var(--bg-archetype-badge);
   border-radius: var(--radius-pill);
+  padding: 1px 8px;
+  white-space: nowrap;
+}
+
+/* Funnel category badges (Reach / Trust / Convert) — shared across drafts, scheduled, published */
+.funnel-badge {
+  display: inline-block;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border-radius: var(--radius-pill);
   padding: 2px 8px;
   white-space: nowrap;
-  margin-left: auto;
 }
+.funnel-badge.reach   { background: #EEF2FF; color: #4338CA; }
+.funnel-badge.trust   { background: #F0FDF4; color: #166534; }
+.funnel-badge.convert { background: #ECFDF5; color: #065F46; }
+
+.sched-tile-hook {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-heading);
+  font-family: var(--font-sans);
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sched-tile-second {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sched-action-edit {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 600;
+  text-decoration: none;
+  color: var(--teal);
+  margin-top: 2px;
+  transition: color 0.15s ease;
+  align-self: flex-start;
+}
+.sched-action-edit:hover { text-decoration: underline; }
 
 /* Section divider between "Next 7 days" and "Coming up" */
 .sched-section-divider {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  margin: var(--space-8) 0 var(--space-4);
+  margin: 20px 0 8px;
 }
 
 .sched-section-divider::before,
@@ -3707,130 +3828,9 @@ body {
   white-space: nowrap;
 }
 
-/* Empty day */
-.sched-empty-day {
-  font-size: 13px;
-  color: var(--text-muted);
-  margin: 0;
-  padding: var(--space-4) var(--space-5);
-  font-style: italic;
-}
-
-/* Fluid grid of tiles inside the card */
-.sched-tiles {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: var(--space-4);
-  padding: var(--space-4) var(--space-5);
-}
-
-/* Tile — inset card inside the day block */
-.sched-post-tile {
-  background: var(--bg-app);
-  border: 1px solid var(--border);
-  border-left: 3px solid var(--teal);
-  border-radius: var(--radius-md);
-  padding: var(--space-3) var(--space-4);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  transition: box-shadow 0.15s ease;
-  min-width: 0;
-}
-
-.sched-post-tile:hover {
-  box-shadow: var(--shadow-sm);
-}
-
-/* Time + badge row */
-.sched-tile-top {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  flex-wrap: wrap;
-}
-
-.sched-post-time {
-  font-family: var(--font-sans);
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-/* Same badge as pub-archetype-badge */
-.sched-archetype-badge {
-  display: inline-block;
-  font-family: var(--font-sans);
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.04em;
-  color: var(--text-teal);
-  background: var(--bg-archetype-badge);
-  border-radius: var(--radius-pill);
-  padding: 2px 10px;
-  white-space: nowrap;
-}
-
-/* Funnel category badges (Reach / Trust / Convert) — shared across drafts, scheduled, published */
-.funnel-badge {
-  display: inline-block;
-  font-family: var(--font-sans);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  border-radius: var(--radius-pill);
-  padding: 2px 8px;
-  white-space: nowrap;
-}
-.funnel-badge.reach   { background: #EEF2FF; color: #4338CA; }
-.funnel-badge.trust   { background: #F0FDF4; color: #166534; }
-.funnel-badge.convert { background: #ECFDF5; color: #065F46; }
-
-/* Hook — same weight as pub-card-hook */
-.sched-tile-hook {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-heading);
-  font-family: var(--font-sans);
-  margin: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* Second line — muted */
-.sched-tile-second {
-  font-size: 12px;
-  color: var(--text-secondary);
-  font-family: var(--font-sans);
-  margin: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* Edit link — same as pub-view-link */
-.sched-action-edit {
-  font-family: var(--font-sans);
-  font-size: 12px;
-  font-weight: 600;
-  text-decoration: none;
-  color: var(--teal);
-  margin-top: var(--space-1);
-  transition: color 0.15s ease;
-  align-self: flex-start;
-}
-
-.sched-action-edit:hover {
-  text-decoration: underline;
-}
-
 @media (max-width: 768px) {
-  .schedule-page { padding: var(--space-5); }
-  .sched-tiles { grid-template-columns: 1fr; }
+  .schedule-page { padding: 16px; }
+  .sched-day-group { grid-template-columns: 44px 1fr; }
 }
 
 /* ═══════════════════════════════════════════════════════════════

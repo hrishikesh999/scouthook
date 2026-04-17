@@ -3701,47 +3701,43 @@ body {
   margin: 0;
 }
 
-/* ── Events — side by side (horizontal) ──────────────────────── */
+/* ── Events — side by side columns, each self-contained ──────── */
 .sched-events {
   display: flex;
   flex-direction: row;
-  height: 100%;
 }
 
+/* Each post is a vertical card column */
 .sched-event {
   flex: 1;
-  display: grid;
-  grid-template-columns: 76px 1fr;
-  border-right: 1px solid var(--border-divider, #F4F4F5);
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--border);
   min-width: 0;
 }
 .sched-event:last-child { border-right: none; }
 
-/* Time — right-aligned */
-.sched-evt-time-col {
-  padding: 16px 12px 16px 16px;
-  display: flex;
-  align-items: flex-start;
-  justify-content: flex-end;
-}
-
-.sched-evt-time {
+/* Time — dark inverted header at the top of each post card */
+.sched-evt-time-badge {
   font-family: var(--font-sans);
   font-size: 11px;
   font-weight: 700;
-  color: var(--teal);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.07em;
+  color: #fff;
+  background: var(--text-heading, #09090B);
+  padding: 7px 14px;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
-/* Content — subtle teal left border */
+/* Content area below the time badge */
 .sched-evt-body {
-  padding: 16px 16px 16px 12px;
-  border-left: 2px solid rgba(15, 118, 110, 0.2);
+  padding: 12px 14px 14px;
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 6px;
+  flex: 1;
   min-width: 0;
 }
 
@@ -3847,10 +3843,9 @@ body {
   .sched-day-aside { padding: 16px 0; }
   .sched-dp-num { font-size: 20px; width: 34px; height: 34px; }
   .sched-events { flex-direction: column; }
-  .sched-event { border-right: none; border-bottom: 1px solid var(--border-divider, #F4F4F5); grid-template-columns: 64px 1fr; }
+  .sched-event { border-right: none; border-bottom: 1px solid var(--border); }
   .sched-event:last-child { border-bottom: none; }
-  .sched-evt-time-col { padding: 12px 10px 12px 12px; }
-  .sched-evt-body { padding: 12px 12px; }
+  .sched-evt-body { padding: 10px 12px 12px; }
 }
 
 /* ═══════════════════════════════════════════════════════════════

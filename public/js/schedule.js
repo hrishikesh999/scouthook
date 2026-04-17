@@ -167,9 +167,7 @@ function renderEventRow(post) {
 
   return `
     <div class="sched-event" data-id="${post.id}">
-      <div class="sched-evt-time-col">
-        <span class="sched-evt-time">${time}</span>
-      </div>
+      <div class="sched-evt-time-badge">${time}</div>
       <div class="sched-evt-body">
         <div class="sched-evt-badges">
           ${archetype ? `<span class="sched-archetype-badge">${archetype}</span>` : ''}

@@ -128,26 +128,35 @@ function renderStream(posts) {
 
 function renderDayGroup(date, posts) {
   const { weekday, num, month, label } = formatDayParts(date);
-  const isToday = label === 'TODAY';
+  const isToday    = label === 'TODAY';
+  const weekdayFull = date.toLocaleDateString('en-US', { weekday: 'long' });
+  const monthFull   = date.toLocaleDateString('en-US', { month: 'long' });
+  const countLabel  = posts.length === 1 ? '1 post' : posts.length > 1 ? `${posts.length} posts` : '';
 
   const bodyHtml = posts.length > 0
-    ? `<div class="sched-tiles">${posts.map(renderPostTile).join('')}</div>`
-    : `<p class="sched-empty-day">No events</p>`;
+    ? `<div class="sched-events">${posts.map(renderEventRow).join('')}</div>`
+    : '';
 
   return `
     <div class="sched-day-group${isToday ? ' sched-day-group--today' : ''}${posts.length === 0 ? ' sched-day-group--empty' : ''}">
-      <div class="sched-day-aside">
-        <span class="sched-day-weekday">${label || weekday}</span>
-        <span class="sched-day-num">${num}</span>
-        <span class="sched-day-month">${month}</span>
+      <div class="sched-day-hd">
+        <div class="sched-date-pill${isToday ? ' sched-date-pill--today' : ''}">
+          <span class="sched-dp-wday">${weekday}</span>
+          <span class="sched-dp-num">${num}</span>
+        </div>
+        <div class="sched-day-label-group">
+          <span class="sched-day-name">${isToday ? 'Today' : weekdayFull}</span>
+          <span class="sched-day-date-str">${monthFull} ${num}</span>
+        </div>
+        ${countLabel
+          ? `<span class="sched-day-count">${countLabel}</span>`
+          : `<span class="sched-empty-hint">No posts scheduled</span>`}
       </div>
-      <div class="sched-day-main">
-        ${bodyHtml}
-      </div>
+      ${bodyHtml}
     </div>`;
 }
 
-function renderPostTile(post) {
+function renderEventRow(post) {
   const time      = formatTime(post.scheduled_for);
   const archetype = toTitleCase(post.format_slug);
   const lines     = (post.content || '').trim().split('\n').map(l => l.trim()).filter(Boolean);
@@ -159,15 +168,19 @@ function renderPostTile(post) {
     : null;
 
   return `
-    <div class="sched-post-tile" data-id="${post.id}">
-      <div class="sched-tile-top">
-        <span class="sched-post-time">${time}</span>
-        ${archetype ? `<span class="sched-archetype-badge">${archetype}</span>` : ''}
-        ${post.funnel_type ? `<span class="funnel-badge ${post.funnel_type}">${post.funnel_type}</span>` : ''}
+    <div class="sched-event" data-id="${post.id}">
+      <div class="sched-evt-time-col">
+        <span class="sched-evt-time">${time}</span>
       </div>
-      <p class="sched-tile-hook">${hook}</p>
-      ${second ? `<p class="sched-tile-second">${second}</p>` : ''}
-      ${editHref ? `<a href="${editHref}" class="sched-action-edit">Edit →</a>` : ''}
+      <div class="sched-evt-body">
+        <div class="sched-evt-badges">
+          ${archetype ? `<span class="sched-archetype-badge">${archetype}</span>` : ''}
+          ${post.funnel_type ? `<span class="funnel-badge ${post.funnel_type}">${post.funnel_type}</span>` : ''}
+        </div>
+        <p class="sched-evt-hook">${hook}</p>
+        ${second ? `<p class="sched-evt-second">${second}</p>` : ''}
+        ${editHref ? `<a href="${editHref}" class="sched-action-edit">Edit →</a>` : ''}
+      </div>
     </div>`;
 }
 

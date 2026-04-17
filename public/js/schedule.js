@@ -137,22 +137,20 @@ function renderDayGroup(date, posts) {
     ? `<div class="sched-events">${posts.map(renderEventRow).join('')}</div>`
     : '';
 
+  const contentHtml = posts.length > 0
+    ? `<div class="sched-events">${posts.map(renderEventRow).join('')}</div>`
+    : `<p class="sched-empty-hint">No posts scheduled</p>`;
+
   return `
     <div class="sched-day-group${isToday ? ' sched-day-group--today' : ''}${posts.length === 0 ? ' sched-day-group--empty' : ''}">
-      <div class="sched-day-hd">
-        <div class="sched-date-pill${isToday ? ' sched-date-pill--today' : ''}">
-          <span class="sched-dp-wday">${weekday}</span>
-          <span class="sched-dp-num">${num}</span>
-        </div>
-        <div class="sched-day-label-group">
-          <span class="sched-day-name">${isToday ? 'Today' : weekdayFull}</span>
-          <span class="sched-day-date-str">${monthFull} ${num}</span>
-        </div>
-        ${countLabel
-          ? `<span class="sched-day-count">${countLabel}</span>`
-          : `<span class="sched-empty-hint">No posts scheduled</span>`}
+      <div class="sched-day-aside">
+        <span class="sched-dp-wday">${label || weekday}</span>
+        <span class="sched-dp-num">${num}</span>
+        <span class="sched-dp-month">${month}</span>
       </div>
-      ${bodyHtml}
+      <div class="sched-day-content">
+        ${contentHtml}
+      </div>
     </div>`;
 }
 

@@ -3707,14 +3707,19 @@ body {
   flex-direction: row;
 }
 
-/* Each post is a vertical card column */
+/* Each post is a vertical card column (may be an <a> when editable) */
 .sched-event {
   flex: 1;
   display: flex;
   flex-direction: column;
   border-right: 1px solid var(--border);
   min-width: 0;
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+  transition: background 0.12s ease;
 }
+.sched-event:hover { background: var(--bg-app, #F9FAFB); }
 .sched-event:last-child { border-right: none; }
 
 /* Time — dark inverted header at the top of each post card */

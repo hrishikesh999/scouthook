@@ -165,8 +165,11 @@ function renderEventRow(post) {
     ? `/generate.html?postId=${encodeURIComponent(post.post_id)}`
     : null;
 
+  const tag    = editHref ? `a href="${editHref}"` : 'div';
+  const endTag = editHref ? 'a' : 'div';
+
   return `
-    <div class="sched-event" data-id="${post.id}">
+    <${tag} class="sched-event" data-id="${post.id}">
       <div class="sched-evt-time-badge">${time}</div>
       <div class="sched-evt-body">
         <div class="sched-evt-badges">
@@ -175,9 +178,9 @@ function renderEventRow(post) {
         </div>
         <p class="sched-evt-hook">${hook}</p>
         ${second ? `<p class="sched-evt-second">${second}</p>` : ''}
-        ${editHref ? `<a href="${editHref}" class="sched-action-edit">Edit →</a>` : ''}
+        <span class="sched-action-edit">Edit →</span>
       </div>
-    </div>`;
+    </${endTag}>`;
 }
 
 // ---------------------------------------------------------------------------

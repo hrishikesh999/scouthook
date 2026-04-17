@@ -3701,29 +3701,37 @@ body {
   margin: 0;
 }
 
-/* ── Events — side by side columns, each self-contained ──────── */
+/* ── Events — row of fixed-width post cards ───────────────────── */
 .sched-events {
   display: flex;
   flex-direction: row;
+  gap: 12px;
+  padding: 14px;
+  flex-wrap: wrap;
 }
 
-/* Each post is a vertical card column (may be an <a> when editable) */
+/* Each post is a fixed-width card (may be an <a> when editable) */
 .sched-event {
-  flex: 1;
+  width: 260px;
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  border-right: 1px solid var(--border);
-  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
   text-decoration: none;
   color: inherit;
   cursor: pointer;
-  transition: background 0.12s ease;
+  transition: box-shadow 0.12s ease, border-color 0.12s ease;
 }
-.sched-event:hover { background: var(--bg-app, #F9FAFB); }
-.sched-event:last-child { border-right: none; }
+.sched-event:hover {
+  box-shadow: var(--shadow-md);
+  border-color: #D4D4D8;
+}
 
-/* Time — dark inverted header at the top of each post card */
+/* Time — dark tag at the top, fits its content */
 .sched-evt-time-badge {
+  align-self: flex-start;
   font-family: var(--font-sans);
   font-size: 11px;
   font-weight: 700;
@@ -3731,14 +3739,15 @@ body {
   letter-spacing: 0.07em;
   color: #fff;
   background: var(--text-heading, #09090B);
-  padding: 7px 14px;
+  padding: 4px 10px;
+  border-radius: 0 0 8px 0;
   white-space: nowrap;
   flex-shrink: 0;
 }
 
-/* Content area below the time badge */
+/* Content area below the time tag */
 .sched-evt-body {
-  padding: 12px 14px 14px;
+  padding: 10px 12px 12px;
   display: flex;
   flex-direction: column;
   gap: 6px;

@@ -1228,10 +1228,13 @@ scheduleConfirm.addEventListener('click', async () => {
         throw new Error('Please pick a time within the next 30 days.');
       }
       if (data.error === 'too_many_scheduled') {
-        throw new Error('You have too many posts scheduled already. Publish/cancel one before adding more.');
+        throw new Error('You have too many posts scheduled. Publish or cancel some before adding more.');
+      }
+      if (data.error === 'daily_schedule_limit') {
+        throw new Error('You can schedule up to 2 posts per day. Choose a different date.');
       }
       if (data.error === 'scheduled_too_close') {
-        throw new Error('Please space scheduled posts at least 60 minutes apart.');
+        throw new Error('Posts on the same day must be at least 4 hours apart.');
       }
       if (data.error === 'content_too_long') {
         throw new Error('Your post is too long for LinkedIn. Please keep it under 3000 characters.');

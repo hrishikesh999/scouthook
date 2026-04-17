@@ -398,8 +398,8 @@ router.post('/schedule', async (req, res) => {
     FROM scheduled_posts
     WHERE user_id = ? AND tenant_id = ? AND status IN ('pending', 'processing')
   `).get(userId, tenantId);
-  // For true auto-posting, keep active schedules conservative.
-  if ((cnt ?? 0) >= 3) {
+  // Cap total pending posts per user (2 posts/day × up to 5 days ahead).
+  if ((cnt ?? 0) >= 10) {
     return res.status(429).json({ ok: false, error: 'too_many_scheduled' });
   }
 
@@ -416,8 +416,8 @@ router.post('/schedule', async (req, res) => {
   }
 
   // Guardrails: enforce a minimum spacing between scheduled posts per user
-  // (keeps usage conservative and aligned with publish rate limits)
-  const MIN_GAP_MINUTES = 60;
+  // (aligned with LinkedIn rate limits and 2-posts-per-day policy)
+  const MIN_GAP_MINUTES = 240; // 4 hours
   // Cross-DB: avoid SQLite-only strftime/extract functions; compute spacing in JS.
   const activeTimes = await db.prepare(`
     SELECT scheduled_for

@@ -3724,17 +3724,20 @@ body {
   font-style: italic;
 }
 
-/* ── Event rows (one per scheduled post) ─────────────────────── */
+/* ── Event rows — side by side when 2 posts, full-width when 1 ── */
 .sched-events {
-  /* no extra padding — event rows handle their own spacing */
+  display: flex;
+  flex-direction: row;
 }
 
 .sched-event {
+  flex: 1;
   display: grid;
   grid-template-columns: 80px 1fr;
-  border-bottom: 1px solid var(--border-divider, #F4F4F5);
+  border-right: 1px solid var(--border-divider, #F4F4F5);
+  min-width: 0;
 }
-.sched-event:last-child { border-bottom: none; }
+.sched-event:last-child { border-right: none; }
 
 /* Time column — right-aligned so times line up neatly */
 .sched-evt-time-col {
@@ -3862,7 +3865,9 @@ body {
 
 @media (max-width: 768px) {
   .schedule-page { padding: 16px; }
-  .sched-event { grid-template-columns: 68px 1fr; }
+  .sched-events { flex-direction: column; }
+  .sched-event { border-right: none; border-bottom: 1px solid var(--border-divider, #F4F4F5); grid-template-columns: 68px 1fr; }
+  .sched-event:last-child { border-bottom: none; }
   .sched-evt-time-col { padding: 12px 10px 12px 14px; }
   .sched-evt-body { padding: 12px 14px; }
 }

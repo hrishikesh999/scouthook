@@ -6,6 +6,7 @@ const {
   getPaddle,
   getUserSubscription,
   getPaddleCustomerId,
+  getFoundingTierInfo,
   canGeneratePost,
   canUploadVaultDoc,
 } = require('../services/subscription');
@@ -21,15 +22,22 @@ function requireAuth(req, res, next) {
 // ---------------------------------------------------------------------------
 // GET /api/billing/config
 // Returns public Paddle config for the frontend (client token, env, price IDs).
+// Includes the current founding tier so the UI can display the right price
+// and badge without any frontend logic.
 // No auth required — these are non-secret client-side values.
 // ---------------------------------------------------------------------------
-router.get('/config', (req, res) => {
+router.get('/config', async (req, res) => {
+  const tierInfo = await getFoundingTierInfo();
   return res.json({
     ok: true,
     clientToken:    process.env.PADDLE_CLIENT_TOKEN || '',
     env:            process.env.NODE_ENV === 'production' ? 'production' : 'sandbox',
-    priceIdMonthly: process.env.PADDLE_PRICE_ID_MONTHLY || '',
-    priceIdYearly:  process.env.PADDLE_PRICE_ID_YEARLY  || '',
+    // priceIdMonthly returns the *currently active* tier price ID (29/39/49)
+    priceIdMonthly: tierInfo.priceId,
+    priceIdYearly:  process.env.PADDLE_PRICE_ID_YEARLY || '',
+    proMonthlyPrice: tierInfo.price,
+    foundingTier:    tierInfo.tier,
+    spotsRemaining:  tierInfo.spotsRemaining,
   });
 });
 
@@ -73,6 +81,8 @@ router.post('/checkout', requireAuth, async (req, res) => {
 
   // Validate priceId is one of the configured Pro prices (prevents price injection)
   const allowedPriceIds = [
+    process.env.PADDLE_PRICE_ID_FOUNDING_1,
+    process.env.PADDLE_PRICE_ID_FOUNDING_2,
     process.env.PADDLE_PRICE_ID_MONTHLY,
     process.env.PADDLE_PRICE_ID_YEARLY,
   ].filter(Boolean);

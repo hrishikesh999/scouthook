@@ -7,6 +7,7 @@ const storage = require('../services/storage');
 const { generateQuoteCard } = require('../services/quoteCardGenerator');
 const { generateCarousel } = require('../services/carouselGenerator');
 const { generateBrandedQuote } = require('../services/brandedQuoteGenerator');
+const { canGenerateVisual, logVisualGeneration } = require('../services/subscription');
 
 // ---------------------------------------------------------------------------
 // POST /api/visuals/:postId
@@ -21,6 +22,21 @@ router.post('/:postId', async (req, res) => {
 
   if (!['quote_card', 'carousel', 'branded_quote'].includes(visual_type)) {
     return res.status(400).json({ ok: false, error: 'invalid_visual_type' });
+  }
+
+  // Check visual generation limit before doing any work
+  if (userId) {
+    const visualCheck = await canGenerateVisual(userId, tenantId);
+    if (!visualCheck.allowed) {
+      return res.status(403).json({
+        ok: false,
+        error: 'plan_limit_exceeded',
+        plan: visualCheck.plan,
+        current: visualCheck.current,
+        limit: visualCheck.limit,
+        reason: visualCheck.reason,
+      });
+    }
   }
 
   // Load post and verify ownership
@@ -110,15 +126,18 @@ router.post('/:postId', async (req, res) => {
         photoDataUri,
         name: displayName,
       }, { userId, tenantId });
+      if (userId) await logVisualGeneration(userId, tenantId, postId, visual_type);
       return res.json({ ok: true, ...result });
     }
 
     if (visual_type === 'quote_card') {
       const result = await generateQuoteCard(post, brand, { userId, tenantId });
+      if (userId) await logVisualGeneration(userId, tenantId, postId, visual_type);
       return res.json({ ok: true, ...result });
     }
 
     const result = await generateCarousel(post, brand, { userId, tenantId });
+    if (userId) await logVisualGeneration(userId, tenantId, postId, visual_type);
     return res.json({ ok: true, ...result });
   } catch (err) {
     console.error('[visuals] generation error:', err.message);

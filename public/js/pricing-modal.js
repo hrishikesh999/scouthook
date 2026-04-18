@@ -292,13 +292,14 @@
             <span class="pm-current-chip" id="pm-pro-chip" style="display:none">Current plan</span>
           </div>
 
+          <div id="pm-founding-badge" style="display:none;margin-bottom:6px;font-size:12px;font-weight:600;color:var(--accent,#10B981);letter-spacing:0.01em;"></div>
           <div id="pm-price-monthly">
-            <div class="pm-price"><sup>$</sup>49</div>
+            <div class="pm-price"><sup>$</sup><span id="pm-monthly-amount">49</span></div>
             <div class="pm-period">/ month</div>
           </div>
           <div id="pm-price-annual" style="display:none">
-            <div class="pm-price"><sup>$</sup>490</div>
-            <div class="pm-period">/ year &nbsp;<span class="pm-period-sub">($40.83 / month)</span></div>
+            <div class="pm-price"><sup>$</sup><span id="pm-annual-amount">490</span></div>
+            <div class="pm-period">/ year &nbsp;<span class="pm-period-sub">(<span id="pm-annual-per-month">$40.83</span> / month)</span></div>
           </div>
 
           <hr class="pm-divider">
@@ -334,9 +335,12 @@
   document.body.appendChild(overlay);
 
   // ── State ────────────────────────────────────────────────────────────────────
-  let priceIdMonthly = '';
-  let priceIdYearly  = '';
-  let configLoaded   = false;
+  let priceIdMonthly  = '';
+  let priceIdYearly   = '';
+  let proMonthlyPrice = 49;
+  let foundingTier    = 'regular';
+  let spotsRemaining  = 0;
+  let configLoaded    = false;
 
   // ── DOM refs (resolved lazily after injection) ────────────────────────────
   function $id(id) { return document.getElementById(id); }
@@ -379,11 +383,58 @@
       const r = await fetch('/api/billing/config');
       if (!r.ok) return;
       const d = await r.json();
-      priceIdMonthly = d.priceIdMonthly || '';
-      priceIdYearly  = d.priceIdYearly  || '';
-      paddleConfig   = d;
-      configLoaded   = true;
+      priceIdMonthly  = d.priceIdMonthly  || '';
+      priceIdYearly   = d.priceIdYearly   || '';
+      proMonthlyPrice = d.proMonthlyPrice  || 49;
+      foundingTier    = d.foundingTier     || 'regular';
+      spotsRemaining  = d.spotsRemaining   || 0;
+      paddleConfig    = d;
+      configLoaded    = true;
+      applyConfig();
     } catch { /* no-op */ }
+  }
+
+  // ── applyConfig — update price display and founding badge after config loads ─
+  function applyConfig() {
+    // Update monthly price amount
+    const monthlyAmountEl = $id('pm-monthly-amount');
+    if (monthlyAmountEl) monthlyAmountEl.textContent = proMonthlyPrice;
+
+    // Update annual price (17% off, rounded to nearest dollar)
+    const annualTotal = Math.round(proMonthlyPrice * 12 * 0.83);
+    const annualPerMonth = (proMonthlyPrice * 0.83).toFixed(2);
+    const annualAmountEl = $id('pm-annual-amount');
+    if (annualAmountEl) annualAmountEl.textContent = annualTotal;
+    const annualPerMonthEl = $id('pm-annual-per-month');
+    if (annualPerMonthEl) annualPerMonthEl.textContent = '$' + annualPerMonth;
+
+    // Show founding badge for non-regular tiers
+    const badgeEl = $id('pm-founding-badge');
+    if (badgeEl) {
+      if (foundingTier === 'founding_1') {
+        badgeEl.textContent  = 'Founding member \u2014 ' + spotsRemaining + ' of 10 spots left';
+        badgeEl.style.display = '';
+      } else if (foundingTier === 'founding_2') {
+        badgeEl.textContent  = 'Early access \u2014 ' + spotsRemaining + ' of 40 spots left';
+        badgeEl.style.display = '';
+      } else {
+        badgeEl.style.display = 'none';
+      }
+    }
+
+    // Hide annual toggle for founding tiers (monthly-only offer)
+    const toggleRow = document.querySelector('.pm-toggle');
+    if (toggleRow) {
+      toggleRow.style.display = (foundingTier === 'regular') ? '' : 'none';
+    }
+    // If annual toggle was on and we're now in a founding tier, reset to monthly
+    if (foundingTier !== 'regular') {
+      const toggle = $id('pm-annual-toggle');
+      if (toggle && toggle.checked) {
+        toggle.checked = false;
+        setAnnual(false);
+      }
+    }
   }
 
   // ── Toggle ───────────────────────────────────────────────────────────────────
@@ -493,6 +544,8 @@
       loadConfig(),
       fetch('/api/billing/subscription').then(r => r.json()).catch(() => null),
     ]);
+    // If config was already cached, applyConfig() wasn't called inside loadConfig() — apply now
+    if (configLoaded) applyConfig();
 
     const sub = subRes.status === 'fulfilled' ? subRes.value : null;
     const plan = sub?.plan || 'free';

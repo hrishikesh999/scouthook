@@ -71,9 +71,12 @@ router.post('/', async (req, res) => {
 
 // ---------------------------------------------------------------------------
 // Allowed Pro price IDs (resolved from env at runtime)
+// Includes all founding tier price IDs in addition to regular monthly/yearly.
 // ---------------------------------------------------------------------------
 function getProPriceIds() {
   return [
+    process.env.PADDLE_PRICE_ID_FOUNDING_1,
+    process.env.PADDLE_PRICE_ID_FOUNDING_2,
     process.env.PADDLE_PRICE_ID_MONTHLY,
     process.env.PADDLE_PRICE_ID_YEARLY,
   ].filter(Boolean);
@@ -131,9 +134,10 @@ async function handlePaddleEvent(event) {
                                ? new Date(data.currentBillingPeriod.endsAt)
                                : null,
       canceledAt:            data.canceledAt ? new Date(data.canceledAt) : null,
+      priceId:               priceId ?? null,
     });
 
-    console.log(`[paddle-webhook] ${eventType} userId=${userId} plan=${plan} status=${data.status}`);
+    console.log(`[paddle-webhook] ${eventType} userId=${userId} plan=${plan} status=${data.status} priceId=${priceId ?? 'unknown'}`);
     return;
   }
 

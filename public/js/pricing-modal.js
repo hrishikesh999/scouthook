@@ -530,7 +530,7 @@
         items: [{ priceId, quantity: 1 }],
         customData: userId ? { userId } : undefined,
         settings: {
-          successUrl: window.location.origin + window.location.pathname + '?checkout=success',
+          successUrl: window.location.origin + '/dashboard.html?checkout=success',
         },
       });
 

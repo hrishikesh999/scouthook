@@ -93,7 +93,7 @@ async function getFoundingTierInfo() {
   let count = 0;
   try {
     const row = await db.prepare(
-      `SELECT COUNT(*) AS cnt FROM user_subscriptions WHERE plan = 'pro'`
+      `SELECT COUNT(*) AS cnt FROM user_subscriptions WHERE plan = 'pro' AND status IN ('active', 'trialing', 'past_due', 'paused')`
     ).get();
     count = parseInt(row?.cnt ?? 0, 10);
   } catch (err) {
@@ -107,7 +107,7 @@ async function getFoundingTierInfo() {
   if (count < FOUNDING_1_MAX && f1PriceId) {
     return {
       priceId: f1PriceId,
-      price: 0.29,
+      price: 29,
       tier: 'founding_1',
       spotsRemaining: FOUNDING_1_MAX - count,
     };

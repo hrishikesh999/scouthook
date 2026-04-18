@@ -465,11 +465,20 @@
         }
       } catch { /* silent — chips stay hidden, button still works */ }
 
-      // Success banner after checkout redirect
+      // Success banner after checkout redirect.
+      // Paddle appends _ptxn=<transactionId> to the success URL — read it before
+      // replaceState wipes the query string, then fire sync.
       const params = new URLSearchParams(window.location.search);
       if (params.get('checkout') === 'success') {
         document.getElementById('success-banner').style.display = '';
+        const _txnId = params.get('_ptxn') || null;
         window.history.replaceState({}, '', '/pricing.html');
+        fetch('/api/billing/sync', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ transactionId: _txnId }),
+        }).catch(() => { /* no-op */ });
       }
     })();
   </script>

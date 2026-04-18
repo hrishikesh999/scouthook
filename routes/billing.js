@@ -208,6 +208,15 @@ router.post('/sync', requireAuth, async (req, res) => {
     // Primary path: transaction ID → subscription ID → subscription details
     if (transactionId) {
       const transaction = await paddle.transactions.get(transactionId);
+
+      // Security: verify this transaction belongs to the authenticated user.
+      // customData.userId is set when we create the transaction in POST /checkout.
+      const txUserId = transaction?.customData?.userId;
+      if (txUserId && txUserId !== userId) {
+        console.warn(`[billing] sync userId mismatch: req=${userId} tx=${txUserId}`);
+        return res.status(403).json({ ok: false, error: 'transaction_not_owned' });
+      }
+
       if (transaction?.subscriptionId) {
         subscription = await paddle.subscriptions.get(transaction.subscriptionId);
       }
@@ -233,7 +242,14 @@ router.post('/sync', requireAuth, async (req, res) => {
   }
 
   const priceId = subscription.items?.[0]?.price?.id ?? null;
-  const plan    = priceId && proPriceIds.includes(priceId) ? 'pro' : 'free';
+  // Mirror the webhook's safe default: if priceId is absent from the REST payload
+  // or not yet in our env list, keep the user on 'pro' rather than downgrading them.
+  let plan;
+  if (!priceId) {
+    plan = 'pro'; // unknown price ID — assume pro, webhook will correct if wrong
+  } else {
+    plan = proPriceIds.includes(priceId) ? 'pro' : 'free';
+  }
 
   try {
     await upsertSubscription({

@@ -27,11 +27,11 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc:     ["'self'"],
-      scriptSrc:      ["'self'", "'unsafe-inline'", "https://cdn.paddle.com"],
-      styleSrc:       ["'self'", "'unsafe-inline'"],
-      imgSrc:         ["'self'", "data:", "*.licdn.com", "media.licdn.com"],
+      scriptSrc:      ["'self'", "'unsafe-inline'", "https://cdn.paddle.com", "https://public.profitwell.com"],
+      styleSrc:       ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdn.paddle.com"],
+      imgSrc:         ["'self'", "data:", "*.licdn.com", "media.licdn.com", "*.googleusercontent.com"],
       connectSrc:     ["'self'", "https://sandbox-api.paddle.com", "https://api.paddle.com", "https://cdn.paddle.com", "https://buy.paddle.com", "https://sandbox-buy.paddle.com"],
-      fontSrc:        ["'self'"],
+      fontSrc:        ["'self'", "https://fonts.gstatic.com"],
       objectSrc:      ["'none'"],
       frameAncestors: ["'none'"],
       frameSrc:       ["https://sandbox-buy.paddle.com", "https://buy.paddle.com"],

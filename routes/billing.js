@@ -220,21 +220,45 @@ router.post('/cancel', requireAuth, async (req, res) => {
 
 // ---------------------------------------------------------------------------
 // GET /api/billing/portal
-// Returns the Paddle customer portal URL with the user's email pre-filled.
-// The base URL is the static portal link from the Paddle dashboard
-// (PADDLE_CUSTOMER_PORTAL_URL env var). Paddle uses the email param to
-// look up the customer — no API call or customer ID needed.
+// Returns the Paddle customer portal URL.
+// Primary path: createPortalSession() → authenticated one-time URL (user
+// lands directly in their portal, no email/login required).
+// Fallback: static PADDLE_CUSTOMER_PORTAL_URL env var (free users / API err).
 // ---------------------------------------------------------------------------
 router.get('/portal', requireAuth, async (req, res) => {
-  const baseUrl = process.env.PADDLE_CUSTOMER_PORTAL_URL;
+  const userId  = req.userId;
+  const baseUrl = process.env.PADDLE_CUSTOMER_PORTAL_URL || '';
+
+  // Try the authenticated session URL first (requires paddle_customer_id).
+  // customerPortalSessions.create() returns a one-time authenticated URL —
+  // the user lands directly in their portal with no email/login required.
+  try {
+    const customerId = await getPaddleCustomerId(userId);
+    if (customerId) {
+      const paddle  = getPaddle();
+      // Pass empty subscriptionIds array to get the portal overview page
+      const session = await paddle.customerPortalSessions.create(customerId, []);
+      // SDK shape: session.urls.general.overview
+      const portalUrl = session?.urls?.general?.overview ?? null;
+      if (portalUrl) {
+        console.log(`[billing] portal session created for userId=${userId} customerId=${customerId}`);
+        return res.json({ ok: true, portalUrl });
+      }
+      console.warn('[billing] portal: session created but no overview URL. session.urls:', JSON.stringify(session?.urls));
+    }
+  } catch (err) {
+    console.warn('[billing] portal: customerPortalSessions.create failed, falling back:', err.message);
+  }
+
+  // Fallback: static portal URL (email pre-fill best-effort)
   if (!baseUrl) {
-    console.error('[billing] portal: PADDLE_CUSTOMER_PORTAL_URL is not set');
+    console.error('[billing] portal: PADDLE_CUSTOMER_PORTAL_URL is not set and createPortalSession failed');
     return res.status(503).json({ ok: false, error: 'portal_not_configured' });
   }
 
   const email = req.user?.email || '';
   const portalUrl = email
-    ? `${baseUrl}?prefilled_email=${encodeURIComponent(email)}`
+    ? `${baseUrl}?email=${encodeURIComponent(email)}`
     : baseUrl;
 
   return res.json({ ok: true, portalUrl });

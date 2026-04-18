@@ -536,6 +536,18 @@
         settings: {
           successUrl: window.location.origin + '/dashboard.html?checkout=success',
         },
+        eventCallback: async function (data) {
+          if (data.name === 'checkout.completed') {
+            try {
+              await fetch('/api/billing/sync', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ transactionId: data.data?.transaction?.id }),
+              });
+            } catch { /* no-op — page-load sync is the backup */ }
+          }
+        },
       });
 
       // Reset button — user may close the overlay without completing
@@ -607,6 +619,18 @@
       $id('pm-free-chip').style.display  = '';
       upgradeBtn.onclick = null; // use the default addEventListener handler above
     }
+  }
+
+  // ── Post-checkout sync on success redirect ───────────────────────────────────
+  // When Paddle redirects back to /dashboard.html?checkout=success, call /sync
+  // so the subscription row is created even if the eventCallback didn't fire.
+  if (window.location.search.includes('checkout=success')) {
+    fetch('/api/billing/sync', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    }).catch(() => { /* no-op */ });
   }
 
   // ── Expose globally ──────────────────────────────────────────────────────────

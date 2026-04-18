@@ -9,6 +9,7 @@ const {
   getFoundingTierInfo,
   canGeneratePost,
   canUploadVaultDoc,
+  upsertSubscription,
 } = require('../services/subscription');
 
 // ---------------------------------------------------------------------------
@@ -179,6 +180,76 @@ router.get('/portal', requireAuth, async (req, res) => {
   }
 
   return res.json({ ok: true, portalUrl: portal.urls?.general?.overview ?? portal.url });
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/billing/sync
+// Called from the frontend immediately after checkout completes (via Paddle
+// eventCallback) and again on the success-redirect page load.
+// Looks up the user's active Paddle subscription directly via the API and
+// creates/updates the user_subscriptions row — no webhook needed.
+// ---------------------------------------------------------------------------
+router.post('/sync', requireAuth, async (req, res) => {
+  const userId = req.userId;
+  const { transactionId } = req.body || {};
+
+  const paddle = getPaddle();
+
+  const proPriceIds = [
+    process.env.PADDLE_PRICE_ID_FOUNDING_1,
+    process.env.PADDLE_PRICE_ID_FOUNDING_2,
+    process.env.PADDLE_PRICE_ID_MONTHLY,
+    process.env.PADDLE_PRICE_ID_YEARLY,
+  ].filter(Boolean);
+
+  let subscription = null;
+
+  try {
+    // Primary path: transaction ID → subscription ID → subscription details
+    if (transactionId) {
+      const transaction = await paddle.transactions.get(transactionId);
+      if (transaction?.subscriptionId) {
+        subscription = await paddle.subscriptions.get(transaction.subscriptionId);
+      }
+    }
+
+    // Fallback: look up via existing Paddle customer ID
+    if (!subscription) {
+      const customerId = await getPaddleCustomerId(userId);
+      if (customerId) {
+        const result = await paddle.subscriptions.list({ customerId: [customerId] });
+        const subs = result?.data ?? [];
+        // Prefer active/trialing, otherwise take the most recent
+        subscription = subs.find(s => ['active', 'trialing'].includes(s.status)) ?? subs[0] ?? null;
+      }
+    }
+  } catch (err) {
+    console.error('[billing] sync error:', err.message);
+    return res.status(502).json({ ok: false, error: 'paddle_error', detail: err.message });
+  }
+
+  if (!subscription) {
+    return res.status(404).json({ ok: false, error: 'no_subscription_found' });
+  }
+
+  const priceId = subscription.items?.[0]?.price?.id ?? null;
+  const plan    = priceId && proPriceIds.includes(priceId) ? 'pro' : 'free';
+
+  await upsertSubscription({
+    userId,
+    paddleCustomerId:     subscription.customerId,
+    paddleSubscriptionId: subscription.id,
+    plan,
+    status:               subscription.status,
+    currentPeriodEnd:     subscription.currentBillingPeriod?.endsAt
+                            ? new Date(subscription.currentBillingPeriod.endsAt)
+                            : null,
+    canceledAt:           subscription.canceledAt ? new Date(subscription.canceledAt) : null,
+    priceId,
+  });
+
+  console.log(`[billing] sync userId=${userId} plan=${plan} status=${subscription.status}`);
+  return res.json({ ok: true, plan, status: subscription.status });
 });
 
 module.exports = router;

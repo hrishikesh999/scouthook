@@ -514,8 +514,8 @@
         } else {
           if (win) win.close();
           if (window.toast) window.toast.error(
-            d.error === 'no_paddle_customer'
-              ? 'No billing account found. Please contact support.'
+            d.error === 'portal_not_configured'
+              ? 'Billing portal is not configured. Please contact support.'
               : 'Could not open billing portal. Please try again.'
           );
         }

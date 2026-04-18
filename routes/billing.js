@@ -220,33 +220,23 @@ router.post('/cancel', requireAuth, async (req, res) => {
 
 // ---------------------------------------------------------------------------
 // GET /api/billing/portal
-// Returns a Paddle customer portal URL for managing payment methods / invoices.
+// Returns the Paddle customer portal URL with the user's email pre-filled.
+// The base URL is the static portal link from the Paddle dashboard
+// (PADDLE_CUSTOMER_PORTAL_URL env var). Paddle uses the email param to
+// look up the customer — no API call or customer ID needed.
 // ---------------------------------------------------------------------------
 router.get('/portal', requireAuth, async (req, res) => {
-  const userId = req.userId;
-  const customerId = await getPaddleCustomerId(userId);
-
-  if (!customerId) {
-    return res.status(400).json({ ok: false, error: 'no_paddle_customer' });
+  const baseUrl = process.env.PADDLE_CUSTOMER_PORTAL_URL;
+  if (!baseUrl) {
+    console.error('[billing] portal: PADDLE_CUSTOMER_PORTAL_URL is not set');
+    return res.status(503).json({ ok: false, error: 'portal_not_configured' });
   }
 
-  const paddle = getPaddle();
+  const email = req.user?.email || '';
+  const portalUrl = email
+    ? `${baseUrl}?email=${encodeURIComponent(email)}`
+    : baseUrl;
 
-  let portal;
-  try {
-    portal = await paddle.customers.createPortalSession(customerId, {
-      subscriptionIds: [],
-    });
-  } catch (err) {
-    console.error('[billing] paddle.customers.createPortalSession error:', err.message);
-    return res.status(502).json({ ok: false, error: 'paddle_error', detail: err.message });
-  }
-
-  const portalUrl = portal.urls?.general?.overview ?? portal.url ?? null;
-  if (!portalUrl) {
-    console.error('[billing] portal: unexpected Paddle response shape:', JSON.stringify(portal));
-    return res.status(502).json({ ok: false, error: 'no_portal_url' });
-  }
   return res.json({ ok: true, portalUrl });
 });
 

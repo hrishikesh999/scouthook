@@ -1,9 +1,11 @@
 'use strict';
 
 const express = require('express');
+const { Environment } = require('@paddle/paddle-node-sdk');
 const router = express.Router();
 const {
   getPaddle,
+  getPaddleEnvironment,
   getUserSubscription,
   getPaddleCustomerId,
   getFoundingTierInfo,
@@ -33,6 +35,16 @@ function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function getTransactionSubscriptionId(tr) {
+  if (!tr) return null;
+  return tr.subscriptionId ?? tr.subscription_id ?? null;
+}
+
+function getTransactionCustomerIdFromTx(tr) {
+  if (!tr) return null;
+  return tr.customerId ?? tr.customer_id ?? null;
+}
+
 // ---------------------------------------------------------------------------
 // Auth guard
 // ---------------------------------------------------------------------------
@@ -50,10 +62,11 @@ function requireAuth(req, res, next) {
 // ---------------------------------------------------------------------------
 router.get('/config', async (req, res) => {
   const tierInfo = await getFoundingTierInfo();
+  const paddleEnv = getPaddleEnvironment();
   return res.json({
     ok: true,
     clientToken:    process.env.PADDLE_CLIENT_TOKEN || '',
-    env:            process.env.NODE_ENV === 'production' ? 'production' : 'sandbox',
+    env:            paddleEnv === Environment.production ? 'production' : 'sandbox',
     // priceIdMonthly returns the *currently active* tier price ID (29/39/49)
     priceIdMonthly: tierInfo.priceId,
     priceIdYearly:  process.env.PADDLE_PRICE_ID_YEARLY || '',
@@ -228,26 +241,33 @@ router.post('/sync', requireAuth, async (req, res) => {
   try {
     // Primary path: transaction ID → subscription ID → subscription details
     if (transactionId) {
-      // subscriptionId can be absent on the first GET right after checkout — brief poll.
+      // subscription_id can be absent on the first GET right after checkout — brief poll.
       let transaction = null;
-      const maxAttempts = 12;
+      const maxAttempts = 15;
       for (let attempt = 0; attempt < maxAttempts; attempt++) {
         transaction = await paddle.transactions.get(transactionId);
 
-        // Security: verify this transaction belongs to the authenticated user when present.
-        // Set on POST /checkout transactions and Paddle.Checkout.open customData (overlay).
         const txUserId = getTransactionCustomUserId(transaction);
         if (txUserId && txUserId !== userId) {
           console.warn(`[billing] sync userId mismatch: req=${userId} tx=${txUserId}`);
           return res.status(403).json({ ok: false, error: 'transaction_not_owned' });
         }
 
-        if (transaction?.subscriptionId) break;
+        if (getTransactionSubscriptionId(transaction)) break;
         if (attempt < maxAttempts - 1) await delay(450);
       }
 
-      if (transaction?.subscriptionId) {
-        subscription = await paddle.subscriptions.get(transaction.subscriptionId);
+      const subId = getTransactionSubscriptionId(transaction);
+      if (subId) {
+        subscription = await paddle.subscriptions.get(subId);
+      } else if (transaction) {
+        const txOwner = getTransactionCustomUserId(transaction);
+        const custId = getTransactionCustomerIdFromTx(transaction);
+        if (custId && txOwner === userId) {
+          const result = await paddle.subscriptions.list({ customerId: [custId] });
+          const subs = result?.data ?? [];
+          subscription = subs.find(s => ['active', 'trialing'].includes(s.status)) ?? subs[0] ?? null;
+        }
       }
     }
 

@@ -26,14 +26,23 @@ const FOUNDING_2_MAX = 50;
 // Paddle SDK singleton
 // ---------------------------------------------------------------------------
 let _paddle;
+
+/** Prefer PADDLE_ENVIRONMENT=sandbox|production when NODE_ENV does not match your Paddle account (common on staging). */
+function getPaddleEnvironment() {
+  const explicit = (process.env.PADDLE_ENVIRONMENT || process.env.PADDLE_ENV || '').toLowerCase();
+  if (explicit === 'sandbox') return Environment.sandbox;
+  if (explicit === 'production') return Environment.production;
+  return process.env.NODE_ENV === 'production'
+    ? Environment.production
+    : Environment.sandbox;
+}
+
 function getPaddle() {
   if (!_paddle) {
     const apiKey = process.env.PADDLE_API_KEY;
     if (!apiKey) throw new Error('PADDLE_API_KEY is not configured');
     _paddle = new Paddle(apiKey, {
-      environment: process.env.NODE_ENV === 'production'
-        ? Environment.production
-        : Environment.sandbox,
+      environment: getPaddleEnvironment(),
     });
   }
   return _paddle;
@@ -353,6 +362,7 @@ async function upsertSubscription({
 
 module.exports = {
   getPaddle,
+  getPaddleEnvironment,
   getUserSubscription,
   getUserPlan,
   getFoundingTierInfo,

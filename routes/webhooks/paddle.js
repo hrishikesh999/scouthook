@@ -10,17 +10,16 @@
  * The route mounts its own express.raw() body parser.
  *
  * Handles:
- *   subscription.created   → create / update subscription row
- *   subscription.updated   → update plan, status, billing dates
+ *   subscription.* (created, updated, activated, trialing, resumed, past_due) → upsert row
  *   subscription.canceled  → mark canceled; user retains Pro access until period end
- *   transaction.completed  → safety net (no-op when subscription events are present)
+ *   transaction.completed  → when subscription_id is set, fetch subscription and upsert
+ *                              (backup if client-side sync / other events miss)
  */
 
 const express = require('express');
 const router = express.Router();
-const { Paddle, Environment } = require('@paddle/paddle-node-sdk');
 const { db } = require('../../db');
-const { upsertSubscription } = require('../../services/subscription');
+const { upsertSubscription, getPaddle } = require('../../services/subscription');
 
 // Raw body parser — required so we can verify Paddle's HMAC signature.
 // This overrides the global express.json() for this route only.
@@ -46,11 +45,7 @@ router.post('/', async (req, res) => {
 
   let event;
   try {
-    const paddle = new Paddle(apiKey, {
-      environment: process.env.NODE_ENV === 'production'
-        ? Environment.production
-        : Environment.sandbox,
-    });
+    const paddle = getPaddle();
     // req.body is a Buffer here (express.raw)
     event = paddle.webhooks.unmarshal(req.body.toString(), webhookSecret, signature);
   } catch (err) {
@@ -86,42 +81,55 @@ function planFromPriceId(priceId) {
   return getProPriceIds().includes(priceId) ? 'pro' : 'free';
 }
 
+function customDataUserId(customData) {
+  if (!customData || typeof customData !== 'object') return null;
+  const v = customData.userId ?? customData.user_id;
+  return typeof v === 'string' && v.length ? v : null;
+}
+
+async function resolveUserIdForSubscriptionPayload(data) {
+  let userId = customDataUserId(data?.customData);
+  if (!userId) {
+    try {
+      if (data?.customerId || data?.id) {
+        const row = await db.prepare(`
+            SELECT user_id
+            FROM user_subscriptions
+            WHERE paddle_subscription_id = ? OR paddle_customer_id = ?
+            LIMIT 1
+          `).get(data?.id ?? null, data?.customerId ?? null);
+        userId = row?.user_id ?? null;
+      }
+    } catch (e) {
+      console.warn(`[paddle-webhook] subscription user lookup failed: ${e.message}`);
+    }
+  }
+  return userId;
+}
+
 // ---------------------------------------------------------------------------
 // Event handlers
 // ---------------------------------------------------------------------------
 async function handlePaddleEvent(event) {
   const { eventType, data } = event;
 
-  let userId = data?.customData?.userId ?? null;
+  const subscriptionUpsertEvents = new Set([
+    'subscription.created',
+    'subscription.updated',
+    'subscription.activated',
+    'subscription.trialing',
+    'subscription.resumed',
+    'subscription.past_due',
+  ]);
 
-  if (eventType === 'subscription.created' || eventType === 'subscription.updated') {
+  if (subscriptionUpsertEvents.has(eventType)) {
+    const userId = await resolveUserIdForSubscriptionPayload(data);
     if (!userId) {
-      // Fallback: resolve the user by Paddle identifiers when customData
-      // isn't present (or isn't echoed back) for some event payloads.
-      try {
-        if (data?.customerId || data?.id) {
-          const row = await db.prepare(`
-            SELECT user_id
-            FROM user_subscriptions
-            WHERE paddle_subscription_id = ? OR paddle_customer_id = ?
-            LIMIT 1
-          `).get(data?.id ?? null, data?.customerId ?? null);
-          userId = row?.user_id ?? null;
-        }
-      } catch (e) {
-        console.warn(`[paddle-webhook] ${eventType}: user resolution fallback failed: ${e.message}`);
-      }
-    }
-
-    if (!userId) {
-      console.warn(`[paddle-webhook] ${eventType}: no userId in customData (and fallback failed) — skipping`);
+      console.warn(`[paddle-webhook] ${eventType}: no userId in custom_data (and DB fallback failed) — skipping`);
       return;
     }
 
     const priceId = data.items?.[0]?.price?.id ?? null;
-    // These events represent the user's Pro subscription in ScoutHook.
-    // Paddle payloads can sometimes omit `items[0].price.id` for updates;
-    // if that happens, default to `pro` to avoid downgrading the user early.
     const plan    = priceId ? planFromPriceId(priceId) : 'pro';
 
     await upsertSubscription({
@@ -142,25 +150,10 @@ async function handlePaddleEvent(event) {
   }
 
   if (eventType === 'subscription.canceled') {
-    if (!userId) {
-      // Same fallback strategy as for created/updated.
-      try {
-        if (data?.customerId || data?.id) {
-          const row = await db.prepare(`
-            SELECT user_id
-            FROM user_subscriptions
-            WHERE paddle_subscription_id = ? OR paddle_customer_id = ?
-            LIMIT 1
-          `).get(data?.id ?? null, data?.customerId ?? null);
-          userId = row?.user_id ?? null;
-        }
-      } catch (e) {
-        console.warn(`[paddle-webhook] subscription.canceled: user resolution fallback failed: ${e.message}`);
-      }
-    }
+    const userId = await resolveUserIdForSubscriptionPayload(data);
 
     if (!userId) {
-      console.warn('[paddle-webhook] subscription.canceled: no userId in customData (and fallback failed) — skipping');
+      console.warn('[paddle-webhook] subscription.canceled: no userId in custom_data (and fallback failed) — skipping');
       return;
     }
 
@@ -183,13 +176,52 @@ async function handlePaddleEvent(event) {
   }
 
   if (eventType === 'transaction.completed') {
-    // subscription.created / subscription.updated are the source of truth for
-    // provisioning.  This handler is a safety net for edge cases (e.g. event
-    // ordering issues). Skip if the transaction has an associated subscription.
-    if (data.subscriptionId) return;
-    if (userId) {
-      console.log(`[paddle-webhook] transaction.completed userId=${userId} (no subscription)`);
+    const subId = data?.subscriptionId ?? data?.subscription_id ?? null;
+    if (!subId) return;
+
+    let userId = customDataUserId(data?.customData);
+    if (!userId && data?.customerId) {
+      try {
+        const row = await db.prepare(`
+          SELECT user_id FROM user_subscriptions WHERE paddle_customer_id = ? LIMIT 1
+        `).get(data.customerId);
+        userId = row?.user_id ?? null;
+      } catch (e) {
+        console.warn(`[paddle-webhook] transaction.completed customer lookup failed: ${e.message}`);
+      }
     }
+
+    if (!userId) {
+      console.warn('[paddle-webhook] transaction.completed: no userId in custom_data — skipping (subscription.* should still provision)');
+      return;
+    }
+
+    const paddle = getPaddle();
+    let subscription;
+    try {
+      subscription = await paddle.subscriptions.get(subId);
+    } catch (e) {
+      console.error('[paddle-webhook] transaction.completed: subscriptions.get failed:', e.message);
+      return;
+    }
+
+    const priceId = subscription.items?.[0]?.price?.id ?? null;
+    const plan    = priceId ? planFromPriceId(priceId) : 'pro';
+
+    await upsertSubscription({
+      userId,
+      paddleCustomerId:     subscription.customerId ?? data.customerId,
+      paddleSubscriptionId: subscription.id,
+      plan,
+      status:               subscription.status,
+      currentPeriodEnd:     subscription.currentBillingPeriod?.endsAt
+                              ? new Date(subscription.currentBillingPeriod.endsAt)
+                              : null,
+      canceledAt:           subscription.canceledAt ? new Date(subscription.canceledAt) : null,
+      priceId:              priceId ?? null,
+    });
+
+    console.log(`[paddle-webhook] transaction.completed provisioned userId=${userId} sub=${subId}`);
     return;
   }
 

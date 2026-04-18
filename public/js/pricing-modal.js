@@ -411,7 +411,26 @@
       if (env !== 'production') {
         window.Paddle.Environment.set('sandbox');
       }
-      window.Paddle.Initialize({ token: clientToken });
+      // Paddle docs: checkout.completed is delivered to eventCallback on Initialize(),
+      // not on Checkout.open(). Without this, no keepalive sync / sessionStorage txn id runs.
+      window.Paddle.Initialize({
+        token: clientToken,
+        eventCallback: function (data) {
+          if (data.name === 'checkout.completed') {
+            const tid = checkoutCompletedTransactionId(data);
+            try {
+              if (tid) sessionStorage.setItem(PENDING_PADDLE_TXN_KEY, tid);
+            } catch { /* private mode / quota */ }
+            fetch('/api/billing/sync', {
+              method: 'POST',
+              credentials: 'same-origin',
+              keepalive: true,
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ transactionId: tid }),
+            }).catch(() => { /* page-load sync is the backup */ });
+          }
+        },
+      });
       paddleInitialized = true;
     })();
     await paddleInitPromise;
@@ -553,23 +572,8 @@
         items: [{ priceId, quantity: 1 }],
         customData: userId ? { userId } : undefined,
         settings: {
+          displayMode: 'overlay',
           successUrl: window.location.origin + '/dashboard.html?checkout=success',
-        },
-        eventCallback: function (data) {
-          if (data.name === 'checkout.completed') {
-            const tid = checkoutCompletedTransactionId(data);
-            try {
-              if (tid) sessionStorage.setItem(PENDING_PADDLE_TXN_KEY, tid);
-            } catch { /* private mode / quota */ }
-            // keepalive lets the request survive the imminent page redirect
-            fetch('/api/billing/sync', {
-              method: 'POST',
-              credentials: 'same-origin',
-              keepalive: true,
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ transactionId: tid }),
-            }).catch(() => { /* page-load sync is the backup */ });
-          }
         },
       });
 

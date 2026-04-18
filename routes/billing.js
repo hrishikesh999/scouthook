@@ -242,7 +242,12 @@ router.get('/portal', requireAuth, async (req, res) => {
     return res.status(502).json({ ok: false, error: 'paddle_error', detail: err.message });
   }
 
-  return res.json({ ok: true, portalUrl: portal.urls?.general?.overview ?? portal.url });
+  const portalUrl = portal.urls?.general?.overview ?? portal.url ?? null;
+  if (!portalUrl) {
+    console.error('[billing] portal: unexpected Paddle response shape:', JSON.stringify(portal));
+    return res.status(502).json({ ok: false, error: 'no_portal_url' });
+  }
+  return res.json({ ok: true, portalUrl });
 });
 
 // ---------------------------------------------------------------------------

@@ -501,12 +501,26 @@
       const orig = btn.innerHTML;  // preserve SVG icons
       btn.disabled = true;
       btn.innerHTML = 'Loading…';
+
+      // Open the window synchronously (in the click handler's task) so browsers
+      // don't treat it as a popup. We navigate it to the real URL after the fetch.
+      const win = window.open('about:blank', '_blank', 'noopener,noreferrer');
+
       try {
         const r = await fetch('/api/billing/portal');
         const d = await r.json();
-        if (d.portalUrl) window.open(d.portalUrl, '_blank', 'noopener');
-        else if (window.toast) window.toast.error('Could not open billing portal. Please try again.');
+        if (d.portalUrl && win) {
+          win.location.href = d.portalUrl;
+        } else {
+          if (win) win.close();
+          if (window.toast) window.toast.error(
+            d.error === 'no_paddle_customer'
+              ? 'No billing account found. Please contact support.'
+              : 'Could not open billing portal. Please try again.'
+          );
+        }
       } catch {
+        if (win) win.close();
         if (window.toast) window.toast.error('Could not open billing portal. Please try again.');
       }
       btn.disabled = false;

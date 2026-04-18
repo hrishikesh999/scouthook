@@ -536,16 +536,16 @@
         settings: {
           successUrl: window.location.origin + '/dashboard.html?checkout=success',
         },
-        eventCallback: async function (data) {
+        eventCallback: function (data) {
           if (data.name === 'checkout.completed') {
-            try {
-              await fetch('/api/billing/sync', {
-                method: 'POST',
-                credentials: 'same-origin',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ transactionId: data.data?.transaction?.id }),
-              });
-            } catch { /* no-op — page-load sync is the backup */ }
+            // keepalive lets the request survive the imminent page redirect
+            fetch('/api/billing/sync', {
+              method: 'POST',
+              credentials: 'same-origin',
+              keepalive: true,
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ transactionId: data.data?.transaction?.id }),
+            }).catch(() => { /* page-load sync is the backup */ });
           }
         },
       });
@@ -622,14 +622,17 @@
   }
 
   // ── Post-checkout sync on success redirect ───────────────────────────────────
-  // When Paddle redirects back to /dashboard.html?checkout=success, call /sync
-  // so the subscription row is created even if the eventCallback didn't fire.
+  // Paddle redirects to /dashboard.html?checkout=success&_ptxn=txn_xxx
+  // Read the transaction ID from _ptxn so the sync endpoint can look up the
+  // subscription even when there is no existing customer row.
   if (window.location.search.includes('checkout=success')) {
+    const _params = new URLSearchParams(window.location.search);
+    const _txnId  = _params.get('_ptxn') || null;
     fetch('/api/billing/sync', {
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({}),
+      body: JSON.stringify({ transactionId: _txnId }),
     }).catch(() => { /* no-op */ });
   }
 

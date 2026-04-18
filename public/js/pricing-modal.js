@@ -301,7 +301,7 @@
             <span class="pm-current-chip" id="pm-pro-chip" style="display:none">Current plan</span>
           </div>
 
-          <div id="pm-founding-badge" style="display:none;margin-bottom:6px;font-size:12px;font-weight:600;color:var(--accent,#10B981);letter-spacing:0.01em;"></div>
+          <div id="pm-founding-badge" style="display:none;margin-bottom:6px;font-size:12px;font-weight:700;color:#059669;letter-spacing:0.01em;"></div>
           <div id="pm-price-monthly">
             <div class="pm-price" style="display:flex;align-items:baseline;gap:8px;">
               <span><sup>$</sup><span id="pm-monthly-amount">49</span></span>
@@ -442,10 +442,10 @@
     const badgeEl = $id('pm-founding-badge');
     if (badgeEl) {
       if (foundingTier === 'founding_1') {
-        badgeEl.textContent  = 'Founding member \u2014 ' + spotsRemaining + ' of 10 spots left';
+        badgeEl.textContent  = 'Founding member -' + spotsRemaining + ' of 10 spots left';
         badgeEl.style.display = '';
       } else if (foundingTier === 'founding_2') {
-        badgeEl.textContent  = 'Early access \u2014 ' + spotsRemaining + ' of 40 spots left';
+        badgeEl.textContent  = 'Early access -' + spotsRemaining + ' of 40 spots left';
         badgeEl.style.display = '';
       } else {
         badgeEl.style.display = 'none';

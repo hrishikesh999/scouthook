@@ -192,6 +192,7 @@
     padding: 4px 0;
   }
   .pm-features li svg { flex-shrink: 0; margin-top: 1px; }
+  .pm-feature-excluded { color: var(--text-muted, #A1A1AA) !important; }
 
   .pm-cta {
     display: block;
@@ -267,7 +268,11 @@
           <ul class="pm-features">
             <li>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent,#10B981)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              5 post generations / month
+              3 post generations / month
+            </li>
+            <li>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent,#10B981)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              3 visuals in your first month
             </li>
             <li>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent,#10B981)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
@@ -275,11 +280,15 @@
             </li>
             <li>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent,#10B981)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              LinkedIn publishing
+              LinkedIn &amp; scheduled publishing
             </li>
-            <li>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent,#10B981)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              Scheduled publishing
+            <li class="pm-feature-excluded">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#A1A1AA" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              Hook A/B alternatives
+            </li>
+            <li class="pm-feature-excluded">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#A1A1AA" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              Draft hub &amp; post archive
             </li>
           </ul>
           <button class="pm-cta pm-cta-muted" disabled>Current plan</button>
@@ -294,7 +303,10 @@
 
           <div id="pm-founding-badge" style="display:none;margin-bottom:6px;font-size:12px;font-weight:600;color:var(--accent,#10B981);letter-spacing:0.01em;"></div>
           <div id="pm-price-monthly">
-            <div class="pm-price"><sup>$</sup><span id="pm-monthly-amount">49</span></div>
+            <div class="pm-price" style="display:flex;align-items:baseline;gap:8px;">
+              <span><sup>$</sup><span id="pm-monthly-amount">49</span></span>
+              <span id="pm-strike-price" style="display:none;font-size:17px;font-weight:500;color:var(--text-muted,#A1A1AA);text-decoration:line-through;">$49</span>
+            </div>
             <div class="pm-period">/ month</div>
           </div>
           <div id="pm-price-annual" style="display:none">
@@ -306,11 +318,19 @@
           <ul class="pm-features">
             <li>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent,#10B981)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              <strong>Unlimited</strong>&nbsp;post generations
+              <strong>40</strong>&nbsp;post generations / month
             </li>
             <li>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent,#10B981)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              <strong>Unlimited</strong>&nbsp;vault documents
+              <strong>20</strong>&nbsp;visuals / month (carousels, quotes, branded)
+            </li>
+            <li>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent,#10B981)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              <strong>10</strong>&nbsp;vault docs / month
+            </li>
+            <li>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent,#10B981)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              Unlimited scheduling (30 days ahead)
             </li>
             <li>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent,#10B981)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
@@ -318,11 +338,11 @@
             </li>
             <li>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent,#10B981)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              Scheduled publishing
+              Hook A/B alternatives
             </li>
             <li>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent,#10B981)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              Visual generation (carousels &amp; quote cards)
+              Draft hub &amp; post archive
             </li>
           </ul>
           <button class="pm-cta pm-cta-primary" id="pm-upgrade-btn" type="button">Upgrade to Pro</button>
@@ -407,6 +427,12 @@
     if (annualAmountEl) annualAmountEl.textContent = annualTotal;
     const annualPerMonthEl = $id('pm-annual-per-month');
     if (annualPerMonthEl) annualPerMonthEl.textContent = '$' + annualPerMonth;
+
+    // Show/hide the strikethrough $49 next to the founding price
+    const strikeEl = $id('pm-strike-price');
+    if (strikeEl) {
+      strikeEl.style.display = (foundingTier !== 'regular') ? '' : 'none';
+    }
 
     // Show founding badge for non-regular tiers
     const badgeEl = $id('pm-founding-badge');

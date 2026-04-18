@@ -234,7 +234,7 @@ router.get('/portal', requireAuth, async (req, res) => {
 
   const email = req.user?.email || '';
   const portalUrl = email
-    ? `${baseUrl}?email=${encodeURIComponent(email)}`
+    ? `${baseUrl}?prefilled_email=${encodeURIComponent(email)}`
     : baseUrl;
 
   return res.json({ ok: true, portalUrl });

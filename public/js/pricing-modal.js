@@ -523,7 +523,11 @@
       try {
         const authData = await window.scouthookAuthReady;
         userId = authData?.user?.user_id ?? null;
-      } catch { /* proceed without userId — webhook will try fallback */ }
+      } catch { /* no-op */ }
+      // Fallback: localStorage is set by session.js on every authenticated page load
+      if (!userId) {
+        try { userId = localStorage.getItem('scouthook_uid'); } catch { /* no-op */ }
+      }
 
       // Open Paddle overlay checkout
       window.Paddle.Checkout.open({

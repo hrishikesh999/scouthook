@@ -30,7 +30,7 @@ app.use(helmet({
       scriptSrc:      ["'self'", "'unsafe-inline'", "https://cdn.paddle.com"],
       styleSrc:       ["'self'", "'unsafe-inline'"],
       imgSrc:         ["'self'", "data:", "*.licdn.com", "media.licdn.com"],
-      connectSrc:     ["'self'", "https://sandbox-api.paddle.com", "https://api.paddle.com"],
+      connectSrc:     ["'self'", "https://sandbox-api.paddle.com", "https://api.paddle.com", "https://cdn.paddle.com", "https://buy.paddle.com", "https://sandbox-buy.paddle.com"],
       fontSrc:        ["'self'"],
       objectSrc:      ["'none'"],
       frameAncestors: ["'none'"],

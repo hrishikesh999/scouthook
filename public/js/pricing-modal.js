@@ -5,6 +5,25 @@
 (function () {
   'use strict';
 
+  /** Survives redirect when Paddle omits ?_ptxn= on successUrl (overlay checkout). */
+  const PENDING_PADDLE_TXN_KEY = 'scouthook_pending_paddle_txn';
+
+  /**
+   * Paddle.js checkout.completed uses data.transaction_id (see Paddle docs).
+   * Older samples used nested shapes — accept both.
+   */
+  function checkoutCompletedTransactionId(payload) {
+    if (!payload || typeof payload !== 'object') return null;
+    const d = payload.data && typeof payload.data === 'object' ? payload.data : payload;
+    const tid =
+      d.transaction_id ||
+      d.transactionId ||
+      (d.transaction && typeof d.transaction === 'object' ? d.transaction.id : null) ||
+      null;
+    if (!tid || typeof tid !== 'string') return null;
+    return tid.startsWith('txn_') ? tid : null;
+  }
+
   // ── Inject styles ───────────────────────────────────────────────────────────
   const style = document.createElement('style');
   style.textContent = `
@@ -538,13 +557,17 @@
         },
         eventCallback: function (data) {
           if (data.name === 'checkout.completed') {
+            const tid = checkoutCompletedTransactionId(data);
+            try {
+              if (tid) sessionStorage.setItem(PENDING_PADDLE_TXN_KEY, tid);
+            } catch { /* private mode / quota */ }
             // keepalive lets the request survive the imminent page redirect
             fetch('/api/billing/sync', {
               method: 'POST',
               credentials: 'same-origin',
               keepalive: true,
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ transactionId: data.data?.transaction?.id }),
+              body: JSON.stringify({ transactionId: tid }),
             }).catch(() => { /* page-load sync is the backup */ });
           }
         },
@@ -622,18 +645,30 @@
   }
 
   // ── Post-checkout sync on success redirect ───────────────────────────────────
-  // Paddle redirects to /dashboard.html?checkout=success&_ptxn=txn_xxx
-  // Read the transaction ID from _ptxn so the sync endpoint can look up the
-  // subscription even when there is no existing customer row.
+  // Paddle may append ?_ptxn=txn_xxx; overlay often omits it — use sessionStorage
+  // filled in checkout.completed as a backup.
   if (window.location.search.includes('checkout=success')) {
     const _params = new URLSearchParams(window.location.search);
-    const _txnId  = _params.get('_ptxn') || null;
+    let _txnId = _params.get('_ptxn') || null;
+    if (!_txnId) {
+      try {
+        _txnId = sessionStorage.getItem(PENDING_PADDLE_TXN_KEY);
+      } catch { /* no-op */ }
+    }
     fetch('/api/billing/sync', {
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ transactionId: _txnId }),
-    }).catch(() => { /* no-op */ });
+    })
+      .then(function (r) {
+        if (r.ok) {
+          try {
+            sessionStorage.removeItem(PENDING_PADDLE_TXN_KEY);
+          } catch { /* no-op */ }
+        }
+      })
+      .catch(() => { /* no-op */ });
   }
 
   // ── Expose globally ──────────────────────────────────────────────────────────

@@ -12,6 +12,27 @@ const {
   upsertSubscription,
 } = require('../services/subscription');
 
+/** Paddle REST / JS may use camelCase or snake_case; values can be object or JSON string. */
+function getTransactionCustomUserId(transaction) {
+  if (!transaction) return null;
+  let raw = transaction.customData ?? transaction.custom_data;
+  if (raw == null) return null;
+  if (typeof raw === 'string') {
+    try {
+      raw = JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+  if (typeof raw !== 'object' || raw === null) return null;
+  const v = raw.userId ?? raw.user_id;
+  return typeof v === 'string' && v.length ? v : null;
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 // ---------------------------------------------------------------------------
 // Auth guard
 // ---------------------------------------------------------------------------
@@ -207,14 +228,22 @@ router.post('/sync', requireAuth, async (req, res) => {
   try {
     // Primary path: transaction ID → subscription ID → subscription details
     if (transactionId) {
-      const transaction = await paddle.transactions.get(transactionId);
+      // subscriptionId can be absent on the first GET right after checkout — brief poll.
+      let transaction = null;
+      const maxAttempts = 12;
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        transaction = await paddle.transactions.get(transactionId);
 
-      // Security: verify this transaction belongs to the authenticated user.
-      // customData.userId is set when we create the transaction in POST /checkout.
-      const txUserId = transaction?.customData?.userId;
-      if (txUserId && txUserId !== userId) {
-        console.warn(`[billing] sync userId mismatch: req=${userId} tx=${txUserId}`);
-        return res.status(403).json({ ok: false, error: 'transaction_not_owned' });
+        // Security: verify this transaction belongs to the authenticated user when present.
+        // Set on POST /checkout transactions and Paddle.Checkout.open customData (overlay).
+        const txUserId = getTransactionCustomUserId(transaction);
+        if (txUserId && txUserId !== userId) {
+          console.warn(`[billing] sync userId mismatch: req=${userId} tx=${txUserId}`);
+          return res.status(403).json({ ok: false, error: 'transaction_not_owned' });
+        }
+
+        if (transaction?.subscriptionId) break;
+        if (attempt < maxAttempts - 1) await delay(450);
       }
 
       if (transaction?.subscriptionId) {

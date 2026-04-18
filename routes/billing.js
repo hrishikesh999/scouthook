@@ -235,18 +235,23 @@ router.post('/sync', requireAuth, async (req, res) => {
   const priceId = subscription.items?.[0]?.price?.id ?? null;
   const plan    = priceId && proPriceIds.includes(priceId) ? 'pro' : 'free';
 
-  await upsertSubscription({
-    userId,
-    paddleCustomerId:     subscription.customerId,
-    paddleSubscriptionId: subscription.id,
-    plan,
-    status:               subscription.status,
-    currentPeriodEnd:     subscription.currentBillingPeriod?.endsAt
-                            ? new Date(subscription.currentBillingPeriod.endsAt)
-                            : null,
-    canceledAt:           subscription.canceledAt ? new Date(subscription.canceledAt) : null,
-    priceId,
-  });
+  try {
+    await upsertSubscription({
+      userId,
+      paddleCustomerId:     subscription.customerId,
+      paddleSubscriptionId: subscription.id,
+      plan,
+      status:               subscription.status,
+      currentPeriodEnd:     subscription.currentBillingPeriod?.endsAt
+                              ? new Date(subscription.currentBillingPeriod.endsAt)
+                              : null,
+      canceledAt:           subscription.canceledAt ? new Date(subscription.canceledAt) : null,
+      priceId,
+    });
+  } catch (err) {
+    console.error('[billing] sync upsert error:', err.message);
+    return res.status(500).json({ ok: false, error: 'db_error', detail: err.message });
+  }
 
   console.log(`[billing] sync userId=${userId} plan=${plan} status=${subscription.status}`);
   return res.json({ ok: true, plan, status: subscription.status });

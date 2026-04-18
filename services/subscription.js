@@ -107,7 +107,7 @@ async function getFoundingTierInfo() {
   if (count < FOUNDING_1_MAX && f1PriceId) {
     return {
       priceId: f1PriceId,
-      price: 29,
+      price: 0.29,
       tier: 'founding_1',
       spotsRemaining: FOUNDING_1_MAX - count,
     };

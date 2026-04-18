@@ -573,7 +573,7 @@
         customData: userId ? { userId } : undefined,
         settings: {
           displayMode: 'overlay',
-          successUrl: window.location.origin + '/dashboard.html?checkout=success',
+          successUrl: window.location.origin + '/billing.html?checkout=success',
         },
       });
 

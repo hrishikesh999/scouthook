@@ -10,6 +10,7 @@ const {
   getPaddleCustomerId,
   getFoundingTierInfo,
   canGeneratePost,
+  canGenerateVisual,
   canUploadVaultDoc,
   upsertSubscription,
 } = require('../services/subscription');
@@ -68,8 +69,10 @@ router.get('/config', async (req, res) => {
     clientToken:    process.env.PADDLE_CLIENT_TOKEN || '',
     env:            paddleEnv === Environment.production ? 'production' : 'sandbox',
     // priceIdMonthly returns the *currently active* tier price ID (29/39/49)
-    priceIdMonthly: tierInfo.priceId,
-    priceIdYearly:  process.env.PADDLE_PRICE_ID_YEARLY || '',
+    priceIdMonthly:  tierInfo.priceId,
+    priceIdYearly:   process.env.PADDLE_PRICE_ID_YEARLY || '',
+    priceIdFounding1: process.env.PADDLE_PRICE_ID_FOUNDING_1 || '',
+    priceIdFounding2: process.env.PADDLE_PRICE_ID_FOUNDING_2 || '',
     proMonthlyPrice: tierInfo.price,
     foundingTier:    tierInfo.tier,
     spotsRemaining:  tierInfo.spotsRemaining,
@@ -138,9 +141,10 @@ router.get('/subscription', requireAuth, async (req, res) => {
     console.warn('[billing] subscription stale-check failed (non-fatal):', checkErr.message);
   }
 
-  const [sub, genCheck, vaultCheck] = await Promise.all([
+  const [sub, genCheck, visualCheck, vaultCheck] = await Promise.all([
     getUserSubscription(userId),
     canGeneratePost(userId),
+    canGenerateVisual(userId),
     canUploadVaultDoc(userId),
   ]);
 
@@ -148,75 +152,22 @@ router.get('/subscription', requireAuth, async (req, res) => {
     ok: true,
     plan: sub.plan,
     status: sub.status,
+    price_id: sub.price_id ?? null,
     current_period_end: sub.current_period_end ?? null,
     canceled_at: sub.canceled_at ?? null,
     generations: {
       current: genCheck.current,
       limit: genCheck.limit === Infinity ? null : genCheck.limit,
     },
+    visuals: {
+      current: visualCheck.current,
+      limit: visualCheck.limit === Infinity ? null : visualCheck.limit,
+    },
     vault_docs: {
       current: vaultCheck.current,
       limit: vaultCheck.limit === Infinity ? null : vaultCheck.limit,
     },
   });
-});
-
-// ---------------------------------------------------------------------------
-// POST /api/billing/checkout
-// Body: { priceId: string }
-// Creates a Paddle transaction and returns the hosted checkout URL.
-// ---------------------------------------------------------------------------
-router.post('/checkout', requireAuth, async (req, res) => {
-  const userId = req.userId;
-  const { priceId } = req.body || {};
-
-  // Validate priceId is one of the configured Pro prices (prevents price injection)
-  const allowedPriceIds = [
-    process.env.PADDLE_PRICE_ID_FOUNDING_1,
-    process.env.PADDLE_PRICE_ID_FOUNDING_2,
-    process.env.PADDLE_PRICE_ID_MONTHLY,
-    process.env.PADDLE_PRICE_ID_YEARLY,
-  ].filter(Boolean);
-
-  if (!priceId || !allowedPriceIds.includes(priceId)) {
-    return res.status(400).json({ ok: false, error: 'invalid_price_id' });
-  }
-
-  const paddle = getPaddle();
-
-  // Look up any existing Paddle customer ID for this user
-  const existingCustomerId = await getPaddleCustomerId(userId);
-
-  const txBody = {
-    items: [{ priceId, quantity: 1 }],
-    customData: { userId },
-    checkout: {
-      url: `${process.env.APP_URL || ''}/pricing.html?checkout=success`,
-    },
-  };
-
-  // Attach customer email / existing customer ID so Paddle pre-fills the checkout
-  if (existingCustomerId) {
-    txBody.customer = { id: existingCustomerId };
-  } else if (req.user?.email) {
-    txBody.customer = { email: req.user.email };
-  }
-
-  let transaction;
-  try {
-    transaction = await paddle.transactions.create(txBody);
-  } catch (err) {
-    console.error('[billing] paddle.transactions.create error:', err.message);
-    return res.status(502).json({ ok: false, error: 'paddle_error', detail: err.message });
-  }
-
-  const checkoutUrl = transaction.checkout?.url;
-  if (!checkoutUrl) {
-    console.error('[billing] no checkout URL in transaction:', JSON.stringify(transaction));
-    return res.status(502).json({ ok: false, error: 'no_checkout_url' });
-  }
-
-  return res.json({ ok: true, checkoutUrl });
 });
 
 // ---------------------------------------------------------------------------

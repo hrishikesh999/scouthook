@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Subscription — Scouthook</title>
+  <link rel="stylesheet" href="/css/main.css">
+  <style>
+    /* ── Usage meters ────────────────────────────────────────── */
+    .usage-meter { margin-bottom: 20px; }
+    .usage-meter:last-child { margin-bottom: 0; }
+    .usage-meter-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 6px;
+    }
+    .usage-meter-label {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-heading);
+    }
+    .usage-meter-count {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      font-variant-numeric: tabular-nums;
+    }
+    .usage-bar-track {
+      height: 6px;
+      background: var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .usage-bar-fill {
+      height: 100%;
+      border-radius: 6px;
+      transition: width 0.4s ease;
+      background: var(--accent); /* green default */
+    }
+    .usage-bar-fill.warn  { background: #D97706; }
+    .usage-bar-fill.crit  { background: #DC2626; }
+    .usage-note {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 16px;
+    }
+
+    /* ── Plan hero ───────────────────────────────────────────── */
+    .billing-plan-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+    }
+    .billing-plan-left { display: flex; flex-direction: column; gap: 6px; }
+    .billing-plan-name {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text-heading);
+      letter-spacing: -0.3px;
+    }
+    .billing-plan-sub {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+    .billing-price {
+      font-size: 24px;
+      font-weight: 800;
+      color: var(--text-heading);
+      letter-spacing: -0.5px;
+    }
+    .billing-price-period {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-muted);
+    }
+    .billing-status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      padding: 3px 10px;
+      border-radius: 20px;
+    }
+    .billing-status-pill.active   { background: rgba(16,185,129,0.12); color: #059669; }
+    .billing-status-pill.trialing { background: rgba(15,118,110,0.10); color: var(--brand); }
+    .billing-status-pill.past_due { background: rgba(217,119,6,0.12);  color: #B45309; }
+    .billing-status-pill.canceled { background: rgba(220,38,38,0.10);  color: #DC2626; }
+    .billing-status-pill.free     { background: var(--bg-pill);        color: var(--text-muted); }
+    .billing-status-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+      flex-shrink: 0;
+    }
+
+    /* ── Canceled banner ─────────────────────────────────────── */
+    .billing-alert {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 12px 14px;
+      border-radius: var(--radius-md);
+      font-size: 13px;
+      line-height: 1.5;
+      margin-bottom: 20px;
+    }
+    .billing-alert.warn {
+      background: rgba(217,119,6,0.08);
+      border: 1px solid rgba(217,119,6,0.25);
+      color: #92400E;
+    }
+    .billing-alert.info {
+      background: rgba(15,118,110,0.06);
+      border: 1px solid rgba(15,118,110,0.20);
+      color: #065F46;
+    }
+    .billing-alert svg { flex-shrink: 0; margin-top: 1px; }
+
+    /* ── Action buttons row ──────────────────────────────────── */
+    .billing-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 20px; }
+
+    /* ── Section divider ─────────────────────────────────────── */
+    .billing-divider {
+      height: 1px;
+      background: var(--border);
+      margin: 20px 0;
+    }
+
+    /* ── Cancel zone ─────────────────────────────────────────── */
+    .cancel-zone-text {
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.6;
+      margin-bottom: 16px;
+    }
+
+    /* ── Upgrade CTA card ────────────────────────────────────── */
+    .upgrade-feature-list {
+      list-style: none;
+      padding: 0;
+      margin: 0 0 20px 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .upgrade-feature-list li {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--text-body);
+    }
+    .upgrade-feature-list svg { color: var(--accent); flex-shrink: 0; }
+
+    /* ── Cancel confirmation modal ───────────────────────────── */
+    .cancel-modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.45);
+      z-index: 500;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .cancel-modal-overlay.open { display: flex; }
+    .cancel-modal {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 28px;
+      max-width: 420px;
+      width: 100%;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.14);
+    }
+    .cancel-modal-title {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--text-heading);
+      margin: 0 0 10px 0;
+    }
+    .cancel-modal-body {
+      font-size: 14px;
+      color: var(--text-muted);
+      line-height: 1.6;
+      margin: 0 0 24px 0;
+    }
+    .cancel-modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
+    .btn-danger {
+      padding: 8px 16px;
+      font-size: 13px;
+      font-weight: 600;
+      border-radius: var(--radius-md);
+      border: 1px solid rgba(220,38,38,0.35);
+      background: rgba(220,38,38,0.06);
+      color: #DC2626;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .btn-danger:hover { background: rgba(220,38,38,0.12); border-color: rgba(220,38,38,0.55); }
+    .btn-danger:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* ── Loading skeleton ────────────────────────────────────── */
+    .billing-skeleton {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .skeleton-line {
+      height: 14px;
+      background: var(--border);
+      border-radius: 6px;
+      animation: shimmer 1.4s infinite;
+    }
+    @keyframes shimmer {
+      0%   { opacity: 1; }
+      50%  { opacity: 0.4; }
+      100% { opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ── Sidebar ──────────────────────────────────────────── -->
+  <aside id="sidebar" role="navigation" aria-label="Main navigation">
+    <a href="/dashboard.html" class="sidebar-logo">
+      <img src="/images/scout-hook-logo.png" alt="ScoutHook" class="sidebar-logo-img">
+    </a>
+    <div class="sidebar-cta">
+      <a href="/generate.html?new=1" class="sidebar-cta-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Create Post</a>
+    </div>
+    <nav class="sidebar-nav">
+      <a href="/dashboard.html" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Dashboard</a>
+      <a href="/vault.html" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>Idea Vault</a>
+      <a href="/drafts.html" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>Drafts</a>
+      <a href="/schedule.html" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Schedule</a>
+      <a href="/Published.html" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>Published</a>
+      <a href="/Media.html" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>Media</a>
+    </nav>
+    <div class="sidebar-bottom">
+      <a href="/account.html" class="sidebar-link active" aria-current="page"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Account Settings</a>
+      <div id="sidebar-account-slot" aria-label="Signed-in account"></div>
+    </div>
+  </aside>
+
+  <!-- ── Main content ──────────────────────────────────────── -->
+  <div id="main-content">
+    <div class="profile-page">
+
+      <nav class="account-tabs" aria-label="Account settings">
+        <a href="/account.html" class="account-tab">My account</a>
+        <a href="/profile.html" class="account-tab">Voice profile</a>
+        <a href="/brand.html" class="account-tab">Brand settings</a>
+        <a href="/billing.html" class="account-tab active" aria-current="page">Subscription</a>
+      </nav>
+
+      <h1 class="profile-heading">Subscription</h1>
+      <p class="profile-subheading">Your plan, usage, and billing details.</p>
+
+      <!-- Loading state -->
+      <div id="billing-loading" class="profile-card">
+        <div class="billing-skeleton">
+          <div class="skeleton-line" style="width:40%"></div>
+          <div class="skeleton-line" style="width:60%"></div>
+          <div class="skeleton-line" style="width:30%;margin-top:8px"></div>
+        </div>
+      </div>
+
+      <!-- Loaded content (hidden until data fetched) -->
+      <div id="billing-content" style="display:none">
+
+        <!-- ── Section 1: Plan hero ─────────────────────────── -->
+        <div class="profile-card" id="plan-hero-card">
+
+          <!-- Canceled amber banner (shown only when status=canceled) -->
+          <div id="canceled-banner" class="billing-alert warn" style="display:none">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <span id="canceled-banner-text"></span>
+          </div>
+
+          <!-- Post-checkout success banner -->
+          <div id="success-banner" class="billing-alert info" style="display:none">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+            <span>You're now on Pro. Welcome to ScoutHook Pro!</span>
+          </div>
+
+          <div class="billing-plan-row">
+            <div class="billing-plan-left">
+              <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                <span id="plan-name" class="billing-plan-name"></span>
+                <span id="status-pill" class="billing-status-pill"><span class="billing-status-dot"></span><span id="status-label"></span></span>
+              </div>
+              <span id="plan-sub" class="billing-plan-sub"></span>
+            </div>
+            <div id="plan-price-block" style="text-align:right;display:none">
+              <div class="billing-price"><span id="plan-price"></span></div>
+              <div class="billing-price-period" id="plan-price-period"></div>
+            </div>
+          </div>
+
+          <div id="renewal-line" style="display:none;font-size:13px;color:var(--text-muted);margin-bottom:4px"></div>
+
+          <!-- Pro payment action buttons -->
+          <div id="pro-actions" class="billing-actions" style="display:none">
+            <button type="button" class="btn btn--secondary" id="btn-manage-payment">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="margin-right:5px"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+              Manage payment
+            </button>
+            <button type="button" class="btn btn--secondary" id="btn-view-invoices">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="margin-right:5px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              View invoices
+            </button>
+          </div>
+
+          <!-- Free upgrade button -->
+          <div id="free-actions" class="billing-actions" style="display:none">
+            <button type="button" class="btn btn--primary" id="btn-upgrade">
+              Upgrade to Pro
+            </button>
+          </div>
+        </div>
+
+        <!-- ── Section 2: Usage this month ─────────────────── -->
+        <div class="profile-card">
+          <label class="field-label">Usage this month</label>
+
+          <div style="margin-top:16px" id="usage-section">
+            <!-- Post Generations -->
+            <div class="usage-meter">
+              <div class="usage-meter-header">
+                <span class="usage-meter-label">Post generations</span>
+                <span class="usage-meter-count" id="gen-count">— / —</span>
+              </div>
+              <div class="usage-bar-track">
+                <div class="usage-bar-fill" id="gen-bar" style="width:0%"></div>
+              </div>
+            </div>
+
+            <!-- Visual Creations -->
+            <div class="usage-meter">
+              <div class="usage-meter-header">
+                <span class="usage-meter-label">Visual creations</span>
+                <span class="usage-meter-count" id="visual-count">— / —</span>
+              </div>
+              <div class="usage-bar-track">
+                <div class="usage-bar-fill" id="visual-bar" style="width:0%"></div>
+              </div>
+            </div>
+
+            <!-- Vault Documents -->
+            <div class="usage-meter">
+              <div class="usage-meter-header">
+                <span class="usage-meter-label" id="vault-label">Vault documents</span>
+                <span class="usage-meter-count" id="vault-count">— / —</span>
+              </div>
+              <div class="usage-bar-track">
+                <div class="usage-bar-fill" id="vault-bar" style="width:0%"></div>
+              </div>
+            </div>
+          </div>
+
+          <p class="usage-note" id="reset-note"></p>
+
+          <!-- Free: upgrade nudge when near limits -->
+          <div id="usage-upgrade-nudge" style="display:none;margin-top:12px;padding:10px 12px;border-radius:var(--radius-md);background:rgba(15,118,110,0.06);border:1px solid rgba(15,118,110,0.18);font-size:12px;color:var(--brand)">
+            You're on the Free plan. <button type="button" style="background:none;border:none;padding:0;font-size:12px;font-weight:600;color:var(--brand);cursor:pointer;text-decoration:underline;" id="btn-upgrade-nudge">Upgrade to Pro</button> for higher limits.
+          </div>
+        </div>
+
+        <!-- ── Section 3: Manage / Cancel (Pro) or Upgrade CTA (Free) ── -->
+        <div class="profile-card" id="bottom-card">
+
+          <!-- Pro: cancel zone -->
+          <div id="cancel-zone" style="display:none">
+            <label class="field-label">Manage subscription</label>
+            <p class="cancel-zone-text" style="margin-top:10px" id="cancel-zone-text"></p>
+            <button type="button" class="btn btn--ghost btn-danger" id="btn-cancel-subscription">
+              Cancel subscription
+            </button>
+          </div>
+
+          <!-- Pro (already canceled): info message -->
+          <div id="canceled-info" class="billing-alert warn" style="display:none">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <span id="canceled-info-text"></span>
+          </div>
+
+          <!-- Free: upgrade CTA -->
+          <div id="upgrade-cta" style="display:none">
+            <label class="field-label">Upgrade to Pro</label>
+            <ul class="upgrade-feature-list" style="margin-top:12px">
+              <li>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+                40 post generations per month
+              </li>
+              <li>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+                20 visual creations per month
+              </li>
+              <li>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+                10 vault documents per month
+              </li>
+              <li>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+                Priority support and early access to new features
+              </li>
+            </ul>
+            <p id="founding-note" style="font-size:12px;color:var(--text-muted);margin:0 0 16px 0;display:none"></p>
+            <button type="button" class="btn btn--primary" id="btn-upgrade-cta">
+              View plans &amp; upgrade
+            </button>
+          </div>
+
+        </div>
+
+      </div><!-- /billing-content -->
+
+    </div><!-- /profile-page -->
+
+    <footer class="app-footer" role="contentinfo">
+      <div class="app-footer-inner">
+        <a href="https://www.scouthook.com/privacy" target="_blank" rel="noopener">Privacy Policy</a>
+        <span class="app-footer-sep">|</span>
+        <a href="https://www.scouthook.com/terms" target="_blank" rel="noopener">Terms of Service</a>
+        <p class="app-footer-legal">© 2026 CopyPower Digital LLP. ScoutHook is an AI-powered authority engine.</p>
+      </div>
+    </footer>
+  </div><!-- /main-content -->
+
+  <!-- ── Cancel confirmation modal ──────────────────────────── -->
+  <div class="cancel-modal-overlay" id="cancel-modal" role="dialog" aria-modal="true" aria-labelledby="cancel-modal-title">
+    <div class="cancel-modal">
+      <h2 class="cancel-modal-title" id="cancel-modal-title">Cancel your subscription?</h2>
+      <p class="cancel-modal-body" id="cancel-modal-body"></p>
+      <div class="cancel-modal-actions">
+        <button type="button" class="btn btn--primary" id="btn-keep-sub">Keep my subscription</button>
+        <button type="button" class="btn-danger" id="btn-confirm-cancel">Yes, cancel</button>
+      </div>
+      <div id="cancel-error" style="display:none;margin-top:12px;font-size:12px;color:#DC2626;text-align:right"></div>
+    </div>
+  </div>
+
+  <script src="/js/session.js"></script>
+  <script src="/js/ui-toast.js"></script>
+  <script src="/js/account-bar.js"></script>
+  <script>
+  (() => {
+    // ── Helpers ────────────────────────────────────────────────
+    function fmt(date) {
+      return new Date(date).toLocaleDateString(undefined, {
+        month: 'long', day: 'numeric', year: 'numeric',
+      });
+    }
+
+    function pct(current, limit) {
+      if (!limit || limit === Infinity) return 0;
+      return Math.min(100, Math.round((current / limit) * 100));
+    }
+
+    function fillBar(barEl, countEl, current, limit, suffix) {
+      const p = pct(current, limit);
+      barEl.style.width = p + '%';
+      barEl.classList.remove('warn', 'crit');
+      if (p >= 90) barEl.classList.add('crit');
+      else if (p >= 75) barEl.classList.add('warn');
+      const limitLabel = limit == null ? '∞' : limit;
+      countEl.textContent = `${current} / ${limitLabel}${suffix || ''}`;
+    }
+
+    function resetNote() {
+      const now = new Date();
+      const next = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      return `Resets on ${fmt(next)}`;
+    }
+
+    // ── Config + price map (single fetch from /api/billing/config) ──
+    async function loadConfig() {
+      try {
+        const r = await fetch('/api/billing/config');
+        if (!r.ok) return { map: {}, cfg: {} };
+        const d = await r.json();
+        const map = {};
+        if (d.priceIdFounding1) map[d.priceIdFounding1] = { label: '$29', period: 'per month · Founding Member' };
+        if (d.priceIdFounding2) map[d.priceIdFounding2] = { label: '$39', period: 'per month · Founding Member' };
+        if (d.priceIdMonthly)   map[d.priceIdMonthly]   = { label: `$${d.proMonthlyPrice}`, period: 'per month' };
+        if (d.priceIdYearly)    map[d.priceIdYearly]    = { label: '$490', period: 'per year' };
+        return { map, cfg: d };
+      } catch { return { map: {}, cfg: {} }; }
+    }
+
+    // ── Open Paddle portal ─────────────────────────────────────
+    async function openPortal(btn) {
+      const orig = btn.innerHTML;  // preserve SVG icons
+      btn.disabled = true;
+      btn.innerHTML = 'Loading…';
+      try {
+        const r = await fetch('/api/billing/portal');
+        const d = await r.json();
+        if (d.portalUrl) window.open(d.portalUrl, '_blank', 'noopener');
+        else if (window.toast) window.toast.error('Could not open billing portal. Please try again.');
+      } catch {
+        if (window.toast) window.toast.error('Could not open billing portal. Please try again.');
+      }
+      btn.disabled = false;
+      btn.innerHTML = orig;
+    }
+
+    // ── Render ─────────────────────────────────────────────────
+    async function render(sub, priceMap) {
+      const isPro = sub.plan === 'pro';
+      const isCanceled = sub.status === 'canceled';
+
+      // Plan hero
+      const planName     = document.getElementById('plan-name');
+      const statusPill   = document.getElementById('status-pill');
+      const statusLabel  = document.getElementById('status-label');
+      const planSub      = document.getElementById('plan-sub');
+      const priceBlock   = document.getElementById('plan-price-block');
+      const planPrice    = document.getElementById('plan-price');
+      const planPricePeriod = document.getElementById('plan-price-period');
+      const renewalLine  = document.getElementById('renewal-line');
+      const canceledBanner = document.getElementById('canceled-banner');
+      const canceledBannerText = document.getElementById('canceled-banner-text');
+
+      if (isPro) {
+        planName.textContent = 'Pro';
+
+        // Status pill
+        const statusMap = {
+          active:   { label: 'Active',    cls: 'active'   },
+          trialing: { label: 'Trial',     cls: 'trialing' },
+          past_due: { label: 'Past due',  cls: 'past_due' },
+          canceled: { label: 'Canceled',  cls: 'canceled' },
+          paused:   { label: 'Paused',    cls: 'past_due' },
+        };
+        const st = statusMap[sub.status] || { label: sub.status, cls: 'active' };
+        statusPill.className = `billing-status-pill ${st.cls}`;
+        statusLabel.textContent = st.label;
+
+        // Price
+        const priceInfo = sub.price_id && priceMap[sub.price_id];
+        if (priceInfo) {
+          priceBlock.style.display = '';
+          planPrice.textContent = priceInfo.label;
+          planPricePeriod.textContent = priceInfo.period;
+        }
+
+        // Plan sub-label: founding member tier
+        if (sub.price_id && priceMap[sub.price_id]?.period?.includes('Founding')) {
+          planSub.textContent = 'Founding Member';
+        }
+
+        // Renewal / access line
+        if (sub.current_period_end) {
+          renewalLine.style.display = '';
+          if (isCanceled) {
+            renewalLine.textContent = `Pro access until ${fmt(sub.current_period_end)}`;
+          } else {
+            renewalLine.textContent = `Renews ${fmt(sub.current_period_end)}`;
+          }
+        }
+
+        // Canceled banner
+        if (isCanceled && sub.current_period_end) {
+          canceledBanner.style.display = '';
+          canceledBannerText.textContent =
+            `Your subscription has been canceled. You'll have Pro access until ${fmt(sub.current_period_end)}.`;
+        }
+
+        // Pro payment actions
+        document.getElementById('pro-actions').style.display = '';
+
+      } else {
+        planName.textContent = 'Free';
+        statusPill.className = 'billing-status-pill free';
+        statusLabel.textContent = 'Free plan';
+        planSub.textContent = 'Limited features — upgrade to unlock more.';
+
+        // Free upgrade button
+        document.getElementById('free-actions').style.display = '';
+      }
+
+      // ── Usage meters ──────────────────────────────────────────
+      const gen   = sub.generations  || { current: 0, limit: 3 };
+      const vis   = sub.visuals       || { current: 0, limit: isPro ? 20 : 3 };
+      const vault = sub.vault_docs    || { current: 0, limit: isPro ? 10 : 1 };
+
+      fillBar(
+        document.getElementById('gen-bar'),
+        document.getElementById('gen-count'),
+        gen.current, gen.limit
+      );
+      fillBar(
+        document.getElementById('visual-bar'),
+        document.getElementById('visual-count'),
+        vis.current, vis.limit
+      );
+
+      // Vault: free plan is total lifetime, not monthly
+      const vaultLabel = document.getElementById('vault-label');
+      if (!isPro) vaultLabel.textContent = 'Vault documents (total)';
+      fillBar(
+        document.getElementById('vault-bar'),
+        document.getElementById('vault-count'),
+        vault.current, vault.limit
+      );
+
+      document.getElementById('reset-note').textContent = isPro ? resetNote() : '';
+
+      // Free nudge
+      if (!isPro) {
+        document.getElementById('usage-upgrade-nudge').style.display = '';
+      }
+
+      // ── Bottom card ───────────────────────────────────────────
+      if (isPro) {
+        if (isCanceled) {
+          // Already canceled — show info only
+          const ci = document.getElementById('canceled-info');
+          ci.style.display = '';
+          document.getElementById('canceled-info-text').textContent =
+            sub.current_period_end
+              ? `Your subscription is canceled. Access continues until ${fmt(sub.current_period_end)}. No further charges.`
+              : 'Your subscription is canceled. No further charges.';
+          document.getElementById('cancel-zone').style.display = 'none';
+          document.getElementById('bottom-card').style.display = '';
+        } else {
+          // Show cancel zone
+          const cz = document.getElementById('cancel-zone');
+          cz.style.display = '';
+          const czText = document.getElementById('cancel-zone-text');
+          czText.textContent = sub.current_period_end
+            ? `Your subscription renews automatically on ${fmt(sub.current_period_end)}. You can cancel anytime — you'll retain Pro access until the end of your current billing period.`
+            : 'You can cancel anytime — you\'ll retain Pro access until the end of your current billing period.';
+          document.getElementById('bottom-card').style.display = '';
+        }
+      } else {
+        // Free: upgrade CTA
+        document.getElementById('upgrade-cta').style.display = '';
+        document.getElementById('bottom-card').style.display = '';
+      }
+
+      // Show content, hide loading
+      document.getElementById('billing-loading').style.display = 'none';
+      document.getElementById('billing-content').style.display = '';
+    }
+
+    // ── Cancel modal logic ─────────────────────────────────────
+    let _subData = null;
+
+    function openCancelModal() {
+      const modal = document.getElementById('cancel-modal');
+      const body  = document.getElementById('cancel-modal-body');
+      const periodEnd = _subData?.current_period_end;
+      body.textContent = periodEnd
+        ? `You'll keep Pro access until ${fmt(periodEnd)}. After that, your account will switch to the Free plan.`
+        : 'You\'ll keep Pro access until the end of your current billing period. After that, your account will switch to the Free plan.';
+      document.getElementById('cancel-error').style.display = 'none';
+      modal.classList.add('open');
+    }
+
+    function closeCancelModal() {
+      document.getElementById('cancel-modal').classList.remove('open');
+    }
+
+    document.getElementById('btn-keep-sub').addEventListener('click', closeCancelModal);
+    document.getElementById('cancel-modal').addEventListener('click', (e) => {
+      if (e.target === e.currentTarget) closeCancelModal();
+    });
+
+    document.getElementById('btn-confirm-cancel').addEventListener('click', async () => {
+      const btn = document.getElementById('btn-confirm-cancel');
+      const errEl = document.getElementById('cancel-error');
+      btn.disabled = true;
+      btn.textContent = 'Canceling…';
+      errEl.style.display = 'none';
+      try {
+        const r = await fetch('/api/billing/cancel', { method: 'POST' });
+        const d = await r.json();
+        if (d.ok) {
+          closeCancelModal();
+          if (window.toast) window.toast.success('Subscription canceled. You keep Pro until the end of this billing period.');
+          // Re-fetch and re-render
+          const r2 = await fetch('/api/billing/subscription');
+          const d2 = await r2.json();
+          _subData = d2;
+          // Reset all toggled elements before re-render
+          ['cancel-zone','canceled-info','upgrade-cta','canceled-banner',
+           'pro-actions','free-actions','plan-price-block','renewal-line',
+           'usage-upgrade-nudge'].forEach(id => {
+            document.getElementById(id).style.display = 'none';
+          });
+          await render(d2, _priceMap);
+        } else {
+          errEl.textContent = 'Could not cancel. Please try again or contact support.';
+          errEl.style.display = '';
+          btn.disabled = false;
+          btn.textContent = 'Yes, cancel';
+        }
+      } catch {
+        errEl.textContent = 'Network error. Please try again.';
+        errEl.style.display = '';
+        btn.disabled = false;
+        btn.textContent = 'Yes, cancel';
+      }
+    });
+
+    // ── Wire up buttons ────────────────────────────────────────
+    document.getElementById('btn-manage-payment').addEventListener('click', (e) => openPortal(e.currentTarget));
+    document.getElementById('btn-view-invoices').addEventListener('click', (e) => openPortal(e.currentTarget));
+
+    const openModal = () => window.PricingModal?.open();
+    document.getElementById('btn-upgrade').addEventListener('click', openModal);
+    document.getElementById('btn-upgrade-cta').addEventListener('click', openModal);
+    document.getElementById('btn-upgrade-nudge').addEventListener('click', openModal);
+
+    document.getElementById('btn-cancel-subscription').addEventListener('click', openCancelModal);
+
+    // ── Success banner after checkout ──────────────────────────
+    (() => {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('checkout') === 'success') {
+        document.getElementById('success-banner').style.display = '';
+        window.history.replaceState({}, '', '/billing.html');
+      }
+    })();
+
+    // ── Bootstrap ──────────────────────────────────────────────
+    let _priceMap = {};
+
+    (async () => {
+      try {
+        const [{ map, cfg }, subRes] = await Promise.all([
+          loadConfig(),
+          fetch('/api/billing/subscription'),
+        ]);
+        _priceMap = map;
+
+        // Founding note (shown by render for free users)
+        if (cfg.spotsRemaining > 0) {
+          const noteEl = document.getElementById('founding-note');
+          noteEl.style.display = '';
+          noteEl.textContent =
+            `Founding member pricing available — ${cfg.spotsRemaining} spot${cfg.spotsRemaining === 1 ? '' : 's'} left at $${cfg.proMonthlyPrice}/month.`;
+        }
+
+        if (!subRes.ok) throw new Error('fetch failed');
+        const d = await subRes.json();
+        _subData = d;
+        await render(d, _priceMap);
+      } catch {
+        document.getElementById('billing-loading').innerHTML =
+          '<p style="font-size:13px;color:var(--text-muted)">Unable to load subscription info. Please refresh.</p>';
+      }
+    })();
+  })();
+  </script>
+</body>
+</html>

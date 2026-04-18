@@ -193,7 +193,7 @@ router.post('/', async (req, res) => {
       plan: planCheck.plan,
       current: planCheck.current,
       limit: planCheck.limit,
-      upgrade_url: '/pricing.html',
+      upgrade_url: '/billing.html',
     });
   }
 
@@ -387,7 +387,7 @@ router.post('/regenerate/:postId', async (req, res) => {
       plan: planCheck.plan,
       current: planCheck.current,
       limit: planCheck.limit,
-      upgrade_url: '/pricing.html',
+      upgrade_url: '/billing.html',
     });
   }
 

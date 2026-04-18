@@ -56,7 +56,7 @@ router.post('/upload', async (req, res) => {
       plan: planCheck.plan,
       current: planCheck.current,
       limit: planCheck.limit,
-      upgrade_url: '/pricing.html',
+      upgrade_url: '/billing.html',
     });
   }
 

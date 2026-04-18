@@ -44,12 +44,9 @@ if (allowedOrigin) {
   app.use(cors({ origin: allowedOrigin, credentials: true }));
 }
 
-// ---------------------------------------------------------------------------
-// Webhook routes — MUST be registered before express.json() so that raw body
-// is preserved for Paddle HMAC signature verification.
-// ---------------------------------------------------------------------------
-
-app.use('/webhooks/paddle', require('./routes/webhooks/paddle'));
+// Paddle webhook route removed — subscription state is managed entirely via
+// direct Paddle API calls in /api/billing/sync (post-checkout) and
+// /api/billing/subscription (stale-refresh on every subscription GET).
 
 // ---------------------------------------------------------------------------
 // Middleware

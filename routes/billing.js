@@ -79,9 +79,65 @@ router.get('/config', async (req, res) => {
 // ---------------------------------------------------------------------------
 // GET /api/billing/subscription
 // Returns plan, status, period end, and current usage vs limits.
+// Live-syncs from Paddle when the stored subscription data is stale:
+//   - current_period_end has passed (renewal likely happened), or
+//   - updated_at is more than 24 hours old (catch any Paddle-side changes).
+// This removes the need for webhooks to keep renewal state current.
 // ---------------------------------------------------------------------------
 router.get('/subscription', requireAuth, async (req, res) => {
   const userId = req.userId;
+
+  // Check if a live refresh is needed before reading from DB
+  const { db } = require('../db');
+  const proPriceIds = [
+    process.env.PADDLE_PRICE_ID_FOUNDING_1,
+    process.env.PADDLE_PRICE_ID_FOUNDING_2,
+    process.env.PADDLE_PRICE_ID_MONTHLY,
+    process.env.PADDLE_PRICE_ID_YEARLY,
+  ].filter(Boolean);
+
+  try {
+    const row = await db.prepare(
+      'SELECT paddle_customer_id, paddle_subscription_id, current_period_end, updated_at FROM user_subscriptions WHERE user_id = ?'
+    ).get(userId);
+
+    if (row?.paddle_subscription_id) {
+      const now = Date.now();
+      const periodEnd  = row.current_period_end ? new Date(row.current_period_end).getTime() : 0;
+      const updatedAt  = row.updated_at         ? new Date(row.updated_at).getTime()         : 0;
+      const stale24h   = (now - updatedAt) > 24 * 60 * 60 * 1000;
+      const periodOver = periodEnd > 0 && periodEnd < now;
+
+      if (stale24h || periodOver) {
+        try {
+          const paddle = getPaddle();
+          const subscription = await paddle.subscriptions.get(row.paddle_subscription_id);
+          if (subscription) {
+            const priceId = subscription.items?.[0]?.price?.id ?? null;
+            const plan    = !priceId ? 'pro' : (proPriceIds.includes(priceId) ? 'pro' : 'free');
+            await upsertSubscription({
+              userId,
+              paddleCustomerId:     subscription.customerId,
+              paddleSubscriptionId: subscription.id,
+              plan,
+              status:               subscription.status,
+              currentPeriodEnd:     subscription.currentBillingPeriod?.endsAt
+                                      ? new Date(subscription.currentBillingPeriod.endsAt)
+                                      : null,
+              canceledAt:           subscription.canceledAt ? new Date(subscription.canceledAt) : null,
+              priceId,
+            });
+          }
+        } catch (syncErr) {
+          // Non-fatal — serve cached DB value on Paddle API errors
+          console.warn('[billing] subscription live-sync failed (non-fatal):', syncErr.message);
+        }
+      }
+    }
+  } catch (checkErr) {
+    console.warn('[billing] subscription stale-check failed (non-fatal):', checkErr.message);
+  }
+
   const [sub, genCheck, vaultCheck] = await Promise.all([
     getUserSubscription(userId),
     canGeneratePost(userId),
@@ -177,13 +233,35 @@ router.post('/cancel', requireAuth, async (req, res) => {
 
   const paddle = getPaddle();
 
+  let canceledSubscription;
   try {
-    await paddle.subscriptions.cancel(sub.paddle_subscription_id, {
+    canceledSubscription = await paddle.subscriptions.cancel(sub.paddle_subscription_id, {
       effectiveFrom: 'next_billing_period',
     });
   } catch (err) {
     console.error('[billing] paddle.subscriptions.cancel error:', err.message);
     return res.status(502).json({ ok: false, error: 'paddle_error', detail: err.message });
+  }
+
+  // Write the cancellation directly — no webhook needed.
+  // Keep plan='pro' so the user retains access until current_period_end.
+  try {
+    await upsertSubscription({
+      userId,
+      paddleCustomerId:     sub.paddle_customer_id,
+      paddleSubscriptionId: sub.paddle_subscription_id,
+      plan:                 'pro',
+      status:               'canceled',
+      currentPeriodEnd:     canceledSubscription?.currentBillingPeriod?.endsAt
+                              ? new Date(canceledSubscription.currentBillingPeriod.endsAt)
+                              : (sub.current_period_end ? new Date(sub.current_period_end) : null),
+      canceledAt:           new Date(),
+      priceId:              sub.price_id ?? null,
+    });
+  } catch (dbErr) {
+    // The Paddle cancellation already succeeded — log but don't fail the response.
+    // The next /subscription GET will live-sync and pick up the canceled status.
+    console.error('[billing] cancel upsert error (non-fatal, will re-sync):', dbErr.message);
   }
 
   return res.json({ ok: true });

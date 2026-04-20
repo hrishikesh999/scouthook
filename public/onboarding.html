@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Get started — Scouthook</title>
+  <link rel="stylesheet" href="/css/main.css" />
+  <link rel="stylesheet" href="/css/onboarding.css" />
+</head>
+<body class="ob-shell">
+
+  <!-- ── Header ──────────────────────────────────────────── -->
+  <header class="ob-header">
+    <div class="ob-logo">Scouthook</div>
+
+    <!-- Step progress dots (shown from screen 2 onward) -->
+    <div id="ob-step-dots" class="ob-step-dots" hidden aria-hidden="true">
+      <span class="ob-dot" data-step="2"></span>
+      <span class="ob-dot" data-step="3"></span>
+      <span class="ob-dot" data-step="4b"></span>
+    </div>
+  </header>
+
+  <!-- ── Screen 1: Role selection ────────────────────────── -->
+  <section id="ob-screen-1" class="ob-screen active" aria-label="Step 1: Your role">
+    <div class="ob-content ob-content--wide">
+      <h1 class="ob-headline">First, tell us about yourself.</h1>
+      <p class="ob-subheadline">We'll shape your experience around what you actually do.</p>
+
+      <div class="ob-role-grid" role="group" aria-label="Select your role">
+        <button class="ob-role-card" data-role="consultant" type="button" aria-pressed="false">
+          <span class="ob-role-emoji" aria-hidden="true">🎯</span>
+          <span class="ob-role-label">Consultant</span>
+          <span class="ob-role-desc">Strategy, advisory or fractional work</span>
+        </button>
+        <button class="ob-role-card" data-role="coach" type="button" aria-pressed="false">
+          <span class="ob-role-emoji" aria-hidden="true">🧭</span>
+          <span class="ob-role-label">Coach</span>
+          <span class="ob-role-desc">Leadership, executive or business coaching</span>
+        </button>
+        <button class="ob-role-card" data-role="freelancer" type="button" aria-pressed="false">
+          <span class="ob-role-emoji" aria-hidden="true">💻</span>
+          <span class="ob-role-label">Freelancer</span>
+          <span class="ob-role-desc">Creative, technical or service-based work</span>
+        </button>
+        <button class="ob-role-card" data-role="founder" type="button" aria-pressed="false">
+          <span class="ob-role-emoji" aria-hidden="true">🚀</span>
+          <span class="ob-role-label">Founder or Owner</span>
+          <span class="ob-role-desc">Building a business and a personal brand</span>
+        </button>
+        <button class="ob-role-card" data-role="other" type="button" aria-pressed="false">
+          <span class="ob-role-emoji" aria-hidden="true">✏️</span>
+          <span class="ob-role-label">Something else</span>
+          <span class="ob-role-desc">Tell us in your own words</span>
+        </button>
+      </div>
+
+      <div id="ob-role-custom-wrap" class="ob-role-custom-wrap" hidden>
+        <label class="ob-label" for="ob-role-custom">What do you do?</label>
+        <input id="ob-role-custom" class="ob-field" type="text"
+               placeholder="A few words is fine, e.g. Product Manager, Investor, Academic" />
+      </div>
+
+      <p id="ob-s1-error" class="ob-field-error" hidden role="alert">Please select a role to continue.</p>
+
+      <button id="ob-s1-cta" class="ob-btn-primary" type="button">Continue →</button>
+    </div>
+  </section>
+
+  <!-- ── Screen 2: Minimal voice profile ─────────────────── -->
+  <section id="ob-screen-2" class="ob-screen" aria-label="Step 2: Your audience">
+    <div class="ob-content">
+      <h1 class="ob-headline">Two questions. Then we generate your first post.</h1>
+      <p class="ob-subheadline">This is what Scouthook uses to shape every post around your audience and your niche.</p>
+
+      <div class="ob-field-group">
+        <label class="ob-label" for="ob-niche">What do you write about?</label>
+        <input id="ob-niche" class="ob-field" type="text"
+               placeholder="e.g. Helping B2B companies fix their sales process" />
+      </div>
+
+      <div class="ob-field-group">
+        <label class="ob-label" for="ob-audience">Who is your ideal reader?</label>
+        <input id="ob-audience" class="ob-field" type="text"
+               placeholder="e.g. Founders and sales leaders at growing startups" />
+      </div>
+
+      <p id="ob-s2-error" class="ob-field-error" hidden role="alert">Please fill in both fields to continue.</p>
+
+      <button id="ob-s2-cta" class="ob-btn-primary" type="button">Build my profile</button>
+      <div id="ob-s2-loading" class="ob-loading-state" hidden aria-live="polite">Building your voice profile...</div>
+    </div>
+  </section>
+
+  <!-- ── Screen 3: First post generation ─────────────────── -->
+  <section id="ob-screen-3" class="ob-screen ob-screen--split" aria-label="Step 3: Generate your first post">
+
+    <!-- Left: input -->
+    <div class="ob-content ob-content--left">
+      <div class="ob-voice-indicator" aria-hidden="true">
+        <span class="ob-voice-dot"></span>
+        Built on your voice profile
+      </div>
+
+      <h1 class="ob-headline">Your first post starts here.</h1>
+      <p class="ob-subheadline">Pick a prompt or type your own idea. One real thought from your experience is enough.</p>
+
+      <div class="ob-chips" role="list">
+        <button class="ob-chip" type="button" role="listitem"
+                data-prompt="A mistake I made early in my career that taught me everything">
+          "A mistake I made early in my career that taught me everything"
+        </button>
+        <button class="ob-chip" type="button" role="listitem"
+                data-prompt="The one thing most of my clients get wrong before they hire me">
+          "The one thing most of my clients get wrong before they hire me"
+        </button>
+        <button class="ob-chip" type="button" role="listitem"
+                data-prompt="What I wish someone had told me when I started out">
+          "What I wish someone had told me when I started out"
+        </button>
+      </div>
+
+      <textarea id="ob-idea" class="ob-textarea" rows="4"
+                placeholder="Or type your own thought here..."></textarea>
+
+      <p id="ob-s3-error" class="ob-field-error" hidden role="alert">Add a thought before generating.</p>
+
+      <button id="ob-s3-cta" class="ob-btn-primary" type="button" style="margin-top:16px">
+        Generate my first post →
+      </button>
+    </div>
+
+    <!-- Right: post preview (shows skeleton while generating; stays visible on 4b) -->
+    <div class="ob-post-preview" id="ob-post-preview" aria-live="polite" aria-label="Post preview">
+      <div id="ob-preview-empty" class="ob-preview-empty">
+        <p>Your post will appear here</p>
+      </div>
+      <div id="ob-preview-skeleton" class="ob-preview-skeleton" hidden aria-busy="true" aria-label="Generating post">
+        <div class="ob-skeleton-line" style="width:60%"></div>
+        <div class="ob-skeleton-line" style="width:90%"></div>
+        <div class="ob-skeleton-line" style="width:75%"></div>
+        <div class="ob-skeleton-line" style="width:85%"></div>
+        <div class="ob-skeleton-line" style="width:50%"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Screen 4a: Celebration ───────────────────────────── -->
+  <section id="ob-screen-4a" class="ob-screen ob-screen--center" aria-label="Post generated">
+    <div class="ob-content ob-content--center">
+      <div class="ob-checkmark-wrap" aria-hidden="true">
+        <svg class="ob-checkmark" viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle class="ob-check-circle" cx="26" cy="26" r="25"/>
+          <path   class="ob-check-tick"   d="M14 27l8 8 16-16"/>
+        </svg>
+      </div>
+      <h1 class="ob-headline">Your first post is ready.</h1>
+      <p class="ob-subheadline">It passed all 15 quality checks. No AI-sounding language. No weak hook. Just a post worth publishing.</p>
+    </div>
+  </section>
+
+  <!-- ── Screen 4b: Post + score ──────────────────────────── -->
+  <section id="ob-screen-4b" class="ob-screen" aria-label="Your generated post">
+    <div class="ob-content" style="max-width:600px">
+
+      <p class="ob-post-context">
+        This is what your ideas look like when they're shaped for LinkedIn. Read it.
+        If it sounds like you, you're ready to publish.
+      </p>
+
+      <!-- Quality score bar — classes shared with generate.html via main.css -->
+      <div id="ob-score-bar" role="region" aria-label="Quality score">
+        <div class="score-left">
+          <div id="ob-score-number" class="fail" aria-live="polite" aria-label="Quality score">0</div>
+          <div class="score-label">Quality score</div>
+        </div>
+        <div class="score-right">
+          <div class="score-top-row">
+            <span id="ob-archetype-badge" class="archetype-badge" style="display:none"></span>
+            <span id="ob-passfail-pill"   class="passfail-pill pass"></span>
+          </div>
+          <button id="ob-suggestions-toggle" class="suggestions-toggle"
+                  aria-expanded="false">▸ 0 suggestions to review</button>
+          <div id="ob-suggestions-list" class="suggestions-list" role="list"></div>
+        </div>
+      </div>
+
+      <!-- Generated post -->
+      <textarea id="ob-post-output" class="ob-textarea" readonly
+                aria-label="Generated post" rows="10"></textarea>
+
+      <p class="ob-post-upsell">
+        Want future posts to sound even more like you? Add your writing samples and
+        Scouthook gets sharper every time.
+      </p>
+
+      <div class="ob-cta-row">
+        <button id="ob-s4b-linkedin" class="ob-btn-primary" type="button">
+          Connect LinkedIn to publish this
+        </button>
+        <button id="ob-s4b-draft" class="ob-btn-secondary" type="button">
+          Save as draft &amp; add writing samples
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Screen 5: LinkedIn connection ────────────────────── -->
+  <section id="ob-screen-5" class="ob-screen" aria-label="Connect LinkedIn">
+    <div class="ob-content">
+      <h1 class="ob-headline">Connect your LinkedIn account.</h1>
+      <p class="ob-subheadline">One click. Takes 30 seconds. You stay in control the whole time.</p>
+
+      <p class="ob-body-copy">
+        Scouthook connects via LinkedIn's official login — the same secure method used by
+        every major publishing tool. We request permission to publish and schedule posts on
+        your behalf. Nothing else.
+      </p>
+      <p class="ob-body-copy">
+        We never read your messages, access your connections list, or store your password.
+        You can review and revoke access from your LinkedIn settings at any time.
+      </p>
+
+      <a class="ob-btn-primary ob-linkedin-btn" href="/api/linkedin/connect?from=onboarding">
+        Connect with LinkedIn
+      </a>
+      <p class="ob-disconnect-note">You can disconnect at any time from Account Settings.</p>
+
+      <button id="ob-s5-skip" class="ob-skip-link" type="button">
+        Skip for now — I'll connect before I publish
+      </button>
+    </div>
+  </section>
+
+  <!-- ── Screen 6: Voice deepening ────────────────────────── -->
+  <section id="ob-screen-6" class="ob-screen" aria-label="Deepen your voice profile">
+    <div class="ob-content" style="max-width:600px">
+      <h1 class="ob-headline">Make every post sound more like you.</h1>
+      <p class="ob-subheadline">
+        Your first post was built on the basics. These three things help Scouthook go deeper.
+        All optional — add what you have, skip what you don't.
+      </p>
+
+      <div class="ob-field-group">
+        <label class="ob-label" for="ob-pain">What keeps your audience up at night?</label>
+        <textarea id="ob-pain" class="ob-textarea ob-textarea--sm" rows="3"
+                  placeholder="e.g. They're generating leads but none of them convert into real clients"></textarea>
+        <p class="ob-helper">The more specific this is, the more your posts will resonate with exactly the right people.</p>
+      </div>
+
+      <div class="ob-field-group">
+        <label class="ob-label" for="ob-contrarian">What's your contrarian view?</label>
+        <textarea id="ob-contrarian" class="ob-textarea ob-textarea--sm" rows="3"
+                  placeholder="e.g. Most consultants don't have a visibility problem — they have a clarity problem"></textarea>
+        <p class="ob-helper">Your honest take on something most people in your field get wrong. Used to generate your strongest posts.</p>
+      </div>
+
+      <div class="ob-field-group">
+        <label class="ob-label" for="ob-samples">Paste 2–3 of your best LinkedIn posts</label>
+        <textarea id="ob-samples" class="ob-textarea ob-textarea--lg" rows="8"
+                  placeholder="Paste your posts here, separated by a blank line. Scouthook uses these to learn how you write — they are never shared or returned via the API."></textarea>
+        <p class="ob-helper">No LinkedIn posts yet? Paste anything you've written — an email, a proposal intro, a message you're proud of.</p>
+      </div>
+
+      <button id="ob-s6-cta" class="ob-btn-primary" type="button">Complete my voice profile</button>
+      <div id="ob-s6-loading" class="ob-loading-state" hidden aria-live="polite">
+        Scouthook is learning your voice...
+      </div>
+
+      <button id="ob-s6-skip" class="ob-skip-link" type="button">
+        Skip for now — I'll do this later
+      </button>
+    </div>
+  </section>
+
+  <!-- ── Screen: Confirmation / complete ──────────────────── -->
+  <section id="ob-screen-confirm" class="ob-screen ob-screen--center" aria-label="Setup complete">
+    <div class="ob-content ob-content--center">
+      <div class="ob-checkmark-wrap" aria-hidden="true">
+        <svg class="ob-checkmark" viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle class="ob-check-circle" cx="26" cy="26" r="25"/>
+          <path   class="ob-check-tick"   d="M14 27l8 8 16-16"/>
+        </svg>
+      </div>
+      <h1 class="ob-headline">Your voice profile is complete.</h1>
+      <p class="ob-subheadline">
+        Every post from here gets sharper. Your draft is waiting whenever you're ready to publish.
+      </p>
+      <button id="ob-goto-draft" class="ob-btn-primary" type="button">Go to my draft →</button>
+    </div>
+  </section>
+
+  <script src="/js/session.js"></script>
+  <script src="/js/onboarding.js"></script>
+</body>
+</html>

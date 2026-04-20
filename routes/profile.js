@@ -20,7 +20,7 @@ router.get('/:user_id', async (req, res) => {
   }
 
   const profile = await db
-    .prepare('SELECT audience_role, audience_pain, content_niche, contrarian_view, voice_fingerprint, brand_bg, brand_accent, brand_text, brand_name, brand_logo FROM user_profiles WHERE user_id = ? AND tenant_id = ?')
+    .prepare('SELECT audience_role, audience_pain, content_niche, contrarian_view, voice_fingerprint, brand_bg, brand_accent, brand_text, brand_name, brand_logo, user_role, onboarding_complete FROM user_profiles WHERE user_id = ? AND tenant_id = ?')
     .get(user_id, tenantId);
 
   if (!profile) {
@@ -30,16 +30,18 @@ router.get('/:user_id', async (req, res) => {
   return res.json({
     ok: true,
     profile: {
-      audience_role:   profile.audience_role,
-      audience_pain:   profile.audience_pain,
-      content_niche:   profile.content_niche,
-      contrarian_view: profile.contrarian_view,
-      has_fingerprint: !!profile.voice_fingerprint,
-      brand_bg:        profile.brand_bg     || '#0F1A3C',
-      brand_accent:    profile.brand_accent || '#0D7A5F',
-      brand_text:      profile.brand_text   || '#F0F4FF',
-      brand_name:      profile.brand_name   || null,
-      brand_logo:      profile.brand_logo   || null,
+      audience_role:       profile.audience_role,
+      audience_pain:       profile.audience_pain,
+      content_niche:       profile.content_niche,
+      contrarian_view:     profile.contrarian_view,
+      has_fingerprint:     !!profile.voice_fingerprint,
+      brand_bg:            profile.brand_bg     || '#0F1A3C',
+      brand_accent:        profile.brand_accent || '#0D7A5F',
+      brand_text:          profile.brand_text   || '#F0F4FF',
+      brand_name:          profile.brand_name   || null,
+      brand_logo:          profile.brand_logo   || null,
+      user_role:           profile.user_role    || null,
+      onboarding_complete: !!profile.onboarding_complete,
     },
   });
 });
@@ -58,10 +60,12 @@ router.post('/', async (req, res) => {
   }
 
   const { writing_samples, contrarian_view, audience_role, audience_pain, content_niche,
-          brand_bg, brand_accent, brand_text, brand_name, brand_logo } = req.body;
+          brand_bg, brand_accent, brand_text, brand_name, brand_logo,
+          user_role, onboarding_complete } = req.body;
 
   if (!audience_role && !audience_pain && !content_niche && !writing_samples && !contrarian_view
-      && !brand_bg && !brand_accent && !brand_text && !brand_name && brand_logo === undefined) {
+      && !brand_bg && !brand_accent && !brand_text && !brand_name && brand_logo === undefined
+      && user_role === undefined && onboarding_complete === undefined) {
     return res.status(400).json({ ok: false, error: 'no_fields_provided' });
   }
 
@@ -72,25 +76,33 @@ router.post('/', async (req, res) => {
 
   const samplesChanged = writing_samples && writing_samples !== existing?.writing_samples;
 
+  // Normalise onboarding_complete: accept 1/true/"1"/"true" → 1, else keep NULL so COALESCE
+  // doesn't overwrite an existing 1 with NULL when the field is omitted from the request.
+  const obComplete = (onboarding_complete === 1 || onboarding_complete === true
+    || onboarding_complete === '1' || onboarding_complete === 'true') ? 1 : null;
+
   // Upsert profile row
   const result = await db.prepare(`
-    INSERT INTO user_profiles (user_id, tenant_id, writing_samples, contrarian_view, audience_role, audience_pain, content_niche, brand_bg, brand_accent, brand_text, brand_name, brand_logo, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    INSERT INTO user_profiles (user_id, tenant_id, writing_samples, contrarian_view, audience_role, audience_pain, content_niche, brand_bg, brand_accent, brand_text, brand_name, brand_logo, user_role, onboarding_complete, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     ON CONFLICT(user_id, tenant_id) DO UPDATE SET
-      writing_samples = COALESCE(excluded.writing_samples, user_profiles.writing_samples),
-      contrarian_view = COALESCE(excluded.contrarian_view, user_profiles.contrarian_view),
-      audience_role   = COALESCE(excluded.audience_role, user_profiles.audience_role),
-      audience_pain   = COALESCE(excluded.audience_pain, user_profiles.audience_pain),
-      content_niche   = COALESCE(excluded.content_niche, user_profiles.content_niche),
-      brand_bg        = COALESCE(excluded.brand_bg, user_profiles.brand_bg),
-      brand_accent    = COALESCE(excluded.brand_accent, user_profiles.brand_accent),
-      brand_text      = COALESCE(excluded.brand_text, user_profiles.brand_text),
-      brand_name      = COALESCE(excluded.brand_name, user_profiles.brand_name),
-      brand_logo      = COALESCE(excluded.brand_logo, user_profiles.brand_logo),
-      updated_at      = CURRENT_TIMESTAMP
+      writing_samples     = COALESCE(excluded.writing_samples, user_profiles.writing_samples),
+      contrarian_view     = COALESCE(excluded.contrarian_view, user_profiles.contrarian_view),
+      audience_role       = COALESCE(excluded.audience_role, user_profiles.audience_role),
+      audience_pain       = COALESCE(excluded.audience_pain, user_profiles.audience_pain),
+      content_niche       = COALESCE(excluded.content_niche, user_profiles.content_niche),
+      brand_bg            = COALESCE(excluded.brand_bg, user_profiles.brand_bg),
+      brand_accent        = COALESCE(excluded.brand_accent, user_profiles.brand_accent),
+      brand_text          = COALESCE(excluded.brand_text, user_profiles.brand_text),
+      brand_name          = COALESCE(excluded.brand_name, user_profiles.brand_name),
+      brand_logo          = COALESCE(excluded.brand_logo, user_profiles.brand_logo),
+      user_role           = COALESCE(excluded.user_role, user_profiles.user_role),
+      onboarding_complete = COALESCE(excluded.onboarding_complete, user_profiles.onboarding_complete),
+      updated_at          = CURRENT_TIMESTAMP
   RETURNING id
   `).run(userId, tenantId, writing_samples || null, contrarian_view || null, audience_role || null, audience_pain || null, content_niche || null,
-         brand_bg || null, brand_accent || null, brand_text || null, brand_name || null, brand_logo || null);
+         brand_bg || null, brand_accent || null, brand_text || null, brand_name || null, brand_logo || null,
+         user_role || null, obComplete);
 
   const profileId = result.lastInsertRowid || existing?.id;
 

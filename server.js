@@ -179,7 +179,16 @@ app.get('/auth/google/callback',
     }
     return passport.authenticate('google', { failureRedirect: '/login.html?error=oauth_failed' })(req, res, next);
   },
-  (req, res) => {
+  async (req, res) => {
+    // Route new users to the onboarding wizard; returning users go straight to dashboard.
+    try {
+      const row = await db.prepare(
+        'SELECT onboarding_complete FROM user_profiles WHERE user_id = ? AND tenant_id = ?'
+      ).get(req.user.user_id, 'default');
+      if (!row?.onboarding_complete) return res.redirect('/onboarding.html');
+    } catch {
+      // Non-fatal — fall through to dashboard if the check fails.
+    }
     return res.redirect('/dashboard.html');
   }
 );
@@ -255,6 +264,7 @@ app.get('/', (req, res) => {
 
 // Protect main app HTML (session + account UI)
 app.get([
+  '/onboarding.html',
   '/dashboard.html',
   '/generate.html',
   '/drafts.html',

@@ -1,0 +1,623 @@
+/* ============================================================
+   onboarding.css — Scouthook first-time wizard
+   Imports design tokens from main.css; handles wizard layout,
+   screen transitions, role cards, prompt chips, celebration,
+   score bar wiring, and all screen-specific overrides.
+   ============================================================ */
+
+/* ── Reset / base ────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  margin: 0;
+}
+
+body.ob-shell {
+  font-family: var(--font-sans);
+  background: var(--bg-app);
+  color: var(--text-body);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Header ─────────────────────────────────────────────── */
+.ob-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 56px;
+  padding: 0 clamp(20px, 5vw, 48px);
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.ob-logo {
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  color: var(--text-heading);
+}
+
+/* ── Step dots ───────────────────────────────────────────── */
+.ob-step-dots {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ob-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--border);
+  transition: background 240ms ease, transform 240ms ease;
+}
+
+.ob-dot.active {
+  background: var(--brand);
+  transform: scale(1.25);
+}
+
+/* ── Screen container ────────────────────────────────────── */
+.ob-screen {
+  display: none;
+  flex: 1;
+  padding: 48px clamp(20px, 5vw, 48px) 64px;
+  animation: ob-fadein 280ms ease forwards;
+}
+
+.ob-screen.active {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.ob-screen.ob-screen--center {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.ob-screen.ob-screen--split {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 40px;
+  padding-top: 40px;
+}
+
+@keyframes ob-fadein {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Content widths ──────────────────────────────────────── */
+.ob-content {
+  width: 100%;
+  max-width: 560px;
+}
+
+.ob-content--wide {
+  max-width: 720px;
+}
+
+.ob-content--center {
+  max-width: 540px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.ob-content--left {
+  flex: 1;
+  max-width: 520px;
+}
+
+/* ── Typography ──────────────────────────────────────────── */
+.ob-headline {
+  font-size: clamp(26px, 3.5vw, 36px);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  color: var(--text-heading);
+  margin: 0 0 10px;
+}
+
+.ob-subheadline {
+  font-size: 16px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin: 0 0 32px;
+}
+
+.ob-body-copy {
+  font-size: 15px;
+  color: var(--text-secondary);
+  line-height: 1.65;
+  margin: 0 0 14px;
+}
+
+.ob-helper {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 6px 0 0;
+  line-height: 1.5;
+}
+
+.ob-post-context {
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin: 0 0 16px;
+  padding: 12px 16px;
+  background: #F0FDF4;
+  border: 1px solid #BBF7D0;
+  border-radius: 8px;
+}
+
+.ob-post-upsell {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.6;
+  margin: 16px 0 24px;
+  padding: 12px 16px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+/* ── Field groups ────────────────────────────────────────── */
+.ob-field-group {
+  margin-bottom: 22px;
+  width: 100%;
+}
+
+.ob-label {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-heading);
+  margin-bottom: 7px;
+}
+
+.ob-field {
+  width: 100%;
+  padding: 11px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--text-body);
+  background: var(--bg-surface);
+  outline: none;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.ob-field:focus {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.12);
+}
+
+.ob-field::placeholder { color: var(--text-muted); }
+
+.ob-textarea {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--text-body);
+  background: var(--bg-surface);
+  outline: none;
+  resize: vertical;
+  line-height: 1.55;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.ob-textarea:focus {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.12);
+}
+
+.ob-textarea::placeholder { color: var(--text-muted); }
+
+.ob-textarea--sm { min-height: 80px; }
+.ob-textarea--lg { min-height: 160px; }
+
+/* standalone textarea on screen 3 */
+#ob-idea {
+  margin-top: 14px;
+  min-height: 88px;
+}
+
+/* read-only post output */
+#ob-post-output {
+  width: 100%;
+  min-height: 200px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--text-body);
+  background: var(--bg-subtle);
+  line-height: 1.65;
+  resize: none;
+  cursor: default;
+  white-space: pre-wrap;
+}
+
+.ob-field-error {
+  font-size: 13px;
+  color: var(--text-danger);
+  margin: 6px 0 10px;
+}
+
+/* ── Buttons ─────────────────────────────────────────────── */
+.ob-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  padding: 0 24px;
+  border-radius: 10px;
+  background: var(--brand);
+  color: #fff;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 150ms ease, transform 120ms ease, opacity 150ms ease;
+  white-space: nowrap;
+}
+
+.ob-btn-primary:hover  { background: var(--brand-hover); transform: translateY(-1px); }
+.ob-btn-primary:active { transform: translateY(0); }
+.ob-btn-primary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.ob-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  padding: 0 20px;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-heading);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
+  border: 1.5px solid var(--border);
+  cursor: pointer;
+  transition: border-color 150ms ease, background 150ms ease, transform 120ms ease;
+  white-space: nowrap;
+}
+
+.ob-btn-secondary:hover  { border-color: var(--brand); background: rgba(15, 118, 110, 0.04); transform: translateY(-1px); }
+.ob-btn-secondary:active { transform: translateY(0); }
+
+.ob-skip-link {
+  display: inline-block;
+  margin-top: 14px;
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--text-muted);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: color 120ms ease;
+}
+
+.ob-skip-link:hover { color: var(--text-secondary); }
+
+.ob-cta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.ob-loading-state {
+  margin-top: 14px;
+  font-size: 13px;
+  color: var(--text-muted);
+  font-style: italic;
+  animation: ob-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes ob-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.45; }
+}
+
+/* ── Role cards ──────────────────────────────────────────── */
+.ob-role-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 14px;
+  margin-bottom: 20px;
+  width: 100%;
+}
+
+.ob-role-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 18px 16px;
+  border-radius: 12px;
+  border: 1.5px solid var(--border);
+  background: var(--bg-surface);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 180ms ease, background 180ms ease, transform 120ms ease, box-shadow 180ms ease;
+  font-family: var(--font-sans);
+}
+
+.ob-role-card:hover {
+  border-color: var(--brand);
+  background: rgba(15, 118, 110, 0.04);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
+}
+
+.ob-role-card.selected {
+  border-color: var(--brand);
+  background: rgba(15, 118, 110, 0.06);
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.14);
+}
+
+.ob-role-emoji {
+  font-size: 26px;
+  line-height: 1;
+  margin-bottom: 2px;
+}
+
+.ob-role-label {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-heading);
+  letter-spacing: -0.01em;
+}
+
+.ob-role-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.ob-role-custom-wrap {
+  margin-bottom: 18px;
+  width: 100%;
+  max-width: 400px;
+  animation: ob-fadein 200ms ease forwards;
+}
+
+/* ── Voice indicator (screen 3) ──────────────────────────── */
+.ob-voice-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.ob-voice-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
+}
+
+/* ── Prompt chips ────────────────────────────────────────── */
+.ob-chips {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  margin-bottom: 4px;
+}
+
+.ob-chip {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 11px 14px;
+  border-radius: 10px;
+  border: 1.5px solid var(--border);
+  background: var(--bg-surface);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-style: italic;
+  color: var(--text-secondary);
+  cursor: pointer;
+  line-height: 1.45;
+  transition: border-color 150ms ease, background 150ms ease, color 150ms ease, transform 100ms ease;
+}
+
+.ob-chip:hover {
+  border-color: var(--brand);
+  background: rgba(15, 118, 110, 0.04);
+  color: var(--text-heading);
+  transform: translateX(3px);
+}
+
+/* ── Post preview pane (screen 3) ────────────────────────── */
+.ob-post-preview {
+  flex: 1;
+  min-width: 280px;
+  max-width: 440px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 24px;
+  min-height: 200px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.ob-preview-empty {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.ob-preview-skeleton {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ob-skeleton-line {
+  height: 14px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, var(--border) 25%, #e8e8ea 50%, var(--border) 75%);
+  background-size: 200% 100%;
+  animation: ob-shimmer 1.4s infinite;
+}
+
+@keyframes ob-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ── Score bar (screen 4b) ───────────────────────────────── */
+/* Reuses .score-left, .score-right, .score-label, .passfail-pill,
+   .archetype-badge, .suggestion-item from main.css.
+   This wrapper just handles visibility toggle. */
+#ob-score-bar {
+  display: none;
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-surface);
+}
+
+#ob-score-bar.visible {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+#ob-score-number {
+  font-size: 36px;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+
+#ob-score-number.pass        { color: var(--score-pass); }
+#ob-score-number.borderline  { color: var(--score-borderline); }
+#ob-score-number.fail        { color: var(--score-fail); }
+
+/* ── Celebration screen (4a) ─────────────────────────────── */
+.ob-checkmark-wrap {
+  margin-bottom: 28px;
+}
+
+.ob-checkmark {
+  width: 72px;
+  height: 72px;
+  display: block;
+}
+
+.ob-check-circle {
+  stroke: var(--brand);
+  stroke-width: 2;
+  stroke-dasharray: 166;
+  stroke-dashoffset: 166;
+  animation: ob-circle-in 600ms cubic-bezier(0.65, 0, 0.45, 1) forwards;
+}
+
+.ob-check-tick {
+  stroke: var(--brand);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 48;
+  stroke-dashoffset: 48;
+  animation: ob-tick-in 380ms cubic-bezier(0.65, 0, 0.45, 1) 500ms forwards;
+}
+
+@keyframes ob-circle-in {
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes ob-tick-in {
+  to { stroke-dashoffset: 0; }
+}
+
+/* ── LinkedIn screen ─────────────────────────────────────── */
+.ob-linkedin-btn {
+  margin-top: 6px;
+  margin-bottom: 10px;
+  background: #0A66C2;
+}
+
+.ob-linkedin-btn:hover { background: #08508f; }
+
+.ob-disconnect-note {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0 0 4px;
+}
+
+/* ── Responsive: split screens ───────────────────────────── */
+@media (max-width: 800px) {
+  .ob-screen.ob-screen--split {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .ob-post-preview {
+    max-width: 100%;
+    min-height: 120px;
+  }
+
+  .ob-content--left {
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 560px) {
+  .ob-screen {
+    padding: 32px 18px 48px;
+  }
+
+  .ob-role-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .ob-cta-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .ob-btn-primary,
+  .ob-btn-secondary {
+    width: 100%;
+    justify-content: center;
+  }
+}

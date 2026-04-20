@@ -130,7 +130,15 @@ router.get('/connect', async (req, res) => {
   }
 
   const state = crypto.randomUUID();
-  await setOAuthState(state, { userId, tenantId });
+  // Allow callers to signal where to return after OAuth completes.
+  // 'onboarding' is the only recognised source; everything else falls back to
+  // the account page.  Stored inside the signed state blob so it cannot be
+  // tampered with by the client.
+  const from = req.query.from;
+  const returnTo = from === 'onboarding'
+    ? '/onboarding.html?linkedin=connected'
+    : '/account.html?linkedin_connected=true';
+  await setOAuthState(state, { userId, tenantId, returnTo });
 
   const params = new URLSearchParams({
     response_type: 'code',
@@ -261,7 +269,7 @@ router.get('/callback', async (req, res) => {
     });
 
     console.log(`[linkedin/callback] Connected user=${userId} as ${linkedin_name} (${linkedin_user_id})`);
-    res.redirect('/account.html?linkedin_connected=true');
+    res.redirect(stateData.returnTo || '/account.html?linkedin_connected=true');
 
   } catch (err) {
     console.error('[linkedin/callback] Error:', err.message);

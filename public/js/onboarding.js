@@ -228,13 +228,17 @@ const Onboarding = (() => {
       const passed = !!(data.quality?.passed || data.quality?.passed_gate);
 
       if (passed) {
-        // Quality gate passed — show the "wow" moment, then move to Screen 6
-        // so users can deepen their voice profile before entering the editor.
+        // Quality gate passed — celebrate, then let the user READ their post
+        // on screen 4b before asking them to deepen their voice profile.
         showScreen('4a');
-        setTimeout(() => showScreen(6), 2400);
+        setTimeout(() => {
+          showScreen('4b');
+          renderPostAndScore(data);
+        }, 2400);
       } else {
-        // Force-returned post — skip celebration, go straight to Screen 6.
-        showScreen(6);
+        // Force-returned post — skip celebration, show the post directly.
+        showScreen('4b');
+        renderPostAndScore(data);
       }
     } catch (e) {
       console.error('[onboarding] generation error:', e);
@@ -316,8 +320,15 @@ const Onboarding = (() => {
     }
 
     // Wire CTAs once (use { once: true } to prevent duplicate listeners on re-renders)
-    qs('ob-s4b-linkedin')?.addEventListener('click', () => showScreen(5), { once: true });
-    qs('ob-s4b-draft')?.addEventListener('click', () => showScreen(6), { once: true });
+    // Primary: continue to voice deepening (Screen 6)
+    qs('ob-s4b-continue')?.addEventListener('click', () => showScreen(6), { once: true });
+    // Secondary: skip voice deepening, go straight to the editor
+    qs('ob-s4b-skip')?.addEventListener('click', async () => {
+      await markOnboardingComplete();
+      window.location.href = state.postId
+        ? `/generate.html?postId=${encodeURIComponent(state.postId)}`
+        : '/drafts.html';
+    }, { once: true });
   }
 
   function animateObScore(target) {

@@ -225,21 +225,16 @@ const Onboarding = (() => {
       state.archetypeUsed  = data.archetypeUsed;
       state.hookConfidence = data.hookConfidence;
 
-      // Mark onboarding complete before leaving the wizard — even if the
-      // redirect fails, the user won't be sent back here on next login.
-      await markOnboardingComplete();
-
       const passed = !!(data.quality?.passed || data.quality?.passed_gate);
-      const dest   = `/generate.html?postId=${encodeURIComponent(data.id)}`;
 
       if (passed) {
-        // Show the "wow" celebration moment, then drop them into generate.html
-        // with the full asset, preview and publish toolset.
+        // Quality gate passed — show the "wow" moment, then move to Screen 6
+        // so users can deepen their voice profile before entering the editor.
         showScreen('4a');
-        setTimeout(() => { window.location.href = dest; }, 2400);
+        setTimeout(() => showScreen(6), 2400);
       } else {
-        // Force-returned post — go straight to generate.html, no celebration
-        window.location.href = dest;
+        // Force-returned post — skip celebration, go straight to Screen 6.
+        showScreen(6);
       }
     } catch (e) {
       console.error('[onboarding] generation error:', e);
@@ -363,6 +358,10 @@ const Onboarding = (() => {
     const skipBtn = qs('ob-s6-skip');
     const gotoBtn = qs('ob-goto-draft');
 
+    const dest = () => state.postId
+      ? `/generate.html?postId=${encodeURIComponent(state.postId)}`
+      : '/drafts.html';
+
     ctaBtn?.addEventListener('click', async () => {
       const pain       = (qs('ob-pain').value       || '').trim() || null;
       const contrarian = (qs('ob-contrarian').value || '').trim() || null;
@@ -382,12 +381,11 @@ const Onboarding = (() => {
             onboarding_complete: 1,
           }),
         });
-        // Allow fingerprint extraction to kick off, then show confirmation
-        await new Promise(r => setTimeout(r, 2800));
-        showScreen('confirm');
+        // Give fingerprint extraction a moment to kick off, then open the editor.
+        await new Promise(r => setTimeout(r, 1800));
+        window.location.href = dest();
       } catch (e) {
         console.error('[onboarding] screen 6 save error:', e);
-      } finally {
         ctaBtn.disabled = false;
         loadEl.hidden   = true;
       }
@@ -396,16 +394,12 @@ const Onboarding = (() => {
     skipBtn?.addEventListener('click', async () => {
       skipBtn.disabled = true;
       await markOnboardingComplete();
-      window.location.href = '/dashboard.html';
+      window.location.href = dest();
     });
 
-    gotoBtn?.addEventListener('click', () => {
-      if (state.postId) {
-        window.location.href = `/generate.html?post=${encodeURIComponent(state.postId)}`;
-      } else {
-        window.location.href = '/drafts.html';
-      }
-    });
+    // gotoBtn lives on the (now unused) confirm screen — keep it wired as a
+    // safety net in case a user somehow reaches it.
+    gotoBtn?.addEventListener('click', () => { window.location.href = dest(); });
   }
 
   /* ── Mark onboarding complete (shared helper) ─────────── */

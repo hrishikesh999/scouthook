@@ -225,19 +225,21 @@ const Onboarding = (() => {
       state.archetypeUsed  = data.archetypeUsed;
       state.hookConfidence = data.hookConfidence;
 
+      // Mark onboarding complete before leaving the wizard — even if the
+      // redirect fails, the user won't be sent back here on next login.
+      await markOnboardingComplete();
+
       const passed = !!(data.quality?.passed || data.quality?.passed_gate);
+      const dest   = `/generate.html?postId=${encodeURIComponent(data.id)}`;
 
       if (passed) {
-        // Show the celebration screen, then auto-advance to 4b
+        // Show the "wow" celebration moment, then drop them into generate.html
+        // with the full asset, preview and publish toolset.
         showScreen('4a');
-        setTimeout(() => {
-          showScreen('4b');
-          renderPostAndScore(data);
-        }, 2600);
+        setTimeout(() => { window.location.href = dest; }, 2400);
       } else {
-        // Force-returned post — skip celebration, go straight to 4b
-        showScreen('4b');
-        renderPostAndScore(data);
+        // Force-returned post — go straight to generate.html, no celebration
+        window.location.href = dest;
       }
     } catch (e) {
       console.error('[onboarding] generation error:', e);

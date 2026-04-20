@@ -164,6 +164,49 @@
       border-radius: var(--radius-lg);
     }
     .seed-list-empty a { color: var(--brand); font-weight: 600; }
+
+    /* ── No-LinkedIn action pair ─────────────────────────────── */
+    .no-linkedin-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .btn-connect-linkedin {
+      display: inline-flex;
+      align-items: center;
+      height: 36px;
+      padding: 0 14px;
+      border-radius: 8px;
+      background: #0A66C2;
+      color: #fff;
+      font-size: 13px;
+      font-weight: 600;
+      font-family: var(--font-sans);
+      text-decoration: none;
+      white-space: nowrap;
+      transition: background 140ms ease, transform 100ms ease;
+    }
+    .btn-connect-linkedin:hover  { background: #08508f; transform: translateY(-1px); }
+    .btn-connect-linkedin:active { transform: translateY(0); }
+    .btn-connect-linkedin.disabled,
+    .btn-connect-linkedin[disabled] { opacity: 0.45; pointer-events: none; }
+
+    .btn-save-draft-explicit {
+      height: 36px;
+      padding: 0 14px;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--text-heading);
+      font-size: 13px;
+      font-weight: 600;
+      font-family: var(--font-sans);
+      border: 1.5px solid var(--border);
+      white-space: nowrap;
+      cursor: pointer;
+      transition: border-color 140ms ease, background 140ms ease;
+    }
+    .btn-save-draft-explicit:hover    { border-color: var(--brand); background: rgba(15,118,110,.04); }
+    .btn-save-draft-explicit:disabled { opacity: 0.45; cursor: not-allowed; }
   </style>
 </head>
 <body>
@@ -404,7 +447,19 @@
           <!-- Right group -->
           <div class="action-right" id="action-right">
             <span class="autosave-indicator" id="save-draft-btn" aria-live="polite"></span>
+            <!-- Shown when LinkedIn IS connected -->
             <button id="schedule-btn" disabled aria-label="Schedule or publish post">Schedule</button>
+            <!-- Shown when LinkedIn is NOT connected (hidden until status known) -->
+            <div id="no-linkedin-actions" class="no-linkedin-actions" hidden>
+              <a id="connect-publish-btn" class="btn-connect-linkedin" href="/api/linkedin/connect?from=generate"
+                 aria-label="Connect LinkedIn account and publish">
+                Connect LinkedIn &amp; Publish
+              </a>
+              <button id="save-draft-explicit-btn" class="btn-save-draft-explicit" type="button"
+                      disabled aria-label="Save as draft to publish later">
+                Save as Draft
+              </button>
+            </div>
           </div>
 
           <!-- Post-publish state (hidden until published/scheduled) -->

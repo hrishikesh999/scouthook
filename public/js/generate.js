@@ -51,8 +51,15 @@ const regenerateBtn   = document.getElementById('regenerate-btn');
 const quoteCardBtn    = document.getElementById('quote-card-btn');
 const carouselBtn     = document.getElementById('carousel-btn');
 const brandedQuoteBtn = document.getElementById('branded-quote-btn');
-const saveDraftBtn    = document.getElementById('save-draft-btn');
-const scheduleBtn     = document.getElementById('schedule-btn');
+const saveDraftBtn        = document.getElementById('save-draft-btn');
+const scheduleBtn         = document.getElementById('schedule-btn');
+const noLinkedInActions   = document.getElementById('no-linkedin-actions');
+const connectPublishBtn   = document.getElementById('connect-publish-btn');
+const saveDraftExplicitBtn = document.getElementById('save-draft-explicit-btn');
+
+/** Tracks whether the signed-in user has a connected LinkedIn account.
+ *  Set by checkLinkedInStatus() on page load and after publish/schedule. */
+let linkedinConnected = false;
 const postPublishState = document.getElementById('post-publish-state');
 const publishedLabel  = document.getElementById('published-label');
 const actionBarError  = document.getElementById('action-bar-error');
@@ -418,6 +425,14 @@ document.addEventListener('visibilitychange', () => {
   const isNew     = _qs.has('new');
   const session   = Session.load();
 
+  // ── Returning from LinkedIn OAuth (from=generate flow) ──────
+  // Re-check status so the Schedule button replaces the connect CTAs.
+  if (_qs.get('linkedin') === 'connected') {
+    window.history.replaceState({}, '', '/generate.html');
+    await checkLinkedInStatus();
+    if (window.toast?.success) window.toast.success('LinkedIn connected! You can now schedule or publish.');
+  }
+
   // ── Vault seed from ideas page ("Generate post" button) ──────
   // Checked first: if present, skip session restore and auto-generate.
   const vaultSeedText = _qs.get('seed');
@@ -501,6 +516,10 @@ async function checkLinkedInStatus() {
     const res = await fetch('/api/linkedin/status', { headers: apiHeaders(), credentials: 'same-origin' });
     const data = await res.json();
     const area = document.getElementById('nav-linkedin-area');
+
+    linkedinConnected = !!data.connected;
+    applyLinkedInCtas();
+
     if (data.connected) {
       if (area) area.innerHTML = buildLinkedInChip(data.name, data.photo_url);
       // Populate LinkedIn preview header (generate.html has no nav-linkedin-area; must not throw)
@@ -521,7 +540,21 @@ async function checkLinkedInStatus() {
       }
     }
   } catch {
-    // Leave default connect button
+    // Leave default connect button; assume not connected
+    linkedinConnected = false;
+    applyLinkedInCtas();
+  }
+}
+
+/** Show the correct right-side CTA based on LinkedIn connection state.
+ *  Called once on load (after status check) and after publish/schedule. */
+function applyLinkedInCtas() {
+  if (linkedinConnected) {
+    scheduleBtn.style.display       = '';
+    if (noLinkedInActions) noLinkedInActions.hidden = true;
+  } else {
+    scheduleBtn.style.display       = 'none';
+    if (noLinkedInActions) noLinkedInActions.hidden = false;
   }
 }
 
@@ -1141,6 +1174,17 @@ function showAutosaveState(state) {
 /* ── 18. Schedule modal ──────────────────────────────────────── */
 scheduleBtn.addEventListener('click', () => openModal());
 
+/* ── 18b. No-LinkedIn CTAs ───────────────────────────────────── */
+if (saveDraftExplicitBtn) {
+  saveDraftExplicitBtn.addEventListener('click', () => {
+    // Post is already auto-saved; confirm and navigate to drafts.
+    if (window.toast?.success) {
+      window.toast.success('Draft saved. Connect LinkedIn from Account Settings to publish.');
+    }
+    setTimeout(() => { window.location.href = '/drafts.html'; }, 900);
+  });
+}
+
 scheduleCancel.addEventListener('click', () => closeModal());
 overlay.addEventListener('click', () => {
   if (scheduleModal.classList.contains('visible')) closeModal();
@@ -1648,19 +1692,20 @@ async function saveAssetToDB() {
 
 /* ── 22. Enable / disable action buttons ────────────────────── */
 function enableActionButtons() {
-  if (scheduleEditLocked) {
-    scheduleBtn.disabled = true;
-    quoteCardBtn.classList.add('disabled');
-    carouselBtn.classList.add('disabled');
-    brandedQuoteBtn.classList.add('disabled');
-    mediaLibraryBtn.classList.add('disabled');
-    return;
+  const locked = scheduleEditLocked;
+  // Asset buttons
+  quoteCardBtn.classList.toggle('disabled', locked);
+  carouselBtn.classList.toggle('disabled', locked);
+  brandedQuoteBtn.classList.toggle('disabled', locked);
+  mediaLibraryBtn.classList.toggle('disabled', locked);
+
+  if (linkedinConnected) {
+    scheduleBtn.disabled = locked;
+  } else {
+    // No-LinkedIn CTA pair — enable/disable in sync with lock state
+    if (connectPublishBtn)    connectPublishBtn.classList.toggle('disabled', locked);
+    if (saveDraftExplicitBtn) saveDraftExplicitBtn.disabled = locked;
   }
-  scheduleBtn.disabled  = false;
-  quoteCardBtn.classList.remove('disabled');
-  carouselBtn.classList.remove('disabled');
-  brandedQuoteBtn.classList.remove('disabled');
-  mediaLibraryBtn.classList.remove('disabled');
 }
 
 function disableActionButtons() {
@@ -1670,6 +1715,8 @@ function disableActionButtons() {
   carouselBtn.classList.add('disabled');
   brandedQuoteBtn.classList.add('disabled');
   mediaLibraryBtn.classList.add('disabled');
+  if (connectPublishBtn)    connectPublishBtn.classList.add('disabled');
+  if (saveDraftExplicitBtn) saveDraftExplicitBtn.disabled = true;
 }
 
 /* ── 23. Loading states ──────────────────────────────────────── */

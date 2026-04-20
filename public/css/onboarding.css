@@ -128,22 +128,22 @@ body.ob-shell {
 }
 
 .ob-subheadline {
-  font-size: 16px;
-  color: var(--text-secondary);
+  font-size: 17px;
+  color: #374151;
   line-height: 1.6;
   margin: 0 0 32px;
 }
 
 .ob-body-copy {
   font-size: 15px;
-  color: var(--text-secondary);
+  color: #374151;
   line-height: 1.65;
   margin: 0 0 14px;
 }
 
 .ob-helper {
-  font-size: 12px;
-  color: var(--text-muted);
+  font-size: 13px;
+  color: #52525B;
   margin: 6px 0 0;
   line-height: 1.5;
 }
@@ -357,8 +357,8 @@ body.ob-shell {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 6px;
-  padding: 18px 16px;
+  gap: 8px;
+  padding: 22px 20px;
   border-radius: 12px;
   border: 1.5px solid var(--border);
   background: var(--bg-surface);
@@ -388,16 +388,16 @@ body.ob-shell {
 }
 
 .ob-role-label {
-  font-size: 14px;
+  font-size: 17px;
   font-weight: 700;
   color: var(--text-heading);
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
 }
 
 .ob-role-desc {
-  font-size: 12px;
-  color: var(--text-muted);
-  line-height: 1.4;
+  font-size: 14px;
+  color: #374151;
+  line-height: 1.45;
 }
 
 .ob-role-custom-wrap {
@@ -440,16 +440,16 @@ body.ob-shell {
   display: block;
   width: 100%;
   text-align: left;
-  padding: 11px 14px;
+  padding: 12px 16px;
   border-radius: 10px;
   border: 1.5px solid var(--border);
   background: var(--bg-surface);
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: 14px;
   font-style: italic;
-  color: var(--text-secondary);
+  color: #374151;
   cursor: pointer;
-  line-height: 1.45;
+  line-height: 1.5;
   transition: border-color 150ms ease, background 150ms ease, color 150ms ease, transform 100ms ease;
 }
 

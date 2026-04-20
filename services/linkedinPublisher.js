@@ -2,6 +2,7 @@
 
 const { db, backendKind } = require('../db');
 const { getValidAccessToken } = require('./linkedinOAuth');
+const { sendEmailToUser } = require('../emails');
 const path = require('path');
 const storage = require('./storage');
 const crypto = require('crypto');
@@ -533,6 +534,20 @@ async function publishScheduledPost(scheduledPostId, { attemptsMade = 0, maxAtte
       );
     } catch { /* non-fatal */ }
 
+    // Email notification — send asynchronously, never block the publisher.
+    try {
+      const appUrl = process.env.APP_URL || '';
+      const postPreview = (row.content || '').slice(0, 120) + ((row.content || '').length > 120 ? '…' : '');
+      // linkedin_post_id is a URN like urn:li:share:123 — construct a direct URL
+      const shareId = String(linkedin_post_id || '').split(':').pop();
+      const linkedinPostUrl = shareId ? `https://www.linkedin.com/feed/update/${linkedin_post_id}/` : `${appUrl}/generate.html`;
+      sendEmailToUser(row.user_id, row.tenant_id, 'post-published', {
+        post_preview: postPreview,
+        linkedin_post_url: linkedinPostUrl,
+        app_url: appUrl,
+      }, { dedupKey: false });
+    } catch { /* non-fatal */ }
+
     console.log(`[publisher] scheduledPostId=${scheduledPostId} published as ${linkedin_post_id}`);
   } catch (err) {
     const isNonRetriable = NON_RETRIABLE_ERRORS.has(err.message) || isFinalAttempt;
@@ -564,7 +579,7 @@ async function publishScheduledPost(scheduledPostId, { attemptsMade = 0, maxAtte
 
       // Notify the user that their scheduled post could not be sent.
       try {
-        const meta = await db.prepare('SELECT user_id, tenant_id FROM scheduled_posts WHERE id = ?').get(scheduledPostId);
+        const meta = await db.prepare('SELECT user_id, tenant_id, content, scheduled_for FROM scheduled_posts WHERE id = ?').get(scheduledPostId);
         if (meta) {
           await db.prepare(`
             INSERT INTO notifications (user_id, tenant_id, type, title, body, ref_id, ref_type)
@@ -575,6 +590,29 @@ async function publishScheduledPost(scheduledPostId, { attemptsMade = 0, maxAtte
             `Your scheduled post could not be published: ${err.message}`,
             scheduledPostId
           );
+
+          // Email notification
+          const appUrl = process.env.APP_URL || '';
+          const postPreview = (meta.content || '').slice(0, 120) + ((meta.content || '').length > 120 ? '…' : '');
+          const scheduledFor = meta.scheduled_for
+            ? new Date(meta.scheduled_for).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })
+            : 'the scheduled time';
+          const errorReasonMap = {
+            reconnect_required: 'Your LinkedIn connection has expired — please reconnect.',
+            not_connected: 'Your LinkedIn account is not connected.',
+            rate_limit_exceeded: 'You reached LinkedIn\'s posting rate limit (1 post/hour).',
+            invalid_image_url: 'The attached image could not be accessed.',
+            invalid_carousel_pdf_url: 'The carousel PDF could not be accessed.',
+            linkedin_document_processing_failed: 'LinkedIn couldn\'t process the carousel document.',
+            linkedin_document_not_ready: 'LinkedIn timed out while processing the carousel document.',
+          };
+          const errorReason = errorReasonMap[err.message] || err.message || 'An unexpected error occurred.';
+          sendEmailToUser(meta.user_id, meta.tenant_id, 'post-failed', {
+            scheduled_for: scheduledFor,
+            error_reason: errorReason,
+            post_preview: postPreview,
+            app_url: appUrl,
+          }, { dedupKey: false });
         }
       } catch { /* non-fatal */ }
 

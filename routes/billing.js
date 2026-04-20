@@ -3,6 +3,7 @@
 const express = require('express');
 const { Environment } = require('@paddle/paddle-node-sdk');
 const router = express.Router();
+const { sendEmailToUser } = require('../emails');
 const {
   getPaddle,
   getPaddleEnvironment,
@@ -130,6 +131,14 @@ router.get('/subscription', requireAuth, async (req, res) => {
               canceledAt:           subscription.canceledAt ? new Date(subscription.canceledAt) : null,
               priceId,
             });
+
+            // Send payment-failed email once per billing cycle when status becomes past_due.
+            if (subscription.status === 'past_due') {
+              const dedupKey = `past_due:${subscription.currentBillingPeriod?.endsAt || 'unknown'}`;
+              const portalUrl = process.env.PADDLE_CUSTOMER_PORTAL_URL || (process.env.APP_URL ? `${process.env.APP_URL}/billing.html` : '');
+              sendEmailToUser(userId, 'default', 'payment-failed', { portal_url: portalUrl },
+                { dedupKey, withinHours: 7 * 24 });
+            }
           }
         } catch (syncErr) {
           // Non-fatal — serve cached DB value on Paddle API errors
@@ -214,6 +223,16 @@ router.post('/cancel', requireAuth, async (req, res) => {
     // The next /subscription GET will live-sync and pick up the canceled status.
     console.error('[billing] cancel upsert error (non-fatal, will re-sync):', dbErr.message);
   }
+
+  // Send cancellation confirmation email.
+  const periodEnd = canceledSubscription?.currentBillingPeriod?.endsAt ?? sub.current_period_end;
+  const accessEnds = periodEnd
+    ? new Date(periodEnd).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+    : 'the end of your current billing period';
+  sendEmailToUser(userId, 'default', 'cancelled', {
+    access_ends: accessEnds,
+    app_url: process.env.APP_URL || '',
+  }, { dedupKey: false });
 
   return res.json({ ok: true });
 });
@@ -367,6 +386,19 @@ router.post('/sync', requireAuth, async (req, res) => {
   }
 
   console.log(`[billing] sync userId=${userId} plan=${plan} status=${subscription.status}`);
+
+  // Send pro-activated email when a new pro subscription is created.
+  // Deduplicate by subscription ID so we only send once per activation.
+  if (plan === 'pro' && ['active', 'trialing'].includes(subscription.status)) {
+    const renewsOn = subscription.currentBillingPeriod?.endsAt
+      ? new Date(subscription.currentBillingPeriod.endsAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+      : '';
+    sendEmailToUser(userId, 'default', 'pro-activated', {
+      renews_on: renewsOn,
+      app_url: process.env.APP_URL || '',
+    }, { dedupKey: `pro-activated:${subscription.id}`, withinHours: 365 * 24 });
+  }
+
   return res.json({ ok: true, plan, status: subscription.status });
 });
 

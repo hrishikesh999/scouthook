@@ -2,6 +2,7 @@
 
 const crypto = require('crypto');
 const { db, getSettingSync } = require('../db');
+const { sendEmailToUser } = require('../emails');
 
 async function createReconnectNotification(userId, tenantId) {
   try {
@@ -19,6 +20,11 @@ async function createReconnectNotification(userId, tenantId) {
               'Your LinkedIn connection has expired. Please reconnect to continue publishing.',
               'linkedin_token')
     `).run(userId, tenantId);
+
+    // Email — deduplicated to once per 24h so repeated token checks don't spam.
+    const appUrl = process.env.APP_URL || '';
+    sendEmailToUser(userId, tenantId, 'linkedin-reconnect', { app_url: appUrl },
+      { dedupKey: 'reconnect', withinHours: 24 });
   } catch { /* non-fatal */ }
 }
 

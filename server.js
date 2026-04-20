@@ -12,6 +12,7 @@ const session = require('express-session');
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const { db } = require('./db');
+const { sendEmail } = require('./emails');
 
 // Initialise DB adapter (schema is managed by migrations)
 require('./db');
@@ -100,9 +101,21 @@ if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
     // We use the existing user_profiles table so the rest of the app has a stable user_id.
     (async () => {
       try {
-        await db.prepare(
-          "INSERT INTO user_profiles (user_id, tenant_id, brand_name) VALUES (?, ?, ?) ON CONFLICT(user_id, tenant_id) DO NOTHING"
-        ).run(userId, 'default', profile?.displayName || email || 'User');
+        const displayName = profile?.displayName || email || 'User';
+        const result = await db.prepare(`
+          INSERT INTO user_profiles (user_id, tenant_id, brand_name, email, display_name)
+          VALUES (?, ?, ?, ?, ?)
+          ON CONFLICT(user_id, tenant_id) DO UPDATE SET
+            email = EXCLUDED.email,
+            display_name = EXCLUDED.display_name
+          RETURNING (xmax = 0) AS is_new_row
+        `).get(userId, 'default', displayName, email, displayName);
+
+        // Send welcome email only on first login (new row inserted).
+        if (result?.is_new_row && email) {
+          const appUrl = process.env.APP_URL || '';
+          sendEmail('welcome', email, { name: displayName.split(' ')[0] || displayName, app_url: appUrl });
+        }
       } catch {
         // Non-fatal; user can still authenticate via session even if profile bootstrap fails.
       }
@@ -335,6 +348,80 @@ async function metricsRetentionCleanup() {
 // Run once on startup, then daily
 metricsRetentionCleanup();
 setInterval(metricsRetentionCleanup, 24 * 60 * 60 * 1000);
+
+// ---------------------------------------------------------------------------
+// Email: expiring-soon — warn cancelled Pro users 3 days before access ends.
+// ---------------------------------------------------------------------------
+async function sendExpiringSoonEmails() {
+  try {
+    const { sendEmailToUser } = require('./emails');
+    const appUrl = process.env.APP_URL || '';
+    // Find cancelled subscriptions whose period ends in the next 3 days.
+    const rows = await db.prepare(`
+      SELECT user_id, current_period_end
+      FROM user_subscriptions
+      WHERE status = 'canceled'
+        AND current_period_end IS NOT NULL
+        AND current_period_end > now()
+        AND current_period_end <= now() + interval '3 days'
+    `).all();
+    for (const row of rows) {
+      const accessEnds = new Date(row.current_period_end).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+      const dedupKey = `expiring-soon:${row.current_period_end}`;
+      sendEmailToUser(row.user_id, 'default', 'expiring-soon', { access_ends: accessEnds, app_url: appUrl },
+        { dedupKey, withinHours: 7 * 24 });
+    }
+  } catch (e) {
+    console.warn('[email-cron] expiring-soon check failed (non-fatal):', e.message);
+  }
+}
+// Stagger slightly from metrics cleanup — run daily at a random offset from startup.
+setTimeout(() => {
+  sendExpiringSoonEmails();
+  setInterval(sendExpiringSoonEmails, 24 * 60 * 60 * 1000);
+}, 5 * 60 * 1000); // first run 5 minutes after startup
+
+// ---------------------------------------------------------------------------
+// Email: weekly digest — sent on Sunday evenings to active users.
+// ---------------------------------------------------------------------------
+async function sendWeeklyDigestEmails() {
+  // Only send on Sundays (getDay() === 0).
+  if (new Date().getDay() !== 0) return;
+  try {
+    const { sendEmailToUser } = require('./emails');
+    const appUrl = process.env.APP_URL || '';
+    const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    // Users who have published at least 1 post ever (engaged users worth emailing).
+    const users = await db.prepare(`
+      SELECT DISTINCT user_id, tenant_id FROM generated_posts WHERE status = 'published'
+    `).all();
+    for (const { user_id, tenant_id } of users) {
+      const [genCount, pubCount] = await Promise.all([
+        db.prepare(`SELECT COUNT(*) AS n FROM generation_runs WHERE user_id = ? AND created_at > ?`).get(user_id, oneWeekAgo),
+        db.prepare(`SELECT COUNT(*) AS n FROM generated_posts WHERE user_id = ? AND status = 'published' AND published_at > ?`).get(user_id, oneWeekAgo),
+      ]);
+      const [schedCountRow, nextSchedRow] = await Promise.all([
+        db.prepare(`SELECT COUNT(*) AS n FROM scheduled_posts WHERE user_id = ? AND status = 'pending' AND scheduled_for > now()`).get(user_id),
+        db.prepare(`SELECT scheduled_for FROM scheduled_posts WHERE user_id = ? AND status = 'pending' AND scheduled_for > now() ORDER BY scheduled_for ASC LIMIT 1`).get(user_id),
+      ]);
+      const nextPostRow = nextSchedRow
+        ? `<p style="margin:0 0 20px;font-size:14px;color:#374151;">Your next post goes live on <strong>${new Date(nextSchedRow.scheduled_for).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</strong>.</p>`
+        : '';
+      const dedupKey = `weekly:${new Date().toISOString().slice(0, 10)}`;
+      sendEmailToUser(user_id, tenant_id, 'weekly-digest', {
+        posts_generated: String(genCount?.n || 0),
+        posts_published: String(pubCount?.n || 0),
+        posts_scheduled: String(schedCountRow?.n || 0),
+        next_post_row: nextPostRow,
+        app_url: appUrl,
+      }, { dedupKey, withinHours: 6 * 24 });
+    }
+  } catch (e) {
+    console.warn('[email-cron] weekly digest failed (non-fatal):', e.message);
+  }
+}
+// Check once every 6 hours — the Sunday guard inside ensures it only sends on Sunday.
+setInterval(sendWeeklyDigestEmails, 6 * 60 * 60 * 1000);
 
 // ---------------------------------------------------------------------------
 // Scheduler (BullMQ worker — only starts if Redis is configured)

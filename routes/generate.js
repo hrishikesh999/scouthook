@@ -8,6 +8,7 @@ const { runQualityGate } = require('../services/qualityGate');
 const { generateInsightAlternativePost, vaultSeedToPost } = require('../services/ideaPath');
 const { classifyContent } = require('../services/funnelClassifier');
 const { canGeneratePost } = require('../services/subscription');
+const { sendEmailToUser } = require('../emails');
 
 // ---------------------------------------------------------------------------
 // Sliding window rate limiter — 10 generations per hour per user.
@@ -187,6 +188,15 @@ router.post('/', async (req, res) => {
 
   const planCheck = await canGeneratePost(userId);
   if (!planCheck.allowed) {
+    // Send limit-reached email once per calendar month.
+    const monthKey = `limit-reached:${new Date().toISOString().slice(0, 7)}`; // e.g. "2026-04"
+    const now = new Date();
+    const firstOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const resetsOn = firstOfNextMonth.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
+    sendEmailToUser(userId, tenantId, 'limit-reached', {
+      resets_on: resetsOn,
+      app_url: process.env.APP_URL || '',
+    }, { dedupKey: monthKey, withinHours: 30 * 24 });
     return res.status(403).json({
       ok: false,
       error: 'plan_limit_exceeded',
@@ -381,6 +391,15 @@ router.post('/regenerate/:postId', async (req, res) => {
 
   const planCheck = await canGeneratePost(userId);
   if (!planCheck.allowed) {
+    // Send limit-reached email once per calendar month.
+    const monthKey = `limit-reached:${new Date().toISOString().slice(0, 7)}`;
+    const now = new Date();
+    const firstOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const resetsOn = firstOfNextMonth.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
+    sendEmailToUser(userId, tenantId, 'limit-reached', {
+      resets_on: resetsOn,
+      app_url: process.env.APP_URL || '',
+    }, { dedupKey: monthKey, withinHours: 30 * 24 });
     return res.status(403).json({
       ok: false,
       error: 'plan_limit_exceeded',

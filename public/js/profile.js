@@ -46,10 +46,11 @@ function buildLinkedInChip(name, photoUrl) {
     if (!data.ok || !data.profile) return;
 
     const p = data.profile;
-    if (p.content_niche) nicheEl.value = p.content_niche;
-    if (p.audience_role) audienceEl.value = p.audience_role;
-    if (p.audience_pain) painEl.value = p.audience_pain;
+    if (p.content_niche)   nicheEl.value      = p.content_niche;
+    if (p.audience_role)   audienceEl.value   = p.audience_role;
+    if (p.audience_pain)   painEl.value       = p.audience_pain;
     if (p.contrarian_view) contrarianEl.value = p.contrarian_view;
+    if (p.writing_samples) samplesEl.value    = p.writing_samples;
   } catch {
     // Leave fields blank
   }

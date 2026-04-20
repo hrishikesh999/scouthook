@@ -30,6 +30,9 @@ const hookBStrip   = document.getElementById('hook-b-strip');
 const hookBText    = document.getElementById('hook-b-text');
 const hookBUseBtn  = document.getElementById('hook-b-use-btn');
 
+const ctaStrip     = document.getElementById('cta-strip');
+const ctaChips     = document.getElementById('cta-chips');
+
 const emptyState      = document.getElementById('empty-state');
 const skeletonState   = document.getElementById('skeleton-state');
 const postErrorState  = document.getElementById('post-error-state');
@@ -101,7 +104,8 @@ let currentPostId     = null;
 let currentFunnelType = null;
 let primaryPost       = null;
 let alternativePost   = null;
-let currentHookB      = null;
+let currentHookB           = null;
+let currentCtaAlternatives = [];
 let currentAssetUrl   = null;
 let currentAssetType  = null;
 /** Asset committed via "Add to post" — included in publish/schedule payloads. */
@@ -632,7 +636,7 @@ async function triggerGenerate(retryData) {
 
 /* ── 9. Handle generation success ───────────────────────────── */
 function handleGenerateSuccess(data, path) {
-  let post, postId, quality, archetype, confidence, alternative, hookB;
+  let post, postId, quality, archetype, confidence, alternative, hookB, ctaAlternatives;
 
   if (path === 'recipe') {
     const first = data.posts && data.posts[0];
@@ -643,22 +647,25 @@ function handleGenerateSuccess(data, path) {
     archetype   = null;
     confidence  = null;
     alternative = null;
-    hookB       = null;
+    hookB            = null;
+    ctaAlternatives  = [];
   } else {
-    post        = data.post;
-    postId      = data.id;
-    quality     = data.quality;
-    archetype   = data.archetypeUsed;
-    confidence  = data.hookConfidence;
-    alternative = data.alternative;
-    hookB       = data.hookB || null;
+    post             = data.post;
+    postId           = data.id;
+    quality          = data.quality;
+    archetype        = data.archetypeUsed;
+    confidence       = data.hookConfidence;
+    alternative      = data.alternative;
+    hookB            = data.hookB || null;
+    ctaAlternatives  = Array.isArray(data.ctaAlternatives) ? data.ctaAlternatives : [];
   }
 
-  primaryPost       = { post, postId, quality, archetype, confidence };
-  alternativePost   = alternative || null;
-  currentHookB      = hookB;
-  currentPostId     = postId;
-  currentFunnelType = (path === 'recipe') ? null : (data.funnel_type || null);
+  primaryPost            = { post, postId, quality, archetype, confidence };
+  alternativePost        = alternative || null;
+  currentHookB           = hookB;
+  currentCtaAlternatives = ctaAlternatives;
+  currentPostId          = postId;
+  currentFunnelType      = (path === 'recipe') ? null : (data.funnel_type || null);
 
   scheduleEditLocked = false;
   scheduledMeta = null;
@@ -668,6 +675,7 @@ function handleGenerateSuccess(data, path) {
   renderFunnelBadge();
   renderAlternativeStrip(alternative, confidence);
   renderHookBStrip(hookB);
+  renderCtaStrip(ctaAlternatives);
   enableActionButtons();
   updateWordCount(post);
 
@@ -684,12 +692,13 @@ function buildSession() {
   return {
     path: currentPath,
     ideaInput: ideaInput.value,
-    post:        postTextarea.value,
-    postId:      currentPostId,
-    funnelType:  currentFunnelType,
-    primary:     primaryPost,
-    alternative: alternativePost,
-    hookB:       currentHookB,
+    post:            postTextarea.value,
+    postId:          currentPostId,
+    funnelType:      currentFunnelType,
+    primary:         primaryPost,
+    alternative:     alternativePost,
+    hookB:           currentHookB,
+    ctaAlternatives: currentCtaAlternatives,
     attachedAssetUrl:   attachedAssetUrl,
     attachedAssetType:  attachedAssetType,
     attachedPreviewUrl: attachedPreviewUrl,
@@ -859,6 +868,41 @@ hookBUseBtn.addEventListener('click', (e) => {
 
   Session.save(buildSession());
 });
+
+/* ── 12c. CTA alternatives strip ────────────────────────────── */
+function renderCtaStrip(alternatives) {
+  if (!alternatives || alternatives.length === 0) {
+    ctaStrip.classList.remove('visible');
+    return;
+  }
+  ctaChips.innerHTML = '';
+  alternatives.forEach((alt, i) => {
+    const btn = document.createElement('a');
+    btn.href = '#';
+    btn.role = 'button';
+    btn.className = 'cta-chip';
+    btn.textContent = alt;
+    btn.setAttribute('aria-label', `Use closing option ${i + 1}`);
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (scheduleEditLocked) return;
+      // Replace the last non-empty line of the post with the chosen CTA
+      const current = postTextarea.value;
+      const lines = current.split('\n');
+      let lastIdx = lines.length - 1;
+      while (lastIdx > 0 && !lines[lastIdx].trim()) lastIdx--;
+      lines[lastIdx] = alt;
+      postTextarea.value = lines.join('\n');
+      postTextarea.dispatchEvent(new Event('input'));
+      // Dismiss after use
+      currentCtaAlternatives = [];
+      ctaStrip.classList.remove('visible');
+      Session.save(buildSession());
+    });
+    ctaChips.appendChild(btn);
+  });
+  ctaStrip.classList.add('visible');
+}
 
 /* ── 13. Edit / Preview tabs ─────────────────────────────────── */
 tabEdit.addEventListener('click', () => switchView('edit'));
@@ -1639,9 +1683,11 @@ function showSkeleton() {
   postTextarea.classList.remove('visible');
   postErrorState.classList.remove('visible');
   skeletonState.classList.add('visible');
-  // Clear hook B from previous generation
+  // Clear hook B and CTA alternatives from previous generation
   currentHookB = null;
   hookBStrip.classList.remove('visible');
+  currentCtaAlternatives = [];
+  ctaStrip.classList.remove('visible');
 }
 
 function hideSkeleton() {
@@ -1681,11 +1727,12 @@ function restoreSession(s) {
   if (s.ideaInput) ideaInput.value = s.ideaInput;
 
   // Restore post
-  currentPostId     = s.postId || null;
-  currentFunnelType = s.funnelType || null;
-  primaryPost       = s.primary || null;
-  alternativePost   = s.alternative || null;
-  currentHookB      = s.hookB || null;
+  currentPostId          = s.postId || null;
+  currentFunnelType      = s.funnelType || null;
+  primaryPost            = s.primary || null;
+  alternativePost        = s.alternative || null;
+  currentHookB           = s.hookB || null;
+  currentCtaAlternatives = Array.isArray(s.ctaAlternatives) ? s.ctaAlternatives : [];
 
   renderPost(s.post);
   updateWordCount(s.post);
@@ -1694,6 +1741,7 @@ function restoreSession(s) {
     renderScoreBar(primaryPost.quality, primaryPost.archetype, primaryPost.confidence);
     renderAlternativeStrip(alternativePost, primaryPost.confidence);
     renderHookBStrip(currentHookB);
+    renderCtaStrip(currentCtaAlternatives);
   }
   renderFunnelBadge();
 

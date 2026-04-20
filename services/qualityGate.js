@@ -103,11 +103,7 @@ function buildRecommendation(errors, flags, warnings) {
   if (errors.some(e => /AI language|as an ai|language model/i.test(e)) || flags.includes('AI_LANGUAGE_DETECTED')) {
     return 'This post contains phrases that signal AI authorship — regenerate or edit before posting.';
   }
-  if (
-    flags.includes('WEAK_HOOK_OPENER')
-    || flags.includes('HOOK_TOO_LONG')
-    || flags.includes('WEAK_HOOK')
-  ) {
+  if (flags.includes('WEAK_HOOK_OPENER') || flags.includes('HOOK_TOO_LONG')) {
     return 'The opening line is too weak for your audience — try a more direct or provocative hook.';
   }
   if (flags.includes('CLICHE_DETECTED')) {
@@ -183,11 +179,15 @@ function runQualityGate(postText, options = {}) {
   }
 
   // Check 4 — AI giveaway phrases
+  let aiGiveawayDeducted = false;
   for (const phrase of AI_GIVEAWAY_PHRASES) {
     if (lowerFull.includes(phrase)) {
       errors.push(`AI giveaway phrase detected: "${phrase}"`);
       if (!flags.includes('AI_LANGUAGE_DETECTED')) flags.push('AI_LANGUAGE_DETECTED');
-      score -= 30;
+      if (!aiGiveawayDeducted) {
+        score -= 30;
+        aiGiveawayDeducted = true;
+      }
     }
   }
 
@@ -217,12 +217,21 @@ function runQualityGate(postText, options = {}) {
     score -= 5;
   }
 
-  // Check 7 — Closing question
+  // Check 7 — Closing CTA
   const lastLine = lastNonEmptyLine(text);
-  if (lastLine && !lastLine.trim().endsWith('?')) {
-    warnings.push('Last line does not end with a question — consider closing with engagement');
-    flags.push('NO_CLOSING_QUESTION');
+  const lowerLastLine = (lastLine || '').toLowerCase();
+  const hasClosingQuestion = lastLine && lastLine.trim().endsWith('?');
+  const hasConversionCta = /\b(dm me|dm us|drop a comment|link in (the )?comments?|follow|reply below|reach out|message me)\b/.test(lowerLastLine);
+  const isGenericCta = /\bwhat do you think\??\s*$|^thoughts\??\s*$/i.test((lastLine || '').trim());
+
+  if (!hasClosingQuestion && !hasConversionCta) {
+    warnings.push('No closing CTA detected — end with a specific question or a soft invite to drive engagement');
+    flags.push('NO_CTA');
     score -= 8;
+  } else if (isGenericCta) {
+    warnings.push('Closing question is generic ("What do you think?" / "Thoughts?") — make it specific to the post\'s content for higher engagement');
+    flags.push('WEAK_CTA');
+    score -= 4;
   }
 
   // Check 8 — Archetype alignment (warning only)
@@ -303,13 +312,13 @@ function runQualityGate(postText, options = {}) {
   const niche = (voiceProfile.content_niche || '').toLowerCase();
   const first20Words = text.split(/\s+/).slice(0, 20).join(' ');
   const nicheExclusions = GENERIC_HOOK_NICHE_EXCLUSIONS[niche] || [];
-  const genericHookHit = !flags.includes('CLICHE_DETECTED') && GENERIC_HOOK_PATTERNS.some(pattern => {
+  const genericHookHit = !flags.includes('CLICHE_DETECTED') && !flags.includes('AI_LANGUAGE_DETECTED') && GENERIC_HOOK_PATTERNS.some(pattern => {
     if (nicheExclusions.some(ex => ex.test(first20Words))) return false;
     return pattern.test(first20Words);
   });
   if (genericHookHit) {
     warnings.push('Opening resembles a generic LinkedIn hook pattern');
-    flags.push('generic_hook');
+    flags.push('GENERIC_HOOK');
     score -= 30;
   }
 
@@ -319,7 +328,7 @@ function runQualityGate(postText, options = {}) {
     const hasSource = SOURCE_KEYWORDS.test(text);
     if (hasNumber && !hasSource) {
       errors.push('Numeric claim without a visible source');
-      flags.push('unattributed_claim');
+      flags.push('UNATTRIBUTED_CLAIM');
       score -= 40;
     }
   }
@@ -330,9 +339,9 @@ function runQualityGate(postText, options = {}) {
     if (formatExclusions.some(ex => ex.source === pattern.source)) return false;
     return pattern.test(text);
   });
-  if (legacyAiHit && !flags.includes('AI_LANGUAGE_DETECTED')) {
+  if (legacyAiHit && !flags.includes('AI_LANGUAGE_DETECTED') && !flags.includes('CLICHE_DETECTED')) {
     warnings.push('Tone patterns that may read as generic AI');
-    flags.push('ai_tone');
+    flags.push('AI_TONE');
     score -= 30;
   }
 

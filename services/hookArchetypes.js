@@ -11,6 +11,7 @@ const HOOK_ARCHETYPES = {
     structureInstruction:
       "Open with a specific number or timeframe that creates immediate scale or stakes. The number must be in the first three words. Format: '[Number] [timeframe/context] ago, [what happened]' or '[Number] [thing] that [outcome]'.",
     exampleHook: '3 years ago I nearly killed my consulting business.',
+    ctaHint: "Ask for the reader's version of the number or timeframe — invite them to share their own measure.",
   },
   CONTRARIAN: {
     name: 'CONTRARIAN',
@@ -18,6 +19,7 @@ const HOOK_ARCHETYPES = {
     structureInstruction:
       "Open with a direct contradiction of the conventional wisdom the thought challenges. No softening language. No 'I think' or 'in my opinion'. State the contrarian position as absolute fact.",
     exampleHook: 'Most advice about pricing is wrong.',
+    ctaHint: 'Invite agreement or pushback — ask if they agree or where they draw the line.',
   },
   CONFESSION: {
     name: 'CONFESSION',
@@ -25,6 +27,7 @@ const HOOK_ARCHETYPES = {
     structureInstruction:
       'Open with the confession in past tense. Make it specific and slightly uncomfortable. The reader should feel the writer is being more honest than expected.',
     exampleHook: 'I used to think strategy was the hard part.',
+    ctaHint: 'Ask if the reader has made a similar mistake or held the same belief — make them feel safe to admit it.',
   },
   PATTERN_INTERRUPT: {
     name: 'PATTERN_INTERRUPT',
@@ -32,6 +35,7 @@ const HOOK_ARCHETYPES = {
     structureInstruction:
       'Open with the shortest possible statement of the unexpected truth. Under 8 words. No context. Drop the reader into the surprise.',
     exampleHook: 'Nobody actually wants your expertise.',
+    ctaHint: 'Close with a sharp, opinionated question that extends the surprise — not a soft "what do you think?"',
   },
   DIRECT_ADDRESS: {
     name: 'DIRECT_ADDRESS',
@@ -39,6 +43,7 @@ const HOOK_ARCHETYPES = {
     structureInstruction:
       "Open by addressing the specific person this post is for. Use 'If you are [specific type of person]' or 'For [specific situation]'. Never use 'everyone' or 'anyone'.",
     exampleHook: 'If you are billing by the hour, read this.',
+    ctaHint: 'Make a direct, low-friction ask to the person you addressed — DM, reply, or follow.',
   },
   STAKES: {
     name: 'STAKES',
@@ -46,6 +51,7 @@ const HOOK_ARCHETYPES = {
     structureInstruction:
       'Open by stating the consequence or cost first — before the context or cause. Make the reader feel what is at risk before they know what caused it.',
     exampleHook: 'This one assumption cost me six months of work.',
+    ctaHint: 'Ask what the reader did to avoid or recover from a similar cost or risk.',
   },
   BEFORE_AFTER: {
     name: 'BEFORE_AFTER',
@@ -53,6 +59,7 @@ const HOOK_ARCHETYPES = {
     structureInstruction:
       'Open with the before state and after state in direct contrast. Use a colon or em dash to separate them. The gap between the two states should feel significant.',
     exampleHook: '12 months ago: 200 followers. Today: inbound every week.',
+    ctaHint: 'Ask what transformation the reader is currently in the middle of.',
   },
   INSIGHT: {
     name: 'INSIGHT',
@@ -60,6 +67,7 @@ const HOOK_ARCHETYPES = {
     structureInstruction:
       "Open with the insight stated as a clean declarative sentence. No 'I noticed' or 'I have found'. State what is true as if it is simply true. The reader should feel they have just learned something.",
     exampleHook: 'The best consultants sell certainty, not strategy.',
+    ctaHint: 'Ask if the reader has seen the same pattern — invite confirmation or a counter-example.',
   },
 };
 

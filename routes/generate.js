@@ -96,7 +96,7 @@ const IDEA_INSIGHT_SLUG = 'idea_insight';
 async function synthesiseIdeaWithOptionalQualityRetry(userProfile, baseOptions) {
   let synthesisAttempt = 1;
   let synthResult = await synthesise(userProfile, baseOptions);
-  let { synthesis, post, hookB, archetypeUsed, hookConfidence } = synthResult;
+  let { synthesis, post, hookB, ctaAlternatives, archetypeUsed, hookConfidence } = synthResult;
 
   const gatePrimary = () =>
     runQualityGate(
@@ -111,7 +111,7 @@ async function synthesiseIdeaWithOptionalQualityRetry(userProfile, baseOptions) 
       `The previous attempt failed these quality checks: ${primaryGate.errors.join(', ')}. Fix all of these in your next attempt.`;
     synthesisAttempt = 2;
     synthResult = await synthesise(userProfile, { ...baseOptions, qualityRetryHint });
-    ({ synthesis, post, hookB, archetypeUsed, hookConfidence } = synthResult);
+    ({ synthesis, post, hookB, ctaAlternatives, archetypeUsed, hookConfidence } = synthResult);
     primaryGate = gatePrimary();
   }
 
@@ -128,13 +128,19 @@ async function synthesiseIdeaWithOptionalQualityRetry(userProfile, baseOptions) 
         null
       )
     );
-    alternative = { post: altSynth.post, archetypeUsed: 'INSIGHT', gate: altGate };
+    alternative = {
+      post: altSynth.post,
+      archetypeUsed: 'INSIGHT',
+      ctaAlternatives: altSynth.ctaAlternatives || [],
+      gate: altGate,
+    };
   }
 
   return {
     synthesis,
     post,
     hookB: hookB || null,
+    ctaAlternatives: ctaAlternatives || [],
     archetypeUsed,
     hookConfidence,
     primaryGate,
@@ -150,7 +156,7 @@ async function synthesiseIdeaWithOptionalQualityRetry(userProfile, baseOptions) 
 async function synthesiseVaultWithQualityRetry(userProfile, vaultIdea, chunkText, baseOptions) {
   let synthesisAttempt = 1;
   let synthResult = await vaultSeedToPost(vaultIdea, chunkText, userProfile, baseOptions);
-  let { synthesis, post, hookB, archetypeUsed, hookConfidence } = synthResult;
+  let { synthesis, post, hookB, ctaAlternatives, archetypeUsed, hookConfidence } = synthResult;
 
   const gate = () =>
     runQualityGate(
@@ -165,11 +171,11 @@ async function synthesiseVaultWithQualityRetry(userProfile, vaultIdea, chunkText
       `The previous attempt failed these quality checks: ${primaryGate.errors.join(', ')}. Fix all of these in your next attempt.`;
     synthesisAttempt = 2;
     synthResult = await vaultSeedToPost(vaultIdea, chunkText, userProfile, { ...baseOptions, qualityRetryHint });
-    ({ synthesis, post, hookB, archetypeUsed, hookConfidence } = synthResult);
+    ({ synthesis, post, hookB, ctaAlternatives, archetypeUsed, hookConfidence } = synthResult);
     primaryGate = gate();
   }
 
-  return { synthesis, post, hookB: hookB || null, archetypeUsed, hookConfidence, primaryGate, synthesisAttempt };
+  return { synthesis, post, hookB: hookB || null, ctaAlternatives: ctaAlternatives || [], archetypeUsed, hookConfidence, primaryGate, synthesisAttempt };
 }
 
 // ---------------------------------------------------------------------------
@@ -265,6 +271,7 @@ router.post('/', async (req, res) => {
         synthesis,
         post,
         hookB,
+        ctaAlternatives,
         archetypeUsed,
         hookConfidence,
         primaryGate,
@@ -302,8 +309,8 @@ router.post('/', async (req, res) => {
 
       const postsInsert = db.prepare(`
         INSERT INTO generated_posts
-          (run_id, user_id, tenant_id, format_slug, content, quality_score, quality_flags, passed_gate, funnel_type, vault_source_ref, hook_b)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          (run_id, user_id, tenant_id, format_slug, content, quality_score, quality_flags, passed_gate, funnel_type, vault_source_ref, hook_b, cta_alternatives)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         RETURNING id
       `);
 
@@ -318,7 +325,8 @@ router.post('/', async (req, res) => {
         primaryGate.passed_gate ? 1 : 0,
         funnelType,
         vaultSourceRef,
-        hookB || null
+        hookB || null,
+        ctaAlternatives?.length ? JSON.stringify(ctaAlternatives) : null
       );
       const primaryId = primaryInsert.lastInsertRowid;
 
@@ -333,6 +341,7 @@ router.post('/', async (req, res) => {
 
       let altPayload = null;
       if (alternative) {
+        const altCtaAlternatives = alternative.ctaAlternatives || [];
         const altInsert = await postsInsert.run(
           runId,
           userId,
@@ -341,13 +350,18 @@ router.post('/', async (req, res) => {
           alternative.post,
           alternative.gate.score,
           JSON.stringify(alternative.gate.flags),
-          alternative.gate.passed_gate ? 1 : 0
+          alternative.gate.passed_gate ? 1 : 0,
+          funnelType,
+          null,
+          null,
+          altCtaAlternatives.length ? JSON.stringify(altCtaAlternatives) : null
         );
         const altQuality = buildQualityPayload(alternative.gate, synthesisAttempt, false);
         altPayload = {
           id: altInsert.lastInsertRowid,
           post: alternative.post,
           archetypeUsed: 'INSIGHT',
+          ctaAlternatives: altCtaAlternatives,
           quality: altQuality,
         };
       }
@@ -358,6 +372,7 @@ router.post('/', async (req, res) => {
         synthesis,
         post,
         hookB: hookB || null,
+        ctaAlternatives: ctaAlternatives || [],
         id: primaryId,
         archetypeUsed,
         hookConfidence,
@@ -473,11 +488,14 @@ router.post('/regenerate/:postId', async (req, res) => {
       ? (ideaResult.alternative?.gate ?? ideaResult.primaryGate)
       : ideaResult.primaryGate;
 
+    const regenCtaAlternatives = isInsightRow ? [] : (ideaResult.ctaAlternatives || []);
+
     await db.prepare(`
       UPDATE generated_posts
-      SET content = ?, quality_score = ?, quality_flags = ?, passed_gate = ?
+      SET content = ?, quality_score = ?, quality_flags = ?, passed_gate = ?, cta_alternatives = ?
       WHERE id = ?
-    `).run(content, gate.score, JSON.stringify(gate.flags), gate.passed_gate ? 1 : 0, postId);
+    `).run(content, gate.score, JSON.stringify(gate.flags), gate.passed_gate ? 1 : 0,
+      regenCtaAlternatives.length ? JSON.stringify(regenCtaAlternatives) : null, postId);
 
     const quality = buildQualityPayload(gate, ideaResult.synthesisAttempt, true);
 
@@ -492,6 +510,7 @@ router.post('/regenerate/:postId', async (req, res) => {
         passed_gate: gate.passed_gate,
         archetypeUsed: isInsightRow ? 'INSIGHT' : ideaResult.archetypeUsed,
         hookConfidence: isInsightRow ? null : ideaResult.hookConfidence,
+        ctaAlternatives: regenCtaAlternatives,
         quality,
       },
     });

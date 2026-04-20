@@ -1298,6 +1298,43 @@ body {
   flex-shrink: 0;
 }
 
+/* ── CTA Alternatives Strip ─────────────────────────────────── */
+#cta-strip {
+  display: none;
+  padding: var(--space-2) var(--space-6);
+  background: var(--bg-page);
+  border-bottom: 1px solid var(--border-divider);
+  font-size: 13px;
+  color: var(--text-secondary);
+  gap: var(--space-2);
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+#cta-strip.visible {
+  display: flex;
+}
+
+#cta-chips {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  flex: 1;
+}
+
+.cta-chip {
+  display: block;
+  color: var(--teal);
+  cursor: pointer;
+  text-decoration: none;
+  font-style: italic;
+  line-height: 1.4;
+}
+
+.cta-chip:hover {
+  text-decoration: underline;
+}
+
 /* ── Post Surface ───────────────────────────────────────────── */
 #post-surface {
   flex: 1;
@@ -1683,6 +1720,7 @@ body {
 #right-panel.preview-mode #score-bar,
 #right-panel.preview-mode #alternative-strip,
 #right-panel.preview-mode #hook-b-strip,
+#right-panel.preview-mode #cta-strip,
 #right-panel.preview-mode #post-edit-area {
   display: none !important;
 }

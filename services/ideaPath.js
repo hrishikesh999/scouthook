@@ -106,7 +106,19 @@ VOICE FINGERPRINT (strictly follow these patterns):
 `;
 }
 
-function buildSystemPrompt(userProfile, hookInjectionBlock) {
+function buildCtaInstruction(funnelType, ctaHint) {
+  const funnelInstructions = {
+    reach:   "End with one specific question inviting the reader to share their own experience with the post's central tension. Specific beats vague — 'What did you do when X happened?' beats 'What do you think?' Do NOT use 'Thoughts?' or 'What do you think?' verbatim.",
+    trust:   "End with a reflection question that challenges the reader to examine their own practice, OR a forward-facing declarative that cements your authority position. The close should feel earned, not appended.",
+    convert: "End with a soft, one-line conversion invite — offer to DM, mention a resource in the comments, or invite them to follow for more. One ask only. Keep it conversational. No 'Check out my link' phrasing.",
+  };
+  const funnelInstruction = funnelInstructions[funnelType] || funnelInstructions.trust;
+  const hintLine = ctaHint ? `\nARCHETYPE CTA DIRECTION: ${ctaHint}` : '';
+  return `\nCLOSING:
+${funnelInstruction}${hintLine}`;
+}
+
+function buildSystemPrompt(userProfile, hookInjectionBlock, ctaInstruction = '') {
   const fingerprintBlock = buildFingerprintBlock(userProfile);
   return `You are an editorial thinking partner for a professional who creates LinkedIn content. Your job is to take a raw idea and transform it into one polished, high-quality LinkedIn post that sounds exactly like the author — not like AI.
 
@@ -135,7 +147,7 @@ ABOVE THE FOLD (critical for reach):
 - Lines 2–3 must deepen the tension from the hook, not explain or contextualise it.
 - Lines 2–3 should make the reader feel they will miss something if they do not click "see more".
 - Never use lines 2–3 for background, setup, or "let me tell you about X" framing.
-${AI_TELLS_PROHIBITION}`;
+${AI_TELLS_PROHIBITION}${ctaInstruction}`;
 }
 
 function buildUserPrompt(rawIdea) {
@@ -151,7 +163,11 @@ Return ONLY valid JSON in this exact structure:
     "recommended_structure": "one sentence on the best structure given the audience",
     "supporting_insight": "one sentence of editorial context that makes this idea stronger"
   },
-  "post": "full text of the single LinkedIn post"
+  "post": "full text of the single LinkedIn post",
+  "cta_alternatives": [
+    "one alternative closing line — different question angle or engagement prompt",
+    "one alternative closing line — soft conversion invite (DM, follow, or resource in comments)"
+  ]
 }
 
 No markdown fences. No explanation. Only the JSON object.`;
@@ -185,7 +201,11 @@ Return ONLY valid JSON in this exact structure:
     "recommended_structure": "one sentence on the best structure given the audience",
     "supporting_insight": "one sentence of editorial context that makes this idea stronger"
   },
-  "post": "full text of the single LinkedIn post"
+  "post": "full text of the single LinkedIn post",
+  "cta_alternatives": [
+    "one alternative closing line — different question angle or engagement prompt",
+    "one alternative closing line — soft conversion invite (DM, follow, or resource in comments)"
+  ]
 }
 
 No markdown fences. No explanation. Only the JSON object.`;
@@ -219,7 +239,11 @@ Return ONLY valid JSON in this exact structure:
     "recommended_structure": "one sentence on the best structure given the audience",
     "supporting_insight": "one sentence of editorial context that makes this idea stronger"
   },
-  "post": "full text of the single LinkedIn post"
+  "post": "full text of the single LinkedIn post",
+  "cta_alternatives": [
+    "one alternative closing line — different question angle or engagement prompt",
+    "one alternative closing line — soft conversion invite (DM, follow, or resource in comments)"
+  ]
 }
 
 No markdown fences. No explanation. Only the JSON object.`;
@@ -233,12 +257,15 @@ async function runSinglePostGeneration({
   archetypeUsed,
   hookConfidence,
   userPromptOverride,
+  funnelType = null,
 }) {
   const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
   if (!apiKey) throw new Error('anthropic_api_key not configured');
   const client = new Anthropic({ apiKey });
 
-  const systemPrompt = buildSystemPrompt(userProfile, hookInjection);
+  const ctaHint = HOOK_ARCHETYPES[archetypeUsed]?.ctaHint || null;
+  const ctaInstruction = buildCtaInstruction(funnelType, ctaHint);
+  const systemPrompt = buildSystemPrompt(userProfile, hookInjection, ctaInstruction);
   let userPrompt = userPromptOverride || buildUserPrompt(rawIdea);
 
   const extraHints = [
@@ -264,9 +291,10 @@ async function runSinglePostGeneration({
     const cleanPost = sanitiseAiTells(validated.post);
     const hookB = await generateAlternativeHook(cleanPost, archetypeUsed, client);
     return {
-      synthesis: validated.synthesis,
-      post:      cleanPost,
+      synthesis:       validated.synthesis,
+      post:            cleanPost,
       hookB,
+      ctaAlternatives: validated.ctaAlternatives,
       archetypeUsed,
       hookConfidence,
     };
@@ -289,9 +317,10 @@ async function runSinglePostGeneration({
         const cleanPost = sanitiseAiTells(validated.post);
         const hookB = await generateAlternativeHook(cleanPost, archetypeUsed, client);
         return {
-          synthesis: validated.synthesis,
-          post:      cleanPost,
+          synthesis:       validated.synthesis,
+          post:            cleanPost,
           hookB,
+          ctaAlternatives: validated.ctaAlternatives,
           archetypeUsed,
           hookConfidence,
         };
@@ -311,7 +340,10 @@ function validateSinglePostResponse(parsed) {
   if (!s.suggested_angle || !s.recommended_structure || !s.supporting_insight) {
     throw new SyntaxError('Response synthesis missing required fields');
   }
-  return { synthesis: parsed.synthesis, post: parsed.post.trim() };
+  const ctaAlternatives = Array.isArray(parsed.cta_alternatives)
+    ? parsed.cta_alternatives.filter(l => typeof l === 'string' && l.trim()).slice(0, 2)
+    : [];
+  return { synthesis: parsed.synthesis, post: parsed.post.trim(), ctaAlternatives };
 }
 
 /**
@@ -349,6 +381,7 @@ async function vaultSeedToPost(vaultIdea, chunkText, userProfile, options = {}) 
     archetypeUsed: archetype,
     hookConfidence: 1.0,            // pre-classified; treat as high confidence
     userPromptOverride,
+    funnelType: vaultIdea.funnel_type || null,
   });
 }
 

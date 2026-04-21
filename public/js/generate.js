@@ -497,6 +497,21 @@ document.addEventListener('visibilitychange', () => {
   } else if (session) {
     restoreSession(session);
   }
+
+  // ── Vault-first default tab ──────────────────────────────────
+  // Switch to the Vault tab on load when the user has available ideas,
+  // unless they're starting a new post (?new=1), arriving from the ideas
+  // page (vault_idea_id already handled above), or resuming a draft.
+  if (!isNew && !vaultIdeaId && !primaryPost) {
+    try {
+      const seedRes  = await fetch('/api/vault/ideas', { headers: apiHeaders() });
+      const seedData = await seedRes.json();
+      const available = (seedData.ideas || []).filter(i => i.status === 'fresh' || i.status === 'saved');
+      if (available.length > 0) {
+        switchToTab('vault');
+      }
+    } catch { /* non-fatal — stay on Quick Spark tab */ }
+  }
 })();
 
 /* ── 4. LinkedIn status ──────────────────────────────────────── */

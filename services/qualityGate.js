@@ -55,6 +55,12 @@ const LEGACY_AI_TONE_PATTERNS = [
   /\bultimately,/i,
   /\bin essence,/i,
   /\bat its core,/i,
+  // 2026 LinkedIn AI-pattern additions
+  /let\s+that\s+sink\s+in\b/i,
+  /here'?s\s+the\s+thing\b/i,
+  /\bpro\s+tip\s*:/i,
+  /not\s+enough\s+people\s+talk\s+about\b/i,
+  /most\s+people\s+don'?t\s+know\b/i,
 ];
 
 const AI_TONE_FORMAT_EXCLUSIONS = {
@@ -78,6 +84,13 @@ const AI_GIVEAWAY_PHRASES = [
   'in the realm of',
   'a testament to',
   'the power of',
+];
+
+const ENGAGEMENT_BAIT_PATTERNS = [
+  /comment\s+yes\b/i, /comment\s+no\b/i, /type\s+yes\b/i, /type\s+1\b/i,
+  /tag\s+someone\b/i, /tag\s+a\s+friend\b/i, /tag\s+a\s+colleague\b/i,
+  /emoji\s+poll\b/i, /repost\s+if\s+you\b/i, /share\s+if\s+you\b/i,
+  /comment\s+if\s+you\b/i,
 ];
 
 function firstNonEmptyLine(text) {
@@ -179,6 +192,14 @@ function runQualityGate(postText, options = {}) {
     }
   }
 
+  // Check 3b — Hook opens with "I" (pronoun, not "In"/"It"/"If"/"Is")
+  const firstWord = firstLine.trim().split(/[\s,!?.]+/)[0];
+  if (firstWord && firstWord.toLowerCase() === 'i') {
+    errors.push("Hook opens with 'I' — posts that start with 'I' signal the post is about you, not the reader. Open with the idea, outcome, or tension.");
+    if (!flags.includes('WEAK_HOOK_OPENER')) flags.push('WEAK_HOOK_OPENER');
+    score -= 25;
+  }
+
   // Check 4 — AI giveaway phrases
   let aiGiveawayDeducted = false;
   for (const phrase of AI_GIVEAWAY_PHRASES) {
@@ -190,6 +211,13 @@ function runQualityGate(postText, options = {}) {
         aiGiveawayDeducted = true;
       }
     }
+  }
+
+  // Check 4b — Engagement bait (LinkedIn 2026 Authenticity Update penalises these)
+  if (ENGAGEMENT_BAIT_PATTERNS.some(p => p.test(text))) {
+    errors.push("Engagement bait detected — LinkedIn's 2026 algorithm actively penalises these patterns");
+    if (!flags.includes('CLICHE_DETECTED')) flags.push('CLICHE_DETECTED');
+    score -= 30;
   }
 
   // Check 5 — Hashtags
@@ -240,7 +268,7 @@ function runQualityGate(postText, options = {}) {
   const lowerLastLine = (lastLine || '').toLowerCase();
   const hasClosingQuestion = lastLine && lastLine.trim().endsWith('?');
   const hasConversionCta = /\b(dm me|dm us|drop a comment|link in (the )?comments?|follow|reply below|reach out|message me)\b/.test(lowerLastLine);
-  const isGenericCta = /\bwhat do you think\??\s*$|^thoughts\??\s*$/i.test((lastLine || '').trim());
+  const isGenericCta = /\bwhat do you think\??\s*$|^thoughts\??\s*$|^agree\??\s*$|^sound familiar\??\s*$|^can you relate\??\s*$|^yes or no\??\s*$/i.test((lastLine || '').trim());
 
   if (!hasClosingQuestion && !hasConversionCta) {
     warnings.push('No closing CTA detected — end with a specific question or a soft invite to drive engagement');

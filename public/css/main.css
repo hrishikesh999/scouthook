@@ -2776,6 +2776,62 @@ body {
   background: rgba(255, 255, 255, 0.9);
 }
 
+/* ── Vault Hero Section ─────────────────────────────────────── */
+.vault-hero-section {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--color-white);
+  border: 1px solid var(--border-light);
+  border-left: 4px solid var(--teal);
+  border-radius: var(--radius-md);
+  padding: var(--space-4) var(--space-6);
+  margin-bottom: var(--space-4);
+}
+
+.vault-hero-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.vault-hero-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-heading);
+  font-family: var(--font-sans);
+}
+
+.vault-hero-count {
+  font-size: 13px;
+  color: var(--teal);
+  font-weight: 500;
+  font-family: var(--font-sans);
+}
+
+.vault-hero-right {
+  flex-shrink: 0;
+}
+
+.vault-hero-btn {
+  height: 36px;
+  padding: 0 var(--space-4);
+  background: var(--teal);
+  color: var(--color-white);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: var(--font-sans);
+  border-radius: var(--radius-md);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  transition: background 0.15s ease;
+}
+
+.vault-hero-btn:hover {
+  background: var(--teal-hover);
+}
+
 /* ── Stat Grid ──────────────────────────────────────────────── */
 .stat-grid {
   display: grid;

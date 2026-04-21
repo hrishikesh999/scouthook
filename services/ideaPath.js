@@ -154,6 +154,8 @@ function buildUserPrompt(rawIdea) {
   return `RAW IDEA:
 ${rawIdea}
 
+EXTRACTION INSTRUCTION: Before structuring the post, identify the most specific experience, result, or data point in the raw idea. If the input is too vague (no concrete outcome, no opinion, no specific moment), ground the post in a plausible but clearly author-attributed specific scenario rather than staying at the level of the vague input.
+
 LENGTH: ${getLengthGuidance('default')}
 
 Return ONLY valid JSON in this exact structure:

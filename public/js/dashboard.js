@@ -35,6 +35,7 @@ const scheduledList    = document.getElementById('scheduled-posts-list');
   loadStats();
   loadRecentPosts();
   loadScheduledPosts();
+  loadVaultHero();
 })();
 
 /* ── LinkedIn status ─────────────────────────────────────────── */
@@ -104,6 +105,30 @@ async function loadScheduledCount() {
   } catch {
     // Leave '—'
   }
+}
+
+/* ── Vault hero ──────────────────────────────────────────────── */
+async function loadVaultHero() {
+  const section = document.getElementById('vault-hero-section');
+  const countEl = document.getElementById('vault-hero-count');
+  const btnEl   = document.getElementById('vault-hero-btn');
+  if (!section) return;
+  try {
+    const res  = await fetch('/api/vault/ideas', { headers: apiHeaders() });
+    const data = await res.json();
+    const available = (data.ideas || []).filter(i => i.status === 'fresh' || i.status === 'saved');
+    const count = available.length;
+    if (count > 0) {
+      countEl.textContent = `${count} idea${count === 1 ? '' : 's'} ready`;
+      btnEl.href          = '/ideas.html';
+      btnEl.textContent   = 'View & Generate from Ideas →';
+    } else {
+      countEl.textContent = '';
+      btnEl.href          = '/vault.html';
+      btnEl.textContent   = 'Mine your first ideas →';
+    }
+    section.style.display = '';
+  } catch { /* non-fatal — leave section hidden */ }
 }
 
 /* ── Recent posts ────────────────────────────────────────────── */

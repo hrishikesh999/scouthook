@@ -562,40 +562,16 @@ body.ob-shell {
 #ob-score-number.fail        { color: var(--score-fail); }
 
 /* ── Celebration screen (4a) ─────────────────────────────── */
-.ob-checkmark-wrap {
+.ob-celebration-emoji {
+  font-size: 72px;
+  line-height: 1;
   margin-bottom: 28px;
+  animation: ob-pop 400ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
 
-.ob-checkmark {
-  width: 72px;
-  height: 72px;
-  display: block;
-}
-
-.ob-check-circle {
-  stroke: var(--brand);
-  stroke-width: 2;
-  stroke-dasharray: 166;
-  stroke-dashoffset: 166;
-  animation: ob-circle-in 600ms cubic-bezier(0.65, 0, 0.45, 1) forwards;
-}
-
-.ob-check-tick {
-  stroke: var(--brand);
-  stroke-width: 3;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-dasharray: 48;
-  stroke-dashoffset: 48;
-  animation: ob-tick-in 380ms cubic-bezier(0.65, 0, 0.45, 1) 500ms forwards;
-}
-
-@keyframes ob-circle-in {
-  to { stroke-dashoffset: 0; }
-}
-
-@keyframes ob-tick-in {
-  to { stroke-dashoffset: 0; }
+@keyframes ob-pop {
+  from { transform: scale(0.4); opacity: 0; }
+  to   { transform: scale(1);   opacity: 1; }
 }
 
 /* ── LinkedIn screen ─────────────────────────────────────── */

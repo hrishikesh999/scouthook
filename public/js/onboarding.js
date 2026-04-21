@@ -231,6 +231,7 @@ const Onboarding = (() => {
         // Quality gate passed — celebrate, then let the user READ their post
         // on screen 4b before asking them to deepen their voice profile.
         showScreen('4a');
+        fireConfetti();
         setTimeout(() => {
           showScreen('4b');
           renderPostAndScore(data);
@@ -320,15 +321,23 @@ const Onboarding = (() => {
     }
 
     // Wire CTAs once (use { once: true } to prevent duplicate listeners on re-renders)
-    // Primary: continue to voice deepening (Screen 6)
+    // Golden: continue to voice deepening (Screen 6)
     qs('ob-s4b-continue')?.addEventListener('click', () => showScreen(6), { once: true });
-    // Secondary: skip voice deepening, go straight to the editor
-    qs('ob-s4b-skip')?.addEventListener('click', async () => {
-      await markOnboardingComplete();
+    // Primary: go straight to the editor — mark complete in background so navigation is instant
+    qs('ob-s4b-skip')?.addEventListener('click', () => {
+      markOnboardingComplete(); // fire-and-forget
       window.location.href = state.postId
         ? `/generate.html?postId=${encodeURIComponent(state.postId)}`
         : '/drafts.html';
     }, { once: true });
+  }
+
+  function fireConfetti() {
+    if (typeof confetti !== 'function') return;
+    const burst = (opts) => confetti({ startVelocity: 30, spread: 70, ticks: 80, zIndex: 999, ...opts });
+    burst({ particleCount: 80, origin: { x: 0.5, y: 0.55 } });
+    setTimeout(() => burst({ particleCount: 50, origin: { x: 0.25, y: 0.6 } }), 220);
+    setTimeout(() => burst({ particleCount: 50, origin: { x: 0.75, y: 0.6 } }), 380);
   }
 
   function animateObScore(target) {

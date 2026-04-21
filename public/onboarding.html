@@ -6,6 +6,7 @@
   <title>Get started — Scouthook</title>
   <link rel="stylesheet" href="/css/main.css" />
   <link rel="stylesheet" href="/css/onboarding.css" />
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
 </head>
 <body class="ob-shell">
 
@@ -65,7 +66,7 @@
   <!-- ── Screen 2: Minimal voice profile ─────────────────── -->
   <section id="ob-screen-2" class="ob-screen" aria-label="Step 2: Your audience">
     <div class="ob-content">
-      <h1 class="ob-headline">Two questions — then we generate your first post</h1>
+      <h1 class="ob-headline">Two questions, then we generate your first post</h1>
       <p class="ob-subheadline">This is what Scouthook uses to shape every post around your audience and your niche.</p>
 
       <div class="ob-field-group">
@@ -136,12 +137,7 @@
   <!-- ── Screen 4a: Celebration ───────────────────────────── -->
   <section id="ob-screen-4a" class="ob-screen ob-screen--center" aria-label="Post generated">
     <div class="ob-content ob-content--center">
-      <div class="ob-checkmark-wrap" aria-hidden="true">
-        <svg class="ob-checkmark" viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <circle class="ob-check-circle" cx="26" cy="26" r="25"/>
-          <path   class="ob-check-tick"   d="M14 27l8 8 16-16"/>
-        </svg>
-      </div>
+      <div class="ob-celebration-emoji" aria-hidden="true">🎉</div>
       <h1 class="ob-headline">Your first post is ready</h1>
       <p class="ob-subheadline">It passed all 15 quality checks. No AI-sounding language. No weak hook. Just a post worth publishing.</p>
     </div>
@@ -153,7 +149,7 @@
 
       <h1 class="ob-headline" style="margin-bottom:6px">Here's your first post</h1>
       <p class="ob-subheadline" style="margin-bottom:20px">
-        Read it out loud. If it sounds like you — that's the point.
+        Scouthook automatically identified the perfect hook for your post and performed 15+ quality checks. You can refine it further.
       </p>
 
       <!-- Quality score bar — classes shared with generate.html via main.css -->

@@ -36,11 +36,10 @@ body.ob-shell {
   border-bottom: 1px solid var(--border);
 }
 
-.ob-logo {
-  font-size: 17px;
-  font-weight: 800;
-  letter-spacing: -0.04em;
-  color: var(--text-heading);
+.ob-logo-img {
+  height: 34px;
+  width: auto;
+  display: block;
 }
 
 /* ── Step dots ───────────────────────────────────────────── */
@@ -245,11 +244,20 @@ body.ob-shell {
   font-family: var(--font-sans);
   font-size: 14px;
   color: var(--text-body);
-  background: var(--bg-subtle);
+  background: #fff;
   line-height: 1.65;
   resize: none;
   cursor: default;
   white-space: pre-wrap;
+}
+
+/* Inline (stacked) variant of post preview used on screen 3 */
+.ob-post-preview--inline {
+  flex: none;
+  max-width: 100%;
+  min-width: 0;
+  width: 100%;
+  margin-top: 20px;
 }
 
 .ob-field-error {
@@ -306,6 +314,27 @@ body.ob-shell {
 
 .ob-btn-secondary:hover  { border-color: var(--brand); background: rgba(15, 118, 110, 0.04); transform: translateY(-1px); }
 .ob-btn-secondary:active { transform: translateY(0); }
+
+.ob-btn-golden {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  padding: 0 20px;
+  border-radius: 10px;
+  background: #FEF3C7;
+  color: #92400E;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
+  border: 1.5px solid #FCD34D;
+  cursor: pointer;
+  transition: background 150ms ease, border-color 150ms ease, transform 120ms ease;
+  white-space: nowrap;
+}
+
+.ob-btn-golden:hover  { background: #FDE68A; border-color: #F59E0B; transform: translateY(-1px); }
+.ob-btn-golden:active { transform: translateY(0); }
 
 .ob-skip-link {
   display: inline-block;

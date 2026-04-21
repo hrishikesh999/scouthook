@@ -55,7 +55,6 @@ const saveDraftBtn           = document.getElementById('save-draft-btn');
 const scheduleBtn            = document.getElementById('schedule-btn');
 const noLinkedInActions      = document.getElementById('no-linkedin-actions');
 const connectPublishBtn      = document.getElementById('connect-publish-btn');
-const linkedinConnectedBar   = document.getElementById('linkedin-connected-bar');
 const linkedinConnectedChip  = document.getElementById('linkedin-connected-chip');
 
 /** Tracks whether the signed-in user has a connected LinkedIn account.
@@ -551,22 +550,11 @@ async function checkLinkedInStatus() {
  *  Called once on load (after status check) and after publish/schedule. */
 function applyLinkedInCtas(liName, liPhoto) {
   if (linkedinConnected) {
-    if (noLinkedInActions)    noLinkedInActions.hidden    = true;
-    if (linkedinConnectedBar) linkedinConnectedBar.hidden = false;
-    // Populate the connected chip with avatar + name
-    if (linkedinConnectedChip) {
-      const initials = liName
-        ? liName.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
-        : '??';
-      const avatarHtml = liPhoto
-        ? `<img src="${liPhoto}" alt="${liName || 'LinkedIn'}">`
-        : `<span class="li-initials">${initials}</span>`;
-      linkedinConnectedChip.innerHTML =
-        `${avatarHtml}<span class="li-check">✓</span>${liName ? `<span>${liName}</span>` : ''}`;
-    }
+    if (noLinkedInActions) noLinkedInActions.hidden = true;
+    if (scheduleBtn)       scheduleBtn.hidden        = false;
   } else {
-    if (linkedinConnectedBar) linkedinConnectedBar.hidden = true;
-    if (noLinkedInActions)    noLinkedInActions.hidden    = false;
+    if (scheduleBtn)       scheduleBtn.hidden        = true;
+    if (noLinkedInActions) noLinkedInActions.hidden  = false;
   }
 }
 

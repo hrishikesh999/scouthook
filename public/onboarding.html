@@ -11,7 +11,7 @@
 
   <!-- ── Header ──────────────────────────────────────────── -->
   <header class="ob-header">
-    <div class="ob-logo">Scouthook</div>
+    <img src="/images/scout-hook-logo.png" alt="Scouthook" class="ob-logo-img">
 
     <!-- Step progress dots (shown from screen 2 onward) -->
     <div id="ob-step-dots" class="ob-step-dots" hidden aria-hidden="true">
@@ -24,7 +24,7 @@
   <!-- ── Screen 1: Role selection ────────────────────────── -->
   <section id="ob-screen-1" class="ob-screen active" aria-label="Step 1: Your role">
     <div class="ob-content ob-content--wide">
-      <h1 class="ob-headline">First, tell us about yourself.</h1>
+      <h1 class="ob-headline">First, tell us about yourself</h1>
       <p class="ob-subheadline">We'll shape your experience around what you actually do.</p>
 
       <div class="ob-role-grid" role="group" aria-label="Select your role">
@@ -65,7 +65,7 @@
   <!-- ── Screen 2: Minimal voice profile ─────────────────── -->
   <section id="ob-screen-2" class="ob-screen" aria-label="Step 2: Your audience">
     <div class="ob-content">
-      <h1 class="ob-headline">Two questions. Then we generate your first post.</h1>
+      <h1 class="ob-headline">Two questions — then we generate your first post</h1>
       <p class="ob-subheadline">This is what Scouthook uses to shape every post around your audience and your niche.</p>
 
       <div class="ob-field-group">
@@ -88,16 +88,9 @@
   </section>
 
   <!-- ── Screen 3: First post generation ─────────────────── -->
-  <section id="ob-screen-3" class="ob-screen ob-screen--split" aria-label="Step 3: Generate your first post">
-
-    <!-- Left: input -->
-    <div class="ob-content ob-content--left">
-      <div class="ob-voice-indicator" aria-hidden="true">
-        <span class="ob-voice-dot"></span>
-        Built on your voice profile
-      </div>
-
-      <h1 class="ob-headline">Your first post starts here.</h1>
+  <section id="ob-screen-3" class="ob-screen" aria-label="Step 3: Generate your first post">
+    <div class="ob-content">
+      <h1 class="ob-headline">Your first post starts here</h1>
       <p class="ob-subheadline">Pick a prompt or type your own idea. One real thought from your experience is enough.</p>
 
       <div class="ob-chips" role="list">
@@ -123,19 +116,19 @@
       <button id="ob-s3-cta" class="ob-btn-primary" type="button" style="margin-top:16px">
         Generate my first post →
       </button>
-    </div>
 
-    <!-- Right: post preview (shows skeleton while generating; stays visible on 4b) -->
-    <div class="ob-post-preview" id="ob-post-preview" aria-live="polite" aria-label="Post preview">
-      <div id="ob-preview-empty" class="ob-preview-empty">
-        <p>Your post will appear here</p>
-      </div>
-      <div id="ob-preview-skeleton" class="ob-preview-skeleton" hidden aria-busy="true" aria-label="Generating post">
-        <div class="ob-skeleton-line" style="width:60%"></div>
-        <div class="ob-skeleton-line" style="width:90%"></div>
-        <div class="ob-skeleton-line" style="width:75%"></div>
-        <div class="ob-skeleton-line" style="width:85%"></div>
-        <div class="ob-skeleton-line" style="width:50%"></div>
+      <!-- Post preview (shows skeleton while generating) -->
+      <div class="ob-post-preview ob-post-preview--inline" id="ob-post-preview" aria-live="polite" aria-label="Post preview">
+        <div id="ob-preview-empty" class="ob-preview-empty">
+          <p>Your post will appear here</p>
+        </div>
+        <div id="ob-preview-skeleton" class="ob-preview-skeleton" hidden aria-busy="true" aria-label="Generating post">
+          <div class="ob-skeleton-line" style="width:60%"></div>
+          <div class="ob-skeleton-line" style="width:90%"></div>
+          <div class="ob-skeleton-line" style="width:75%"></div>
+          <div class="ob-skeleton-line" style="width:85%"></div>
+          <div class="ob-skeleton-line" style="width:50%"></div>
+        </div>
       </div>
     </div>
   </section>
@@ -149,7 +142,7 @@
           <path   class="ob-check-tick"   d="M14 27l8 8 16-16"/>
         </svg>
       </div>
-      <h1 class="ob-headline">Your first post is ready.</h1>
+      <h1 class="ob-headline">Your first post is ready</h1>
       <p class="ob-subheadline">It passed all 15 quality checks. No AI-sounding language. No weak hook. Just a post worth publishing.</p>
     </div>
   </section>
@@ -158,7 +151,7 @@
   <section id="ob-screen-4b" class="ob-screen" aria-label="Your generated post">
     <div class="ob-content" style="max-width:600px">
 
-      <h1 class="ob-headline" style="margin-bottom:6px">Here's your first post.</h1>
+      <h1 class="ob-headline" style="margin-bottom:6px">Here's your first post</h1>
       <p class="ob-subheadline" style="margin-bottom:20px">
         Read it out loud. If it sounds like you — that's the point.
       </p>
@@ -184,17 +177,12 @@
       <textarea id="ob-post-output" class="ob-textarea" readonly
                 aria-label="Generated post" rows="10"></textarea>
 
-      <p class="ob-post-upsell">
-        One more step and every post after this one gets sharper — Scouthook will learn
-        your exact voice, your audience's pain, and your strongest takes.
-      </p>
-
       <div class="ob-cta-row">
-        <button id="ob-s4b-continue" class="ob-btn-primary" type="button">
-          Make future posts even better →
+        <button id="ob-s4b-skip" class="ob-btn-primary" type="button">
+          Review and Publish Your First Post
         </button>
-        <button id="ob-s4b-skip" class="ob-btn-secondary" type="button">
-          Skip — open my post in editor
+        <button id="ob-s4b-continue" class="ob-btn-golden" type="button">
+          Make Future Posts Even Better
         </button>
       </div>
     </div>
@@ -203,7 +191,7 @@
   <!-- ── Screen 5: LinkedIn connection ────────────────────── -->
   <section id="ob-screen-5" class="ob-screen" aria-label="Connect LinkedIn">
     <div class="ob-content">
-      <h1 class="ob-headline">Connect your LinkedIn account.</h1>
+      <h1 class="ob-headline">Connect your LinkedIn account</h1>
       <p class="ob-subheadline">One click. Takes 30 seconds. You stay in control the whole time.</p>
 
       <p class="ob-body-copy">
@@ -277,7 +265,7 @@
           <path   class="ob-check-tick"   d="M14 27l8 8 16-16"/>
         </svg>
       </div>
-      <h1 class="ob-headline">Your voice profile is complete.</h1>
+      <h1 class="ob-headline">Your voice profile is complete</h1>
       <p class="ob-subheadline">
         Every post from here gets sharper. Your draft is waiting whenever you're ready to publish.
       </p>

@@ -165,12 +165,26 @@
     }
     .seed-list-empty a { color: var(--brand); font-weight: 600; }
 
-    /* ── No-LinkedIn action pair ─────────────────────────────── */
-    .no-linkedin-actions {
+    /* ── LinkedIn connect banner (above action bar) ──────────── */
+    .linkedin-connect-banner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 16px;
+      background: #EFF6FF;
+      border-top: 1px solid #BFDBFE;
+      font-size: 13px;
+      color: #1E40AF;
+    }
+
+    .linkedin-connect-banner-text {
       display: flex;
       align-items: center;
       gap: 8px;
+      font-weight: 500;
     }
+
     .btn-connect-linkedin {
       display: inline-flex;
       align-items: center;
@@ -191,47 +205,6 @@
     .btn-connect-linkedin.disabled,
     .btn-connect-linkedin[disabled] { opacity: 0.45; pointer-events: none; }
 
-    /* LinkedIn connected bar */
-    .linkedin-connected-bar {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-    .linkedin-connected-chip {
-      display: flex;
-      align-items: center;
-      gap: 7px;
-      padding: 4px 10px 4px 4px;
-      background: #EEF9F7;
-      border: 1.5px solid #A7F3D0;
-      border-radius: 20px;
-      font-size: 13px;
-      font-weight: 600;
-      color: #065F46;
-      white-space: nowrap;
-    }
-    .linkedin-connected-chip img {
-      width: 22px;
-      height: 22px;
-      border-radius: 50%;
-      object-fit: cover;
-    }
-    .linkedin-connected-chip .li-initials {
-      width: 22px;
-      height: 22px;
-      border-radius: 50%;
-      background: #0A66C2;
-      color: #fff;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 10px;
-      font-weight: 700;
-    }
-    .linkedin-connected-chip .li-check {
-      font-size: 11px;
-      color: #059669;
-    }
   </style>
 </head>
 <body>
@@ -446,6 +419,18 @@
 
       </div><!-- /post-surface -->
 
+      <!-- LinkedIn connect banner — shown when not connected, hidden once connected -->
+      <div id="no-linkedin-actions" class="linkedin-connect-banner" hidden aria-live="polite">
+        <div class="linkedin-connect-banner-text">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="#0A66C2" aria-hidden="true"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+          Connect LinkedIn to schedule and publish directly from here
+        </div>
+        <a id="connect-publish-btn" class="btn-connect-linkedin" href="/api/linkedin/connect?from=generate"
+           aria-label="Connect your LinkedIn account">
+          Connect →
+        </a>
+      </div>
+
       <!-- Zone 4: Action bar -->
       <div>
         <div id="action-bar">
@@ -473,17 +458,7 @@
           <div class="action-right" id="action-right">
             <span class="autosave-indicator" id="save-draft-btn" aria-live="polite"></span>
             <!-- Shown when LinkedIn IS connected -->
-            <div id="linkedin-connected-bar" class="linkedin-connected-bar" hidden>
-              <div id="linkedin-connected-chip" class="linkedin-connected-chip" aria-label="LinkedIn connected"></div>
-              <button id="schedule-btn" disabled aria-label="Schedule or publish post">Schedule</button>
-            </div>
-            <!-- Shown when LinkedIn is NOT connected (hidden until status known) -->
-            <div id="no-linkedin-actions" class="no-linkedin-actions" hidden>
-              <a id="connect-publish-btn" class="btn-connect-linkedin" href="/api/linkedin/connect?from=generate"
-                 aria-label="Connect your LinkedIn account">
-                Connect to LinkedIn
-              </a>
-            </div>
+            <button id="schedule-btn" class="linkedin-connected-bar" disabled hidden aria-label="Schedule or publish post">Schedule</button>
           </div>
 
           <!-- Post-publish state (hidden until published/scheduled) -->

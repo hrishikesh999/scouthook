@@ -552,8 +552,9 @@ function applyLinkedInCtas(liName, liPhoto) {
   if (linkedinConnected) {
     if (noLinkedInActions) noLinkedInActions.hidden = true;
     if (scheduleBtn) {
-      scheduleBtn.hidden    = false;
-      scheduleBtn.title     = '';
+      scheduleBtn.hidden   = false;
+      scheduleBtn.disabled = false;
+      scheduleBtn.title    = '';
     }
   } else {
     if (noLinkedInActions) noLinkedInActions.hidden = false;

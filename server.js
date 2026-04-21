@@ -59,10 +59,10 @@ app.use(express.json({ limit: '30mb' }));
 // Auth (Google OAuth) + session
 // ---------------------------------------------------------------------------
 
-const SESSION_SECRET = process.env.SESSION_SECRET || 'dev_session_secret_change_me';
 if (!process.env.SESSION_SECRET) {
-  console.warn('[auth] SESSION_SECRET is not set; using a dev default (NOT safe for production).');
+  throw new Error('SESSION_SECRET environment variable is required. Set a strong random string (e.g. openssl rand -hex 32).');
 }
+const SESSION_SECRET = process.env.SESSION_SECRET;
 
 app.set('trust proxy', 1); // needed on Render/behind proxies for secure cookies
 app.use(session({

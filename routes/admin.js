@@ -4,7 +4,10 @@ const express = require('express');
 const router = express.Router();
 const { getSetting, setSetting, getAllSettings } = require('../db');
 
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'changeme';
+if (!process.env.ADMIN_PASSWORD) {
+  throw new Error('ADMIN_PASSWORD environment variable is required.');
+}
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 
 // Simple password check middleware for admin routes
 function requireAdminPassword(req, res, next) {

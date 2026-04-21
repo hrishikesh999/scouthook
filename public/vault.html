@@ -71,6 +71,14 @@
       flex: 1;
     }
 
+    /* Stable content area — prevents height shifts when toggling states */
+    .ideas-content {
+      flex: 1;
+      min-height: 300px;
+      display: flex;
+      flex-direction: column;
+    }
+
     /* ── Filter pills ────────────────────────────────────────── */
     .ideas-filters {
       display: flex;
@@ -214,6 +222,7 @@
       grid-template-columns: 1fr 1.4fr;
       gap: var(--space-8);
       align-items: start;
+      flex: 1;
     }
     .vault-upload-panel { display: flex; flex-direction: column; gap: var(--space-6); }
     .vault-panel-heading { font-size: 1.25rem; font-weight: 700; color: var(--text-heading); margin: 0 0 var(--space-1) 0; }
@@ -334,7 +343,7 @@
     .vault-mine-status.ok    { background: #ECFDF5; color: #065F46; display: block; }
     .vault-mine-status.error { background: #FEF2F2; color: var(--text-danger); display: block; }
 
-    .vault-doc-list { display: flex; flex-direction: column; gap: var(--space-3); }
+    .vault-doc-list { display: flex; flex-direction: column; gap: var(--space-3); overflow-y: auto; max-height: calc(100vh - 280px); }
     .vault-doc-card {
       display: flex;
       align-items: flex-start;
@@ -435,15 +444,17 @@
           <button class="filter-btn" data-filter="convert">Convert</button>
         </div>
 
-        <div id="ideas-grid" class="ideas-grid" style="display:none"></div>
+        <div class="ideas-content" id="ideas-content">
+          <div id="ideas-grid" class="ideas-grid" style="display:none"></div>
 
-        <div id="ideas-filter-empty" style="display:none; text-align:center; padding:var(--space-8); color:var(--text-muted); font-size:0.875rem;"></div>
+          <div id="ideas-filter-empty" style="display:none; text-align:center; padding:var(--space-8); color:var(--text-muted); font-size:0.875rem;"></div>
 
-        <div id="ideas-empty" class="vault-empty" style="display:none">
-          <svg class="vault-empty-icon" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a7 7 0 0 1 7 7c0 3.87-2.96 7.05-3 7.94V18a1 1 0 0 1-1 1h-6a1 1 0 0 1-1-1v-1.06C7.96 16.05 5 12.87 5 9a7 7 0 0 1 7-7z"/><line x1="9" y1="21" x2="15" y2="21"/></svg>
-          <p class="vault-empty-label">No ideas yet</p>
-          <p class="vault-empty-sub">Add a source and generate ideas to fill your vault.</p>
-          <button class="idea-action-btn primary" id="goto-sources-btn" style="margin-top:var(--space-4)">Add Sources →</button>
+          <div id="ideas-empty" class="vault-empty" style="display:none">
+            <svg class="vault-empty-icon" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a7 7 0 0 1 7 7c0 3.87-2.96 7.05-3 7.94V18a1 1 0 0 1-1 1h-6a1 1 0 0 1-1-1v-1.06C7.96 16.05 5 12.87 5 9a7 7 0 0 1 7-7z"/><line x1="9" y1="21" x2="15" y2="21"/></svg>
+            <p class="vault-empty-label">No ideas yet</p>
+            <p class="vault-empty-sub">Add a source and generate ideas to fill your vault.</p>
+            <button class="idea-action-btn primary" id="goto-sources-btn" style="margin-top:var(--space-4)">Add Sources →</button>
+          </div>
         </div>
 
         <div id="dismissed-section" style="display:none">

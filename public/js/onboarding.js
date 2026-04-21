@@ -320,16 +320,6 @@ const Onboarding = (() => {
       }
     }
 
-    // Wire CTAs once (use { once: true } to prevent duplicate listeners on re-renders)
-    // Golden: continue to voice deepening (Screen 6)
-    qs('ob-s4b-continue')?.addEventListener('click', () => showScreen(6), { once: true });
-    // Primary: go straight to the editor — mark complete in background so navigation is instant
-    qs('ob-s4b-skip')?.addEventListener('click', () => {
-      markOnboardingComplete(); // fire-and-forget
-      window.location.href = state.postId
-        ? `/generate.html?postId=${encodeURIComponent(state.postId)}`
-        : '/drafts.html';
-    }, { once: true });
   }
 
   function fireConfetti() {
@@ -352,6 +342,17 @@ const Onboarding = (() => {
       if (progress < 1) requestAnimationFrame(step);
     }
     requestAnimationFrame(step);
+  }
+
+  /* ── Screen 4b: CTA buttons ──────────────────────────── */
+  function initScreen4b() {
+    qs('ob-s4b-continue')?.addEventListener('click', () => showScreen(6));
+    qs('ob-s4b-skip')?.addEventListener('click', () => {
+      markOnboardingComplete(); // fire-and-forget
+      window.location.href = state.postId
+        ? `/generate.html?postId=${encodeURIComponent(state.postId)}`
+        : '/drafts.html';
+    });
   }
 
   /* ── Screen 5: LinkedIn ───────────────────────────────── */
@@ -478,6 +479,7 @@ const Onboarding = (() => {
     initScreen1();
     initScreen2();
     initScreen3();
+    initScreen4b();
     initScreen5();
     initScreen6();
 

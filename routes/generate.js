@@ -309,8 +309,8 @@ router.post('/', async (req, res) => {
 
       const postsInsert = db.prepare(`
         INSERT INTO generated_posts
-          (run_id, user_id, tenant_id, format_slug, content, quality_score, quality_flags, passed_gate, funnel_type, vault_source_ref, hook_b, cta_alternatives)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          (run_id, user_id, tenant_id, format_slug, content, quality_score, quality_flags, passed_gate, funnel_type, vault_source_ref, hook_b, cta_alternatives, idea_input)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         RETURNING id
       `);
 
@@ -326,7 +326,8 @@ router.post('/', async (req, res) => {
         funnelType,
         vaultSourceRef,
         hookB || null,
-        ctaAlternatives?.length ? JSON.stringify(ctaAlternatives) : null
+        ctaAlternatives?.length ? JSON.stringify(ctaAlternatives) : null,
+        inputData.raw_idea || null
       );
       const primaryId = primaryInsert.lastInsertRowid;
 
@@ -354,7 +355,8 @@ router.post('/', async (req, res) => {
           funnelType,
           null,
           null,
-          altCtaAlternatives.length ? JSON.stringify(altCtaAlternatives) : null
+          altCtaAlternatives.length ? JSON.stringify(altCtaAlternatives) : null,
+          inputData.raw_idea || null
         );
         const altQuality = buildQualityPayload(alternative.gate, synthesisAttempt, false);
         altPayload = {

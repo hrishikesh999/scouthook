@@ -191,22 +191,47 @@
     .btn-connect-linkedin.disabled,
     .btn-connect-linkedin[disabled] { opacity: 0.45; pointer-events: none; }
 
-    .btn-save-draft-explicit {
-      height: 36px;
-      padding: 0 14px;
-      border-radius: 8px;
-      background: transparent;
-      color: var(--text-heading);
+    /* LinkedIn connected bar */
+    .linkedin-connected-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .linkedin-connected-chip {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 4px 10px 4px 4px;
+      background: #EEF9F7;
+      border: 1.5px solid #A7F3D0;
+      border-radius: 20px;
       font-size: 13px;
       font-weight: 600;
-      font-family: var(--font-sans);
-      border: 1.5px solid var(--border);
+      color: #065F46;
       white-space: nowrap;
-      cursor: pointer;
-      transition: border-color 140ms ease, background 140ms ease;
     }
-    .btn-save-draft-explicit:hover    { border-color: var(--brand); background: rgba(15,118,110,.04); }
-    .btn-save-draft-explicit:disabled { opacity: 0.45; cursor: not-allowed; }
+    .linkedin-connected-chip img {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      object-fit: cover;
+    }
+    .linkedin-connected-chip .li-initials {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: #0A66C2;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      font-weight: 700;
+    }
+    .linkedin-connected-chip .li-check {
+      font-size: 11px;
+      color: #059669;
+    }
   </style>
 </head>
 <body>
@@ -448,17 +473,16 @@
           <div class="action-right" id="action-right">
             <span class="autosave-indicator" id="save-draft-btn" aria-live="polite"></span>
             <!-- Shown when LinkedIn IS connected -->
-            <button id="schedule-btn" disabled aria-label="Schedule or publish post">Schedule</button>
+            <div id="linkedin-connected-bar" class="linkedin-connected-bar" hidden>
+              <div id="linkedin-connected-chip" class="linkedin-connected-chip" aria-label="LinkedIn connected"></div>
+              <button id="schedule-btn" disabled aria-label="Schedule or publish post">Schedule</button>
+            </div>
             <!-- Shown when LinkedIn is NOT connected (hidden until status known) -->
             <div id="no-linkedin-actions" class="no-linkedin-actions" hidden>
               <a id="connect-publish-btn" class="btn-connect-linkedin" href="/api/linkedin/connect?from=generate"
-                 aria-label="Connect LinkedIn account and publish">
-                Connect LinkedIn &amp; Publish
+                 aria-label="Connect your LinkedIn account">
+                Connect to LinkedIn
               </a>
-              <button id="save-draft-explicit-btn" class="btn-save-draft-explicit" type="button"
-                      disabled aria-label="Save as draft to publish later">
-                Save as Draft
-              </button>
             </div>
           </div>
 

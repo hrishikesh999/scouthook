@@ -551,10 +551,17 @@ async function checkLinkedInStatus() {
 function applyLinkedInCtas(liName, liPhoto) {
   if (linkedinConnected) {
     if (noLinkedInActions) noLinkedInActions.hidden = true;
-    if (scheduleBtn)       scheduleBtn.hidden        = false;
+    if (scheduleBtn) {
+      scheduleBtn.hidden    = false;
+      scheduleBtn.title     = '';
+    }
   } else {
-    if (scheduleBtn)       scheduleBtn.hidden        = true;
-    if (noLinkedInActions) noLinkedInActions.hidden  = false;
+    if (noLinkedInActions) noLinkedInActions.hidden = false;
+    if (scheduleBtn) {
+      scheduleBtn.hidden    = false;
+      scheduleBtn.disabled  = true;
+      scheduleBtn.title     = 'Connect LinkedIn to schedule and publish posts';
+    }
   }
 }
 

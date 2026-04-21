@@ -120,7 +120,7 @@ async function loadVaultHero() {
     const count = available.length;
     if (count > 0) {
       countEl.textContent = `${count} idea${count === 1 ? '' : 's'} ready`;
-      btnEl.href          = '/ideas.html';
+      btnEl.href          = '/vault.html';
       btnEl.textContent   = 'View & Generate from Ideas →';
     } else {
       countEl.textContent = '';

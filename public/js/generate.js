@@ -461,7 +461,7 @@ document.addEventListener('visibilitychange', () => {
         if (data.post.quality_score != null) {
           let flags = [];
           try { flags = JSON.parse(data.post.quality_flags || '[]'); } catch { flags = []; }
-          qualityObj = { score: data.post.quality_score, flags, forcedReturn: false };
+          qualityObj = { score: data.post.quality_score, flags, forcedReturn: false, passed: data.post.quality_score >= 75 };
         }
 
         currentPostId     = data.post.id;
@@ -785,13 +785,20 @@ function renderScoreBar(quality, archetype, confidence) {
   }
 
   // Pass / fail pill
-  const passed = quality.passed || quality.passed_gate;
+  // Fall back to score-based derivation when loaded from DB (no explicit passed flag)
+  const passed = quality.passed ?? quality.passed_gate ?? (score >= 75);
   passfailPill.textContent = passed ? '● Passed' : '● Failed';
   passfailPill.className = 'passfail-pill ' + (passed ? 'pass' : 'fail');
   if (passfailTooltip) {
-    passfailTooltip.textContent = passed
-      ? 'The post passed our quality check. It\'s ready to publish.'
-      : 'The post did not pass our quality check. It needs refinement.';
+    if (passed) {
+      passfailTooltip.textContent = 'The post passed our quality check. It\'s ready to publish.';
+    } else {
+      const reasons = (quality.errors || quality.flags || []).filter(Boolean);
+      passfailTooltip.innerHTML = reasons.length
+        ? '<strong style="display:block;margin-bottom:4px">Why it failed:</strong>' +
+          reasons.map(r => escHtml(r)).join('<br>')
+        : 'The post did not pass our quality check. Review the suggestions below.';
+    }
   }
 
   // Suggestions

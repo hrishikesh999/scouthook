@@ -135,6 +135,7 @@ function runQualityGate(postText, options = {}) {
     hookConfidence = null,
     formatSlug = '',
     path = 'idea',
+    funnelType = null,
   } = options;
 
   const text = postText || '';
@@ -203,18 +204,35 @@ function runQualityGate(postText, options = {}) {
 
   const totalWords = countWords(text);
 
-  // Check 6 — Post length (warnings)
-  if (totalWords < LINKEDIN_RULES.post.minWords) {
-    warnings.push(
-      `Post is short at ${totalWords} words — aim for ${LINKEDIN_RULES.post.minWords}–${LINKEDIN_RULES.post.maxWords}`,
-    );
+  // Check 6 — Post length (warnings, funnel-aware)
+  // Reach posts are intentionally short (100–200 words); penalising them for brevity contradicts their design.
+  // Use per-funnel targets from postLengthTargets when funnelType is known; fall back to global thresholds.
+  const funnelTarget = LINKEDIN_RULES.postLengthTargets[funnelType] || null;
+  const effectiveMin = funnelType === 'reach' ? 0 : (funnelTarget?.min ?? LINKEDIN_RULES.post.minWords);
+  const effectiveMax = funnelTarget?.max ?? LINKEDIN_RULES.post.maxWords;
+
+  if (effectiveMin > 0 && totalWords < effectiveMin) {
+    const label = funnelTarget ? `${funnelTarget.min}–${funnelTarget.max}` : `${LINKEDIN_RULES.post.minWords}–${LINKEDIN_RULES.post.maxWords}`;
+    warnings.push(`Post is short at ${totalWords} words — aim for ${label}`);
     flags.push('TOO_SHORT');
     score -= 10;
   }
-  if (totalWords > LINKEDIN_RULES.post.maxWords) {
-    warnings.push(`Post is long at ${totalWords} words — max is ${LINKEDIN_RULES.post.maxWords}`);
+  if (totalWords > effectiveMax) {
+    warnings.push(`Post is long at ${totalWords} words — keep it under ${effectiveMax} for a ${funnelType || 'standard'} post`);
     flags.push('TOO_LONG');
     score -= 5;
+  }
+
+  // Check 6b — Reach specificity (reach-only warning)
+  // Short reach posts still need at least one concrete anchor — a number, timeframe, or direct quote —
+  // to give readers something specific to engage with and to drive dwell time.
+  if (funnelType === 'reach') {
+    const hasConcreteAnchor = /\d/.test(text) || /["'][^"']{4,}["']/.test(text);
+    if (!hasConcreteAnchor) {
+      warnings.push('Add a concrete detail — a number, timeframe, or real example — to give this post something specific to grab onto');
+      flags.push('LACKS_SPECIFICITY');
+      score -= 8;
+    }
   }
 
   // Check 7 — Closing CTA

@@ -62,13 +62,14 @@ async function checkRateLimit(userId) {
   return { limited: false };
 }
 
-function gateOptions(post, userProfile, genPath, archetypeUsed, hookConfidence) {
+function gateOptions(post, userProfile, genPath, archetypeUsed, hookConfidence, funnelType = null) {
   return {
     voiceProfile: userProfile,
     archetypeUsed: archetypeUsed ?? null,
     hookConfidence: hookConfidence ?? null,
     formatSlug: post.format_slug,
     path: genPath,
+    funnelType: funnelType ?? null,
   };
 }
 
@@ -161,7 +162,7 @@ async function synthesiseVaultWithQualityRetry(userProfile, vaultIdea, chunkText
   const gate = () =>
     runQualityGate(
       post,
-      gateOptions({ format_slug: IDEA_SLUG, content: post }, userProfile, 'idea', archetypeUsed, hookConfidence)
+      gateOptions({ format_slug: IDEA_SLUG, content: post }, userProfile, 'idea', archetypeUsed, hookConfidence, baseOptions.funnelType || null)
     );
 
   let primaryGate = gate();
@@ -257,9 +258,10 @@ router.post('/', async (req, res) => {
         trust:   'This post should build authority — demonstrate expertise, share a proprietary framework, or offer a counterintuitive perspective.',
         convert: 'This post should drive inbound — be specific about who you help and what transformation you create. Include a subtle but clear call to action.',
       };
-      const vaultOptions = vaultIdea.funnel_type
-        ? { _funnelHint: funnelHints[vaultIdea.funnel_type] || '' }
-        : {};
+      const vaultOptions = {
+        ...(vaultIdea.funnel_type ? { _funnelHint: funnelHints[vaultIdea.funnel_type] || '' } : {}),
+        funnelType: vaultIdea.funnel_type || null,
+      };
       ideaResult = await synthesiseVaultWithQualityRetry(userProfile, vaultIdea, vaultChunkText, vaultOptions);
     } else {
       // Standard idea path
@@ -531,7 +533,7 @@ router.post('/regenerate/:postId', async (req, res) => {
 router.post('/quality-check', async (req, res) => {
   const userId = req.userId;
   const tenantId = req.tenantId;
-  const { postText, archetypeUsed = null, hookConfidence = null } = req.body;
+  const { postText, archetypeUsed = null, hookConfidence = null, funnel_type = null } = req.body;
 
   if (!postText || typeof postText !== 'string') {
     return res.status(400).json({ ok: false, error: 'postText is required' });
@@ -546,6 +548,7 @@ router.post('/quality-check', async (req, res) => {
     hookConfidence: typeof hookConfidence === 'number' ? hookConfidence : null,
     voiceProfile: userProfile || {},
     path: 'idea',
+    funnelType: funnel_type ?? null,
   });
 
   return res.json({ ok: true, quality });

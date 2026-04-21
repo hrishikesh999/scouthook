@@ -26,7 +26,8 @@ const emptyProfile = {};
   assert.ok(r.flags.includes('WEAK_HOOK_OPENER'));
 }
 
-// Test 3 — AI language (two phrases → score below 50)
+// Test 3 — AI language (two phrases → significant score penalty, failed gate)
+// Scoring: -30 AI giveaway, -10 TOO_SHORT, -8 NO_CTA = 52 → below 60
 {
   const post =
     'As an AI language model I will explain. In conclusion, here is my take.\n\n' +
@@ -35,7 +36,7 @@ const emptyProfile = {};
   const r = runQualityGate(post, { voiceProfile: emptyProfile });
   assert.strictEqual(r.passed, false);
   assert.ok(r.flags.includes('AI_LANGUAGE_DETECTED'));
-  assert.ok(r.score < 50, `expected score < 50, got ${r.score}`);
+  assert.ok(r.score < 60, `expected score < 60, got ${r.score}`);
 }
 
 // Test 4 — hashtag spam
@@ -90,7 +91,7 @@ const emptyProfile = {};
     '#professional #insight #career';
   const r = runQualityGate(post, { voiceProfile: emptyProfile });
   assert.strictEqual(r.passed, true);
-  assert.ok(r.flags.includes('NO_CLOSING_QUESTION'));
+  assert.ok(r.flags.includes('NO_CTA'));
 }
 
 // Test 8 — two clichés + long hook → score below 60

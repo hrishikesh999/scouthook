@@ -1065,7 +1065,7 @@ async function rescorePost(text) {
     const res = await fetch('/api/generate/quality-check', {
       method: 'POST',
       headers: apiHeaders(),
-      body: JSON.stringify({ postText: text })
+      body: JSON.stringify({ postText: text, funnel_type: currentFunnelType || null })
     });
     const data = await res.json();
     if (data.ok && data.quality) {

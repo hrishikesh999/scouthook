@@ -555,7 +555,7 @@ router.get('/scheduled', (req, res) => {
              sp.post_id, gp.format_slug, gp.funnel_type
       FROM   scheduled_posts sp
       LEFT JOIN generated_posts gp ON sp.post_id = gp.id
-      WHERE  sp.user_id = ? AND sp.tenant_id = ? AND sp.status IN ('pending', 'processing')
+      WHERE  sp.user_id = ? AND sp.tenant_id = ? AND sp.status IN ('pending', 'processing', 'not_sent')
       ORDER  BY sp.scheduled_for ASC
     `).all(userId, tenantId);
 

@@ -92,8 +92,11 @@ function renderStream(posts) {
   if (!stream) return;
 
   const list   = Array.isArray(posts) ? posts : [];
+  const failed = list.filter(p => p.status === 'not_sent');
+  const active = list.filter(p => p.status !== 'not_sent');
+
   const days   = buildDayRange();
-  const byDate = groupByDate(list);
+  const byDate = groupByDate(active);
 
   // Day keys covered by the 7-day window
   const windowKeys = new Set(days.map(localDateKeyFromDate));
@@ -123,7 +126,18 @@ function renderStream(posts) {
       ${groups}`;
   }
 
-  stream.innerHTML = weekHtml + laterHtml;
+  // "Failed to Publish" section
+  let failedHtml = '';
+  if (failed.length > 0) {
+    const rows = failed.map(renderFailedRow).join('');
+    failedHtml = `
+      <div class="sched-section-divider sched-section-divider--failed">
+        <span class="sched-section-label sched-section-label--failed">Failed to Publish</span>
+      </div>
+      <div class="sched-failed-list">${rows}</div>`;
+  }
+
+  stream.innerHTML = weekHtml + laterHtml + failedHtml;
 }
 
 function renderDayGroup(date, posts) {
@@ -181,6 +195,39 @@ function renderEventRow(post) {
         <span class="sched-action-edit">Edit →</span>
       </div>
     </${endTag}>`;
+}
+
+function renderFailedRow(post) {
+  const lines    = (post.content || '').trim().split('\n').map(l => l.trim()).filter(Boolean);
+  const hook     = lines[0] || '';
+  const editHref = post.post_id ? `/generate.html?postId=${encodeURIComponent(post.post_id)}` : '/generate.html';
+  const when     = post.scheduled_for
+    ? new Date(post.scheduled_for).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })
+    : '';
+
+  const errorMap = {
+    reconnect_required: 'LinkedIn connection expired',
+    not_connected: 'LinkedIn not connected',
+    rate_limit_exceeded: 'Rate limit exceeded',
+    invalid_image_url: 'Image could not be accessed',
+    invalid_carousel_pdf_url: 'Carousel PDF could not be accessed',
+    linkedin_document_processing_failed: 'LinkedIn rejected the carousel',
+    linkedin_document_not_ready: 'LinkedIn timed out on carousel',
+    stuck_processing_timeout: 'Worker timed out',
+    scheduled_payload_mismatch: 'Post content was modified after scheduling',
+  };
+  const reason = errorMap[post.error_message] || post.error_message || 'Unknown error';
+
+  return `
+    <a href="${editHref}" class="sched-failed-row">
+      <div class="sched-failed-meta">
+        <span class="sched-failed-badge">Failed to Publish</span>
+        ${when ? `<span class="sched-failed-when">Scheduled for ${when}</span>` : ''}
+      </div>
+      <p class="sched-failed-hook">${hook}</p>
+      <p class="sched-failed-reason">${reason}</p>
+      <span class="sched-action-edit">Edit &amp; reschedule →</span>
+    </a>`;
 }
 
 // ---------------------------------------------------------------------------

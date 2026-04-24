@@ -1,6 +1,7 @@
 'use strict';
 
 const { getSetting, db, backendKind } = require('../db');
+const { sendEmailToUser } = require('../emails');
 
 let postQueue = null;
 let workerInstance = null;
@@ -36,9 +37,13 @@ async function initScheduler() {
   const IORedis = require('ioredis');
   const { publishScheduledPost } = require('./linkedinPublisher');
 
-  const connection = new IORedis(redisUrl, { maxRetriesPerRequest: null });
+  // BullMQ requires separate IORedis instances for Queue and Worker.
+  // The Worker uses blocking commands (BRPOP/BLMOVE) that hold the connection,
+  // which would prevent the Queue from sending non-blocking commands on the same connection.
+  const queueConnection  = new IORedis(redisUrl, { maxRetriesPerRequest: null });
+  const workerConnection = new IORedis(redisUrl, { maxRetriesPerRequest: null });
 
-  postQueue = new Queue('linkedin-posts', { connection });
+  postQueue = new Queue('linkedin-posts', { connection: queueConnection });
   schedulerEnabled = true;
 
   workerInstance = new Worker('linkedin-posts', async job => {
@@ -50,8 +55,7 @@ async function initScheduler() {
       maxAttempts: job.opts?.attempts ?? 3,
     });
   }, {
-    connection,
-    // Conservative default to reduce bursty automation.
+    connection: workerConnection,
     concurrency: 1,
   });
 
@@ -125,12 +129,45 @@ async function initScheduler() {
     `).run(row.id);
 
     try {
-      const meta = await db.prepare('SELECT user_id, tenant_id FROM scheduled_posts WHERE id = ?').get(row.id);
+      const meta = await db.prepare(
+        'SELECT user_id, tenant_id, post_id, content, scheduled_for FROM scheduled_posts WHERE id = ?'
+      ).get(row.id);
       if (meta) {
+        // Revert originating draft so user can edit and reschedule
+        if (meta.post_id) {
+          await db.prepare(`
+            UPDATE generated_posts SET status = 'draft'
+            WHERE id = ? AND user_id = ? AND tenant_id = ? AND status = 'scheduled'
+          `).run(meta.post_id, meta.user_id, meta.tenant_id);
+        }
+
         await db.prepare(`
           INSERT INTO scheduled_post_events (scheduled_post_id, user_id, tenant_id, event_type, message)
           VALUES (?, ?, ?, 'recovered', ?)
         `).run(row.id, meta.user_id, meta.tenant_id, 'processing_stale→not_sent');
+
+        // In-app notification
+        await db.prepare(`
+          INSERT INTO notifications (user_id, tenant_id, type, title, body, ref_id, ref_type)
+          VALUES (?, ?, 'publish_failed', 'Scheduled post failed', ?, ?, 'scheduled_post')
+        `).run(
+          meta.user_id, meta.tenant_id,
+          'Your scheduled post could not be published: stuck_processing_timeout',
+          row.id
+        );
+
+        // Email notification
+        const appUrl = process.env.APP_URL || '';
+        const postPreview = (meta.content || '').slice(0, 120) + ((meta.content || '').length > 120 ? '…' : '');
+        const scheduledFor = meta.scheduled_for
+          ? new Date(meta.scheduled_for).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })
+          : 'the scheduled time';
+        sendEmailToUser(meta.user_id, meta.tenant_id, 'post-failed', {
+          scheduled_for: scheduledFor,
+          error_reason: 'The post worker timed out. Please reschedule.',
+          post_preview: postPreview,
+          app_url: appUrl,
+        }, { dedupKey: false }).catch(() => {});
       }
     } catch { /* non-fatal */ }
 

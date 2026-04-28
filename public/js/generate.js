@@ -439,7 +439,7 @@ document.addEventListener('visibilitychange', () => {
   const vaultIdeaId   = _qs.get('vault_idea_id');
   if (vaultSeedText && vaultIdeaId) {
     currentVaultIdeaId = Number(vaultIdeaId);
-    ideaInput.value    = decodeURIComponent(vaultSeedText);
+    ideaInput.value    = vaultSeedText;
     if (vaultSourceBadge) vaultSourceBadge.style.display = 'none';
     window.history.replaceState({}, '', '/generate.html');
     triggerGenerate();

@@ -194,12 +194,16 @@ app.get('/auth/google/callback',
 );
 
 app.post('/auth/logout', (req, res) => {
-  req.logout?.(() => {});
   const finish = () => {
     res.clearCookie('scouthook.sid');
     res.json({ ok: true });
   };
-  if (req.session) {
+  if (req.logout) {
+    req.logout((err) => {
+      if (err) console.error('[logout]', err);
+      finish();
+    });
+  } else if (req.session) {
     req.session.destroy(finish);
   } else {
     finish();

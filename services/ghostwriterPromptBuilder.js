@@ -28,18 +28,24 @@ Your job: given a user's brand profile and their uploaded documents, write a com
 The output should be a ready-to-use system prompt — detailed, specific, and grounded in the person's actual business, audience, proof points, and language. It should NOT be generic.
 
 Structure the output in this order:
-1. ROLE — who the ghostwriter is writing for (name, business, one-line positioning)
-2. WHO [NAME] IS — their background, what they personally do, why they're credible
-3. POSITIONING — their one-line value proposition (extract from documents if not stated)
-4. TARGET AUDIENCE — specific role, seniority, business context
-5. THEIR WORLD — the language, vocabulary, and industry terms their audience uses naturally (extract from documents)
-6. AUDIENCE PSYCHIC REALITY — what keeps them up at night, what frustrates them, what they want (extract from documents)
-7. THE ANGLE — what specifically this person's work fixes for their audience (extract from documents)
-8. PROOF POINTS — real results, specific numbers, named case studies from their documents. Use the exact figures.
-9. POST FORMAT RULES — include all 5 formats: Insight, Story, Myth-Bust, Numbered List, CTA (occasional). Describe each briefly.
-10. FORMATTING — LinkedIn-specific rules: short paragraphs, one sentence per line, hook on line 1, no hashtags unless requested, 150–300 words typically
-11. VOICE FINGERPRINT — how this person writes (tone, sentence rhythm, credibility approach, signature patterns)
-12. WHAT NEVER TO DO — patterns that would expose AI authorship or break their brand voice
+1. ROLE — who the ghostwriter is writing for (name, business, one-line positioning). State clearly: "You are writing for [Name], founder/role of [Business] — [positioning tagline]." Include: posts are written in their voice — first person, confident, sharp, direct. No corporate language. No fluff. No hedging. Short sentences. Human tone. They sound like a smart practitioner talking to a peer, not a marketer writing content.
+2. WHO [NAME] IS — their background, what they personally do day-to-day, why they're credible. Specific details only — no generic founder clichés.
+3. THE NICHE YOU ARE WRITING FOR RIGHT NOW — the specific audience segment extracted from their documents (name the sub-niche, not just a category). Describe their world: what they do, what they spend money on, what their business model looks like.
+4. THEIR LANGUAGE — a list of vocabulary and industry terms their audience uses naturally (extract from documents). These are words/phrases to use in posts so the content feels native to the reader.
+5. AUDIENCE PSYCHIC REALITY — what keeps them up at night, what frustrates them, what they want. Be specific and visceral — this should read like you interviewed their clients. Extract from documents.
+6. THE ANGLE — what specifically this person's service fixes for their audience. The exact mechanism that delivers results. Extract from documents.
+7. PROOF POINTS — real results, specific numbers, named client case studies from their documents. Use the exact figures. Format as a bullet list.
+8. POST FORMAT RULES — include all 5 formats with descriptions:
+   - The Insight Post — one sharp observation about what their audience gets wrong. No pitch. Pure value. Ends with a thought-provoking line or question.
+   - The Story Post — a real (or realistic/composite) client story. Before → what was broken → what was fixed → result. First person.
+   - The Myth-Bust Post — destroy a common belief, then build the correct frame.
+   - The Numbered List Post — 3–5 specific, actionable items. No generic advice.
+   - The CTA Post — soft, one-line ask at the end (DM, follow, resource mention). Teach first, ask last. Use occasionally, not every week.
+9. FORMATTING — LinkedIn-specific rules: short paragraphs (1–3 lines max), hook on line 1 to earn the "see more" click, no hashtags unless requested, no emojis unless requested, 150–300 words typically (up to 400 for story posts)
+10. VOICE FINGERPRINT — describe how this person writes: tone adjectives, sentence rhythm, how they establish credibility, signature structural moves. Be specific — "confident and direct, never hedging" beats "professional tone."
+11. WHAT NEVER TO DO — list specific prohibitions: AI-sounding phrases to avoid ("leverage", "synergy", "game-changer", "in today's world", "at the end of the day"), topics outside their niche, generic advice that could apply to anyone, and any other brand-breaking patterns. Include: never sound like the person is pitching — they're teaching. The pitch is implied by the authority of the content.
+12. PROJECT KNOWLEDGE — list each uploaded document by name (using the filenames provided). Then add: "Always reference these documents before writing posts to ensure accuracy, proof points, and on-brand positioning."
+13. HOW TO RESPOND WHEN ASKED FOR 5 POSTS FOR THE WEEK — include exactly: "Deliver 5 complete, ready-to-publish LinkedIn posts. Label them Post 1 (Monday) through Post 5 (Friday). Vary the format each day. Monday and Wednesday should be the strongest content — those are peak LinkedIn days. Friday can be slightly more conversational or storytelling. Do not explain the posts. Do not add commentary. Just deliver the posts, ready to copy-paste."
 
 Return ONLY the prompt text. No preamble, no explanation, no markdown fences.`;
 
@@ -67,14 +73,16 @@ async function getVaultContext(userId, tenantId) {
 
   if (!chunks || chunks.length === 0) return null;
 
+  const seenFiles = new Set();
   let combined = '';
   for (const chunk of chunks) {
+    seenFiles.add(chunk.filename);
     const section = `[${chunk.filename} — ${chunk.source_ref}]\n${chunk.content}\n\n`;
     if (combined.length + section.length > MAX_VAULT_CHARS) break;
     combined += section;
   }
 
-  return combined.trim() || null;
+  return { text: combined.trim() || null, filenames: [...seenFiles] };
 }
 
 /**
@@ -92,8 +100,8 @@ async function buildGhostwriterPrompt(userId, tenantId) {
 
     if (!isProfileReadyForGhostwriter(profile)) return;
 
-    const vaultContext = await getVaultContext(userId, tenantId);
-    if (!vaultContext) return;
+    const vault = await getVaultContext(userId, tenantId);
+    if (!vault?.text) return;
 
     // Build the meta-prompt user message
     const fingerprint = profile.voice_fingerprint ? JSON.parse(profile.voice_fingerprint) : null;
@@ -113,14 +121,19 @@ Audience pain points: ${profile.audience_pain || 'not specified'}
 Editorial stance / contrarian view: ${profile.contrarian_view || 'not specified'}
 ${voiceBlock}`;
 
+    const docList = vault.filenames.map((f, i) => `${i + 1}. ${f}`).join('\n');
+
     const prohibitions = `\nPROHIBITION RULES TO INCLUDE IN THE PROMPT (copy these verbatim into the output):
 ${AI_TELLS_PROHIBITION}`;
 
     const userMessage = `${profileBlock}
 
-UPLOADED DOCUMENTS (use these to extract proof points, niche language, ICP psychic reality, and service angle):
+UPLOADED DOCUMENT NAMES (list these verbatim in the PROJECT KNOWLEDGE section of the output):
+${docList}
 
-${vaultContext}
+UPLOADED DOCUMENT CONTENT (use these to extract proof points, niche language, ICP psychic reality, and service angle):
+
+${vault.text}
 
 ${prohibitions}
 

@@ -313,8 +313,8 @@ router.post('/weekly-batch', async (req, res) => {
 
   if (!userProfile) return res.status(400).json({ ok: false, error: 'complete_profile_first' });
 
-  const vaultContext = await getVaultContext(userId, tenantId);
-  if (!vaultContext) {
+  const vault = await getVaultContext(userId, tenantId);
+  if (!vault?.text) {
     return res.status(400).json({ ok: false, error: 'no_vault_documents', message: 'Upload and index at least one document to generate posts from.' });
   }
 
@@ -333,7 +333,7 @@ router.post('/weekly-batch', async (req, res) => {
   }
 
   try {
-    const posts = await generateWeeklyBatch(userProfile.ghostwriter_prompt, vaultContext);
+    const posts = await generateWeeklyBatch(userProfile.ghostwriter_prompt, vault.text);
 
     // Classify funnel type for each post; default to 'trust' for batch posts
     const batchId = require('crypto').randomUUID();

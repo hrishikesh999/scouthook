@@ -523,13 +523,14 @@ async function publishScheduledPost(scheduledPostId, { attemptsMade = 0, maxAtte
       `).run(scheduledPostId, row.user_id, row.tenant_id, linkedin_post_id);
     } catch { /* non-fatal */ }
 
-    // Stamp the originating draft as published
+    // Stamp the originating draft as published, including the linkedin_post_id
+    // so the Published page can render a "View on LinkedIn" link.
     if (row.post_id) {
       await db.prepare(`
         UPDATE generated_posts
-        SET status = 'published', published_at = CURRENT_TIMESTAMP
+        SET status = 'published', published_at = CURRENT_TIMESTAMP, linkedin_post_id = ?
         WHERE id = ? AND user_id = ? AND tenant_id = ?
-      `).run(row.post_id, row.user_id, row.tenant_id);
+      `).run(linkedin_post_id, row.post_id, row.user_id, row.tenant_id);
     }
 
     // Notify the user that their scheduled post was published.

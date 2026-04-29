@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Idea Vault — ScoutHook</title>
+  <title>Content Vault — ScoutHook</title>
   <link rel="stylesheet" href="/css/main.css">
   <style>
     .vault-page {
@@ -13,14 +13,14 @@
       box-sizing: border-box;
     }
     .vault-page-header {
-      margin-bottom: 22px;
+      margin-bottom: 28px;
     }
     .vault-page-title {
       font-size: 24px;
       font-weight: 700;
       letter-spacing: -0.04em;
       color: var(--text-heading);
-      margin: 0 0 3px;
+      margin: 0 0 4px;
     }
     .vault-page-subtitle {
       font-size: 14px;
@@ -28,216 +28,32 @@
       margin: 0;
     }
 
-    /* ── Inner tabs ──────────────────────────────────────────── */
-    .vault-inner-tabs {
-      display: flex;
-      border-bottom: 2px solid var(--border);
-      margin-bottom: 24px;
-    }
-    .vault-tab {
-      font-family: var(--font-sans);
-      font-size: 0.9375rem;
-      font-weight: 600;
-      padding: 10px var(--space-5);
-      background: none;
-      border: none;
-      border-bottom: 2px solid transparent;
-      margin-bottom: -2px;
-      cursor: pointer;
-      color: var(--text-muted);
-      display: flex;
-      align-items: center;
-      gap: var(--space-2);
-      transition: color 0.15s, border-color 0.15s;
-      white-space: nowrap;
-    }
-    .vault-tab:hover { color: var(--text-heading); }
-    .vault-tab.active { color: var(--brand); border-bottom-color: var(--brand); }
-    .vault-tab-count {
-      font-size: 0.75rem;
-      font-weight: 600;
-      background: var(--bg-pill);
-      color: var(--text-muted);
-      padding: 1px 7px;
-      border-radius: var(--radius-pill);
-    }
-    .vault-tab.active .vault-tab-count { background: #F0FDF9; color: var(--brand); }
-
-    /* ── Panes ───────────────────────────────────────────────── */
-    .vault-pane {
-      display: flex;
-      flex-direction: column;
-      gap: var(--space-5);
-    }
-
-    /* Stable content area — prevents height shifts when toggling states */
-    .ideas-content {
-      flex: 1;
-      min-height: 300px;
-      display: flex;
-      flex-direction: column;
-    }
-
-    /* ── Filter pills ────────────────────────────────────────── */
-    .ideas-filters {
-      display: flex;
-      gap: var(--space-2);
-      flex-wrap: wrap;
-    }
-    .filter-btn {
-      font-family: var(--font-sans);
-      font-size: 0.8125rem;
-      font-weight: 500;
-      padding: 6px 14px;
-      border: 1px solid var(--border);
-      border-radius: var(--radius-pill);
-      background: var(--bg-surface);
-      color: var(--text-secondary);
-      cursor: pointer;
-      transition: border-color 0.15s, background 0.15s, color 0.15s;
-      white-space: nowrap;
-    }
-    .filter-btn:hover { border-color: var(--brand); color: var(--brand); }
-    .filter-btn.active { border-color: var(--brand); background: #F0FDF9; color: var(--brand); font-weight: 600; }
-
-    /* ── Ideas grid ──────────────────────────────────────────── */
-    .ideas-grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: var(--space-4);
-      align-items: start;
-    }
-
-    /* ── Idea cards ──────────────────────────────────────────── */
-    .idea-card {
-      background: var(--bg-surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
-      padding: var(--space-4) var(--space-5);
-      box-shadow: var(--shadow-sm);
-      display: flex;
-      flex-direction: column;
-      gap: var(--space-3);
-      transition: box-shadow 0.15s;
-    }
-    .idea-card:hover { box-shadow: var(--shadow-md); }
-    .idea-card.is-saved { border-left: 3px solid var(--brand); }
-
-    .idea-card-badges { display: flex; gap: var(--space-2); flex-wrap: wrap; }
-    .idea-badge {
-      display: inline-flex;
-      align-items: center;
-      font-size: 0.6875rem;
-      font-weight: 700;
-      padding: 2px 8px;
-      border-radius: var(--radius-pill);
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-    }
-    .idea-badge.reach   { background: #EEF2FF; color: #4338CA; }
-    .idea-badge.trust   { background: #F0FDF4; color: #166534; }
-    .idea-badge.convert { background: #ECFDF5; color: #065F46; }
-    .idea-badge.archetype { background: var(--bg-pill); color: var(--text-secondary); }
-
-    .idea-card-text {
-      font-size: 0.9375rem;
-      color: var(--text-body);
-      line-height: 1.6;
-      margin: 0;
-    }
-    .idea-card-source {
-      font-size: 0.75rem;
-      color: var(--text-muted);
-      margin: 0;
-      font-style: italic;
-    }
-    .idea-card-actions {
-      display: flex;
-      align-items: center;
-      gap: var(--space-2);
-      flex-wrap: wrap;
-      margin-top: var(--space-1);
-    }
-    .idea-action-btn {
-      font-family: var(--font-sans);
-      font-size: 0.8125rem;
-      font-weight: 600;
-      padding: 7px 14px;
-      border-radius: var(--radius-md);
-      cursor: pointer;
-      border: 1px solid transparent;
-      transition: background 0.15s, border-color 0.15s, color 0.15s;
-      white-space: nowrap;
-    }
-    .idea-action-btn.primary { background: var(--brand); color: #fff; border-color: var(--brand); }
-    .idea-action-btn.primary:hover { background: var(--brand-hover); border-color: var(--brand-hover); }
-    .idea-action-btn.secondary { background: var(--bg-surface); color: var(--text-secondary); border-color: var(--border); }
-    .idea-action-btn.secondary:hover { border-color: var(--brand); color: var(--brand); }
-    .idea-action-btn.secondary.is-saved { color: var(--brand); border-color: var(--brand); background: #F0FDF9; }
-    .idea-action-btn.ghost {
-      background: none;
-      border-color: transparent;
-      color: var(--text-muted);
-      padding-left: var(--space-2);
-      padding-right: var(--space-2);
-    }
-    .idea-action-btn.ghost:hover { color: var(--text-danger); }
-    .idea-used-label { font-size: 0.8125rem; color: var(--text-muted); padding: 7px 2px; }
-
-    /* ── Dismissed toggle ────────────────────────────────────── */
-    .dismissed-toggle-btn {
-      font-family: var(--font-sans);
-      font-size: 0.8125rem;
-      color: var(--text-muted);
-      background: none;
-      border: none;
-      cursor: pointer;
-      padding: var(--space-1) 0;
-      text-decoration: underline;
-      text-decoration-color: transparent;
-      transition: color 0.15s, text-decoration-color 0.15s;
-    }
-    .dismissed-toggle-btn:hover { color: var(--text-secondary); text-decoration-color: var(--text-secondary); }
-
-    /* ── Empty states ────────────────────────────────────────── */
-    .vault-empty {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: var(--space-12) var(--space-8);
-      text-align: center;
-      border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
-      background: var(--bg-subtle);
-    }
-    .vault-empty-icon { color: var(--text-muted); margin-bottom: var(--space-3); }
-    .vault-empty-label { font-size: 0.9375rem; font-weight: 600; color: var(--text-secondary); margin: 0 0 var(--space-1) 0; }
-    .vault-empty-sub { font-size: 0.8125rem; color: var(--text-muted); margin: 0; }
-
-    /* ── Sources pane layout ─────────────────────────────────── */
+    /* ── Two-column grid ─────────────────────────────────────────── */
     .vault-grid {
       display: grid;
       grid-template-columns: 1fr 1.4fr;
       gap: var(--space-8);
       align-items: start;
+      margin-bottom: var(--space-8);
     }
-    .vault-upload-panel { display: flex; flex-direction: column; gap: var(--space-6); }
-    .vault-panel-heading { font-size: 1.25rem; font-weight: 700; color: var(--text-heading); margin: 0 0 var(--space-1) 0; }
+    .vault-upload-panel { display: flex; flex-direction: column; gap: var(--space-5); }
+    .vault-panel-heading { font-size: 1rem; font-weight: 700; color: var(--text-heading); margin: 0 0 var(--space-1) 0; }
 
+    /* ── Drop zone ───────────────────────────────────────────────── */
     .vault-dropzone {
       border: 2px dashed var(--border);
       border-radius: var(--radius-lg);
       background: var(--bg-subtle);
-      padding: var(--space-10) var(--space-8);
+      padding: var(--space-8) var(--space-6);
       text-align: center;
       cursor: pointer;
       transition: border-color 0.15s, background 0.15s;
       position: relative;
+      display: block;
     }
     .vault-dropzone:hover, .vault-dropzone.dragging { border-color: var(--brand); background: #F0FDF9; }
     .vault-dropzone input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
-    .vault-dropzone-icon { width: 40px; height: 40px; margin: 0 auto var(--space-3); color: var(--text-muted); }
+    .vault-dropzone-icon { width: 36px; height: 36px; margin: 0 auto var(--space-2); color: var(--text-muted); }
     .vault-dropzone-label { font-size: 0.9375rem; font-weight: 600; color: var(--text-heading); margin: 0 0 var(--space-1) 0; }
     .vault-dropzone-hint { font-size: 0.8125rem; color: var(--text-muted); margin: 0; }
 
@@ -280,68 +96,9 @@
     .vault-upload-status.error { background: #FEF2F2; color: #DC2626; display: block; }
     .vault-upload-status.ok    { background: #ECFDF5; color: #065F46; display: block; }
 
-    .vault-topic-row { display: flex; flex-direction: column; gap: var(--space-2); }
-    .vault-topic-input {
-      font-family: var(--font-sans);
-      font-size: 0.875rem;
-      padding: 10px var(--space-3);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-md);
-      color: var(--text-heading);
-      background: var(--bg-surface);
-      outline: none;
-      resize: vertical;
-      min-height: 68px;
-      transition: border-color 0.15s;
-      line-height: 1.5;
-    }
-    .vault-topic-input:focus { border-color: var(--brand); }
-    .vault-topic-input::placeholder { color: var(--text-muted); }
-    .vault-topic-btn {
-      font-family: var(--font-sans);
-      font-size: 0.875rem;
-      font-weight: 600;
-      padding: 10px var(--space-4);
-      border: none;
-      border-radius: var(--radius-md);
-      background: var(--brand);
-      color: #fff;
-      cursor: pointer;
-      align-self: flex-end;
-      white-space: nowrap;
-      transition: background 0.15s;
-    }
-    .vault-topic-btn:hover    { background: var(--brand-hover); }
-    .vault-topic-btn:disabled { background: var(--teal-disabled); cursor: not-allowed; }
-
+    /* ── Documents panel ─────────────────────────────────────────── */
     .vault-docs-panel { display: flex; flex-direction: column; gap: var(--space-4); min-width: 0; }
-    .vault-docs-header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); }
-    .vault-mine-btn {
-      font-family: var(--font-sans);
-      font-size: 0.875rem;
-      font-weight: 600;
-      padding: 9px var(--space-5);
-      border: none;
-      border-radius: var(--radius-md);
-      background: var(--brand);
-      color: #fff;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: var(--space-2);
-      transition: background 0.15s;
-      white-space: nowrap;
-    }
-    .vault-mine-btn:hover { background: var(--brand-hover); }
-    .vault-mine-btn:disabled { background: var(--teal-disabled); cursor: not-allowed; }
-    .vault-mine-btn svg { flex-shrink: 0; }
-
-    .vault-mine-status { font-size: 0.8125rem; padding: var(--space-3) var(--space-4); border-radius: var(--radius-md); display: none; }
-    .vault-mine-status.info  { background: #EFF6FF; color: #1D4ED8; display: block; }
-    .vault-mine-status.ok    { background: #ECFDF5; color: #065F46; display: block; }
-    .vault-mine-status.error { background: #FEF2F2; color: var(--text-danger); display: block; }
-
-    .vault-doc-list { display: flex; flex-direction: column; gap: var(--space-3); overflow-y: auto; max-height: calc(100vh - 280px); }
+    .vault-doc-list { display: flex; flex-direction: column; gap: var(--space-3); }
     .vault-doc-card {
       display: flex;
       align-items: flex-start;
@@ -364,7 +121,6 @@
     .vault-doc-body { flex: 1; min-width: 0; }
     .vault-doc-name { font-size: 0.875rem; font-weight: 600; color: var(--text-heading); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin: 0 0 2px 0; }
     .vault-doc-meta { font-size: 0.75rem; color: var(--text-muted); margin: 0 0 var(--space-2) 0; }
-    .vault-doc-ideas { font-size: 0.75rem; color: var(--text-secondary); font-weight: 500; }
     .vault-doc-delete {
       background: none; border: none; cursor: pointer;
       padding: var(--space-1); color: var(--text-muted);
@@ -387,16 +143,35 @@
     .vault-status-badge.indexing .status-dot { animation: pulse-dot 1.2s ease-in-out infinite; }
     @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
 
-    /* ── Generate This Week's Posts ─────────────────────────────── */
+    /* ── Empty state ─────────────────────────────────────────────── */
+    .vault-empty {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: var(--space-10) var(--space-8);
+      text-align: center;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      background: var(--bg-subtle);
+    }
+    .vault-empty-icon { color: var(--text-muted); margin-bottom: var(--space-3); }
+    .vault-empty-label { font-size: 0.9375rem; font-weight: 600; color: var(--text-secondary); margin: 0 0 var(--space-1) 0; }
+    .vault-empty-sub { font-size: 0.8125rem; color: var(--text-muted); margin: 0; }
+
+    /* ── Generate This Week's Posts ──────────────────────────────── */
     .vault-weekly-section {
       display: none;
-      margin-top: var(--space-6);
-      padding-top: var(--space-6);
-      border-top: 1px solid var(--border);
+      padding: var(--space-7) var(--space-8);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      background: var(--bg-surface);
+      box-shadow: var(--shadow-sm);
     }
     .vault-weekly-section.visible { display: block; }
+    .vault-weekly-header { margin-bottom: var(--space-4); }
     .vault-weekly-heading {
-      font-size: 1rem;
+      font-size: 1.0625rem;
       font-weight: 700;
       color: var(--text-heading);
       margin: 0 0 var(--space-1) 0;
@@ -404,7 +179,7 @@
     .vault-weekly-sub {
       font-size: 0.8125rem;
       color: var(--text-muted);
-      margin: 0 0 var(--space-4) 0;
+      margin: 0;
     }
     .vault-weekly-btn {
       font-family: var(--font-sans);
@@ -423,7 +198,13 @@
     }
     .vault-weekly-btn:hover    { background: var(--brand-hover); }
     .vault-weekly-btn:disabled { background: var(--teal-disabled); cursor: not-allowed; }
-    .vault-weekly-status { font-size: 0.8125rem; padding: var(--space-3) var(--space-4); border-radius: var(--radius-md); margin-top: var(--space-3); display: none; }
+    .vault-weekly-status {
+      font-size: 0.8125rem;
+      padding: var(--space-3) var(--space-4);
+      border-radius: var(--radius-md);
+      margin-top: var(--space-3);
+      display: none;
+    }
     .vault-weekly-status.info  { background: #EFF6FF; color: #1D4ED8; display: block; }
     .vault-weekly-status.ok    { background: #ECFDF5; color: #065F46; display: block; }
     .vault-weekly-status.error { background: #FEF2F2; color: #DC2626; display: block; }
@@ -433,7 +214,7 @@
       display: none;
       background: var(--bg-subtle);
       border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
+      border-radius: var(--radius-md);
       padding: var(--space-5);
       margin-bottom: var(--space-4);
     }
@@ -479,6 +260,87 @@
     }
     .vault-positioning-save:hover { background: var(--brand-hover); }
     .vault-positioning-save:disabled { background: var(--teal-disabled); cursor: not-allowed; }
+
+    /* ── Post preview cards ──────────────────────────────────────── */
+    .vault-posts-preview {
+      display: none;
+      margin-top: var(--space-6);
+      border-top: 1px solid var(--border);
+      padding-top: var(--space-6);
+    }
+    .vault-posts-preview.visible { display: block; }
+    .vault-posts-preview-heading {
+      font-size: 0.8125rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin: 0 0 var(--space-4) 0;
+    }
+    .vault-posts-list { display: flex; flex-direction: column; gap: var(--space-4); }
+    .vault-post-card {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      background: var(--bg-subtle);
+      padding: var(--space-5);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-3);
+    }
+    .vault-post-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-3);
+    }
+    .vault-post-card-meta { display: flex; align-items: center; gap: var(--space-2); }
+    .vault-post-day {
+      font-size: 0.875rem;
+      font-weight: 700;
+      color: var(--text-heading);
+    }
+    .vault-post-format {
+      font-size: 0.6875rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 2px 8px;
+      border-radius: var(--radius-pill);
+      background: var(--bg-pill);
+      color: var(--text-muted);
+    }
+    .vault-post-copy {
+      font-family: var(--font-sans);
+      font-size: 0.8125rem;
+      font-weight: 600;
+      padding: 6px 14px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      background: var(--bg-surface);
+      color: var(--text-secondary);
+      cursor: pointer;
+      white-space: nowrap;
+      transition: border-color 0.15s, color 0.15s;
+      flex-shrink: 0;
+    }
+    .vault-post-copy:hover { border-color: var(--brand); color: var(--brand); }
+    .vault-post-copy.copied { border-color: #059669; color: #059669; }
+    .vault-post-text {
+      font-size: 0.9375rem;
+      color: var(--text-body);
+      line-height: 1.65;
+      white-space: pre-wrap;
+      margin: 0;
+      max-height: 220px;
+      overflow-y: auto;
+    }
+    .vault-posts-footer {
+      margin-top: var(--space-4);
+      font-size: 0.875rem;
+      color: var(--text-muted);
+    }
+    .vault-posts-footer a { color: var(--brand); font-weight: 600; text-decoration: none; }
+    .vault-posts-footer a:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
@@ -495,7 +357,7 @@
     </div>
     <nav class="sidebar-nav">
       <a href="/dashboard.html" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Dashboard</a>
-      <a href="/vault.html" class="sidebar-link active"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>Idea Vault</a>
+      <a href="/vault.html" class="sidebar-link active"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>Content Vault</a>
       <a href="/drafts.html" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>Drafts</a>
       <a href="/schedule.html" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Schedule</a>
       <a href="/Published.html" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>Published</a>
@@ -511,118 +373,72 @@
     <div class="vault-page">
 
       <div class="vault-page-header">
-        <h1 class="vault-page-title">Idea Vault</h1>
-        <p class="vault-page-subtitle">Turn your existing expertise into LinkedIn post ideas.</p>
+        <h1 class="vault-page-title">Content Vault</h1>
+        <p class="vault-page-subtitle">Upload your business documents. We'll write your week of LinkedIn posts.</p>
       </div>
 
-      <div class="vault-inner-tabs" role="tablist" aria-label="Idea Vault sections">
-        <button class="vault-tab active" data-tab="ideas" role="tab" aria-selected="true" aria-controls="pane-ideas">
-          Ideas <span class="vault-tab-count" id="tab-count-ideas">0</span>
-        </button>
-        <button class="vault-tab" data-tab="sources" role="tab" aria-selected="false" aria-controls="pane-sources">
-          Sources <span class="vault-tab-count" id="tab-count-sources">0</span>
-        </button>
-      </div>
+      <!-- ── Two-column: upload + documents ───────────────────────── -->
+      <div class="vault-grid">
 
-      <!-- ── Ideas pane ─────────────────────────────────────────── -->
-      <div id="pane-ideas" class="vault-pane" role="tabpanel">
+        <section class="vault-upload-panel" aria-label="Upload documents">
+          <label class="vault-dropzone" id="vault-dropzone" aria-label="Drop files here or click to browse">
+            <input type="file" id="vault-file-input" accept=".pdf,.docx,.txt" multiple aria-label="Choose file">
+            <svg class="vault-dropzone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            <p class="vault-dropzone-label">Drop files here or click to browse</p>
+            <p class="vault-dropzone-hint">PDF, DOCX, or TXT · Up to 25 MB each</p>
+          </label>
 
-        <div class="ideas-filters" role="group" aria-label="Filter ideas">
-          <button class="filter-btn active" data-filter="all">All</button>
-          <button class="filter-btn" data-filter="saved">Saved</button>
-          <button class="filter-btn" data-filter="reach">Reach</button>
-          <button class="filter-btn" data-filter="trust">Trust</button>
-          <button class="filter-btn" data-filter="convert">Convert</button>
-        </div>
+          <div id="vault-upload-status" class="vault-upload-status" role="status" aria-live="polite"></div>
 
-        <div class="ideas-content" id="ideas-content">
-          <div id="ideas-grid" class="ideas-grid" style="display:none"></div>
-
-          <div id="ideas-filter-empty" style="display:none; text-align:center; padding:var(--space-8); color:var(--text-muted); font-size:0.875rem;"></div>
-
-          <div id="ideas-empty" class="vault-empty" style="display:none">
-            <svg class="vault-empty-icon" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a7 7 0 0 1 7 7c0 3.87-2.96 7.05-3 7.94V18a1 1 0 0 1-1 1h-6a1 1 0 0 1-1-1v-1.06C7.96 16.05 5 12.87 5 9a7 7 0 0 1 7-7z"/><line x1="9" y1="21" x2="15" y2="21"/></svg>
-            <p class="vault-empty-label">No ideas yet</p>
-            <p class="vault-empty-sub">Add a source and generate ideas to fill your vault.</p>
-            <button class="idea-action-btn primary" id="goto-sources-btn" style="margin-top:var(--space-4)">Add Sources →</button>
+          <div class="vault-divider">or paste a URL</div>
+          <div class="vault-url-row">
+            <input type="url" id="vault-url-input" class="vault-url-input" placeholder="https://your-newsletter.com/article…" aria-label="Article or newsletter URL">
+            <button id="vault-url-btn" class="vault-url-btn">Add URL</button>
           </div>
-        </div>
+        </section>
 
-        <div id="dismissed-section" style="display:none">
-          <button class="dismissed-toggle-btn" id="dismissed-toggle-btn"></button>
-          <div id="dismissed-grid" class="ideas-grid" style="display:none; margin-top:var(--space-3)"></div>
-        </div>
+        <section class="vault-docs-panel" aria-label="Your documents">
+          <h2 class="vault-panel-heading">Documents</h2>
+          <div id="vault-empty" class="vault-empty" aria-label="No documents yet">
+            <svg class="vault-empty-icon" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+            <p class="vault-empty-label">No documents yet</p>
+            <p class="vault-empty-sub">Upload a PDF, DOCX, or paste a URL to get started.</p>
+          </div>
+          <div id="vault-doc-list" class="vault-doc-list" style="display:none"></div>
+        </section>
 
       </div>
 
-      <!-- ── Sources pane ───────────────────────────────────────── -->
-      <div id="pane-sources" class="vault-pane" role="tabpanel" style="display:none">
+      <!-- ── Generate This Week's Posts ────────────────────────────── -->
+      <div id="vault-weekly-section" class="vault-weekly-section">
 
-        <!-- Generate This Week's Posts — visible once a ready document exists -->
-        <div id="vault-weekly-section" class="vault-weekly-section">
+        <div class="vault-weekly-header">
           <h2 class="vault-weekly-heading">Generate This Week's Posts</h2>
-          <p class="vault-weekly-sub">Your uploaded documents are used to write 5 ready-to-publish LinkedIn posts — one for each day.</p>
-
-          <!-- Inline positioning prompt — shown only once if business_positioning is not set -->
-          <div id="vault-positioning-prompt" class="vault-positioning-prompt">
-            <p class="vault-positioning-label">One quick thing — how do you help your clients?</p>
-            <p class="vault-positioning-hint">e.g. "Turn your email list into consistent revenue" or "Help SaaS founders close their first 10 enterprise deals"</p>
-            <div class="vault-positioning-row">
-              <input type="text" id="vault-positioning-input" class="vault-positioning-input" maxlength="500" placeholder="In one sentence, what's the result you deliver?" aria-label="Your business positioning">
-              <button id="vault-positioning-save" class="vault-positioning-save">Got it →</button>
-            </div>
-          </div>
-
-          <button id="vault-weekly-btn" class="vault-weekly-btn">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
-            Generate This Week's Posts
-          </button>
-          <div id="vault-weekly-status" class="vault-weekly-status" role="status" aria-live="polite"></div>
+          <p class="vault-weekly-sub">Your documents are ready. Click below to generate 5 LinkedIn posts — one for each day.</p>
         </div>
 
-        <div class="vault-grid">
+        <!-- Inline positioning prompt — shown only once if not set -->
+        <div id="vault-positioning-prompt" class="vault-positioning-prompt">
+          <p class="vault-positioning-label">One quick thing — how do you help your clients?</p>
+          <p class="vault-positioning-hint">e.g. "Turn your email list into consistent revenue" or "Help SaaS founders close their first 10 enterprise deals"</p>
+          <div class="vault-positioning-row">
+            <input type="text" id="vault-positioning-input" class="vault-positioning-input" maxlength="500" placeholder="In one sentence, what's the result you deliver?" aria-label="Your business positioning">
+            <button id="vault-positioning-save" class="vault-positioning-save">Got it →</button>
+          </div>
+        </div>
 
-          <section class="vault-upload-panel" aria-label="Upload documents">
-            <label class="vault-dropzone" id="vault-dropzone" aria-label="Drop files here or click to browse">
-              <input type="file" id="vault-file-input" accept=".pdf,.docx,.txt" multiple aria-label="Choose file">
-              <svg class="vault-dropzone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-              <p class="vault-dropzone-label">Drop files here or click to browse</p>
-              <p class="vault-dropzone-hint">PDF, DOCX, or TXT · Up to 25 MB each</p>
-            </label>
+        <button id="vault-weekly-btn" class="vault-weekly-btn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
+          Generate This Week's Posts
+        </button>
 
-            <div id="vault-upload-status" class="vault-upload-status" role="status" aria-live="polite"></div>
+        <div id="vault-weekly-status" class="vault-weekly-status" role="status" aria-live="polite"></div>
 
-            <div class="vault-divider">or paste a URL</div>
-            <div class="vault-url-row">
-              <input type="url" id="vault-url-input" class="vault-url-input" placeholder="https://your-newsletter.com/article…" aria-label="Article or newsletter URL">
-              <button id="vault-url-btn" class="vault-url-btn">Add URL</button>
-            </div>
-
-            <div class="vault-divider">or brainstorm from a topic</div>
-            <div class="vault-topic-row">
-              <textarea id="vault-topic-input" class="vault-topic-input" rows="2" maxlength="300" placeholder="e.g. why most onboarding processes fail, lessons from a bad client…" aria-label="Topic to brainstorm ideas about"></textarea>
-              <button id="vault-topic-btn" class="vault-topic-btn">Brainstorm Ideas</button>
-            </div>
-            <div id="vault-topic-status" class="vault-upload-status" role="status" aria-live="polite"></div>
-          </section>
-
-          <section class="vault-docs-panel" aria-label="Vault documents">
-            <div class="vault-docs-header">
-              <h2 class="vault-panel-heading" style="margin:0">Documents</h2>
-              <button id="vault-mine-btn" class="vault-mine-btn" disabled>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-                Generate Ideas
-              </button>
-            </div>
-            <div id="vault-mine-status" class="vault-mine-status" role="status" aria-live="polite"></div>
-            <div id="vault-empty" class="vault-empty" aria-label="No documents yet">
-              <svg class="vault-empty-icon" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
-              <p class="vault-empty-label">Your vault is empty</p>
-              <p class="vault-empty-sub">Upload a PDF, DOCX, or paste a URL to get started.</p>
-            </div>
-            <div id="vault-doc-list" class="vault-doc-list" style="display:none"></div>
-          </section>
-
+        <!-- Inline post preview — shown after successful generation -->
+        <div id="vault-posts-preview" class="vault-posts-preview">
+          <p class="vault-posts-preview-heading">This week's posts</p>
+          <div id="vault-posts-list" class="vault-posts-list"></div>
+          <p class="vault-posts-footer">All posts saved to <a href="/drafts.html">Drafts →</a> — schedule or edit them there.</p>
         </div>
 
       </div>
@@ -645,236 +461,27 @@
   <script>
   'use strict';
 
-  let allIdeas           = [];
-  let documents          = [];
-  let activeFilter       = 'all';
-  let dismissedOpen      = false;
+  let documents = [];
   let hasBusinessPositioning = false;
 
-  // Weekly batch elements
-  const weeklySection       = document.getElementById('vault-weekly-section');
-  const weeklyBtn           = document.getElementById('vault-weekly-btn');
-  const weeklyStatus        = document.getElementById('vault-weekly-status');
-  const positioningPrompt   = document.getElementById('vault-positioning-prompt');
-  const positioningInput    = document.getElementById('vault-positioning-input');
-  const positioningSaveBtn  = document.getElementById('vault-positioning-save');
+  // Elements
+  const weeklySection      = document.getElementById('vault-weekly-section');
+  const weeklyBtn          = document.getElementById('vault-weekly-btn');
+  const weeklyStatus       = document.getElementById('vault-weekly-status');
+  const positioningPrompt  = document.getElementById('vault-positioning-prompt');
+  const positioningInput   = document.getElementById('vault-positioning-input');
+  const positioningSaveBtn = document.getElementById('vault-positioning-save');
+  const postsPreview       = document.getElementById('vault-posts-preview');
+  const postsList          = document.getElementById('vault-posts-list');
+  const dropzone           = document.getElementById('vault-dropzone');
+  const fileInput          = document.getElementById('vault-file-input');
+  const urlInput           = document.getElementById('vault-url-input');
+  const urlBtn             = document.getElementById('vault-url-btn');
+  const uploadStatus       = document.getElementById('vault-upload-status');
+  const docList            = document.getElementById('vault-doc-list');
+  const docEmpty           = document.getElementById('vault-empty');
 
-  // Tab controls
-  const tabBtns         = document.querySelectorAll('.vault-tab');
-  const paneIdeas       = document.getElementById('pane-ideas');
-  const paneSources     = document.getElementById('pane-sources');
-  const tabCountIdeas   = document.getElementById('tab-count-ideas');
-  const tabCountSources = document.getElementById('tab-count-sources');
-
-  // Ideas pane
-  const filterBtns       = document.querySelectorAll('.filter-btn');
-  const ideasGrid        = document.getElementById('ideas-grid');
-  const ideasEmpty       = document.getElementById('ideas-empty');
-  const ideasFilterEmpty = document.getElementById('ideas-filter-empty');
-  const dismissedSection = document.getElementById('dismissed-section');
-  const dismissedToggle  = document.getElementById('dismissed-toggle-btn');
-  const dismissedGrid    = document.getElementById('dismissed-grid');
-  const gotoSourcesBtn   = document.getElementById('goto-sources-btn');
-
-  // Sources pane
-  const dropzone     = document.getElementById('vault-dropzone');
-  const fileInput    = document.getElementById('vault-file-input');
-  const urlInput     = document.getElementById('vault-url-input');
-  const urlBtn       = document.getElementById('vault-url-btn');
-  const uploadStatus = document.getElementById('vault-upload-status');
-  const mineBtn      = document.getElementById('vault-mine-btn');
-  const mineStatus   = document.getElementById('vault-mine-status');
-  const docList      = document.getElementById('vault-doc-list');
-  const docEmpty     = document.getElementById('vault-empty');
-  const topicInput   = document.getElementById('vault-topic-input');
-  const topicBtn     = document.getElementById('vault-topic-btn');
-  const topicStatus  = document.getElementById('vault-topic-status');
-
-  // ── Tab switching ─────────────────────────────────────────────
-  tabBtns.forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset.tab)));
-
-  function switchTab(tab) {
-    tabBtns.forEach(b => {
-      b.classList.toggle('active', b.dataset.tab === tab);
-      b.setAttribute('aria-selected', String(b.dataset.tab === tab));
-    });
-    paneIdeas.style.display   = tab === 'ideas'   ? '' : 'none';
-    paneSources.style.display = tab === 'sources' ? '' : 'none';
-  }
-
-  gotoSourcesBtn.addEventListener('click', () => switchTab('sources'));
-
-  // ── Filter pills ──────────────────────────────────────────────
-  filterBtns.forEach(btn => {
-    btn.addEventListener('click', () => {
-      filterBtns.forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      activeFilter = btn.dataset.filter;
-      renderIdeas();
-    });
-  });
-
-  // ── Ideas: load + render ──────────────────────────────────────
-  async function loadIdeas() {
-    try {
-      const res  = await fetch('/api/vault/ideas');
-      const data = await res.json();
-      if (!data.ok) return;
-      allIdeas = data.ideas || [];
-      renderIdeas();
-    } catch { /* non-fatal */ }
-  }
-
-  function getVisible() {
-    return allIdeas.filter(i => {
-      if (i.status === 'discarded' || i.status === 'used') return false;
-      if (activeFilter === 'saved')   return i.status === 'saved';
-      if (activeFilter === 'reach')   return i.funnel_type === 'reach';
-      if (activeFilter === 'trust')   return i.funnel_type === 'trust';
-      if (activeFilter === 'convert') return i.funnel_type === 'convert';
-      return true;
-    });
-  }
-
-  function getDiscarded() {
-    return allIdeas.filter(i => i.status === 'discarded');
-  }
-
-  function renderIdeas() {
-    const visible   = getVisible();
-    const discarded = getDiscarded();
-    const activeIds = allIdeas.filter(i => i.status === 'fresh' || i.status === 'saved');
-    tabCountIdeas.textContent = activeIds.length;
-
-    const hasAny = activeIds.length > 0;
-
-    ideasEmpty.style.display       = hasAny ? 'none' : '';
-    ideasGrid.style.display        = hasAny ? '' : 'none';
-    ideasFilterEmpty.style.display = 'none';
-
-    if (!hasAny) {
-      dismissedSection.style.display = 'none';
-      return;
-    }
-
-    if (visible.length === 0) {
-      ideasGrid.innerHTML = '';
-      const label = activeFilter === 'saved' ? 'saved ideas' : `"${activeFilter}" ideas`;
-      ideasFilterEmpty.textContent   = `No ${label} yet.`;
-      ideasFilterEmpty.style.display = '';
-    } else {
-      ideasFilterEmpty.style.display = 'none';
-      ideasGrid.innerHTML = visible.map(i => renderCard(i)).join('');
-      wireCardActions(ideasGrid);
-    }
-
-    if (discarded.length > 0) {
-      dismissedSection.style.display = '';
-      dismissedToggle.textContent    = dismissedOpen
-        ? `Hide dismissed (${discarded.length})`
-        : `Show dismissed (${discarded.length})`;
-      if (dismissedOpen) {
-        dismissedGrid.innerHTML = discarded.map(i => renderCard(i, true)).join('');
-        wireCardActions(dismissedGrid);
-      }
-    } else {
-      dismissedSection.style.display = 'none';
-      dismissedOpen = false;
-    }
-  }
-
-  function renderCard(idea, isDiscarded = false) {
-    const funnelBadge    = idea.funnel_type
-      ? `<span class="idea-badge ${idea.funnel_type}">${idea.funnel_type.toUpperCase()}</span>` : '';
-    const archetypeBadge = idea.hook_archetype
-      ? `<span class="idea-badge archetype">${idea.hook_archetype}</span>` : '';
-    const savedClass = idea.status === 'saved' ? ' is-saved' : '';
-
-    let actions;
-    if (idea.status === 'used') {
-      actions = `<div class="idea-card-actions"><span class="idea-used-label">✓ Post created</span></div>`;
-    } else if (isDiscarded) {
-      actions = `<div class="idea-card-actions">
-        <button class="idea-action-btn secondary" data-action="restore" data-id="${idea.id}">Restore</button>
-      </div>`;
-    } else {
-      const saveBtn = idea.status === 'saved'
-        ? `<button class="idea-action-btn secondary is-saved" data-action="unsave" data-id="${idea.id}">★ Saved</button>`
-        : `<button class="idea-action-btn secondary" data-action="save" data-id="${idea.id}">☆ Save</button>`;
-      actions = `<div class="idea-card-actions">
-        <button class="idea-action-btn primary" data-action="grow" data-id="${idea.id}" data-seed="${escAttr(idea.seed_text)}">Generate Post →</button>
-        ${saveBtn}
-        <button class="idea-action-btn ghost" data-action="discard" data-id="${idea.id}">Dismiss</button>
-      </div>`;
-    }
-
-    return `
-      <article class="idea-card${savedClass}" data-id="${idea.id}">
-        <div class="idea-card-badges">${funnelBadge}${archetypeBadge}</div>
-        <p class="idea-card-text">${escHtml(idea.seed_text)}</p>
-        ${idea.source_ref ? `<p class="idea-card-source">${escHtml(idea.source_ref)}</p>` : ''}
-        ${actions}
-      </article>`;
-  }
-
-  function wireCardActions(container) {
-    container.querySelectorAll('[data-action]').forEach(btn => {
-      btn.addEventListener('click', handleCardAction);
-    });
-  }
-
-  async function handleCardAction(e) {
-    const btn    = e.currentTarget;
-    const action = btn.dataset.action;
-    const id     = Number(btn.dataset.id);
-
-    if (action === 'grow') {
-      const seed = btn.dataset.seed || '';
-      window.location.href = `/generate.html?vault_idea_id=${id}&seed=${encodeURIComponent(seed)}`;
-      return;
-    }
-
-    const statusMap = { save: 'saved', unsave: 'fresh', discard: 'discarded', restore: 'fresh' };
-    const newStatus = statusMap[action];
-    if (!newStatus) return;
-
-    try {
-      const res  = await fetch(`/api/vault/ideas/${id}`, {
-        method:  'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ status: newStatus }),
-      });
-      const data = await res.json();
-      if (!data.ok) throw new Error(data.error);
-      const idea = allIdeas.find(i => i.id === id);
-      if (idea) idea.status = newStatus;
-      renderIdeas();
-    } catch (err) {
-      console.error('[ideas] action failed:', err.message);
-    }
-  }
-
-  dismissedToggle.addEventListener('click', () => {
-    dismissedOpen = !dismissedOpen;
-    dismissedGrid.style.display = dismissedOpen ? '' : 'none';
-    renderIdeas();
-  });
-
-  // ── Sources: upload helpers ───────────────────────────────────
-  function setUploadStatus(msg, type, isHtml) {
-    if (isHtml) uploadStatus.innerHTML = msg;
-    else        uploadStatus.textContent = msg;
-    uploadStatus.className = `vault-upload-status ${type}`;
-  }
-  function clearUploadStatus() {
-    uploadStatus.textContent = '';
-    uploadStatus.className   = 'vault-upload-status';
-  }
-  function setMineStatus(msg, type) {
-    mineStatus.textContent = msg;
-    mineStatus.className   = `vault-mine-status ${type}`;
-  }
-
+  // ── Upload: file drag/drop/select ────────────────────────────────
   dropzone.addEventListener('dragover',  e => { e.preventDefault(); dropzone.classList.add('dragging'); });
   dropzone.addEventListener('dragleave', ()  => dropzone.classList.remove('dragging'));
   dropzone.addEventListener('drop', e => {
@@ -928,6 +535,17 @@
     return 'application/octet-stream';
   }
 
+  function setUploadStatus(msg, type, isHtml) {
+    if (isHtml) uploadStatus.innerHTML = msg;
+    else        uploadStatus.textContent = msg;
+    uploadStatus.className = `vault-upload-status ${type}`;
+  }
+  function clearUploadStatus() {
+    uploadStatus.textContent = '';
+    uploadStatus.className   = 'vault-upload-status';
+  }
+
+  // ── Upload: URL ───────────────────────────────────────────────────
   urlBtn.addEventListener('click', async () => {
     const url = urlInput.value.trim();
     if (!url) return;
@@ -959,6 +577,7 @@
     }
   });
 
+  // ── Documents: load, render, poll, delete ─────────────────────────
   async function loadDocuments() {
     try {
       const res  = await fetch('/api/vault/documents');
@@ -973,37 +592,28 @@
   }
 
   function renderDocuments() {
-    tabCountSources.textContent = documents.length;
     const hasReady = documents.some(d => d.status === 'ready');
-
     if (!documents.length) {
       docEmpty.style.display = '';
       docList.style.display  = 'none';
-      mineBtn.disabled       = true;
       weeklySection.classList.remove('visible');
       return;
     }
     docEmpty.style.display = 'none';
     docList.style.display  = '';
-    mineBtn.disabled       = !hasReady;
     docList.innerHTML      = documents.map(renderDocCard).join('');
     docList.querySelectorAll('.vault-doc-delete').forEach(btn => {
       btn.addEventListener('click', () => deleteDocument(Number(btn.dataset.id)));
     });
-
-    // Show weekly batch section once at least one document is ready
-    if (hasReady) {
-      weeklySection.classList.add('visible');
-    } else {
-      weeklySection.classList.remove('visible');
-    }
+    if (hasReady) weeklySection.classList.add('visible');
+    else          weeklySection.classList.remove('visible');
   }
 
   function renderDocCard(doc) {
     const icon   = docIcon(doc.source_type);
     const badge  = statusBadge(doc.status);
     const date   = new Date(doc.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-    const ideas  = doc.ideas_mined > 0 ? `<span class="vault-doc-ideas">${doc.ideas_mined} idea${doc.ideas_mined !== 1 ? 's' : ''} mined</span>` : '';
+    const meta   = `${doc.source_type.toUpperCase()} · ${date}${doc.chunk_count ? ` · ${doc.chunk_count} sections` : ''}`;
     const errMsg = doc.status === 'error' && doc.error_message
       ? `<p style="font-size:0.75rem;color:var(--text-danger);margin:4px 0 0 0">${escHtml(doc.error_message)}</p>` : '';
     return `
@@ -1011,8 +621,8 @@
         <div class="vault-doc-icon">${icon}</div>
         <div class="vault-doc-body">
           <p class="vault-doc-name" title="${escHtml(doc.filename)}">${escHtml(doc.filename)}</p>
-          <p class="vault-doc-meta">${escHtml(doc.source_type.toUpperCase())} · ${date}${doc.chunk_count ? ` · ${doc.chunk_count} sections` : ''}</p>
-          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">${badge}${ideas}</div>
+          <p class="vault-doc-meta">${escHtml(meta)}</p>
+          ${badge}
           ${errMsg}
         </div>
         <button class="vault-doc-delete" data-id="${doc.id}" aria-label="Delete ${escHtml(doc.filename)}">
@@ -1057,7 +667,7 @@
   }
 
   async function deleteDocument(docId) {
-    if (!confirm('Remove this document from your vault? All mined ideas from this document will also be deleted.')) return;
+    if (!confirm('Remove this document from your vault?')) return;
     try {
       const res  = await fetch(`/api/vault/documents/${docId}`, { method: 'DELETE' });
       const data = await res.json();
@@ -1069,67 +679,7 @@
     }
   }
 
-  mineBtn.addEventListener('click', async () => {
-    mineBtn.disabled = true;
-    setMineStatus('Mining your documents for ideas… this may take a minute.', 'info');
-    try {
-      const res  = await fetch('/api/vault/mine', { method: 'POST' });
-      const data = await res.json();
-      if (!data.ok) throw new Error(data.error);
-      if (data.chunks_queued === 0) {
-        setMineStatus('No new content to mine — all documents have already been processed.', 'ok');
-      } else {
-        setMineStatus(`Mining ${data.chunks_queued} sections in the background. Check the Ideas tab when done.`, 'ok');
-      }
-    } catch (err) {
-      setMineStatus(`Mining failed: ${err.message}`, 'error');
-    } finally {
-      setTimeout(() => { mineBtn.disabled = false; loadDocuments(); }, 3000);
-    }
-  });
-
-  topicBtn.addEventListener('click', async () => {
-    const topic = topicInput.value.trim();
-    if (!topic) return;
-    topicBtn.disabled       = true;
-    topicStatus.textContent = 'Brainstorming ideas…';
-    topicStatus.className   = 'vault-upload-status info';
-    try {
-      const res  = await fetch('/api/vault/brainstorm', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ topic }),
-      });
-      const data = await res.json();
-      if (!data.ok) {
-        const msg = data.error === 'profile_incomplete'
-          ? 'Add your content niche in Account Settings so ideas are specific to your field.'
-          : (data.message || 'Brainstorm failed.');
-        topicStatus.textContent = msg;
-        topicStatus.className   = 'vault-upload-status error';
-        return;
-      }
-      topicInput.value        = '';
-      topicStatus.textContent = `${data.count} ideas added.`;
-      topicStatus.className   = 'vault-upload-status ok';
-      await loadIdeas();
-      switchTab('ideas');
-    } catch (err) {
-      topicStatus.textContent = `Failed: ${err.message}`;
-      topicStatus.className   = 'vault-upload-status error';
-    } finally {
-      topicBtn.disabled = false;
-    }
-  });
-
-  function escHtml(str) {
-    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  }
-  function escAttr(str) {
-    return String(str).replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-  }
-
-  // ── Weekly batch: load profile to check business_positioning ─────────────
+  // ── Load profile: check business_positioning ──────────────────────
   async function loadProfileForWeekly() {
     try {
       const res  = await fetch('/api/profile/me');
@@ -1140,11 +690,10 @@
     } catch { /* non-fatal */ }
   }
 
-  // ── Positioning prompt: save then generate ───────────────────────────────
+  // ── Positioning prompt ────────────────────────────────────────────
   positioningSaveBtn.addEventListener('click', async () => {
     const val = positioningInput.value.trim();
     if (!val) { positioningInput.focus(); return; }
-
     positioningSaveBtn.disabled = true;
     try {
       const res  = await fetch('/api/profile', {
@@ -1168,10 +717,9 @@
     if (e.key === 'Enter') positioningSaveBtn.click();
   });
 
-  // ── Weekly batch: click handler ──────────────────────────────────────────
+  // ── Weekly batch ──────────────────────────────────────────────────
   weeklyBtn.addEventListener('click', () => {
     if (!hasBusinessPositioning) {
-      // Show inline positioning prompt first
       positioningPrompt.classList.add('visible');
       positioningInput.focus();
       return;
@@ -1183,9 +731,12 @@
     weeklyBtn.disabled       = true;
     weeklyStatus.textContent = 'Writing your posts… this takes about 30 seconds.';
     weeklyStatus.className   = 'vault-weekly-status info';
+    postsPreview.classList.remove('visible');
+
     try {
       const res  = await fetch('/api/generate/weekly-batch', { method: 'POST' });
       const data = await res.json();
+
       if (!data.ok) {
         if (data.error === 'ghostwriter_prompt_not_ready') {
           weeklyStatus.innerHTML = data.message || 'Could not build your AI profile. Make sure your Voice Profile (Content Niche + Audience) is filled in.';
@@ -1197,17 +748,61 @@
         weeklyStatus.className = 'vault-weekly-status error';
         return;
       }
-      weeklyStatus.innerHTML = `5 posts added to your drafts. <a href="/drafts.html" style="color:var(--brand);font-weight:600">View drafts →</a>`;
-      weeklyStatus.className = 'vault-weekly-status ok';
+
+      weeklyStatus.className   = 'vault-weekly-status';
+      weeklyStatus.textContent = '';
+      renderPostPreview(data.posts || []);
+
     } catch (err) {
       weeklyStatus.textContent = `Failed: ${err.message}`;
       weeklyStatus.className   = 'vault-weekly-status error';
     } finally {
-      weeklyBtn.disabled = false;
+      weeklyBtn.disabled  = false;
+      weeklyBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg> Regenerate This Week's Posts`;
     }
   }
 
-  loadIdeas();
+  function renderPostPreview(posts) {
+    if (!posts.length) return;
+    postsList.innerHTML = posts.map((p, i) => {
+      const formatLabel = (p.format || '').replace(/_/g, ' ');
+      return `
+        <div class="vault-post-card">
+          <div class="vault-post-card-header">
+            <div class="vault-post-card-meta">
+              <span class="vault-post-day">${escHtml(p.day || `Post ${i + 1}`)}</span>
+              <span class="vault-post-format">${escHtml(formatLabel)}</span>
+            </div>
+            <button class="vault-post-copy" data-index="${i}" aria-label="Copy post">Copy</button>
+          </div>
+          <p class="vault-post-text" id="post-text-${i}">${escHtml(p.post || '')}</p>
+        </div>`;
+    }).join('');
+
+    postsList.querySelectorAll('.vault-post-copy').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx  = Number(btn.dataset.index);
+        const text = posts[idx]?.post || '';
+        navigator.clipboard.writeText(text).then(() => {
+          btn.textContent = 'Copied!';
+          btn.classList.add('copied');
+          setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+        }).catch(() => {
+          btn.textContent = 'Copy failed';
+          setTimeout(() => { btn.textContent = 'Copy'; }, 2000);
+        });
+      });
+    });
+
+    postsPreview.classList.add('visible');
+    postsPreview.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function escHtml(str) {
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // ── Boot ──────────────────────────────────────────────────────────
   loadDocuments();
   loadProfileForWeekly();
   </script>

@@ -12,6 +12,10 @@ const tabEdit         = document.getElementById('tab-edit');
 const tabPreviewBtn   = document.getElementById('tab-preview');
 const wordCountEl     = document.getElementById('word-count');
 
+const leftInputState  = document.getElementById('left-input-state');
+const leftAssistState = document.getElementById('left-assist-state');
+const backToIdeaBtn   = document.getElementById('back-to-idea-btn');
+
 const scoreBar        = document.getElementById('score-bar');
 const scoreNumber     = document.getElementById('score-number');
 const forceRetPill    = document.getElementById('force-returned-pill');
@@ -105,7 +109,18 @@ const scheduleLockBannerText = document.getElementById('schedule-lock-banner-tex
 const schedulePauseBtn       = document.getElementById('schedule-pause-btn');
 const scheduleLockMsg        = document.getElementById('schedule-lock-banner-msg');
 
-/* ── 2. State ────────────────────────────────────────────────── */
+/* ── 2. Left panel state ─────────────────────────────────────── */
+function showAssistPanel() {
+  leftInputState.style.display = 'none';
+  leftAssistState.style.display = '';
+}
+function showInputPanel() {
+  leftAssistState.style.display = 'none';
+  leftInputState.style.display = '';
+}
+backToIdeaBtn.addEventListener('click', showInputPanel);
+
+/* ── 3. State ────────────────────────────────────────────────── */
 let currentPath       = 'idea';
 let currentPostId     = null;
 let currentFunnelType = null;
@@ -450,6 +465,7 @@ document.addEventListener('visibilitychange', () => {
   if (isNew) {
     // Explicit "new post" navigation — wipe any in-progress session so a blank slate loads
     Session.clear();
+    showInputPanel();
   } else if (urlPostId && String(session?.postId) !== String(urlPostId)) {
     // URL points to a specific draft that differs from (or absent in) the session —
     // fetch it from the DB and render it directly.
@@ -754,6 +770,7 @@ function handleGenerateSuccess(data, path) {
   renderCtaStrip(ctaAlternatives);
   enableActionButtons();
   updateWordCount(post);
+  showAssistPanel();
 
   // Scroll right panel into view on mobile
   if (window.innerWidth <= 768) {
@@ -1194,7 +1211,7 @@ regenerateBtn.addEventListener('click', async () => {
 });
 
 function resetRegenerateBtn() {
-  regenerateBtn.textContent = 'Regenerate';
+  regenerateBtn.textContent = '↻ Regenerate';
   regenerateBtn.classList.remove('undo-mode');
   regenerateBtn.setAttribute('aria-label', 'Regenerate post');
   regenerateBtn.onclick = null;
@@ -1763,6 +1780,7 @@ function disableActionButtons() {
 function setGenerating(loading) {
   generateBtn.disabled    = loading;
   generateBtn.textContent = loading ? 'Writing the post…' : 'Write the post';
+  if (regenerateBtn) regenerateBtn.disabled = loading;
 }
 
 function showSkeleton() {
@@ -1829,6 +1847,7 @@ function restoreSession(s) {
     renderAlternativeStrip(alternativePost, primaryPost.confidence);
     renderHookBStrip(currentHookB);
     renderCtaStrip(currentCtaAlternatives);
+    showAssistPanel();
   }
   renderFunnelBadge();
 

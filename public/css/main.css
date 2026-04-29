@@ -1063,19 +1063,21 @@ body {
 /* ── Score Bar ──────────────────────────────────────────────── */
 #score-bar {
   display: none;
-  border-bottom: 1px solid var(--border-divider);
-  padding: var(--space-5) var(--space-6);
-  flex-shrink: 0;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-bottom: var(--space-4);
+  margin-bottom: var(--space-4);
+  border-bottom: 1px solid var(--border);
 }
 
 #score-bar.visible {
   display: flex;
-  align-items: flex-start;
-  gap: var(--space-6);
 }
 
 .score-left {
-  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
 }
 
 #score-number {
@@ -1278,9 +1280,8 @@ body {
 /* ── Hook B Strip ───────────────────────────────────────────── */
 #hook-b-strip {
   display: none;
-  padding: var(--space-2) var(--space-6);
-  background: var(--bg-page);
-  border-bottom: 1px solid var(--border-divider);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--border);
   font-size: 13px;
   color: var(--text-secondary);
   gap: var(--space-2);
@@ -1315,9 +1316,8 @@ body {
 /* ── CTA Alternatives Strip ─────────────────────────────────── */
 #cta-strip {
   display: none;
-  padding: var(--space-2) var(--space-6);
-  background: var(--bg-page);
-  border-bottom: 1px solid var(--border-divider);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--border);
   font-size: 13px;
   color: var(--text-secondary);
   gap: var(--space-2);
@@ -1580,24 +1580,41 @@ body {
   display: block;
 }
 
-#regenerate-btn {
-  font-size: 13px;
-  color: var(--text-secondary);
+.back-to-idea-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   background: none;
   border: none;
-  cursor: pointer;
-  padding: var(--space-2);
+  color: var(--text-secondary);
+  font-size: 13px;
   font-family: var(--font-sans);
-  transition: color 0.15s ease, opacity 1s ease;
+  cursor: pointer;
+  padding: 0 0 var(--space-4) 0;
+  margin-bottom: var(--space-4);
+  border-bottom: 1px solid var(--border);
+  width: 100%;
+  text-align: left;
 }
+.back-to-idea-btn:hover { color: var(--brand); }
 
-#regenerate-btn:hover {
-  color: var(--text-primary);
+.regenerate-btn-left {
+  width: 100%;
+  margin-top: var(--space-5);
+  padding: 10px 0;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  color: var(--text-body);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: background 0.15s;
 }
-
-#regenerate-btn.undo-mode {
-  color: var(--teal);
-}
+.regenerate-btn-left:hover { background: var(--bg-hover); }
+.regenerate-btn-left:disabled { opacity: 0.5; cursor: not-allowed; }
+.regenerate-btn-left.undo-mode { color: var(--teal); }
 
 .action-divider {
   width: 1px;
@@ -1731,10 +1748,6 @@ body {
 }
 
 /* ── Preview mode — hide editing chrome ─────────────────────── */
-#right-panel.preview-mode #score-bar,
-#right-panel.preview-mode #alternative-strip,
-#right-panel.preview-mode #hook-b-strip,
-#right-panel.preview-mode #cta-strip,
 #right-panel.preview-mode #post-edit-area {
   display: none !important;
 }

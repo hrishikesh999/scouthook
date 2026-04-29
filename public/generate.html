@@ -241,51 +241,108 @@
     <!-- ── Left Panel ──────────────────────────────────────── -->
     <div id="left-panel">
 
-      <!-- Input tabs: Write an idea | From your Vault -->
-      <div class="input-tab-bar" role="tablist" aria-label="Input source">
-        <button class="input-tab active" id="input-tab-write" role="tab" aria-selected="true" aria-controls="idea-fields">Quick Spark</button>
-        <button class="input-tab" id="input-tab-vault" role="tab" aria-selected="false" aria-controls="vault-ideas-panel">From your Vault</button>
-      </div>
+      <!-- State A: Input (shown before generation) -->
+      <div id="left-input-state">
 
-      <!-- Tab A: Idea path fields (existing — unchanged) -->
-      <div id="idea-fields" role="tabpanel" aria-labelledby="input-tab-write">
-        <div class="idea-prompt-header">
-          <h2 class="idea-prompt-heading">What's on your mind?</h2>
-          <div id="voice-indicator-area"><!-- Populated by JS --></div>
-          <p class="idea-prompt-sub">A raw thought is enough. ScoutHook turns it into a post your audience will remember.</p>
+        <!-- Input tabs: Write an idea | From your Vault -->
+        <div class="input-tab-bar" role="tablist" aria-label="Input source">
+          <button class="input-tab active" id="input-tab-write" role="tab" aria-selected="true" aria-controls="idea-fields">Quick Spark</button>
+          <button class="input-tab" id="input-tab-vault" role="tab" aria-selected="false" aria-controls="vault-ideas-panel">From your Vault</button>
         </div>
-        <div class="field-group">
-          <textarea
-            id="idea-input"
-            class="field-textarea"
-            placeholder="Brain dump anything — a result, a moment, a belief, a rant. The more of your own words, the better."
-            aria-label="Your idea"
-          ></textarea>
-          <div class="field-error" id="idea-error" role="alert">Add a thought before writing the post</div>
+
+        <!-- Tab A: Idea path fields -->
+        <div id="idea-fields" role="tabpanel" aria-labelledby="input-tab-write">
+          <div class="idea-prompt-header">
+            <h2 class="idea-prompt-heading">What's on your mind?</h2>
+            <div id="voice-indicator-area"><!-- Populated by JS --></div>
+            <p class="idea-prompt-sub">A raw thought is enough. ScoutHook turns it into a post your audience will remember.</p>
+          </div>
+          <div class="field-group">
+            <textarea
+              id="idea-input"
+              class="field-textarea"
+              placeholder="Brain dump anything — a result, a moment, a belief, a rant. The more of your own words, the better."
+              aria-label="Your idea"
+            ></textarea>
+            <div class="field-error" id="idea-error" role="alert">Add a thought before writing the post</div>
+          </div>
+          <!-- Source badge: shown when post grown from vault idea -->
+          <div id="vault-source-badge" class="vault-source-badge" style="display:none" aria-live="polite"></div>
         </div>
-        <!-- Source badge: shown when post grown from vault idea -->
-        <div id="vault-source-badge" class="vault-source-badge" style="display:none" aria-live="polite"></div>
+
+        <!-- Tab B: Vault seed panel -->
+        <div id="vault-ideas-panel" role="tabpanel" aria-labelledby="input-tab-vault" style="display:none">
+          <!-- Mini funnel widget -->
+          <div id="mini-funnel-widget" class="mini-funnel-widget" style="display:none" aria-label="30-day funnel health"></div>
+
+          <!-- Funnel filter -->
+          <div class="vault-seed-filters" role="group" aria-label="Filter seeds by funnel type">
+            <button class="seed-filter-btn active" data-funnel="">All</button>
+            <button class="seed-filter-btn" data-funnel="reach">Reach</button>
+            <button class="seed-filter-btn" data-funnel="trust">Trust</button>
+            <button class="seed-filter-btn" data-funnel="convert">Convert</button>
+          </div>
+
+          <!-- Seed list -->
+          <div id="vault-seed-list" class="vault-seed-list" aria-label="Vault seed ideas"></div>
+        </div>
+
+        <button id="generate-btn" aria-live="polite">Write the post</button>
+
+      </div><!-- /left-input-state -->
+
+      <!-- State B: AI Assist (shown after generation) -->
+      <div id="left-assist-state" style="display:none">
+
+        <button id="back-to-idea-btn" class="back-to-idea-btn">← Edit idea</button>
+
+        <!-- Quality score bar -->
+        <div id="score-bar" role="region" aria-label="Quality score">
+          <div class="score-left">
+            <div id="score-number" class="fail" aria-live="polite" aria-label="Quality score">0</div>
+            <div>
+              <div class="score-label">Quality score</div>
+              <div id="force-returned-pill" class="force-returned-pill" style="display:none">FORCE RETURNED</div>
+            </div>
+          </div>
+          <div class="score-top-row">
+            <span id="archetype-badge" class="archetype-badge" style="display:none"></span>
+            <span id="confidence-text" class="confidence-text" style="display:none"></span>
+            <span id="passfail-pill" class="passfail-pill pass"></span>
+            <span class="passfail-help" aria-label="What is the quality gate?">
+              ?
+              <span id="passfail-tooltip" class="passfail-tooltip" role="tooltip"></span>
+            </span>
+          </div>
+          <div id="funnel-type-row" class="funnel-type-row" style="display:none">
+            <span class="funnel-type-label">Funnel Type:</span>
+            <span id="funnel-type-badge"></span>
+          </div>
+          <button class="suggestions-toggle" id="suggestions-toggle" aria-expanded="false">▸ 0 suggestions to review</button>
+          <div class="suggestions-list" id="suggestions-list" role="list"></div>
+        </div>
+
+        <!-- CTA alternatives -->
+        <div id="cta-strip" role="note" aria-label="Alternative closing CTAs">
+          <span class="hook-b-label">Alt. closing:</span>
+          <div id="cta-chips"></div>
+        </div>
+
+        <!-- Hook B: alternative opening line -->
+        <div id="hook-b-strip" role="note" aria-label="Alternative opening line">
+          <span class="hook-b-label">Alternative hook:</span>
+          <span id="hook-b-text"></span>
+          <a id="hook-b-use-btn" href="#" role="button">Use this hook →</a>
+        </div>
+
+        <!-- Content feedback nudge -->
         <div id="content-nudge" class="content-nudge" style="display:none"></div>
-      </div>
 
-      <!-- Tab B: Vault seed panel -->
-      <div id="vault-ideas-panel" role="tabpanel" aria-labelledby="input-tab-vault" style="display:none">
-        <!-- Mini funnel widget -->
-        <div id="mini-funnel-widget" class="mini-funnel-widget" style="display:none" aria-label="30-day funnel health"></div>
+        <!-- Regenerate -->
+        <button id="regenerate-btn" class="regenerate-btn-left" aria-label="Regenerate post">↻ Regenerate</button>
 
-        <!-- Funnel filter -->
-        <div class="vault-seed-filters" role="group" aria-label="Filter seeds by funnel type">
-          <button class="seed-filter-btn active" data-funnel="">All</button>
-          <button class="seed-filter-btn" data-funnel="reach">Reach</button>
-          <button class="seed-filter-btn" data-funnel="trust">Trust</button>
-          <button class="seed-filter-btn" data-funnel="convert">Convert</button>
-        </div>
+      </div><!-- /left-assist-state -->
 
-        <!-- Seed list -->
-        <div id="vault-seed-list" class="vault-seed-list" aria-label="Vault seed ideas"></div>
-      </div>
-
-      <button id="generate-btn" aria-live="polite">Write the post</button>
     </div>
     <!-- /left-panel -->
 
@@ -306,52 +363,7 @@
         <div class="word-count" id="word-count" aria-live="polite">0 words</div>
       </div>
 
-      <!-- Zone 2: Quality score bar -->
-      <div id="score-bar" role="region" aria-label="Quality score">
-        <div class="score-left">
-          <div id="score-number" class="fail" aria-live="polite" aria-label="Quality score">0</div>
-          <div class="score-label">Quality score</div>
-          <div id="force-returned-pill" class="force-returned-pill" style="display:none">FORCE RETURNED</div>
-        </div>
-        <div class="score-right">
-          <div class="score-top-row">
-            <span id="archetype-badge" class="archetype-badge" style="display:none"></span>
-            <span id="confidence-text" class="confidence-text" style="display:none"></span>
-            <span id="passfail-pill" class="passfail-pill pass"></span>
-            <span class="passfail-help" aria-label="What is the quality gate?">
-              ?
-              <span id="passfail-tooltip" class="passfail-tooltip" role="tooltip"></span>
-            </span>
-          </div>
-          <div id="funnel-type-row" class="funnel-type-row" style="display:none">
-            <span class="funnel-type-label">Funnel Type:</span>
-            <span id="funnel-type-badge"></span>
-          </div>
-          <button class="suggestions-toggle" id="suggestions-toggle" aria-expanded="false">▸ 0 suggestions to review</button>
-          <div class="suggestions-list" id="suggestions-list" role="list"></div>
-        </div>
-      </div>
-
-      <!-- Alternative post strip -->
-      <div id="alternative-strip" role="note">
-        <span id="alternative-preview-text"></span>
-        <a id="switch-alternative-btn" href="#" role="button">Switch to this →</a>
-      </div>
-
-      <!-- Hook B strip: alternative opening line -->
-      <div id="hook-b-strip" role="note" aria-label="Alternative opening line">
-        <span class="hook-b-label">Alternative hook:</span>
-        <span id="hook-b-text"></span>
-        <a id="hook-b-use-btn" href="#" role="button">Use this hook →</a>
-      </div>
-
-      <!-- CTA alternatives strip: swap closing line -->
-      <div id="cta-strip" role="note" aria-label="Alternative closing CTAs">
-        <span class="hook-b-label">Alt. closing:</span>
-        <div id="cta-chips"></div>
-      </div>
-
-      <!-- Zone 3: Post surface -->
+      <!-- Zone 2: Post surface -->
       <div id="post-surface">
 
         <!-- Edit area -->
@@ -360,7 +372,7 @@
           <!-- Empty state -->
           <div class="empty-state" id="empty-state">
             <p class="empty-state-heading">Your post will appear here</p>
-            <p class="empty-state-sub">Type a thought, lesson, or observation on the left and hit Generate.</p>
+            <p class="empty-state-sub">Type a thought on the left and hit "Write the post".</p>
           </div>
 
           <!-- Skeleton (while loading) -->
@@ -437,8 +449,6 @@
       <div>
         <div id="action-bar">
           <!-- Left group -->
-          <button id="regenerate-btn" aria-label="Regenerate post">Regenerate</button>
-          <div class="action-divider" aria-hidden="true"></div>
           <button class="asset-action-btn disabled" id="quote-card-btn" aria-label="Generate quote card">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="9" y1="10" x2="15" y2="10"/><line x1="9" y1="14" x2="13" y2="14"/></svg>
             <span class="asset-action-label">Quote card</span>

@@ -420,41 +420,44 @@ const NON_RETRIABLE_ERRORS = new Set([
  */
 async function publishScheduledPost(scheduledPostId, { attemptsMade = 0, maxAttempts = 3 } = {}) {
   const isFinalAttempt = (attemptsMade + 1) >= maxAttempts;
-  const current = await db.prepare('SELECT * FROM scheduled_posts WHERE id = ?').get(scheduledPostId);
-  if (!current) {
-    console.log(`[publisher] scheduledPostId=${scheduledPostId} not found — skipping`);
-    return;
-  }
-
-  if (!['pending', 'processing'].includes(current.status)) {
-    console.log(`[publisher] scheduledPostId=${scheduledPostId} status=${current.status} — skipping`);
-    return;
-  }
-
-  // If already published, don't attempt again (idempotency guard).
-  if (current.status === 'published' || current.linkedin_post_id) {
-    console.log(`[publisher] scheduledPostId=${scheduledPostId} already published — skipping`);
-    return;
-  }
-
-  // Claim the job if it's pending. For retries, we may see it pending again.
-  if (current.status === 'pending') {
-    const claim = await db.prepare(`
-      UPDATE scheduled_posts
-      SET status = 'processing',
-          attempts = attempts + 1,
-          updated_at = CURRENT_TIMESTAMP
-      WHERE id = ? AND status = 'pending'
-    `).run(scheduledPostId);
-
-    if (claim.changes === 0) {
-      // Another worker claimed it or it was cancelled between reads.
-      console.log(`[publisher] scheduledPostId=${scheduledPostId} could not be claimed — skipping`);
-      return;
-    }
-  }
 
   try {
+    // Fetch current state. All pre-publish logic is inside the try so any DB error
+    // is handled by the catch block (marks not_sent on final attempt).
+    const current = await db.prepare('SELECT * FROM scheduled_posts WHERE id = ?').get(scheduledPostId);
+    if (!current) {
+      console.log(`[publisher] scheduledPostId=${scheduledPostId} not found — skipping`);
+      return;
+    }
+
+    if (!['pending', 'processing'].includes(current.status)) {
+      console.log(`[publisher] scheduledPostId=${scheduledPostId} status=${current.status} — skipping`);
+      return;
+    }
+
+    // If already published, don't attempt again (idempotency guard).
+    if (current.status === 'published' || current.linkedin_post_id) {
+      console.log(`[publisher] scheduledPostId=${scheduledPostId} already published — skipping`);
+      return;
+    }
+
+    // Claim the job if it's pending. For retries, we may see it pending again.
+    if (current.status === 'pending') {
+      const claim = await db.prepare(`
+        UPDATE scheduled_posts
+        SET status = 'processing',
+            attempts = attempts + 1,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ? AND status = 'pending'
+      `).run(scheduledPostId);
+
+      if (claim.changes === 0) {
+        // Another worker claimed it or it was cancelled between reads.
+        console.log(`[publisher] scheduledPostId=${scheduledPostId} could not be claimed — skipping`);
+        return;
+      }
+    }
+
     // Re-fetch after claiming to get updated attempts/status.
     const row = await db.prepare('SELECT * FROM scheduled_posts WHERE id = ?').get(scheduledPostId);
     if (!row || row.status !== 'processing') {
@@ -554,11 +557,25 @@ async function publishScheduledPost(scheduledPostId, { attemptsMade = 0, maxAtte
 
     if (isNonRetriable) {
       // Permanent failure — mark not_sent and unlock the draft.
-      await db.prepare(`
-        UPDATE scheduled_posts
-        SET status = 'not_sent', error_message = ?, updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-      `).run(err.message, scheduledPostId);
+      // Retry the DB write up to 3 times; if it still fails, throw so BullMQ retries
+      // rather than silently leaving the post stuck in 'processing'.
+      let markOk = false;
+      for (let i = 0; i < 3 && !markOk; i++) {
+        try {
+          if (i > 0) await new Promise(r => setTimeout(r, 2000));
+          await db.prepare(`
+            UPDATE scheduled_posts
+            SET status = 'not_sent', error_message = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ? AND status IN ('pending', 'processing')
+          `).run(err.message, scheduledPostId);
+          markOk = true;
+        } catch (dbErr) {
+          console.error(`[publisher] scheduledPostId=${scheduledPostId} not_sent UPDATE failed (attempt ${i + 1}/3):`, dbErr.message);
+        }
+      }
+      if (!markOk) {
+        throw new Error(`not_sent_db_write_failed: ${err.message}`);
+      }
 
       try {
         const r = await db.prepare('SELECT user_id, tenant_id, post_id FROM scheduled_posts WHERE id = ?').get(scheduledPostId);
@@ -620,11 +637,16 @@ async function publishScheduledPost(scheduledPostId, { attemptsMade = 0, maxAtte
       // Do not throw — BullMQ should not retry non-retriable failures.
     } else {
       // Transient failure — reset to pending so the next BullMQ attempt can claim it.
-      await db.prepare(`
-        UPDATE scheduled_posts
-        SET status = 'pending', error_message = ?, updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-      `).run(err.message, scheduledPostId);
+      try {
+        await db.prepare(`
+          UPDATE scheduled_posts
+          SET status = 'pending', error_message = ?, updated_at = CURRENT_TIMESTAMP
+          WHERE id = ? AND status = 'processing'
+        `).run(err.message, scheduledPostId);
+      } catch (dbErr) {
+        // If reset fails, status stays 'processing'; periodic recovery will rescue it.
+        console.error(`[publisher] scheduledPostId=${scheduledPostId} pending reset failed:`, dbErr.message);
+      }
 
       try {
         const r = await db.prepare('SELECT user_id, tenant_id FROM scheduled_posts WHERE id = ?').get(scheduledPostId);

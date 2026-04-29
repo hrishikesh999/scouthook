@@ -14,6 +14,70 @@ function scheduledJobId(scheduledPostId) {
 }
 
 /**
+ * Recover posts stuck in 'processing' for >20 minutes (e.g. worker crash).
+ * Marks them not_sent, reverts associated drafts, and sends notifications.
+ * Called at startup and every 10 minutes by a periodic timer.
+ */
+async function recoverStuckPosts() {
+  const stuckSql = backendKind === 'sqlite'
+    ? `SELECT id, scheduled_for FROM scheduled_posts WHERE status = 'processing' AND updated_at < datetime('now', '-20 minutes')`
+    : `SELECT id, scheduled_for FROM scheduled_posts WHERE status = 'processing' AND updated_at < (now() - interval '20 minutes')`;
+  const stuck = await db.prepare(stuckSql).all();
+
+  for (const row of stuck) {
+    await db.prepare(`
+      UPDATE scheduled_posts
+      SET status = 'not_sent',
+          error_message = 'stuck_processing_timeout',
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND status = 'processing'
+    `).run(row.id);
+
+    try {
+      const meta = await db.prepare(
+        'SELECT user_id, tenant_id, post_id, content, scheduled_for FROM scheduled_posts WHERE id = ?'
+      ).get(row.id);
+      if (meta) {
+        if (meta.post_id) {
+          await db.prepare(`
+            UPDATE generated_posts SET status = 'draft'
+            WHERE id = ? AND user_id = ? AND tenant_id = ? AND status = 'scheduled'
+          `).run(meta.post_id, meta.user_id, meta.tenant_id);
+        }
+
+        await db.prepare(`
+          INSERT INTO scheduled_post_events (scheduled_post_id, user_id, tenant_id, event_type, message)
+          VALUES (?, ?, ?, 'recovered', ?)
+        `).run(row.id, meta.user_id, meta.tenant_id, 'processing_stale→not_sent');
+
+        await db.prepare(`
+          INSERT INTO notifications (user_id, tenant_id, type, title, body, ref_id, ref_type)
+          VALUES (?, ?, 'publish_failed', 'Scheduled post failed', ?, ?, 'scheduled_post')
+        `).run(
+          meta.user_id, meta.tenant_id,
+          'Your scheduled post could not be published: stuck_processing_timeout',
+          row.id
+        );
+
+        const appUrl = process.env.APP_URL || '';
+        const postPreview = (meta.content || '').slice(0, 120) + ((meta.content || '').length > 120 ? '…' : '');
+        const scheduledFor = meta.scheduled_for
+          ? new Date(meta.scheduled_for).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })
+          : 'the scheduled time';
+        sendEmailToUser(meta.user_id, meta.tenant_id, 'post-failed', {
+          scheduled_for: scheduledFor,
+          error_reason: 'The post worker timed out. Please reschedule.',
+          post_preview: postPreview,
+          app_url: appUrl,
+        }, { dedupKey: false }).catch(() => {});
+      }
+    } catch { /* non-fatal */ }
+
+    console.log(`[scheduler] Recovered processing→not_sent scheduledPostId=${row.id}`);
+  }
+}
+
+/**
  * Initialise BullMQ queue and worker.
  * Only starts if redis_url is configured in platform_settings.
  * Called from server.js on startup — failure is non-fatal (logged as warning).
@@ -102,77 +166,14 @@ async function initScheduler() {
     console.log(`[scheduler] Re-enqueued scheduledPostId=${row.id} delay=${delay}ms`);
   }
 
-  // Recover posts stuck in 'processing' (e.g. worker crash mid-flight).
-  // Single-attempt policy: if processing is older than 20 minutes, mark as not_sent.
-  const stuckSql = backendKind === 'sqlite'
-    ? `
-      SELECT id, scheduled_for
-      FROM scheduled_posts
-      WHERE status = 'processing'
-        AND updated_at < datetime('now', '-20 minutes')
-    `
-    : `
-      SELECT id, scheduled_for
-      FROM scheduled_posts
-      WHERE status = 'processing'
-        AND updated_at < (now() - interval '20 minutes')
-    `;
-  const stuck = await db.prepare(stuckSql).all();
+  await recoverStuckPosts();
 
-  for (const row of stuck) {
-    await db.prepare(`
-      UPDATE scheduled_posts
-      SET status = 'not_sent',
-          error_message = 'stuck_processing_timeout',
-          updated_at = CURRENT_TIMESTAMP
-      WHERE id = ? AND status = 'processing'
-    `).run(row.id);
-
-    try {
-      const meta = await db.prepare(
-        'SELECT user_id, tenant_id, post_id, content, scheduled_for FROM scheduled_posts WHERE id = ?'
-      ).get(row.id);
-      if (meta) {
-        // Revert originating draft so user can edit and reschedule
-        if (meta.post_id) {
-          await db.prepare(`
-            UPDATE generated_posts SET status = 'draft'
-            WHERE id = ? AND user_id = ? AND tenant_id = ? AND status = 'scheduled'
-          `).run(meta.post_id, meta.user_id, meta.tenant_id);
-        }
-
-        await db.prepare(`
-          INSERT INTO scheduled_post_events (scheduled_post_id, user_id, tenant_id, event_type, message)
-          VALUES (?, ?, ?, 'recovered', ?)
-        `).run(row.id, meta.user_id, meta.tenant_id, 'processing_stale→not_sent');
-
-        // In-app notification
-        await db.prepare(`
-          INSERT INTO notifications (user_id, tenant_id, type, title, body, ref_id, ref_type)
-          VALUES (?, ?, 'publish_failed', 'Scheduled post failed', ?, ?, 'scheduled_post')
-        `).run(
-          meta.user_id, meta.tenant_id,
-          'Your scheduled post could not be published: stuck_processing_timeout',
-          row.id
-        );
-
-        // Email notification
-        const appUrl = process.env.APP_URL || '';
-        const postPreview = (meta.content || '').slice(0, 120) + ((meta.content || '').length > 120 ? '…' : '');
-        const scheduledFor = meta.scheduled_for
-          ? new Date(meta.scheduled_for).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })
-          : 'the scheduled time';
-        sendEmailToUser(meta.user_id, meta.tenant_id, 'post-failed', {
-          scheduled_for: scheduledFor,
-          error_reason: 'The post worker timed out. Please reschedule.',
-          post_preview: postPreview,
-          app_url: appUrl,
-        }, { dedupKey: false }).catch(() => {});
-      }
-    } catch { /* non-fatal */ }
-
-    console.log(`[scheduler] Recovered processing→not_sent scheduledPostId=${row.id}`);
-  }
+  // Run stuck-post recovery every 10 minutes so posts never stay stuck between restarts.
+  setInterval(() => {
+    recoverStuckPosts().catch(err =>
+      console.error('[scheduler] recoverStuckPosts periodic error:', err.message)
+    );
+  }, 10 * 60 * 1000);
 }
 
 /**
@@ -241,4 +242,4 @@ function getWorker() {
   return workerInstance;
 }
 
-module.exports = { initScheduler, addScheduledJob, removeScheduledJob, isSchedulerEnabled, getWorker };
+module.exports = { initScheduler, addScheduledJob, removeScheduledJob, isSchedulerEnabled, getWorker, recoverStuckPosts };

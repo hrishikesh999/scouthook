@@ -87,13 +87,21 @@ function groupByDate(posts) {
 // Render
 // ---------------------------------------------------------------------------
 
+const MISSED_THRESHOLD_MS = 30 * 60 * 1000; // 30 minutes
+
+function isMissedPost(post) {
+  if (!['pending', 'processing'].includes(post.status)) return false;
+  const t = new Date(post.scheduled_for).getTime();
+  return Number.isFinite(t) && (Date.now() - t) > MISSED_THRESHOLD_MS;
+}
+
 function renderStream(posts) {
   const stream = document.getElementById('schedule-stream');
   if (!stream) return;
 
   const list   = Array.isArray(posts) ? posts : [];
-  const failed = list.filter(p => p.status === 'not_sent');
-  const active = list.filter(p => p.status !== 'not_sent');
+  const failed = list.filter(p => p.status === 'not_sent' || isMissedPost(p));
+  const active = list.filter(p => p.status !== 'not_sent' && !isMissedPost(p));
 
   const days   = buildDayRange();
   const byDate = groupByDate(active);
@@ -198,10 +206,10 @@ function renderEventRow(post) {
 }
 
 function renderFailedRow(post) {
-  const lines    = (post.content || '').trim().split('\n').map(l => l.trim()).filter(Boolean);
-  const hook     = lines[0] || '';
-  const editHref = post.post_id ? `/generate.html?postId=${encodeURIComponent(post.post_id)}` : '/generate.html';
-  const when     = post.scheduled_for
+  const lines   = (post.content || '').trim().split('\n').map(l => l.trim()).filter(Boolean);
+  const hook    = lines[0] || '';
+  const missed  = isMissedPost(post);
+  const when    = post.scheduled_for
     ? new Date(post.scheduled_for).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })
     : '';
 
@@ -216,18 +224,40 @@ function renderFailedRow(post) {
     stuck_processing_timeout: 'Worker timed out',
     scheduled_payload_mismatch: 'Post content was modified after scheduling',
   };
-  const reason = errorMap[post.error_message] || post.error_message || 'Unknown error';
+  const reason = missed
+    ? 'Missed scheduled time'
+    : (errorMap[post.error_message] || post.error_message || 'Unknown error');
+
+  const editHref = post.post_id ? `/generate.html?postId=${encodeURIComponent(post.post_id)}` : null;
+
+  // Missed posts (still pending/processing) show as read-only — server will recover them shortly.
+  // not_sent posts get full dismiss + reschedule actions.
+  const actionsHtml = post.status === 'not_sent' ? `
+    <div class="sched-failed-actions">
+      <button class="sched-btn sched-btn--reschedule-toggle" data-id="${post.id}">Reschedule</button>
+      <button class="sched-btn sched-btn--publish-now" data-id="${post.id}">Publish now</button>
+      ${editHref ? `<a href="${editHref}" class="sched-btn sched-btn--edit">Edit →</a>` : ''}
+      <button class="sched-btn sched-btn--dismiss" data-id="${post.id}">Dismiss</button>
+    </div>
+    <div class="sched-reschedule-panel" id="reschedule-panel-${post.id}" style="display:none">
+      <input type="datetime-local" class="sched-reschedule-input" id="reschedule-dt-${post.id}">
+      <button class="sched-btn sched-btn--confirm-reschedule" data-id="${post.id}">Confirm reschedule</button>
+    </div>` : `
+    <div class="sched-failed-actions">
+      ${editHref ? `<a href="${editHref}" class="sched-btn sched-btn--edit">Edit →</a>` : ''}
+      <span class="sched-failed-recovering">Recovering…</span>
+    </div>`;
 
   return `
-    <a href="${editHref}" class="sched-failed-row">
+    <div class="sched-failed-row" data-id="${post.id}">
       <div class="sched-failed-meta">
         <span class="sched-failed-badge">Failed to Publish</span>
         ${when ? `<span class="sched-failed-when">Scheduled for ${when}</span>` : ''}
       </div>
       <p class="sched-failed-hook">${hook}</p>
       <p class="sched-failed-reason">${reason}</p>
-      <span class="sched-action-edit">Edit &amp; reschedule →</span>
-    </a>`;
+      ${actionsHtml}
+    </div>`;
 }
 
 // ---------------------------------------------------------------------------
@@ -265,9 +295,7 @@ async function checkLinkedInStatus() {
 // Boot
 // ---------------------------------------------------------------------------
 
-document.addEventListener('DOMContentLoaded', async () => {
-  checkLinkedInStatus();
-
+async function reloadStream() {
   try {
     const res  = await fetch('/api/linkedin/scheduled', { headers: apiHeaders() });
     const data = await res.json();
@@ -275,4 +303,95 @@ document.addEventListener('DOMContentLoaded', async () => {
   } catch {
     renderStream([]);
   }
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+  checkLinkedInStatus();
+  await reloadStream();
+
+  // Event delegation for dismiss / reschedule actions on failed-post cards.
+  const stream = document.getElementById('schedule-stream');
+  if (!stream) return;
+
+  stream.addEventListener('click', async e => {
+    const dismissBtn  = e.target.closest('.sched-btn--dismiss');
+    const toggleBtn   = e.target.closest('.sched-btn--reschedule-toggle');
+    const confirmBtn  = e.target.closest('.sched-btn--confirm-reschedule');
+    const nowBtn      = e.target.closest('.sched-btn--publish-now');
+
+    if (dismissBtn) {
+      const id = dismissBtn.dataset.id;
+      try {
+        const res = await fetch(`/api/linkedin/scheduled/${id}/dismiss`, {
+          method: 'DELETE', headers: apiHeaders(),
+        });
+        const data = await res.json();
+        if (data.ok) {
+          stream.querySelector(`.sched-failed-row[data-id="${id}"]`)?.remove();
+        } else {
+          alert(`Could not dismiss: ${data.error}`);
+        }
+      } catch { alert('Dismiss failed — please try again.'); }
+    }
+
+    if (toggleBtn) {
+      const id    = toggleBtn.dataset.id;
+      const panel = document.getElementById(`reschedule-panel-${id}`);
+      if (panel) {
+        const opening = panel.style.display === 'none';
+        panel.style.display = opening ? '' : 'none';
+        if (opening) {
+          // Pre-fill with tomorrow at 9am as a sensible default
+          const dt = document.getElementById(`reschedule-dt-${id}`);
+          if (dt && !dt.value) {
+            const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0);
+            dt.value = d.toISOString().slice(0, 16);
+          }
+        }
+      }
+    }
+
+    if (confirmBtn) {
+      const id  = confirmBtn.dataset.id;
+      const dt  = document.getElementById(`reschedule-dt-${id}`);
+      if (!dt?.value) { alert('Please pick a date and time.'); return; }
+      const scheduled_for = new Date(dt.value).toISOString();
+      try {
+        const res  = await fetch(`/api/linkedin/scheduled/${id}/reschedule`, {
+          method: 'POST',
+          headers: { ...apiHeaders(), 'Content-Type': 'application/json' },
+          body: JSON.stringify({ scheduled_for }),
+        });
+        const data = await res.json();
+        if (data.ok) {
+          await reloadStream();
+        } else {
+          const msgs = {
+            scheduled_for_too_soon: 'Please pick a time at least 5 minutes in the future.',
+            scheduled_for_too_far:  'Please pick a time within the next 30 days.',
+            scheduling_unavailable: 'Scheduler is unavailable — try again shortly.',
+          };
+          alert(msgs[data.error] || `Could not reschedule: ${data.error}`);
+        }
+      } catch { alert('Reschedule failed — please try again.'); }
+    }
+
+    if (nowBtn) {
+      const id = nowBtn.dataset.id;
+      if (!confirm('Publish this post to LinkedIn right now?')) return;
+      try {
+        const res  = await fetch(`/api/linkedin/scheduled/${id}/reschedule`, {
+          method: 'POST',
+          headers: { ...apiHeaders(), 'Content-Type': 'application/json' },
+          body: JSON.stringify({ scheduled_for: null }),
+        });
+        const data = await res.json();
+        if (data.ok) {
+          await reloadStream();
+        } else {
+          alert(`Could not publish: ${data.error}`);
+        }
+      } catch { alert('Publish failed — please try again.'); }
+    }
+  });
 });

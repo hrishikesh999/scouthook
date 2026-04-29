@@ -31,7 +31,7 @@ async function cancelScheduledPostById(userId, tenantId, scheduledPostId) {
   ).get(scheduledPostId, userId, tenantId);
 
   if (!row) return { ok: false, error: 'not_found' };
-  if (!['pending', 'processing'].includes(row.status)) {
+  if (!['pending', 'processing', 'not_sent'].includes(row.status)) {
     return { ok: false, error: 'cannot_cancel', status: row.status };
   }
 
@@ -581,6 +581,145 @@ router.delete('/scheduled/:id', async (req, res) => {
   }
 
   return res.json({ ok: true });
+});
+
+// ---------------------------------------------------------------------------
+// DELETE /api/linkedin/scheduled/:id/dismiss
+// Dismiss a not_sent (failed) post — marks it cancelled so it leaves the feed.
+// ---------------------------------------------------------------------------
+router.delete('/scheduled/:id/dismiss', async (req, res) => {
+  const userId   = req.userId;
+  const tenantId = req.tenantId;
+  const id       = Number(req.params.id);
+
+  if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
+  if (!Number.isFinite(id)) return res.status(400).json({ ok: false, error: 'invalid_id' });
+
+  const row = await db.prepare(
+    'SELECT id, status, post_id FROM scheduled_posts WHERE id = ? AND user_id = ? AND tenant_id = ?'
+  ).get(id, userId, tenantId);
+
+  if (!row) return res.status(404).json({ ok: false, error: 'not_found' });
+  if (row.status !== 'not_sent') {
+    return res.status(400).json({ ok: false, error: 'cannot_dismiss', status: row.status });
+  }
+
+  await db.prepare(
+    `UPDATE scheduled_posts SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP WHERE id = ?`
+  ).run(id);
+
+  if (row.post_id) {
+    await db.prepare(`
+      UPDATE generated_posts SET status = 'draft'
+      WHERE id = ? AND user_id = ? AND tenant_id = ? AND status = 'scheduled'
+    `).run(row.post_id, userId, tenantId);
+  }
+
+  logScheduledEvent({ scheduledPostId: id, userId, tenantId, eventType: 'cancelled', message: 'dismissed_by_user' });
+
+  return res.json({ ok: true });
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/linkedin/scheduled/:id/reschedule
+// Reschedule a not_sent post. Creates a new scheduled_posts row (same content/
+// assets) and marks the old row cancelled.
+// Body: { scheduled_for: ISO datetime string | null }
+//   null / omitted → publish now (~10 s delay)
+// ---------------------------------------------------------------------------
+router.post('/scheduled/:id/reschedule', async (req, res) => {
+  const userId   = req.userId;
+  const tenantId = req.tenantId;
+  const id       = Number(req.params.id);
+  const { scheduled_for } = req.body || {};
+
+  if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
+  if (!Number.isFinite(id)) return res.status(400).json({ ok: false, error: 'invalid_id' });
+
+  const schedulingEnabled = String((await getSetting('scheduling_enabled')) ?? '1').trim();
+  if (schedulingEnabled === '0' || schedulingEnabled.toLowerCase() === 'false') {
+    return res.status(503).json({ ok: false, error: 'scheduling_disabled' });
+  }
+  if (!isSchedulerEnabled()) {
+    return res.status(503).json({ ok: false, error: 'scheduling_unavailable' });
+  }
+
+  const old = await db.prepare(
+    'SELECT * FROM scheduled_posts WHERE id = ? AND user_id = ? AND tenant_id = ?'
+  ).get(id, userId, tenantId);
+
+  if (!old) return res.status(404).json({ ok: false, error: 'not_found' });
+  if (old.status !== 'not_sent') {
+    return res.status(400).json({ ok: false, error: 'not_reschedulable', status: old.status });
+  }
+
+  const publishNowMode = !scheduled_for;
+  let scheduledDate;
+  if (publishNowMode) {
+    scheduledDate = new Date(Date.now() + 10_000); // fire ~10 s from now
+  } else {
+    scheduledDate = new Date(scheduled_for);
+    if (isNaN(scheduledDate)) {
+      return res.status(400).json({ ok: false, error: 'scheduled_for_invalid' });
+    }
+    const now = Date.now();
+    if (scheduledDate.getTime() <= now + 5 * 60 * 1000) {
+      return res.status(400).json({ ok: false, error: 'scheduled_for_too_soon' });
+    }
+    if (scheduledDate.getTime() > now + 30 * 24 * 60 * 60 * 1000) {
+      return res.status(400).json({ ok: false, error: 'scheduled_for_too_far' });
+    }
+  }
+
+  const payloadHash = sha256Hex(JSON.stringify({
+    content: old.content,
+    asset_type: old.asset_type || null,
+    asset_url: old.asset_url || null,
+    scheduled_for: scheduledDate.toISOString(),
+  }));
+
+  let newScheduledPostId;
+  try {
+    await db.transaction(async tx => {
+      await tx.prepare(
+        `UPDATE scheduled_posts SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP WHERE id = ?`
+      ).run(id);
+
+      const result = await tx.prepare(`
+        INSERT INTO scheduled_posts
+          (user_id, tenant_id, post_id, content, scheduled_for, status, asset_type, asset_url, payload_hash)
+        VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?)
+        RETURNING id
+      `).run(
+        userId, tenantId,
+        old.post_id || null,
+        old.content,
+        scheduledDate.toISOString(),
+        old.asset_type || null,
+        old.asset_url || null,
+        payloadHash
+      );
+      newScheduledPostId = Number(result.lastInsertRowid);
+    });
+
+    logScheduledEvent({ scheduledPostId: id, userId, tenantId, eventType: 'cancelled', message: `rescheduled_as=${newScheduledPostId}` });
+    logScheduledEvent({ scheduledPostId: newScheduledPostId, userId, tenantId, eventType: 'created', message: `rescheduled_from=${id},scheduled_for=${scheduledDate.toISOString()}` });
+
+    const bullJobId = await addScheduledJob(newScheduledPostId, scheduledDate);
+    await db.prepare(
+      `UPDATE scheduled_posts SET bull_job_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
+    ).run(String(bullJobId), newScheduledPostId);
+
+    logScheduledEvent({ scheduledPostId: newScheduledPostId, userId, tenantId, eventType: 'enqueued', message: `bull_job_id=${bullJobId}` });
+
+    return res.json({ ok: true, scheduled_post_id: newScheduledPostId, publish_now: publishNowMode });
+  } catch (err) {
+    console.error('[linkedin/reschedule] Error:', err.message);
+    if (err.message?.includes('scheduler_not_initialized')) {
+      return res.status(503).json({ ok: false, error: 'scheduling_unavailable' });
+    }
+    return res.status(500).json({ ok: false, error: err.message });
+  }
 });
 
 // ---------------------------------------------------------------------------

@@ -12,7 +12,7 @@ const LINKEDIN_UGC_URL = 'https://api.linkedin.com/v2/ugcPosts';
 const LINKEDIN_ASSETS_REGISTER_URL = 'https://api.linkedin.com/v2/assets?action=registerUpload';
 const LINKEDIN_DOC_INIT_URL = 'https://api.linkedin.com/rest/documents?action=initializeUpload';
 const LINKEDIN_REST_POSTS_URL = 'https://api.linkedin.com/rest/posts';
-const LINKEDIN_API_VERSION = '202501';
+const LINKEDIN_API_VERSION = '202504';
 const RATE_LIMIT_WINDOW_HOURS = 1;
 
 function sha256Hex(s) {
@@ -85,6 +85,7 @@ async function registerFeedshareImageUpload(accessToken, ownerUrn) {
   });
 
   if (!res.ok) {
+    if (res.status === 426) throw new Error('linkedin_api_version_error');
     const text = await res.text();
     throw new Error(`LinkedIn assets registerUpload error ${res.status}: ${text}`);
   }
@@ -114,6 +115,7 @@ async function uploadFeedshareImageBinary(accessToken, uploadUrl, buffer, extraH
   });
 
   if (!res.ok) {
+    if (res.status === 426) throw new Error('linkedin_api_version_error');
     const text = await res.text();
     throw new Error(`LinkedIn feedshare image upload error ${res.status}: ${text}`);
   }
@@ -154,6 +156,7 @@ async function createUgcPostWithImage(accessToken, linkedinUserId, content, asse
   });
 
   if (!res.ok) {
+    if (res.status === 426) throw new Error('linkedin_api_version_error');
     const text = await res.text();
     throw new Error(`LinkedIn API error ${res.status}: ${text}`);
   }
@@ -191,6 +194,7 @@ async function callLinkedInAPI(accessToken, linkedinUserId, content) {
   });
 
   if (!res.ok) {
+    if (res.status === 426) throw new Error('linkedin_api_version_error');
     const text = await res.text();
     throw new Error(`LinkedIn API error ${res.status}: ${text}`);
   }
@@ -226,6 +230,7 @@ async function createRestPostWithMedia(accessToken, linkedinUserId, commentary, 
   });
 
   if (!res.ok) {
+    if (res.status === 426) throw new Error('linkedin_api_version_error');
     const text = await res.text();
     throw new Error(`LinkedIn rest/posts error ${res.status}: ${text}`);
   }
@@ -288,6 +293,7 @@ async function initializeDocumentUpload(accessToken, ownerUrn) {
   });
 
   if (!res.ok) {
+    if (res.status === 426) throw new Error('linkedin_api_version_error');
     const text = await res.text();
     throw new Error(`LinkedIn document initializeUpload error ${res.status}: ${text}`);
   }
@@ -315,6 +321,7 @@ async function uploadDocumentPdf(accessToken, uploadUrl, buffer) {
   });
 
   if (!res.ok) {
+    if (res.status === 426) throw new Error('linkedin_api_version_error');
     const text = await res.text();
     throw new Error(`LinkedIn document upload error ${res.status}: ${text}`);
   }
@@ -408,6 +415,7 @@ const NON_RETRIABLE_ERRORS = new Set([
   'invalid_image_url',
   'reconnect_required',
   'scheduler_not_initialized',
+  'linkedin_api_version_error',
 ]);
 
 /**
@@ -622,6 +630,7 @@ async function publishScheduledPost(scheduledPostId, { attemptsMade = 0, maxAtte
             invalid_carousel_pdf_url: 'The carousel PDF could not be accessed.',
             linkedin_document_processing_failed: 'LinkedIn couldn\'t process the carousel document.',
             linkedin_document_not_ready: 'LinkedIn timed out while processing the carousel document.',
+            linkedin_api_version_error: 'A LinkedIn API version issue occurred — the post has been queued for retry after an update.',
           };
           const errorReason = errorReasonMap[err.message] || err.message || 'An unexpected error occurred.';
           sendEmailToUser(meta.user_id, meta.tenant_id, 'post-failed', {

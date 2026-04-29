@@ -223,6 +223,7 @@ function renderFailedRow(post) {
     linkedin_document_not_ready: 'LinkedIn timed out on carousel',
     stuck_processing_timeout: 'Worker timed out',
     scheduled_payload_mismatch: 'Post content was modified after scheduling',
+    linkedin_api_version_error: 'LinkedIn API version mismatch — contact support',
   };
   const reason = missed
     ? 'Missed scheduled time'

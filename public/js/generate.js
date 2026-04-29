@@ -440,9 +440,10 @@ document.addEventListener('visibilitychange', () => {
   if (vaultSeedText && vaultIdeaId) {
     currentVaultIdeaId = Number(vaultIdeaId);
     ideaInput.value    = vaultSeedText;
+    autoGrowTextarea(ideaInput);
     if (vaultSourceBadge) vaultSourceBadge.style.display = 'none';
     window.history.replaceState({}, '', '/generate.html');
-    triggerGenerate();
+    triggerGenerate({ path: 'idea', raw_idea: vaultSeedText, vault_idea_id: Number(vaultIdeaId) });
     return;
   }
 
@@ -1810,7 +1811,7 @@ function restoreSession(s) {
   if (!s || !s.post) return;
 
   // Restore inputs
-  if (s.ideaInput) ideaInput.value = s.ideaInput;
+  if (s.ideaInput) { ideaInput.value = s.ideaInput; autoGrowTextarea(ideaInput); }
 
   // Restore post
   currentPostId          = s.postId || null;

@@ -12,7 +12,7 @@ const LINKEDIN_UGC_URL = 'https://api.linkedin.com/v2/ugcPosts';
 const LINKEDIN_ASSETS_REGISTER_URL = 'https://api.linkedin.com/v2/assets?action=registerUpload';
 const LINKEDIN_DOC_INIT_URL = 'https://api.linkedin.com/rest/documents?action=initializeUpload';
 const LINKEDIN_REST_POSTS_URL = 'https://api.linkedin.com/rest/posts';
-const LINKEDIN_API_VERSION = '202504';
+const LINKEDIN_API_VERSION = '202603';
 const RATE_LIMIT_WINDOW_HOURS = 1;
 
 function sha256Hex(s) {

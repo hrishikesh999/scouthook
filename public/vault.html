@@ -743,7 +743,7 @@
         } else if (data.error === 'rate_limit_exceeded') {
           weeklyStatus.textContent = 'Rate limit reached — try again in an hour.';
         } else {
-          weeklyStatus.textContent = data.message || 'Something went wrong. Please try again.';
+          weeklyStatus.textContent = data.message || data.error || 'Something went wrong. Please try again.';
         }
         weeklyStatus.className = 'vault-weekly-status error';
         return;

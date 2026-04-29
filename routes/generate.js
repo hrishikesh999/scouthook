@@ -313,6 +313,7 @@ router.post('/weekly-batch', async (req, res) => {
 
   if (!userProfile) return res.status(400).json({ ok: false, error: 'complete_profile_first' });
 
+  try {
   const vault = await getVaultContext(userId, tenantId);
   if (!vault?.text) {
     return res.status(400).json({ ok: false, error: 'no_vault_documents', message: 'Upload and index at least one document to generate posts from.' });
@@ -320,11 +321,11 @@ router.post('/weekly-batch', async (req, res) => {
 
   // Build (or rebuild) the ghostwriter prompt when missing or stale.
   // Stale = a vault document was added/updated after the prompt was last built.
-  const latestDoc = db
+  const latestDoc = await db
     .prepare(`SELECT MAX(updated_at) AS ts FROM vault_documents WHERE user_id = ? AND tenant_id = ? AND status = 'ready'`)
     .get(userId, tenantId);
-  const promptBuiltAt  = userProfile.ghostwriter_prompt_built_at;
-  const latestDocAt    = latestDoc?.ts;
+  const promptBuiltAt = userProfile.ghostwriter_prompt_built_at;
+  const latestDocAt   = latestDoc?.ts;
   const isStale = !userProfile.ghostwriter_prompt || (latestDocAt && promptBuiltAt && latestDocAt > promptBuiltAt);
 
   if (isStale) {
@@ -387,8 +388,13 @@ router.post('/weekly-batch', async (req, res) => {
     return res.json({ ok: true, batch_id: batchId, posts: savedPosts });
 
   } catch (err) {
-    console.error('[generate/weekly-batch] Error:', err.message);
-    return res.status(500).json({ ok: false, error: err.message });
+    console.error('[generate/weekly-batch] inner error:', err.message);
+    return res.status(500).json({ ok: false, error: err.message, message: err.message });
+  }
+
+  } catch (err) {
+    console.error('[generate/weekly-batch] error:', err.message);
+    return res.status(500).json({ ok: false, error: err.message, message: err.message });
   }
 });
 

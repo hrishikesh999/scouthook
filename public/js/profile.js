@@ -1,12 +1,13 @@
 /* profile.js — voice profile page logic */
 
-const nicheEl      = document.getElementById('profile-niche');
-const audienceEl   = document.getElementById('profile-audience');
-const painEl       = document.getElementById('profile-pain');
-const contrarianEl = document.getElementById('profile-contrarian');
-const samplesEl    = document.getElementById('profile-samples');
-const saveBtn      = document.getElementById('save-profile-btn');
-const saveError    = document.getElementById('profile-save-error');
+const positioningEl = document.getElementById('profile-positioning');
+const nicheEl       = document.getElementById('profile-niche');
+const audienceEl    = document.getElementById('profile-audience');
+const painEl        = document.getElementById('profile-pain');
+const contrarianEl  = document.getElementById('profile-contrarian');
+const samplesEl     = document.getElementById('profile-samples');
+const saveBtn       = document.getElementById('save-profile-btn');
+const saveError     = document.getElementById('profile-save-error');
 
 /* ── LinkedIn status in nav ──────────────────────────────────── */
 function buildLinkedInChip(name, photoUrl) {
@@ -46,11 +47,12 @@ function buildLinkedInChip(name, photoUrl) {
     if (!data.ok || !data.profile) return;
 
     const p = data.profile;
-    if (p.content_niche)   nicheEl.value      = p.content_niche;
-    if (p.audience_role)   audienceEl.value   = p.audience_role;
-    if (p.audience_pain)   painEl.value       = p.audience_pain;
-    if (p.contrarian_view) contrarianEl.value = p.contrarian_view;
-    if (p.writing_samples) samplesEl.value    = p.writing_samples;
+    if (p.business_positioning) positioningEl.value = p.business_positioning;
+    if (p.content_niche)        nicheEl.value       = p.content_niche;
+    if (p.audience_role)        audienceEl.value    = p.audience_role;
+    if (p.audience_pain)        painEl.value        = p.audience_pain;
+    if (p.contrarian_view)      contrarianEl.value  = p.contrarian_view;
+    if (p.writing_samples)      samplesEl.value     = p.writing_samples;
   } catch {
     // Leave fields blank
   }
@@ -61,11 +63,12 @@ saveBtn.addEventListener('click', async () => {
   saveError.classList.remove('visible');
 
   const body = {
-    content_niche:    nicheEl.value.trim(),
-    audience_role:    audienceEl.value.trim(),
-    audience_pain:    painEl.value.trim(),
-    contrarian_view:  contrarianEl.value.trim(),
-    writing_samples:  samplesEl.value.trim()
+    business_positioning: positioningEl.value.trim(),
+    content_niche:        nicheEl.value.trim(),
+    audience_role:        audienceEl.value.trim(),
+    audience_pain:        painEl.value.trim(),
+    contrarian_view:      contrarianEl.value.trim(),
+    writing_samples:      samplesEl.value.trim()
   };
 
   // Remove empty fields so the backend doesn't reject with no_fields_provided

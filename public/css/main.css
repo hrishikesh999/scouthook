@@ -844,7 +844,8 @@ body {
   min-height: 220px;
   height: auto;
   resize: none;
-  font-size: 14px;
+  font-size: 15px;
+  line-height: 1.6;
 }
 
 .content-nudge {
@@ -1403,9 +1404,9 @@ body {
   outline: none;
   resize: none;
   background: transparent;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 500;
-  line-height: 1.7;
+  line-height: 1.6;
   font-family: var(--font-sans);
   color: var(--text-body);
   padding: 0;

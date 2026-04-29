@@ -307,19 +307,29 @@ router.post('/weekly-batch', async (req, res) => {
     });
   }
 
-  const userProfile = await db
+  let userProfile = await db
     .prepare('SELECT * FROM user_profiles WHERE user_id = ? AND tenant_id = ?')
     .get(userId, tenantId);
 
   if (!userProfile) return res.status(400).json({ ok: false, error: 'complete_profile_first' });
 
-  if (!userProfile.ghostwriter_prompt) {
-    return res.status(400).json({ ok: false, error: 'ghostwriter_prompt_not_ready', message: 'Upload and index at least one document first.' });
-  }
-
   const vaultContext = await getVaultContext(userId, tenantId);
   if (!vaultContext) {
     return res.status(400).json({ ok: false, error: 'no_vault_documents', message: 'Upload and index at least one document to generate posts from.' });
+  }
+
+  // Build the ghostwriter prompt inline on first run if it hasn't been built yet
+  // (e.g. documents were uploaded before the prompt builder existed).
+  if (!userProfile.ghostwriter_prompt) {
+    const { buildGhostwriterPrompt } = require('../services/ghostwriterPromptBuilder');
+    await buildGhostwriterPrompt(userId, tenantId);
+    // Re-fetch profile to get the newly saved prompt
+    userProfile = await db
+      .prepare('SELECT * FROM user_profiles WHERE user_id = ? AND tenant_id = ?')
+      .get(userId, tenantId);
+    if (!userProfile.ghostwriter_prompt) {
+      return res.status(400).json({ ok: false, error: 'ghostwriter_prompt_not_ready', message: 'Could not build your AI profile. Make sure your Voice Profile (Content Niche + Audience) is filled in.' });
+    }
   }
 
   try {

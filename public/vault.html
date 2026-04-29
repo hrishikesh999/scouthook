@@ -1191,7 +1191,7 @@
       const data = await res.json();
       if (!data.ok) {
         if (data.error === 'ghostwriter_prompt_not_ready') {
-          weeklyStatus.innerHTML = 'Still processing your documents. Try again in a moment.';
+          weeklyStatus.innerHTML = data.message || 'Could not build your AI profile. Make sure your Voice Profile (Content Niche + Audience) is filled in.';
         } else if (data.error === 'rate_limit_exceeded') {
           weeklyStatus.textContent = 'Rate limit reached — try again in an hour.';
         } else {

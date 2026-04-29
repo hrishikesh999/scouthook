@@ -841,9 +841,10 @@ body {
 
 /* ── Idea textarea ──────────────────────────────────────────── */
 #idea-input {
-  min-height: 140px;
+  min-height: 220px;
   height: auto;
   resize: none;
+  font-size: 14px;
 }
 
 .content-nudge {
@@ -1402,7 +1403,7 @@ body {
   outline: none;
   resize: none;
   background: transparent;
-  font-size: 17px;
+  font-size: 14px;
   font-weight: 500;
   line-height: 1.7;
   font-family: var(--font-sans);

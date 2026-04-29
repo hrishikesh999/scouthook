@@ -1156,9 +1156,6 @@
       if (!data.ok) throw new Error(data.error);
       hasBusinessPositioning = true;
       positioningPrompt.classList.remove('visible');
-      // Also trigger prompt rebuild now that positioning is set
-      await fetch('/api/vault/build-prompt', { method: 'POST' });
-      // Proceed to generate
       runWeeklyBatch();
     } catch (err) {
       positioningSaveBtn.disabled = false;

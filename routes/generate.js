@@ -318,12 +318,18 @@ router.post('/weekly-batch', async (req, res) => {
     return res.status(400).json({ ok: false, error: 'no_vault_documents', message: 'Upload and index at least one document to generate posts from.' });
   }
 
-  // Build the ghostwriter prompt inline on first run if it hasn't been built yet
-  // (e.g. documents were uploaded before the prompt builder existed).
-  if (!userProfile.ghostwriter_prompt) {
+  // Build (or rebuild) the ghostwriter prompt when missing or stale.
+  // Stale = a vault document was added/updated after the prompt was last built.
+  const latestDoc = db
+    .prepare(`SELECT MAX(updated_at) AS ts FROM vault_documents WHERE user_id = ? AND tenant_id = ? AND status = 'ready'`)
+    .get(userId, tenantId);
+  const promptBuiltAt  = userProfile.ghostwriter_prompt_built_at;
+  const latestDocAt    = latestDoc?.ts;
+  const isStale = !userProfile.ghostwriter_prompt || (latestDocAt && promptBuiltAt && latestDocAt > promptBuiltAt);
+
+  if (isStale) {
     const { buildGhostwriterPrompt } = require('../services/ghostwriterPromptBuilder');
     await buildGhostwriterPrompt(userId, tenantId);
-    // Re-fetch profile to get the newly saved prompt
     userProfile = await db
       .prepare('SELECT * FROM user_profiles WHERE user_id = ? AND tenant_id = ?')
       .get(userId, tenantId);

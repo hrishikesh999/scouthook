@@ -387,4 +387,168 @@ async function vaultSeedToPost(vaultIdea, chunkText, userProfile, options = {}) 
   });
 }
 
-module.exports = { ideaToPost, generateInsightAlternativePost, vaultSeedToPost };
+// ---------------------------------------------------------------------------
+// Editorial path: copy editor model — reshapes author's own words, adds nothing.
+// ---------------------------------------------------------------------------
+
+function buildRefineSystemPrompt(userProfile) {
+  return `You are a copy editor for a LinkedIn professional, not a ghostwriter.
+
+Your job is to take the author's own words and shape them into a high-impact LinkedIn post.
+You sharpen what is already there. You do not add what is not.
+
+THE LINE YOU MUST NEVER CROSS:
+- You may tighten a sentence — cut flab, strengthen verbs, remove hedging.
+- You may NOT add a new fact, statistic, example, story beat, or claim the author did not provide.
+- If the author said "I think pricing is something most founders get wrong", you may sharpen it to "Most founders get pricing wrong." You may not add "In my experience working with 50+ startups" if the author did not write that.
+- The author's specifics (numbers, names, outcomes, timeframes) are sacred. Keep them verbatim.
+
+RULES:
+1. HOOK (line 1): Identify the most compelling idea in the input. Write it as a sharp, direct opening line — tightened from the author's words. Surface the author's best line; do not invent a new angle.
+2. LINES 2–3 (above the fold): These are what decide whether someone clicks "see more". Do NOT use them for context, setup, or explanation. Use them to deepen the tension from the hook — a consequence, a contradiction, or a "here's why this changed everything" that makes the reader feel they'll miss something if they stop reading.
+3. BODY: Every sentence must trace back to something the author wrote. You may tighten, split, or reorder — you may not invent.
+4. TRIM: Remove sentences that are weak, redundant, or tangential to the central point.
+5. CTA: Write one closing question that invites a specific personal memory or experience — not a generic opinion. Bad: "What do you think?" Good: "What's the hardest thing you had to unlearn in your first year leading a team?" The best CTAs make readers want to answer because they already have the answer.
+6. FORMAT: One sentence per line. Blank line between every 2–3 lines. No bullet lists. No headers. No paragraph blocks.
+
+AUTHOR CONTEXT:
+- Niche: ${userProfile.content_niche || 'not specified'}
+- Audience: ${userProfile.audience_role || 'professionals in the author\'s field'}
+- Audience pain: ${userProfile.audience_pain || 'professional challenges in their field'}
+
+${AI_TELLS_PROHIBITION}`;
+}
+
+function buildRefineUserPrompt(sourceText) {
+  return `AUTHOR'S TEXT:
+${sourceText}
+
+INSTRUCTION:
+1. Find the author's strongest idea. Open with it — sharpened from their words, not rewritten from scratch.
+2. Work through the remaining content: keep what strengthens the post, cut what doesn't.
+3. Tighten prose where needed — shorter sentences, stronger verbs, no hedging. Do not add new facts or claims.
+4. Add one closing question that invites a specific personal memory or experience.
+5. Format: one sentence per line, blank line between every 2–3 lines.
+
+Return ONLY valid JSON:
+{
+  "synthesis": {
+    "suggested_angle": "the core idea you surfaced as the hook",
+    "recommended_structure": "one sentence on how you ordered the body",
+    "supporting_insight": "the CTA question you added"
+  },
+  "post": "full text of the shaped LinkedIn post",
+  "cta_alternatives": [
+    "one alternative closing question — different angle",
+    "one alternative closing question — softer or more specific"
+  ]
+}
+
+No markdown fences. No explanation. Only the JSON object.`;
+}
+
+async function assessInputQuality(text, client) {
+  try {
+    const response = await client.messages.create({
+      model:       HAIKU_MODEL,
+      max_tokens:  80,
+      temperature: 0,
+      system:      'You assess LinkedIn post inputs. Return only valid JSON, nothing else.',
+      messages: [{
+        role:    'user',
+        content: `Does this text contain:
+1. A CONCRETE SPECIFIC — a real number, result, timeframe, named scenario, or measurable outcome?
+2. GENUINE TENSION — a surprising outcome, unpopular opinion, personal failure, or unexpected result?
+
+TEXT: ${text.slice(0, 1200)}
+
+Return only: {"has_specific": true/false, "has_tension": true/false}`,
+      }],
+    });
+    const parsed = JSON.parse(response.content[0].text.trim());
+    return { hasSpecific: !!parsed.has_specific, hasTension: !!parsed.has_tension };
+  } catch {
+    return { hasSpecific: true, hasTension: true }; // fail open — never block on error
+  }
+}
+
+function buildContentFeedback({ hasSpecific, hasTension }) {
+  if (hasSpecific && hasTension) return null;
+  const missing = [];
+  if (!hasSpecific) missing.push('a concrete result, number, or specific moment');
+  if (!hasTension)  missing.push('a surprising outcome, an unpopular view, or a personal failure');
+  return `To push this post further: add ${missing.join(' and ')}.`;
+}
+
+async function restructureToPost(sourceText, userProfile) {
+  const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
+  if (!apiKey) throw new Error('anthropic_api_key not configured');
+  const client = new Anthropic({ apiKey });
+
+  const systemPrompt = buildRefineSystemPrompt(userProfile);
+  const userPrompt   = buildRefineUserPrompt(sourceText);
+  let responseText   = '';
+
+  // Quality check runs in parallel with main generation — zero added latency
+  let message, inputQuality;
+  try {
+    [message, inputQuality] = await Promise.all([
+      client.messages.create({
+        model:       'claude-sonnet-4-6',
+        max_tokens:  2000,
+        temperature: 0.3,
+        system:      systemPrompt,
+        messages:    [{ role: 'user', content: userPrompt }],
+      }),
+      assessInputQuality(sourceText, client),
+    ]);
+  } catch (err) {
+    throw err;
+  }
+
+  try {
+    responseText = message.content[0]?.text?.trim() || '';
+    const validated = validateSinglePostResponse(extractJsonFromResponse(responseText));
+    const cleanPost  = sanitiseAiTells(validated.post);
+    return {
+      synthesis:       validated.synthesis,
+      post:            cleanPost,
+      ctaAlternatives: validated.ctaAlternatives,
+      archetypeUsed:   'EDITORIAL',
+      hookConfidence:  1.0,
+      contentFeedback: buildContentFeedback(inputQuality),
+    };
+  } catch (firstErr) {
+    if (firstErr instanceof SyntaxError && responseText) {
+      try {
+        const retry = await client.messages.create({
+          model:       'claude-sonnet-4-6',
+          max_tokens:  2000,
+          temperature: 0.3,
+          system:      systemPrompt,
+          messages: [
+            { role: 'user',      content: userPrompt },
+            { role: 'assistant', content: responseText },
+            { role: 'user',      content: 'Return only valid JSON, no other text.' },
+          ],
+        });
+        responseText = retry.content[0]?.text?.trim() || '';
+        const validated = validateSinglePostResponse(extractJsonFromResponse(responseText));
+        const cleanPost  = sanitiseAiTells(validated.post);
+        return {
+          synthesis:       validated.synthesis,
+          post:            cleanPost,
+          ctaAlternatives: validated.ctaAlternatives,
+          archetypeUsed:   'EDITORIAL',
+          hookConfidence:  1.0,
+          contentFeedback: buildContentFeedback(inputQuality),
+        };
+      } catch (retryErr) {
+        throw new Error(`Restructure failed after retry: ${retryErr.message}`);
+      }
+    }
+    throw firstErr;
+  }
+}
+
+module.exports = { ideaToPost, generateInsightAlternativePost, vaultSeedToPost, restructureToPost };

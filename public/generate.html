@@ -258,13 +258,14 @@
           <textarea
             id="idea-input"
             class="field-textarea"
-            placeholder="A real result, moment, or belief — the more specific, the stronger the post."
+            placeholder="Brain dump anything — a result, a moment, a belief, a rant. The more of your own words, the better."
             aria-label="Your idea"
           ></textarea>
-          <div class="field-error" id="idea-error" role="alert">Add a thought before generating</div>
+          <div class="field-error" id="idea-error" role="alert">Add a thought before writing the post</div>
         </div>
         <!-- Source badge: shown when post grown from vault idea -->
         <div id="vault-source-badge" class="vault-source-badge" style="display:none" aria-live="polite"></div>
+        <div id="content-nudge" class="content-nudge" style="display:none"></div>
       </div>
 
       <!-- Tab B: Vault seed panel -->
@@ -284,7 +285,7 @@
         <div id="vault-seed-list" class="vault-seed-list" aria-label="Vault seed ideas"></div>
       </div>
 
-      <button id="generate-btn" aria-live="polite">Generate</button>
+      <button id="generate-btn" aria-live="polite">Write the post</button>
     </div>
     <!-- /left-panel -->
 

@@ -621,6 +621,14 @@ async function triggerGenerate(retryData) {
     const idea = ideaInput.value.trim();
     if (!idea) {
       ideaInput.classList.add('error');
+      ideaError.textContent = 'Add a thought before writing the post';
+      ideaError.classList.add('visible');
+      ideaInput.focus();
+      return;
+    }
+    if (idea.length < 80) {
+      ideaInput.classList.add('error');
+      ideaError.textContent = 'Add more of your own words — a few sentences gives us more to work with.';
       ideaError.classList.add('visible');
       ideaInput.focus();
       return;
@@ -666,6 +674,17 @@ async function triggerGenerate(retryData) {
     }
 
     handleGenerateSuccess(data, currentPath);
+
+    // Show content quality nudge if input lacked specifics or tension
+    const contentNudge = document.getElementById('content-nudge');
+    if (contentNudge) {
+      if (data.content_feedback) {
+        contentNudge.textContent = data.content_feedback;
+        contentNudge.style.display = 'block';
+      } else {
+        contentNudge.style.display = 'none';
+      }
+    }
 
     // Show source badge if post came from vault idea
     if (data.vault_source_ref && vaultSourceBadge) {
@@ -1066,6 +1085,8 @@ postTextarea.addEventListener('input', () => {
     if (!scheduleEditLocked) rescorePost(postTextarea.value);
   }, 1200);
 });
+
+ideaInput.addEventListener('input', () => autoGrowTextarea(ideaInput));
 
 function autoGrowTextarea(el) {
   const surface  = document.getElementById('post-surface');
@@ -1740,7 +1761,7 @@ function disableActionButtons() {
 /* ── 23. Loading states ──────────────────────────────────────── */
 function setGenerating(loading) {
   generateBtn.disabled    = loading;
-  generateBtn.textContent = loading ? 'Generating…' : 'Generate';
+  generateBtn.textContent = loading ? 'Writing the post…' : 'Write the post';
 }
 
 function showSkeleton() {

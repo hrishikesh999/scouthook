@@ -281,7 +281,15 @@ app.get([
   '/ideas.html',
 ], requireLoginHtml);
 
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public'), {
+  setHeaders(res, filePath) {
+    if (filePath.endsWith('.html')) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+    }
+  }
+}));
 
 // Serve generated visuals and uploads behind session auth.
 // In local mode: sendFile from disk.  In S3 mode: stream from S3 using the

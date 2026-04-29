@@ -26,9 +26,6 @@ const passfailTooltip = document.getElementById('passfail-tooltip');
 const suggestionsBtn  = document.getElementById('suggestions-toggle');
 const suggestionsList = document.getElementById('suggestions-list');
 
-const alternativeStrip   = document.getElementById('alternative-strip');
-const alternativePreview = document.getElementById('alternative-preview-text');
-const switchAltBtn       = document.getElementById('switch-alternative-btn');
 
 const hookBStrip   = document.getElementById('hook-b-strip');
 const hookBText    = document.getElementById('hook-b-text');
@@ -316,8 +313,7 @@ function applyScheduleLockUi() {
   brandedQuoteBtn.classList.add('disabled');
   mediaLibraryBtn.classList.add('disabled');
   if (assetChipRemove) assetChipRemove.style.display = 'none';
-  switchAltBtn.style.pointerEvents = 'none';
-  switchAltBtn.style.opacity = '0.5';
+
 }
 
 function clearScheduleLockUi() {
@@ -332,8 +328,7 @@ function clearScheduleLockUi() {
   brandedQuoteBtn.classList.remove('disabled');
   mediaLibraryBtn.classList.remove('disabled');
   if (assetChipRemove) assetChipRemove.style.display = '';
-  switchAltBtn.style.pointerEvents = '';
-  switchAltBtn.style.opacity = '';
+
   postPublishState.classList.remove('visible');
   actionRight.style.display = '';
 }
@@ -765,7 +760,6 @@ function handleGenerateSuccess(data, path) {
   renderPost(post);
   renderScoreBar(quality, archetype, confidence);
   renderFunnelBadge();
-  renderAlternativeStrip(alternative, confidence);
   renderHookBStrip(hookB);
   renderCtaStrip(ctaAlternatives);
   enableActionButtons();
@@ -909,34 +903,6 @@ suggestionsBtn.addEventListener('click', () => {
   const count = allItems.length;
   updateSuggestionsBtn(count);
   suggestionsList.classList.toggle('visible', suggestionsExpanded);
-});
-
-/* ── 12. Alternative strip ───────────────────────────────────── */
-function renderAlternativeStrip(alternative, confidence) {
-  if (!alternative || confidence === null || confidence >= 0.7) {
-    alternativeStrip.classList.remove('visible');
-    return;
-  }
-  const words = (alternative.post || '').split(/\s+/).slice(0, 8).join(' ');
-  alternativePreview.textContent = `We also wrote an INSIGHT version — "${words}… " `;
-  alternativeStrip.classList.add('visible');
-}
-
-switchAltBtn.addEventListener('click', (e) => {
-  e.preventDefault();
-  if (scheduleEditLocked) return;
-  if (!alternativePost) return;
-
-  const prev = primaryPost;
-  primaryPost = { post: alternativePost.post, postId: alternativePost.id, quality: alternativePost.quality, archetype: alternativePost.archetypeUsed, confidence: null };
-  alternativePost = prev;
-
-  renderPost(primaryPost.post);
-  renderScoreBar(primaryPost.quality, primaryPost.archetype, primaryPost.confidence);
-  alternativeStrip.classList.remove('visible');
-  currentPostId = primaryPost.postId;
-
-  Session.save(buildSession());
 });
 
 /* ── 12b. Hook B strip ───────────────────────────────────────── */
@@ -1844,7 +1810,6 @@ function restoreSession(s) {
 
   if (primaryPost) {
     renderScoreBar(primaryPost.quality, primaryPost.archetype, primaryPost.confidence);
-    renderAlternativeStrip(alternativePost, primaryPost.confidence);
     renderHookBStrip(currentHookB);
     renderCtaStrip(currentCtaAlternatives);
     showAssistPanel();

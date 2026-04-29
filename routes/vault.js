@@ -19,6 +19,7 @@ const { extractAndChunk, extractAndChunkUrl, mineChunks } = require('../services
 const { classifyContent } = require('../services/funnelClassifier');
 const { brainstorm }     = require('../services/reachBrainstormer');
 const { canUploadVaultDoc } = require('../services/subscription');
+const { buildGhostwriterPrompt } = require('../services/ghostwriterPromptBuilder');
 
 const ALLOWED_MIME = new Set(['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain']);
 const MIME_TO_TYPE = {
@@ -186,6 +187,9 @@ async function saveChunks(docId, chunks, userId, tenantId) {
   `).run(chunks.length, docId);
 
   console.log(`[vault] doc=${docId} indexed ${chunks.length} chunks`);
+
+  // Silently rebuild ghostwriter prompt in background — no await, errors suppressed
+  buildGhostwriterPrompt(userId, tenantId).catch(() => {});
 }
 
 // ---------------------------------------------------------------------------
@@ -387,6 +391,19 @@ router.post('/brainstorm', async (req, res) => {
     console.error('[vault/brainstorm] failed:', err.message);
     return res.status(500).json({ ok: false, error: 'brainstorm_failed', message: err.message });
   }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/vault/build-prompt — manually trigger ghostwriter prompt rebuild
+// Used internally after user saves business_positioning for the first time.
+// ---------------------------------------------------------------------------
+router.post('/build-prompt', async (req, res) => {
+  const { userId, tenantId } = req;
+  if (!requireUser(req, res)) return;
+
+  // Fire and forget — response returns immediately
+  buildGhostwriterPrompt(userId, tenantId).catch(() => {});
+  return res.json({ ok: true, building: true });
 });
 
 // ---------------------------------------------------------------------------

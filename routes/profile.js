@@ -20,7 +20,7 @@ router.get('/:user_id', async (req, res) => {
   }
 
   const profile = await db
-    .prepare('SELECT audience_role, audience_pain, content_niche, contrarian_view, voice_fingerprint, writing_samples, brand_bg, brand_accent, brand_text, brand_name, brand_logo, user_role, onboarding_complete FROM user_profiles WHERE user_id = ? AND tenant_id = ?')
+    .prepare('SELECT audience_role, audience_pain, content_niche, contrarian_view, voice_fingerprint, writing_samples, brand_bg, brand_accent, brand_text, brand_name, brand_logo, user_role, onboarding_complete, business_positioning, ghostwriter_prompt_built_at FROM user_profiles WHERE user_id = ? AND tenant_id = ?')
     .get(user_id, tenantId);
 
   if (!profile) {
@@ -41,8 +41,10 @@ router.get('/:user_id', async (req, res) => {
       brand_text:          profile.brand_text   || '#F0F4FF',
       brand_name:          profile.brand_name   || null,
       brand_logo:          profile.brand_logo   || null,
-      user_role:           profile.user_role    || null,
-      onboarding_complete: !!profile.onboarding_complete,
+      user_role:                    profile.user_role    || null,
+      onboarding_complete:          !!profile.onboarding_complete,
+      business_positioning:         profile.business_positioning || null,
+      ghostwriter_prompt_built_at:  profile.ghostwriter_prompt_built_at || null,
     },
   });
 });
@@ -62,20 +64,21 @@ router.post('/', async (req, res) => {
 
   const { writing_samples, contrarian_view, audience_role, audience_pain, content_niche,
           brand_bg, brand_accent, brand_text, brand_name, brand_logo,
-          user_role, onboarding_complete } = req.body;
+          user_role, onboarding_complete, business_positioning } = req.body;
 
   if (!audience_role && !audience_pain && !content_niche && !writing_samples && !contrarian_view
       && !brand_bg && !brand_accent && !brand_text && !brand_name && brand_logo === undefined
-      && user_role === undefined && onboarding_complete === undefined) {
+      && user_role === undefined && onboarding_complete === undefined && !business_positioning) {
     return res.status(400).json({ ok: false, error: 'no_fields_provided' });
   }
 
-  // Check if writing_samples changed (to decide whether to re-extract fingerprint)
+  // Check what's changing (to decide whether to re-extract fingerprint / rebuild prompt)
   const existing = await db
-    .prepare('SELECT id, writing_samples FROM user_profiles WHERE user_id = ? AND tenant_id = ?')
+    .prepare('SELECT id, writing_samples, business_positioning FROM user_profiles WHERE user_id = ? AND tenant_id = ?')
     .get(userId, tenantId);
 
-  const samplesChanged = writing_samples && writing_samples !== existing?.writing_samples;
+  const samplesChanged      = writing_samples && writing_samples !== existing?.writing_samples;
+  const positioningChanged  = business_positioning && business_positioning !== existing?.business_positioning;
 
   // Normalise onboarding_complete: accept 1/true/"1"/"true" → 1, else keep NULL so COALESCE
   // doesn't overwrite an existing 1 with NULL when the field is omitted from the request.
@@ -84,8 +87,8 @@ router.post('/', async (req, res) => {
 
   // Upsert profile row
   const result = await db.prepare(`
-    INSERT INTO user_profiles (user_id, tenant_id, writing_samples, contrarian_view, audience_role, audience_pain, content_niche, brand_bg, brand_accent, brand_text, brand_name, brand_logo, user_role, onboarding_complete, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    INSERT INTO user_profiles (user_id, tenant_id, writing_samples, contrarian_view, audience_role, audience_pain, content_niche, brand_bg, brand_accent, brand_text, brand_name, brand_logo, user_role, onboarding_complete, business_positioning, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     ON CONFLICT(user_id, tenant_id) DO UPDATE SET
       writing_samples     = COALESCE(excluded.writing_samples, user_profiles.writing_samples),
       contrarian_view     = COALESCE(excluded.contrarian_view, user_profiles.contrarian_view),
@@ -99,11 +102,12 @@ router.post('/', async (req, res) => {
       brand_logo          = COALESCE(excluded.brand_logo, user_profiles.brand_logo),
       user_role           = COALESCE(excluded.user_role, user_profiles.user_role),
       onboarding_complete = COALESCE(excluded.onboarding_complete, user_profiles.onboarding_complete),
+      business_positioning = COALESCE(excluded.business_positioning, user_profiles.business_positioning),
       updated_at          = CURRENT_TIMESTAMP
   RETURNING id
   `).run(userId, tenantId, writing_samples || null, contrarian_view || null, audience_role || null, audience_pain || null, content_niche || null,
          brand_bg || null, brand_accent || null, brand_text || null, brand_name || null, brand_logo || null,
-         user_role || null, obComplete);
+         user_role || null, obComplete, business_positioning || null);
 
   const profileId = result.lastInsertRowid || existing?.id;
 
@@ -120,6 +124,12 @@ router.post('/', async (req, res) => {
       .catch(err => {
         console.error('[profile] Fingerprint extraction failed (non-fatal):', err.message);
       });
+  }
+
+  // Rebuild ghostwriter prompt when business_positioning changes
+  if (positioningChanged) {
+    const { buildGhostwriterPrompt } = require('../services/ghostwriterPromptBuilder');
+    buildGhostwriterPrompt(userId, tenantId).catch(() => {});
   }
 
   return res.json({ ok: true, profile_id: profileId, fingerprint_updated: samplesChanged });

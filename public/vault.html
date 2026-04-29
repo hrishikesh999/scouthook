@@ -386,6 +386,99 @@
     .status-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
     .vault-status-badge.indexing .status-dot { animation: pulse-dot 1.2s ease-in-out infinite; }
     @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+    /* ── Generate This Week's Posts ─────────────────────────────── */
+    .vault-weekly-section {
+      display: none;
+      margin-top: var(--space-6);
+      padding-top: var(--space-6);
+      border-top: 1px solid var(--border);
+    }
+    .vault-weekly-section.visible { display: block; }
+    .vault-weekly-heading {
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--text-heading);
+      margin: 0 0 var(--space-1) 0;
+    }
+    .vault-weekly-sub {
+      font-size: 0.8125rem;
+      color: var(--text-muted);
+      margin: 0 0 var(--space-4) 0;
+    }
+    .vault-weekly-btn {
+      font-family: var(--font-sans);
+      font-size: 0.9375rem;
+      font-weight: 600;
+      padding: 12px var(--space-6);
+      border: none;
+      border-radius: var(--radius-md);
+      background: var(--brand);
+      color: #fff;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+      transition: background 0.15s;
+    }
+    .vault-weekly-btn:hover    { background: var(--brand-hover); }
+    .vault-weekly-btn:disabled { background: var(--teal-disabled); cursor: not-allowed; }
+    .vault-weekly-status { font-size: 0.8125rem; padding: var(--space-3) var(--space-4); border-radius: var(--radius-md); margin-top: var(--space-3); display: none; }
+    .vault-weekly-status.info  { background: #EFF6FF; color: #1D4ED8; display: block; }
+    .vault-weekly-status.ok    { background: #ECFDF5; color: #065F46; display: block; }
+    .vault-weekly-status.error { background: #FEF2F2; color: #DC2626; display: block; }
+
+    /* Inline positioning prompt */
+    .vault-positioning-prompt {
+      display: none;
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: var(--space-5);
+      margin-bottom: var(--space-4);
+    }
+    .vault-positioning-prompt.visible { display: block; }
+    .vault-positioning-label {
+      font-size: 0.9375rem;
+      font-weight: 600;
+      color: var(--text-heading);
+      margin: 0 0 var(--space-1) 0;
+    }
+    .vault-positioning-hint {
+      font-size: 0.8125rem;
+      color: var(--text-muted);
+      margin: 0 0 var(--space-3) 0;
+    }
+    .vault-positioning-row { display: flex; gap: var(--space-2); }
+    .vault-positioning-input {
+      flex: 1;
+      font-family: var(--font-sans);
+      font-size: 0.875rem;
+      padding: 10px var(--space-3);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      color: var(--text-heading);
+      background: var(--bg-surface);
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .vault-positioning-input:focus { border-color: var(--brand); }
+    .vault-positioning-input::placeholder { color: var(--text-muted); }
+    .vault-positioning-save {
+      font-family: var(--font-sans);
+      font-size: 0.875rem;
+      font-weight: 600;
+      padding: 10px var(--space-4);
+      border: none;
+      border-radius: var(--radius-md);
+      background: var(--brand);
+      color: #fff;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.15s;
+    }
+    .vault-positioning-save:hover { background: var(--brand-hover); }
+    .vault-positioning-save:disabled { background: var(--teal-disabled); cursor: not-allowed; }
   </style>
 </head>
 <body>
@@ -464,6 +557,29 @@
 
       <!-- ── Sources pane ───────────────────────────────────────── -->
       <div id="pane-sources" class="vault-pane" role="tabpanel" style="display:none">
+
+        <!-- Generate This Week's Posts — visible once a ready document exists -->
+        <div id="vault-weekly-section" class="vault-weekly-section">
+          <h2 class="vault-weekly-heading">Generate This Week's Posts</h2>
+          <p class="vault-weekly-sub">Your uploaded documents are used to write 5 ready-to-publish LinkedIn posts — one for each day.</p>
+
+          <!-- Inline positioning prompt — shown only once if business_positioning is not set -->
+          <div id="vault-positioning-prompt" class="vault-positioning-prompt">
+            <p class="vault-positioning-label">One quick thing — how do you help your clients?</p>
+            <p class="vault-positioning-hint">e.g. "Turn your email list into consistent revenue" or "Help SaaS founders close their first 10 enterprise deals"</p>
+            <div class="vault-positioning-row">
+              <input type="text" id="vault-positioning-input" class="vault-positioning-input" maxlength="500" placeholder="In one sentence, what's the result you deliver?" aria-label="Your business positioning">
+              <button id="vault-positioning-save" class="vault-positioning-save">Got it →</button>
+            </div>
+          </div>
+
+          <button id="vault-weekly-btn" class="vault-weekly-btn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
+            Generate This Week's Posts
+          </button>
+          <div id="vault-weekly-status" class="vault-weekly-status" role="status" aria-live="polite"></div>
+        </div>
+
         <div class="vault-grid">
 
           <section class="vault-upload-panel" aria-label="Upload documents">
@@ -508,6 +624,7 @@
           </section>
 
         </div>
+
       </div>
 
     </div>
@@ -528,10 +645,19 @@
   <script>
   'use strict';
 
-  let allIdeas      = [];
-  let documents     = [];
-  let activeFilter  = 'all';
-  let dismissedOpen = false;
+  let allIdeas           = [];
+  let documents          = [];
+  let activeFilter       = 'all';
+  let dismissedOpen      = false;
+  let hasBusinessPositioning = false;
+
+  // Weekly batch elements
+  const weeklySection       = document.getElementById('vault-weekly-section');
+  const weeklyBtn           = document.getElementById('vault-weekly-btn');
+  const weeklyStatus        = document.getElementById('vault-weekly-status');
+  const positioningPrompt   = document.getElementById('vault-positioning-prompt');
+  const positioningInput    = document.getElementById('vault-positioning-input');
+  const positioningSaveBtn  = document.getElementById('vault-positioning-save');
 
   // Tab controls
   const tabBtns         = document.querySelectorAll('.vault-tab');
@@ -848,19 +974,29 @@
 
   function renderDocuments() {
     tabCountSources.textContent = documents.length;
+    const hasReady = documents.some(d => d.status === 'ready');
+
     if (!documents.length) {
       docEmpty.style.display = '';
       docList.style.display  = 'none';
       mineBtn.disabled       = true;
+      weeklySection.classList.remove('visible');
       return;
     }
     docEmpty.style.display = 'none';
     docList.style.display  = '';
-    mineBtn.disabled       = !documents.some(d => d.status === 'ready');
+    mineBtn.disabled       = !hasReady;
     docList.innerHTML      = documents.map(renderDocCard).join('');
     docList.querySelectorAll('.vault-doc-delete').forEach(btn => {
       btn.addEventListener('click', () => deleteDocument(Number(btn.dataset.id)));
     });
+
+    // Show weekly batch section once at least one document is ready
+    if (hasReady) {
+      weeklySection.classList.add('visible');
+    } else {
+      weeklySection.classList.remove('visible');
+    }
   }
 
   function renderDocCard(doc) {
@@ -993,8 +1129,90 @@
     return String(str).replace(/"/g,'&quot;').replace(/'/g,'&#39;');
   }
 
+  // ── Weekly batch: load profile to check business_positioning ─────────────
+  async function loadProfileForWeekly() {
+    try {
+      const res  = await fetch('/api/profile/me');
+      const data = await res.json();
+      if (data.ok && data.profile) {
+        hasBusinessPositioning = !!data.profile.business_positioning;
+      }
+    } catch { /* non-fatal */ }
+  }
+
+  // ── Positioning prompt: save then generate ───────────────────────────────
+  positioningSaveBtn.addEventListener('click', async () => {
+    const val = positioningInput.value.trim();
+    if (!val) { positioningInput.focus(); return; }
+
+    positioningSaveBtn.disabled = true;
+    try {
+      const res  = await fetch('/api/profile', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ business_positioning: val }),
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error);
+      hasBusinessPositioning = true;
+      positioningPrompt.classList.remove('visible');
+      // Also trigger prompt rebuild now that positioning is set
+      await fetch('/api/vault/build-prompt', { method: 'POST' });
+      // Proceed to generate
+      runWeeklyBatch();
+    } catch (err) {
+      positioningSaveBtn.disabled = false;
+      weeklyStatus.textContent = `Could not save: ${err.message}`;
+      weeklyStatus.className   = 'vault-weekly-status error';
+    }
+  });
+
+  positioningInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') positioningSaveBtn.click();
+  });
+
+  // ── Weekly batch: click handler ──────────────────────────────────────────
+  weeklyBtn.addEventListener('click', () => {
+    if (!hasBusinessPositioning) {
+      // Show inline positioning prompt first
+      positioningPrompt.classList.add('visible');
+      positioningInput.focus();
+      return;
+    }
+    runWeeklyBatch();
+  });
+
+  async function runWeeklyBatch() {
+    weeklyBtn.disabled       = true;
+    weeklyStatus.textContent = 'Writing your posts… this takes about 30 seconds.';
+    weeklyStatus.className   = 'vault-weekly-status info';
+    try {
+      const res  = await fetch('/api/generate/weekly-batch', { method: 'POST' });
+      const data = await res.json();
+      if (!data.ok) {
+        if (data.error === 'ghostwriter_prompt_not_ready') {
+          weeklyStatus.innerHTML = 'Still processing your documents. Try again in a moment.';
+        } else if (data.error === 'rate_limit_exceeded') {
+          weeklyStatus.textContent = 'Rate limit reached — try again in an hour.';
+        } else {
+          weeklyStatus.textContent = data.message || 'Something went wrong. Please try again.';
+        }
+        weeklyStatus.className = 'vault-weekly-status error';
+        return;
+      }
+      weeklyStatus.innerHTML = `5 posts added to your drafts. <a href="/drafts.html" style="color:var(--brand);font-weight:600">View drafts →</a>`;
+      weeklyStatus.className = 'vault-weekly-status ok';
+    } catch (err) {
+      weeklyStatus.textContent = `Failed: ${err.message}`;
+      weeklyStatus.className   = 'vault-weekly-status error';
+    } finally {
+      weeklyBtn.disabled = false;
+    }
+  }
+
   loadIdeas();
   loadDocuments();
+  loadProfileForWeekly();
   </script>
 </body>
 </html>

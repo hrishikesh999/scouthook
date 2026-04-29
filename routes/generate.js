@@ -4,7 +4,8 @@ const express = require('express');
 const router = express.Router();
 const { db } = require('../db');
 const { runQualityGate } = require('../services/qualityGate');
-const { restructureToPost } = require('../services/ideaPath');
+const { restructureToPost, generateWeeklyBatch } = require('../services/ideaPath');
+const { getVaultContext } = require('../services/ghostwriterPromptBuilder');
 const { classifyContent } = require('../services/funnelClassifier');
 const { canGeneratePost } = require('../services/subscription');
 const { sendEmailToUser } = require('../emails');
@@ -279,6 +280,98 @@ router.post('/', async (req, res) => {
 
   } catch (err) {
     console.error('[generate] Error:', err.message);
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/generate/weekly-batch
+// Generates 5 Mon–Fri posts using the user's ghostwriter prompt + vault context.
+// ---------------------------------------------------------------------------
+router.post('/weekly-batch', async (req, res) => {
+  const userId   = req.userId;
+  const tenantId = req.tenantId;
+  if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
+
+  const rl = await checkRateLimit(userId);
+  if (rl.limited) {
+    return res.status(429).json({ ok: false, error: 'rate_limit_exceeded', retry_after_sec: rl.retryAfterSec });
+  }
+
+  const planCheck = await canGeneratePost(userId);
+  if (!planCheck.allowed) {
+    return res.status(403).json({
+      ok: false, error: 'plan_limit_exceeded',
+      plan: planCheck.plan, current: planCheck.current, limit: planCheck.limit,
+      upgrade_url: '/billing.html',
+    });
+  }
+
+  const userProfile = await db
+    .prepare('SELECT * FROM user_profiles WHERE user_id = ? AND tenant_id = ?')
+    .get(userId, tenantId);
+
+  if (!userProfile) return res.status(400).json({ ok: false, error: 'complete_profile_first' });
+
+  if (!userProfile.ghostwriter_prompt) {
+    return res.status(400).json({ ok: false, error: 'ghostwriter_prompt_not_ready', message: 'Upload and index at least one document first.' });
+  }
+
+  const vaultContext = await getVaultContext(userId, tenantId);
+  if (!vaultContext) {
+    return res.status(400).json({ ok: false, error: 'no_vault_documents', message: 'Upload and index at least one document to generate posts from.' });
+  }
+
+  try {
+    const posts = await generateWeeklyBatch(userProfile.ghostwriter_prompt, vaultContext);
+
+    // Classify funnel type for each post; default to 'trust' for batch posts
+    const batchId = require('crypto').randomUUID();
+
+    const insertPost = db.prepare(`
+      INSERT INTO generated_posts
+        (run_id, user_id, tenant_id, format_slug, content, quality_score, quality_flags, passed_gate, funnel_type, cta_alternatives, idea_input, batch_id)
+      VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      RETURNING id
+    `);
+
+    const savedPosts = [];
+    for (const p of posts) {
+      const gate = runQualityGate(p.post, {
+        voiceProfile:   userProfile,
+        archetypeUsed:  null,
+        hookConfidence: null,
+        path:           'ghostwriter',
+        funnelType:     'trust',
+      });
+
+      const inserted = await insertPost.run(
+        userId, tenantId,
+        `ghostwriter_${p.format.toLowerCase()}`,
+        p.post,
+        gate.score,
+        JSON.stringify(gate.flags),
+        gate.passed ? 1 : 0,
+        'trust',
+        p.ctaAlternatives?.length ? JSON.stringify(p.ctaAlternatives) : null,
+        `${p.day} — ${p.format}`,
+        batchId
+      );
+
+      savedPosts.push({
+        id:              inserted.lastInsertRowid,
+        day:             p.day,
+        format:          p.format,
+        post:            p.post,
+        ctaAlternatives: p.ctaAlternatives,
+        quality:         { passed: gate.passed, score: gate.score },
+      });
+    }
+
+    return res.json({ ok: true, batch_id: batchId, posts: savedPosts });
+
+  } catch (err) {
+    console.error('[generate/weekly-batch] Error:', err.message);
     return res.status(500).json({ ok: false, error: err.message });
   }
 });

@@ -2,7 +2,7 @@
 
 const express = require('express');
 const router = express.Router();
-const { getSetting, setSetting, getAllSettings } = require('../db');
+const { getSetting, setSetting, getAllSettings, db } = require('../db');
 
 if (!process.env.ADMIN_PASSWORD) {
   throw new Error('ADMIN_PASSWORD environment variable is required.');
@@ -77,6 +77,35 @@ router.post('/settings', requireAdminPassword, (req, res) => {
   })().catch(err => {
     return res.status(500).json({ ok: false, error: err.message });
   });
+});
+
+// ---------------------------------------------------------------------------
+// GET /admin/diagnostics
+// Shows users, their subscription state, vault doc counts, and post counts.
+// Useful for debugging "account reset" / user_id mismatch issues.
+// ---------------------------------------------------------------------------
+router.get('/diagnostics', requireAdminPassword, (req, res) => {
+  (async () => {
+    const users = await db.prepare(`
+      SELECT
+        p.user_id,
+        p.email,
+        p.display_name,
+        p.created_at                         AS profile_created_at,
+        s.plan,
+        s.status,
+        s.current_period_end,
+        s.paddle_subscription_id,
+        (SELECT COUNT(*) FROM vault_documents  v WHERE v.user_id = p.user_id) AS vault_docs,
+        (SELECT COUNT(*) FROM generated_posts  g WHERE g.user_id = p.user_id) AS posts
+      FROM user_profiles p
+      LEFT JOIN user_subscriptions s ON s.user_id = p.user_id
+      ORDER BY p.created_at DESC
+      LIMIT 100
+    `).all();
+
+    return res.json({ ok: true, users });
+  })().catch(err => res.status(500).json({ ok: false, error: err.message }));
 });
 
 module.exports = router;

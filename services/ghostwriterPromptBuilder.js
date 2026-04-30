@@ -61,7 +61,8 @@ function isProfileReadyForGhostwriter(profile) {
 /**
  * Collect and concatenate all vault chunk text for a user, up to MAX_VAULT_CHARS.
  */
-async function getVaultContext(userId, tenantId) {
+async function getVaultContext(userId, tenantId, maxChars) {
+  const limit = maxChars || MAX_VAULT_CHARS;
   const chunks = await db.prepare(`
     SELECT vc.content, vc.source_ref, vd.filename
     FROM   vault_chunks vc
@@ -78,7 +79,7 @@ async function getVaultContext(userId, tenantId) {
   for (const chunk of chunks) {
     seenFiles.add(chunk.filename);
     const section = `[${chunk.filename} — ${chunk.source_ref}]\n${chunk.content}\n\n`;
-    if (combined.length + section.length > MAX_VAULT_CHARS) break;
+    if (combined.length + section.length > limit) break;
     combined += section;
   }
 

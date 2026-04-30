@@ -314,7 +314,10 @@ router.post('/weekly-batch', async (req, res) => {
   if (!userProfile) return res.status(400).json({ ok: false, error: 'complete_profile_first' });
 
   try {
-  const vault = await getVaultContext(userId, tenantId);
+  // Cap vault context at 20k chars for batch generation — enough for rich
+  // source material without pushing total prompt tokens past ~25k, which
+  // keeps latency under Render's HTTP timeout.
+  const vault = await getVaultContext(userId, tenantId, 20000);
   if (!vault?.text) {
     return res.status(400).json({ ok: false, error: 'no_vault_documents', message: 'Upload and index at least one document to generate posts from.' });
   }
@@ -370,6 +373,7 @@ router.post('/weekly-batch', async (req, res) => {
       });
 
       const inserted = await insertPost.run(
+        runId,
         userId, tenantId,
         `ghostwriter_${p.format.toLowerCase()}`,
         p.post,

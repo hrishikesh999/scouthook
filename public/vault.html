@@ -780,7 +780,14 @@
     weeklyStatus.className   = 'vault-weekly-status info';
 
     try {
-      const res  = await fetch('/api/generate/weekly-batch', { method: 'POST' });
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 120000); // 2-min hard cap
+      let res;
+      try {
+        res = await fetch('/api/generate/weekly-batch', { method: 'POST', signal: controller.signal });
+      } finally {
+        clearTimeout(timeout);
+      }
       const data = await res.json();
 
       if (!data.ok) {

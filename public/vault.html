@@ -555,15 +555,19 @@
         pollDocumentStatus(data.document.id);
       } catch (err) {
         if (err.message === 'plan_limit_exceeded') {
-          setUploadStatus(
-            `Free plan: you've used your 1 vault document. <button type="button" onclick="window.PricingModal?.open()" style="background:none;border:none;padding:0;color:var(--brand);font-weight:600;cursor:pointer;font-size:inherit">Upgrade to Pro →</button>`,
-            'error', true
-          );
+          setUploadStatus(planLimitMessage(err.planData), 'error', true);
         } else {
           setUploadStatus(`Upload failed: ${err.message}`, 'error');
         }
       }
     }
+  }
+
+  function planLimitMessage(planData) {
+    if (planData?.plan === 'pro') {
+      return `Monthly vault limit reached (${planData.current}/${planData.limit} docs this month). Resets at the start of next month.`;
+    }
+    return `Free plan: 1 vault document allowed. <button type="button" onclick="window.PricingModal?.open()" style="background:none;border:none;padding:0;color:var(--brand);font-weight:600;cursor:pointer;font-size:inherit">Upgrade to Pro →</button>`;
   }
 
   function guessMime(filename) {
@@ -596,17 +600,14 @@
         body:    JSON.stringify({ url }),
       });
       const data = await res.json();
-      if (!data.ok) throw new Error(data.error || 'Failed to add URL');
+      if (!data.ok) throw Object.assign(new Error(data.error || 'Failed to add URL'), { planData: data });
       urlInput.value = '';
       setUploadStatus('URL added — indexing…', 'ok');
       prependDocument(data.document);
       pollDocumentStatus(data.document.id);
     } catch (err) {
       if (err.message === 'plan_limit_exceeded') {
-        setUploadStatus(
-          `Free plan: you've used your 1 vault document. <button type="button" onclick="window.PricingModal?.open()" style="background:none;border:none;padding:0;color:var(--brand);font-weight:600;cursor:pointer;font-size:inherit">Upgrade to Pro →</button>`,
-          'error', true
-        );
+        setUploadStatus(planLimitMessage(err.planData), 'error', true);
       } else {
         setUploadStatus(`Failed: ${err.message}`, 'error');
       }

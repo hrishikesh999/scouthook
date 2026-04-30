@@ -106,6 +106,7 @@ router.get('/subscription', requireAuth, async (req, res) => {
     ).get(userId);
 
     if (row?.paddle_subscription_id) {
+      // ── Existing row: refresh if stale ────────────────────────────────────
       const now = Date.now();
       const periodEnd  = row.current_period_end ? new Date(row.current_period_end).getTime() : 0;
       const updatedAt  = row.updated_at         ? new Date(row.updated_at).getTime()         : 0;
@@ -143,6 +144,52 @@ router.get('/subscription', requireAuth, async (req, res) => {
         } catch (syncErr) {
           // Non-fatal — serve cached DB value on Paddle API errors
           console.warn('[billing] subscription live-sync failed (non-fatal):', syncErr.message);
+        }
+      }
+    } else {
+      // ── No local row: attempt recovery by looking up the user in Paddle ──
+      // This handles DB resets (e.g. ephemeral Render disk) where the local
+      // subscription record was wiped but Paddle still has the subscription.
+      const email = req.user?.email || null;
+      if (email) {
+        try {
+          const paddle = getPaddle();
+          // Search Paddle customers by email to find a matching customer ID
+          const customerList = await paddle.customers.list({ email: [email] });
+          const customers = customerList?.data ?? [];
+          let recovered = null;
+
+          for (const customer of customers) {
+            const subList = await paddle.subscriptions.list({ customerId: [customer.id] });
+            const subs = subList?.data ?? [];
+            // Prefer active/trialing; otherwise the most recent non-canceled subscription
+            const best = subs.find(s => ['active', 'trialing'].includes(s.status))
+              ?? subs.find(s => s.status !== 'canceled')
+              ?? subs[0]
+              ?? null;
+            if (best) { recovered = best; break; }
+          }
+
+          if (recovered) {
+            const priceId = recovered.items?.[0]?.price?.id ?? null;
+            const plan    = !priceId ? 'pro' : (proPriceIds.includes(priceId) ? 'pro' : 'free');
+            await upsertSubscription({
+              userId,
+              paddleCustomerId:     recovered.customerId,
+              paddleSubscriptionId: recovered.id,
+              plan,
+              status:               recovered.status,
+              currentPeriodEnd:     recovered.currentBillingPeriod?.endsAt
+                                      ? new Date(recovered.currentBillingPeriod.endsAt)
+                                      : null,
+              canceledAt:           recovered.canceledAt ? new Date(recovered.canceledAt) : null,
+              priceId,
+            });
+            console.log(`[billing] recovered subscription for userId=${userId} email=${email} subId=${recovered.id}`);
+          }
+        } catch (recoverErr) {
+          // Non-fatal — if Paddle lookup fails just return current (free) state
+          console.warn('[billing] subscription recovery from Paddle failed (non-fatal):', recoverErr.message);
         }
       }
     }

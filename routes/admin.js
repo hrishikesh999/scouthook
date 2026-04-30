@@ -91,12 +91,14 @@ router.get('/diagnostics', requireAdminPassword, (req, res) => {
         p.user_id,
         p.email,
         p.display_name,
+        p.tenant_id                          AS profile_tenant_id,
         p.created_at                         AS profile_created_at,
         s.plan,
         s.status,
         s.current_period_end,
         s.paddle_subscription_id,
-        (SELECT COUNT(*) FROM vault_documents  v WHERE v.user_id = p.user_id) AS vault_docs,
+        (SELECT COUNT(*) FROM vault_documents  v WHERE v.user_id = p.user_id) AS vault_docs_total,
+        (SELECT COUNT(*) FROM vault_documents  v WHERE v.user_id = p.user_id AND v.tenant_id = 'default') AS vault_docs_default_tenant,
         (SELECT COUNT(*) FROM generated_posts  g WHERE g.user_id = p.user_id) AS posts
       FROM user_profiles p
       LEFT JOIN user_subscriptions s ON s.user_id = p.user_id

@@ -573,7 +573,7 @@ const BATCH_FORMATS = ['INSIGHT', 'STORY', 'MYTH_BUST', 'NUMBERED_LIST', 'CTA'];
  * @param {string} vaultContext       — concatenated vault chunk text
  * @returns {Promise<Array<{ day, format, post, ctaAlternatives }>>}
  */
-async function generateWeeklyBatch(ghostwriterPrompt, vaultContext) {
+async function generateWeeklyBatch(ghostwriterPrompt) {
   const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
   if (!apiKey) throw new Error('anthropic_api_key not configured');
   const client = new Anthropic({ apiKey });
@@ -599,9 +599,7 @@ ${dayInstructions}
 Monday and Wednesday should be the strongest posts — those are peak LinkedIn days.
 Friday can be slightly more conversational or story-based.
 
-PROJECT KNOWLEDGE (your uploaded documents — draw from these for proof points, client results, and specific examples):
-
-${vaultContext}
+Draw on the proof points, client results, and specific examples from your project knowledge (already in your system context).
 
 Return ONLY valid JSON — an array of 5 objects in this exact structure:
 [

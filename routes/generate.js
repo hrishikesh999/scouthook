@@ -342,13 +342,20 @@ router.post('/weekly-batch', async (req, res) => {
   try {
     const posts = await generateWeeklyBatch(userProfile.ghostwriter_prompt, vault.text);
 
-    // Classify funnel type for each post; default to 'trust' for batch posts
     const batchId = require('crypto').randomUUID();
+
+    // Create a generation_runs row for this batch (run_id is NOT NULL)
+    const run = await db.prepare(`
+      INSERT INTO generation_runs (user_id, tenant_id, path, input_data)
+      VALUES (?, ?, 'ghostwriter_batch', ?)
+      RETURNING id
+    `).get(userId, tenantId, JSON.stringify({ batch_id: batchId }));
+    const runId = run.id;
 
     const insertPost = db.prepare(`
       INSERT INTO generated_posts
         (run_id, user_id, tenant_id, format_slug, content, quality_score, quality_flags, passed_gate, funnel_type, cta_alternatives, idea_input, batch_id)
-      VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       RETURNING id
     `);
 
@@ -526,6 +533,88 @@ router.post('/regenerate/:postId', async (req, res) => {
     console.error('[generate/regenerate] Error:', err.message);
     return res.status(500).json({ ok: false, error: err.message });
   }
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/generate/post/:postId
+// Loads a single generated post for the preview page.
+// ---------------------------------------------------------------------------
+router.get('/post/:postId', async (req, res) => {
+  const userId   = req.userId;
+  const tenantId = req.tenantId;
+  const { postId } = req.params;
+
+  if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
+
+  const row = await db.prepare(`
+    SELECT id, content, quality_score, quality_flags, passed_gate,
+           hook_b, cta_alternatives, format_slug, funnel_type
+    FROM generated_posts
+    WHERE id = ? AND user_id = ? AND tenant_id = ?
+  `).get(postId, userId, tenantId);
+
+  if (!row) return res.status(404).json({ ok: false, error: 'post_not_found' });
+
+  let flags = [];
+  try { flags = JSON.parse(row.quality_flags || '[]'); } catch {}
+  let ctaAlternatives = [];
+  try { ctaAlternatives = JSON.parse(row.cta_alternatives || '[]'); } catch {}
+
+  return res.json({
+    ok: true,
+    post: {
+      id:              row.id,
+      content:         row.content,
+      quality:         { score: row.quality_score || 0, passed: row.passed_gate === 1, flags, errors: flags, warnings: [] },
+      hookB:           row.hook_b || null,
+      ctaAlternatives,
+      archetype:       null,
+      funnelType:      row.funnel_type || null,
+    },
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/generate/batch/:batch_id
+// Loads all posts in a weekly batch for the preview page.
+// ---------------------------------------------------------------------------
+router.get('/batch/:batch_id', async (req, res) => {
+  const userId   = req.userId;
+  const tenantId = req.tenantId;
+  const { batch_id } = req.params;
+
+  if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
+
+  const rows = await db.prepare(`
+    SELECT id, format_slug, content, quality_score, quality_flags, passed_gate,
+           cta_alternatives, hook_b, idea_input
+    FROM generated_posts
+    WHERE batch_id = ? AND user_id = ? AND tenant_id = ?
+    ORDER BY id ASC
+  `).all(batch_id, userId, tenantId);
+
+  if (!rows.length) return res.status(404).json({ ok: false, error: 'batch_not_found' });
+
+  const posts = rows.map(row => {
+    let flags = [];
+    try { flags = JSON.parse(row.quality_flags || '[]'); } catch {}
+    let ctaAlternatives = [];
+    try { ctaAlternatives = JSON.parse(row.cta_alternatives || '[]'); } catch {}
+    const parts  = (row.idea_input || '').split(' — ');
+    const day    = parts[0] || '';
+    const format = (row.format_slug || '').replace(/^ghostwriter_/, '');
+    return {
+      id:              row.id,
+      day,
+      format,
+      post:            row.content,
+      quality:         { score: row.quality_score || 0, passed: row.passed_gate === 1, flags, errors: flags, warnings: [] },
+      hookB:           row.hook_b || null,
+      ctaAlternatives,
+    };
+  });
+
+  return res.json({ ok: true, batch_id, posts });
 });
 
 // ---------------------------------------------------------------------------

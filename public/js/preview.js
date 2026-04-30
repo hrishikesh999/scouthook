@@ -1,0 +1,1580 @@
+/* preview.js — interaction logic for preview.html (shared post editor for idea + vault flows) */
+
+/* ── 1. DOM References ───────────────────────────────────────── */
+const toggleBar       = document.getElementById('toggle-bar');
+const tabEdit         = document.getElementById('tab-edit');
+const tabPreviewBtn   = document.getElementById('tab-preview');
+const wordCountEl     = document.getElementById('word-count');
+
+const leftAssistState = document.getElementById('left-assist-state');
+
+const scoreBar        = document.getElementById('score-bar');
+const scoreNumber     = document.getElementById('score-number');
+const forceRetPill    = document.getElementById('force-returned-pill');
+const archetypeBadge  = document.getElementById('archetype-badge');
+const confidenceText  = document.getElementById('confidence-text');
+const passfailPill    = document.getElementById('passfail-pill');
+const passfailTooltip = document.getElementById('passfail-tooltip');
+const suggestionsBtn  = document.getElementById('suggestions-toggle');
+const suggestionsList = document.getElementById('suggestions-list');
+
+const hookBStrip   = document.getElementById('hook-b-strip');
+const hookBText    = document.getElementById('hook-b-text');
+const hookBUseBtn  = document.getElementById('hook-b-use-btn');
+
+const ctaStrip     = document.getElementById('cta-strip');
+const ctaChips     = document.getElementById('cta-chips');
+
+const emptyState      = document.getElementById('empty-state');
+const skeletonState   = document.getElementById('skeleton-state');
+const postErrorState  = document.getElementById('post-error-state');
+const tryAgainLink    = document.getElementById('try-again-link');
+const postTextarea    = document.getElementById('post-textarea');
+const postEditArea    = document.getElementById('post-edit-area');
+const linkedinPreview = document.getElementById('linkedin-preview');
+const previewBody     = document.getElementById('preview-body');
+const previewName     = document.getElementById('preview-name');
+const previewHeadline = document.getElementById('preview-headline');
+const previewInitials = document.getElementById('linkedin-avatar-initials');
+
+const actionBar       = document.getElementById('action-bar');
+const actionRight     = document.getElementById('action-right');
+const regenerateBtn   = document.getElementById('regenerate-btn');
+const quoteCardBtn    = document.getElementById('quote-card-btn');
+const carouselBtn     = document.getElementById('carousel-btn');
+const brandedQuoteBtn = document.getElementById('branded-quote-btn');
+const saveDraftBtn           = document.getElementById('save-draft-btn');
+const scheduleBtn            = document.getElementById('schedule-btn');
+const noLinkedInActions      = document.getElementById('no-linkedin-actions');
+const connectPublishBtn      = document.getElementById('connect-publish-btn');
+
+let linkedinConnected = false;
+const postPublishState = document.getElementById('post-publish-state');
+const publishedLabel  = document.getElementById('published-label');
+const actionBarError  = document.getElementById('action-bar-error');
+
+const slideOver       = document.getElementById('slide-over');
+const slideOverLabel  = document.getElementById('slide-over-label');
+const slideOverClose  = document.getElementById('slide-over-close');
+const slideOverContent = document.getElementById('slide-over-content');
+const slideOverSkeleton = document.getElementById('slide-over-skeleton');
+const slideOverSave   = document.getElementById('slide-over-save');
+const slideOverAdd    = document.getElementById('slide-over-add');
+const slideOverDiscard = document.getElementById('slide-over-discard');
+
+const mediaDrawer      = document.getElementById('media-drawer');
+const mediaDrawerClose = document.getElementById('media-drawer-close');
+const drawerUploadZone = document.getElementById('drawer-upload-zone');
+const drawerFileInput  = document.getElementById('drawer-file-input');
+const drawerGrid       = document.getElementById('drawer-media-grid');
+const drawerEmptyMsg   = document.getElementById('drawer-empty-msg');
+const drawerErrorMsg   = document.getElementById('drawer-error-msg');
+const mediaLibraryBtn  = document.getElementById('media-library-btn');
+
+const assetChip       = document.getElementById('asset-chip');
+const assetChipLabel  = document.getElementById('asset-chip-label');
+const assetChipRemove = document.getElementById('asset-chip-remove');
+
+const previewAssetEl    = document.getElementById('preview-asset');
+const previewAvatarImg  = document.getElementById('linkedin-avatar-img');
+const rightPanel        = document.getElementById('right-panel');
+
+const scheduleModal   = document.getElementById('schedule-modal');
+const scheduleDateEl  = document.getElementById('schedule-date');
+const scheduleTimeEl  = document.getElementById('schedule-time');
+const scheduleCancel  = document.getElementById('schedule-cancel');
+const scheduleConfirm = document.getElementById('schedule-confirm-btn');
+const publishNowBtn   = document.getElementById('publish-now-btn');
+const modalError      = document.getElementById('modal-error');
+
+const overlay         = document.getElementById('overlay');
+
+const scheduleLockBanner     = document.getElementById('schedule-lock-banner');
+const scheduleLockBannerText = document.getElementById('schedule-lock-banner-text');
+const schedulePauseBtn       = document.getElementById('schedule-pause-btn');
+const scheduleLockMsg        = document.getElementById('schedule-lock-banner-msg');
+
+/* ── Batch nav DOM refs ──────────────────────────────────────── */
+const batchNav       = document.getElementById('batch-nav');
+const batchDayPills  = document.querySelectorAll('.batch-day-pill');
+const batchNavStatus = document.getElementById('batch-nav-status');
+
+/* ── 2. Left panel state ─────────────────────────────────────── */
+function showAssistPanel() {
+  if (leftAssistState) leftAssistState.style.display = '';
+}
+
+/* ── 3. State ────────────────────────────────────────────────── */
+let currentPath       = 'idea';
+let currentPostId     = null;
+let currentFunnelType = null;
+let primaryPost       = null;
+let alternativePost   = null;
+let currentHookB           = null;
+let currentCtaAlternatives = [];
+let currentAssetUrl   = null;
+let currentAssetType  = null;
+let attachedAssetUrl  = null;
+let attachedAssetType = null;
+let attachedPreviewUrl = null;
+let attachedSlideCount = 0;
+let currentPreviewUrl  = null;
+let currentSlideCount  = 0;
+let suggestionsExpanded = false;
+let previewExpanded   = false;
+let undoTimer         = null;
+let rescoreDebounce   = null;
+let sessionDebounce   = null;
+let scheduleEditLocked  = false;
+let scheduledMeta       = null;
+
+/* ── Batch state ─────────────────────────────────────────────── */
+let currentBatchId    = null;
+let batchPosts        = [];
+let currentBatchIndex = 0;
+
+/* ── 4. LinkedIn status ──────────────────────────────────────── */
+function buildLinkedInChip(name, photoUrl) {
+  const initials = name
+    ? name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
+    : '??';
+  const avatarHtml = photoUrl
+    ? `<img class="nav-linkedin-avatar" src="${photoUrl}" alt="${name || 'LinkedIn'}">`
+    : `<div class="nav-linkedin-initials">${initials}</div>`;
+  const nameHtml = name ? `<span class="nav-linkedin-name">${name}</span>` : '';
+  return `<div class="nav-linkedin-connected">${avatarHtml}${nameHtml}</div>`;
+}
+
+async function checkLinkedInStatus() {
+  try {
+    const res = await fetch('/api/linkedin/status', { headers: apiHeaders(), credentials: 'same-origin' });
+    const data = await res.json();
+    const area = document.getElementById('nav-linkedin-area');
+
+    linkedinConnected = !!data.connected;
+    applyLinkedInCtas(data.name || null, data.photo_url || null);
+
+    if (data.connected) {
+      if (area) area.innerHTML = buildLinkedInChip(data.name, data.photo_url);
+      previewName.textContent = data.name || 'Your Name';
+      previewHeadline.textContent = data.headline || '';
+      if (data.photo_url) {
+        previewAvatarImg.src = data.photo_url;
+        previewAvatarImg.alt = data.name ? `Photo of ${data.name}` : '';
+        previewAvatarImg.style.display = '';
+        previewInitials.style.display = 'none';
+      } else {
+        previewAvatarImg.removeAttribute('src');
+        previewAvatarImg.style.display = 'none';
+        previewInitials.style.display = 'flex';
+        previewInitials.textContent = data.name
+          ? data.name.charAt(0).toUpperCase()
+          : (previewName.textContent || 'U').charAt(0).toUpperCase();
+      }
+    }
+  } catch {
+    linkedinConnected = false;
+    applyLinkedInCtas(null, null);
+  }
+}
+
+function applyLinkedInCtas(liName, liPhoto) {
+  if (linkedinConnected) {
+    if (noLinkedInActions) noLinkedInActions.hidden = true;
+    if (scheduleBtn) {
+      scheduleBtn.hidden   = false;
+      scheduleBtn.disabled = false;
+      scheduleBtn.title    = '';
+    }
+  } else {
+    if (noLinkedInActions) noLinkedInActions.hidden = false;
+    if (scheduleBtn) {
+      scheduleBtn.hidden    = false;
+      scheduleBtn.disabled  = true;
+      scheduleBtn.title     = 'Connect LinkedIn to schedule and publish posts';
+    }
+  }
+}
+
+/* ── 5. Schedule lock helpers ────────────────────────────────── */
+function formatScheduledLocal(iso) {
+  if (!iso) return '';
+  try {
+    const d = new Date(iso);
+    return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZoneName: 'short' });
+  } catch {
+    return '';
+  }
+}
+
+function getUserTimezone() {
+  try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { return ''; }
+}
+
+function getUserTzAbbr() {
+  try {
+    return new Intl.DateTimeFormat(undefined, { timeZoneName: 'short' })
+      .formatToParts(new Date())
+      .find(p => p.type === 'timeZoneName')?.value || '';
+  } catch { return ''; }
+}
+
+function applyScheduleLockUi() {
+  if (!scheduleLockBanner) return;
+  scheduleLockBanner.classList.remove('hidden');
+  const when = scheduledMeta?.scheduledFor ? formatScheduledLocal(scheduledMeta.scheduledFor) : '';
+  scheduleLockBannerText.textContent = when
+    ? `This post is scheduled for ${when}. Pause scheduling to edit — the scheduled send uses a separate copy until you pause.`
+    : 'This post is scheduled. Pause scheduling to edit.';
+  if (scheduleLockMsg) scheduleLockMsg.textContent = '';
+  postTextarea.readOnly = true;
+  regenerateBtn.disabled = true;
+  scheduleBtn.disabled = true;
+  quoteCardBtn.classList.add('disabled');
+  carouselBtn.classList.add('disabled');
+  brandedQuoteBtn.classList.add('disabled');
+  mediaLibraryBtn.classList.add('disabled');
+  if (assetChipRemove) assetChipRemove.style.display = 'none';
+}
+
+function clearScheduleLockUi() {
+  if (scheduleLockBanner) scheduleLockBanner.classList.add('hidden');
+  if (scheduleLockMsg) scheduleLockMsg.textContent = '';
+  postTextarea.readOnly = false;
+  regenerateBtn.disabled = false;
+  quoteCardBtn.classList.remove('disabled');
+  carouselBtn.classList.remove('disabled');
+  brandedQuoteBtn.classList.remove('disabled');
+  mediaLibraryBtn.classList.remove('disabled');
+  if (assetChipRemove) assetChipRemove.style.display = '';
+  postPublishState.classList.remove('visible');
+  actionRight.style.display = '';
+}
+
+function setScheduleLockFromPost(p) {
+  if (p && p.status === 'scheduled' && p.scheduled_for) {
+    scheduleEditLocked = true;
+    scheduledMeta = {
+      scheduledFor: p.scheduled_for,
+      scheduledPostId: p.scheduled_post_id,
+    };
+    applyScheduleLockUi();
+    showPublishedState(`Scheduled · ${formatScheduledLocal(p.scheduled_for)}`);
+    return;
+  }
+  const wasLocked = scheduleEditLocked;
+  scheduleEditLocked = false;
+  scheduledMeta = null;
+  if (wasLocked) {
+    clearScheduleLockUi();
+  }
+  if (p && p.status === 'draft') {
+    enableActionButtons();
+  }
+}
+
+async function refetchPostAndApplyLock() {
+  if (!currentPostId) return;
+  try {
+    const res = await fetch(`/api/posts/${encodeURIComponent(currentPostId)}`, { headers: apiHeaders() });
+    const data = await res.json();
+    if (!data.ok || !data.post) return;
+    setScheduleLockFromPost(data.post);
+    if (data.post.status === 'published') {
+      postTextarea.readOnly = true;
+      postTextarea.classList.add('published');
+      showPublishedState('Published · LinkedIn');
+      Session.clear();
+    }
+  } catch { /* ignore */ }
+}
+
+if (schedulePauseBtn) {
+  schedulePauseBtn.addEventListener('click', async () => {
+    if (!currentPostId) return;
+    schedulePauseBtn.disabled = true;
+    if (scheduleLockMsg) scheduleLockMsg.textContent = '';
+    try {
+      const res = await fetch('/api/linkedin/scheduled/pause-by-post', {
+        method: 'POST',
+        headers: apiHeaders(),
+        body: JSON.stringify({ post_id: currentPostId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) {
+        if (data.error === 'no_active_schedule') {
+          await refetchPostAndApplyLock();
+          if (scheduleLockMsg) {
+            scheduleLockMsg.textContent = 'Schedule already ended or this post was published — state refreshed.';
+          }
+          if (window.toast?.info) window.toast.info('Schedule already ended — refreshed the post state.');
+          return;
+        }
+        throw new Error(data.error || 'Could not pause');
+      }
+      await refetchPostAndApplyLock();
+      if (window.toast?.success) window.toast.success('Scheduling paused. You can edit this post now.');
+    } catch (e) {
+      if (scheduleLockMsg) scheduleLockMsg.textContent = e.message || 'Could not pause';
+      if (window.toast?.error) window.toast.error("Couldn't pause scheduling. Please try again.");
+    } finally {
+      schedulePauseBtn.disabled = false;
+    }
+  });
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && scheduleEditLocked && currentPostId) {
+    refetchPostAndApplyLock();
+  }
+});
+
+/* ── 6. Init ─────────────────────────────────────────────────── */
+(async function init() {
+  await window.scouthookAuthReady;
+
+  await checkLinkedInStatus();
+
+  const _qs       = new URLSearchParams(window.location.search);
+  const urlBatchId = _qs.get('batch_id');
+  const urlPostId  = _qs.get('post_id');
+
+  if (_qs.get('linkedin') === 'connected') {
+    window.history.replaceState({}, '', '/preview.html');
+    await checkLinkedInStatus();
+    if (window.toast?.success) window.toast.success('LinkedIn connected! You can now schedule or publish.');
+  }
+
+  if (urlBatchId) {
+    window.history.replaceState({}, '', '/preview.html');
+    showSkeleton();
+    await loadBatch(urlBatchId);
+    return;
+  }
+
+  if (urlPostId) {
+    window.history.replaceState({}, '', '/preview.html');
+    showSkeleton();
+    await loadSinglePost(urlPostId);
+    return;
+  }
+
+  // No URL params — show empty state (direct navigation or back button)
+  // Empty state is already visible by default
+})();
+
+/* ── 7. Load single post (from ?post_id) ─────────────────────── */
+async function loadSinglePost(postId) {
+  try {
+    const res  = await fetch(`/api/generate/post/${encodeURIComponent(postId)}`, { headers: apiHeaders() });
+    const data = await res.json();
+    if (!data.ok || !data.post) {
+      showPostError();
+      return;
+    }
+    const p = data.post;
+    currentPostId          = p.id;
+    currentFunnelType      = p.funnelType || null;
+    currentHookB           = p.hookB || null;
+    currentCtaAlternatives = Array.isArray(p.ctaAlternatives) ? p.ctaAlternatives : [];
+    primaryPost            = { post: p.content, postId: p.id, quality: p.quality, archetype: p.archetype, confidence: null };
+    alternativePost        = null;
+    scheduleEditLocked     = false;
+    scheduledMeta          = null;
+
+    renderPost(p.content);
+    updateWordCount(p.content);
+    renderScoreBar(p.quality, p.archetype, null);
+    renderHookBStrip(currentHookB);
+    renderCtaStrip(currentCtaAlternatives);
+    renderFunnelBadge();
+    enableActionButtons();
+    showAssistPanel();
+    refetchPostAndApplyLock();
+  } catch {
+    showPostError();
+  }
+}
+
+/* ── 8. Load batch (from ?batch_id) ──────────────────────────── */
+async function loadBatch(batchId) {
+  try {
+    if (batchNavStatus) batchNavStatus.textContent = 'Loading posts…';
+    const res  = await fetch(`/api/generate/batch/${encodeURIComponent(batchId)}`, { headers: apiHeaders() });
+    const data = await res.json();
+    if (!data.ok) {
+      if (batchNavStatus) batchNavStatus.textContent = data.error === 'batch_not_found' ? 'Batch not found.' : 'Could not load posts.';
+      showPostError();
+      return;
+    }
+    batchPosts     = data.posts || [];
+    currentBatchId = batchId;
+    if (batchNavStatus) batchNavStatus.textContent = '';
+    if (batchNav) batchNav.style.display = '';
+    loadBatchPost(0);
+  } catch {
+    if (batchNavStatus) batchNavStatus.textContent = 'Failed to load batch.';
+    showPostError();
+  }
+}
+
+function loadBatchPost(index) {
+  const p = batchPosts[index];
+  if (!p) return;
+
+  currentBatchIndex = index;
+
+  batchDayPills.forEach((pill, i) => {
+    pill.classList.toggle('active', i === index);
+    pill.setAttribute('aria-selected', String(i === index));
+  });
+
+  currentPostId          = p.id;
+  currentFunnelType      = 'trust';
+  currentHookB           = p.hookB || null;
+  currentCtaAlternatives = Array.isArray(p.ctaAlternatives) ? p.ctaAlternatives : [];
+  primaryPost            = { post: p.post, postId: p.id, quality: p.quality, archetype: null, confidence: null };
+  alternativePost        = null;
+  scheduleEditLocked     = false;
+  scheduledMeta          = null;
+
+  if (scheduleLockBanner) scheduleLockBanner.classList.add('hidden');
+
+  renderPost(p.post);
+  updateWordCount(p.post);
+  renderScoreBar(p.quality, null, null);
+  renderHookBStrip(currentHookB);
+  renderCtaStrip(currentCtaAlternatives);
+  renderFunnelBadge();
+  enableActionButtons();
+  showAssistPanel();
+}
+
+batchDayPills.forEach((pill, i) => {
+  pill.addEventListener('click', () => loadBatchPost(i));
+});
+
+/* ── 9. Handle generation success (called by regenerate) ─────── */
+function handleGenerateSuccess(data) {
+  const post            = data.post;
+  const postId          = data.id;
+  const quality         = data.quality;
+  const archetype       = data.archetypeUsed;
+  const confidence      = data.hookConfidence;
+  const hookB           = data.hookB || null;
+  const ctaAlternatives = Array.isArray(data.ctaAlternatives) ? data.ctaAlternatives : [];
+
+  primaryPost            = { post, postId, quality, archetype, confidence };
+  alternativePost        = null;
+  currentHookB           = hookB;
+  currentCtaAlternatives = ctaAlternatives;
+  currentPostId          = postId;
+  currentFunnelType      = data.funnel_type || null;
+  scheduleEditLocked     = false;
+  scheduledMeta          = null;
+
+  renderPost(post);
+  renderScoreBar(quality, archetype, confidence);
+  renderFunnelBadge();
+  renderHookBStrip(hookB);
+  renderCtaStrip(ctaAlternatives);
+  enableActionButtons();
+  updateWordCount(post);
+  showAssistPanel();
+
+  Session.save(buildSession());
+}
+
+function buildSession() {
+  return {
+    path:            currentPath,
+    post:            postTextarea.value,
+    postId:          currentPostId,
+    funnelType:      currentFunnelType,
+    primary:         primaryPost,
+    alternative:     alternativePost,
+    hookB:           currentHookB,
+    ctaAlternatives: currentCtaAlternatives,
+    attachedAssetUrl:   attachedAssetUrl,
+    attachedAssetType:  attachedAssetType,
+    attachedPreviewUrl: attachedPreviewUrl,
+    attachedSlideCount: attachedSlideCount,
+  };
+}
+
+/* ── 10. Render post ─────────────────────────────────────────── */
+function renderPost(text) {
+  hideSkeleton();
+  emptyState.classList.add('hidden');
+  postErrorState.classList.remove('visible');
+  postTextarea.value = text;
+  postTextarea.classList.add('visible');
+  postTextarea.classList.remove('published');
+  autoGrowTextarea(postTextarea);
+}
+
+/* ── 11. Score bar ───────────────────────────────────────────── */
+function renderScoreBar(quality, archetype, confidence) {
+  if (!quality) return;
+
+  scoreBar.classList.add('visible');
+  animateScore(quality.score || 0);
+
+  const score = quality.score || 0;
+  scoreNumber.className = '';
+  if (score >= 75)      scoreNumber.classList.add('pass');
+  else if (score >= 50) scoreNumber.classList.add('borderline');
+  else                  scoreNumber.classList.add('fail');
+
+  forceRetPill.style.display = quality.forcedReturn ? '' : 'none';
+
+  if (archetype) {
+    archetypeBadge.textContent = archetype.toUpperCase();
+    archetypeBadge.style.display = '';
+  } else {
+    archetypeBadge.style.display = 'none';
+  }
+
+  if (confidence !== null && confidence !== undefined) {
+    confidenceText.textContent = `${Math.round(confidence * 100)}% confident`;
+    confidenceText.style.display = '';
+  } else {
+    confidenceText.style.display = 'none';
+  }
+
+  const passed = quality.passed ?? quality.passed_gate ?? (score >= 75);
+  passfailPill.textContent = passed ? '● Passed' : '● Failed';
+  passfailPill.className = 'passfail-pill ' + (passed ? 'pass' : 'fail');
+  if (passfailTooltip) {
+    if (passed) {
+      passfailTooltip.textContent = 'The post passed our quality check. It\'s ready to publish.';
+    } else {
+      const reasons = (quality.errors || quality.flags || []).filter(Boolean);
+      passfailTooltip.innerHTML = reasons.length
+        ? '<strong style="display:block;margin-bottom:4px">Why it failed:</strong>' +
+          reasons.map(r => escHtml(r)).join('<br>')
+        : 'The post did not pass our quality check. Review the suggestions below.';
+    }
+  }
+
+  const allItems = [...(quality.errors || []), ...(quality.warnings || [])];
+  if (allItems.length > 0) {
+    suggestionsBtn.classList.add('visible');
+    updateSuggestionsBtn(allItems.length);
+    renderSuggestions(quality.errors || [], quality.warnings || []);
+  } else {
+    suggestionsBtn.classList.remove('visible');
+    suggestionsList.classList.remove('visible');
+    suggestionsExpanded = false;
+  }
+}
+
+function animateScore(target) {
+  const start    = performance.now();
+  const duration = 600;
+  function step(now) {
+    const progress = Math.min((now - start) / duration, 1);
+    const eased    = 1 - Math.pow(1 - progress, 3);
+    scoreNumber.textContent = Math.round(eased * target);
+    if (progress < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+function updateSuggestionsBtn(count) {
+  suggestionsBtn.textContent = suggestionsExpanded
+    ? `▾ ${count} suggestions`
+    : `▸ ${count} suggestions to review`;
+  suggestionsBtn.setAttribute('aria-expanded', String(suggestionsExpanded));
+}
+
+function renderSuggestions(errors, warnings) {
+  const items = [
+    ...errors.map(e => ({ text: e, type: 'error' })),
+    ...warnings.map(w => ({ text: w, type: 'warning' }))
+  ];
+  suggestionsList.innerHTML = items.map(item =>
+    `<div class="suggestion-item" role="listitem">${item.type === 'error' ? '⚠ ' : '· '}${escHtml(item.text)}</div>`
+  ).join('');
+}
+
+suggestionsBtn.addEventListener('click', () => {
+  suggestionsExpanded = !suggestionsExpanded;
+  const allItems = [...scoreBar.querySelectorAll('.suggestion-item')];
+  const count = allItems.length;
+  updateSuggestionsBtn(count);
+  suggestionsList.classList.toggle('visible', suggestionsExpanded);
+});
+
+/* ── 12b. Hook B strip ───────────────────────────────────────── */
+function renderHookBStrip(hookB) {
+  if (!hookB) {
+    hookBStrip.classList.remove('visible');
+    return;
+  }
+  hookBText.textContent = hookB;
+  hookBStrip.classList.add('visible');
+}
+
+hookBUseBtn.addEventListener('click', (e) => {
+  e.preventDefault();
+  if (scheduleEditLocked) return;
+  if (!currentHookB) return;
+
+  const current = postTextarea.value;
+  const lines = current.split('\n');
+  lines[0] = currentHookB;
+  const updated = lines.join('\n');
+  postTextarea.value = updated;
+  postTextarea.dispatchEvent(new Event('input'));
+
+  currentHookB = null;
+  hookBStrip.classList.remove('visible');
+
+  Session.save(buildSession());
+});
+
+/* ── 12c. CTA alternatives strip ────────────────────────────── */
+function renderCtaStrip(alternatives) {
+  if (!alternatives || alternatives.length === 0) {
+    ctaStrip.classList.remove('visible');
+    return;
+  }
+  ctaChips.innerHTML = '';
+  alternatives.forEach((alt, i) => {
+    const btn = document.createElement('a');
+    btn.href = '#';
+    btn.role = 'button';
+    btn.className = 'cta-chip';
+    btn.textContent = alt;
+    btn.setAttribute('aria-label', `Use closing option ${i + 1}`);
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (scheduleEditLocked) return;
+      const current = postTextarea.value;
+      const lines = current.split('\n');
+      let lastIdx = lines.length - 1;
+      while (lastIdx > 0 && !lines[lastIdx].trim()) lastIdx--;
+      lines[lastIdx] = alt;
+      postTextarea.value = lines.join('\n');
+      postTextarea.dispatchEvent(new Event('input'));
+      currentCtaAlternatives = [];
+      ctaStrip.classList.remove('visible');
+      Session.save(buildSession());
+    });
+    ctaChips.appendChild(btn);
+  });
+  ctaStrip.classList.add('visible');
+}
+
+/* ── 13. Edit / Preview tabs ─────────────────────────────────── */
+tabEdit.addEventListener('click', () => switchView('edit'));
+tabPreviewBtn.addEventListener('click', () => switchView('preview'));
+
+function switchView(view) {
+  if (view === 'edit') {
+    tabEdit.classList.add('active');
+    tabEdit.setAttribute('aria-selected', 'true');
+    tabPreviewBtn.classList.remove('active');
+    tabPreviewBtn.setAttribute('aria-selected', 'false');
+    rightPanel.classList.remove('preview-mode');
+    linkedinPreview.classList.remove('visible');
+    linkedinPreview.setAttribute('aria-hidden', 'true');
+    postTextarea.style.display = postTextarea.classList.contains('visible') ? '' : 'none';
+    wordCountEl.style.display = '';
+  } else {
+    tabPreviewBtn.classList.add('active');
+    tabPreviewBtn.setAttribute('aria-selected', 'true');
+    tabEdit.classList.remove('active');
+    tabEdit.setAttribute('aria-selected', 'false');
+    rightPanel.classList.add('preview-mode');
+    buildLinkedInPreview(postTextarea.value);
+    renderPreviewAsset();
+    void checkLinkedInStatus();
+    linkedinPreview.classList.add('visible');
+    linkedinPreview.setAttribute('aria-hidden', 'false');
+    wordCountEl.style.display = 'none';
+  }
+}
+
+function renderFunnelBadge() {
+  const badge = document.getElementById('funnel-type-badge');
+  const row   = document.getElementById('funnel-type-row');
+  if (!badge || !row) return;
+  if (currentFunnelType) {
+    badge.innerHTML = `<span class="seed-badge ${currentFunnelType}">${currentFunnelType.toUpperCase()}</span>`;
+    row.style.display = 'flex';
+  } else {
+    badge.innerHTML = '';
+    row.style.display = 'none';
+  }
+}
+
+function buildLinkedInPreview(text) {
+  const truncLimit = 210;
+  previewExpanded = false;
+
+  if (text.length > truncLimit) {
+    const truncated = escHtml(text.slice(0, truncLimit));
+    previewBody.innerHTML = truncated + `… <a class="linkedin-see-more" id="see-more-link" href="#" role="button">see more</a>`;
+    document.getElementById('see-more-link').addEventListener('click', (e) => {
+      e.preventDefault();
+      previewExpanded = true;
+      previewBody.textContent = text;
+    });
+  } else {
+    previewBody.textContent = text;
+  }
+}
+
+/* ── 14. Word count ──────────────────────────────────────────── */
+function updateWordCount(text) {
+  const count = text.trim() ? text.trim().split(/\s+/).length : 0;
+  wordCountEl.textContent = `${count} word${count !== 1 ? 's' : ''}`;
+}
+
+/* ── 15. Post textarea auto-grow + re-score ──────────────────── */
+postTextarea.addEventListener('input', () => {
+  if (scheduleEditLocked) return;
+  autoGrowTextarea(postTextarea);
+  updateWordCount(postTextarea.value);
+
+  clearTimeout(sessionDebounce);
+  sessionDebounce = setTimeout(async () => {
+    if (!currentPostId || scheduleEditLocked) return;
+    Session.save(buildSession());
+    showAutosaveState('saving');
+    try {
+      await fetch(`/api/posts/${currentPostId}`, {
+        method:  'PATCH',
+        headers: apiHeaders(),
+        body:    JSON.stringify({ content: postTextarea.value.trim() }),
+      });
+      showAutosaveState('saved');
+    } catch {
+      showAutosaveState('hidden');
+    }
+  }, 1200);
+
+  clearTimeout(rescoreDebounce);
+  rescoreDebounce = setTimeout(() => {
+    if (!scheduleEditLocked) rescorePost(postTextarea.value);
+  }, 1200);
+});
+
+function autoGrowTextarea(el) {
+  const surface  = document.getElementById('post-surface');
+  const savedTop = surface ? surface.scrollTop : 0;
+  el.style.height = 'auto';
+  el.style.height = el.scrollHeight + 'px';
+  if (surface) surface.scrollTop = savedTop;
+}
+
+async function rescorePost(text) {
+  if (!text.trim()) return;
+  try {
+    const res = await fetch('/api/generate/quality-check', {
+      method: 'POST',
+      headers: apiHeaders(),
+      body: JSON.stringify({ postText: text, funnel_type: currentFunnelType || null })
+    });
+    const data = await res.json();
+    if (data.ok && data.quality) {
+      const arch = primaryPost ? primaryPost.archetype : null;
+      const conf = primaryPost ? primaryPost.confidence : null;
+      renderScoreBar(data.quality, arch, conf);
+    }
+  } catch { /* silently fail */ }
+}
+
+/* ── 16. Regenerate ──────────────────────────────────────────── */
+regenerateBtn.addEventListener('click', async () => {
+  if (scheduleEditLocked) return;
+  if (!currentPostId) return;
+
+  const prevPost    = postTextarea.value;
+  const prevPrimary = primaryPost ? { ...primaryPost } : null;
+
+  regenerateBtn.textContent = 'Undo →';
+  regenerateBtn.classList.add('undo-mode');
+  regenerateBtn.setAttribute('aria-label', 'Undo regeneration');
+
+  clearTimeout(undoTimer);
+
+  const undoFn = () => {
+    if (prevPrimary) {
+      renderPost(prevPost);
+      renderScoreBar(prevPrimary.quality, prevPrimary.archetype, prevPrimary.confidence);
+      primaryPost = prevPrimary;
+      currentPostId = prevPrimary.postId;
+    }
+    resetRegenerateBtn();
+  };
+
+  regenerateBtn.onclick = (e) => {
+    e.preventDefault();
+    clearTimeout(undoTimer);
+    undoFn();
+    regenerateBtn.onclick = null;
+  };
+
+  undoTimer = setTimeout(() => {
+    regenerateBtn.style.opacity = '0';
+    setTimeout(() => {
+      resetRegenerateBtn();
+      regenerateBtn.style.opacity = '';
+    }, 1000);
+  }, 10000);
+
+  setGenerating(true);
+  showSkeleton();
+
+  try {
+    const res = await fetch(`/api/generate/regenerate/${currentPostId}`, {
+      method: 'POST',
+      headers: apiHeaders(),
+      body: JSON.stringify({})
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error();
+
+    const p = data.post;
+    const newPost  = p.content || p.post;
+    const newQual  = p.quality;
+    const newArch  = p.archetypeUsed || null;
+    const newConf  = p.hookConfidence !== undefined ? p.hookConfidence : null;
+
+    primaryPost = { post: newPost, postId: p.id, quality: newQual, archetype: newArch, confidence: newConf };
+    currentPostId = p.id;
+
+    renderPost(newPost);
+    renderScoreBar(newQual, newArch, newConf);
+    updateWordCount(newPost);
+    Session.save(buildSession());
+
+  } catch {
+    showPostError();
+  } finally {
+    setGenerating(false);
+  }
+});
+
+function resetRegenerateBtn() {
+  regenerateBtn.textContent = '↻ Regenerate';
+  regenerateBtn.classList.remove('undo-mode');
+  regenerateBtn.setAttribute('aria-label', 'Regenerate post');
+  regenerateBtn.onclick = null;
+}
+
+/* ── 17. Autosave indicator ──────────────────────────────────── */
+let _autosaveIndicatorTimer = null;
+function showAutosaveState(state) {
+  clearTimeout(_autosaveIndicatorTimer);
+  if (state === 'saving') {
+    saveDraftBtn.textContent = 'Saving…';
+    saveDraftBtn.classList.add('autosave-indicator--saving');
+    saveDraftBtn.classList.remove('autosave-indicator--saved');
+  } else if (state === 'saved') {
+    saveDraftBtn.textContent = 'Saved ✓';
+    saveDraftBtn.classList.remove('autosave-indicator--saving');
+    saveDraftBtn.classList.add('autosave-indicator--saved');
+    _autosaveIndicatorTimer = setTimeout(() => {
+      saveDraftBtn.textContent = '';
+      saveDraftBtn.classList.remove('autosave-indicator--saved');
+    }, 2500);
+  } else {
+    saveDraftBtn.textContent = '';
+    saveDraftBtn.classList.remove('autosave-indicator--saving', 'autosave-indicator--saved');
+  }
+}
+
+/* ── 18. Schedule modal ──────────────────────────────────────── */
+scheduleBtn.addEventListener('click', () => openModal());
+scheduleCancel.addEventListener('click', () => closeModal());
+overlay.addEventListener('click', () => {
+  if (scheduleModal.classList.contains('visible')) closeModal();
+  if (slideOver.classList.contains('open')) closeSlideOver();
+});
+
+function openModal() {
+  if (scheduleEditLocked) return;
+  scheduleModal.classList.add('visible');
+  scheduleModal.setAttribute('aria-hidden', 'false');
+  overlay.classList.add('visible');
+  overlay.setAttribute('aria-hidden', 'false');
+  modalError.classList.remove('visible');
+  scheduleDateEl.value = '';
+  scheduleTimeEl.value = '';
+  clearPresetSelection();
+  const tzLabel = document.getElementById('schedule-tz-label');
+  if (tzLabel) {
+    const tz = getUserTimezone();
+    const abbr = getUserTzAbbr();
+    tzLabel.textContent = tz ? `Times shown in your local timezone: ${abbr} (${tz})` : '';
+  }
+  const firstEl = scheduleModal.querySelector('button.schedule-preset-btn');
+  if (firstEl) firstEl.focus();
+  trapFocus(scheduleModal);
+}
+
+function calcPreset(key) {
+  const now = new Date();
+  let d;
+  if (key === '2h') {
+    d = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+    d.setMinutes(Math.ceil(d.getMinutes() / 15) * 15, 0, 0);
+  } else if (key === 'tomorrow-9') {
+    d = new Date(now); d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0);
+  } else if (key === 'tomorrow-12') {
+    d = new Date(now); d.setDate(d.getDate() + 1); d.setHours(12, 0, 0, 0);
+  } else if (key === 'monday-9') {
+    d = new Date(now);
+    const daysUntilMonday = (8 - d.getDay()) % 7 || 7;
+    d.setDate(d.getDate() + daysUntilMonday); d.setHours(9, 0, 0, 0);
+  }
+  return d;
+}
+
+function applyPreset(key) {
+  const d = calcPreset(key);
+  if (!d) return;
+  const yyyy = d.getFullYear();
+  const mm   = String(d.getMonth() + 1).padStart(2, '0');
+  const dd   = String(d.getDate()).padStart(2, '0');
+  const hh   = String(d.getHours()).padStart(2, '0');
+  const min  = String(d.getMinutes()).padStart(2, '0');
+  scheduleDateEl.value = `${yyyy}-${mm}-${dd}`;
+  scheduleTimeEl.value = `${hh}:${min}`;
+  modalError.classList.remove('visible');
+}
+
+function clearPresetSelection() {
+  document.querySelectorAll('.schedule-preset-btn').forEach(b => b.classList.remove('active'));
+}
+
+document.querySelectorAll('.schedule-preset-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    clearPresetSelection();
+    btn.classList.add('active');
+    applyPreset(btn.dataset.preset);
+  });
+});
+
+[scheduleDateEl, scheduleTimeEl].forEach(el => {
+  el.addEventListener('input', clearPresetSelection);
+});
+
+function closeModal() {
+  scheduleModal.classList.remove('visible');
+  scheduleModal.setAttribute('aria-hidden', 'true');
+  overlay.classList.remove('visible');
+  overlay.setAttribute('aria-hidden', 'true');
+  publishNowBtn.textContent = 'Publish now';
+  publishNowBtn.disabled = false;
+}
+
+scheduleConfirm.addEventListener('click', async () => {
+  const dateVal = scheduleDateEl.value;
+  const timeVal = scheduleTimeEl.value;
+  if (!dateVal || !timeVal) {
+    modalError.textContent = 'Please select a date and time.';
+    modalError.classList.add('visible');
+    return;
+  }
+  const scheduledFor = new Date(`${dateVal}T${timeVal}`).toISOString();
+  const content = postTextarea.value;
+
+  scheduleConfirm.textContent = 'Scheduling…';
+  scheduleConfirm.disabled = true;
+  modalError.classList.remove('visible');
+
+  try {
+    const schedulePayload = {
+      content,
+      scheduled_for: scheduledFor,
+      ...(currentPostId ? { post_id: currentPostId } : {}),
+    };
+    if (attachedAssetUrl) {
+      if (attachedAssetType === 'carousel' || attachedAssetType === 'media_pdf') {
+        schedulePayload.carousel_pdf_url = attachedAssetUrl;
+      } else {
+        schedulePayload.image_url = attachedAssetUrl;
+      }
+    }
+    const res = await fetch('/api/linkedin/schedule', {
+      method:  'POST',
+      headers: apiHeaders(),
+      body:    JSON.stringify(schedulePayload),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      if (data.error === 'scheduling_unavailable') throw new Error('Scheduling is temporarily unavailable. Please try again in a few minutes.');
+      if (data.error === 'scheduled_for_too_soon') throw new Error('Please schedule at least 5 minutes from now.');
+      if (data.error === 'scheduled_for_too_far') throw new Error('Please pick a time within the next 30 days.');
+      if (data.error === 'too_many_scheduled') throw new Error('You have too many posts scheduled. Publish or cancel some before adding more.');
+      if (data.error === 'daily_schedule_limit') throw new Error('You can schedule up to 2 posts per day. Choose a different date.');
+      if (data.error === 'scheduled_too_close') throw new Error('Posts on the same day must be at least 4 hours apart.');
+      if (data.error === 'content_too_long') throw new Error('Your post is too long for LinkedIn. Please keep it under 3000 characters.');
+      throw new Error(data.error || 'Scheduling failed');
+    }
+
+    closeModal();
+    const dateStr = new Date(`${dateVal}T${timeVal}`).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZoneName: 'short' });
+    scheduleEditLocked = true;
+    scheduledMeta = {
+      scheduledFor: scheduledFor,
+      scheduledPostId: data.scheduled_post_id != null ? Number(data.scheduled_post_id) : null,
+    };
+    applyScheduleLockUi();
+    showPublishedState(`Scheduled · ${dateStr}`);
+    if (window.toast?.success) window.toast.success('Post scheduled successfully.');
+  } catch (err) {
+    modalError.textContent = err.message || 'Something went wrong. Try again.';
+    modalError.classList.add('visible');
+    if (window.toast?.error) window.toast.error("Couldn't schedule post. Please check the date/time and try again.");
+  } finally {
+    scheduleConfirm.textContent = 'Schedule';
+    scheduleConfirm.disabled = false;
+  }
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    if (scheduleModal.classList.contains('visible')) closeModal();
+    else if (slideOver.classList.contains('open')) closeSlideOver();
+  }
+});
+
+function trapFocus(container) {
+  const focusable = container.querySelectorAll('button, input, select, textarea, [tabindex]:not([tabindex="-1"])');
+  const first = focusable[0];
+  const last  = focusable[focusable.length - 1];
+  function handler(e) {
+    if (e.key !== 'Tab') return;
+    if (e.shiftKey) {
+      if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+    } else {
+      if (document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+  }
+  container.addEventListener('keydown', handler);
+  container._trapHandler = handler;
+}
+
+/* ── 19. Publish now ─────────────────────────────────────────── */
+publishNowBtn.addEventListener('click', async () => {
+  if (scheduleEditLocked) return;
+  const content = postTextarea.value.trim();
+  if (!content) return;
+
+  publishNowBtn.textContent = 'Publishing…';
+  publishNowBtn.disabled = true;
+  modalError.classList.remove('visible');
+
+  try {
+    const publishPayload = { content, postId: currentPostId };
+    if (attachedAssetUrl) {
+      if (attachedAssetType === 'carousel' || attachedAssetType === 'media_pdf') {
+        publishPayload.carousel_pdf_url = attachedAssetUrl;
+      } else {
+        publishPayload.image_url = attachedAssetUrl;
+      }
+    }
+    const res = await fetch('/api/linkedin/publish', {
+      method: 'POST',
+      headers: apiHeaders(),
+      body: JSON.stringify(publishPayload)
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      if (data.error === 'publish_blocked_scheduled') throw new Error('Pause scheduling before publishing, or wait for the scheduled send.');
+      throw new Error(data.error || 'Publish failed');
+    }
+
+    closeModal();
+    attachedAssetUrl   = null;
+    attachedAssetType  = null;
+    attachedPreviewUrl = null;
+    attachedSlideCount = 0;
+    assetChip.classList.add('hidden');
+    clearPreviewAsset();
+    sessionStorage.setItem('sh_just_published', '1');
+    postTextarea.classList.add('published');
+    showPublishedState('Published · just now');
+    Session.clear();
+    if (window.toast?.success) window.toast.success('Post published successfully.');
+
+  } catch (err) {
+    publishNowBtn.textContent = 'Publish now';
+    publishNowBtn.disabled = false;
+    modalError.textContent = err.message || 'Publish failed. Please try again.';
+    modalError.classList.add('visible');
+    if (window.toast?.error) window.toast.error("Couldn't publish post. Please try again.");
+  }
+});
+
+function showPublishedState(label) {
+  publishedLabel.textContent = label;
+  actionRight.style.display = 'none';
+  postPublishState.classList.add('visible');
+}
+
+/* ── 21. Slide-over ──────────────────────────────────────────── */
+quoteCardBtn.addEventListener('click',   () => openSlideOver('quote_card',   'QUOTE CARD'));
+carouselBtn.addEventListener('click',    () => openSlideOver('carousel',      'CAROUSEL'));
+brandedQuoteBtn.addEventListener('click',() => openSlideOver('branded_quote', 'BRANDED QUOTE'));
+
+slideOverClose.addEventListener('click',   closeSlideOver);
+slideOverDiscard.addEventListener('click', closeSlideOver);
+
+function openSlideOver(type, label) {
+  if (scheduleEditLocked) return;
+  if (!currentPostId) return;
+
+  currentAssetType = type;
+  currentAssetUrl  = null;
+
+  slideOverLabel.textContent  = label;
+  slideOverContent.innerHTML  = '';
+  slideOverSkeleton.style.display = '';
+  slideOverContent.appendChild(slideOverSkeleton);
+
+  slideOver.classList.add('open');
+  slideOver.setAttribute('aria-hidden', 'false');
+  overlay.classList.add('visible');
+  overlay.setAttribute('aria-hidden', 'false');
+  slideOverClose.focus();
+  trapFocus(slideOver);
+
+  generateVisual(type);
+}
+
+function closeSlideOver() {
+  slideOver.classList.remove('open');
+  slideOver.setAttribute('aria-hidden', 'true');
+  overlay.classList.remove('visible');
+  overlay.setAttribute('aria-hidden', 'true');
+}
+
+function visualErrorMessage(code) {
+  if (!code) return 'Failed to generate visual';
+  if (code === 'branded_quote_requires_linkedin') {
+    return 'Branded quotes use your LinkedIn profile photo. <a href="/account.html" style="color:var(--brand);font-weight:600">Connect LinkedIn in Account Settings</a> to use this feature.';
+  }
+  if (code === 'branded_quote_photo_fetch_failed') {
+    return 'Could not load your LinkedIn photo. Try reconnecting LinkedIn in Account Settings.';
+  }
+  if (code === 'post_not_found' || code === 'forbidden') {
+    return 'Post not found or access denied. Refresh the page and try again.';
+  }
+  return String(code);
+}
+
+async function generateVisual(type) {
+  try {
+    const res = await fetch(`/api/visuals/${encodeURIComponent(String(currentPostId))}`, {
+      method: 'POST',
+      headers: apiHeaders(),
+      credentials: 'include',
+      body: JSON.stringify({ visual_type: type }),
+    });
+    let data;
+    try { data = await res.json(); } catch { throw new Error('Could not read server response.'); }
+    slideOverSkeleton.style.display = 'none';
+    if (!res.ok || !data.ok) throw new Error(visualErrorMessage(data.error));
+
+    if (type === 'carousel') {
+      renderCarousel(data.slides);
+      currentAssetUrl   = data.pdf_url || data.zip_url;
+      currentPreviewUrl = data.slides?.[0]?.png_url || null;
+      currentSlideCount = data.slides?.length || 0;
+    } else {
+      currentAssetUrl   = data.png_url;
+      currentPreviewUrl = data.png_url;
+      currentSlideCount = 0;
+      const img = document.createElement('img');
+      img.src = data.png_url;
+      img.alt = '';
+      img.className = 'slide-over-image';
+      slideOverContent.appendChild(img);
+    }
+  } catch (e) {
+    slideOverSkeleton.style.display = 'none';
+    const err = document.createElement('p');
+    err.style.cssText = 'font-size:14px;color:var(--text-secondary);text-align:center;padding:var(--space-8) 16px';
+    const msg = e instanceof Error && e.message ? e.message : 'Could not generate asset. Try again.';
+    err.innerHTML = msg;
+    slideOverContent.appendChild(err);
+  }
+}
+
+function renderCarousel(slides) {
+  if (!slides || !slides.length) return;
+  slides.forEach((slide, i) => {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'carousel-slide';
+    const label = document.createElement('div');
+    label.className = 'carousel-slide-label';
+    label.textContent = `Slide ${i + 1}`;
+    const img = document.createElement('img');
+    img.src = slide.png_url;
+    img.alt = '';
+    img.className = 'slide-over-image';
+    wrapper.appendChild(label);
+    wrapper.appendChild(img);
+    slideOverContent.appendChild(wrapper);
+  });
+}
+
+slideOverSave.addEventListener('click', () => {
+  if (!currentAssetUrl) return;
+  const a = document.createElement('a');
+  a.href = currentAssetUrl;
+  a.download = '';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+});
+
+slideOverAdd.addEventListener('click', () => {
+  if (currentAssetUrl) {
+    attachedAssetUrl   = currentAssetUrl;
+    attachedAssetType  = currentAssetType;
+    attachedPreviewUrl = currentPreviewUrl;
+    attachedSlideCount = currentSlideCount;
+    const labelMap = { quote_card: 'Quote Card', carousel: 'Carousel', branded_quote: 'Branded Quote' };
+    assetChipLabel.textContent = labelMap[attachedAssetType] || attachedAssetType;
+    assetChip.classList.remove('hidden');
+    renderPreviewAsset();
+    saveGeneratedToMedia(currentAssetUrl, currentAssetType, currentPreviewUrl);
+  }
+  closeSlideOver();
+});
+
+assetChipRemove.addEventListener('click', () => {
+  attachedAssetUrl   = null;
+  attachedAssetType  = null;
+  attachedPreviewUrl = null;
+  attachedSlideCount = 0;
+  assetChip.classList.add('hidden');
+  assetChipLabel.textContent = '';
+  clearPreviewAsset();
+  saveAssetToDB();
+});
+
+function renderPreviewAsset() {
+  if (!attachedPreviewUrl || !previewAssetEl) return;
+  previewAssetEl.innerHTML = '';
+  const img = document.createElement('img');
+  img.src = attachedPreviewUrl;
+  img.alt = attachedAssetType === 'carousel' ? 'Carousel preview' : 'Visual asset';
+  previewAssetEl.appendChild(img);
+  if (attachedAssetType === 'carousel' && attachedSlideCount > 1) {
+    const badge = document.createElement('div');
+    badge.className = 'preview-asset-badge';
+    badge.textContent = `Document · ${attachedSlideCount} slides`;
+    previewAssetEl.appendChild(badge);
+  }
+  previewAssetEl.classList.remove('hidden');
+  previewAssetEl.setAttribute('aria-hidden', 'false');
+}
+
+function clearPreviewAsset() {
+  if (!previewAssetEl) return;
+  previewAssetEl.innerHTML = '';
+  previewAssetEl.classList.add('hidden');
+  previewAssetEl.setAttribute('aria-hidden', 'true');
+}
+
+async function saveGeneratedToMedia(assetUrl, assetType, previewUrl) {
+  if (!assetUrl || !assetUrl.startsWith('/files/')) return;
+
+  const saves = [];
+  if (assetType === 'carousel') {
+    saves.push({ fileUrl: assetUrl, filename: `carousel_${Date.now()}.pdf`, mimeType: 'application/pdf', role: 'asset' });
+  } else {
+    const prefix = assetType === 'branded_quote' ? 'branded_quote' : 'quote_card';
+    saves.push({ fileUrl: assetUrl, filename: `${prefix}_${Date.now()}.png`, mimeType: 'image/png', role: 'asset' });
+  }
+
+  for (const save of saves) {
+    try {
+      const res  = await fetch('/api/media/save-generated', {
+        method:  'POST',
+        headers: apiHeaders(),
+        body:    JSON.stringify({ fileUrl: save.fileUrl, filename: save.filename, mimeType: save.mimeType }),
+      });
+      const data = await res.json();
+      if (!data.ok) continue;
+      if (save.role === 'asset') {
+        attachedAssetUrl = data.file.url;
+        if (assetType !== 'carousel') attachedPreviewUrl = data.file.url;
+      }
+      if (currentPostId) {
+        Session.save(buildSession());
+        saveAssetToDB();
+      }
+    } catch { /* non-fatal */ }
+  }
+}
+
+async function saveAssetToDB() {
+  if (!currentPostId || scheduleEditLocked) return;
+  try {
+    await fetch(`/api/posts/${currentPostId}`, {
+      method:  'PATCH',
+      headers: apiHeaders(),
+      body: JSON.stringify({
+        content:           postTextarea.value.trim(),
+        asset_url:         attachedAssetUrl   || null,
+        asset_preview_url: attachedPreviewUrl || null,
+        asset_type:        attachedAssetType  || null,
+        asset_slide_count: attachedSlideCount || null,
+      }),
+    });
+  } catch { /* non-fatal */ }
+}
+
+/* ── 22. Enable / disable action buttons ────────────────────── */
+function enableActionButtons() {
+  const locked = scheduleEditLocked;
+  quoteCardBtn.classList.toggle('disabled', locked);
+  carouselBtn.classList.toggle('disabled', locked);
+  brandedQuoteBtn.classList.toggle('disabled', locked);
+  mediaLibraryBtn.classList.toggle('disabled', locked);
+
+  if (linkedinConnected) {
+    scheduleBtn.disabled = locked;
+  } else {
+    if (connectPublishBtn) connectPublishBtn.classList.toggle('disabled', locked);
+  }
+}
+
+function disableActionButtons() {
+  showAutosaveState('hidden');
+  scheduleBtn.disabled  = true;
+  quoteCardBtn.classList.add('disabled');
+  carouselBtn.classList.add('disabled');
+  brandedQuoteBtn.classList.add('disabled');
+  mediaLibraryBtn.classList.add('disabled');
+  if (connectPublishBtn) connectPublishBtn.classList.add('disabled');
+}
+
+/* ── 23. Loading states ──────────────────────────────────────── */
+function setGenerating(loading) {
+  if (regenerateBtn) regenerateBtn.disabled = loading;
+}
+
+function showSkeleton() {
+  emptyState.classList.add('hidden');
+  postTextarea.classList.remove('visible');
+  postErrorState.classList.remove('visible');
+  skeletonState.classList.add('visible');
+  currentHookB = null;
+  hookBStrip.classList.remove('visible');
+  currentCtaAlternatives = [];
+  ctaStrip.classList.remove('visible');
+}
+
+function hideSkeleton() {
+  skeletonState.classList.remove('visible');
+}
+
+function showPostError() {
+  hideSkeleton();
+  emptyState.classList.add('hidden');
+  postTextarea.classList.remove('visible');
+  postErrorState.classList.add('visible');
+}
+
+/* ── 24. Media drawer ────────────────────────────────────────── */
+mediaLibraryBtn.addEventListener('click', () => {
+  if (scheduleEditLocked || !currentPostId) return;
+  openMediaDrawer();
+});
+
+mediaDrawerClose.addEventListener('click', closeMediaDrawer);
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && mediaDrawer.classList.contains('open')) closeMediaDrawer();
+});
+
+overlay.addEventListener('click', () => {
+  if (mediaDrawer.classList.contains('open')) closeMediaDrawer();
+});
+
+function openMediaDrawer() {
+  if (slideOver.classList.contains('open')) closeSlideOver();
+  mediaDrawer.classList.add('open');
+  mediaDrawer.setAttribute('aria-hidden', 'false');
+  overlay.classList.add('visible');
+  overlay.setAttribute('aria-hidden', 'false');
+  mediaDrawerClose.focus();
+  loadDrawerMedia();
+}
+
+function closeMediaDrawer() {
+  mediaDrawer.classList.remove('open');
+  mediaDrawer.setAttribute('aria-hidden', 'true');
+  overlay.classList.remove('visible');
+  overlay.setAttribute('aria-hidden', 'true');
+}
+
+async function loadDrawerMedia() {
+  drawerGrid.innerHTML = '';
+  if (drawerEmptyMsg) drawerEmptyMsg.style.display = 'none';
+  if (drawerErrorMsg) drawerErrorMsg.style.display = 'none';
+
+  try {
+    const res  = await fetch('/api/media', { headers: apiHeaders() });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+    if (data.files.length === 0) {
+      if (drawerEmptyMsg) drawerEmptyMsg.style.display = '';
+    } else {
+      data.files.forEach(f => drawerGrid.appendChild(buildDrawerCard(f)));
+    }
+  } catch {
+    if (drawerErrorMsg) {
+      drawerErrorMsg.textContent = 'Could not load media. Try again.';
+      drawerErrorMsg.style.display = '';
+    }
+  }
+}
+
+function buildDrawerCard(file) {
+  const isPdf = file.mime_type === 'application/pdf';
+  const card  = document.createElement('div');
+  card.className  = 'media-card';
+  card.dataset.id = file.id;
+  card.setAttribute('role', 'button');
+  card.setAttribute('tabindex', '0');
+  card.setAttribute('aria-label', `Attach ${file.filename}`);
+
+  card.innerHTML = `
+    <div class="media-thumb">
+      ${isPdf
+        ? `<div class="media-pdf-thumb" aria-hidden="true">
+             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+               <polyline points="14 2 14 8 20 8"/>
+             </svg>
+             <span>PDF</span>
+           </div>`
+        : `<img src="${file.url}" alt="${escHtml(file.filename)}" loading="lazy">`
+      }
+    </div>
+    <div class="media-card-info">
+      <span class="media-filename" title="${escHtml(file.filename)}">${escHtml(truncMediaName(file.filename))}</span>
+      <span class="media-format-tag">${escHtml(file.format_tag || 'File')}</span>
+    </div>
+  `;
+
+  const attach = () => {
+    const assetType = isPdf ? 'media_pdf' : 'media_image';
+    attachedAssetUrl   = file.url;
+    attachedAssetType  = assetType;
+    attachedPreviewUrl = isPdf ? null : file.url;
+    attachedSlideCount = 0;
+    assetChipLabel.textContent = isPdf ? 'PDF' : (file.format_tag || 'Image');
+    assetChip.classList.remove('hidden');
+    renderPreviewAsset();
+    if (currentPostId) Session.save(buildSession());
+    saveAssetToDB();
+    closeMediaDrawer();
+  };
+
+  card.addEventListener('click', attach);
+  card.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); attach(); } });
+  return card;
+}
+
+drawerUploadZone.addEventListener('click', () => drawerFileInput.click());
+
+drawerFileInput.addEventListener('change', () => {
+  if (drawerFileInput.files.length) drawerProcessFiles(Array.from(drawerFileInput.files));
+  drawerFileInput.value = '';
+});
+
+drawerUploadZone.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  drawerUploadZone.classList.add('dragover');
+});
+drawerUploadZone.addEventListener('dragleave', () => drawerUploadZone.classList.remove('dragover'));
+drawerUploadZone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  drawerUploadZone.classList.remove('dragover');
+  const files = Array.from(e.dataTransfer.files);
+  if (files.length) drawerProcessFiles(files);
+});
+
+async function drawerProcessFiles(files) {
+  drawerUploadZone.classList.add('uploading');
+  for (const file of files) {
+    try {
+      await drawerUploadFile(file);
+    } catch (err) {
+      if (drawerErrorMsg) {
+        drawerErrorMsg.textContent = err.message || 'Upload failed';
+        drawerErrorMsg.style.display = '';
+      }
+    }
+  }
+  drawerUploadZone.classList.remove('uploading');
+}
+
+async function drawerUploadFile(file) {
+  const ALLOWED = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
+  if (!ALLOWED.includes(file.type)) throw new Error(`${file.name}: unsupported type`);
+  if (file.size > 20 * 1024 * 1024) throw new Error(`${file.name}: exceeds 20 MB`);
+
+  const headers = {
+    'Content-Type': file.type,
+    'X-Filename':   encodeURIComponent(file.name),
+    'X-User-Id':    getUserId(),
+    'X-Tenant-Id':  getTenantId(),
+  };
+
+  let res;
+  try { res = await fetch('/api/media/upload', { method: 'POST', headers, body: file }); }
+  catch { throw new Error('Network error — could not reach server'); }
+
+  let data;
+  try { data = await res.json(); }
+  catch { throw new Error(`Upload failed (HTTP ${res.status})`); }
+
+  if (!data.ok) throw new Error(data.error || 'Upload failed');
+
+  const card = buildDrawerCard(data.file);
+  drawerGrid.prepend(card);
+  if (drawerEmptyMsg) drawerEmptyMsg.style.display = 'none';
+}
+
+function truncMediaName(name, max = 18) {
+  if (name.length <= max) return name;
+  const ext = name.lastIndexOf('.');
+  if (ext > 0) {
+    const base = name.slice(0, ext), suffix = name.slice(ext);
+    return base.slice(0, max - suffix.length - 1) + '…' + suffix;
+  }
+  return name.slice(0, max - 1) + '…';
+}
+
+/* ── 25. Try-again handler ───────────────────────────────────── */
+if (tryAgainLink) {
+  tryAgainLink.onclick = (e) => {
+    e.preventDefault();
+    if (currentPostId) loadSinglePost(String(currentPostId));
+    else window.location.reload();
+  };
+}
+
+/* ── 26. Helpers ─────────────────────────────────────────────── */
+function escHtml(str) {
+  if (!str) return '';
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}

@@ -350,7 +350,7 @@ const Onboarding = (() => {
     qs('ob-s4b-skip')?.addEventListener('click', () => {
       markOnboardingComplete(); // fire-and-forget
       window.location.href = state.postId
-        ? `/generate.html?postId=${encodeURIComponent(state.postId)}`
+        ? `/preview.html?post_id=${encodeURIComponent(state.postId)}`
         : '/drafts.html';
     });
   }
@@ -380,7 +380,7 @@ const Onboarding = (() => {
     const gotoBtn = qs('ob-goto-draft');
 
     const dest = () => state.postId
-      ? `/generate.html?postId=${encodeURIComponent(state.postId)}`
+      ? `/preview.html?post_id=${encodeURIComponent(state.postId)}`
       : '/drafts.html';
 
     ctaBtn?.addEventListener('click', async () => {

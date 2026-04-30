@@ -117,7 +117,7 @@ function renderGrid(posts) {
     const cls   = scoreClass(post.quality_score);
     const score = post.quality_score != null ? post.quality_score : '—';
     const label = toTitleCase(post.format_slug);
-    const url   = `/generate.html?postId=${encodeURIComponent(post.id)}`;
+    const url   = `/preview.html?post_id=${encodeURIComponent(post.id)}`;
     const text  = (post.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const pid   = String(post.id);
 

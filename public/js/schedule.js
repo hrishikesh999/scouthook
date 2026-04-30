@@ -184,7 +184,7 @@ function renderEventRow(post) {
   const second    = lines[1] || '';
 
   const editHref = post.post_id
-    ? `/generate.html?postId=${encodeURIComponent(post.post_id)}`
+    ? `/preview.html?post_id=${encodeURIComponent(post.post_id)}`
     : null;
 
   const tag    = editHref ? `a href="${editHref}"` : 'div';
@@ -229,7 +229,7 @@ function renderFailedRow(post) {
     ? 'Missed scheduled time'
     : (errorMap[post.error_message] || post.error_message || 'Unknown error');
 
-  const editHref = post.post_id ? `/generate.html?postId=${encodeURIComponent(post.post_id)}` : null;
+  const editHref = post.post_id ? `/preview.html?post_id=${encodeURIComponent(post.post_id)}` : null;
 
   // Missed posts (still pending/processing) show as read-only — server will recover them shortly.
   // not_sent posts get full dismiss + reschedule actions.

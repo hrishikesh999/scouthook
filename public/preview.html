@@ -45,10 +45,47 @@
     .btn-connect-linkedin.disabled,
     .btn-connect-linkedin[disabled] { opacity: 0.45; pointer-events: none; }
 
+    /* ── Override #app to stack batch-nav above panels ─────── */
+    #app {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 0;
+    }
+
+    /* ── Panels row: left + right side by side ──────────────── */
+    #panels-row {
+      display: flex;
+      gap: var(--space-12, 48px);
+      align-items: flex-start;
+      width: 100%;
+      margin-top: var(--space-6, 24px);
+    }
+
+    /* ── Left panel: fixed width, no flex shrink ────────────── */
+    #left-panel {
+      flex-shrink: 0;
+    }
+
+    /* ── Right panel: fill remaining space, no resize ───────── */
+    #right-panel {
+      flex: 1;
+      min-width: 0;
+    }
+
+    /* ── Stable post surface height — no resize on tab switch ── */
+    #post-surface {
+      min-height: 420px;
+    }
+    #linkedin-preview.visible {
+      min-height: 420px;
+    }
+
     /* ── Batch day navigation ────────────────────────────────── */
     #batch-nav {
-      padding: 10px 16px 0;
-      background: var(--bg-surface, #fff);
+      padding: 0 0 4px;
+      background: transparent;
+      border-bottom: 1px solid var(--border, #e5e7eb);
+      margin-bottom: 0;
     }
     .batch-nav-pills {
       display: flex;
@@ -135,6 +172,9 @@
       </div>
       <p id="batch-nav-status" class="batch-nav-status" aria-live="polite"></p>
     </div>
+
+    <!-- ── Panels row (left + right sit side-by-side below nav) -->
+    <div id="panels-row">
 
     <!-- ── Left Panel ──────────────────────────────────────── -->
     <div id="left-panel">
@@ -341,6 +381,8 @@
       </div>
 
     </div><!-- /right-panel -->
+
+    </div><!-- /panels-row -->
 
   </main>
 

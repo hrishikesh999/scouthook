@@ -563,6 +563,10 @@
     }
   }
 
+  function escHtml(str) {
+    return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
   function planLimitMessage(planData) {
     if (planData?.plan === 'pro') {
       return `Monthly vault limit reached (${planData.current}/${planData.limit} docs this month). Resets at the start of next month.`;

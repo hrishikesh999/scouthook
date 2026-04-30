@@ -765,7 +765,10 @@
   weeklyBtn.addEventListener('click', () => {
     if (!hasBusinessPositioning) {
       positioningPrompt.classList.add('visible');
+      positioningPrompt.scrollIntoView({ behavior: 'smooth', block: 'center' });
       positioningInput.focus();
+      weeklyStatus.innerHTML = 'One quick thing first — tell us how you help your clients below, then hit <strong>Got it →</strong>';
+      weeklyStatus.className = 'vault-weekly-status info';
       return;
     }
     runWeeklyBatch();
@@ -782,7 +785,7 @@
 
       if (!data.ok) {
         if (data.error === 'ghostwriter_prompt_not_ready') {
-          weeklyStatus.innerHTML = data.message || 'Could not build your AI profile. Make sure your Voice Profile (Content Niche + Audience) is filled in.';
+          weeklyStatus.innerHTML = 'Your Voice Profile needs a bit more info. <a href="/profile.html" style="color:var(--brand);font-weight:600">Complete your Voice Profile →</a> (Content Niche + Audience are required).';
         } else if (data.error === 'rate_limit_exceeded') {
           weeklyStatus.textContent = 'Rate limit reached — try again in an hour.';
         } else {

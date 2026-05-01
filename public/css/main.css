@@ -917,7 +917,6 @@ body {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  min-height: 600px;
   max-height: calc(100vh - 52px - var(--space-10) * 2);
 }
 
@@ -1751,6 +1750,11 @@ body {
 /* ── Preview mode — hide editing chrome ─────────────────────── */
 #right-panel.preview-mode #post-edit-area {
   display: none !important;
+}
+
+/* In preview mode, post-surface should hug its content so the action bar sits directly below the LinkedIn card */
+#right-panel.preview-mode #post-surface {
+  flex: 0 0 auto;
 }
 
 .action-right {
@@ -2686,7 +2690,6 @@ body {
 
   #right-panel {
     width: 100%;
-    min-height: 500px;
   }
 
   .modal {

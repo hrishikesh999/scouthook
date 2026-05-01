@@ -14,10 +14,6 @@
     }
     .vault-page-header {
       margin-bottom: 28px;
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: var(--space-4);
     }
     .vault-page-title {
       font-size: 24px;
@@ -31,27 +27,7 @@
       color: var(--text-secondary);
       margin: 0;
     }
-    .vault-generate-cta {
-      font-family: var(--font-sans);
-      font-size: 0.875rem;
-      font-weight: 600;
-      padding: 9px var(--space-5);
-      border: none;
-      border-radius: var(--radius-md);
-      background: var(--brand);
-      color: #fff;
-      cursor: pointer;
-      white-space: nowrap;
-      text-decoration: none;
-      display: inline-flex;
-      align-items: center;
-      gap: var(--space-2);
-      transition: background 0.15s;
-      flex-shrink: 0;
-    }
-    .vault-generate-cta:hover { background: var(--brand-hover); }
-
-    /* ── Two-column grid ─────────────────────────────────────────── */
+/* ── Two-column grid ─────────────────────────────────────────── */
     .vault-grid {
       display: grid;
       grid-template-columns: 1fr 1.4fr;
@@ -230,14 +206,8 @@
     <div class="vault-page">
 
       <div class="vault-page-header">
-        <div>
-          <h1 class="vault-page-title">Content Vault</h1>
-          <p class="vault-page-subtitle">Your document library. Upload case studies, service docs, and newsletters — ScoutHook uses them to generate posts in your voice.</p>
-        </div>
-        <a href="/generate.html?mode=vault" class="vault-generate-cta">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
-          Generate this week's posts
-        </a>
+        <h1 class="vault-page-title">Content Vault</h1>
+        <p class="vault-page-subtitle">Your document library. Upload case studies, service docs, and newsletters — ScoutHook uses them to generate posts in your voice.</p>
       </div>
 
       <!-- ── Documents: upload + list ──────────────────────────────── -->

@@ -1,6 +1,7 @@
 /* profile.js — voice profile page logic */
 
 const positioningEl = document.getElementById('profile-positioning');
+const websiteEl     = document.getElementById('profile-website');
 const nicheEl       = document.getElementById('profile-niche');
 const audienceEl    = document.getElementById('profile-audience');
 const painEl        = document.getElementById('profile-pain');
@@ -48,6 +49,7 @@ function buildLinkedInChip(name, photoUrl) {
 
     const p = data.profile;
     if (p.business_positioning) positioningEl.value = p.business_positioning;
+    if (p.website_url)          websiteEl.value     = p.website_url;
     if (p.content_niche)        nicheEl.value       = p.content_niche;
     if (p.audience_role)        audienceEl.value    = p.audience_role;
     if (p.audience_pain)        painEl.value        = p.audience_pain;
@@ -64,6 +66,7 @@ saveBtn.addEventListener('click', async () => {
 
   const body = {
     business_positioning: positioningEl.value.trim(),
+    website_url:          websiteEl.value.trim(),
     content_niche:        nicheEl.value.trim(),
     audience_role:        audienceEl.value.trim(),
     audience_pain:        painEl.value.trim(),

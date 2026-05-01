@@ -277,4 +277,5 @@ module.exports = {
   extractAndChunk,
   extractAndChunkUrl,
   mineChunks,
+  extractUrl,
 };

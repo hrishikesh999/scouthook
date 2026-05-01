@@ -2,17 +2,22 @@
 
 /* ============================================================
    onboarding.js — Scouthook first-time wizard
-   Controls the 7-screen setup flow: role → voice basics →
-   generate first post → celebration → post + score →
-   LinkedIn connect (optional) → voice deepening (optional).
+   Controls the 6-screen setup flow:
+     1. Role + voice profile (combined, with optional website auto-fill)
+     3. Generate first post (role-specific chips)
+     4a. Archetype reveal + celebration
+     4b. Post + quality score
+     5. LinkedIn connect (reframed as required for publishing)
+     6. Voice deepening + vault hint (optional)
    ============================================================ */
 
 const Onboarding = (() => {
 
   /* ── Module state ─────────────────────────────────────── */
   const state = {
-    role:            null,  // e.g. "consultant"
-    roleCustom:      null,  // free-text for role === "other"
+    role:            null,
+    roleCustom:      null,
+    websiteUrl:      null,
     postId:          null,
     post:            null,
     quality:         null,
@@ -20,6 +25,47 @@ const Onboarding = (() => {
     hookConfidence:  null,
     currentScreen:   '1',
     suggestionsOpen: false,
+  };
+
+  /* ── Role-specific prompt chips ────────────────────────── */
+  const ROLE_CHIPS = {
+    consultant: [
+      'The assumption that cost a client before we worked together',
+      'The question I ask at the start of every new engagement',
+      'Why most advice in my field sounds right but fails in practice',
+    ],
+    coach: [
+      'The belief that held my best client back the longest',
+      'What high performers consistently get wrong about growth',
+      'The moment I knew someone was finally ready to change',
+    ],
+    freelancer: [
+      'The project scope conversation I wish I\'d had on day one',
+      'What clients say they want versus what they actually need',
+      'The pattern I see in every client who outgrows freelancing',
+    ],
+    founder: [
+      'The assumption I had about product-market fit that was completely wrong',
+      'What I wish I\'d known about hiring before we made our first mistake',
+      'The decision that looks obvious now but wasn\'t at the time',
+    ],
+    other: [
+      'A mistake I made early in my career that taught me everything',
+      'The one thing most of my clients get wrong before they hire me',
+      'What I wish someone had told me when I started out',
+    ],
+  };
+
+  /* ── Archetype metadata for reveal + why-hook ──────────── */
+  const ARCHETYPE_META = {
+    NUMBER:          { desc: 'Opens with a specific number, timeframe, or measurable result', example: '"3 years ago I nearly killed my consulting business."' },
+    CONTRARIAN:      { desc: 'Challenges a popular belief directly — no softening language', example: '"Most advice about pricing is wrong."' },
+    CONFESSION:      { desc: 'Opens with a personal mistake or failure in the past tense', example: '"I used to think strategy was the hard part."' },
+    PATTERN_INTERRUPT: { desc: 'A counterintuitive truth under 8 words — no context given', example: '"Nobody actually wants your expertise."' },
+    DIRECT_ADDRESS:  { desc: 'Speaks directly to a specific person in a specific situation', example: '"If you are billing by the hour, read this."' },
+    STAKES:          { desc: 'Opens with consequence or cost before cause or context', example: '"This one assumption cost me six months of work."' },
+    BEFORE_AFTER:    { desc: 'Two contrasting states that show a transformation', example: '"12 months ago: 200 followers. Today: inbound every week."' },
+    INSIGHT:         { desc: 'A clean declarative observation about your field', example: '"The best consultants sell certainty, not strategy."' },
   };
 
   /* ── Utilities ────────────────────────────────────────── */
@@ -36,7 +82,6 @@ const Onboarding = (() => {
 
   /* ── Screen navigation ────────────────────────────────── */
   function showScreen(id) {
-    // id may be a number or string: 1, 2, 3, '4a', '4b', 5, 6, 'confirm'
     const key = String(id);
     qsa('.ob-screen').forEach(s => s.classList.remove('active'));
     const target = document.getElementById(`ob-screen-${key}`);
@@ -49,9 +94,9 @@ const Onboarding = (() => {
   }
 
   function updateDots(screenKey) {
-    const dots    = qs('ob-step-dots');
+    const dots = qs('ob-step-dots');
     if (!dots) return;
-    const dotMap  = { '2': '2', '3': '3', '4b': '4b' };
+    const dotMap  = { '3': '3', '4b': '4b', '6': '6' };
     const showFor = Object.keys(dotMap);
     dots.hidden = !showFor.includes(screenKey);
     if (!dots.hidden) {
@@ -61,12 +106,18 @@ const Onboarding = (() => {
     }
   }
 
-  /* ── Screen 1: Role cards ─────────────────────────────── */
+  /* ── Screen 1: Role + voice profile (combined) ────────── */
   function initScreen1() {
     const cards      = qsa('.ob-role-card');
     const customWrap = qs('ob-role-custom-wrap');
-    const errorEl    = qs('ob-s1-error');
+    const voiceFields = qs('ob-voice-fields');
+    const ctaBtn     = qs('ob-s2-cta');
+    const loadEl     = qs('ob-s2-loading');
+    const errorEl    = qs('ob-s2-error');
+    const autofillBtn = qs('ob-autofill-btn');
+    const autofillLoad = qs('ob-autofill-loading');
 
+    // Role card selection → reveal voice fields
     cards.forEach(card => {
       card.addEventListener('click', () => {
         cards.forEach(c => {
@@ -80,44 +131,71 @@ const Onboarding = (() => {
         const isOther = state.role === 'other';
         customWrap.hidden = !isOther;
         if (isOther) qs('ob-role-custom').focus();
-        if (errorEl) errorEl.hidden = true;
+
+        // Slide in voice fields on first role selection
+        if (voiceFields.hidden) {
+          voiceFields.hidden = false;
+          // Trigger CSS transition on next frame
+          requestAnimationFrame(() => voiceFields.classList.add('visible'));
+          qs('ob-website')?.focus();
+        }
       });
     });
 
-    qs('ob-s1-cta').addEventListener('click', () => {
-      if (!state.role) {
-        errorEl.hidden = false;
-        return;
-      }
-      if (state.role === 'other') {
-        const custom = (qs('ob-role-custom').value || '').trim();
-        if (!custom) {
-          errorEl.textContent = 'Please describe what you do to continue.';
-          errorEl.hidden = false;
+    // Website auto-fill
+    if (autofillBtn) {
+      autofillBtn.addEventListener('click', async () => {
+        const url = (qs('ob-website').value || '').trim();
+        if (!url || !/^https?:\/\//i.test(url)) {
+          qs('ob-website').focus();
           return;
         }
-        state.roleCustom = custom;
-      }
-      errorEl.hidden = true;
-      showScreen(2);
-    });
-  }
+        state.websiteUrl = url;
+        autofillBtn.disabled = true;
+        autofillLoad.hidden  = false;
 
-  /* ── Screen 2: Voice basics ───────────────────────────── */
-  function initScreen2() {
-    const ctaBtn   = qs('ob-s2-cta');
-    const loadEl   = qs('ob-s2-loading');
-    const errorEl  = qs('ob-s2-error');
+        try {
+          const res  = await fetch('/api/profile/extract-website', {
+            method:  'POST',
+            headers: apiHeaders(),
+            body:    JSON.stringify({ url }),
+          });
+          const data = await res.json();
+          if (data.ok) {
+            if (data.content_niche)  qs('ob-niche').value    = data.content_niche;
+            if (data.audience_role)  qs('ob-audience').value = data.audience_role;
+            if (data.audience_pain)  { /* stored for Screen 6 pre-fill if desired */ }
+            if (data.content_niche || data.audience_role) {
+              qs('ob-niche').focus();
+            }
+          }
+        } catch (e) {
+          console.error('[onboarding] auto-fill error (non-fatal):', e);
+        } finally {
+          autofillBtn.disabled = false;
+          autofillLoad.hidden  = true;
+        }
+      });
+    }
 
-    // Allow submitting with Enter key on either field
+    // Allow submitting with Enter key on niche/audience fields
     ['ob-niche', 'ob-audience'].forEach(id => {
       const el = qs(id);
       if (el) el.addEventListener('keydown', e => {
-        if (e.key === 'Enter') { e.preventDefault(); ctaBtn.click(); }
+        if (e.key === 'Enter') { e.preventDefault(); ctaBtn?.click(); }
       });
     });
 
-    ctaBtn.addEventListener('click', async () => {
+    // CTA: validate + save profile → go to Screen 3
+    ctaBtn?.addEventListener('click', async () => {
+      if (!state.role) return; // shouldn't happen — CTA only visible after role selected
+
+      if (state.role === 'other') {
+        const custom = (qs('ob-role-custom').value || '').trim();
+        if (!custom) return;
+        state.roleCustom = custom;
+      }
+
       const niche    = (qs('ob-niche').value    || '').trim();
       const audience = (qs('ob-audience').value || '').trim();
 
@@ -133,23 +211,23 @@ const Onboarding = (() => {
 
       try {
         const roleValue = state.role === 'other' ? state.roleCustom : state.role;
+        const body = {
+          content_niche: niche,
+          audience_role: audience,
+          user_role:     roleValue,
+        };
+        if (state.websiteUrl) body.website_url = state.websiteUrl;
+
         const res = await fetch('/api/profile', {
           method:  'POST',
           headers: apiHeaders(),
-          body:    JSON.stringify({
-            content_niche: niche,
-            audience_role: audience,
-            user_role:     roleValue,
-          }),
+          body:    JSON.stringify(body),
         });
         if (!res.ok) throw new Error('profile_save_failed');
-        // Hold the "Building your voice profile..." state for a beat so it
-        // doesn't feel like the save was instant — gives users confidence that
-        // something real just happened.
-        await new Promise(r => setTimeout(r, 2000));
+        populateChips(); // role is set — render role-specific chips before showing screen
         showScreen(3);
       } catch (e) {
-        console.error('[onboarding] screen 2 save error:', e);
+        console.error('[onboarding] screen 1 save error:', e);
         errorEl.textContent = 'Something went wrong saving your profile. Please try again.';
         errorEl.hidden = false;
       } finally {
@@ -165,20 +243,28 @@ const Onboarding = (() => {
     const ctaBtn  = qs('ob-s3-cta');
     const errorEl = qs('ob-s3-error');
 
-    // Prompt chips populate and focus the textarea
-    qsa('.ob-chip').forEach(chip => {
-      chip.addEventListener('click', () => {
-        ideaEl.value = chip.dataset.prompt || '';
-        autoGrow(ideaEl);
-        ideaEl.focus();
-        if (errorEl) errorEl.hidden = true;
-      });
+    // Chip clicks populate and focus the textarea (delegate — chips are rendered at nav time)
+    qs('ob-chips')?.addEventListener('click', e => {
+      const chip = e.target.closest('.ob-chip');
+      if (!chip) return;
+      ideaEl.value = chip.dataset.prompt || '';
+      autoGrow(ideaEl);
+      ideaEl.focus();
+      if (errorEl) errorEl.hidden = true;
     });
 
-    // Auto-grow textarea
     ideaEl.addEventListener('input', () => autoGrow(ideaEl));
-
     ctaBtn.addEventListener('click', () => runGeneration());
+  }
+
+  function populateChips() {
+    const container = qs('ob-chips');
+    if (!container) return;
+    const role  = state.role || 'other';
+    const chips = ROLE_CHIPS[role] || ROLE_CHIPS.other;
+    container.innerHTML = chips.map(prompt =>
+      `<button class="ob-chip" type="button" role="listitem" data-prompt="${escHtml(prompt)}">"${escHtml(prompt)}"</button>`
+    ).join('');
   }
 
   function autoGrow(el) {
@@ -218,7 +304,6 @@ const Onboarding = (() => {
         throw new Error(data.error || 'generation_failed');
       }
 
-      // Stash results in module state
       state.postId         = data.id;
       state.post           = data.post;
       state.quality        = data.quality;
@@ -228,8 +313,8 @@ const Onboarding = (() => {
       const passed = !!(data.quality?.passed || data.quality?.passed_gate);
 
       if (passed) {
-        // Quality gate passed — celebrate, then let the user READ their post
-        // on screen 4b before asking them to deepen their voice profile.
+        // Populate archetype reveal before showing 4a
+        populateArchetypeReveal(data.archetypeUsed);
         showScreen('4a');
         fireConfetti();
         setTimeout(() => {
@@ -237,7 +322,7 @@ const Onboarding = (() => {
           renderPostAndScore(data);
         }, 2400);
       } else {
-        // Force-returned post — skip celebration, show the post directly.
+        // Force-returned post — skip celebration, show directly
         showScreen('4b');
         renderPostAndScore(data);
       }
@@ -254,20 +339,36 @@ const Onboarding = (() => {
     }
   }
 
+  /* ── Screen 4a: Archetype reveal ─────────────────────── */
+  function populateArchetypeReveal(archetype) {
+    if (!archetype) return;
+    const key  = archetype.toUpperCase();
+    const meta = ARCHETYPE_META[key];
+    if (!meta) return;
+
+    const wrap    = qs('ob-4a-archetype');
+    const badge   = qs('ob-4a-archetype-badge');
+    const descEl  = qs('ob-4a-archetype-desc');
+    const example = qs('ob-4a-archetype-example');
+
+    if (badge)   badge.textContent   = key;
+    if (descEl)  descEl.textContent  = meta.desc;
+    if (example) example.textContent = meta.example;
+    if (wrap)    wrap.hidden         = false;
+  }
+
   /* ── Screen 4b: Post + score ──────────────────────────── */
   function renderPostAndScore(data) {
     const quality   = data.quality;
     const archetype = data.archetypeUsed;
     const post      = data.post || state.post || '';
 
-    // Populate post textarea
     const postOut = qs('ob-post-output');
     if (postOut) {
       postOut.value = post;
       autoGrow(postOut);
     }
 
-    // Score bar
     if (quality) {
       const scoreBar = qs('ob-score-bar');
       if (scoreBar) scoreBar.classList.add('visible');
@@ -284,8 +385,17 @@ const Onboarding = (() => {
       }
 
       if (archetype) {
+        const key  = archetype.toUpperCase();
         const badge = qs('ob-archetype-badge');
-        if (badge) { badge.textContent = archetype.toUpperCase(); badge.style.display = ''; }
+        if (badge) { badge.textContent = key; badge.style.display = ''; }
+
+        // Why-hook explanation
+        const meta   = ARCHETYPE_META[key];
+        const whyEl  = qs('ob-4b-hook-why');
+        if (whyEl && meta) {
+          whyEl.textContent = `We identified a ${key} hook in your idea — ${meta.desc.toLowerCase()}.`;
+          whyEl.hidden = false;
+        }
       }
 
       const passed = !!(quality.passed || quality.passed_gate);
@@ -295,7 +405,6 @@ const Onboarding = (() => {
         pill.className   = 'passfail-pill ' + (passed ? 'pass' : 'fail');
       }
 
-      // Suggestions
       const errors   = quality.errors   || [];
       const warnings = quality.warnings || [];
       const allItems = [...errors.map(t => ({ t, type: 'error' })), ...warnings.map(t => ({ t, type: 'warn' }))];
@@ -304,8 +413,8 @@ const Onboarding = (() => {
 
       if (allItems.length && sugBtn && sugList) {
         sugBtn.classList.add('visible');
-        sugBtn.textContent   = `▸ ${allItems.length} suggestions to review`;
-        sugList.innerHTML    = allItems.map(item =>
+        sugBtn.textContent = `▸ ${allItems.length} suggestions to review`;
+        sugList.innerHTML  = allItems.map(item =>
           `<div class="suggestion-item" role="listitem">${item.type === 'error' ? '⚠ ' : '· '}${escHtml(item.t)}</div>`
         ).join('');
 
@@ -319,7 +428,6 @@ const Onboarding = (() => {
         });
       }
     }
-
   }
 
   function fireConfetti() {
@@ -346,9 +454,9 @@ const Onboarding = (() => {
 
   /* ── Screen 4b: CTA buttons ──────────────────────────── */
   function initScreen4b() {
-    qs('ob-s4b-continue')?.addEventListener('click', () => showScreen(6));
+    qs('ob-s4b-continue')?.addEventListener('click', () => showScreen(5));
     qs('ob-s4b-skip')?.addEventListener('click', () => {
-      markOnboardingComplete(); // fire-and-forget
+      markOnboardingComplete();
       window.location.href = state.postId
         ? `/preview.html?post_id=${encodeURIComponent(state.postId)}`
         : '/drafts.html';
@@ -363,7 +471,6 @@ const Onboarding = (() => {
   function checkLinkedInReturn() {
     const params = new URLSearchParams(window.location.search);
     if (params.get('linkedin') === 'connected') {
-      // Came back from LinkedIn OAuth during onboarding — mark complete, go to dashboard
       markOnboardingComplete().finally(() => {
         window.location.href = '/dashboard.html';
       });
@@ -402,7 +509,7 @@ const Onboarding = (() => {
             onboarding_complete: 1,
           }),
         });
-        // Give fingerprint extraction a moment to kick off, then open the editor.
+        // Give fingerprint extraction a moment to kick off
         await new Promise(r => setTimeout(r, 1800));
         window.location.href = dest();
       } catch (e) {
@@ -418,8 +525,6 @@ const Onboarding = (() => {
       window.location.href = dest();
     });
 
-    // gotoBtn lives on the (now unused) confirm screen — keep it wired as a
-    // safety net in case a user somehow reaches it.
     gotoBtn?.addEventListener('click', () => { window.location.href = dest(); });
   }
 
@@ -438,13 +543,10 @@ const Onboarding = (() => {
 
   /* ── Boot ─────────────────────────────────────────────── */
   async function init() {
-    // Wait for session.js to synchronise the auth state
     if (window.scouthookAuthReady) {
       await window.scouthookAuthReady;
     }
 
-    // Verify the user is authenticated (server already enforced this via
-    // requireLoginHtml, but a client-side check gives a clean redirect)
     let currentUser = null;
     try {
       const meRes  = await fetch('/api/auth/me');
@@ -459,7 +561,6 @@ const Onboarding = (() => {
       return;
     }
 
-    // If the user already completed onboarding, redirect to dashboard
     try {
       const profRes  = await fetch(`/api/profile/${encodeURIComponent(currentUser.user_id)}`,
         { headers: apiHeaders() });
@@ -469,21 +570,17 @@ const Onboarding = (() => {
         return;
       }
     } catch {
-      // Non-fatal — continue with the wizard even if profile check fails
+      // Non-fatal — continue with the wizard
     }
 
-    // Handle returning from LinkedIn OAuth mid-onboarding
     if (checkLinkedInReturn()) return;
 
-    // Initialise all screens (event listeners are cheap to attach up-front)
     initScreen1();
-    initScreen2();
     initScreen3();
     initScreen4b();
     initScreen5();
     initScreen6();
 
-    // Show the first screen
     showScreen(1);
   }
 

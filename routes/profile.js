@@ -64,17 +64,18 @@ router.post('/', async (req, res) => {
 
   const { writing_samples, contrarian_view, audience_role, audience_pain, content_niche,
           brand_bg, brand_accent, brand_text, brand_name, brand_logo,
-          user_role, onboarding_complete, business_positioning } = req.body;
+          user_role, onboarding_complete, business_positioning, website_url } = req.body;
 
   if (!audience_role && !audience_pain && !content_niche && !writing_samples && !contrarian_view
       && !brand_bg && !brand_accent && !brand_text && !brand_name && brand_logo === undefined
-      && user_role === undefined && onboarding_complete === undefined && !business_positioning) {
+      && user_role === undefined && onboarding_complete === undefined && !business_positioning
+      && !website_url) {
     return res.status(400).json({ ok: false, error: 'no_fields_provided' });
   }
 
   // Check what's changing (to decide whether to re-extract fingerprint / rebuild prompt)
   const existing = await db
-    .prepare('SELECT id, writing_samples, business_positioning FROM user_profiles WHERE user_id = ? AND tenant_id = ?')
+    .prepare('SELECT id, writing_samples, business_positioning, website_url FROM user_profiles WHERE user_id = ? AND tenant_id = ?')
     .get(userId, tenantId);
 
   const samplesChanged      = writing_samples && writing_samples !== existing?.writing_samples;
@@ -87,8 +88,8 @@ router.post('/', async (req, res) => {
 
   // Upsert profile row
   const result = await db.prepare(`
-    INSERT INTO user_profiles (user_id, tenant_id, writing_samples, contrarian_view, audience_role, audience_pain, content_niche, brand_bg, brand_accent, brand_text, brand_name, brand_logo, user_role, onboarding_complete, business_positioning, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    INSERT INTO user_profiles (user_id, tenant_id, writing_samples, contrarian_view, audience_role, audience_pain, content_niche, brand_bg, brand_accent, brand_text, brand_name, brand_logo, user_role, onboarding_complete, business_positioning, website_url, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     ON CONFLICT(user_id, tenant_id) DO UPDATE SET
       writing_samples     = COALESCE(excluded.writing_samples, user_profiles.writing_samples),
       contrarian_view     = COALESCE(excluded.contrarian_view, user_profiles.contrarian_view),
@@ -103,11 +104,12 @@ router.post('/', async (req, res) => {
       user_role           = COALESCE(excluded.user_role, user_profiles.user_role),
       onboarding_complete = COALESCE(excluded.onboarding_complete, user_profiles.onboarding_complete),
       business_positioning = COALESCE(excluded.business_positioning, user_profiles.business_positioning),
+      website_url         = COALESCE(excluded.website_url, user_profiles.website_url),
       updated_at          = CURRENT_TIMESTAMP
   RETURNING id
   `).run(userId, tenantId, writing_samples || null, contrarian_view || null, audience_role || null, audience_pain || null, content_niche || null,
          brand_bg || null, brand_accent || null, brand_text || null, brand_name || null, brand_logo || null,
-         user_role || null, obComplete, business_positioning || null);
+         user_role || null, obComplete, business_positioning || null, website_url || null);
 
   const profileId = result.lastInsertRowid || existing?.id;
 
@@ -133,6 +135,65 @@ router.post('/', async (req, res) => {
   }
 
   return res.json({ ok: true, profile_id: profileId, fingerprint_updated: samplesChanged });
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/profile/extract-website
+// Fetches a user's website and extracts voice profile fields via Claude Haiku.
+// Used during onboarding to auto-fill niche, audience, and positioning fields.
+// ---------------------------------------------------------------------------
+router.post('/extract-website', async (req, res) => {
+  const { url } = req.body;
+  if (!url || !/^https?:\/\//i.test(url)) {
+    return res.status(400).json({ ok: false, error: 'invalid_url' });
+  }
+
+  const { extractUrl } = require('../services/vaultMiner');
+  const Anthropic = require('@anthropic-ai/sdk');
+  const { getSetting } = require('../db');
+
+  try {
+    const { text } = await extractUrl(url);
+    const truncated = text.slice(0, 4000);
+
+    const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
+    if (!apiKey) return res.status(500).json({ ok: false, error: 'no_api_key' });
+
+    const client = new Anthropic({ apiKey });
+    const message = await client.messages.create({
+      model: 'claude-haiku-4-5',
+      max_tokens: 400,
+      messages: [{
+        role: 'user',
+        content: `Analyze this professional website content and extract positioning for a LinkedIn content tool.
+
+Website content:
+${truncated}
+
+Return a JSON object with these fields (concise, 1-2 sentences each):
+- content_niche: What this person/business writes or talks about professionally. Frame as "Helping [who] [do what]" if possible.
+- audience_role: Who their ideal client is. E.g. "Founders and sales leaders at growing startups"
+- audience_pain: The main problem their audience faces (only if clearly inferable)
+- contrarian_view: A strong opinion or unconventional stance visible on the site (only if clearly inferable)
+
+Return null for any field you cannot confidently infer. Return only the JSON object, no other text.`,
+      }],
+    });
+
+    const raw = message.content[0]?.text || '{}';
+    let extracted = {};
+    try {
+      const match = raw.match(/\{[\s\S]*\}/);
+      extracted = JSON.parse(match ? match[0] : raw);
+    } catch {
+      // Malformed JSON — return empty (client falls back silently)
+    }
+
+    return res.json({ ok: true, ...extracted });
+  } catch (err) {
+    console.error('[profile] extract-website error (non-fatal):', err.message);
+    return res.json({ ok: false, error: 'extraction_failed' });
+  }
 });
 
 module.exports = router;

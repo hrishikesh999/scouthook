@@ -376,6 +376,48 @@ body.ob-shell {
   50%       { opacity: 0.45; }
 }
 
+/* ── Voice fields slide-in (Screen 1) ───────────────────── */
+.ob-voice-fields {
+  width: 100%;
+  max-width: 560px;
+  overflow: hidden;
+  max-height: 0;
+  opacity: 0;
+  margin-top: 0;
+  transition: max-height 380ms ease, opacity 260ms ease, margin-top 260ms ease;
+}
+
+.ob-voice-fields.visible {
+  max-height: 700px;
+  opacity: 1;
+  margin-top: 28px;
+}
+
+/* ── Website auto-fill row ───────────────────────────────── */
+.ob-website-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.ob-website-row .ob-field {
+  flex: 1;
+  min-width: 0;
+}
+
+.ob-website-row .ob-btn-secondary {
+  flex-shrink: 0;
+  height: 44px;
+  padding: 0 16px;
+  font-size: 13px;
+}
+
+.ob-optional {
+  font-weight: 400;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
 /* ── Role cards ──────────────────────────────────────────── */
 .ob-role-grid {
   display: grid;
@@ -575,6 +617,75 @@ body.ob-shell {
 @keyframes ob-pop {
   from { transform: scale(0.4); opacity: 0; }
   to   { transform: scale(1);   opacity: 1; }
+}
+
+/* Archetype reveal block on 4a */
+.ob-4a-archetype {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-top: 24px;
+  padding: 18px 24px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  animation: ob-fadein 300ms ease forwards;
+}
+
+.ob-4a-archetype-badge {
+  font-size: 16px;
+  padding: 4px 14px;
+}
+
+.ob-4a-archetype-desc {
+  font-size: 15px;
+  color: var(--text-body);
+  font-weight: 500;
+  margin: 0;
+  text-align: center;
+}
+
+.ob-4a-archetype-example {
+  font-size: 14px;
+  font-style: italic;
+  color: var(--text-muted);
+  margin: 0;
+  text-align: center;
+}
+
+/* Why-hook explanation on 4b (below archetype badge) */
+.ob-hook-why {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin: 4px 0 6px;
+}
+
+/* Trust bullet list on LinkedIn screen */
+.ob-trust-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ob-trust-list li {
+  font-size: 14px;
+  color: #374151;
+  padding-left: 20px;
+  position: relative;
+  line-height: 1.5;
+}
+
+.ob-trust-list li::before {
+  content: '✓';
+  position: absolute;
+  left: 0;
+  color: var(--accent);
+  font-weight: 700;
 }
 
 /* ── LinkedIn screen ─────────────────────────────────────── */

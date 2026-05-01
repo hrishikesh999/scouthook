@@ -555,12 +555,23 @@ router.get('/post/:postId', async (req, res) => {
 
   if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
 
-  const row = await db.prepare(`
-    SELECT id, content, quality_score, quality_flags, passed_gate,
-           hook_b, cta_alternatives, format_slug, funnel_type
-    FROM generated_posts
-    WHERE id = ? AND user_id = ? AND tenant_id = ?
-  `).get(postId, userId, tenantId);
+  let row;
+  try {
+    row = await db.prepare(`
+      SELECT id, content, quality_score, quality_flags, passed_gate,
+             hook_b, cta_alternatives, format_slug, funnel_type,
+             asset_url, asset_preview_url, asset_type, asset_slide_count
+      FROM generated_posts
+      WHERE id = ? AND user_id = ? AND tenant_id = ?
+    `).get(postId, userId, tenantId);
+  } catch {
+    row = await db.prepare(`
+      SELECT id, content, quality_score, quality_flags, passed_gate,
+             hook_b, cta_alternatives, format_slug, funnel_type
+      FROM generated_posts
+      WHERE id = ? AND user_id = ? AND tenant_id = ?
+    `).get(postId, userId, tenantId);
+  }
 
   if (!row) return res.status(404).json({ ok: false, error: 'post_not_found' });
 
@@ -579,6 +590,10 @@ router.get('/post/:postId', async (req, res) => {
       ctaAlternatives,
       archetype:       null,
       funnelType:      row.funnel_type || null,
+      assetUrl:        row.asset_url        || null,
+      assetPreviewUrl: row.asset_preview_url || null,
+      assetType:       row.asset_type        || null,
+      assetSlideCount: row.asset_slide_count || 0,
     },
   });
 });

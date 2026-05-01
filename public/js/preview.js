@@ -390,6 +390,7 @@ async function loadSinglePost(postId) {
     renderFunnelBadge();
     enableActionButtons();
     showAssistPanel();
+    applyPostAsset(p);
     refetchPostAndApplyLock();
   } catch {
     showPostError();
@@ -437,6 +438,14 @@ function loadBatchPost(index) {
   alternativePost        = null;
   scheduleEditLocked     = false;
   scheduledMeta          = null;
+
+  attachedAssetUrl   = null;
+  attachedAssetType  = null;
+  attachedPreviewUrl = null;
+  attachedSlideCount = 0;
+  assetChip.classList.add('hidden');
+  assetChipLabel.textContent = '';
+  clearPreviewAsset();
 
   if (scheduleLockBanner) scheduleLockBanner.classList.add('hidden');
 
@@ -1284,6 +1293,18 @@ function clearPreviewAsset() {
   previewAssetEl.innerHTML = '';
   previewAssetEl.classList.add('hidden');
   previewAssetEl.setAttribute('aria-hidden', 'true');
+}
+
+function applyPostAsset(post) {
+  if (!post.assetUrl) return;
+  attachedAssetUrl   = post.assetUrl;
+  attachedAssetType  = post.assetType || 'media_image';
+  attachedPreviewUrl = post.assetPreviewUrl || (post.assetType !== 'carousel' ? post.assetUrl : null);
+  attachedSlideCount = post.assetSlideCount || 0;
+  const labelMap = { carousel: 'Carousel', media_pdf: 'PDF', media_image: 'Image', quote_card: 'Quote Card', branded_quote: 'Branded Quote' };
+  assetChipLabel.textContent = labelMap[attachedAssetType] || attachedAssetType;
+  assetChip.classList.remove('hidden');
+  renderPreviewAsset();
 }
 
 async function saveGeneratedToMedia(assetUrl, assetType, previewUrl) {

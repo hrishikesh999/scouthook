@@ -164,7 +164,7 @@ const Onboarding = (() => {
           if (data.ok) {
             if (data.content_niche)  qs('ob-niche').value    = data.content_niche;
             if (data.audience_role)  qs('ob-audience').value = data.audience_role;
-            if (data.audience_pain)  { /* stored for Screen 6 pre-fill if desired */ }
+            if (data.audience_pain)  qs('ob-pain').value     = data.audience_pain;
             if (data.content_niche || data.audience_role) {
               qs('ob-niche').focus();
             }

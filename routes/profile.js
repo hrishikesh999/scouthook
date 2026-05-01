@@ -144,6 +144,8 @@ router.post('/', async (req, res) => {
 // Used during onboarding to auto-fill niche, audience, and positioning fields.
 // ---------------------------------------------------------------------------
 router.post('/extract-website', async (req, res) => {
+  if (!req.userId) return res.status(401).json({ ok: false, error: 'unauthenticated' });
+
   const { url } = req.body;
   if (!url || !/^https?:\/\//i.test(url)) {
     return res.status(400).json({ ok: false, error: 'invalid_url' });

@@ -1752,10 +1752,6 @@ body {
   display: none !important;
 }
 
-/* In preview mode, post-surface should hug its content so the action bar sits directly below the LinkedIn card */
-#right-panel.preview-mode #post-surface {
-  flex: 0 0 auto;
-}
 
 .action-right {
   display: flex;

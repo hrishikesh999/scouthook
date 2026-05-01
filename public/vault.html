@@ -14,6 +14,10 @@
     }
     .vault-page-header {
       margin-bottom: 28px;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: var(--space-4);
     }
     .vault-page-title {
       font-size: 24px;
@@ -27,6 +31,25 @@
       color: var(--text-secondary);
       margin: 0;
     }
+    .vault-generate-cta {
+      font-family: var(--font-sans);
+      font-size: 0.875rem;
+      font-weight: 600;
+      padding: 9px var(--space-5);
+      border: none;
+      border-radius: var(--radius-md);
+      background: var(--brand);
+      color: #fff;
+      cursor: pointer;
+      white-space: nowrap;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+      transition: background 0.15s;
+      flex-shrink: 0;
+    }
+    .vault-generate-cta:hover { background: var(--brand-hover); }
 
     /* ── Two-column grid ─────────────────────────────────────────── */
     .vault-grid {
@@ -159,204 +182,6 @@
     .vault-empty-label { font-size: 0.9375rem; font-weight: 600; color: var(--text-secondary); margin: 0 0 var(--space-1) 0; }
     .vault-empty-sub { font-size: 0.8125rem; color: var(--text-muted); margin: 0; }
 
-    /* ── Hero: Generate This Week's Posts ───────────────────────── */
-    .vault-hero {
-      border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
-      background: var(--bg-surface);
-      box-shadow: var(--shadow-sm);
-      margin-bottom: var(--space-8);
-      overflow: hidden;
-    }
-    .vault-hero-accent {
-      height: 3px;
-      background: linear-gradient(90deg, #0D9488 0%, #5EEAD4 100%);
-    }
-    .vault-hero-body {
-      padding: var(--space-7) var(--space-8);
-    }
-    .vault-hero-header { margin-bottom: var(--space-5); }
-    .vault-weekly-heading {
-      font-size: 1.1875rem;
-      font-weight: 700;
-      color: var(--text-heading);
-      margin: 0 0 var(--space-1) 0;
-      letter-spacing: -0.02em;
-    }
-    .vault-weekly-sub {
-      font-size: 0.875rem;
-      color: var(--text-secondary);
-      margin: 0;
-    }
-
-    /* Locked state — shown when no ready documents yet */
-    .vault-hero-locked {
-      display: flex;
-      align-items: center;
-      gap: var(--space-5);
-      padding: var(--space-5) var(--space-6);
-      background: var(--bg-subtle);
-      border: 1px dashed var(--border);
-      border-radius: var(--radius-md);
-    }
-    .vault-hero-locked-icon { color: var(--text-muted); flex-shrink: 0; }
-    .vault-hero-locked-text { font-size: 0.875rem; color: var(--text-muted); line-height: 1.5; }
-    .vault-hero-locked-text strong { color: var(--text-secondary); font-weight: 600; }
-
-    /* Active state wrapper */
-    .vault-weekly-section { }
-    .vault-weekly-btn {
-      font-family: var(--font-sans);
-      font-size: 0.9375rem;
-      font-weight: 600;
-      padding: 12px var(--space-6);
-      border: none;
-      border-radius: var(--radius-md);
-      background: var(--brand);
-      color: #fff;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: var(--space-2);
-      transition: background 0.15s;
-    }
-    .vault-weekly-btn:hover    { background: var(--brand-hover); }
-    .vault-weekly-btn:disabled { background: var(--teal-disabled); cursor: not-allowed; }
-    .vault-weekly-status {
-      font-size: 0.8125rem;
-      padding: var(--space-3) var(--space-4);
-      border-radius: var(--radius-md);
-      margin-top: var(--space-3);
-      display: none;
-    }
-    .vault-weekly-status.info  { background: #EFF6FF; color: #1D4ED8; display: block; }
-    .vault-weekly-status.ok    { background: #ECFDF5; color: #065F46; display: block; }
-    .vault-weekly-status.error { background: #FEF2F2; color: #DC2626; display: block; }
-
-    /* Inline positioning prompt */
-    .vault-positioning-prompt {
-      display: none;
-      background: var(--bg-subtle);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-md);
-      padding: var(--space-5);
-      margin-bottom: var(--space-4);
-    }
-    .vault-positioning-prompt.visible { display: block; }
-    .vault-positioning-label {
-      font-size: 0.9375rem;
-      font-weight: 600;
-      color: var(--text-heading);
-      margin: 0 0 var(--space-1) 0;
-    }
-    .vault-positioning-hint {
-      font-size: 0.8125rem;
-      color: var(--text-muted);
-      margin: 0 0 var(--space-3) 0;
-    }
-    .vault-positioning-row { display: flex; gap: var(--space-2); }
-    .vault-positioning-input {
-      flex: 1;
-      font-family: var(--font-sans);
-      font-size: 0.875rem;
-      padding: 10px var(--space-3);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-md);
-      color: var(--text-heading);
-      background: var(--bg-surface);
-      outline: none;
-      transition: border-color 0.15s;
-    }
-    .vault-positioning-input:focus { border-color: var(--brand); }
-    .vault-positioning-input::placeholder { color: var(--text-muted); }
-    .vault-positioning-save {
-      font-family: var(--font-sans);
-      font-size: 0.875rem;
-      font-weight: 600;
-      padding: 10px var(--space-4);
-      border: none;
-      border-radius: var(--radius-md);
-      background: var(--brand);
-      color: #fff;
-      cursor: pointer;
-      white-space: nowrap;
-      transition: background 0.15s;
-    }
-    .vault-positioning-save:hover { background: var(--brand-hover); }
-    .vault-positioning-save:disabled { background: var(--teal-disabled); cursor: not-allowed; }
-
-    /* ── Post preview cards ──────────────────────────────────────── */
-    .vault-posts-preview {
-      display: none;
-      margin-top: var(--space-6);
-      border-top: 1px solid var(--border);
-      padding-top: var(--space-6);
-    }
-    .vault-posts-preview.visible { display: block; }
-    .vault-posts-preview-heading {
-      font-size: 0.8125rem;
-      font-weight: 600;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      margin: 0 0 var(--space-4) 0;
-    }
-    .vault-posts-list { display: flex; flex-direction: column; gap: var(--space-4); }
-    .vault-post-card {
-      border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
-      background: var(--bg-subtle);
-      padding: var(--space-5);
-      display: flex;
-      flex-direction: column;
-      gap: var(--space-3);
-    }
-    .vault-post-card-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: var(--space-3);
-    }
-    .vault-post-card-meta { display: flex; align-items: center; gap: var(--space-2); }
-    .vault-post-day {
-      font-size: 0.875rem;
-      font-weight: 700;
-      color: var(--text-heading);
-    }
-    .vault-post-format {
-      font-size: 0.6875rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      padding: 2px 8px;
-      border-radius: var(--radius-pill);
-      background: var(--bg-pill);
-      color: var(--text-muted);
-    }
-    .vault-post-copy {
-      font-family: var(--font-sans);
-      font-size: 0.8125rem;
-      font-weight: 600;
-      padding: 6px 14px;
-      border: 1px solid var(--border);
-      border-radius: var(--radius-md);
-      background: var(--bg-surface);
-      color: var(--text-secondary);
-      cursor: pointer;
-      white-space: nowrap;
-      transition: border-color 0.15s, color 0.15s;
-      flex-shrink: 0;
-    }
-    .vault-post-copy:hover { border-color: var(--brand); color: var(--brand); }
-    .vault-post-copy.copied { border-color: #059669; color: #059669; }
-    .vault-post-text {
-      font-size: 0.9375rem;
-      color: var(--text-body);
-      line-height: 1.65;
-      white-space: pre-wrap;
-      margin: 0;
-    }
-
     /* ── Documents section label ─────────────────────────────────── */
     .vault-section-label {
       font-size: 0.75rem;
@@ -405,49 +230,14 @@
     <div class="vault-page">
 
       <div class="vault-page-header">
-        <h1 class="vault-page-title">Content Vault</h1>
-        <p class="vault-page-subtitle">Upload your business documents. Generate a week of LinkedIn posts in one click.</p>
-      </div>
-
-      <!-- ── Hero: Generate This Week's Posts (always at top) ──────── -->
-      <div class="vault-hero">
-        <div class="vault-hero-accent"></div>
-        <div class="vault-hero-body">
-
-          <div class="vault-hero-header">
-            <h2 class="vault-weekly-heading">Generate This Week's Posts</h2>
-            <p class="vault-weekly-sub">Your uploaded documents become 5 ready-to-publish LinkedIn posts — Monday through Friday.</p>
-          </div>
-
-          <!-- Locked state: shown when no ready documents exist -->
-          <div id="vault-hero-locked" class="vault-hero-locked">
-            <svg class="vault-hero-locked-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-            <p class="vault-hero-locked-text"><strong>Upload your first document below to unlock this.</strong> Add a case study, service doc, or newsletter — anything that represents your business and results.</p>
-          </div>
-
-          <!-- Active state: shown when at least one document is ready -->
-          <div id="vault-weekly-section" class="vault-weekly-section" style="display:none">
-
-            <!-- Inline positioning prompt — shown only once if not set -->
-            <div id="vault-positioning-prompt" class="vault-positioning-prompt">
-              <p class="vault-positioning-label">One quick thing — how do you help your clients?</p>
-              <p class="vault-positioning-hint">e.g. "Turn your email list into consistent revenue" or "Help SaaS founders close their first 10 enterprise deals"</p>
-              <div class="vault-positioning-row">
-                <input type="text" id="vault-positioning-input" class="vault-positioning-input" maxlength="500" placeholder="In one sentence, what's the result you deliver?" aria-label="Your business positioning">
-                <button id="vault-positioning-save" class="vault-positioning-save">Got it →</button>
-              </div>
-            </div>
-
-            <button id="vault-weekly-btn" class="vault-weekly-btn">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
-              Generate This Week's Posts
-            </button>
-
-            <div id="vault-weekly-status" class="vault-weekly-status" role="status" aria-live="polite"></div>
-
-          </div>
-
+        <div>
+          <h1 class="vault-page-title">Content Vault</h1>
+          <p class="vault-page-subtitle">Your document library. Upload case studies, service docs, and newsletters — ScoutHook uses them to generate posts in your voice.</p>
         </div>
+        <a href="/generate.html?mode=vault" class="vault-generate-cta">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
+          Generate this week's posts
+        </a>
       </div>
 
       <!-- ── Documents: upload + list ──────────────────────────────── -->
@@ -501,16 +291,8 @@
   'use strict';
 
   let documents = [];
-  let hasBusinessPositioning = false;
 
   // Elements
-  const heroLocked         = document.getElementById('vault-hero-locked');
-  const weeklySection      = document.getElementById('vault-weekly-section');
-  const weeklyBtn          = document.getElementById('vault-weekly-btn');
-  const weeklyStatus       = document.getElementById('vault-weekly-status');
-  const positioningPrompt  = document.getElementById('vault-positioning-prompt');
-  const positioningInput   = document.getElementById('vault-positioning-input');
-  const positioningSaveBtn = document.getElementById('vault-positioning-save');
   const dropzone           = document.getElementById('vault-dropzone');
   const fileInput          = document.getElementById('vault-file-input');
   const urlInput           = document.getElementById('vault-url-input');
@@ -635,12 +417,9 @@
   }
 
   function renderDocuments() {
-    const hasReady = documents.some(d => d.status === 'ready');
     if (!documents.length) {
-      docEmpty.style.display      = '';
-      docList.style.display       = 'none';
-      heroLocked.style.display    = '';
-      weeklySection.style.display = 'none';
+      docEmpty.style.display = '';
+      docList.style.display  = 'none';
       return;
     }
     docEmpty.style.display = 'none';
@@ -649,8 +428,6 @@
     docList.querySelectorAll('.vault-doc-delete').forEach(btn => {
       btn.addEventListener('click', () => deleteDocument(Number(btn.dataset.id)));
     });
-    heroLocked.style.display    = hasReady ? 'none' : '';
-    weeklySection.style.display = hasReady ? ''     : 'none';
   }
 
   function renderDocCard(doc) {
@@ -723,102 +500,8 @@
     }
   }
 
-  // ── Load profile: check business_positioning ──────────────────────
-  async function loadProfileForWeekly() {
-    try {
-      const res  = await fetch('/api/profile/me');
-      const data = await res.json();
-      if (data.ok && data.profile) {
-        hasBusinessPositioning = !!data.profile.business_positioning;
-      }
-    } catch { /* non-fatal */ }
-  }
-
-  // ── Positioning prompt ────────────────────────────────────────────
-  positioningSaveBtn.addEventListener('click', async () => {
-    const val = positioningInput.value.trim();
-    if (!val) { positioningInput.focus(); return; }
-    positioningSaveBtn.disabled = true;
-    try {
-      const res  = await fetch('/api/profile', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ business_positioning: val }),
-      });
-      const data = await res.json();
-      if (!data.ok) throw new Error(data.error);
-      hasBusinessPositioning = true;
-      positioningPrompt.classList.remove('visible');
-      runWeeklyBatch();
-    } catch (err) {
-      positioningSaveBtn.disabled = false;
-      weeklyStatus.textContent = `Could not save: ${err.message}`;
-      weeklyStatus.className   = 'vault-weekly-status error';
-    }
-  });
-
-  positioningInput.addEventListener('keydown', e => {
-    if (e.key === 'Enter') positioningSaveBtn.click();
-  });
-
-  // ── Weekly batch ──────────────────────────────────────────────────
-  weeklyBtn.addEventListener('click', () => {
-    if (!hasBusinessPositioning) {
-      positioningPrompt.classList.add('visible');
-      positioningPrompt.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      positioningInput.focus();
-      weeklyStatus.innerHTML = 'One quick thing first — tell us how you help your clients below, then hit <strong>Got it →</strong>';
-      weeklyStatus.className = 'vault-weekly-status info';
-      return;
-    }
-    runWeeklyBatch();
-  });
-
-  async function runWeeklyBatch() {
-    weeklyBtn.disabled       = true;
-    weeklyStatus.textContent = 'Writing your posts… this takes about 30 seconds.';
-    weeklyStatus.className   = 'vault-weekly-status info';
-
-    try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 120000); // 2-min hard cap
-      let res;
-      try {
-        res = await fetch('/api/generate/weekly-batch', { method: 'POST', signal: controller.signal });
-      } finally {
-        clearTimeout(timeout);
-      }
-      const data = await res.json();
-
-      if (!data.ok) {
-        if (data.error === 'ghostwriter_prompt_not_ready') {
-          weeklyStatus.innerHTML = 'Your Voice Profile needs a bit more info. <a href="/profile.html" style="color:var(--brand);font-weight:600">Complete your Voice Profile →</a> (Content Niche + Audience are required).';
-        } else if (data.error === 'rate_limit_exceeded') {
-          weeklyStatus.textContent = 'Rate limit reached — try again in an hour.';
-        } else {
-          weeklyStatus.textContent = data.message || data.error || 'Something went wrong. Please try again.';
-        }
-        weeklyStatus.className = 'vault-weekly-status error';
-        return;
-      }
-
-      weeklyStatus.className   = 'vault-weekly-status';
-      weeklyStatus.textContent = '';
-      window.location.href = `/preview.html?batch_id=${encodeURIComponent(data.batch_id)}`;
-      return;
-
-    } catch (err) {
-      weeklyStatus.textContent = `Failed: ${err.message}`;
-      weeklyStatus.className   = 'vault-weekly-status error';
-    } finally {
-      weeklyBtn.disabled  = false;
-      weeklyBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg> Regenerate This Week's Posts`;
-    }
-  }
-
   // ── Boot ──────────────────────────────────────────────────────────
   loadDocuments();
-  loadProfileForWeekly();
   </script>
 </body>
 </html>

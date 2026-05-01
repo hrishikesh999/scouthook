@@ -112,6 +112,150 @@
       font-weight: 600;
     }
 
+    /* ── Mode switcher ───────────────────────────────────────── */
+    .gen-mode-switcher {
+      display: flex;
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 3px;
+      margin-bottom: var(--space-2);
+    }
+    .gen-mode-btn {
+      flex: 1;
+      font-family: var(--font-sans);
+      font-size: 0.875rem;
+      font-weight: 500;
+      padding: 8px var(--space-4);
+      border: none;
+      border-radius: calc(var(--radius-lg) - 2px);
+      background: transparent;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+    }
+    .gen-mode-btn.active {
+      background: var(--bg-surface);
+      color: var(--text-heading);
+      font-weight: 600;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+
+    /* ── Pane wrapper ─────────────────────────────────────────── */
+    .gen-pane { display: flex; flex-direction: column; gap: var(--space-4); }
+
+    /* ── Vault pane ───────────────────────────────────────────── */
+    .gen-vault-doc-count {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-3);
+      padding: var(--space-4) var(--space-5);
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      font-size: 0.875rem;
+    }
+    .gen-vault-doc-count-text { color: var(--text-secondary); }
+    .gen-vault-doc-count-text strong { color: var(--text-heading); font-weight: 600; }
+    .gen-vault-empty {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-4);
+      padding: var(--space-5);
+      background: var(--bg-subtle);
+      border: 1px dashed var(--border);
+      border-radius: var(--radius-md);
+      font-size: 0.875rem;
+      color: var(--text-muted);
+    }
+    .gen-vault-link {
+      color: var(--brand);
+      font-weight: 500;
+      text-decoration: none;
+      white-space: nowrap;
+      font-size: 0.8125rem;
+    }
+    .gen-vault-link:hover { text-decoration: underline; }
+    .gen-positioning-prompt {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: var(--space-5);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-3);
+    }
+    .gen-positioning-label {
+      font-size: 0.9375rem;
+      font-weight: 600;
+      color: var(--text-heading);
+      margin: 0;
+    }
+    .gen-positioning-hint {
+      font-size: 0.8125rem;
+      color: var(--text-muted);
+      margin: 0;
+    }
+    .gen-positioning-row { display: flex; gap: var(--space-2); }
+    .gen-positioning-input {
+      flex: 1;
+      font-family: var(--font-sans);
+      font-size: 0.875rem;
+      padding: 10px var(--space-3);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      color: var(--text-heading);
+      background: var(--bg-surface);
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .gen-positioning-input:focus { border-color: var(--brand); }
+    .gen-positioning-input::placeholder { color: var(--text-muted); }
+    .gen-positioning-save {
+      font-family: var(--font-sans);
+      font-size: 0.875rem;
+      font-weight: 600;
+      padding: 10px var(--space-4);
+      border: none;
+      border-radius: var(--radius-md);
+      background: var(--brand);
+      color: #fff;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.15s;
+    }
+    .gen-positioning-save:hover { background: var(--brand-hover); }
+    .gen-positioning-save:disabled { background: var(--teal-disabled); cursor: not-allowed; }
+    .gen-vault-btn {
+      font-family: var(--font-sans);
+      font-size: 0.9375rem;
+      font-weight: 600;
+      padding: 12px var(--space-6);
+      border: none;
+      border-radius: var(--radius-md);
+      background: var(--brand);
+      color: #fff;
+      cursor: pointer;
+      align-self: flex-start;
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+      transition: background 0.15s;
+    }
+    .gen-vault-btn:hover    { background: var(--brand-hover); }
+    .gen-vault-btn:disabled { background: var(--teal-disabled); cursor: not-allowed; }
+    .gen-vault-run-status {
+      font-size: 0.8125rem;
+      padding: var(--space-3) var(--space-4);
+      border-radius: var(--radius-md);
+      display: none;
+    }
+    .gen-vault-run-status.info  { background: #EFF6FF; color: #1D4ED8; display: block; }
+    .gen-vault-run-status.ok    { background: #ECFDF5; color: #065F46; display: block; }
+    .gen-vault-run-status.error { background: #FEF2F2; color: #DC2626; display: block; }
+
     /* ── Voice indicator ─────────────────────────────────────── */
     #voice-indicator-area {
       font-size: 0.8125rem;
@@ -164,30 +308,69 @@
     <div id="idea-page">
       <div class="idea-form">
 
-        <div>
-          <h1 class="idea-heading">What's on your mind?</h1>
-          <p class="idea-sub">Brain dump anything — a result, a moment, a belief, a rant. The more of your own words, the better.</p>
-          <div id="voice-indicator-area"></div>
+        <!-- Mode switcher -->
+        <div class="gen-mode-switcher" role="tablist" aria-label="Generation mode">
+          <button class="gen-mode-btn active" data-mode="idea" role="tab" aria-selected="true">Write from an idea</button>
+          <button class="gen-mode-btn" data-mode="vault" role="tab" aria-selected="false">This week from Vault</button>
         </div>
 
-        <textarea
-          id="idea-input"
-          placeholder="A raw thought is enough. ScoutHook turns it into a post your audience will remember."
-          aria-label="Your idea"
-        ></textarea>
+        <!-- Pane: write from an idea (default) -->
+        <div id="gen-pane-idea" class="gen-pane" role="tabpanel">
 
-        <div id="idea-error" role="alert">Add a thought before writing the post</div>
+          <div>
+            <h1 class="idea-heading">What's on your mind?</h1>
+            <p class="idea-sub">Brain dump anything — a result, a moment, a belief, a rant. The more of your own words, the better.</p>
+            <div id="voice-indicator-area"></div>
+          </div>
 
-        <!-- Skeleton shown while generating -->
-        <div id="generating-state" aria-busy="true" aria-label="Generating post">
-          <div class="gen-skeleton-line" style="width: 60%"></div>
-          <div class="gen-skeleton-line" style="width: 90%"></div>
-          <div class="gen-skeleton-line" style="width: 72%"></div>
+          <textarea
+            id="idea-input"
+            placeholder="A raw thought is enough. ScoutHook turns it into a post your audience will remember."
+            aria-label="Your idea"
+          ></textarea>
+
+          <div id="idea-error" role="alert">Add a thought before writing the post</div>
+
+          <!-- Skeleton shown while generating -->
+          <div id="generating-state" aria-busy="true" aria-label="Generating post">
+            <div class="gen-skeleton-line" style="width: 60%"></div>
+            <div class="gen-skeleton-line" style="width: 90%"></div>
+            <div class="gen-skeleton-line" style="width: 72%"></div>
+          </div>
+
+          <div id="generate-error" role="alert"></div>
+
+          <button id="generate-btn">Write the post</button>
+
         </div>
 
-        <div id="generate-error" role="alert"></div>
+        <!-- Pane: generate this week from Vault -->
+        <div id="gen-pane-vault" class="gen-pane" role="tabpanel" style="display:none">
 
-        <button id="generate-btn">Write the post</button>
+          <div>
+            <h2 class="idea-heading">Generate This Week's Posts</h2>
+            <p class="idea-sub">Turn your uploaded documents into 5 ready-to-publish LinkedIn posts — Monday through Friday.</p>
+          </div>
+
+          <div id="gen-vault-doc-status"></div>
+
+          <div id="gen-positioning-prompt" class="gen-positioning-prompt" style="display:none">
+            <p class="gen-positioning-label">One quick thing — how do you help your clients?</p>
+            <p class="gen-positioning-hint">e.g. "Turn your email list into consistent revenue" or "Help SaaS founders close their first 10 enterprise deals"</p>
+            <div class="gen-positioning-row">
+              <input type="text" id="gen-positioning-input" class="gen-positioning-input" maxlength="500" placeholder="In one sentence, what's the result you deliver?" aria-label="Your business positioning">
+              <button id="gen-positioning-save" class="gen-positioning-save">Got it →</button>
+            </div>
+          </div>
+
+          <button id="gen-vault-btn" class="gen-vault-btn" disabled>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
+            Generate This Week's Posts
+          </button>
+
+          <div id="gen-vault-run-status" class="gen-vault-run-status" role="status" aria-live="polite"></div>
+
+        </div>
 
       </div>
     </div>

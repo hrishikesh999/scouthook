@@ -688,6 +688,125 @@ body.ob-shell {
   font-weight: 700;
 }
 
+/* ── Doc upload dropzone ─────────────────────────────────── */
+.ob-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 32px 24px;
+  border: 2px dashed var(--border);
+  border-radius: 14px;
+  background: var(--bg-surface);
+  cursor: pointer;
+  text-align: center;
+  transition: border-color 180ms ease, background 180ms ease;
+  margin-bottom: 14px;
+}
+
+.ob-dropzone:hover,
+.ob-dropzone:focus,
+.ob-dropzone.dragging {
+  border-color: var(--brand);
+  background: rgba(15, 118, 110, 0.04);
+  outline: none;
+}
+
+.ob-dropzone-icon {
+  color: var(--text-muted);
+}
+
+.ob-dropzone-label {
+  font-size: 14px;
+  color: var(--text-body);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.ob-dropzone-browse {
+  color: var(--brand);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.ob-dropzone-types {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+/* ── File badge ──────────────────────────────────────────── */
+.ob-file-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1.5px solid var(--border);
+  background: var(--bg-surface);
+  margin-bottom: 14px;
+}
+
+.ob-file-badge svg {
+  flex-shrink: 0;
+  color: var(--brand);
+}
+
+.ob-file-badge-name {
+  flex: 1;
+  font-size: 13px;
+  color: var(--text-body);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.ob-file-clear {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  padding: 0 4px;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 120ms ease;
+}
+
+.ob-file-clear:hover { color: var(--text-danger); }
+
+/* ── URL alternative row ─────────────────────────────────── */
+.ob-url-alt-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.ob-url-alt-or {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.ob-url-alt-row .ob-field {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ── Path divider (toggle link container) ────────────────── */
+.ob-path-divider {
+  margin-top: 20px;
+  text-align: center;
+}
+
 /* ── LinkedIn screen ─────────────────────────────────────── */
 .ob-linkedin-btn {
   margin-top: 6px;

@@ -426,7 +426,40 @@ AUTHOR CONTEXT:
 ${AI_TELLS_PROHIBITION}`;
 }
 
-function buildRefineUserPrompt(sourceText) {
+function buildRefineUserPrompt(sourceText, documentContext = null) {
+  if (documentContext) {
+    return `Use specific details, examples, and language from this source material where relevant:
+<source>
+${documentContext.slice(0, 2000)}
+</source>
+
+Key insight to focus on:
+${sourceText}
+
+INSTRUCTION:
+1. Open with the strongest, most memorable idea from the insight and source material.
+2. Work through the content: keep what strengthens the post, cut what doesn't.
+3. Tighten prose — shorter sentences, stronger verbs, no hedging. Do not add new facts or claims beyond the source material.
+4. Add one closing question that invites a specific personal memory or experience.
+5. Format: one sentence per line, blank line between every 2–3 lines.
+
+Return ONLY valid JSON:
+{
+  "synthesis": {
+    "suggested_angle": "the core idea you surfaced as the hook",
+    "recommended_structure": "one sentence on how you ordered the body",
+    "supporting_insight": "the CTA question you added"
+  },
+  "post": "full text of the shaped LinkedIn post",
+  "cta_alternatives": [
+    "one alternative closing question — different angle",
+    "one alternative closing question — softer or more specific"
+  ]
+}
+
+No markdown fences. No explanation. Only the JSON object.`;
+  }
+
   return `AUTHOR'S TEXT:
 ${sourceText}
 
@@ -487,13 +520,13 @@ function buildContentFeedback({ hasSpecific, hasTension }) {
   return `To push this post further: add ${missing.join(' and ')}.`;
 }
 
-async function restructureToPost(sourceText, userProfile) {
+async function restructureToPost(sourceText, userProfile, documentContext = null) {
   const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
   if (!apiKey) throw new Error('anthropic_api_key not configured');
   const client = new Anthropic({ apiKey });
 
   const systemPrompt = buildRefineSystemPrompt(userProfile);
-  const userPrompt   = buildRefineUserPrompt(sourceText);
+  const userPrompt   = buildRefineUserPrompt(sourceText, documentContext);
   let responseText   = '';
 
   // Quality check runs in parallel with main generation — zero added latency

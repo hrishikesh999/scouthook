@@ -2,7 +2,8 @@
 
 const express = require('express');
 const router = express.Router();
-const { db } = require('../db');
+const { db, getSetting } = require('../db');
+const Anthropic = require('@anthropic-ai/sdk');
 const { runQualityGate } = require('../services/qualityGate');
 const { restructureToPost, generateWeeklyBatch } = require('../services/ideaPath');
 const { getVaultContext } = require('../services/ghostwriterPromptBuilder');
@@ -640,6 +641,232 @@ router.get('/batch/:batch_id', async (req, res) => {
 
   return res.json({ ok: true, batch_id, posts });
 });
+
+// ---------------------------------------------------------------------------
+// POST /api/generate/from-doc
+// Extracts a key insight from an uploaded document (or URL) and generates a post.
+// File: raw binary body + Content-Type header + X-Filename header (URI-encoded)
+// URL:  Content-Type: application/json + { url }
+// ---------------------------------------------------------------------------
+const FROM_DOC_MIME_MAP = {
+  'application/pdf': 'pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+  'text/plain': 'txt',
+};
+
+router.post('/from-doc', async (req, res) => {
+  const userId   = req.userId;
+  const tenantId = req.tenantId;
+  if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
+
+  const rl = await checkRateLimit(userId);
+  if (rl.limited) {
+    return res.status(429).json({ ok: false, error: 'rate_limit_exceeded', retry_after_sec: rl.retryAfterSec });
+  }
+
+  const planCheck = await canGeneratePost(userId);
+  if (!planCheck.allowed) {
+    return res.status(403).json({
+      ok: false, error: 'plan_limit_exceeded',
+      plan: planCheck.plan, current: planCheck.current, limit: planCheck.limit,
+      upgrade_url: '/billing.html',
+    });
+  }
+
+  const contentType = (req.headers['content-type'] || '').split(';')[0].trim();
+
+  let docText        = '';
+  let filename       = 'document';
+  let fileBuffer     = null;
+  let fileSourceType = null;
+  let sourceUrl      = null;
+
+  if (contentType === 'application/json') {
+    const { url } = req.body || {};
+    if (!url || !/^https?:\/\//i.test(url)) {
+      return res.status(400).json({ ok: false, error: 'invalid_url' });
+    }
+    sourceUrl = url;
+    try { filename = new URL(url).hostname; } catch { filename = 'url-doc'; }
+
+    const { extractUrl } = require('../services/vaultMiner');
+    try {
+      const { text } = await extractUrl(url);
+      docText = text;
+    } catch (err) {
+      return res.status(400).json({ ok: false, error: 'url_fetch_failed', detail: err.message });
+    }
+  } else {
+    // File upload — read raw binary body
+    await new Promise((resolve, reject) => {
+      express.raw({ type: '*/*', limit: '26mb' })(req, res, err => err ? reject(err) : resolve());
+    });
+
+    fileSourceType = FROM_DOC_MIME_MAP[contentType];
+    if (!fileSourceType) {
+      return res.status(415).json({ ok: false, error: 'unsupported_file_type', allowed: ['pdf', 'docx', 'txt'] });
+    }
+    filename = (() => {
+      try { return decodeURIComponent(req.headers['x-filename'] || ''); } catch { return ''; }
+    })() || 'document';
+
+    if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
+      return res.status(400).json({ ok: false, error: 'empty_body' });
+    }
+    if (req.body.length > 25 * 1024 * 1024) {
+      return res.status(413).json({ ok: false, error: 'file_too_large', max_mb: 25 });
+    }
+
+    fileBuffer = req.body;
+    const { extractText } = require('../services/vaultMiner');
+    try {
+      const { text } = await extractText(fileBuffer, fileSourceType, filename);
+      docText = text;
+    } catch (err) {
+      return res.status(400).json({ ok: false, error: 'extraction_failed', detail: err.message });
+    }
+  }
+
+  if (!docText || docText.trim().length < 50) {
+    return res.status(400).json({ ok: false, error: 'doc_too_short' });
+  }
+
+  const truncated = docText.slice(0, 4000);
+
+  const userProfile = await db
+    .prepare('SELECT * FROM user_profiles WHERE user_id = ? AND tenant_id = ?')
+    .get(userId, tenantId);
+  if (!userProfile) return res.status(400).json({ ok: false, error: 'complete_profile_first' });
+
+  const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
+  if (!apiKey) return res.status(500).json({ ok: false, error: 'no_api_key' });
+
+  // Haiku insight distillation — find the single strongest post-worthy insight
+  const haikuClient = new Anthropic({ apiKey });
+  let insight;
+  try {
+    const haiku = await haikuClient.messages.create({
+      model:      'claude-haiku-4-5-20251001',
+      max_tokens: 200,
+      messages: [{
+        role:    'user',
+        content: `Extract the single strongest, most post-worthy insight from this content. Return it in 1–2 sentences in the author's voice — concrete, specific, opinionated. No intro text, no labels.\n\nContent:\n${truncated}`,
+      }],
+    });
+    insight = haiku.content[0]?.text?.trim() || truncated.slice(0, 400);
+  } catch (err) {
+    console.error('[generate/from-doc] Haiku distillation failed (using raw text):', err.message);
+    insight = truncated.slice(0, 400);
+  }
+
+  try {
+    const { synthesis, post, ctaAlternatives, archetypeUsed, hookConfidence, contentFeedback } =
+      await restructureToPost(insight, userProfile, truncated);
+
+    const primaryGate = runQualityGate(
+      post,
+      gateOptions(
+        { format_slug: IDEA_SLUG, content: post },
+        userProfile,
+        'doc',
+        archetypeUsed,
+        hookConfidence,
+        null
+      )
+    );
+
+    const runResult = await db.prepare(`
+      INSERT INTO generation_runs (user_id, tenant_id, path, input_data, synthesis)
+      VALUES (?, ?, ?, ?, ?)
+      RETURNING id
+    `).run(
+      userId, tenantId, 'doc',
+      JSON.stringify({ raw_idea: insight, doc_filename: filename }),
+      JSON.stringify(synthesis)
+    );
+    const runId = runResult.lastInsertRowid;
+
+    const funnelType = (await classifyContent(post)).funnelType;
+
+    const primaryInsert = await db.prepare(`
+      INSERT INTO generated_posts
+        (run_id, user_id, tenant_id, format_slug, content, quality_score, quality_flags, passed_gate, funnel_type, hook_b, cta_alternatives, idea_input)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      RETURNING id
+    `).run(
+      runId, userId, tenantId, IDEA_SLUG,
+      post, primaryGate.score, JSON.stringify(primaryGate.flags), primaryGate.passed_gate ? 1 : 0,
+      funnelType, null,
+      ctaAlternatives?.length ? JSON.stringify(ctaAlternatives) : null,
+      insight
+    );
+    const primaryId = primaryInsert.lastInsertRowid;
+
+    // Async vault save — fire and forget, silently skip on failure
+    setImmediate(() => saveDocToVaultAsync({
+      userId, tenantId, filename,
+      buffer: fileBuffer, sourceType: fileSourceType, sourceUrl, docText,
+    }));
+
+    const primaryQuality = buildQualityPayload(primaryGate, 1, true);
+
+    return res.json({
+      ok: true,
+      run_id:          runId,
+      synthesis,
+      post,
+      hookB:           null,
+      ctaAlternatives: ctaAlternatives || [],
+      id:              primaryId,
+      archetypeUsed,
+      hookConfidence,
+      quality:         primaryQuality,
+      alternative:     null,
+      funnel_type:     funnelType,
+      vault_source_ref: null,
+      content_feedback: contentFeedback || null,
+      from_doc:        true,
+    });
+
+  } catch (err) {
+    console.error('[generate/from-doc] Error:', err.message);
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+async function saveDocToVaultAsync({ userId, tenantId, filename, buffer, sourceType, sourceUrl, docText }) {
+  try {
+    const { canUploadVaultDoc } = require('../services/subscription');
+    const planCheck = await canUploadVaultDoc(userId);
+    if (!planCheck.allowed) return; // silently skip if over vault limit
+
+    const { chunkText } = require('../services/vaultMiner');
+    const chunks = chunkText(docText, null);
+    if (!chunks || chunks.length === 0) return;
+
+    const docResult = await db.prepare(`
+      INSERT INTO vault_documents (user_id, tenant_id, filename, source_type, source_url, status)
+      VALUES (?, ?, ?, ?, ?, 'indexing')
+      RETURNING id
+    `).run(userId, tenantId, filename.slice(0, 200), sourceUrl ? 'url' : sourceType, sourceUrl || null);
+    const docId = docResult.lastInsertRowid;
+
+    const insertChunk = db.prepare(`
+      INSERT INTO vault_chunks (document_id, user_id, tenant_id, chunk_index, content, source_ref)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `);
+    for (const chunk of chunks) {
+      await insertChunk.run(docId, userId, tenantId, chunk.chunkIndex, chunk.content, chunk.sourceRef);
+    }
+    await db.prepare(`
+      UPDATE vault_documents SET status = 'ready', chunk_count = ?, updated_at = now() WHERE id = ?
+    `).run(chunks.length, docId);
+
+    console.log(`[generate/from-doc] vault doc=${docId} saved with ${chunks.length} chunks`);
+  } catch (err) {
+    console.error('[generate/from-doc] vault save failed (non-fatal):', err.message);
+  }
+}
 
 // ---------------------------------------------------------------------------
 // POST /api/quality-check

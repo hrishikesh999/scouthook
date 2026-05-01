@@ -278,4 +278,6 @@ module.exports = {
   extractAndChunkUrl,
   mineChunks,
   extractUrl,
+  extractText,
+  chunkText,
 };

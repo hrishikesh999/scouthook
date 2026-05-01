@@ -18,6 +18,9 @@ const Onboarding = (() => {
     role:            null,
     roleCustom:      null,
     websiteUrl:      null,
+    docFile:         null,   // File object when user uploads a file
+    docUrl:          null,   // URL string when user pastes a URL
+    docPath:         false,  // true when generation came from doc upload
     postId:          null,
     post:            null,
     quality:         null,
@@ -239,11 +242,11 @@ const Onboarding = (() => {
 
   /* ── Screen 3: First post generation ─────────────────── */
   function initScreen3() {
+    // ── Idea path ──────────────────────────────────────────
     const ideaEl  = qs('ob-idea');
     const ctaBtn  = qs('ob-s3-cta');
     const errorEl = qs('ob-s3-error');
 
-    // Chip clicks populate and focus the textarea (delegate — chips are rendered at nav time)
     qs('ob-chips')?.addEventListener('click', e => {
       const chip = e.target.closest('.ob-chip');
       if (!chip) return;
@@ -253,8 +256,93 @@ const Onboarding = (() => {
       if (errorEl) errorEl.hidden = true;
     });
 
-    ideaEl.addEventListener('input', () => autoGrow(ideaEl));
-    ctaBtn.addEventListener('click', () => runGeneration());
+    ideaEl?.addEventListener('input', () => autoGrow(ideaEl));
+    ctaBtn?.addEventListener('click', () => runGeneration());
+
+    // ── Doc path ───────────────────────────────────────────
+    const dropzone   = qs('ob-dropzone');
+    const fileInput  = qs('ob-file-input');
+    const fileBadge  = qs('ob-file-badge');
+    const fileNameEl = qs('ob-file-name');
+    const fileClear  = qs('ob-file-clear');
+    const docUrlEl   = qs('ob-doc-url');
+    const docCta     = qs('ob-s3-doc-cta');
+    const docErrEl   = qs('ob-s3-doc-error');
+
+    // Path toggles
+    qs('ob-toggle-to-idea')?.addEventListener('click', () => {
+      qs('ob-s3-doc-path').hidden  = true;
+      qs('ob-s3-idea-path').hidden = false;
+    });
+    qs('ob-toggle-to-doc')?.addEventListener('click', () => {
+      qs('ob-s3-idea-path').hidden = true;
+      qs('ob-s3-doc-path').hidden  = false;
+    });
+
+    // Dropzone: click opens file picker
+    dropzone?.addEventListener('click', () => fileInput?.click());
+    dropzone?.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput?.click(); }
+    });
+
+    // Drag and drop
+    dropzone?.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('dragging'); });
+    dropzone?.addEventListener('dragleave', () => dropzone.classList.remove('dragging'));
+    dropzone?.addEventListener('drop', e => {
+      e.preventDefault();
+      dropzone.classList.remove('dragging');
+      const file = e.dataTransfer?.files?.[0];
+      if (file) handleFileSelect(file);
+    });
+
+    // File input change
+    fileInput?.addEventListener('change', () => {
+      const file = fileInput.files?.[0];
+      if (file) handleFileSelect(file);
+    });
+
+    // Clear selected file
+    fileClear?.addEventListener('click', () => {
+      state.docFile = null;
+      if (fileBadge) fileBadge.hidden = true;
+      if (dropzone)  dropzone.hidden  = false;
+      if (fileInput) fileInput.value  = '';
+    });
+
+    // Typing a URL clears any selected file
+    docUrlEl?.addEventListener('input', () => {
+      if (docUrlEl.value.trim()) {
+        state.docFile = null;
+        if (fileBadge) fileBadge.hidden = true;
+        if (dropzone)  dropzone.hidden  = false;
+        if (fileInput) fileInput.value  = '';
+      }
+    });
+
+    docCta?.addEventListener('click', () => runDocGeneration());
+
+    function handleFileSelect(file) {
+      const ALLOWED_TYPES = [
+        'application/pdf',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'text/plain',
+      ];
+      const nameOk = /\.(pdf|docx|txt)$/i.test(file.name);
+      if (!ALLOWED_TYPES.includes(file.type) && !nameOk) {
+        if (docErrEl) { docErrEl.textContent = 'Unsupported file type. Please upload a PDF, DOCX, or TXT.'; docErrEl.hidden = false; }
+        return;
+      }
+      if (file.size > 25 * 1024 * 1024) {
+        if (docErrEl) { docErrEl.textContent = 'File is too large. Maximum is 25 MB.'; docErrEl.hidden = false; }
+        return;
+      }
+      if (docErrEl) docErrEl.hidden = true;
+      state.docFile = file;
+      if (fileNameEl) fileNameEl.textContent = file.name;
+      if (fileBadge)  fileBadge.hidden = false;
+      if (dropzone)   dropzone.hidden  = true;
+      if (docUrlEl)   docUrlEl.value   = '';
+    }
   }
 
   function populateChips() {
@@ -339,8 +427,104 @@ const Onboarding = (() => {
     }
   }
 
+  /* ── Doc path generation ─────────────────────────────── */
+  async function runDocGeneration() {
+    const docCta   = qs('ob-s3-doc-cta');
+    const docErrEl = qs('ob-s3-doc-error');
+    const skeleton = qs('ob-preview-skeleton');
+    const emptyEl  = qs('ob-preview-empty');
+
+    const docUrl = (qs('ob-doc-url')?.value || '').trim();
+
+    if (!state.docFile && !docUrl) {
+      if (docErrEl) { docErrEl.textContent = 'Please upload a file or enter a URL.'; docErrEl.hidden = false; }
+      return;
+    }
+    if (docUrl && !/^https?:\/\//i.test(docUrl)) {
+      if (docErrEl) { docErrEl.textContent = 'Please enter a valid URL (starting with https://).'; docErrEl.hidden = false; }
+      return;
+    }
+    if (docErrEl) docErrEl.hidden = true;
+    if (docCta)   { docCta.disabled = true; docCta.textContent = 'Extracting and generating...'; }
+    if (skeleton) skeleton.hidden = false;
+    if (emptyEl)  emptyEl.hidden  = true;
+
+    try {
+      let res;
+      if (state.docFile) {
+        // Determine MIME type from file object or extension
+        const extMime = {
+          pdf:  'application/pdf',
+          docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          txt:  'text/plain',
+        };
+        const ext  = state.docFile.name.split('.').pop().toLowerCase();
+        const mime = state.docFile.type || extMime[ext] || 'text/plain';
+        const buf  = await state.docFile.arrayBuffer();
+        res = await fetch('/api/generate/from-doc', {
+          method:  'POST',
+          headers: {
+            ...apiHeaders(),
+            'Content-Type': mime,
+            'X-Filename':   encodeURIComponent(state.docFile.name),
+          },
+          body: buf,
+        });
+      } else {
+        state.docUrl = docUrl;
+        res = await fetch('/api/generate/from-doc', {
+          method:  'POST',
+          headers: apiHeaders(),
+          body:    JSON.stringify({ url: docUrl }),
+        });
+      }
+
+      const data = await res.json();
+      if (!res.ok || !data.ok || !data.post) {
+        throw new Error(data.error || 'generation_failed');
+      }
+
+      state.postId        = data.id;
+      state.post          = data.post;
+      state.quality       = data.quality;
+      state.archetypeUsed = data.archetypeUsed;
+      state.hookConfidence = data.hookConfidence;
+      state.docPath       = true;
+
+      const passed = !!(data.quality?.passed || data.quality?.passed_gate);
+      if (passed) {
+        populateArchetypeReveal(data.archetypeUsed);
+        showScreen('4a');
+        fireConfetti();
+        setTimeout(() => {
+          showScreen('4b');
+          renderPostAndScore(data);
+        }, 2400);
+      } else {
+        showScreen('4b');
+        renderPostAndScore(data);
+      }
+    } catch (e) {
+      console.error('[onboarding] doc generation error:', e);
+      if (docErrEl) { docErrEl.textContent = 'Something went wrong. Please try again.'; docErrEl.hidden = false; }
+      if (skeleton) skeleton.hidden = true;
+      if (emptyEl)  emptyEl.hidden  = false;
+    } finally {
+      if (docCta) { docCta.disabled = false; docCta.textContent = 'Extract and generate →'; }
+      if (skeleton) skeleton.hidden = true;
+    }
+  }
+
   /* ── Screen 4a: Archetype reveal ─────────────────────── */
   function populateArchetypeReveal(archetype) {
+    // Update headline based on which path generated the post
+    const headlineEl = qs('ob-4a-headline');
+    if (headlineEl) {
+      headlineEl.textContent = state.docPath
+        ? 'Your expertise just became a post'
+        : 'Your first post is ready';
+    }
+
     if (!archetype) return;
     const key  = archetype.toUpperCase();
     const meta = ARCHETYPE_META[key];
@@ -452,9 +636,18 @@ const Onboarding = (() => {
     requestAnimationFrame(step);
   }
 
+  /* ── Vault hint helper ───────────────────────────────── */
+  function prepareScreen6() {
+    const hint = qs('ob-s6-vault-hint');
+    if (hint) hint.hidden = !state.docPath;
+  }
+
   /* ── Screen 4b: CTA buttons ──────────────────────────── */
   function initScreen4b() {
-    qs('ob-s4b-continue')?.addEventListener('click', () => showScreen(5));
+    qs('ob-s4b-continue')?.addEventListener('click', () => {
+      prepareScreen6();
+      showScreen(5);
+    });
     qs('ob-s4b-skip')?.addEventListener('click', () => {
       markOnboardingComplete();
       window.location.href = state.postId
@@ -465,7 +658,10 @@ const Onboarding = (() => {
 
   /* ── Screen 5: LinkedIn ───────────────────────────────── */
   function initScreen5() {
-    qs('ob-s5-skip')?.addEventListener('click', () => showScreen(6));
+    qs('ob-s5-skip')?.addEventListener('click', () => {
+      prepareScreen6();
+      showScreen(6);
+    });
   }
 
   function checkLinkedInReturn() {

@@ -94,23 +94,86 @@
   <!-- ── Screen 3: First post generation ─────────────────── -->
   <section id="ob-screen-3" class="ob-screen" aria-label="Step 2: Generate your first post">
     <div class="ob-content">
-      <h1 class="ob-headline">Your first post starts here</h1>
-      <p class="ob-subheadline">Pick a prompt or type your own idea. One real thought from your experience is enough.</p>
 
-      <div id="ob-chips" class="ob-chips" role="list">
-        <!-- Populated by JS based on role -->
+      <!-- Doc path (shown by default) -->
+      <div id="ob-s3-doc-path">
+        <h1 class="ob-headline">Turn your existing work into your first post</h1>
+        <p class="ob-subheadline">Upload something you've already written — a blog post, case study, talk notes, email. We'll pull out the strongest insight and turn it into a LinkedIn post.</p>
+
+        <!-- Drop zone -->
+        <div id="ob-dropzone" class="ob-dropzone" role="button" tabindex="0"
+             aria-label="Upload a file — PDF, DOCX, or TXT">
+          <svg class="ob-dropzone-icon" width="32" height="32" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"
+               aria-hidden="true">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/>
+            <line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+          <p class="ob-dropzone-label">
+            Drag and drop a file here, or <span class="ob-dropzone-browse">click to browse</span>
+          </p>
+          <p class="ob-dropzone-types">PDF, DOCX, or TXT · 25 MB max</p>
+          <input id="ob-file-input" type="file" accept=".pdf,.docx,.txt" hidden aria-hidden="true" />
+        </div>
+
+        <!-- File badge (shown after file selected) -->
+        <div id="ob-file-badge" class="ob-file-badge" hidden>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+          </svg>
+          <span id="ob-file-name" class="ob-file-badge-name"></span>
+          <button id="ob-file-clear" class="ob-file-clear" type="button" aria-label="Remove file">×</button>
+        </div>
+
+        <!-- URL alternative -->
+        <div class="ob-url-alt-row">
+          <span class="ob-url-alt-or">or</span>
+          <input id="ob-doc-url" class="ob-field" type="url"
+                 placeholder="Paste a URL — blog post, article, or web page" />
+        </div>
+
+        <p id="ob-s3-doc-error" class="ob-field-error" hidden role="alert">Please upload a file or enter a URL.</p>
+
+        <button id="ob-s3-doc-cta" class="ob-btn-primary" type="button" style="margin-top:16px">
+          Extract and generate →
+        </button>
+
+        <div class="ob-path-divider">
+          <button id="ob-toggle-to-idea" class="ob-skip-link" type="button">
+            I don't have a document — start from an idea instead
+          </button>
+        </div>
       </div>
 
-      <textarea id="ob-idea" class="ob-textarea" rows="4"
-                placeholder="Or type your own thought here..."></textarea>
+      <!-- Idea path (hidden by default, revealed via toggle) -->
+      <div id="ob-s3-idea-path" hidden>
+        <h1 class="ob-headline">Your first post starts here</h1>
+        <p class="ob-subheadline">Pick a prompt or type your own idea. One real thought from your experience is enough.</p>
 
-      <p id="ob-s3-error" class="ob-field-error" hidden role="alert">Add a thought before generating.</p>
+        <div id="ob-chips" class="ob-chips" role="list">
+          <!-- Populated by JS based on role -->
+        </div>
 
-      <button id="ob-s3-cta" class="ob-btn-primary" type="button" style="margin-top:16px">
-        Generate my first post →
-      </button>
+        <textarea id="ob-idea" class="ob-textarea" rows="4"
+                  placeholder="Or type your own thought here..."></textarea>
 
-      <!-- Post preview (shows skeleton while generating) -->
+        <p id="ob-s3-error" class="ob-field-error" hidden role="alert">Add a thought before generating.</p>
+
+        <button id="ob-s3-cta" class="ob-btn-primary" type="button" style="margin-top:16px">
+          Generate my first post →
+        </button>
+
+        <div class="ob-path-divider">
+          <button id="ob-toggle-to-doc" class="ob-skip-link" type="button">
+            ← Back to document upload
+          </button>
+        </div>
+      </div>
+
+      <!-- Post preview — shared between both paths -->
       <div class="ob-post-preview ob-post-preview--inline" id="ob-post-preview" aria-live="polite" aria-label="Post preview">
         <div id="ob-preview-empty" class="ob-preview-empty">
           <p>Your post will appear here</p>
@@ -123,6 +186,7 @@
           <div class="ob-skeleton-line" style="width:50%"></div>
         </div>
       </div>
+
     </div>
   </section>
 
@@ -130,7 +194,7 @@
   <section id="ob-screen-4a" class="ob-screen ob-screen--center" aria-label="Post generated">
     <div class="ob-content ob-content--center">
       <div class="ob-celebration-emoji" aria-hidden="true">🎉</div>
-      <h1 class="ob-headline">Your first post is ready</h1>
+      <h1 id="ob-4a-headline" class="ob-headline">Your first post is ready</h1>
       <p class="ob-subheadline">No AI-sounding language. No weak hook. Just a post worth publishing.</p>
 
       <!-- Archetype reveal — populated by JS before showing this screen -->
@@ -216,6 +280,10 @@
         Your writing samples train the engine behind every post — including your Content Vault,
         where one document becomes a week of posts in your voice.
         All fields are optional.
+      </p>
+
+      <p id="ob-s6-vault-hint" class="ob-post-context" hidden>
+        Your document has been added to your Content Vault — explore it after this to generate a full week of posts.
       </p>
 
       <div class="ob-field-group">

@@ -165,9 +165,10 @@ const Onboarding = (() => {
           });
           const data = await res.json();
           if (data.ok) {
-            if (data.content_niche)  qs('ob-niche').value    = data.content_niche;
-            if (data.audience_role)  qs('ob-audience').value = data.audience_role;
-            if (data.audience_pain)  qs('ob-pain').value     = data.audience_pain;
+            if (data.content_niche)   qs('ob-niche').value      = data.content_niche;
+            if (data.audience_role)   qs('ob-audience').value   = data.audience_role;
+            if (data.audience_pain)   qs('ob-pain').value       = data.audience_pain;
+            if (data.contrarian_view) qs('ob-contrarian').value = data.contrarian_view;
             if (data.content_niche || data.audience_role) {
               qs('ob-niche').focus();
             }
@@ -220,6 +221,10 @@ const Onboarding = (() => {
           user_role:     roleValue,
         };
         if (state.websiteUrl) body.website_url = state.websiteUrl;
+        const pain       = (qs('ob-pain').value       || '').trim();
+        const contrarian = (qs('ob-contrarian').value  || '').trim();
+        if (pain)       body.audience_pain   = pain;
+        if (contrarian) body.contrarian_view = contrarian;
 
         const res = await fetch('/api/profile', {
           method:  'POST',

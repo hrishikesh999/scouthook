@@ -17,7 +17,7 @@ const HOOK_ARCHETYPES = {
     name: 'CONTRARIAN',
     trigger: 'thought challenges a commonly held belief, industry norm, or popular advice',
     structureInstruction:
-      "Open with a direct contradiction of the conventional wisdom the thought challenges. No softening language. No 'I think' or 'in my opinion'. State the contrarian position as absolute fact.",
+      "State the contrarian position as absolute fact in under 10 words. No softening, no hedging, no 'I think' or 'in my opinion'. It must feel like the author is picking a fight they might lose. Bad: 'Most advice about mindset in business tends to oversimplify things.' Good: 'Most advice about mindset is just repackaged procrastination.' The reader should feel slightly provoked — like someone said something at a dinner table that makes the room go quiet.",
     exampleHook: 'Most advice about pricing is wrong.',
     ctaHint: 'Invite agreement or pushback — ask if they agree or where they draw the line.',
   },
@@ -25,7 +25,7 @@ const HOOK_ARCHETYPES = {
     name: 'CONFESSION',
     trigger: 'thought involves a personal mistake, failure, realisation, or thing the writer used to believe',
     structureInstruction:
-      'Open with the confession in past tense. Make it specific and slightly uncomfortable. The reader should feel the writer is being more honest than expected.',
+      "Open in past tense — name the specific wrong belief or mistake, not a vague gesture at it. Under 12 words. The reader should wince in recognition, not nod in comfort. Bad: 'I used to get client onboarding wrong.' Good: 'I used to send a 40-page strategy deck and call it discovery.' The specificity is what makes it land — the more precisely you name the mistake, the more honest it feels.",
     exampleHook: 'I used to think strategy was the hard part.',
     ctaHint: 'Ask if the reader has made a similar mistake or held the same belief — make them feel safe to admit it.',
   },
@@ -33,7 +33,7 @@ const HOOK_ARCHETYPES = {
     name: 'PATTERN_INTERRUPT',
     trigger: 'thought is counterintuitive, unexpected, or contradicts what the reader would assume',
     structureInstruction:
-      'Open with the shortest possible statement of the unexpected truth. Under 8 words. No context. Drop the reader into the surprise.',
+      "Under 8 words. No context. The statement must directly contradict something the reader currently believes about themselves or their work — not just something vaguely 'unexpected'. Bad: 'Success is not about working harder.' (safe, expected) Good: 'Nobody actually wants your expertise.' (challenges what they think they're selling). The reader should feel slightly defensive before they even know why.",
     exampleHook: 'Nobody actually wants your expertise.',
     ctaHint: 'Close with a sharp, opinionated question that extends the surprise — not a soft "what do you think?"',
   },
@@ -41,7 +41,7 @@ const HOOK_ARCHETYPES = {
     name: 'DIRECT_ADDRESS',
     trigger: 'thought is specifically relevant to a clearly defined type of person or situation',
     structureInstruction:
-      "Open by addressing the specific person this post is for. Use 'If you are [specific type of person]' or 'For [specific situation]'. Never use 'everyone' or 'anyone'.",
+      "Address a specific person in a specific situation — not a demographic category. It should feel like catching someone in the act of a mistake they know they shouldn't be making. Bad: 'For consultants who are struggling with pricing.' Good: 'If you are billing by the hour, read this.' 'Read this' is more direct than 'this is for you'. Never use 'everyone' or 'anyone'. The address should feel like a tap on the shoulder, not a marketing segment qualifier.",
     exampleHook: 'If you are billing by the hour, read this.',
     ctaHint: 'Make a direct, low-friction ask to the person you addressed — DM, reply, or follow.',
   },
@@ -49,7 +49,7 @@ const HOOK_ARCHETYPES = {
     name: 'STAKES',
     trigger: 'thought involves a consequence, cost, risk, or what happens if something is ignored',
     structureInstruction:
-      'Open by stating the consequence or cost first — before the context or cause. Make the reader feel what is at risk before they know what caused it.',
+      "State a specific, concrete consequence before revealing its cause. The stakes must include a number, a timeframe, or a named outcome — vague stakes do not land. Bad: 'This mistake can cost you years of growth.' Good: 'This one assumption cost me six months of work.' The reader must feel the weight of a specific loss before they know what caused it.",
     exampleHook: 'This one assumption cost me six months of work.',
     ctaHint: 'Ask what the reader did to avoid or recover from a similar cost or risk.',
   },
@@ -57,7 +57,7 @@ const HOOK_ARCHETYPES = {
     name: 'BEFORE_AFTER',
     trigger: 'thought involves a transformation, change over time, or contrast between two states',
     structureInstruction:
-      'Open with the before state and after state in direct contrast. Use a colon or em dash to separate them. The gap between the two states should feel significant.',
+      "Two states in direct contrast — both must be concrete and specific, not generic. Bad: 'Before: overwhelmed. After: in control.' Good: '12 months ago: 200 followers. Today: inbound every week.' Use a colon or em dash. A number, named behaviour, or measurable outcome in each state makes the transformation credible. The gap between the two states must feel earned.",
     exampleHook: '12 months ago: 200 followers. Today: inbound every week.',
     ctaHint: 'Ask what transformation the reader is currently in the middle of.',
   },
@@ -65,7 +65,7 @@ const HOOK_ARCHETYPES = {
     name: 'INSIGHT',
     trigger: 'thought is an observation, pattern, or truth the writer has noticed that others have not articulated',
     structureInstruction:
-      "Open with the insight stated as a clean declarative sentence. No 'I noticed' or 'I have found'. State what is true as if it is simply true. The reader should feel they have just learned something.",
+      "State the insight as a clean declarative sentence. No 'I noticed' or 'I have found' — state it as simply true. It must be non-obvious: if the reader has seen it on a motivational poster or heard it at a conference keynote, it fails. Bad: 'The best leaders listen more than they talk.' (cliché) Good: 'The best consultants sell certainty, not strategy.' It should make the reader stop and think 'I have never heard it put that way.'",
     exampleHook: 'The best consultants sell certainty, not strategy.',
     ctaHint: 'Ask if the reader has seen the same pattern — invite confirmation or a counter-example.',
   },

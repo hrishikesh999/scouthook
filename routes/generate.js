@@ -4,7 +4,7 @@ const express = require('express');
 const router = express.Router();
 const { db, getSetting } = require('../db');
 const { runQualityGate } = require('../services/qualityGate');
-const { restructureToPost, generateWeeklyBatch } = require('../services/ideaPath');
+const { ideaToPost, restructureToPost, generateWeeklyBatch } = require('../services/ideaPath');
 const { getVaultContext } = require('../services/ghostwriterPromptBuilder');
 const { classifyContent } = require('../services/funnelClassifier');
 const { canGeneratePost } = require('../services/subscription');
@@ -741,8 +741,8 @@ router.post('/from-doc', async (req, res) => {
   if (!apiKey) return res.status(500).json({ ok: false, error: 'no_api_key' });
 
   try {
-    const { synthesis, post, ctaAlternatives, archetypeUsed, hookConfidence, contentFeedback } =
-      await restructureToPost(truncated, userProfile, null);
+    const { synthesis, post, hookB, ctaAlternatives, archetypeUsed, hookConfidence } =
+      await ideaToPost(truncated, userProfile);
 
     const primaryGate = runQualityGate(
       post,
@@ -777,7 +777,7 @@ router.post('/from-doc', async (req, res) => {
     `).run(
       runId, userId, tenantId, IDEA_SLUG,
       post, primaryGate.score, JSON.stringify(primaryGate.flags), primaryGate.passed_gate ? 1 : 0,
-      funnelType, null,
+      funnelType, hookB || null,
       ctaAlternatives?.length ? JSON.stringify(ctaAlternatives) : null,
       truncated
     );
@@ -796,7 +796,7 @@ router.post('/from-doc', async (req, res) => {
       run_id:          runId,
       synthesis,
       post,
-      hookB:           null,
+      hookB:           hookB || null,
       ctaAlternatives: ctaAlternatives || [],
       id:              primaryId,
       archetypeUsed,
@@ -805,7 +805,7 @@ router.post('/from-doc', async (req, res) => {
       alternative:     null,
       funnel_type:     funnelType,
       vault_source_ref: null,
-      content_feedback: contentFeedback || null,
+      content_feedback: null,
       from_doc:        true,
     });
 

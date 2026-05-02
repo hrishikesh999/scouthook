@@ -47,7 +47,21 @@
       </div>
     </div>
 
-    <!-- Zone 1.5: Vault hero — primary CTA when vault has ideas -->
+    <!-- Zone 1.5a: Onboarding checklist — shown for new users, auto-hides when all done -->
+    <div id="onboarding-checklist" class="onboarding-checklist" hidden role="region" aria-label="Getting started">
+      <div class="checklist-header">
+        <div class="checklist-header-left">
+          <span class="checklist-title">Get started</span>
+          <span class="checklist-progress-text" id="checklist-progress-text"></span>
+        </div>
+        <div class="checklist-bar-wrap">
+          <div class="checklist-bar" id="checklist-bar" style="width:0%"></div>
+        </div>
+      </div>
+      <ul class="checklist-items" id="checklist-items" aria-live="polite"></ul>
+    </div>
+
+    <!-- Zone 1.5b: Vault hero — primary CTA when vault has ideas -->
     <div class="vault-hero-section" id="vault-hero-section" style="display:none" role="region" aria-label="Your Vault Ideas">
       <div class="vault-hero-left">
         <span class="vault-hero-label">Your Vault Ideas</span>

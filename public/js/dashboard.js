@@ -36,6 +36,7 @@ const scheduledList    = document.getElementById('scheduled-posts-list');
   loadRecentPosts();
   loadScheduledPosts();
   loadVaultHero();
+  loadChecklist();
 })();
 
 /* ── LinkedIn status ─────────────────────────────────────────── */
@@ -206,6 +207,78 @@ function showEmptyScheduled() {
     <div class="card-empty-state">
       Nothing scheduled — <a href="/generate.html?new=1">Schedule a post →</a>
     </div>`;
+}
+
+/* ── Onboarding checklist ────────────────────────────────────── */
+async function loadChecklist() {
+  // Skip entirely if user has already completed and dismissed the checklist
+  if (localStorage.getItem('sh_checklist_done')) return;
+
+  const section  = document.getElementById('onboarding-checklist');
+  const barEl    = document.getElementById('checklist-bar');
+  const textEl   = document.getElementById('checklist-progress-text');
+  const itemsEl  = document.getElementById('checklist-items');
+  if (!section || !barEl || !textEl || !itemsEl) return;
+
+  try {
+    const res  = await fetch('/api/checklist', { headers: apiHeaders() });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!data.ok) return;
+
+    // If all done on this load, collapse immediately and remember
+    if (data.all_done) {
+      collapseChecklist(section);
+      return;
+    }
+
+    // Personalise the hero banner
+    const firstName = (data.display_name || '').split(' ')[0];
+    if (firstName) {
+      const heading    = document.querySelector('.hero-heading');
+      const subheading = document.querySelector('.hero-subheading');
+      if (heading)    heading.textContent    = `Welcome, ${firstName}. Your LinkedIn posting engine is ready.`;
+      if (subheading) subheading.textContent = 'Your voice profile is set up. Start by publishing your first post.';
+    }
+
+    // Progress bar and counter
+    const pct = Math.round((data.completed_count / data.total) * 100);
+    barEl.style.width  = pct + '%';
+    textEl.textContent = `${data.completed_count} of ${data.total} complete`;
+
+    // Render items
+    itemsEl.innerHTML = '';
+    data.steps.forEach(step => {
+      const li = document.createElement('li');
+      li.className = 'checklist-item' + (step.done ? ' done' : '');
+
+      const tickSvg = step.done
+        ? `<svg width="11" height="9" viewBox="0 0 11 9" fill="none" aria-hidden="true"><path d="M1 4.5L4 7.5L10 1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+        : '';
+
+      li.innerHTML = `
+        <span class="checklist-tick" aria-hidden="true">${tickSvg}</span>
+        <span class="checklist-label">${escHtml(step.label)}</span>
+        ${!step.done ? `<a class="checklist-link" href="${escHtml(step.href)}">Go →</a>` : ''}
+      `;
+      itemsEl.appendChild(li);
+    });
+
+    // Show the section
+    section.hidden = false;
+
+  } catch {
+    // Non-fatal — checklist is a progressive enhancement
+  }
+}
+
+function collapseChecklist(section) {
+  section.classList.add('collapsing');
+  section.addEventListener('transitionend', () => {
+    section.hidden = true;
+    section.classList.remove('collapsing');
+  }, { once: true });
+  localStorage.setItem('sh_checklist_done', '1');
 }
 
 /* ── Render rows ─────────────────────────────────────────────── */

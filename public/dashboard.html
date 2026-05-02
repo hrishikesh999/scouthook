@@ -61,78 +61,18 @@
       <ul class="checklist-items" id="checklist-items" aria-live="polite"></ul>
     </div>
 
-    <!-- Zone 1.5b: Vault hero — primary CTA when vault has ideas -->
-    <div class="vault-hero-section" id="vault-hero-section" style="display:none" role="region" aria-label="Your Vault Ideas">
-      <div class="vault-hero-left">
-        <span class="vault-hero-label">Your Vault Ideas</span>
-        <span class="vault-hero-count" id="vault-hero-count"></span>
+    <!-- Zone 2: Recent posts -->
+    <div class="posts-card" role="region" aria-label="Recent posts">
+      <div class="card-header">
+        <span class="card-title">Recent posts</span>
+        <a href="/drafts.html" class="card-view-all">View all →</a>
       </div>
-      <div class="vault-hero-right">
-        <a href="/vault.html" class="vault-hero-btn" id="vault-hero-btn">View &amp; Generate from Ideas →</a>
+      <div id="recent-posts-list" aria-live="polite">
+        <div class="card-empty-state">
+          No posts yet — <a href="/generate.html?new=1">Generate your first post →</a>
+        </div>
       </div>
     </div>
-
-    <!-- Zone 2: Stat cards -->
-    <div class="stat-grid" role="region" aria-label="Summary statistics">
-
-      <div class="stat-card">
-        <div class="stat-label">Posts This Month</div>
-        <div class="stat-value" id="stat-posts-month" aria-live="polite">—</div>
-        <div class="stat-sublabel">generated</div>
-      </div>
-
-      <div class="stat-card">
-        <div class="stat-label">Avg Quality Score</div>
-        <div class="stat-value" id="stat-avg-score" aria-live="polite">—</div>
-        <div class="stat-sublabel">across all posts</div>
-      </div>
-
-      <div class="stat-card">
-        <div class="stat-label">Scheduled</div>
-        <div class="stat-value" id="stat-scheduled" aria-live="polite">—</div>
-        <div class="stat-sublabel">upcoming posts</div>
-      </div>
-
-      <div class="stat-card">
-        <div class="stat-label">LinkedIn</div>
-        <div class="stat-value-text disconnected" id="stat-linkedin-value" aria-live="polite">Not connected</div>
-        <div class="stat-sublabel" id="stat-linkedin-sublabel">
-          <a href="/api/linkedin/connect" id="linkedin-connect-btn">Connect your account</a>
-        </div>
-      </div>
-
-    </div><!-- /stat-grid -->
-
-    <!-- Zone 3: Two-column content -->
-    <div class="content-grid">
-
-      <!-- Recent posts -->
-      <div class="posts-card" role="region" aria-label="Recent posts">
-        <div class="card-header">
-          <span class="card-title">Recent posts</span>
-          <a href="/drafts.html" class="card-view-all">View all →</a>
-        </div>
-        <div id="recent-posts-list" aria-live="polite">
-          <div class="card-empty-state">
-            No posts yet — <a href="/generate.html">Generate →</a>
-          </div>
-        </div>
-      </div>
-
-      <!-- Upcoming scheduled -->
-      <div class="scheduled-card" role="region" aria-label="Upcoming scheduled posts">
-        <div class="card-header">
-          <span class="card-title">Scheduled</span>
-          <a href="/schedule.html" class="card-view-all">View all →</a>
-        </div>
-        <div id="scheduled-posts-list" aria-live="polite">
-          <div class="card-empty-state">
-            Nothing scheduled — <a href="/generate.html">Schedule a post →</a>
-          </div>
-        </div>
-      </div>
-
-    </div><!-- /content-grid -->
 
   </div><!-- /dashboard-page -->
 

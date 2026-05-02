@@ -2770,8 +2770,8 @@ body {
 }
 
 .hero-subheading {
-  font-size: 14px;
-  color: rgba(255, 255, 255, 0.75);
+  font-size: 15px;
+  color: rgba(255, 255, 255, 0.92);
   margin-top: var(--space-2);
   font-family: var(--font-sans);
 }
@@ -2841,16 +2841,16 @@ body {
 }
 
 .checklist-title {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 .checklist-progress-text {
-  font-size: 12px;
-  color: var(--text-muted);
+  font-size: 13px;
+  color: var(--text-secondary);
 }
 
 .checklist-bar-wrap {
@@ -2915,27 +2915,37 @@ body {
 
 .checklist-label {
   flex: 1;
-  font-size: 14px;
-  color: var(--text-body);
+  font-size: 15px;
+  color: var(--text-heading);
   font-family: var(--font-sans);
 }
 
 .checklist-item.done .checklist-label {
-  color: var(--text-muted);
+  color: var(--text-secondary);
   text-decoration: line-through;
 }
 
 .checklist-link {
-  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 12px;
+  margin-left: var(--space-3);
+  background: var(--brand);
+  color: #fff;
+  font-size: 12px;
   font-weight: 600;
-  color: var(--brand);
+  font-family: var(--font-sans);
+  border-radius: var(--radius-pill);
   text-decoration: none;
   white-space: nowrap;
-  padding: 2px 0;
+  transition: background 150ms ease, transform 120ms ease;
 }
 
 .checklist-link:hover {
-  text-decoration: underline;
+  background: var(--brand-hover);
+  transform: translateY(-1px);
+  text-decoration: none;
 }
 
 /* ── Vault Hero Section ─────────────────────────────────────── */
@@ -3065,7 +3075,7 @@ body {
 /* ── Content Grid ───────────────────────────────────────────── */
 .content-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: var(--space-6);
   margin-top: var(--space-6);
 }
@@ -3076,6 +3086,7 @@ body {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   padding: var(--space-6);
+  margin-top: var(--space-6);
   box-shadow: var(--shadow-sm);
   transition: box-shadow 0.2s ease, border-color 0.2s ease;
 }
@@ -3094,7 +3105,7 @@ body {
 }
 
 .card-title {
-  font-size: 15px;
+  font-size: 17px;
   font-weight: 700;
   color: var(--text-heading);
   font-family: var(--font-sans);
@@ -3129,20 +3140,20 @@ body {
 }
 
 .post-row-title {
-  font-size: 13px;
-  color: var(--text-primary);
-  font-weight: 400;
+  font-size: 14px;
+  color: var(--text-heading);
+  font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 240px;
+  max-width: 480px;
   font-family: var(--font-sans);
 }
 
 .post-row-date {
-  font-size: 11px;
-  color: var(--text-tertiary);
-  margin-top: 2px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 3px;
   font-family: var(--font-sans);
 }
 
@@ -3213,14 +3224,19 @@ body {
 .card-empty-state {
   text-align: center;
   padding: var(--space-8) 0;
-  font-size: 13px;
-  color: var(--text-secondary);
+  font-size: 15px;
+  color: var(--text-heading);
   font-family: var(--font-sans);
 }
 
 .card-empty-state a {
-  color: var(--teal);
+  color: var(--brand);
+  font-weight: 600;
   text-decoration: none;
+}
+
+.card-empty-state a:hover {
+  text-decoration: underline;
 }
 
 /* ── Coming Soon (stub pages) ───────────────────────────────── */

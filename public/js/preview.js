@@ -343,6 +343,22 @@ document.addEventListener('visibilitychange', () => {
     window.history.replaceState({}, '', '/preview.html');
     await checkLinkedInStatus();
     if (window.toast?.success) window.toast.success('LinkedIn connected! You can now schedule or publish.');
+
+    // Restore the post/batch the user was viewing before the OAuth redirect
+    const savedPostId  = sessionStorage.getItem('preview_post_id');
+    const savedBatchId = sessionStorage.getItem('preview_batch_id');
+    sessionStorage.removeItem('preview_post_id');
+    sessionStorage.removeItem('preview_batch_id');
+    if (savedBatchId) {
+      showSkeleton();
+      await loadBatch(savedBatchId);
+      return;
+    }
+    if (savedPostId) {
+      showSkeleton();
+      await loadSinglePost(savedPostId);
+      return;
+    }
   }
 
   if (urlBatchId) {
@@ -1588,6 +1604,17 @@ if (tryAgainLink) {
     if (currentPostId) loadSinglePost(String(currentPostId));
     else window.location.reload();
   };
+}
+
+// Save the current post/batch to sessionStorage before LinkedIn OAuth so we
+// can restore it when the user returns to /preview.html?linkedin=connected.
+if (connectPublishBtn) {
+  connectPublishBtn.addEventListener('click', () => {
+    sessionStorage.removeItem('preview_post_id');
+    sessionStorage.removeItem('preview_batch_id');
+    if (currentBatchId) sessionStorage.setItem('preview_batch_id', String(currentBatchId));
+    else if (currentPostId) sessionStorage.setItem('preview_post_id', String(currentPostId));
+  });
 }
 
 /* ── 26. Helpers ─────────────────────────────────────────────── */

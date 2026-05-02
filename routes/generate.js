@@ -741,27 +741,27 @@ router.post('/from-doc', async (req, res) => {
   const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
   if (!apiKey) return res.status(500).json({ ok: false, error: 'no_api_key' });
 
-  // Haiku insight distillation — find the single strongest post-worthy insight
+  // Haiku passage selector — find and quote the strongest passage verbatim, no rewriting
   const haikuClient = new Anthropic({ apiKey });
-  let insight;
+  let sourcePassage;
   try {
     const haiku = await haikuClient.messages.create({
       model:      'claude-haiku-4-5-20251001',
-      max_tokens: 200,
+      max_tokens: 300,
       messages: [{
         role:    'user',
-        content: `Extract the single strongest, most post-worthy insight from this content. Return it in 1–2 sentences in the author's voice — concrete, specific, opinionated. No intro text, no labels.\n\nContent:\n${truncated}`,
+        content: `Find the single most powerful, post-worthy passage in this document. Return it verbatim — copied word for word from the text. Include 2–4 sentences if they form a complete thought. Do not summarize, paraphrase, or add anything. Return only the exact quoted text, nothing else.\n\nContent:\n${truncated}`,
       }],
     });
-    insight = haiku.content[0]?.text?.trim() || truncated.slice(0, 400);
+    sourcePassage = haiku.content[0]?.text?.trim() || truncated.slice(0, 500);
   } catch (err) {
-    console.error('[generate/from-doc] Haiku distillation failed (using raw text):', err.message);
-    insight = truncated.slice(0, 400);
+    console.error('[generate/from-doc] Haiku selector failed (using raw text):', err.message);
+    sourcePassage = truncated.slice(0, 500);
   }
 
   try {
     const { synthesis, post, ctaAlternatives, archetypeUsed, hookConfidence, contentFeedback } =
-      await restructureToPost(insight, userProfile, truncated);
+      await restructureToPost(sourcePassage, userProfile, null);
 
     const primaryGate = runQualityGate(
       post,
@@ -781,7 +781,7 @@ router.post('/from-doc', async (req, res) => {
       RETURNING id
     `).run(
       userId, tenantId, 'doc',
-      JSON.stringify({ raw_idea: insight, doc_filename: filename }),
+      JSON.stringify({ raw_idea: sourcePassage, doc_filename: filename }),
       JSON.stringify(synthesis)
     );
     const runId = runResult.lastInsertRowid;
@@ -798,7 +798,7 @@ router.post('/from-doc', async (req, res) => {
       post, primaryGate.score, JSON.stringify(primaryGate.flags), primaryGate.passed_gate ? 1 : 0,
       funnelType, null,
       ctaAlternatives?.length ? JSON.stringify(ctaAlternatives) : null,
-      insight
+      sourcePassage
     );
     const primaryId = primaryInsert.lastInsertRowid;
 

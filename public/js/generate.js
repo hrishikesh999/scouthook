@@ -124,9 +124,12 @@ function clearError() {
 }
 
 /* ── 6. Mode switcher ────────────────────────────────────────── */
-const modeBtns      = document.querySelectorAll('.gen-mode-btn');
-const paneIdea      = document.getElementById('gen-pane-idea');
-const paneVault     = document.getElementById('gen-pane-vault');
+const modeBtns = document.querySelectorAll('.gen-mode-btn');
+const modePane = {
+  idea:       document.getElementById('gen-pane-idea'),
+  'from-doc': document.getElementById('gen-pane-from-doc'),
+  vault:      document.getElementById('gen-pane-vault'),
+};
 
 modeBtns.forEach(btn => {
   btn.addEventListener('click', () => {
@@ -134,13 +137,167 @@ modeBtns.forEach(btn => {
     btn.classList.add('active');
     btn.setAttribute('aria-selected', 'true');
     const mode = btn.dataset.mode;
-    paneIdea.style.display  = mode === 'idea'  ? '' : 'none';
-    paneVault.style.display = mode === 'vault' ? '' : 'none';
+    Object.entries(modePane).forEach(([m, el]) => { if (el) el.style.display = m === mode ? '' : 'none'; });
     if (mode === 'vault' && !vaultLoaded) loadVaultPane();
   });
 });
 
-/* ── 7. Vault mode ───────────────────────────────────────────── */
+/* ── 7. From-a-document pane ─────────────────────────────────── */
+let fromDocFile = null;
+
+function initFromDocPane() {
+  const dropzone  = document.getElementById('gen-doc-dropzone');
+  const fileInput = document.getElementById('gen-doc-file-input');
+  const fileBadge = document.getElementById('gen-doc-file-badge');
+  const fileName  = document.getElementById('gen-doc-file-name');
+  const fileClear = document.getElementById('gen-doc-file-clear');
+  const urlInput  = document.getElementById('gen-doc-url');
+  const genBtn    = document.getElementById('gen-doc-btn');
+  const errEl     = document.getElementById('gen-doc-error');
+
+  const ACCEPTED_EXT = ['pdf', 'docx', 'txt'];
+
+  function showFile(file) {
+    fromDocFile = file;
+    fileName.textContent = file.name;
+    fileBadge.hidden = false;
+    dropzone.hidden  = true;
+    if (urlInput) urlInput.value = '';
+  }
+
+  function clearFile() {
+    fromDocFile = null;
+    fileBadge.hidden = true;
+    dropzone.hidden  = false;
+  }
+
+  function showErr(msg) { errEl.textContent = msg; errEl.style.display = ''; }
+  function hideErr()     { errEl.style.display = 'none'; }
+
+  function handleFile(file) {
+    const ext = file.name.split('.').pop().toLowerCase();
+    if (!ACCEPTED_EXT.includes(ext)) {
+      showErr('Only PDF, DOCX, and TXT files are supported.');
+      return;
+    }
+    if (file.size > 25 * 1024 * 1024) {
+      showErr('File is too large. Maximum size is 25 MB.');
+      return;
+    }
+    hideErr();
+    showFile(file);
+  }
+
+  // Click / keyboard to browse
+  dropzone.addEventListener('click', () => fileInput.click());
+  dropzone.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') fileInput.click(); });
+
+  // Drag and drop
+  dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('dragging'); });
+  dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragging'));
+  dropzone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropzone.classList.remove('dragging');
+    const file = e.dataTransfer.files?.[0];
+    if (file) handleFile(file);
+  });
+
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files?.[0]) handleFile(fileInput.files[0]);
+    fileInput.value = '';
+  });
+
+  fileClear.addEventListener('click', clearFile);
+  genBtn.addEventListener('click', runFromDocGeneration);
+}
+
+async function runFromDocGeneration() {
+  const genBtn   = document.getElementById('gen-doc-btn');
+  const statusEl = document.getElementById('gen-doc-status');
+  const errEl    = document.getElementById('gen-doc-error');
+  const urlInput = document.getElementById('gen-doc-url');
+  const docUrl   = (urlInput?.value || '').trim();
+
+  if (!fromDocFile && !docUrl) {
+    errEl.textContent = 'Please upload a file or paste a URL.';
+    errEl.style.display = '';
+    return;
+  }
+  if (docUrl && !/^https?:\/\//i.test(docUrl)) {
+    errEl.textContent = 'Please enter a valid URL (starting with https://).';
+    errEl.style.display = '';
+    return;
+  }
+
+  errEl.style.display    = 'none';
+  genBtn.disabled        = true;
+  genBtn.textContent     = 'Extracting and generating…';
+  statusEl.style.display = '';
+
+  const controller = new AbortController();
+  const timeout    = setTimeout(() => controller.abort(), 90_000);
+
+  try {
+    let res;
+    if (fromDocFile) {
+      const extMime = {
+        pdf:  'application/pdf',
+        docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        txt:  'text/plain',
+      };
+      const ext  = fromDocFile.name.split('.').pop().toLowerCase();
+      const mime = fromDocFile.type || extMime[ext] || 'text/plain';
+      const buf  = await fromDocFile.arrayBuffer();
+      res = await fetch('/api/generate/from-doc', {
+        method:  'POST',
+        headers: { ...apiHeaders(), 'Content-Type': mime, 'X-Filename': encodeURIComponent(fromDocFile.name) },
+        body:    buf,
+        signal:  controller.signal,
+      });
+    } else {
+      res = await fetch('/api/generate/from-doc', {
+        method:  'POST',
+        headers: { ...apiHeaders(), 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ url: docUrl }),
+        signal:  controller.signal,
+      });
+    }
+
+    clearTimeout(timeout);
+    const data = await res.json();
+
+    if (!res.ok || !data.ok) {
+      const msg = data.error === 'plan_limit_exceeded'
+        ? 'You\'ve reached your generation limit. <a href="/billing.html">Upgrade →</a>'
+        : data.error === 'complete_profile_first'
+        ? 'Complete your <a href="/profile.html">voice profile</a> first.'
+        : data.error === 'doc_too_short'
+        ? 'The document didn\'t have enough text to work with. Try a longer file or URL.'
+        : data.error === 'url_fetch_failed'
+        ? 'Couldn\'t fetch that URL. Try uploading the file directly.'
+        : 'Something went wrong. Please try again.';
+      errEl.innerHTML    = msg;
+      errEl.style.display = '';
+      return;
+    }
+
+    window.location.href = `/preview.html?post_id=${encodeURIComponent(data.id)}`;
+
+  } catch (err) {
+    clearTimeout(timeout);
+    const msg = err.name === 'AbortError'
+      ? 'Generation timed out. Please try again.'
+      : 'Something went wrong. Please try again.';
+    errEl.textContent   = msg;
+    errEl.style.display = '';
+  } finally {
+    genBtn.disabled        = false;
+    genBtn.textContent     = 'Extract and generate →';
+    statusEl.style.display = 'none';
+  }
+}
+
+/* ── 9. Vault mode ───────────────────────────────────────────── */
 let hasPositioning = false;
 let vaultLoaded    = false;
 
@@ -259,14 +416,16 @@ function setVaultRunStatus(msg, type) {
   vaultRunStatus.className   = `gen-vault-run-status ${type}`;
 }
 
-/* ── 8. Init ─────────────────────────────────────────────────── */
+/* ── 10. Init ────────────────────────────────────────────────── */
 (async function init() {
   await window.scouthookAuthReady;
   await loadProfile();
+  initFromDocPane();
 
-  // Auto-switch to vault tab if ?mode=vault is in the URL
-  if (new URLSearchParams(location.search).get('mode') === 'vault') {
-    document.querySelector('[data-mode="vault"]').click();
+  // Auto-switch tab if ?mode= is in the URL
+  const urlMode = new URLSearchParams(location.search).get('mode');
+  if (urlMode === 'vault' || urlMode === 'from-doc') {
+    document.querySelector(`[data-mode="${urlMode}"]`)?.click();
   } else {
     ideaInput.focus();
   }

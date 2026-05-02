@@ -9,6 +9,7 @@ const helmet = require('helmet');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const session = require('express-session');
+const connectPgSimple = require('connect-pg-simple');
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const { db } = require('./db');
@@ -65,11 +66,18 @@ if (!process.env.SESSION_SECRET) {
 const SESSION_SECRET = process.env.SESSION_SECRET;
 
 app.set('trust proxy', 1); // needed on Render/behind proxies for secure cookies
+
+const PgSession = connectPgSimple(session);
 app.use(session({
   name: 'scouthook.sid',
   secret: SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
+  store: new PgSession({
+    conString: process.env.DATABASE_URL,
+    tableName: 'session',
+    pruneSessionInterval: 60 * 15, // prune expired sessions every 15 min
+  }),
   cookie: {
     httpOnly: true,
     sameSite: 'lax',

@@ -144,7 +144,8 @@ LINKEDIN FORMATTING (non-negotiable):
 ABOVE THE FOLD (critical for reach):
 - LinkedIn shows only the first 2–3 lines before the "see more" truncation.
 - Line 1 is the hook — handled by the archetype instruction above.
-- Lines 2–3 must deepen the tension from the hook, not explain or contextualise it.
+- Lines 2–3 must sharpen the tension, not explain or contextualise it.
+- Avoid "not X, not Y" patterns — they are safe but flat. Instead, add a second sharp fact, a stark contrast, or a consequence that makes the hook land harder.
 - Lines 2–3 should make the reader feel they will miss something if they do not click "see more".
 - Never use lines 2–3 for background, setup, or "let me tell you about X" framing.
 ${AI_TELLS_PROHIBITION}${ctaInstruction}`;

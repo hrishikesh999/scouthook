@@ -9,7 +9,7 @@ const HOOK_ARCHETYPES = {
     name: 'NUMBER',
     trigger: 'thought contains a specific number, timeframe, dollar amount, or measurable result',
     structureInstruction:
-      "Open with a specific number or timeframe that creates immediate scale or stakes. The number must be in the first three words. Format: '[Number] [timeframe/context] ago, [what happened]' or '[Number] [thing] that [outcome]'.",
+      "Open with a specific number in the first three words. Under 10 words total. The hook must create a question in the reader's mind — never explain context. What follows the number should create tension or contrast, not description. Bad: '260% more email revenue from a single archery brand.' Good: '2.6x more revenue. Same list. One assumption changed.' The reader must immediately think 'how?' or 'what changed?' — never 'so what?'.",
     exampleHook: '3 years ago I nearly killed my consulting business.',
     ctaHint: "Ask for the reader's version of the number or timeframe — invite them to share their own measure.",
   },

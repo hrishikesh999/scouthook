@@ -26,7 +26,7 @@ router.get('/', async (req, res) => {
 
     const publishedRow = db.prepare(`
       SELECT COUNT(*) AS n FROM generated_posts
-      WHERE  user_id = ? AND tenant_id = ? AND status = 'published'
+      WHERE  user_id = ? AND tenant_id = ? AND status IN ('published', 'scheduled')
     `).get(uid, tid);
 
     const linkedInRow = db.prepare(`
@@ -46,13 +46,13 @@ router.get('/', async (req, res) => {
         id:    'voice_profile',
         label: 'Complete your voice profile',
         done:  !!(profile?.content_niche),
-        href:  '/account.html',
+        href:  '/profile.html',
       },
       {
         id:    'brand_settings',
         label: 'Update your brand settings',
         done:  !!(profile?.brand_name),
-        href:  '/account.html',
+        href:  '/brand.html',
       },
       {
         id:    'vault_upload',

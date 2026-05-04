@@ -783,11 +783,10 @@ router.post('/from-doc', async (req, res) => {
     );
     const primaryId = primaryInsert.lastInsertRowid;
 
-    // Async vault save — fire and forget, silently skip on failure
-    setImmediate(() => saveDocToVaultAsync({
+    await saveDocToVaultAsync({
       userId, tenantId, filename,
       buffer: fileBuffer, sourceType: fileSourceType, sourceUrl, docText,
-    }));
+    });
 
     const primaryQuality = buildQualityPayload(primaryGate, 1, true);
 

@@ -19,7 +19,7 @@ router.get('/', async (req, res) => {
 
   try {
     const profile = db.prepare(`
-      SELECT display_name, writing_samples, content_niche
+      SELECT display_name, writing_samples, content_niche, brand_name
       FROM   user_profiles
       WHERE  user_id = ? AND tenant_id = ?
     `).get(uid, tid);
@@ -49,10 +49,16 @@ router.get('/', async (req, res) => {
         href:  '/account.html',
       },
       {
-        id:    'first_publish',
-        label: 'Publish your first post',
-        done:  (publishedRow?.n ?? 0) > 0,
-        href:  '/drafts.html',
+        id:    'brand_settings',
+        label: 'Update your brand settings',
+        done:  !!(profile?.brand_name),
+        href:  '/account.html',
+      },
+      {
+        id:    'vault_upload',
+        label: 'Upload to Content Vault',
+        done:  (vaultRow?.n ?? 0) > 0,
+        href:  '/vault.html',
       },
       {
         id:    'linkedin',
@@ -61,16 +67,10 @@ router.get('/', async (req, res) => {
         href:  connectUrl,
       },
       {
-        id:    'writing_samples',
-        label: 'Add writing samples',
-        done:  !!(profile?.writing_samples),
-        href:  '/account.html',
-      },
-      {
-        id:    'vault_upload',
-        label: 'Upload to Content Vault',
-        done:  (vaultRow?.n ?? 0) > 0,
-        href:  '/vault.html',
+        id:    'first_publish',
+        label: 'Publish your first post',
+        done:  (publishedRow?.n ?? 0) > 0,
+        href:  '/drafts.html',
       },
     ];
 

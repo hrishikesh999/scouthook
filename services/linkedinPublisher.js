@@ -481,6 +481,7 @@ async function publishScheduledPost(scheduledPostId, { attemptsMade = 0, maxAtte
         asset_type: row.asset_type || null,
         asset_url: row.asset_url || null,
         scheduled_for: row.scheduled_for,
+        first_comment: row.first_comment || null,
       }));
       if (computed !== row.payload_hash) {
         throw new Error('scheduled_payload_mismatch');
@@ -522,6 +523,17 @@ async function publishScheduledPost(scheduledPostId, { attemptsMade = 0, maxAtte
         VALUES (?, ?, ?, 'published', ?)
       `).run(scheduledPostId, row.user_id, row.tenant_id, linkedin_post_id);
     } catch { /* non-fatal */ }
+
+    // Enqueue first comment job if the user scheduled one (fires 60s later).
+    if (row.first_comment) {
+      try {
+        const { addCommentJob } = require('./scheduler');
+        await addCommentJob(scheduledPostId);
+      } catch (e) {
+        // Non-fatal — the post is published; a failed comment job shouldn't block.
+        console.warn(`[publisher] scheduledPostId=${scheduledPostId} failed to enqueue comment job:`, e.message);
+      }
+    }
 
     // Stamp the originating draft as published, including the linkedin_post_id
     // so the Published page can render a "View on LinkedIn" link.
@@ -674,4 +686,69 @@ async function publishScheduledPost(scheduledPostId, { attemptsMade = 0, maxAtte
   }
 }
 
-module.exports = { publishNow, publishScheduledPost };
+/**
+ * Post the first comment on a published post. Called by the BullMQ 'post-comment' job
+ * 60 seconds after the post goes live.
+ */
+async function publishFirstComment(scheduledPostId) {
+  const row = await db.prepare(
+    'SELECT linkedin_post_id, first_comment, user_id, tenant_id FROM scheduled_posts WHERE id = ?'
+  ).get(scheduledPostId);
+
+  if (!row?.first_comment || !row?.linkedin_post_id) return;
+
+  const tokenRow = await db.prepare(
+    'SELECT linkedin_user_id FROM linkedin_tokens WHERE user_id = ? AND tenant_id = ?'
+  ).get(row.user_id, row.tenant_id);
+
+  if (!tokenRow?.linkedin_user_id) {
+    await db.prepare(
+      "UPDATE scheduled_posts SET first_comment_status = 'failed', updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+    ).run(scheduledPostId);
+    return;
+  }
+
+  const accessToken = await getValidAccessToken(row.user_id, row.tenant_id);
+  const actorUrn = `urn:li:person:${tokenRow.linkedin_user_id}`;
+  const shareUrn = row.linkedin_post_id;
+
+  const res = await fetch(
+    `https://api.linkedin.com/rest/socialActions/${encodeURIComponent(shareUrn)}/comments`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+        'LinkedIn-Version': LINKEDIN_API_VERSION,
+        'X-Restli-Protocol-Version': '2.0.0',
+      },
+      body: JSON.stringify({
+        actor: actorUrn,
+        message: { text: row.first_comment },
+      }),
+    }
+  );
+
+  if (!res.ok) {
+    const errText = await res.text().catch(() => '');
+    console.error(`[publisher] first comment failed for scheduledPostId=${scheduledPostId}: ${res.status} ${errText}`);
+    await db.prepare(
+      "UPDATE scheduled_posts SET first_comment_status = 'failed', updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+    ).run(scheduledPostId);
+    throw new Error(`linkedin_comment_api_error_${res.status}`);
+  }
+
+  await db.prepare(
+    "UPDATE scheduled_posts SET first_comment_status = 'posted', updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+  ).run(scheduledPostId);
+
+  try {
+    await db.prepare(
+      "INSERT INTO scheduled_post_events (scheduled_post_id, user_id, tenant_id, event_type) VALUES (?, ?, ?, 'first_comment_posted')"
+    ).run(scheduledPostId, row.user_id, row.tenant_id);
+  } catch { /* non-fatal */ }
+
+  console.log(`[publisher] scheduledPostId=${scheduledPostId} first comment posted`);
+}
+
+module.exports = { publishNow, publishScheduledPost, publishFirstComment };

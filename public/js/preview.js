@@ -86,6 +86,9 @@ const scheduleCancel  = document.getElementById('schedule-cancel');
 const scheduleConfirm = document.getElementById('schedule-confirm-btn');
 const publishNowBtn   = document.getElementById('publish-now-btn');
 const modalError      = document.getElementById('modal-error');
+const firstCommentInput      = document.getElementById('first-comment-input');
+const firstCommentCount      = document.getElementById('first-comment-count');
+const suggestFirstCommentBtn = document.getElementById('suggest-first-comment-btn');
 
 const overlay         = document.getElementById('overlay');
 
@@ -996,7 +999,35 @@ function closeModal() {
   overlay.setAttribute('aria-hidden', 'true');
   publishNowBtn.textContent = 'Publish now';
   publishNowBtn.disabled = false;
+  if (firstCommentInput) { firstCommentInput.value = ''; firstCommentCount.textContent = '0'; }
 }
+
+firstCommentInput?.addEventListener('input', () => {
+  firstCommentCount.textContent = firstCommentInput.value.length;
+});
+
+suggestFirstCommentBtn?.addEventListener('click', async () => {
+  const content = postTextarea.value.trim();
+  if (!content) return;
+  suggestFirstCommentBtn.textContent = '…generating';
+  suggestFirstCommentBtn.disabled = true;
+  try {
+    const res = await fetch('/api/linkedin/suggest-first-comment', {
+      method: 'POST',
+      headers: apiHeaders(),
+      body: JSON.stringify({ content }),
+    });
+    const data = await res.json();
+    if (data.suggestion) {
+      firstCommentInput.value = data.suggestion;
+      firstCommentCount.textContent = data.suggestion.length;
+    }
+  } catch { /* silently fail — user can type manually */ }
+  finally {
+    suggestFirstCommentBtn.textContent = '✦ Suggest with AI';
+    suggestFirstCommentBtn.disabled = false;
+  }
+});
 
 scheduleConfirm.addEventListener('click', async () => {
   const dateVal = scheduleDateEl.value;
@@ -1014,10 +1045,12 @@ scheduleConfirm.addEventListener('click', async () => {
   modalError.classList.remove('visible');
 
   try {
+    const firstComment = firstCommentInput?.value.trim() || null;
     const schedulePayload = {
       content,
       scheduled_for: scheduledFor,
       ...(currentPostId ? { post_id: currentPostId } : {}),
+      ...(firstComment ? { first_comment: firstComment } : {}),
     };
     if (attachedAssetUrl) {
       if (attachedAssetType === 'carousel' || attachedAssetType === 'media_pdf') {

@@ -436,6 +436,27 @@
     </div>
     <p class="schedule-tz-label" id="schedule-tz-label"></p>
 
+    <div class="modal-field" style="margin-top:16px;margin-bottom:0;border-top:1px solid #e5e7eb;padding-top:14px">
+      <label class="field-label" for="first-comment-input">
+        First comment
+        <span style="font-weight:400;color:#9ca3af">(optional — posts 60s after your post goes live)</span>
+      </label>
+      <textarea
+        id="first-comment-input"
+        rows="3"
+        maxlength="1250"
+        placeholder="Add a link, CTA, or hashtags here instead of the post body…"
+        class="field-input"
+        style="resize:none;width:100%"
+      ></textarea>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:4px">
+        <button id="suggest-first-comment-btn" type="button" style="font-size:12px;color:#0077b5;background:none;border:none;cursor:pointer;padding:0;display:flex;align-items:center;gap:4px">
+          ✦ Suggest with AI
+        </button>
+        <span style="font-size:12px;color:#9ca3af"><span id="first-comment-count">0</span>/1250</span>
+      </div>
+    </div>
+
     <div class="modal-footer">
       <button class="btn-outlined" id="schedule-cancel" style="height:36px">Cancel</button>
       <div style="display:flex;gap:8px">

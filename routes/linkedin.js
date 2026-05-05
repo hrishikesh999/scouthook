@@ -6,7 +6,7 @@ const router  = express.Router();
 const { db, getSetting } = require('../db');
 const { storeTokens, getValidAccessToken, revokeLinkedInToken } = require('../services/linkedinOAuth');
 const { publishNow } = require('../services/linkedinPublisher');
-const { addScheduledJob, removeScheduledJob, isSchedulerEnabled } = require('../services/scheduler');
+const { addScheduledJob, addCommentJob, removeScheduledJob, isSchedulerEnabled } = require('../services/scheduler');
 const { syncPostMetrics, RateLimitError } = require('../services/linkedinMetrics');
 
 function sha256Hex(s) {
@@ -355,7 +355,7 @@ router.post('/publish', async (req, res) => {
 router.post('/schedule', async (req, res) => {
   const userId   = req.userId;
   const tenantId = req.tenantId;
-  const { content, scheduled_for, post_id, image_url, carousel_pdf_url } = req.body;
+  const { content, scheduled_for, post_id, image_url, carousel_pdf_url, first_comment } = req.body;
 
   if (!userId)         return res.status(400).json({ ok: false, error: 'missing_user_id' });
   if (!content?.trim()) return res.status(400).json({ ok: false, error: 'missing_content' });
@@ -367,6 +367,10 @@ router.post('/schedule', async (req, res) => {
   }
   if (image_url && carousel_pdf_url) {
     return res.status(400).json({ ok: false, error: 'multiple_assets_not_supported' });
+  }
+  const trimmedFirstComment = first_comment?.trim() || null;
+  if (trimmedFirstComment && trimmedFirstComment.length > 1250) {
+    return res.status(400).json({ ok: false, error: 'first_comment_too_long' });
   }
 
   // Global kill-switch
@@ -458,6 +462,7 @@ router.post('/schedule', async (req, res) => {
       asset_type: carousel_pdf_url ? 'carousel' : image_url ? 'image' : null,
       asset_url: (carousel_pdf_url || image_url)?.trim() || null,
       scheduled_for: scheduledDate.toISOString(),
+      first_comment: trimmedFirstComment,
     }));
 
     // Atomically insert the scheduled_posts row and update generated_posts status.
@@ -465,8 +470,8 @@ router.post('/schedule', async (req, res) => {
     let scheduledPostId;
     await db.transaction(async tx => {
       const result = await tx.prepare(`
-        INSERT INTO scheduled_posts (user_id, tenant_id, post_id, content, scheduled_for, status, asset_type, asset_url, payload_hash)
-        VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?)
+        INSERT INTO scheduled_posts (user_id, tenant_id, post_id, content, scheduled_for, status, asset_type, asset_url, payload_hash, first_comment, first_comment_status)
+        VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)
         RETURNING id
       `).run(
         userId,
@@ -476,7 +481,9 @@ router.post('/schedule', async (req, res) => {
         scheduledDate.toISOString(),
         carousel_pdf_url ? 'carousel' : image_url ? 'image' : null,
         (carousel_pdf_url || image_url)?.trim() || null,
-        payloadHash
+        payloadHash,
+        trimmedFirstComment,
+        trimmedFirstComment ? 'pending' : null
       );
       scheduledPostId = Number(result.lastInsertRowid);
 
@@ -673,11 +680,13 @@ router.post('/scheduled/:id/reschedule', async (req, res) => {
     }
   }
 
+  const oldFirstComment = old.first_comment || null;
   const payloadHash = sha256Hex(JSON.stringify({
     content: old.content,
     asset_type: old.asset_type || null,
     asset_url: old.asset_url || null,
     scheduled_for: scheduledDate.toISOString(),
+    first_comment: oldFirstComment,
   }));
 
   let newScheduledPostId;
@@ -689,8 +698,8 @@ router.post('/scheduled/:id/reschedule', async (req, res) => {
 
       const result = await tx.prepare(`
         INSERT INTO scheduled_posts
-          (user_id, tenant_id, post_id, content, scheduled_for, status, asset_type, asset_url, payload_hash)
-        VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?)
+          (user_id, tenant_id, post_id, content, scheduled_for, status, asset_type, asset_url, payload_hash, first_comment, first_comment_status)
+        VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)
         RETURNING id
       `).run(
         userId, tenantId,
@@ -699,7 +708,9 @@ router.post('/scheduled/:id/reschedule', async (req, res) => {
         scheduledDate.toISOString(),
         old.asset_type || null,
         old.asset_url || null,
-        payloadHash
+        payloadHash,
+        oldFirstComment,
+        oldFirstComment ? 'pending' : null
       );
       newScheduledPostId = Number(result.lastInsertRowid);
     });
@@ -721,6 +732,42 @@ router.post('/scheduled/:id/reschedule', async (req, res) => {
       return res.status(503).json({ ok: false, error: 'scheduling_unavailable' });
     }
     return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/linkedin/suggest-first-comment
+// Generate an AI-suggested first comment for a LinkedIn post.
+// Body: { content } — the post body text
+// Returns: { suggestion: string }
+// ---------------------------------------------------------------------------
+router.post('/suggest-first-comment', async (req, res) => {
+  const userId = req.userId;
+  if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
+
+  const { content } = req.body || {};
+  if (!content?.trim()) return res.status(400).json({ ok: false, error: 'missing_content' });
+
+  const Anthropic = require('@anthropic-ai/sdk');
+  const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
+  if (!apiKey) return res.status(500).json({ ok: false, error: 'no_api_key' });
+
+  try {
+    const client = new Anthropic({ apiKey });
+    const message = await client.messages.create({
+      model: 'claude-haiku-4-5',
+      max_tokens: 300,
+      system: 'You are a LinkedIn growth expert. Generate a concise, high-converting first comment for a LinkedIn post. The comment should add value — a CTA, a key takeaway, a relevant link placeholder, or hashtags. Keep it under 200 characters. No generic phrases like "Great post!" or "Love this!". No emojis unless they genuinely add meaning.',
+      messages: [{
+        role: 'user',
+        content: `Post:\n\n${content.trim().slice(0, 2000)}\n\nGenerate the first comment.`,
+      }],
+    });
+    const suggestion = message.content[0]?.text?.trim() || '';
+    return res.json({ ok: true, suggestion });
+  } catch (err) {
+    console.error('[linkedin/suggest-first-comment] Error:', err.message);
+    return res.status(500).json({ ok: false, error: 'generation_failed' });
   }
 });
 

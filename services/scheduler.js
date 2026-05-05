@@ -99,7 +99,7 @@ async function initScheduler() {
 
   const { Queue, Worker } = require('bullmq');
   const IORedis = require('ioredis');
-  const { publishScheduledPost } = require('./linkedinPublisher');
+  const { publishScheduledPost, publishFirstComment } = require('./linkedinPublisher');
 
   // BullMQ requires separate IORedis instances for Queue and Worker.
   // The Worker uses blocking commands (BRPOP/BLMOVE) that hold the connection,
@@ -112,12 +112,16 @@ async function initScheduler() {
 
   workerInstance = new Worker('linkedin-posts', async job => {
     const { scheduledPostId } = job.data;
-    // Pass BullMQ attempt metadata so publishScheduledPost can distinguish
-    // a transient retry from a final failure.
-    await publishScheduledPost(scheduledPostId, {
-      attemptsMade: job.attemptsMade,
-      maxAttempts: job.opts?.attempts ?? 3,
-    });
+    if (job.name === 'post-comment') {
+      await publishFirstComment(scheduledPostId);
+    } else {
+      // Pass BullMQ attempt metadata so publishScheduledPost can distinguish
+      // a transient retry from a final failure.
+      await publishScheduledPost(scheduledPostId, {
+        attemptsMade: job.attemptsMade,
+        maxAttempts: job.opts?.attempts ?? 3,
+      });
+    }
   }, {
     connection: workerConnection,
     concurrency: 1,
@@ -234,6 +238,27 @@ async function removeScheduledJob(scheduledPostId) {
   }
 }
 
+/**
+ * Enqueue a job to post the first comment 60 seconds after a post is published.
+ * @param {number} scheduledPostId
+ * @returns {Promise<string>} BullMQ job id
+ */
+async function addCommentJob(scheduledPostId) {
+  if (!postQueue) throw new Error('scheduler_not_initialized');
+  const job = await postQueue.add(
+    'post-comment',
+    { scheduledPostId },
+    {
+      delay: 60_000,
+      attempts: 2,
+      backoff: { type: 'fixed', delay: 30_000 },
+      removeOnComplete: true,
+      removeOnFail: false,
+    }
+  );
+  return job.id;
+}
+
 function isSchedulerEnabled() {
   return schedulingEnabledCache && schedulerEnabled && !!postQueue;
 }
@@ -242,4 +267,4 @@ function getWorker() {
   return workerInstance;
 }
 
-module.exports = { initScheduler, addScheduledJob, removeScheduledJob, isSchedulerEnabled, getWorker, recoverStuckPosts };
+module.exports = { initScheduler, addScheduledJob, addCommentJob, removeScheduledJob, isSchedulerEnabled, getWorker, recoverStuckPosts };

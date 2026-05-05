@@ -2070,6 +2070,10 @@ body {
 }
 
 .btn-teal-filled {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
   height: 40px;
   padding: 0 var(--space-5);
   background: linear-gradient(180deg, #0D9488 0%, #0F766E 100%);

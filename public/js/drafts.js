@@ -149,9 +149,7 @@ function renderEmpty() {
   const container = document.getElementById('drafts-container');
   container.innerHTML = `
     <div class="drafts-empty">
-      <a href="/generate.html?new=1" class="btn-teal-filled" style="display:inline-flex;text-decoration:none;">
-        Create Your First Post
-      </a>
+      <a href="/generate.html?new=1" class="btn-teal-filled">Create Your First Post</a>
       <p class="drafts-empty-sub">You are one click away from an authoritative post.</p>
     </div>`;
 }

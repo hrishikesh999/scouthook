@@ -11,13 +11,13 @@
     .first-comment-area {
       display: flex;
       gap: 10px;
-      margin-top: 4px;
+      margin-top: 12px;
       padding-bottom: 8px;
     }
     .first-comment-connector {
       flex-shrink: 0;
       width: 2px;
-      background: #e2e8f0;
+      background: #d1d5db;
       border-radius: 2px;
       margin-left: 6px;
       min-height: 100%;
@@ -25,13 +25,17 @@
     .first-comment-body {
       flex: 1;
       min-width: 0;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 10px 14px 8px;
     }
     .first-comment-label {
-      font-size: 11px;
+      font-size: 12px;
       font-weight: 600;
-      color: #94a3b8;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
+      color: #111111;
+      letter-spacing: 0;
+      text-transform: none;
       margin-bottom: 6px;
       display: flex;
       align-items: center;
@@ -39,9 +43,7 @@
     }
     .first-comment-hint {
       font-weight: 400;
-      text-transform: none;
-      letter-spacing: 0;
-      color: #cbd5e1;
+      color: #6b7280;
     }
     .first-comment-textarea {
       width: 100%;
@@ -53,11 +55,11 @@
       font-weight: 400;
       line-height: 1.55;
       font-family: var(--font-sans);
-      color: var(--text-body);
+      color: #111111;
       padding: 0;
       min-height: 48px;
     }
-    .first-comment-textarea::placeholder { color: #cbd5e1; }
+    .first-comment-textarea::placeholder { color: #9ca3af; }
     .first-comment-footer {
       display: flex;
       align-items: center;
@@ -78,7 +80,7 @@
     }
     .first-comment-suggest-btn:hover { color: #005885; }
     .first-comment-suggest-btn:disabled { opacity: 0.5; cursor: default; }
-    .first-comment-counter { font-size: 12px; color: #cbd5e1; }
+    .first-comment-counter { font-size: 12px; color: #9ca3af; }
 
     /* ── LinkedIn connect banner (above action bar) ──────────── */
     .linkedin-connect-banner[hidden] { display: none !important; }

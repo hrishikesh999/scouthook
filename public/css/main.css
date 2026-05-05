@@ -3464,6 +3464,97 @@ body {
   font-family: var(--font-sans);
 }
 
+/* ── Draft list rows ─────────────────────────────────────────── */
+#drafts-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.draft-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4) var(--space-5);
+  box-shadow: var(--shadow-sm);
+  border-left: 3px solid var(--border);
+  transition: box-shadow 0.15s ease, border-color 0.15s ease;
+}
+.draft-row:hover {
+  box-shadow: var(--shadow-md);
+  border-left-color: var(--teal);
+}
+
+.draft-row-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.draft-row-date {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.draft-row-hook {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-body);
+  font-family: var(--font-sans);
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.draft-row-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-shrink: 0;
+}
+
+.draft-row-delete {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 6px;
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
+  transition: color 0.15s, background 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.draft-row-delete:hover {
+  color: var(--text-danger);
+  background: var(--bg-pill-fail);
+}
+
+.draft-quality-pill {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  white-space: nowrap;
+}
+.draft-quality-pill.good   { background: var(--bg-pill-pass);      color: #065F46; }
+.draft-quality-pill.mid    { background: var(--bg-pill-borderline); color: #92400E; }
+.draft-quality-pill.low    { background: var(--bg-pill);            color: var(--text-muted); }
+
 @media (max-width: 768px) {
   .drafts-grid {
     grid-template-columns: 1fr;

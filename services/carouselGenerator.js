@@ -136,8 +136,11 @@ function buildSlideSvg(slide, slideNum, totalSlides, brand = {}) {
   const isTitle = slide.type === 'title';
   const isClosing = slide.type === 'closing';
 
-  const headlineLines = wrapText(slide.headline || '', 24);
-  const bodyLines = slide.body ? wrapText(slide.body, 42) : [];
+  // Title uses 72px font (~40px/char) — wrap tighter to keep text inside margins.
+  // Content/closing uses 56px font (~30px/char) — can fit more chars per line.
+  const headlineMaxChars = isTitle ? 16 : 22;
+  const headlineLines = wrapText(slide.headline || '', headlineMaxChars);
+  const bodyLines = slide.body ? wrapText(slide.body, 38) : [];
 
   const headlineFontSize = isTitle ? 72 : 56;
   const headlineLineHeight = isTitle ? 86 : 68;
@@ -149,13 +152,17 @@ function buildSlideSvg(slide, slideNum, totalSlides, brand = {}) {
   const totalBlockH = headlineBlockH + bodyBlockH;
   const startY = (H - totalBlockH) / 2;
 
+  // Horizontal padding: 80px each side → text area = 920px wide, centred at 540.
+  const PAD = 80;
+  const textClipDef = `<clipPath id="textClip"><rect x="${PAD}" y="0" width="${W - PAD * 2}" height="${H}"/></clipPath>`;
+
   const headlineXml = headlineLines.map((line, i) =>
-    `<text x="540" y="${startY + i * headlineLineHeight}" font-family="system-ui,-apple-system,'Helvetica Neue',sans-serif" font-size="${headlineFontSize}" font-weight="600" letter-spacing="-0.5" fill="${TX}" text-anchor="middle" dominant-baseline="hanging">${escapeXml(line)}</text>`
+    `<text x="540" y="${startY + i * headlineLineHeight}" font-family="system-ui,-apple-system,'Helvetica Neue',sans-serif" font-size="${headlineFontSize}" font-weight="600" letter-spacing="-0.5" fill="${TX}" text-anchor="middle" dominant-baseline="hanging" clip-path="url(#textClip)">${escapeXml(line)}</text>`
   ).join('\n  ');
 
   const bodyStartY = startY + headlineBlockH + 40;
   const bodyXml = bodyLines.map((line, i) =>
-    `<text x="540" y="${bodyStartY + i * bodyLineHeight}" font-family="system-ui,-apple-system,'Helvetica Neue',sans-serif" font-size="${bodyFontSize}" font-weight="400" fill="${TX}" opacity="0.75" text-anchor="middle" dominant-baseline="hanging">${escapeXml(line)}</text>`
+    `<text x="540" y="${bodyStartY + i * bodyLineHeight}" font-family="system-ui,-apple-system,'Helvetica Neue',sans-serif" font-size="${bodyFontSize}" font-weight="400" fill="${TX}" opacity="0.75" text-anchor="middle" dominant-baseline="hanging" clip-path="url(#textClip)">${escapeXml(line)}</text>`
   ).join('\n  ');
 
   // Accent treatment: title gets full bottom bar, others get left bar
@@ -180,6 +187,7 @@ function buildSlideSvg(slide, slideNum, totalSlides, brand = {}) {
   }
 
   return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">
+  <defs>${textClipDef}</defs>
   <rect width="${W}" height="${H}" fill="${BG_SLIDE}"/>
   ${accentXml}
   ${headlineXml}

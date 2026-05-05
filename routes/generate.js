@@ -681,19 +681,36 @@ router.post('/from-doc', async (req, res) => {
   let sourceUrl      = null;
 
   if (contentType === 'application/json') {
-    const { url } = req.body || {};
-    if (!url || !/^https?:\/\//i.test(url)) {
-      return res.status(400).json({ ok: false, error: 'invalid_url' });
-    }
-    sourceUrl = url;
-    try { filename = new URL(url).hostname; } catch { filename = 'url-doc'; }
+    const body = req.body || {};
+    const { url, vault_doc_id } = body;
 
-    const { extractUrl } = require('../services/vaultMiner');
-    try {
-      const { text } = await extractUrl(url);
-      docText = text;
-    } catch (err) {
-      return res.status(400).json({ ok: false, error: 'url_fetch_failed', detail: err.message });
+    if (vault_doc_id) {
+      // Use an already-indexed vault document — fetch its chunks from the database
+      const doc = db
+        .prepare(`SELECT id, filename FROM vault_documents WHERE id = ? AND user_id = ? AND tenant_id = ? AND status = 'ready'`)
+        .get(vault_doc_id, userId, tenantId);
+      if (!doc) {
+        return res.status(404).json({ ok: false, error: 'vault_doc_not_found' });
+      }
+      filename = doc.filename;
+      const chunks = db
+        .prepare(`SELECT content FROM vault_chunks WHERE document_id = ? AND user_id = ? ORDER BY chunk_index`)
+        .all(vault_doc_id, userId);
+      docText = chunks.map(c => c.content).join('\n\n');
+    } else {
+      if (!url || !/^https?:\/\//i.test(url)) {
+        return res.status(400).json({ ok: false, error: 'invalid_url' });
+      }
+      sourceUrl = url;
+      try { filename = new URL(url).hostname; } catch { filename = 'url-doc'; }
+
+      const { extractUrl } = require('../services/vaultMiner');
+      try {
+        const { text } = await extractUrl(url);
+        docText = text;
+      } catch (err) {
+        return res.status(400).json({ ok: false, error: 'url_fetch_failed', detail: err.message });
+      }
     }
   } else {
     // File upload — read raw binary body

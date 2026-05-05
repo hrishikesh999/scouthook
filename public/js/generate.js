@@ -7,13 +7,31 @@ const generateBtn     = document.getElementById('generate-btn');
 const voiceIndicator  = document.getElementById('voice-indicator-area');
 const generatingState = document.getElementById('generating-state');
 const generateError   = document.getElementById('generate-error');
+const charCount       = document.getElementById('idea-char-count');
 
-/* ── 2. Auto-grow textarea ───────────────────────────────────── */
+/* ── 2. Auto-grow textarea + char counter ────────────────────── */
 ideaInput.addEventListener('input', () => {
   ideaInput.style.height = 'auto';
   ideaInput.style.height = ideaInput.scrollHeight + 'px';
   clearError();
+  updateCharCount();
 });
+
+function updateCharCount() {
+  const len = ideaInput.value.length;
+  if (len === 0) {
+    charCount.textContent = '';
+    charCount.className = 'gen-char-count';
+    return;
+  }
+  if (len < 80) {
+    charCount.textContent = `${len} / 80 characters minimum`;
+    charCount.className = 'gen-char-count warn';
+  } else {
+    charCount.textContent = '';
+    charCount.className = 'gen-char-count';
+  }
+}
 
 /* ── 3. Voice profile indicator ─────────────────────────────── */
 async function loadProfile() {
@@ -26,10 +44,10 @@ async function loadProfile() {
     if (complete) {
       voiceIndicator.innerHTML = `<div class="voice-indicator"><span class="voice-indicator-dot voice-indicator-dot--green"></span><a href="/profile.html" class="edit-link">Created using your voice profile</a></div>`;
     } else {
-      voiceIndicator.innerHTML = `<div class="voice-indicator"><span class="voice-indicator-dot voice-indicator-dot--red"></span><a href="/profile.html" class="edit-link">Voice profile incomplete — complete it for better results</a></div>`;
+      voiceIndicator.innerHTML = `<div class="voice-indicator"><span class="voice-indicator-dot voice-indicator-dot--red"></span><a href="/profile.html" class="edit-link">Voice profile incomplete, complete it for better results</a></div>`;
     }
   } catch {
-    voiceIndicator.innerHTML = `<div class="voice-indicator"><span class="voice-indicator-dot voice-indicator-dot--red"></span><a href="/profile.html" class="edit-link">Voice profile incomplete — complete it for better results</a></div>`;
+    voiceIndicator.innerHTML = `<div class="voice-indicator"><span class="voice-indicator-dot voice-indicator-dot--red"></span><a href="/profile.html" class="edit-link">Voice profile incomplete, complete it for better results</a></div>`;
   }
 }
 
@@ -112,7 +130,6 @@ function showInputError(msg) {
 function showGenerateError(html) {
   generateError.innerHTML = html;
   generateError.classList.add('visible');
-  // Wire up "Try again" links in the error message
   const tryLink = generateError.querySelector('a[href="#"]');
   if (tryLink) tryLink.addEventListener('click', (e) => { e.preventDefault(); triggerGenerate(); });
 }
@@ -143,32 +160,53 @@ modeBtns.forEach(btn => {
 });
 
 /* ── 7. From-a-document pane ─────────────────────────────────── */
-let fromDocFile = null;
+let fromDocFile    = null;
+let fromDocVaultId = null; // vault_doc_id when picked from vault
 
 function initFromDocPane() {
-  const dropzone  = document.getElementById('gen-doc-dropzone');
-  const fileInput = document.getElementById('gen-doc-file-input');
-  const fileBadge = document.getElementById('gen-doc-file-badge');
-  const fileName  = document.getElementById('gen-doc-file-name');
-  const fileClear = document.getElementById('gen-doc-file-clear');
-  const urlInput  = document.getElementById('gen-doc-url');
-  const genBtn    = document.getElementById('gen-doc-btn');
-  const errEl     = document.getElementById('gen-doc-error');
+  const dropzone      = document.getElementById('gen-doc-dropzone');
+  const fileInput     = document.getElementById('gen-doc-file-input');
+  const fileBadge     = document.getElementById('gen-doc-file-badge');
+  const fileName      = document.getElementById('gen-doc-file-name');
+  const fileClear     = document.getElementById('gen-doc-file-clear');
+  const urlInput      = document.getElementById('gen-doc-url');
+  const genBtn        = document.getElementById('gen-doc-btn');
+  const errEl         = document.getElementById('gen-doc-error');
+  const pickerToggle  = document.getElementById('gen-vault-picker-toggle');
+  const pickerPanel   = document.getElementById('gen-vault-picker');
+  const pickerList    = document.getElementById('gen-vault-picker-list');
 
   const ACCEPTED_EXT = ['pdf', 'docx', 'txt'];
+  let pickerLoaded = false;
 
   function showFile(file) {
-    fromDocFile = file;
+    fromDocFile    = file;
+    fromDocVaultId = null;
     fileName.textContent = file.name;
     fileBadge.hidden = false;
     dropzone.hidden  = true;
     if (urlInput) urlInput.value = '';
   }
 
+  function showVaultDoc(id, name) {
+    fromDocFile    = null;
+    fromDocVaultId = id;
+    fileName.textContent = name;
+    fileBadge.hidden = false;
+    dropzone.hidden  = true;
+    if (urlInput) urlInput.value = '';
+    // Close picker
+    pickerPanel.hidden = true;
+    pickerToggle.setAttribute('aria-expanded', 'false');
+  }
+
   function clearFile() {
-    fromDocFile = null;
+    fromDocFile    = null;
+    fromDocVaultId = null;
     fileBadge.hidden = true;
     dropzone.hidden  = false;
+    // Deselect any picker item
+    pickerList.querySelectorAll('.gen-vault-picker-item').forEach(el => el.classList.remove('selected'));
   }
 
   function showErr(msg) { errEl.textContent = msg; errEl.style.display = ''; }
@@ -209,6 +247,58 @@ function initFromDocPane() {
 
   fileClear.addEventListener('click', clearFile);
   genBtn.addEventListener('click', runFromDocGeneration);
+
+  // ── Vault picker ──
+  pickerToggle.addEventListener('click', async () => {
+    const isOpen = !pickerPanel.hidden;
+    if (isOpen) {
+      pickerPanel.hidden = true;
+      pickerToggle.setAttribute('aria-expanded', 'false');
+      return;
+    }
+    pickerPanel.hidden = false;
+    pickerToggle.setAttribute('aria-expanded', 'true');
+
+    if (pickerLoaded) return;
+    pickerLoaded = true;
+
+    try {
+      const res  = await fetch('/api/vault/documents', { headers: apiHeaders() });
+      const data = await res.json();
+      const docs  = (data.documents || []).filter(d => d.status === 'ready');
+
+      if (docs.length === 0) {
+        pickerList.innerHTML = `<div class="gen-vault-picker-empty">No ready documents in your Vault yet. <a href="/vault.html" style="color:var(--brand)">Upload one →</a></div>`;
+        return;
+      }
+
+      pickerList.innerHTML = docs.map(d => {
+        const date = d.created_at ? new Date(d.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '';
+        return `<button type="button" class="gen-vault-picker-item" data-id="${d.id}" data-name="${escapeAttr(d.filename)}">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          <span class="gen-vault-picker-item-name">${escapeHtml(d.filename)}</span>
+          <span class="gen-vault-picker-item-date">${date}</span>
+        </button>`;
+      }).join('');
+
+      pickerList.querySelectorAll('.gen-vault-picker-item').forEach(item => {
+        item.addEventListener('click', () => {
+          pickerList.querySelectorAll('.gen-vault-picker-item').forEach(el => el.classList.remove('selected'));
+          item.classList.add('selected');
+          showVaultDoc(item.dataset.id, item.dataset.name);
+        });
+      });
+    } catch {
+      pickerList.innerHTML = '<div class="gen-vault-picker-empty">Could not load documents. Try refreshing.</div>';
+    }
+  });
+}
+
+function escapeHtml(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function escapeAttr(str) {
+  return String(str).replace(/"/g, '&quot;');
 }
 
 async function runFromDocGeneration() {
@@ -218,8 +308,8 @@ async function runFromDocGeneration() {
   const urlInput = document.getElementById('gen-doc-url');
   const docUrl   = (urlInput?.value || '').trim();
 
-  if (!fromDocFile && !docUrl) {
-    errEl.textContent = 'Please upload a file or paste a URL.';
+  if (!fromDocFile && !docUrl && !fromDocVaultId) {
+    errEl.textContent = 'Please upload a file, paste a URL, or pick from your Vault.';
     errEl.style.display = '';
     return;
   }
@@ -239,7 +329,14 @@ async function runFromDocGeneration() {
 
   try {
     let res;
-    if (fromDocFile) {
+    if (fromDocVaultId) {
+      res = await fetch('/api/generate/from-doc', {
+        method:  'POST',
+        headers: { ...apiHeaders(), 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ vault_doc_id: fromDocVaultId }),
+        signal:  controller.signal,
+      });
+    } else if (fromDocFile) {
       const extMime = {
         pdf:  'application/pdf',
         docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -275,6 +372,8 @@ async function runFromDocGeneration() {
         ? 'The document didn\'t have enough text to work with. Try a longer file or URL.'
         : data.error === 'url_fetch_failed'
         ? 'Couldn\'t fetch that URL. Try uploading the file directly.'
+        : data.error === 'vault_doc_not_found'
+        ? 'That document is no longer in your Vault. <a href="/vault.html">Manage Vault →</a>'
         : 'Something went wrong. Please try again.';
       errEl.innerHTML    = msg;
       errEl.style.display = '';
@@ -381,7 +480,7 @@ vaultBtn.addEventListener('click', () => {
 
 async function runWeeklyBatch() {
   vaultBtn.disabled = true;
-  setVaultRunStatus('Writing your posts… this takes about 30 seconds.', 'info');
+  setVaultRunStatus('Writing your posts, this takes about 30 seconds.', 'info');
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 120000);
@@ -394,10 +493,10 @@ async function runWeeklyBatch() {
     const data = await res.json();
     if (!data.ok) {
       if (data.error === 'ghostwriter_prompt_not_ready') {
-        setVaultRunStatus('Your Voice Profile needs a bit more info — complete Content Niche + Audience first.', 'error');
+        setVaultRunStatus('Your Voice Profile needs a bit more info, complete Content Niche + Audience first.', 'error');
         vaultRunStatus.innerHTML += ' <a href="/profile.html" style="color:var(--brand);font-weight:600">Complete Voice Profile →</a>';
       } else if (data.error === 'rate_limit_exceeded') {
-        setVaultRunStatus('Rate limit reached — try again in an hour.', 'error');
+        setVaultRunStatus('Rate limit reached. Try again in an hour.', 'error');
       } else {
         setVaultRunStatus(data.message || data.error || 'Something went wrong. Please try again.', 'error');
       }

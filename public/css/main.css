@@ -1445,9 +1445,11 @@ body {
 
 #linkedin-preview.visible {
   display: block;
-  background: var(--bg-preview);
-  padding: var(--space-6);
   min-height: 300px;
+}
+
+#right-panel.preview-mode #post-surface {
+  background: var(--bg-preview);
 }
 
 .linkedin-card {

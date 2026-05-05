@@ -32,6 +32,7 @@ const tryAgainLink    = document.getElementById('try-again-link');
 const postTextarea    = document.getElementById('post-textarea');
 const postEditArea    = document.getElementById('post-edit-area');
 const linkedinPreview = document.getElementById('linkedin-preview');
+const firstCommentArea = document.getElementById('first-comment-area');
 const previewBody     = document.getElementById('preview-body');
 const previewName     = document.getElementById('preview-name');
 const previewHeadline = document.getElementById('preview-headline');
@@ -539,6 +540,7 @@ function renderPost(text) {
   postTextarea.classList.add('visible');
   postTextarea.classList.remove('published');
   autoGrowTextarea(postTextarea);
+  firstCommentArea?.classList.remove('hidden');
 }
 
 /* ── 11. Score bar ───────────────────────────────────────────── */
@@ -1438,6 +1440,7 @@ function setGenerating(loading) {
 function showSkeleton() {
   emptyState.classList.add('hidden');
   postTextarea.classList.remove('visible');
+  firstCommentArea?.classList.add('hidden');
   postErrorState.classList.remove('visible');
   skeletonState.classList.add('visible');
   currentHookB = null;
@@ -1454,6 +1457,7 @@ function showPostError() {
   hideSkeleton();
   emptyState.classList.add('hidden');
   postTextarea.classList.remove('visible');
+  firstCommentArea?.classList.add('hidden');
   postErrorState.classList.add('visible');
 }
 

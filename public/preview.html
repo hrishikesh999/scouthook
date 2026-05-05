@@ -7,6 +7,79 @@
   <title>Post Preview — Scouthook</title>
   <link rel="stylesheet" href="/css/main.css">
   <style>
+    /* ── First comment thread ─────────────────────────────────── */
+    .first-comment-area {
+      display: flex;
+      gap: 10px;
+      margin-top: 4px;
+      padding-bottom: 8px;
+    }
+    .first-comment-connector {
+      flex-shrink: 0;
+      width: 2px;
+      background: #e2e8f0;
+      border-radius: 2px;
+      margin-left: 6px;
+      min-height: 100%;
+    }
+    .first-comment-body {
+      flex: 1;
+      min-width: 0;
+    }
+    .first-comment-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: #94a3b8;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .first-comment-hint {
+      font-weight: 400;
+      text-transform: none;
+      letter-spacing: 0;
+      color: #cbd5e1;
+    }
+    .first-comment-textarea {
+      width: 100%;
+      border: none;
+      outline: none;
+      resize: none;
+      background: transparent;
+      font-size: 14px;
+      font-weight: 400;
+      line-height: 1.55;
+      font-family: var(--font-sans);
+      color: var(--text-body);
+      padding: 0;
+      min-height: 48px;
+    }
+    .first-comment-textarea::placeholder { color: #cbd5e1; }
+    .first-comment-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 6px;
+    }
+    .first-comment-suggest-btn {
+      font-size: 12px;
+      color: #0077b5;
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-family: var(--font-sans);
+    }
+    .first-comment-suggest-btn:hover { color: #005885; }
+    .first-comment-suggest-btn:disabled { opacity: 0.5; cursor: default; }
+    .first-comment-counter { font-size: 12px; color: #cbd5e1; }
+
     /* ── LinkedIn connect banner (above action bar) ──────────── */
     .linkedin-connect-banner[hidden] { display: none !important; }
     .linkedin-connect-banner {
@@ -283,6 +356,31 @@
             aria-multiline="true"
           ></textarea>
 
+          <!-- First comment — thread-style, shown once a post is loaded -->
+          <div id="first-comment-area" class="first-comment-area hidden">
+            <div class="first-comment-connector" aria-hidden="true"></div>
+            <div class="first-comment-body">
+              <div class="first-comment-label">
+                First comment
+                <span class="first-comment-hint">posts 60s after your post goes live · optional</span>
+              </div>
+              <textarea
+                id="first-comment-input"
+                class="first-comment-textarea"
+                rows="2"
+                maxlength="1250"
+                placeholder="Add a link, CTA, or hashtags here instead of the post body…"
+                aria-label="First comment"
+              ></textarea>
+              <div class="first-comment-footer">
+                <button id="suggest-first-comment-btn" type="button" class="first-comment-suggest-btn">
+                  ✦ Suggest with AI
+                </button>
+                <span class="first-comment-counter"><span id="first-comment-count">0</span>/1250</span>
+              </div>
+            </div>
+          </div>
+
         </div><!-- /post-edit-area -->
 
         <!-- LinkedIn Preview -->
@@ -435,27 +533,6 @@
       </div>
     </div>
     <p class="schedule-tz-label" id="schedule-tz-label"></p>
-
-    <div class="modal-field" style="margin-top:16px;margin-bottom:0;border-top:1px solid #e5e7eb;padding-top:14px">
-      <label class="field-label" for="first-comment-input">
-        First comment
-        <span style="font-weight:400;color:#9ca3af">(optional — posts 60s after your post goes live)</span>
-      </label>
-      <textarea
-        id="first-comment-input"
-        rows="3"
-        maxlength="1250"
-        placeholder="Add a link, CTA, or hashtags here instead of the post body…"
-        class="field-input"
-        style="resize:none;width:100%"
-      ></textarea>
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:4px">
-        <button id="suggest-first-comment-btn" type="button" style="font-size:12px;color:#0077b5;background:none;border:none;cursor:pointer;padding:0;display:flex;align-items:center;gap:4px">
-          ✦ Suggest with AI
-        </button>
-        <span style="font-size:12px;color:#9ca3af"><span id="first-comment-count">0</span>/1250</span>
-      </div>
-    </div>
 
     <div class="modal-footer">
       <button class="btn-outlined" id="schedule-cancel" style="height:36px">Cancel</button>

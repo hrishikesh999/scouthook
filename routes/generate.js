@@ -686,14 +686,14 @@ router.post('/from-doc', async (req, res) => {
 
     if (vault_doc_id) {
       // Use an already-indexed vault document — fetch its chunks from the database
-      const doc = db
+      const doc = await db
         .prepare(`SELECT id, filename FROM vault_documents WHERE id = ? AND user_id = ? AND tenant_id = ? AND status = 'ready'`)
         .get(vault_doc_id, userId, tenantId);
       if (!doc) {
         return res.status(404).json({ ok: false, error: 'vault_doc_not_found' });
       }
       filename = doc.filename;
-      const chunks = db
+      const chunks = await db
         .prepare(`SELECT content FROM vault_chunks WHERE document_id = ? AND user_id = ? ORDER BY chunk_index`)
         .all(vault_doc_id, userId);
       docText = chunks.map(c => c.content).join('\n\n');

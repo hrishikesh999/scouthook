@@ -1452,6 +1452,10 @@ body {
   background: var(--bg-preview);
 }
 
+#post-edit-area {
+  padding: var(--space-5);
+}
+
 .linkedin-card {
   background: var(--bg-card);
   border: 1px solid var(--border);

@@ -48,13 +48,18 @@ function buildQuoteCardSvg(quote, brand = {}) {
   const accent = brand.accent || ACCENT;
   const text   = brand.text   || TEXT;
 
-  const lines = wrapText(quote, 36);
+  // Accent bar right edge is at x=80. Keep text ≥24px clear → clip from x=104.
+  // Symmetric right clip: 1080-104=976. At 50px font ~26.5px/char, 32 chars ≈ 848px
+  // centred at 540 → extends to x=116 left, x=964 right — well inside both clip edges.
+  const TEXT_LEFT_CLIP = 104;
+  const TEXT_RIGHT_CLIP = W - TEXT_LEFT_CLIP;
+  const lines = wrapText(quote, 32);
   const lineHeight = 72;
   const blockHeight = lines.length * lineHeight;
   const startY = (H - blockHeight) / 2;
 
   const linesXml = lines.map((line, i) =>
-    `<text x="540" y="${startY + i * lineHeight}" font-family="system-ui, -apple-system, 'Helvetica Neue', sans-serif" font-size="50" font-weight="500" letter-spacing="-0.3" fill="${text}" text-anchor="middle" dominant-baseline="hanging">${escapeXml(line)}</text>`
+    `<text x="540" y="${startY + i * lineHeight}" font-family="system-ui, -apple-system, 'Helvetica Neue', sans-serif" font-size="50" font-weight="500" letter-spacing="-0.3" fill="${text}" text-anchor="middle" dominant-baseline="hanging" clip-path="url(#quoteTextClip)">${escapeXml(line)}</text>`
   ).join('\n  ');
 
   // Brand mark: logo image > brand name text > "Scouthook" fallback
@@ -67,13 +72,10 @@ function buildQuoteCardSvg(quote, brand = {}) {
   }
 
   return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">
-  <!-- Background -->
+  <defs><clipPath id="quoteTextClip"><rect x="${TEXT_LEFT_CLIP}" y="0" width="${TEXT_RIGHT_CLIP - TEXT_LEFT_CLIP}" height="${H}"/></clipPath></defs>
   <rect width="${W}" height="${H}" fill="${bg}"/>
-  <!-- Accent bar — left edge -->
   <rect x="72" y="${startY - 40}" width="8" height="${blockHeight + 80}" fill="${accent}" rx="4"/>
-  <!-- Quote text -->
   ${linesXml}
-  <!-- Brand mark -->
   ${brandXml}
 </svg>`;
 }

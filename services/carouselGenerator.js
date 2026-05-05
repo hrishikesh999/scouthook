@@ -136,9 +136,9 @@ function buildSlideSvg(slide, slideNum, totalSlides, brand = {}) {
   const isTitle = slide.type === 'title';
   const isClosing = slide.type === 'closing';
 
-  // Title uses 72px font (~40px/char) — wrap tighter to keep text inside margins.
+  // Title uses 72px font (~38px/char) — wrap at 20 chars (~760px) for balanced margins.
   // Content/closing uses 56px font (~30px/char) — can fit more chars per line.
-  const headlineMaxChars = isTitle ? 16 : 22;
+  const headlineMaxChars = isTitle ? 20 : 22;
   const headlineLines = wrapText(slide.headline || '', headlineMaxChars);
   const bodyLines = slide.body ? wrapText(slide.body, 38) : [];
 

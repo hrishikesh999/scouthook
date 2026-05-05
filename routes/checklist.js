@@ -18,23 +18,23 @@ router.get('/', async (req, res) => {
   const tid = req.tenantId || 'default';
 
   try {
-    const profile = db.prepare(`
+    const profile = await db.prepare(`
       SELECT display_name, writing_samples, content_niche, brand_name
       FROM   user_profiles
       WHERE  user_id = ? AND tenant_id = ?
     `).get(uid, tid);
 
-    const publishedRow = db.prepare(`
+    const publishedRow = await db.prepare(`
       SELECT COUNT(*) AS n FROM generated_posts
       WHERE  user_id = ? AND tenant_id = ? AND status IN ('published', 'scheduled')
     `).get(uid, tid);
 
-    const linkedInRow = db.prepare(`
+    const linkedInRow = await db.prepare(`
       SELECT id FROM linkedin_tokens
       WHERE  user_id = ? AND tenant_id = ?
     `).get(uid, tid);
 
-    const vaultRow = db.prepare(`
+    const vaultRow = await db.prepare(`
       SELECT COUNT(*) AS n FROM vault_documents
       WHERE  user_id = ? AND tenant_id = ?
     `).get(uid, tid);

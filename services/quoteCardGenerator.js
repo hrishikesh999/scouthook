@@ -14,24 +14,10 @@ const TEXT_MUTED = '#8A9CC0';
 const W = 1080;
 const H = 1080;
 
-/**
- * Generate a quote card from a post.
- * 1. Claude Haiku extracts the single most powerful line.
- * 2. SVG rendered at 1080x1080 with dark bg + teal accent.
- * 3. sharp converts SVG buffer → PNG.
- *
- * @param {object} post — { id, content }
- * @param {{ userId: string, tenantId: string }} [ctx]
- * @returns {Promise<{ svg: string, png_url: string }>}
- */
-async function generateQuoteCard(post, brand = {}, ctx = {}) {
-  const { userId, tenantId } = ctx;
+async function extractQuoteCardContent(post) {
   const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
   if (!apiKey) throw new Error('anthropic_api_key not configured');
-
   const client = new Anthropic({ apiKey });
-
-  // Step 1: Extract most powerful line
   const extractMsg = await client.messages.create({
     model: 'claude-haiku-4-5',
     max_tokens: 200,
@@ -40,17 +26,21 @@ async function generateQuoteCard(post, brand = {}, ctx = {}) {
       content: `Extract the single most impactful, memorable sentence from this post. Return only that sentence — nothing else, no punctuation changes, no explanation.\n\n${post.content}`,
     }],
   });
-  const quoteLine = getAnthropicMessageText(extractMsg) || post.content.split('\n')[0];
+  return { quote: getAnthropicMessageText(extractMsg) || post.content.split('\n')[0] };
+}
 
-  // Step 2: Build SVG
-  const svg = buildQuoteCardSvg(quoteLine, brand);
-
-  // Step 3: Convert to PNG and store
+async function renderQuoteCard(post, brand = {}, content, ctx = {}) {
+  const { userId, tenantId } = ctx;
+  const svg = buildQuoteCardSvg(content.quote, brand);
   const filename = `quote_${post.id}_${Date.now()}.png`;
   const pngBuffer = await sharp(Buffer.from(svg)).png().toBuffer();
   await storage.upload(pngBuffer, { tenantId, userId, type: 'generated', filename, mimeType: 'image/png' });
-
   return { svg, png_url: `/files/${filename}` };
+}
+
+async function generateQuoteCard(post, brand = {}, ctx = {}) {
+  const content = await extractQuoteCardContent(post);
+  return renderQuoteCard(post, brand, content, ctx);
 }
 
 function buildQuoteCardSvg(quote, brand = {}) {
@@ -116,4 +106,4 @@ function escapeXml(str) {
     .replace(/'/g, '&apos;');
 }
 
-module.exports = { generateQuoteCard };
+module.exports = { generateQuoteCard, extractQuoteCardContent, renderQuoteCard };

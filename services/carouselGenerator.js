@@ -17,19 +17,7 @@ const BG_CARD = '#162040';
 const W = 1080;
 const H = 1080;
 
-/**
- * Generate a carousel (6–8 slides) from a post.
- * 1. Claude Haiku breaks post into 6–8 slides (title + content + closing).
- * 2. SVG rendered per slide at 1080x1080.
- * 3. sharp converts each SVG → PNG.
- * 4. archiver zips all PNGs.
- *
- * @param {object} post — { id, content }
- * @param {{ userId: string, tenantId: string }} [ctx]
- * @returns {Promise<{ slides: Array<{ svg: string, png_url: string }>, zip_url: string, pdf_url: string }>}
- */
-async function generateCarousel(post, brand = {}, ctx = {}) {
-  const { userId, tenantId } = ctx;
+async function extractCarouselContent(post) {
   const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
   if (!apiKey) throw new Error('anthropic_api_key not configured');
 
@@ -56,7 +44,6 @@ Rules:
 POST:
 ${post.content}`;
 
-  // Step 1: Break post into slides
   const slideMsg = await client.messages.create({
     model: 'claude-haiku-4-5',
     max_tokens: 1500,
@@ -68,7 +55,6 @@ ${post.content}`;
   try {
     slidesData = extractJsonFromResponse(rawText);
   } catch (e) {
-    // Retry once with full assistant payload for the Messages API
     const retry = await client.messages.create({
       model: 'claude-haiku-4-5',
       max_tokens: 1500,
@@ -86,11 +72,17 @@ ${post.content}`;
     throw new Error(`Expected 6-8 slides, got ${slides?.length}`);
   }
 
+  return { slides };
+}
+
+async function renderCarousel(post, brand = {}, content, ctx = {}) {
+  const { userId, tenantId } = ctx;
+  const { slides } = content;
+
   const timestamp = Date.now();
-  const pngBuffers = [];  // { buffer, filename } — kept in memory for ZIP + PDF
+  const pngBuffers = [];
   const slideResults = [];
 
-  // Step 2+3: Build SVG + convert to PNG per slide (in memory)
   for (let i = 0; i < slides.length; i++) {
     const slide = slides[i];
     const svg = buildSlideSvg(slide, i + 1, slides.length, brand);
@@ -101,12 +93,10 @@ ${post.content}`;
     slideResults.push({ svg, png_url: `/files/${filename}` });
   }
 
-  // Step 4: ZIP all PNGs (buffered in memory)
   const zipFilename = `carousel_${post.id}_${timestamp}.zip`;
   const zipBuffer = await buildZipBuffer(pngBuffers);
   await storage.upload(zipBuffer, { tenantId, userId, type: 'generated', filename: zipFilename, mimeType: 'application/zip' });
 
-  // Step 5: PDF (one page per PNG buffer)
   const pdfFilename = `carousel_${post.id}_${timestamp}.pdf`;
   const pdfBytes = await buildCarouselPdfFromBuffers(pngBuffers.map(p => p.buffer));
   await storage.upload(Buffer.from(pdfBytes), { tenantId, userId, type: 'generated', filename: pdfFilename, mimeType: 'application/pdf' });
@@ -116,6 +106,11 @@ ${post.content}`;
     zip_url: `/files/${zipFilename}`,
     pdf_url: `/files/${pdfFilename}`,
   };
+}
+
+async function generateCarousel(post, brand = {}, ctx = {}) {
+  const content = await extractCarouselContent(post);
+  return renderCarousel(post, brand, content, ctx);
 }
 
 /**
@@ -238,4 +233,4 @@ function escapeXml(str) {
     .replace(/'/g, '&apos;');
 }
 
-module.exports = { generateCarousel };
+module.exports = { generateCarousel, extractCarouselContent, renderCarousel };

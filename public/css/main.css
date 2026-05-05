@@ -2223,6 +2223,98 @@ body {
   font-family: var(--font-sans);
 }
 
+/* ── Slide-over image editor ────────────────────────────────── */
+.so-editor-form {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-2) 0 var(--space-4);
+}
+
+.so-field-hint {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 0 0 var(--space-3);
+  line-height: 1.5;
+}
+
+.so-quote-textarea {
+  min-height: 96px;
+  resize: vertical;
+  font-size: 15px;
+}
+
+.so-body-textarea {
+  min-height: 72px;
+  resize: vertical;
+  font-size: 14px;
+}
+
+.so-char-counter,
+.so-word-counter {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: right;
+  margin-top: var(--space-1);
+  font-family: var(--font-sans);
+}
+
+.so-char-counter--full {
+  color: var(--score-fail);
+  font-weight: 600;
+}
+
+.so-wc-warn {
+  color: var(--score-fail);
+  font-weight: 600;
+}
+
+.so-slide-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
+  background: var(--bg-subtle, #FAFAFA);
+}
+
+.so-slide-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-3);
+}
+
+.so-slide-num {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+}
+
+.so-slide-badge {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-sans);
+}
+
+.so-slide-badge--title   { background: #EFF6FF; color: #1D4ED8; }
+.so-slide-badge--content { background: var(--bg-pill, #F4F4F5); color: var(--text-secondary, #52525B); }
+.so-slide-badge--closing { background: #F0FDF4; color: #15803D; }
+
+.so-extract-error {
+  font-size: 14px;
+  color: var(--text-muted);
+  text-align: center;
+  padding: var(--space-8) 16px;
+  line-height: 1.5;
+}
+
+.so-hl-input {
+  font-size: 14px;
+}
+
 /* ── Brand Settings Page ────────────────────────────────────── */
 .brand-page {
   padding: var(--space-8);

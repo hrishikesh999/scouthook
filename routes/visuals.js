@@ -4,9 +4,9 @@ const express = require('express');
 const router = express.Router();
 const { db } = require('../db');
 const storage = require('../services/storage');
-const { generateQuoteCard } = require('../services/quoteCardGenerator');
-const { generateCarousel } = require('../services/carouselGenerator');
-const { generateBrandedQuote } = require('../services/brandedQuoteGenerator');
+const { generateQuoteCard, extractQuoteCardContent, renderQuoteCard } = require('../services/quoteCardGenerator');
+const { generateCarousel, extractCarouselContent, renderCarousel } = require('../services/carouselGenerator');
+const { generateBrandedQuote, extractBrandedQuoteContent, renderBrandedQuote } = require('../services/brandedQuoteGenerator');
 const { canGenerateVisual, logVisualGeneration } = require('../services/subscription');
 
 // ---------------------------------------------------------------------------
@@ -16,7 +16,7 @@ const { canGenerateVisual, logVisualGeneration } = require('../services/subscrip
 // ---------------------------------------------------------------------------
 router.post('/:postId', async (req, res) => {
   const { postId } = req.params;
-  const { visual_type } = req.body;
+  const { visual_type, mode = 'render', content } = req.body;
   const tenantId = req.tenantId;
   const userId = req.userId;
 
@@ -24,8 +24,8 @@ router.post('/:postId', async (req, res) => {
     return res.status(400).json({ ok: false, error: 'invalid_visual_type' });
   }
 
-  // Check visual generation limit before doing any work
-  if (userId) {
+  // Check visual generation limit only for render calls (extract produces no image)
+  if (mode === 'render' && userId) {
     const visualCheck = await canGenerateVisual(userId, tenantId);
     if (!visualCheck.allowed) {
       return res.status(403).json({
@@ -48,7 +48,6 @@ router.post('/:postId', async (req, res) => {
     return res.status(404).json({ ok: false, error: 'post_not_found' });
   }
 
-  // Verify user ownership if user_id provided
   if (userId && post.user_id !== userId) {
     return res.status(403).json({ ok: false, error: 'forbidden' });
   }
@@ -63,26 +62,22 @@ router.post('/:postId', async (req, res) => {
     accent: profile?.brand_accent || '#0D7A5F',
     text:   profile?.brand_text   || '#F0F4FF',
     name:   profile?.brand_name   || null,
-    logo:   null, // populated below if logo URL is set
+    logo:   null,
   };
 
-  // If a logo URL is stored, convert it to a base64 data URI for SVG embedding.
-  // Relative URLs (e.g. /uploads/...) are read directly from storage; absolute URLs are fetched.
   if (profile?.brand_logo) {
     try {
       const logoUrl = profile.brand_logo;
       let buf;
       if (/^https?:\/\//i.test(logoUrl)) {
-        // External URL — fetch over HTTP
         const logoRes = await fetch(logoUrl);
         if (logoRes.ok) {
           const ab = await logoRes.arrayBuffer();
           const rawMime = logoRes.headers.get('content-type') || 'image/png';
-          const mime = rawMime.split(';')[0].trim(); // strip charset etc.
+          const mime = rawMime.split(';')[0].trim();
           brand.logo = `data:${mime};base64,${Buffer.from(ab).toString('base64')}`;
         }
       } else {
-        // Internal relative URL — derive storage key from the path basename
         const storedName = require('path').basename(logoUrl);
         const key = storage.buildKey(tenantId, userId, 'uploads', storedName);
         buf = await storage.download(key);
@@ -96,6 +91,22 @@ router.post('/:postId', async (req, res) => {
   }
 
   try {
+    // ── EXTRACT MODE — return AI-suggested text only, no image rendered ──
+    if (mode === 'extract') {
+      if (visual_type === 'quote_card') {
+        const extracted = await extractQuoteCardContent(post);
+        return res.json({ ok: true, mode: 'extract', visual_type, content: extracted });
+      }
+      if (visual_type === 'branded_quote') {
+        const extracted = await extractBrandedQuoteContent(post);
+        return res.json({ ok: true, mode: 'extract', visual_type, content: extracted });
+      }
+      // carousel
+      const extracted = await extractCarouselContent(post);
+      return res.json({ ok: true, mode: 'extract', visual_type, content: extracted });
+    }
+
+    // ── RENDER MODE — generate image from provided (or auto-extracted) content ──
     if (visual_type === 'branded_quote') {
       const li = await db.prepare(
         'SELECT linkedin_name, linkedin_photo FROM linkedin_tokens WHERE user_id = ? AND tenant_id = ?'
@@ -122,21 +133,23 @@ router.post('/:postId', async (req, res) => {
         return res.status(502).json({ ok: false, error: 'branded_quote_photo_fetch_failed' });
       }
 
-      const result = await generateBrandedQuote(post, brand, {
-        photoDataUri,
-        name: displayName,
-      }, { userId, tenantId });
+      // Use provided content if present (user-edited), otherwise auto-extract
+      const renderContent = content || await extractBrandedQuoteContent(post);
+      const result = await renderBrandedQuote(post, brand, renderContent, { photoDataUri, name: displayName }, { userId, tenantId });
       if (userId) await logVisualGeneration(userId, tenantId, postId, visual_type);
       return res.json({ ok: true, ...result });
     }
 
     if (visual_type === 'quote_card') {
-      const result = await generateQuoteCard(post, brand, { userId, tenantId });
+      const renderContent = content || await extractQuoteCardContent(post);
+      const result = await renderQuoteCard(post, brand, renderContent, { userId, tenantId });
       if (userId) await logVisualGeneration(userId, tenantId, postId, visual_type);
       return res.json({ ok: true, ...result });
     }
 
-    const result = await generateCarousel(post, brand, { userId, tenantId });
+    // carousel
+    const renderContent = content || await extractCarouselContent(post);
+    const result = await renderCarousel(post, brand, renderContent, { userId, tenantId });
     if (userId) await logVisualGeneration(userId, tenantId, postId, visual_type);
     return res.json({ ok: true, ...result });
   } catch (err) {

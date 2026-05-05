@@ -102,22 +102,16 @@ function computeLayoutYs(lines, hasBrandHeader) {
   return { avatarY, nameY, brandY, bodyStartY, fadeTop };
 }
 
-/**
- * LinkedIn-style branded quote: avatar + name + brand + excerpt with bottom fade + brand mark.
- *
- * @param {object} post — { id, content }
- * @param {object} brand — { bg, text, name?, logo? }
- * @param {object} linkedin — { photoDataUri: string, name: string }
- * @param {{ userId: string, tenantId: string }} [ctx]
- * @returns {Promise<{ svg: string, png_url: string }>}
- */
-async function generateBrandedQuote(post, brand = {}, linkedin = {}, ctx = {}) {
+async function extractBrandedQuoteContent(post) {
+  return { quote: await extractBrandedQuoteText(post.content || '') };
+}
+
+async function renderBrandedQuote(post, brand = {}, content, linkedin = {}, ctx = {}) {
   const { userId, tenantId } = ctx;
   const bg = brand.bg || '#0F1A3C';
   const text = brand.text || '#F0F4FF';
 
-  const quoteText = await extractBrandedQuoteText(post.content || '');
-  const previewLines = linesFromQuote(quoteText, MAX_LINES, getBodyMaxChars());
+  const previewLines = linesFromQuote(content.quote, MAX_LINES, getBodyMaxChars());
   const svg = buildBrandedQuoteSvg(previewLines, brand, linkedin, bg, text);
 
   const filename = `branded_quote_${post.id}_${Date.now()}.png`;
@@ -125,6 +119,11 @@ async function generateBrandedQuote(post, brand = {}, linkedin = {}, ctx = {}) {
   await storage.upload(pngBuffer, { tenantId, userId, type: 'generated', filename, mimeType: 'image/png' });
 
   return { svg, png_url: `/files/${filename}` };
+}
+
+async function generateBrandedQuote(post, brand = {}, linkedin = {}, ctx = {}) {
+  const content = await extractBrandedQuoteContent(post);
+  return renderBrandedQuote(post, brand, content, linkedin, ctx);
 }
 
 /**
@@ -315,4 +314,4 @@ function escapeXml(str) {
     .replace(/'/g, '&apos;');
 }
 
-module.exports = { generateBrandedQuote };
+module.exports = { generateBrandedQuote, extractBrandedQuoteContent, renderBrandedQuote };

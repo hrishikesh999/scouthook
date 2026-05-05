@@ -59,9 +59,10 @@ const slideOverLabel  = document.getElementById('slide-over-label');
 const slideOverClose  = document.getElementById('slide-over-close');
 const slideOverContent = document.getElementById('slide-over-content');
 const slideOverSkeleton = document.getElementById('slide-over-skeleton');
-const slideOverSave   = document.getElementById('slide-over-save');
-const slideOverAdd    = document.getElementById('slide-over-add');
-const slideOverDiscard = document.getElementById('slide-over-discard');
+const slideOverSave     = document.getElementById('slide-over-save');
+const slideOverAdd      = document.getElementById('slide-over-add');
+const slideOverDiscard  = document.getElementById('slide-over-discard');
+const slideOverGenerate = document.getElementById('slide-over-generate');
 
 const mediaDrawer      = document.getElementById('media-drawer');
 const mediaDrawerClose = document.getElementById('media-drawer-close');
@@ -118,6 +119,8 @@ let currentHookB           = null;
 let currentCtaAlternatives = [];
 let currentAssetUrl   = null;
 let currentAssetType  = null;
+let slideOverState    = 'loading'; // 'loading' | 'editing' | 'preview'
+let extractedContent  = null;
 let attachedAssetUrl  = null;
 let attachedAssetType = null;
 let attachedPreviewUrl = null;
@@ -1186,6 +1189,16 @@ brandedQuoteBtn.addEventListener('click',() => openSlideOver('branded_quote', 'B
 
 slideOverClose.addEventListener('click',   closeSlideOver);
 slideOverDiscard.addEventListener('click', closeSlideOver);
+slideOverGenerate.addEventListener('click', () => {
+  if (currentAssetType) generateFromEditor(currentAssetType);
+});
+
+function setSlideOverState(state) {
+  slideOverState = state;
+  slideOverGenerate.hidden = (state !== 'editing');
+  slideOverSave.hidden     = (state !== 'preview');
+  slideOverAdd.hidden      = (state !== 'preview');
+}
 
 function openSlideOver(type, label) {
   if (scheduleEditLocked) return;
@@ -1193,6 +1206,7 @@ function openSlideOver(type, label) {
 
   currentAssetType = type;
   currentAssetUrl  = null;
+  extractedContent = null;
 
   slideOverLabel.textContent  = label;
   slideOverContent.innerHTML  = '';
@@ -1206,7 +1220,8 @@ function openSlideOver(type, label) {
   slideOverClose.focus();
   trapFocus(slideOver);
 
-  generateVisual(type);
+  setSlideOverState('loading');
+  extractContent(type);
 }
 
 function closeSlideOver() {
@@ -1214,6 +1229,10 @@ function closeSlideOver() {
   slideOver.setAttribute('aria-hidden', 'true');
   overlay.classList.remove('visible');
   overlay.setAttribute('aria-hidden', 'true');
+  extractedContent = null;
+  slideOverGenerate.disabled = false;
+  slideOverGenerate.textContent = 'Generate';
+  setSlideOverState('loading');
 }
 
 function visualErrorMessage(code) {
@@ -1230,19 +1249,170 @@ function visualErrorMessage(code) {
   return String(code);
 }
 
-async function generateVisual(type) {
+async function extractContent(type) {
   try {
     const res = await fetch(`/api/visuals/${encodeURIComponent(String(currentPostId))}`, {
       method: 'POST',
       headers: apiHeaders(),
       credentials: 'include',
-      body: JSON.stringify({ visual_type: type }),
+      body: JSON.stringify({ visual_type: type, mode: 'extract' }),
     });
     let data;
     try { data = await res.json(); } catch { throw new Error('Could not read server response.'); }
+    if (!res.ok || !data.ok) throw new Error(visualErrorMessage(data.error));
+    extractedContent = data.content;
     slideOverSkeleton.style.display = 'none';
+    renderEditorForm(type, extractedContent);
+    setSlideOverState('editing');
+  } catch (e) {
+    slideOverSkeleton.style.display = 'none';
+    const err = document.createElement('p');
+    err.className = 'so-extract-error';
+    err.innerHTML = (e instanceof Error && e.message) ? e.message : 'Could not load suggestions. Try again.';
+    slideOverContent.appendChild(err);
+    setSlideOverState('editing');
+  }
+}
+
+function renderEditorForm(type, content) {
+  slideOverContent.innerHTML = '';
+
+  if (type === 'quote_card') {
+    const q = content.quote || '';
+    slideOverContent.innerHTML = `
+      <div class="so-editor-form">
+        <label class="field-label" for="so-quote-input">Quote text</label>
+        <textarea id="so-quote-input" class="field-textarea so-quote-textarea" maxlength="500">${escHtml(q)}</textarea>
+        <div class="so-char-counter"><span id="so-quote-len">${q.length}</span> / 500</div>
+      </div>`;
+    const ta = document.getElementById('so-quote-input');
+    const lenEl = document.getElementById('so-quote-len');
+    ta.addEventListener('input', () => { lenEl.textContent = ta.value.length; });
+
+  } else if (type === 'branded_quote') {
+    const q = content.quote || '';
+    const maxLen = 160;
+    slideOverContent.innerHTML = `
+      <div class="so-editor-form">
+        <p class="so-field-hint">Best quote from your post — max 160 characters to fit on the card.</p>
+        <label class="field-label" for="so-quote-input">Quote text</label>
+        <textarea id="so-quote-input" class="field-textarea so-quote-textarea" maxlength="${maxLen}">${escHtml(q)}</textarea>
+        <div class="so-char-counter${q.length >= maxLen ? ' so-char-counter--full' : ''}" id="so-quote-counter">
+          <span id="so-quote-len">${q.length}</span> / ${maxLen}
+        </div>
+      </div>`;
+    const ta = document.getElementById('so-quote-input');
+    const lenEl = document.getElementById('so-quote-len');
+    const counter = document.getElementById('so-quote-counter');
+    ta.addEventListener('input', () => {
+      const n = ta.value.length;
+      lenEl.textContent = n;
+      counter.classList.toggle('so-char-counter--full', n >= maxLen);
+    });
+
+  } else if (type === 'carousel') {
+    const slides = content.slides || [];
+    const cardsHtml = slides.map((slide, i) => {
+      const isTitle   = slide.type === 'title';
+      const isClosing = slide.type === 'closing';
+      const badge     = isTitle ? 'Title' : isClosing ? 'Closing' : 'Content';
+      const wc        = (slide.headline || '').trim().split(/\s+/).filter(Boolean).length;
+      const bodyHtml  = !isTitle ? `
+        <div class="so-field-group">
+          <label class="field-label" for="so-body-${i}">Body</label>
+          <textarea id="so-body-${i}" class="field-textarea so-body-textarea" maxlength="200" data-idx="${i}">${escHtml(slide.body || '')}</textarea>
+          <div class="so-char-counter"><span id="so-body-len-${i}">${(slide.body || '').length}</span> / 150</div>
+        </div>` : '';
+      return `
+        <div class="so-slide-card" data-idx="${i}" data-type="${escHtml(slide.type)}">
+          <div class="so-slide-card-header">
+            <span class="so-slide-badge so-slide-badge--${escHtml(slide.type)}">${badge}</span>
+            <span class="so-slide-num">Slide ${i + 1}</span>
+          </div>
+          <div class="so-field-group">
+            <label class="field-label" for="so-hl-${i}">Headline</label>
+            <input type="text" id="so-hl-${i}" class="field-input so-hl-input" value="${escHtml(slide.headline || '')}" maxlength="80" data-idx="${i}"/>
+            <div class="so-word-counter" id="so-hl-wc-${i}">
+              <span id="so-wc-${i}">${wc}</span> / 8 words${wc > 8 ? '<span class="so-wc-warn"> Too long</span>' : ''}
+            </div>
+          </div>
+          ${bodyHtml}
+        </div>`;
+    }).join('');
+    slideOverContent.innerHTML = `<div class="so-editor-form so-carousel-editor">${cardsHtml}</div>`;
+
+    // Wire live word/char counters
+    slides.forEach((_, i) => {
+      const hlInput  = document.getElementById(`so-hl-${i}`);
+      const wcEl     = document.getElementById(`so-wc-${i}`);
+      const wcWrap   = document.getElementById(`so-hl-wc-${i}`);
+      if (hlInput && wcEl) {
+        hlInput.addEventListener('input', () => {
+          const wc = hlInput.value.trim().split(/\s+/).filter(Boolean).length;
+          wcEl.textContent = wc;
+          let warn = wcWrap.querySelector('.so-wc-warn');
+          if (wc > 8 && !warn) {
+            warn = document.createElement('span');
+            warn.className = 'so-wc-warn';
+            warn.textContent = ' Too long';
+            wcWrap.appendChild(warn);
+          } else if (wc <= 8 && warn) {
+            warn.remove();
+          }
+        });
+      }
+      const bodyInput = document.getElementById(`so-body-${i}`);
+      const bodyLenEl = document.getElementById(`so-body-len-${i}`);
+      if (bodyInput && bodyLenEl) {
+        bodyInput.addEventListener('input', () => { bodyLenEl.textContent = bodyInput.value.length; });
+      }
+    });
+  }
+}
+
+function readEditorContent(type) {
+  if (type === 'quote_card' || type === 'branded_quote') {
+    const ta = document.getElementById('so-quote-input');
+    return { quote: (ta?.value || '').trim() };
+  }
+  if (type === 'carousel') {
+    const cards = slideOverContent.querySelectorAll('.so-slide-card');
+    const slides = Array.from(cards).map((card, i) => {
+      const hlInput   = card.querySelector(`#so-hl-${i}`);
+      const bodyInput = card.querySelector(`#so-body-${i}`);
+      return {
+        type:     card.dataset.type || 'content',
+        headline: (hlInput?.value || '').trim(),
+        body:     (bodyInput?.value || '').trim(),
+      };
+    });
+    return { slides };
+  }
+  return {};
+}
+
+async function generateFromEditor(type) {
+  slideOverGenerate.disabled = true;
+  slideOverGenerate.textContent = 'Generating…';
+
+  const content = readEditorContent(type);
+
+  slideOverContent.innerHTML = '';
+  slideOverSkeleton.style.display = '';
+  slideOverContent.appendChild(slideOverSkeleton);
+
+  try {
+    const res = await fetch(`/api/visuals/${encodeURIComponent(String(currentPostId))}`, {
+      method: 'POST',
+      headers: apiHeaders(),
+      credentials: 'include',
+      body: JSON.stringify({ visual_type: type, mode: 'render', content }),
+    });
+    let data;
+    try { data = await res.json(); } catch { throw new Error('Could not read server response.'); }
     if (!res.ok || !data.ok) throw new Error(visualErrorMessage(data.error));
 
+    slideOverSkeleton.style.display = 'none';
     if (type === 'carousel') {
       renderCarousel(data.slides);
       currentAssetUrl   = data.pdf_url || data.zip_url;
@@ -1258,13 +1428,17 @@ async function generateVisual(type) {
       img.className = 'slide-over-image';
       slideOverContent.appendChild(img);
     }
+    setSlideOverState('preview');
   } catch (e) {
     slideOverSkeleton.style.display = 'none';
+    slideOverGenerate.disabled = false;
+    slideOverGenerate.textContent = 'Generate';
+    if (extractedContent) renderEditorForm(type, extractedContent);
+    setSlideOverState('editing');
     const err = document.createElement('p');
-    err.style.cssText = 'font-size:14px;color:var(--text-secondary);text-align:center;padding:var(--space-8) 16px';
-    const msg = e instanceof Error && e.message ? e.message : 'Could not generate asset. Try again.';
-    err.innerHTML = msg;
-    slideOverContent.appendChild(err);
+    err.className = 'so-extract-error';
+    err.innerHTML = (e instanceof Error && e.message) ? e.message : 'Could not generate asset. Try again.';
+    slideOverContent.insertBefore(err, slideOverContent.firstChild);
   }
 }
 

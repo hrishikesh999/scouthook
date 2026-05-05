@@ -51,11 +51,9 @@
       gap: 12px;
     }
     .billing-card-title {
-      font-size: 11px;
+      font-size: 13px;
       font-weight: 600;
-      letter-spacing: 0.07em;
-      text-transform: uppercase;
-      color: var(--text-muted);
+      color: #111;
     }
     .billing-card-body { padding: 24px; }
     .billing-card-footer {
@@ -484,7 +482,7 @@
         <!-- Post-checkout success banner (full width) -->
         <div id="success-banner" class="billing-alert success" style="display:none;margin-bottom:20px">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="9 12 11 14 15 10"/></svg>
-          <span>You're now on <strong>Pro</strong> — welcome to ScoutHook Pro! Your account has been upgraded.</span>
+          <span>You're now on <strong>Pro</strong>. Welcome to ScoutHook Pro! Your account has been upgraded.</span>
         </div>
 
         <div class="billing-grid">
@@ -604,7 +602,7 @@
 
               <!-- Free nudge -->
               <div id="usage-upgrade-nudge" class="usage-nudge" style="display:none">
-                <span>You're on the Free plan — limits are tight.</span>
+                <span>You're on the Free plan - limits are tight.</span>
                 <button type="button" id="btn-upgrade-nudge">Upgrade to Pro</button>
               </div>
 
@@ -848,7 +846,7 @@
           const cb = document.getElementById('canceled-banner');
           cb.style.display = '';
           document.getElementById('canceled-banner-text').textContent =
-            `Subscription canceled — you keep Pro access until ${fmt(sub.current_period_end)}.`;
+            `Subscription canceled, you keep Pro access until ${fmt(sub.current_period_end)}.`;
         }
 
         document.getElementById('pro-actions').style.display = '';
@@ -858,7 +856,7 @@
         statusPill.className = 'status-pill free';
         statusLabel.textContent = 'Free plan';
         document.getElementById('plan-name').textContent = 'Free';
-        document.getElementById('plan-sub').textContent = 'Limited features — upgrade to unlock everything.';
+        document.getElementById('plan-sub').textContent = 'Limited features - upgrade to unlock everything.';
         document.getElementById('free-actions').style.display = '';
       }
 
@@ -904,8 +902,8 @@
         } else {
           const czText = document.getElementById('cancel-zone-text');
           czText.textContent = sub.current_period_end
-            ? `Your subscription renews automatically on ${fmt(sub.current_period_end)}. You can cancel anytime — you'll keep Pro access until the end of your billing period, then move to the Free plan.`
-            : `You can cancel anytime — you'll keep Pro access until the end of your billing period.`;
+            ? `Your subscription renews automatically on ${fmt(sub.current_period_end)}. You can cancel anytime, and you'll keep Pro access until the end of your billing period, then move to the Free plan.`
+            : `You can cancel anytime, and you'll keep Pro access until the end of your billing period.`;
           document.getElementById('cancel-zone').style.display = '';
         }
       } else {

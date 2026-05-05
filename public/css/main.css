@@ -776,12 +776,11 @@ body {
 
 /* ── Section Labels ─────────────────────────────────────────── */
 .field-label {
-  font-size: 10px;
+  font-size: 13px;
   font-family: var(--font-sans);
-  font-weight: 500;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--text-tertiary);
+  font-weight: 600;
+  letter-spacing: 0;
+  color: #111;
   margin-bottom: var(--space-2);
   display: block;
 }

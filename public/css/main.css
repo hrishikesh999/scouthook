@@ -2563,8 +2563,8 @@ body {
 }
 
 .brand-preview-logo-img {
-  height: 28px;
-  max-width: 120px;
+  height: 48px;
+  max-width: 200px;
   object-fit: contain;
 }
 

@@ -121,6 +121,10 @@ let currentAssetUrl   = null;
 let currentAssetType  = null;
 let slideOverState    = 'loading'; // 'loading' | 'editing' | 'preview'
 let extractedContent  = null;
+
+// Cache keyed by `${postId}:${visualType}` — survives close/reopen within same session.
+// Each entry: { extractedContent, assetUrl?, previewUrl?, slideCount? }
+const visualCache = new Map();
 let attachedAssetUrl  = null;
 let attachedAssetType = null;
 let attachedPreviewUrl = null;
@@ -1210,8 +1214,6 @@ function openSlideOver(type, label) {
 
   slideOverLabel.textContent  = label;
   slideOverContent.innerHTML  = '';
-  slideOverSkeleton.style.display = '';
-  slideOverContent.appendChild(slideOverSkeleton);
 
   slideOver.classList.add('open');
   slideOver.setAttribute('aria-hidden', 'false');
@@ -1220,8 +1222,28 @@ function openSlideOver(type, label) {
   slideOverClose.focus();
   trapFocus(slideOver);
 
-  setSlideOverState('loading');
-  extractContent(type);
+  const cached = visualCache.get(`${currentPostId}:${type}`);
+
+  if (cached?.assetUrl) {
+    // Full render cached — show image immediately, no API calls
+    currentAssetUrl   = cached.assetUrl;
+    currentPreviewUrl = cached.previewUrl || null;
+    currentSlideCount = cached.slideCount || 0;
+    extractedContent  = cached.extractedContent || null;
+    restoreCachedPreview(type, cached);
+    setSlideOverState('preview');
+  } else if (cached?.extractedContent) {
+    // Extract cached — show editor form without calling Claude
+    extractedContent = cached.extractedContent;
+    renderEditorForm(type, extractedContent);
+    setSlideOverState('editing');
+  } else {
+    // Nothing cached — full extract flow
+    slideOverSkeleton.style.display = '';
+    slideOverContent.appendChild(slideOverSkeleton);
+    setSlideOverState('loading');
+    extractContent(type);
+  }
 }
 
 function closeSlideOver() {
@@ -1233,6 +1255,31 @@ function closeSlideOver() {
   slideOverGenerate.disabled = false;
   slideOverGenerate.textContent = 'Generate';
   setSlideOverState('loading');
+}
+
+function restoreCachedPreview(type, cached) {
+  slideOverContent.innerHTML = '';
+  if (type === 'carousel') {
+    renderCarousel((cached.slides || []).map((url, i) => ({ png_url: url })));
+  } else {
+    const img = document.createElement('img');
+    img.src = cached.assetUrl;
+    img.alt = '';
+    img.className = 'slide-over-image';
+    slideOverContent.appendChild(img);
+  }
+  const regenBar = document.createElement('div');
+  regenBar.className = 'so-regen-bar';
+  regenBar.innerHTML = `<span class="so-regen-hint">Previously generated</span><button class="so-regen-btn" id="so-regen-btn">Regenerate</button>`;
+  slideOverContent.appendChild(regenBar);
+  document.getElementById('so-regen-btn').addEventListener('click', () => {
+    visualCache.delete(`${currentPostId}:${type}`);
+    slideOverContent.innerHTML = '';
+    slideOverSkeleton.style.display = '';
+    slideOverContent.appendChild(slideOverSkeleton);
+    setSlideOverState('loading');
+    extractContent(type);
+  });
 }
 
 function visualErrorMessage(code) {
@@ -1261,6 +1308,7 @@ async function extractContent(type) {
     try { data = await res.json(); } catch { throw new Error('Could not read server response.'); }
     if (!res.ok || !data.ok) throw new Error(visualErrorMessage(data.error));
     extractedContent = data.content;
+    visualCache.set(`${currentPostId}:${type}`, { extractedContent });
     slideOverSkeleton.style.display = 'none';
     renderEditorForm(type, extractedContent);
     setSlideOverState('editing');
@@ -1418,10 +1466,23 @@ async function generateFromEditor(type) {
       currentAssetUrl   = data.pdf_url || data.zip_url;
       currentPreviewUrl = data.slides?.[0]?.png_url || null;
       currentSlideCount = data.slides?.length || 0;
+      visualCache.set(`${currentPostId}:${type}`, {
+        extractedContent,
+        assetUrl:   currentAssetUrl,
+        previewUrl: currentPreviewUrl,
+        slideCount: currentSlideCount,
+        slides:     data.slides.map(s => s.png_url),
+      });
     } else {
       currentAssetUrl   = data.png_url;
       currentPreviewUrl = data.png_url;
       currentSlideCount = 0;
+      visualCache.set(`${currentPostId}:${type}`, {
+        extractedContent,
+        assetUrl:   data.png_url,
+        previewUrl: data.png_url,
+        slideCount: 0,
+      });
       const img = document.createElement('img');
       img.src = data.png_url;
       img.alt = '';

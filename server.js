@@ -7,7 +7,7 @@ require('express-async-errors');
 const path = require('path');
 const helmet = require('helmet');
 const cors = require('cors');
-const rateLimit = require('express-rate-limit');
+const { rateLimit, ipKeyGenerator } = require('express-rate-limit');
 const session = require('express-session');
 const connectPgSimple = require('connect-pg-simple');
 const passport = require('passport');
@@ -165,7 +165,7 @@ app.use('/api', rateLimit({
   keyGenerator: (req) => {
     const uid = req.userId;
     if (uid && String(uid).trim()) return `api:${String(uid).trim()}`;
-    return `ip:${req.ip || 'unknown'}`;
+    return `ip:${ipKeyGenerator(req)}`;
   },
   handler: (req, res) => {
     res.status(429).json({ ok: false, error: 'rate_limited' });

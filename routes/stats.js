@@ -156,7 +156,7 @@ router.get('/posts/:id', async (req, res) => {
     if (!post) return res.status(404).json({ ok: false, error: 'post_not_found' });
 
     const sched = await db.prepare(`
-      SELECT id AS scheduled_post_id, scheduled_for, status AS scheduled_status
+      SELECT id AS scheduled_post_id, scheduled_for, status AS scheduled_status, first_comment
       FROM   scheduled_posts
       WHERE  post_id = ? AND user_id = ? AND tenant_id = ? AND status IN ('pending', 'processing')
     `).get(postId, userId, tenantId);
@@ -166,6 +166,7 @@ router.get('/posts/:id', async (req, res) => {
       scheduled_post_id: sched?.scheduled_post_id ?? null,
       scheduled_for:     sched?.scheduled_for ?? null,
       scheduled_status:  sched?.scheduled_status ?? null,
+      first_comment:     sched?.first_comment ?? null,
     };
 
     return res.json({ ok: true, post: payload });

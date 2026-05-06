@@ -269,6 +269,10 @@ function setScheduleLockFromPost(p) {
       scheduledFor: p.scheduled_for,
       scheduledPostId: p.scheduled_post_id,
     };
+    if (firstCommentInput && p.first_comment) {
+      firstCommentInput.value = p.first_comment;
+      if (firstCommentCount) firstCommentCount.textContent = p.first_comment.length;
+    }
     applyScheduleLockUi();
     showPublishedState(`Scheduled · ${formatScheduledLocal(p.scheduled_for)}`);
     return;
@@ -1008,7 +1012,6 @@ function closeModal() {
   overlay.setAttribute('aria-hidden', 'true');
   publishNowBtn.textContent = 'Publish now';
   publishNowBtn.disabled = false;
-  if (firstCommentInput) { firstCommentInput.value = ''; firstCommentCount.textContent = '0'; }
 }
 
 firstCommentInput?.addEventListener('input', () => {

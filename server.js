@@ -98,7 +98,7 @@ if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
     clientID: GOOGLE_CLIENT_ID,
     clientSecret: GOOGLE_CLIENT_SECRET,
     callbackURL: GOOGLE_CALLBACK_URL || '/auth/google/callback',
-  }, (accessToken, refreshToken, profile, done) => {
+  }, async (accessToken, refreshToken, profile, done) => {
     const email = profile?.emails?.[0]?.value || null;
     const photo = profile?.photos?.[0]?.value || null;
     const googleId = profile?.id || null;
@@ -106,28 +106,27 @@ if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
     if (!userId) return done(null, false);
 
     // First login == "sign up": ensure an app profile row exists.
-    // We use the existing user_profiles table so the rest of the app has a stable user_id.
-    (async () => {
-      try {
-        const displayName = profile?.displayName || email || 'User';
-        const result = await db.prepare(`
-          INSERT INTO user_profiles (user_id, tenant_id, brand_name, email, display_name)
-          VALUES (?, ?, ?, ?, ?)
-          ON CONFLICT(user_id, tenant_id) DO UPDATE SET
-            email = EXCLUDED.email,
-            display_name = EXCLUDED.display_name
-          RETURNING (xmax = 0) AS is_new_row
-        `).get(userId, 'default', displayName, email, displayName);
+    // Awaited so the profile is guaranteed to exist before the session is created.
+    try {
+      const displayName = profile?.displayName || email || 'User';
+      const result = await db.prepare(`
+        INSERT INTO user_profiles (user_id, tenant_id, brand_name, email, display_name)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(user_id, tenant_id) DO UPDATE SET
+          email = EXCLUDED.email,
+          display_name = EXCLUDED.display_name
+        RETURNING (xmax = 0) AS is_new_row
+      `).get(userId, 'default', displayName, email, displayName);
 
-        // Send welcome email only on first login (new row inserted).
-        if (result?.is_new_row && email) {
-          const appUrl = process.env.APP_URL || '';
-          sendEmail('welcome', email, { name: displayName.split(' ')[0] || displayName, app_url: appUrl });
-        }
-      } catch {
-        // Non-fatal; user can still authenticate via session even if profile bootstrap fails.
+      // Send welcome email only on first login (new row inserted).
+      if (result?.is_new_row && email) {
+        const appUrl = process.env.APP_URL || '';
+        sendEmail('welcome', email, { name: displayName.split(' ')[0] || displayName, app_url: appUrl });
       }
-    })();
+    } catch (err) {
+      console.error('[auth] user_profile bootstrap failed for', userId, err.message);
+      // Still allow login — profile can be recovered, but log clearly so it's not silent.
+    }
 
     return done(null, {
       provider: 'google',

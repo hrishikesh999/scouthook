@@ -288,7 +288,7 @@ function buildBrandedQuoteSvg(lines, brand, linkedin, bg, text) {
 
   let brandMarkXml;
   if (brand.logo) {
-    brandMarkXml = `<image xlink:href="${brand.logo}" x="390" y="${H - 128}" width="300" height="84" preserveAspectRatio="xMidYMid meet"/>`;
+    brandMarkXml = `<image xlink:href="${brand.logo}" x="240" y="${H - 176}" width="600" height="136" preserveAspectRatio="xMidYMid meet"/>`;
   } else {
     const mark = escapeXml(brand.name || 'Scouthook');
     brandMarkXml = `<text x="540" y="${BRAND_TEXT_Y}" font-family="system-ui,-apple-system,'Helvetica Neue',sans-serif" font-size="28" font-weight="600" fill="${TEXT_MUTED}" text-anchor="middle">${mark}</text>`;

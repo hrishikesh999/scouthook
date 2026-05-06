@@ -181,7 +181,7 @@ function buildSlideSvg(slide, slideNum, totalSlides, brand = {}) {
   // Brand mark bottom-right: logo > name > nothing (carousel has slide counter bottom-center)
   let brandXml = '';
   if (brand.logo) {
-    brandXml = `<image xlink:href="${brand.logo}" x="${W - 288}" y="${H - 119}" width="240" height="75" preserveAspectRatio="xMidYMid meet"/>`;
+    brandXml = `<image xlink:href="${brand.logo}" x="${W - 420}" y="${H - 136}" width="360" height="96" preserveAspectRatio="xMidYMid meet"/>`;
   } else if (brand.name) {
     brandXml = `<text x="${W - 60}" y="${H - 56}" font-family="system-ui,-apple-system,'Helvetica Neue',sans-serif" font-size="22" font-weight="600" fill="${TX}" opacity="0.45" text-anchor="end">${escapeXml(brand.name)}</text>`;
   }

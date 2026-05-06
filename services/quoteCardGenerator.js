@@ -65,7 +65,7 @@ function buildQuoteCardSvg(quote, brand = {}) {
   // Brand mark: logo image > brand name text > "Scouthook" fallback
   let brandXml;
   if (brand.logo) {
-    brandXml = `<image xlink:href="${brand.logo}" x="380" y="${H - 136}" width="320" height="96" preserveAspectRatio="xMidYMid meet"/>`;
+    brandXml = `<image xlink:href="${brand.logo}" x="240" y="${H - 176}" width="600" height="136" preserveAspectRatio="xMidYMid meet"/>`;
   } else {
     const brandLabel = escapeXml(brand.name || 'Scouthook');
     brandXml = `<text x="540" y="${H - 64}" font-family="system-ui, -apple-system, 'Helvetica Neue', sans-serif" font-size="28" font-weight="600" fill="${TEXT_MUTED}" text-anchor="middle">${brandLabel}</text>`;

@@ -1789,6 +1789,15 @@ body {
   color: var(--accent);
 }
 
+.autosave-stamp {
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: var(--space-2) 0 var(--space-1);
+  text-align: right;
+  user-select: none;
+  pointer-events: none;
+}
+
 /* Primary / secondary buttons (premium chrome) */
 .btn-primary {
   display: inline-flex;

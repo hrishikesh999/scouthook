@@ -910,6 +910,8 @@ function resetRegenerateBtn() {
 
 /* ── 17. Autosave indicator ──────────────────────────────────── */
 let _autosaveIndicatorTimer = null;
+const autosaveStamp = document.getElementById('autosave-stamp');
+
 function showAutosaveState(state) {
   clearTimeout(_autosaveIndicatorTimer);
   if (state === 'saving') {
@@ -924,6 +926,12 @@ function showAutosaveState(state) {
       saveDraftBtn.textContent = '';
       saveDraftBtn.classList.remove('autosave-indicator--saved');
     }, 2500);
+    if (autosaveStamp) {
+      const t = new Date();
+      const ts = t.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+      autosaveStamp.textContent = `Draft auto-saved · ${ts}`;
+      autosaveStamp.hidden = false;
+    }
   } else {
     saveDraftBtn.textContent = '';
     saveDraftBtn.classList.remove('autosave-indicator--saving', 'autosave-indicator--saved');

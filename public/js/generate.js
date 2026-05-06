@@ -145,7 +145,6 @@ const modeBtns = document.querySelectorAll('.gen-mode-btn');
 const modePane = {
   idea:       document.getElementById('gen-pane-idea'),
   'from-doc': document.getElementById('gen-pane-from-doc'),
-  vault:      document.getElementById('gen-pane-vault'),
 };
 
 modeBtns.forEach(btn => {
@@ -155,7 +154,6 @@ modeBtns.forEach(btn => {
     btn.setAttribute('aria-selected', 'true');
     const mode = btn.dataset.mode;
     Object.entries(modePane).forEach(([m, el]) => { if (el) el.style.display = m === mode ? '' : 'none'; });
-    if (mode === 'vault' && !vaultLoaded) loadVaultPane();
   });
 });
 
@@ -396,134 +394,15 @@ async function runFromDocGeneration() {
   }
 }
 
-/* ── 9. Vault mode ───────────────────────────────────────────── */
-let hasPositioning = false;
-let vaultLoaded    = false;
-
-const vaultDocStatus    = document.getElementById('gen-vault-doc-status');
-const positioningPrompt = document.getElementById('gen-positioning-prompt');
-const positioningInput  = document.getElementById('gen-positioning-input');
-const positioningSave   = document.getElementById('gen-positioning-save');
-const vaultBtn          = document.getElementById('gen-vault-btn');
-const vaultRunStatus    = document.getElementById('gen-vault-run-status');
-
-async function loadVaultPane() {
-  vaultLoaded = true;
-  try {
-    const [docsRes, profileRes] = await Promise.all([
-      fetch('/api/vault/documents'),
-      fetch('/api/profile/me'),
-    ]);
-    const docsData    = await docsRes.json();
-    const profileData = await profileRes.json();
-    const readyDocs   = (docsData.documents || []).filter(d => d.status === 'ready');
-    hasPositioning    = !!(profileData.ok && profileData.profile?.business_positioning);
-    renderVaultDocStatus(readyDocs.length);
-  } catch {
-    vaultDocStatus.innerHTML = '<p style="font-size:0.875rem;color:var(--text-muted);margin:0">Could not load vault status. Try refreshing.</p>';
-  }
-}
-
-function renderVaultDocStatus(count) {
-  if (count === 0) {
-    vaultDocStatus.innerHTML = `
-      <div class="gen-vault-empty">
-        <span>No documents in your Content Vault yet. Upload case studies, service docs, or newsletters to get started.</span>
-        <a href="/vault.html" class="gen-vault-link">Go to Vault →</a>
-      </div>`;
-    vaultBtn.disabled = true;
-  } else {
-    vaultDocStatus.innerHTML = `
-      <div class="gen-vault-doc-count">
-        <span class="gen-vault-doc-count-text"><strong>${count}</strong> document${count === 1 ? '' : 's'} ready in your Vault</span>
-        <a href="/vault.html" class="gen-vault-link">Manage Vault →</a>
-      </div>`;
-    vaultBtn.disabled = false;
-    if (!hasPositioning) positioningPrompt.style.display = '';
-  }
-}
-
-positioningSave.addEventListener('click', async () => {
-  const val = positioningInput.value.trim();
-  if (!val) { positioningInput.focus(); return; }
-  positioningSave.disabled = true;
-  try {
-    const res  = await fetch('/api/profile', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ business_positioning: val }),
-    });
-    const data = await res.json();
-    if (!data.ok) throw new Error(data.error);
-    hasPositioning = true;
-    positioningPrompt.style.display = 'none';
-    runWeeklyBatch();
-  } catch (err) {
-    positioningSave.disabled = false;
-    setVaultRunStatus(`Could not save: ${err.message}`, 'error');
-  }
-});
-
-positioningInput.addEventListener('keydown', e => {
-  if (e.key === 'Enter') positioningSave.click();
-});
-
-vaultBtn.addEventListener('click', () => {
-  if (!hasPositioning) {
-    positioningPrompt.style.display = '';
-    positioningInput.focus();
-    setVaultRunStatus('Complete the box above first, then click "Got it →"', 'info');
-    return;
-  }
-  runWeeklyBatch();
-});
-
-async function runWeeklyBatch() {
-  vaultBtn.disabled = true;
-  setVaultRunStatus('Writing your posts, this takes about 30 seconds.', 'info');
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 120000);
-    let res;
-    try {
-      res = await fetch('/api/generate/weekly-batch', { method: 'POST', signal: controller.signal });
-    } finally {
-      clearTimeout(timeout);
-    }
-    const data = await res.json();
-    if (!data.ok) {
-      if (data.error === 'ghostwriter_prompt_not_ready') {
-        setVaultRunStatus('Your Voice Profile needs a bit more info, complete Content Niche + Audience first.', 'error');
-        vaultRunStatus.innerHTML += ' <a href="/profile.html" style="color:var(--brand);font-weight:600">Complete Voice Profile →</a>';
-      } else if (data.error === 'rate_limit_exceeded') {
-        setVaultRunStatus('Rate limit reached. Try again in an hour.', 'error');
-      } else {
-        setVaultRunStatus(data.message || data.error || 'Something went wrong. Please try again.', 'error');
-      }
-      return;
-    }
-    window.location.href = `/preview.html?batch_id=${encodeURIComponent(data.batch_id)}`;
-  } catch (err) {
-    setVaultRunStatus(`Failed: ${err.message}`, 'error');
-  } finally {
-    vaultBtn.disabled = false;
-  }
-}
-
-function setVaultRunStatus(msg, type) {
-  vaultRunStatus.textContent = msg;
-  vaultRunStatus.className   = `gen-vault-run-status ${type}`;
-}
-
-/* ── 10. Init ────────────────────────────────────────────────── */
+/* ── 9. Init ─────────────────────────────────────────────────── */
 (async function init() {
   await window.scouthookAuthReady;
   await loadProfile();
   initFromDocPane();
 
-  // Auto-switch tab if ?mode= is in the URL
+  // Auto-switch tab if ?mode=from-doc is in the URL
   const urlMode = new URLSearchParams(location.search).get('mode');
-  if (urlMode === 'vault' || urlMode === 'from-doc') {
+  if (urlMode === 'from-doc') {
     document.querySelector(`[data-mode="${urlMode}"]`)?.click();
   } else {
     ideaInput.focus();

@@ -4,8 +4,7 @@ const express = require('express');
 const router = express.Router();
 const { db, getSetting } = require('../db');
 const { runQualityGate } = require('../services/qualityGate');
-const { ideaToPost, restructureToPost, generateWeeklyBatch } = require('../services/ideaPath');
-const { getVaultContext } = require('../services/ghostwriterPromptBuilder');
+const { ideaToPost, restructureToPost } = require('../services/ideaPath');
 const { classifyContent } = require('../services/funnelClassifier');
 const { canGeneratePost } = require('../services/subscription');
 const { sendEmailToUser } = require('../emails');
@@ -281,136 +280,6 @@ router.post('/', async (req, res) => {
   } catch (err) {
     console.error('[generate] Error:', err.message);
     return res.status(500).json({ ok: false, error: err.message });
-  }
-});
-
-// ---------------------------------------------------------------------------
-// POST /api/generate/weekly-batch
-// Generates 5 Mon–Fri posts using the user's ghostwriter prompt + vault context.
-// ---------------------------------------------------------------------------
-router.post('/weekly-batch', async (req, res) => {
-  const userId   = req.userId;
-  const tenantId = req.tenantId;
-  if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
-
-  const rl = await checkRateLimit(userId);
-  if (rl.limited) {
-    return res.status(429).json({ ok: false, error: 'rate_limit_exceeded', retry_after_sec: rl.retryAfterSec });
-  }
-
-  const planCheck = await canGeneratePost(userId);
-  if (!planCheck.allowed) {
-    return res.status(403).json({
-      ok: false, error: 'plan_limit_exceeded',
-      plan: planCheck.plan, current: planCheck.current, limit: planCheck.limit,
-      upgrade_url: '/billing.html',
-    });
-  }
-
-  let userProfile = await db
-    .prepare('SELECT * FROM user_profiles WHERE user_id = ? AND tenant_id = ?')
-    .get(userId, tenantId);
-
-  if (!userProfile) return res.status(400).json({ ok: false, error: 'complete_profile_first' });
-
-  try {
-  // Verify at least one ready vault document exists — the ghostwriter prompt
-  // was built from these, so we don't need to re-send raw content.
-  const hasVaultDocs = await db
-    .prepare(`SELECT 1 FROM vault_documents WHERE user_id = ? AND tenant_id = ? AND status = 'ready' LIMIT 1`)
-    .get(userId, tenantId);
-  if (!hasVaultDocs) {
-    return res.status(400).json({ ok: false, error: 'no_vault_documents', message: 'Upload and index at least one document to generate posts from.' });
-  }
-
-  // Build (or rebuild) the ghostwriter prompt when missing or stale.
-  // Stale = a vault document was added/updated after the prompt was last built.
-  const latestDoc = await db
-    .prepare(`SELECT MAX(updated_at) AS ts FROM vault_documents WHERE user_id = ? AND tenant_id = ? AND status = 'ready'`)
-    .get(userId, tenantId);
-  const promptBuiltAt = userProfile.ghostwriter_prompt_built_at;
-  const latestDocAt   = latestDoc?.ts;
-  const isStale = !userProfile.ghostwriter_prompt || (latestDocAt && promptBuiltAt && latestDocAt > promptBuiltAt);
-
-  if (isStale) {
-    const { buildGhostwriterPrompt } = require('../services/ghostwriterPromptBuilder');
-    await buildGhostwriterPrompt(userId, tenantId);
-    userProfile = await db
-      .prepare('SELECT * FROM user_profiles WHERE user_id = ? AND tenant_id = ?')
-      .get(userId, tenantId);
-    if (!userProfile.ghostwriter_prompt) {
-      return res.status(400).json({ ok: false, error: 'ghostwriter_prompt_not_ready', message: 'Could not build your AI profile. Make sure your Voice Profile (Content Niche + Audience) is filled in.' });
-    }
-  }
-
-  try {
-    // Pass only the ghostwriter prompt — it was built from the vault content
-    // and already contains the distilled proof points, niche language, and
-    // client results. Re-sending raw vault chunks doubles token usage for no
-    // quality gain.
-    const posts = await generateWeeklyBatch(userProfile.ghostwriter_prompt);
-
-    const batchId = require('crypto').randomUUID();
-
-    // Create a generation_runs row for this batch (run_id is NOT NULL)
-    const run = await db.prepare(`
-      INSERT INTO generation_runs (user_id, tenant_id, path, input_data)
-      VALUES (?, ?, 'ghostwriter_batch', ?)
-      RETURNING id
-    `).get(userId, tenantId, JSON.stringify({ batch_id: batchId }));
-    const runId = run.id;
-
-    const insertPost = db.prepare(`
-      INSERT INTO generated_posts
-        (run_id, user_id, tenant_id, format_slug, content, quality_score, quality_flags, passed_gate, funnel_type, cta_alternatives, idea_input, batch_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      RETURNING id
-    `);
-
-    const savedPosts = [];
-    for (const p of posts) {
-      const gate = runQualityGate(p.post, {
-        voiceProfile:   userProfile,
-        archetypeUsed:  null,
-        hookConfidence: null,
-        path:           'ghostwriter',
-        funnelType:     'trust',
-      });
-
-      const inserted = await insertPost.run(
-        runId,
-        userId, tenantId,
-        `ghostwriter_${p.format.toLowerCase()}`,
-        p.post,
-        gate.score,
-        JSON.stringify(gate.flags),
-        gate.passed ? 1 : 0,
-        'trust',
-        p.ctaAlternatives?.length ? JSON.stringify(p.ctaAlternatives) : null,
-        `${p.day} — ${p.format}`,
-        batchId
-      );
-
-      savedPosts.push({
-        id:              inserted.lastInsertRowid,
-        day:             p.day,
-        format:          p.format,
-        post:            p.post,
-        ctaAlternatives: p.ctaAlternatives,
-        quality:         { passed: gate.passed, score: gate.score },
-      });
-    }
-
-    return res.json({ ok: true, batch_id: batchId, posts: savedPosts });
-
-  } catch (err) {
-    console.error('[generate/weekly-batch] inner error:', err.message);
-    return res.status(500).json({ ok: false, error: err.message, message: err.message });
-  }
-
-  } catch (err) {
-    console.error('[generate/weekly-batch] error:', err.message);
-    return res.status(500).json({ ok: false, error: err.message, message: err.message });
   }
 });
 

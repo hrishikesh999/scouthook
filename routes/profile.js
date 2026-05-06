@@ -20,7 +20,7 @@ router.get('/:user_id', async (req, res) => {
   }
 
   const profile = await db
-    .prepare('SELECT audience_role, audience_pain, content_niche, contrarian_view, voice_fingerprint, writing_samples, brand_bg, brand_accent, brand_text, brand_name, brand_logo, user_role, onboarding_complete, business_positioning, ghostwriter_prompt_built_at, website_url FROM user_profiles WHERE user_id = ? AND tenant_id = ?')
+    .prepare('SELECT audience_role, audience_pain, content_niche, contrarian_view, voice_fingerprint, writing_samples, brand_bg, brand_accent, brand_text, brand_name, brand_logo, user_role, onboarding_complete, business_positioning, website_url FROM user_profiles WHERE user_id = ? AND tenant_id = ?')
     .get(user_id, tenantId);
 
   if (!profile) {
@@ -44,7 +44,6 @@ router.get('/:user_id', async (req, res) => {
       user_role:                    profile.user_role    || null,
       onboarding_complete:          !!profile.onboarding_complete,
       business_positioning:         profile.business_positioning || null,
-      ghostwriter_prompt_built_at:  profile.ghostwriter_prompt_built_at || null,
       website_url:                  profile.website_url  || null,
     },
   });
@@ -129,11 +128,6 @@ router.post('/', async (req, res) => {
       });
   }
 
-  // Rebuild ghostwriter prompt when business_positioning changes
-  if (positioningChanged) {
-    const { buildGhostwriterPrompt } = require('../services/ghostwriterPromptBuilder');
-    buildGhostwriterPrompt(userId, tenantId).catch(() => {});
-  }
 
   return res.json({ ok: true, profile_id: profileId, fingerprint_updated: samplesChanged });
 });

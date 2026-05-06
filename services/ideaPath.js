@@ -269,7 +269,6 @@ async function runSinglePostGeneration({
 
   const ctaHint = HOOK_ARCHETYPES[archetypeUsed]?.ctaHint || null;
   const ctaInstruction = buildCtaInstruction(funnelType, ctaHint);
-  // Use personalized ghostwriter prompt when provided, otherwise build from profile
   const systemPrompt = systemOverride || buildSystemPrompt(userProfile, hookInjection, ctaInstruction);
   let userPrompt = userPromptOverride || buildUserPrompt(rawIdea);
 
@@ -378,9 +377,7 @@ async function vaultSeedToPost(vaultIdea, chunkText, userProfile, options = {}) 
     ? buildReachUserPrompt(vaultIdea)
     : buildVaultUserPrompt(vaultIdea, chunkText);
 
-  // Use the personalized ghostwriter prompt as system prompt when available.
-  // It captures the user's full brand context, ICP language, and proof points.
-  const systemOverride = userProfile.ghostwriter_prompt || null;
+  const systemOverride = null;
 
   return runSinglePostGeneration({
     rawIdea: vaultIdea.seed_text,
@@ -410,6 +407,9 @@ THE LINE YOU MUST NEVER CROSS:
 - You may NOT add a new fact, statistic, example, story beat, or claim the author did not provide.
 - If the author said "I think pricing is something most founders get wrong", you may sharpen it to "Most founders get pricing wrong." You may not add "In my experience working with 50+ startups" if the author did not write that.
 - The author's specifics (numbers, names, outcomes, timeframes) are sacred. Keep them verbatim.
+
+SPECIFICS ARE SACRED — NO EXCEPTIONS:
+Any number, percentage, named company, client role, timeframe, or measurable outcome in the source material must appear in the post VERBATIM. Never paraphrase, round, approximate, or generalise them. "31% reduction in 6 weeks for a Series B SaaS team" stays exactly that — not "around 30%", not "significant reduction", not "a fast-growing startup". If the source says it, the post says it the same way. This is what makes the post credible and unfakeable.
 
 RULES:
 1. HOOK (line 1): Identify the most compelling idea in the input. Write it as a sharp, direct opening line — tightened from the author's words. Surface the author's best line; do not invent a new angle.
@@ -592,120 +592,5 @@ async function restructureToPost(sourceText, userProfile, documentContext = null
   }
 }
 
-// ---------------------------------------------------------------------------
-// Weekly batch: generate 5 Mon–Fri posts using the ghostwriter prompt.
-// ---------------------------------------------------------------------------
 
-const BATCH_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
-const BATCH_FORMATS = ['INSIGHT', 'STORY', 'MYTH_BUST', 'NUMBERED_LIST', 'CTA'];
-
-/**
- * Generate 5 LinkedIn posts (Mon–Fri) using the user's personalized ghostwriter prompt
- * and all uploaded vault document content as project knowledge.
- *
- * @param {string} ghostwriterPrompt  — from user_profiles.ghostwriter_prompt
- * @param {string} vaultContext       — concatenated vault chunk text
- * @returns {Promise<Array<{ day, format, post, ctaAlternatives }>>}
- */
-async function generateWeeklyBatch(ghostwriterPrompt) {
-  const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
-  if (!apiKey) throw new Error('anthropic_api_key not configured');
-  const client = new Anthropic({ apiKey });
-
-  const formatDescriptions = {
-    INSIGHT:      'Insight Post — one sharp observation. No pitch. Pure value. Ends with a thought-provoking line.',
-    STORY:        'Story Post — a real client result: Before → what was broken → what was fixed → result. First person.',
-    MYTH_BUST:    'Myth-Bust Post — destroy a common belief, then build the correct frame.',
-    NUMBERED_LIST:'Numbered List Post — 3–5 specific, actionable items. No generic advice.',
-    CTA:          'CTA Post — soft, one-line ask at the end (DM, follow, resource mention). Teach first, ask last.',
-  };
-
-  const dayInstructions = BATCH_DAYS.map((day, i) => {
-    const fmt = BATCH_FORMATS[i];
-    return `${day}: ${formatDescriptions[fmt]}`;
-  }).join('\n');
-
-  const userMessage = `Write 5 LinkedIn posts for this week (Monday through Friday).
-
-SCHEDULE AND FORMAT REQUIREMENTS:
-${dayInstructions}
-
-Monday and Wednesday should be the strongest posts — those are peak LinkedIn days.
-Friday can be slightly more conversational or story-based.
-
-Draw on the proof points, client results, and specific examples from your project knowledge (already in your system context).
-
-Return ONLY valid JSON — an array of 5 objects in this exact structure:
-[
-  {
-    "day": "Monday",
-    "format": "INSIGHT",
-    "post": "full post text",
-    "cta_alternatives": [
-      "one alternative closing line — different question angle",
-      "one alternative closing line — softer or more specific"
-    ]
-  },
-  ...
-]
-
-No markdown fences. No explanation. Only the JSON array.`;
-
-  let responseText = '';
-
-  try {
-    const message = await client.messages.create({
-      model:       'claude-sonnet-4-6',
-      max_tokens:  6000,
-      temperature: 0.75,
-      system:      ghostwriterPrompt,
-      messages:    [{ role: 'user', content: userMessage }],
-    });
-
-    responseText = message.content[0]?.text?.trim() || '';
-    const parsed = extractJsonFromResponse(responseText);
-    return validateBatchResponse(parsed);
-
-  } catch (firstErr) {
-    if (firstErr instanceof SyntaxError && responseText) {
-      try {
-        const retry = await client.messages.create({
-          model:       'claude-sonnet-4-6',
-          max_tokens:  6000,
-          temperature: 0.75,
-          system:      ghostwriterPrompt,
-          messages: [
-            { role: 'user',      content: userMessage },
-            { role: 'assistant', content: responseText },
-            { role: 'user',      content: 'Return only valid JSON array, no other text.' },
-          ],
-        });
-        responseText = retry.content[0]?.text?.trim() || '';
-        const parsed = extractJsonFromResponse(responseText);
-        return validateBatchResponse(parsed);
-      } catch (retryErr) {
-        throw new Error(`Weekly batch failed after retry: ${retryErr.message}`);
-      }
-    }
-    throw firstErr;
-  }
-}
-
-function validateBatchResponse(parsed) {
-  if (!Array.isArray(parsed)) throw new SyntaxError('Batch response is not an array');
-  return parsed.slice(0, 5).map((item, i) => {
-    if (typeof item.post !== 'string' || !item.post.trim()) {
-      throw new SyntaxError(`Post ${i + 1} missing post text`);
-    }
-    return {
-      day:            item.day || BATCH_DAYS[i],
-      format:         item.format || BATCH_FORMATS[i],
-      post:           sanitiseAiTells(item.post.trim()),
-      ctaAlternatives: Array.isArray(item.cta_alternatives)
-        ? item.cta_alternatives.filter(l => typeof l === 'string' && l.trim()).slice(0, 2)
-        : [],
-    };
-  });
-}
-
-module.exports = { ideaToPost, generateInsightAlternativePost, vaultSeedToPost, restructureToPost, generateWeeklyBatch };
+module.exports = { ideaToPost, generateInsightAlternativePost, vaultSeedToPost, restructureToPost };

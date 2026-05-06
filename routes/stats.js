@@ -184,7 +184,7 @@ router.patch('/posts/:id', async (req, res) => {
   const userId   = req.userId;
   const tenantId = req.tenantId || 'default';
   const postId   = req.params.id;
-  const { content, idea_input,
+  const { content, idea_input, first_comment,
           asset_url, asset_preview_url, asset_type, asset_slide_count } = req.body;
 
   if (!userId)  return res.status(400).json({ ok: false, error: 'missing_user_id' });
@@ -205,25 +205,30 @@ router.patch('/posts/:id', async (req, res) => {
     // Only update when the caller included them in the request body.
     const hasAsset = 'asset_url' in req.body;
 
+    const firstCommentVal = 'first_comment' in req.body ? (first_comment?.trim() || null) : undefined;
+
     const result = hasAsset
       ? await db.prepare(`
           UPDATE generated_posts
           SET content           = ?,
               idea_input        = COALESCE(?, idea_input),
+              first_comment     = COALESCE(?, first_comment),
               asset_url         = ?,
               asset_preview_url = ?,
               asset_type        = ?,
               asset_slide_count = ?
           WHERE id = ? AND user_id = ? AND tenant_id = ? AND status = 'draft'
-        `).run(content, idea_input ?? null,
+        `).run(content, idea_input ?? null, firstCommentVal ?? null,
                asset_url ?? null, asset_preview_url ?? null,
                asset_type ?? null, asset_slide_count ?? null,
                postId, userId, tenantId)
       : await db.prepare(`
           UPDATE generated_posts
-          SET content = ?, idea_input = COALESCE(?, idea_input)
+          SET content       = ?,
+              idea_input    = COALESCE(?, idea_input),
+              first_comment = COALESCE(?, first_comment)
           WHERE id = ? AND user_id = ? AND tenant_id = ? AND status = 'draft'
-        `).run(content, idea_input ?? null, postId, userId, tenantId);
+        `).run(content, idea_input ?? null, firstCommentVal ?? null, postId, userId, tenantId);
 
     if (result.changes === 0) {
       return res.status(409).json({ ok: false, error: 'post_not_editable' });
@@ -339,7 +344,7 @@ router.get('/posts', async (req, res) => {
       `).all(userId, tenantId);
     } else {
       posts = await db.prepare(`
-        SELECT id, content, quality_score, passed_gate, format_slug, status, created_at, funnel_type
+        SELECT id, content, quality_score, passed_gate, format_slug, status, created_at, funnel_type, first_comment
         FROM   generated_posts
         WHERE  user_id = ? AND tenant_id = ? AND status = 'draft'
         ORDER  BY created_at DESC

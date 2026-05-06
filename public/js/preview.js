@@ -423,6 +423,11 @@ async function loadSinglePost(postId) {
     enableActionButtons();
     showAssistPanel();
     applyPostAsset(p);
+    if (firstCommentInput && p.first_comment) {
+      firstCommentInput.value = p.first_comment;
+      if (firstCommentCount) firstCommentCount.textContent = p.first_comment.length;
+      autoGrowTextarea(firstCommentInput);
+    }
     refetchPostAndApplyLock();
   } catch {
     showPostError();
@@ -790,7 +795,10 @@ postTextarea.addEventListener('input', () => {
       await fetch(`/api/posts/${currentPostId}`, {
         method:  'PATCH',
         headers: apiHeaders(),
-        body:    JSON.stringify({ content: postTextarea.value.trim() }),
+        body:    JSON.stringify({
+          content: postTextarea.value.trim(),
+          first_comment: firstCommentInput?.value.trim() || null,
+        }),
       });
       showAutosaveState('saved');
     } catch {
@@ -1026,6 +1034,8 @@ function closeModal() {
 firstCommentInput?.addEventListener('input', () => {
   firstCommentCount.textContent = firstCommentInput.value.length;
   autoGrowTextarea(firstCommentInput);
+  // Trigger auto-save debounce so first comment is persisted with the draft
+  postTextarea.dispatchEvent(new Event('input'));
 });
 
 suggestFirstCommentBtn?.addEventListener('click', async () => {

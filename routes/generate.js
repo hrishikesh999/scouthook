@@ -560,7 +560,7 @@ router.get('/post/:postId', async (req, res) => {
     row = await db.prepare(`
       SELECT id, content, quality_score, quality_flags, passed_gate,
              hook_b, cta_alternatives, format_slug, funnel_type,
-             asset_url, asset_preview_url, asset_type, asset_slide_count
+             asset_url, asset_preview_url, asset_type, asset_slide_count, first_comment
       FROM generated_posts
       WHERE id = ? AND user_id = ? AND tenant_id = ?
     `).get(postId, userId, tenantId);

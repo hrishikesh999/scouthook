@@ -556,11 +556,12 @@ router.post('/from-doc', async (req, res) => {
   let fileSourceType = null;
   let sourceUrl      = null;
 
-  let skipSubstanceCheckDoc = false;
+  // Always skip the substance pre-check on the from-doc path — the user
+  // provided a real document, which is already their substance signal.
+  const skipSubstanceCheckDoc = true;
   if (contentType === 'application/json') {
     const body = req.body || {};
     const { url, vault_doc_id } = body;
-    skipSubstanceCheckDoc = !!body.skip_substance_check;
 
     if (vault_doc_id) {
       // Use an already-indexed vault document — fetch its chunks from the database

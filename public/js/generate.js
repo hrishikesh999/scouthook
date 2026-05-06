@@ -392,6 +392,8 @@ async function runFromDocGeneration() {
         ? 'Couldn\'t fetch that URL. Try uploading the file directly.'
         : data.error === 'vault_doc_not_found'
         ? 'That document is no longer in your Vault. <a href="/vault.html">Manage Vault →</a>'
+        : data.error === 'missing_substance'
+        ? 'The document didn\'t contain enough specific content to generate a strong post. Try a more detailed file.'
         : 'Something went wrong. Please try again.';
       errEl.innerHTML    = msg;
       errEl.style.display = '';

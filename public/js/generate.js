@@ -118,6 +118,8 @@ async function triggerGenerate(opts = {}) {
       const used = (err.planCurrent !== undefined && err.planLimit !== undefined)
         ? ` You've used ${err.planCurrent} of ${err.planLimit} this month.` : '';
       showGenerateError(`You've reached the free plan generation limit.${used} <button type="button" onclick="window.PricingModal?.open()" style="background:none;border:none;padding:0;color:var(--brand);font-weight:600;cursor:pointer;font-size:inherit">Upgrade to Pro →</button>`);
+    } else if (err.message === 'rate_limit_exceeded') {
+      showGenerateError('You\'ve hit the hourly generation limit. Wait a few minutes and try again.');
     } else {
       showGenerateError('Something went wrong. <a href="#">Try again →</a>');
     }
@@ -194,7 +196,7 @@ function initFromDocPane() {
   const pickerPanel   = document.getElementById('gen-vault-picker');
   const pickerList    = document.getElementById('gen-vault-picker-list');
 
-  const ACCEPTED_EXT = ['pdf', 'docx', 'txt'];
+  const ACCEPTED_EXT = ['pdf', 'docx', 'pptx', 'txt'];
   let pickerLoaded = false;
 
   function showFile(file) {
@@ -233,7 +235,7 @@ function initFromDocPane() {
   function handleFile(file) {
     const ext = file.name.split('.').pop().toLowerCase();
     if (!ACCEPTED_EXT.includes(ext)) {
-      showErr('Only PDF, DOCX, and TXT files are supported.');
+      showErr('Only PDF, DOCX, PPTX, and TXT files are supported.');
       return;
     }
     if (file.size > 25 * 1024 * 1024) {
@@ -358,6 +360,7 @@ async function runFromDocGeneration() {
       const extMime = {
         pdf:  'application/pdf',
         docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
         txt:  'text/plain',
       };
       const ext  = fromDocFile.name.split('.').pop().toLowerCase();

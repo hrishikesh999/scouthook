@@ -526,6 +526,7 @@ router.get('/batch/:batch_id', async (req, res) => {
 const FROM_DOC_MIME_MAP = {
   'application/pdf': 'pdf',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
   'text/plain': 'txt',
 };
 
@@ -599,7 +600,7 @@ router.post('/from-doc', async (req, res) => {
 
     fileSourceType = FROM_DOC_MIME_MAP[contentType];
     if (!fileSourceType) {
-      return res.status(415).json({ ok: false, error: 'unsupported_file_type', allowed: ['pdf', 'docx', 'txt'] });
+      return res.status(415).json({ ok: false, error: 'unsupported_file_type', allowed: ['pdf', 'docx', 'pptx', 'txt'] });
     }
     filename = (() => {
       try { return decodeURIComponent(req.headers['x-filename'] || ''); } catch { return ''; }

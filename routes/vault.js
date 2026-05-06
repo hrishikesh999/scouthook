@@ -20,10 +20,11 @@ const { classifyContent } = require('../services/funnelClassifier');
 const { brainstorm }     = require('../services/reachBrainstormer');
 const { canUploadVaultDoc } = require('../services/subscription');
 
-const ALLOWED_MIME = new Set(['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain']);
+const ALLOWED_MIME = new Set(['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/vnd.openxmlformats-officedocument.presentationml.presentation', 'text/plain']);
 const MIME_TO_TYPE = {
   'application/pdf': 'pdf',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
   'text/plain': 'txt',
 };
 const MAX_BYTES = 25 * 1024 * 1024; // 25 MB

@@ -28,6 +28,7 @@ async function extractText(buffer, sourceType, filename) {
   switch (sourceType) {
     case 'pdf':  return extractPdf(buffer);
     case 'docx': return extractDocx(buffer);
+    case 'pptx': return extractPptx(buffer);
     case 'txt':  return { text: buffer.toString('utf8'), pages: null };
     default:
       throw new Error(`Unsupported source_type for buffer extraction: ${sourceType}`);
@@ -49,6 +50,12 @@ async function extractDocx(buffer) {
   const mammoth = require('mammoth');
   const result  = await mammoth.extractRawText({ buffer });
   return { text: result.value || '', pages: null };
+}
+
+async function extractPptx(buffer) {
+  const officeparser = require('officeparser');
+  const text = await officeparser.parseOfficeAsync(buffer, { outputErrorToConsole: false });
+  return { text: text || '', pages: null };
 }
 
 /**

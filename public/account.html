@@ -107,7 +107,10 @@
           window.toast.success('LinkedIn connected successfully.');
         }
       } else if (err) {
-        banner.textContent = `LinkedIn connection failed: ${err}`;
+        const errMsg = err === 'linkedin_already_connected'
+          ? 'This LinkedIn account is already connected to another ScoutHook profile. Disconnect it there first.'
+          : `LinkedIn connection failed: ${err}`;
+        banner.textContent = errMsg;
         banner.style.borderColor = 'rgba(220, 38, 38, 0.35)';
         banner.style.background = 'var(--bg-pill-fail)';
         banner.style.color = 'var(--score-fail)';

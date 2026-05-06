@@ -262,6 +262,17 @@ router.get('/callback', async (req, res) => {
       console.warn('[linkedin/callback] me fetch error:', e.message);
     }
 
+    // Reject if this LinkedIn account is already connected to a different ScoutHook user.
+    if (linkedin_user_id) {
+      const existing = await db.prepare(
+        'SELECT user_id FROM linkedin_tokens WHERE linkedin_user_id = ? AND tenant_id = ? AND user_id != ?'
+      ).get(linkedin_user_id, tenantId, userId);
+      if (existing) {
+        console.warn(`[linkedin/callback] linkedin_user_id=${linkedin_user_id} already claimed by ${existing.user_id}, blocked for ${userId}`);
+        return res.redirect('/account.html?linkedin_error=linkedin_already_connected');
+      }
+    }
+
     await storeTokens(userId, tenantId, {
       access_token: tokens.access_token,
       refresh_token: tokens.refresh_token || null,

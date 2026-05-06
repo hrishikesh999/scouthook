@@ -268,43 +268,9 @@ async function logVisualGeneration(userId, tenantId = 'default', postId, visualT
 }
 
 // ---------------------------------------------------------------------------
-// canUploadVaultDoc
-// Pro users: allowed if vault docs this month < PRO_VAULT_DOC_LIMIT.
-// Free users: allowed if total vault_documents count < FREE_VAULT_DOC_LIMIT.
-// ---------------------------------------------------------------------------
-async function canUploadVaultDoc(userId) {
-  const plan = await getUserPlan(userId);
-
-  if (plan === 'pro') {
-    const [start, end] = calendarMonthBounds();
-    let current = 0;
-    try {
-      const row = await db.prepare(`
-        SELECT COUNT(*) AS cnt
-        FROM vault_documents
-        WHERE user_id = ?
-          AND created_at >= ?
-          AND created_at < ?
-      `).get(userId, start, end);
-      current = parseInt(row?.cnt ?? 0, 10);
-    } catch (err) {
-      console.error('[subscription] canUploadVaultDoc pro count error:', err.message);
-      return { allowed: true, current: 0, limit: PRO_VAULT_DOC_LIMIT, plan: 'pro' };
-    }
-    return { allowed: current < PRO_VAULT_DOC_LIMIT, current, limit: PRO_VAULT_DOC_LIMIT, plan: 'pro' };
-  }
-
-  const row = await db.prepare(
-    'SELECT COUNT(*) AS cnt FROM vault_documents WHERE user_id = ?'
-  ).get(userId);
-
-  const current = parseInt(row?.cnt ?? 0, 10);
-  return {
-    allowed: current < FREE_VAULT_DOC_LIMIT,
-    current,
-    limit: FREE_VAULT_DOC_LIMIT,
-    plan: 'free',
-  };
+// canUploadVaultDoc — unrestricted for all plans.
+async function canUploadVaultDoc(_userId) {
+  return { allowed: true, current: 0, limit: null, plan: null };
 }
 
 // ---------------------------------------------------------------------------

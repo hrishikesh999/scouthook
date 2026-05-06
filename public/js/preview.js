@@ -272,6 +272,7 @@ function setScheduleLockFromPost(p) {
     if (firstCommentInput && p.first_comment) {
       firstCommentInput.value = p.first_comment;
       if (firstCommentCount) firstCommentCount.textContent = p.first_comment.length;
+      autoGrowTextarea(firstCommentInput);
     }
     applyScheduleLockUi();
     showPublishedState(`Scheduled · ${formatScheduledLocal(p.scheduled_for)}`);
@@ -1016,6 +1017,7 @@ function closeModal() {
 
 firstCommentInput?.addEventListener('input', () => {
   firstCommentCount.textContent = firstCommentInput.value.length;
+  autoGrowTextarea(firstCommentInput);
 });
 
 suggestFirstCommentBtn?.addEventListener('click', async () => {
@@ -1033,6 +1035,7 @@ suggestFirstCommentBtn?.addEventListener('click', async () => {
     if (data.suggestion) {
       firstCommentInput.value = data.suggestion;
       firstCommentCount.textContent = data.suggestion.length;
+      autoGrowTextarea(firstCommentInput);
     }
   } catch { /* silently fail — user can type manually */ }
   finally {

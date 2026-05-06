@@ -8,6 +8,7 @@ const recentList = document.getElementById('recent-posts-list');
   await window.scouthookAuthReady;
   loadRecentPosts();
   loadChecklist();
+  loadPerformance();
 })();
 
 /* ── Recent posts ────────────────────────────────────────────── */
@@ -186,4 +187,105 @@ function escHtml(str) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+/* ── Performance tagging ────────────────────────────────────── */
+async function loadPerformance() {
+  try {
+    const res  = await fetch('/api/posts/performance-summary', { headers: apiHeaders() });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!data.ok) return;
+
+    if (data.enough_data) {
+      renderContentIntelligence(data);
+    }
+    if (Array.isArray(data.untagged) && data.untagged.length > 0) {
+      renderPerfNudge(data.untagged);
+    }
+  } catch {
+    // Non-fatal
+  }
+}
+
+function renderContentIntelligence(data) {
+  const card   = document.getElementById('content-intelligence');
+  const body   = document.getElementById('ci-body');
+  const countEl = document.getElementById('ci-tag-count');
+  if (!card || !body) return;
+
+  countEl.textContent = `Based on ${data.total_tagged} rated post${data.total_tagged !== 1 ? 's' : ''}`;
+
+  const rows = [];
+
+  if (data.archetypes?.length > 0) {
+    const top = data.archetypes[0];
+    const rate = top.total > 0 ? Math.round((top.strong_count / top.total) * 100) : 0;
+    rows.push(`<div class="ci-insight">
+      <span class="ci-label">Best hook type</span>
+      <span class="ci-value">${escHtml(top.archetype_used)} — ${rate}% strong posts</span>
+    </div>`);
+  }
+
+  if (data.best_day) {
+    const day = (data.best_day.day_name || '').trim();
+    rows.push(`<div class="ci-insight">
+      <span class="ci-label">Best day to post</span>
+      <span class="ci-value">${escHtml(day)} — highest strong rate</span>
+    </div>`);
+  }
+
+  if (rows.length === 0) return;
+  body.innerHTML = rows.join('');
+  card.hidden = false;
+}
+
+function renderPerfNudge(posts) {
+  const card = document.getElementById('perf-nudge');
+  const list = document.getElementById('perf-nudge-list');
+  if (!card || !list) return;
+
+  list.innerHTML = posts.map(post => {
+    const firstLine = (post.content || '').split('\n').find(l => l.trim()) || '';
+    const dateStr   = post.published_at
+      ? new Date(post.published_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+      : '';
+    return `<div class="perf-nudge-row" data-post-id="${post.id}">
+      <div class="perf-nudge-text">
+        <span class="perf-nudge-hook">${escHtml(firstLine)}</span>
+        <span class="perf-nudge-date">${escHtml(dateStr)}</span>
+      </div>
+      <div class="perf-nudge-btns" aria-label="Rate this post">
+        <button class="perf-btn" data-tag="strong" title="Strong — got leads, DMs or strong engagement">🔥</button>
+        <button class="perf-btn" data-tag="decent" title="Decent — some engagement, nothing remarkable">👍</button>
+        <button class="perf-btn" data-tag="weak"   title="Weak — little engagement">👎</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  list.querySelectorAll('.perf-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const row    = btn.closest('.perf-nudge-row');
+      const postId = row?.dataset.postId;
+      const tag    = btn.dataset.tag;
+      if (!postId || !tag) return;
+
+      try {
+        const r = await fetch(`/api/posts/${encodeURIComponent(postId)}/performance`, {
+          method:  'POST',
+          headers: { ...apiHeaders(), 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ tag }),
+        });
+        if (r.ok) {
+          row.innerHTML = `<div class="perf-nudge-done">Rated as <strong>${tag}</strong> — thanks!</div>`;
+          const remaining = list.querySelectorAll('.perf-nudge-row').length;
+          if (remaining === 0) card.hidden = true;
+        }
+      } catch {
+        // Non-fatal
+      }
+    });
+  });
+
+  card.hidden = false;
 }

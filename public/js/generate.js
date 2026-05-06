@@ -1,13 +1,18 @@
 /* generate.js — idea input and submission for generate.html */
 
 /* ── 1. DOM references ───────────────────────────────────────── */
-const ideaInput       = document.getElementById('idea-input');
-const ideaError       = document.getElementById('idea-error');
-const generateBtn     = document.getElementById('generate-btn');
-const voiceIndicator  = document.getElementById('voice-indicator-area');
-const generatingState = document.getElementById('generating-state');
-const generateError   = document.getElementById('generate-error');
-const charCount       = document.getElementById('idea-char-count');
+const ideaInput          = document.getElementById('idea-input');
+const ideaError          = document.getElementById('idea-error');
+const generateBtn        = document.getElementById('generate-btn');
+const voiceIndicator     = document.getElementById('voice-indicator-area');
+const generatingState    = document.getElementById('generating-state');
+const generateError      = document.getElementById('generate-error');
+const charCount          = document.getElementById('idea-char-count');
+const substanceWarning   = document.getElementById('substance-warning');
+const substanceWarningTx = document.getElementById('substance-warning-text');
+const generateBtnAnyway  = document.getElementById('generate-btn-anyway');
+
+generateBtnAnyway?.addEventListener('click', () => triggerGenerate({ skipSubstanceCheck: true }));
 
 /* ── 2. Auto-grow textarea + char counter ────────────────────── */
 ideaInput.addEventListener('input', () => {
@@ -54,7 +59,7 @@ async function loadProfile() {
 /* ── 4. Generate ─────────────────────────────────────────────── */
 generateBtn.addEventListener('click', () => triggerGenerate());
 
-async function triggerGenerate() {
+async function triggerGenerate(opts = {}) {
   clearError();
 
   const idea = ideaInput.value.trim();
@@ -75,10 +80,13 @@ async function triggerGenerate() {
   const timeoutId  = setTimeout(() => controller.abort(), 30000);
 
   try {
+    const body = { path: 'idea', raw_idea: idea };
+    if (opts.skipSubstanceCheck) body.skip_substance_check = true;
+
     const res = await fetch('/api/generate', {
       method:  'POST',
       headers: apiHeaders(),
-      body:    JSON.stringify({ path: 'idea', raw_idea: idea }),
+      body:    JSON.stringify(body),
       signal:  controller.signal,
     });
     clearTimeout(timeoutId);
@@ -90,6 +98,9 @@ async function triggerGenerate() {
         err.planCurrent = data.current;
         err.planLimit   = data.limit;
       }
+      if (data.error === 'missing_substance') {
+        err.substancePrompt = data.prompt;
+      }
       throw err;
     }
 
@@ -99,6 +110,8 @@ async function triggerGenerate() {
     clearTimeout(timeoutId);
     if (err.name === 'AbortError') {
       showGenerateError('This is taking too long. <a href="#">Try again →</a>');
+    } else if (err.message === 'missing_substance') {
+      showSubstanceWarning(err.substancePrompt || 'Add a specific outcome or contrarian view to improve this post.');
     } else if (err.message === 'complete_profile_first') {
       showGenerateError('Your voice profile is incomplete — posts need it to generate. <a href="/profile.html">Complete it →</a>');
     } else if (err.message === 'plan_limit_exceeded') {
@@ -109,6 +122,12 @@ async function triggerGenerate() {
       showGenerateError('Something went wrong. <a href="#">Try again →</a>');
     }
     setGenerating(false);
+  }}
+
+function showSubstanceWarning(msg) {
+  if (substanceWarning && substanceWarningTx) {
+    substanceWarningTx.textContent = msg;
+    substanceWarning.style.display = 'block';
   }
 }
 
@@ -138,6 +157,7 @@ function clearError() {
   ideaInput.classList.remove('error');
   ideaError.classList.remove('visible');
   generateError.classList.remove('visible');
+  if (substanceWarning) substanceWarning.style.display = 'none';
 }
 
 /* ── 6. Mode switcher ────────────────────────────────────────── */

@@ -4846,3 +4846,125 @@ body {
     max-width: none;
   }
 }
+
+/* ── Content Intelligence card ──────────────────────────────── */
+.ci-card .card-header {
+  margin-bottom: var(--space-4);
+}
+
+.ci-tag-count {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  font-family: var(--font-sans);
+}
+
+.ci-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.ci-insight {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--bg-card);
+  border: 1px solid var(--border-divider);
+  border-radius: 8px;
+}
+
+.ci-label {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  font-family: var(--font-sans);
+  min-width: 120px;
+  flex-shrink: 0;
+}
+
+.ci-value {
+  font-size: 14px;
+  color: var(--text-heading);
+  font-weight: 500;
+  font-family: var(--font-sans);
+}
+
+/* ── Performance nudge card ─────────────────────────────────── */
+.perf-nudge-card .card-header {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  margin-bottom: var(--space-4);
+}
+
+.card-subtitle {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  font-family: var(--font-sans);
+}
+
+.perf-nudge-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--border-divider);
+}
+
+.perf-nudge-row:last-child {
+  border-bottom: none;
+}
+
+.perf-nudge-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.perf-nudge-hook {
+  font-size: 14px;
+  color: var(--text-heading);
+  font-weight: 500;
+  font-family: var(--font-sans);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.perf-nudge-date {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  font-family: var(--font-sans);
+}
+
+.perf-nudge-btns {
+  display: flex;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.perf-btn {
+  background: none;
+  border: 1px solid var(--border-divider);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 18px;
+  padding: 4px 8px;
+  line-height: 1;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.perf-btn:hover {
+  background: var(--bg-card-hover, var(--bg-card));
+  border-color: var(--teal-600, #0d9488);
+}
+
+.perf-nudge-done {
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  padding: var(--space-3) 0;
+}

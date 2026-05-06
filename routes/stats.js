@@ -64,7 +64,8 @@ router.get('/posts/recent', async (req, res) => {
 
   try {
     const posts = await db.prepare(`
-      SELECT id, content, quality_score, passed_gate, created_at, status
+      SELECT id, content, quality_score, passed_gate, created_at, status,
+             archetype_used, published_at, performance_tag
       FROM generated_posts
       WHERE user_id = ? AND tenant_id = ? AND status != 'scheduled'
       ORDER BY created_at DESC
@@ -72,12 +73,15 @@ router.get('/posts/recent', async (req, res) => {
     `).all(req.userId, req.tenantId);
 
     const mapped = posts.map(p => ({
-      id:            p.id,
-      content:       p.content,
-      quality_score: p.quality_score,
-      passed_gate:   p.passed_gate,
-      created_at:    p.created_at,
-      status:        p.status || 'draft',
+      id:              p.id,
+      content:         p.content,
+      quality_score:   p.quality_score,
+      passed_gate:     p.passed_gate,
+      created_at:      p.created_at,
+      status:          p.status || 'draft',
+      archetype_used:  p.archetype_used || null,
+      published_at:    p.published_at || null,
+      performance_tag: p.performance_tag || null,
     }));
 
     return res.json({ ok: true, posts: mapped });

@@ -90,9 +90,9 @@ function buildQualityPayload(gate, synthesisAttempt, isPrimary) {
 const IDEA_SLUG = 'idea';
 const IDEA_INSIGHT_SLUG = 'idea_insight';
 
-async function restructureWithQualityGate(userProfile, sourceText, funnelType) {
+async function restructureWithQualityGate(userProfile, sourceText, funnelType, options = {}) {
   const { synthesis, post, ctaAlternatives, archetypeUsed, hookConfidence, contentFeedback } =
-    await restructureToPost(sourceText, userProfile);
+    await restructureToPost(sourceText, userProfile, null, options);
 
   const primaryGate = runQualityGate(
     post,
@@ -144,7 +144,7 @@ router.post('/', async (req, res) => {
     });
   }
 
-  const { path: genPath, raw_idea, vault_idea_id } = req.body;
+  const { path: genPath, raw_idea, vault_idea_id, skip_substance_check } = req.body;
 
   if (!genPath) return res.status(400).json({ ok: false, error: 'missing_path' });
 
@@ -185,7 +185,9 @@ router.post('/', async (req, res) => {
       ? (vaultChunkText || vaultIdea.seed_text)
       : raw_idea;
     const funnelTypeForGate = vaultIdea?.funnel_type || null;
-    ideaResult = await restructureWithQualityGate(userProfile, sourceText, funnelTypeForGate);
+    ideaResult = await restructureWithQualityGate(userProfile, sourceText, funnelTypeForGate, {
+      skipSubstanceCheck: !!skip_substance_check,
+    });
 
     {
       const {
@@ -228,8 +230,8 @@ router.post('/', async (req, res) => {
 
       const postsInsert = db.prepare(`
         INSERT INTO generated_posts
-          (run_id, user_id, tenant_id, format_slug, content, quality_score, quality_flags, passed_gate, funnel_type, vault_source_ref, hook_b, cta_alternatives, idea_input)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          (run_id, user_id, tenant_id, format_slug, content, quality_score, quality_flags, passed_gate, funnel_type, vault_source_ref, hook_b, cta_alternatives, idea_input, archetype_used)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         RETURNING id
       `);
 
@@ -246,7 +248,8 @@ router.post('/', async (req, res) => {
         vaultSourceRef,
         null,
         ctaAlternatives?.length ? JSON.stringify(ctaAlternatives) : null,
-        inputData.raw_idea || null
+        inputData.raw_idea || null,
+        archetypeUsed || null
       );
       const primaryId = primaryInsert.lastInsertRowid;
 
@@ -278,6 +281,9 @@ router.post('/', async (req, res) => {
     }
 
   } catch (err) {
+    if (err.message === 'missing_substance') {
+      return res.status(422).json({ ok: false, error: 'missing_substance', prompt: err.substancePrompt });
+    }
     console.error('[generate] Error:', err.message);
     return res.status(500).json({ ok: false, error: err.message });
   }
@@ -382,12 +388,13 @@ router.post('/regenerate/:postId', async (req, res) => {
 
     const regenCtaAlternatives = isInsightRow ? [] : (ideaResult.ctaAlternatives || []);
 
+    const regenArchetype = isInsightRow ? 'INSIGHT' : (ideaResult.archetypeUsed || null);
     await db.prepare(`
       UPDATE generated_posts
-      SET content = ?, quality_score = ?, quality_flags = ?, passed_gate = ?, cta_alternatives = ?
+      SET content = ?, quality_score = ?, quality_flags = ?, passed_gate = ?, cta_alternatives = ?, archetype_used = ?
       WHERE id = ?
     `).run(content, gate.score, JSON.stringify(gate.flags), gate.passed_gate ? 1 : 0,
-      regenCtaAlternatives.length ? JSON.stringify(regenCtaAlternatives) : null, postId);
+      regenCtaAlternatives.length ? JSON.stringify(regenCtaAlternatives) : null, regenArchetype, postId);
 
     const quality = buildQualityPayload(gate, 1, true);
 
@@ -549,9 +556,11 @@ router.post('/from-doc', async (req, res) => {
   let fileSourceType = null;
   let sourceUrl      = null;
 
+  let skipSubstanceCheckDoc = false;
   if (contentType === 'application/json') {
     const body = req.body || {};
     const { url, vault_doc_id } = body;
+    skipSubstanceCheckDoc = !!body.skip_substance_check;
 
     if (vault_doc_id) {
       // Use an already-indexed vault document — fetch its chunks from the database
@@ -628,7 +637,7 @@ router.post('/from-doc', async (req, res) => {
 
   try {
     const { synthesis, post, hookB, ctaAlternatives, archetypeUsed, hookConfidence } =
-      await ideaToPost(truncated, userProfile);
+      await ideaToPost(truncated, userProfile, { skipSubstanceCheck: skipSubstanceCheckDoc });
 
     const primaryGate = runQualityGate(
       post,
@@ -657,15 +666,16 @@ router.post('/from-doc', async (req, res) => {
 
     const primaryInsert = await db.prepare(`
       INSERT INTO generated_posts
-        (run_id, user_id, tenant_id, format_slug, content, quality_score, quality_flags, passed_gate, funnel_type, hook_b, cta_alternatives, idea_input)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (run_id, user_id, tenant_id, format_slug, content, quality_score, quality_flags, passed_gate, funnel_type, hook_b, cta_alternatives, idea_input, archetype_used)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       RETURNING id
     `).run(
       runId, userId, tenantId, IDEA_SLUG,
       post, primaryGate.score, JSON.stringify(primaryGate.flags), primaryGate.passed_gate ? 1 : 0,
       funnelType, hookB || null,
       ctaAlternatives?.length ? JSON.stringify(ctaAlternatives) : null,
-      truncated
+      truncated,
+      archetypeUsed || null
     );
     const primaryId = primaryInsert.lastInsertRowid;
 
@@ -695,6 +705,9 @@ router.post('/from-doc', async (req, res) => {
     });
 
   } catch (err) {
+    if (err.message === 'missing_substance') {
+      return res.status(422).json({ ok: false, error: 'missing_substance', prompt: err.substancePrompt });
+    }
     console.error('[generate/from-doc] Error:', err.message);
     return res.status(500).json({ ok: false, error: err.message });
   }

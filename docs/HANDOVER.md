@@ -2,7 +2,7 @@
 
 **Product:** AI-powered LinkedIn content intelligence platform  
 **Stack:** Node.js + Express, PostgreSQL (Neon), Redis/BullMQ, Anthropic Claude, Google OAuth + LinkedIn OAuth  
-**Last updated:** 2026-04-14 (Intelligence Vault + Funnel Intelligence sprint)
+**Last updated:** 2026-05-06 (Sprint 1 — Hook injection, Performance Tagging, Viral tension pre-check)
 
 ---
 
@@ -81,6 +81,7 @@ Vault async background (setImmediate):
 │   ├── profile.js               # User voice/brand profile
 │   ├── recipes.js               # Content recipe templates
 │   ├── stats.js                 # Dashboard stats + post CRUD
+│   ├── performance.js           # Post performance tagging (🔥/👍/👎) + Content Intelligence summary
 │   ├── events.js                # Client event logging (copy, etc.)
 │   ├── media.js                 # File upload and management
 │   ├── visuals.js               # Visual generation (cards, carousels)
@@ -140,22 +141,26 @@ Row is created on first Google OAuth login (`ON CONFLICT DO NOTHING`).
 
 **`generated_posts`**
 ```
-id               BIGSERIAL PK
-user_id          TEXT
-tenant_id        TEXT  DEFAULT 'default'
-content          TEXT
-status           TEXT  (draft | published | scheduled | not_sent)
-quality_score    INT
-hook_type        TEXT
-funnel_type      TEXT  (reach | trust | convert)       ← added migration 005
-vault_source_ref TEXT  (e.g. "Q3 Strategy PDF · p.4")  ← added migration 005
-linkedin_post_id TEXT  (set after publish; idempotency guard)
-likes            INT   NULLable (cleared after 90 days)
-comments         INT   NULLable (cleared after 90 days)
-reactions        JSONB NULLable (cleared after 90 days)
-last_synced_at   TIMESTAMPTZ NULLable
-created_at       TIMESTAMPTZ
-published_at     TIMESTAMPTZ
+id                    BIGSERIAL PK
+user_id               TEXT
+tenant_id             TEXT  DEFAULT 'default'
+content               TEXT
+status                TEXT  (draft | published | scheduled | not_sent)
+quality_score         INT
+hook_type             TEXT
+funnel_type           TEXT  (reach | trust | convert)         ← migration 005
+vault_source_ref      TEXT  (e.g. "Q3 Strategy PDF · p.4")   ← migration 005
+archetype_used        TEXT  (e.g. MYTH_BUST, INSIGHT, etc.)  ← migration 018
+linkedin_post_id      TEXT  (set after publish; idempotency guard)
+likes                 INT   NULLable (cleared after 90 days)
+comments              INT   NULLable (cleared after 90 days)
+reactions             JSONB NULLable (cleared after 90 days)
+last_synced_at        TIMESTAMPTZ NULLable
+created_at            TIMESTAMPTZ
+published_at          TIMESTAMPTZ
+performance_tag       TEXT  NULLable  (strong | decent | weak) ← migration 018
+performance_note      TEXT  NULLable                           ← migration 018
+performance_tagged_at TIMESTAMPTZ NULLable                     ← migration 018
 ```
 
 **`linkedin_tokens`**
@@ -345,8 +350,9 @@ All `/api/*` routes require an active session. API routes return JSON `{ ok: tru
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/api/generate` | Generate post from idea. Body: `{ idea, recipe_id?, vault_idea_id? }`. If `vault_idea_id` is supplied, funnel type is fetched from `vault_ideas` and injected as a system-prompt hint; post is stored with `funnel_type` and `vault_source_ref`; seed is marked `used`. |
-| `POST` | `/api/generate/regenerate/:postId` | Regenerate existing post |
+| `POST` | `/api/generate` | Generate post from idea. Body: `{ path: 'idea', raw_idea, vault_idea_id?, skip_substance_check? }`. Returns HTTP 422 `{ error: 'missing_substance', prompt }` when input lacks both specificity and tension (bypass with `skip_substance_check: true`). Persists `archetype_used` on the generated post. |
+| `POST` | `/api/generate/from-doc` | Generate from uploaded file or URL. Accepts `skip_substance_check` in JSON body. Same 422 behaviour. |
+| `POST` | `/api/generate/regenerate/:postId` | Regenerate existing post; persists updated `archetype_used` |
 | `POST` | `/api/quality-check` | Score manually edited post text |
 
 Rate limit: 10 generations/hour per user (Redis sliding window, in-memory fallback).
@@ -355,13 +361,16 @@ Rate limit: 10 generations/hour per user (Redis sliding window, in-memory fallba
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/api/posts/recent` | Last 5 generated posts |
+| `GET` | `/api/posts/recent` | Last 5 generated posts (includes `archetype_used`, `published_at`, `performance_tag`) |
 | `GET` | `/api/posts/scheduled` | Upcoming scheduled posts |
 | `GET` | `/api/posts/:id` | Single post with schedule info |
 | `PATCH` | `/api/posts/:id` | Update draft content |
 | `DELETE` | `/api/posts/:id` | Delete draft post |
 | `POST` | `/api/posts/:id/delete` | Same as DELETE (form-friendly) |
 | `GET` | `/api/posts` | All posts; optional `?status=draft\|published` filter |
+| `POST` | `/api/posts/:postId/performance` | Tag a published post. Body: `{ tag: 'strong'\|'decent'\|'weak', note?: string }` |
+| `GET` | `/api/posts/performance-summary` | Content Intelligence summary: best archetype, best day, untagged posts. Returns `{ enough_data, total_tagged, archetypes, best_day, untagged }`. Requires ≥3 tagged posts for `enough_data: true`. |
+| `GET` | `/api/posts/untagged-published` | Published posts without a performance tag (up to 5) |
 
 ### Profile
 
@@ -506,7 +515,12 @@ Scores generated posts and enforces quality thresholds. Retries generation if be
 
 ### `services/ideaPath.js` *(modified)*
 
-Core generation flow. Now accepts `options._funnelHint` alongside `options.qualityRetryHint` and `options._regenerateHint`. The hint string is appended to the system prompt, steering Claude toward the intended funnel type (reach / trust / convert) when generating from a Vault seed.
+Core generation flow. Key functions:
+
+- **`ideaToPost(rawIdea, userProfile, options)`** — Idea path. Runs `selectHook()` + `assessInputQuality()` in parallel before generation. Throws `{ message: 'missing_substance', substancePrompt }` when input has neither a specific outcome nor a surprising angle, unless `options.skipSubstanceCheck` is set.
+- **`restructureToPost(sourceText, userProfile, documentContext, options)`** — Editorial path for vault seeds and regeneration. Same `selectHook()` + `assessInputQuality()` parallel pre-check. `buildRefineSystemPrompt()` accepts an optional `hookInjection` block that replaces the generic Rule 1 with the classified archetype's structural pattern. Returns `archetypeUsed` (real archetype key, not `'EDITORIAL'`).
+- **`buildSubstancePrompt({ hasSpecific, hasTension })`** — Returns a blocking message string when both are false; null otherwise.
+- **`assessInputQuality(text, client)`** — Claude Haiku call; checks for concrete specifics and genuine tension. Fails open (`{ hasSpecific: true, hasTension: true }`) to never block on error.
 
 ---
 
@@ -693,6 +707,15 @@ tenants/{tenant_id}/users/{user_id}/vault/{filename}      ← vault source files
 ---
 
 ## Recent Changes
+
+### May 2026 — Sprint 1: Hook injection, Performance Tagging, Viral tension pre-check
+
+| Change | Details |
+|--------|---------|
+| Hook archetype injection | `selectHook()` now runs on `restructureToPost()` (editorial path). `buildRefineSystemPrompt()` accepts optional `hookInjection` block. `archetype_used` persisted via all generation INSERT/UPDATE paths. |
+| Post Performance Tagging | `routes/performance.js` — `POST /api/posts/:id/performance`, `GET /api/posts/performance-summary`, `GET /api/posts/untagged-published`. Dashboard: "Rate your posts" nudge card + "Content Intelligence" card. |
+| Viral tension pre-check | `buildSubstancePrompt()` added. `ideaToPost()` and `restructureToPost()` throw `missing_substance` (HTTP 422) when both specificity and tension are absent. Frontend shows amber warning with "Generate anyway" bypass. |
+| Migration | `018_performance_tagging.sql` — adds `archetype_used`, `performance_tag`, `performance_note`, `performance_tagged_at` to `generated_posts`. Run `DATABASE_URL=<prod> node scripts/migrate.js`. |
 
 ### April 2026 — Intelligence Vault + Funnel Intelligence
 

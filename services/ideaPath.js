@@ -52,8 +52,21 @@ async function generateAlternativeHook(post, usedArchetype, client) {
 async function ideaToPost(rawIdea, userProfile, options = {}) {
   const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
   if (!apiKey) throw new Error('anthropic_api_key not configured');
+  const client = new Anthropic({ apiKey });
 
-  const hookResult = await selectHook(rawIdea, userProfile);
+  const [hookResult, inputQuality] = await Promise.all([
+    selectHook(rawIdea, userProfile),
+    assessInputQuality(rawIdea, client),
+  ]);
+
+  if (!options.skipSubstanceCheck) {
+    const substancePrompt = buildSubstancePrompt(inputQuality);
+    if (substancePrompt) {
+      const err = new Error('missing_substance');
+      err.substancePrompt = substancePrompt;
+      throw err;
+    }
+  }
 
   return runSinglePostGeneration({
     rawIdea,
@@ -62,6 +75,7 @@ async function ideaToPost(rawIdea, userProfile, options = {}) {
     hookInjection: hookResult.hookInjection,
     archetypeUsed: hookResult.archetype,
     hookConfidence: hookResult.confidence,
+    contentFeedback: buildContentFeedback(inputQuality),
   });
 }
 
@@ -396,7 +410,12 @@ async function vaultSeedToPost(vaultIdea, chunkText, userProfile, options = {}) 
 // Editorial path: copy editor model — reshapes author's own words, adds nothing.
 // ---------------------------------------------------------------------------
 
-function buildRefineSystemPrompt(userProfile) {
+function buildRefineSystemPrompt(userProfile, hookInjection = null) {
+  const hookRule = hookInjection
+    ? `1. HOOK (line 1): Use the archetype structure below — applied to the author's own words, not invented from scratch. The hook must surface the author's strongest idea in this structural form; do not invent new facts or angles.
+${hookInjection}`
+    : `1. HOOK (line 1): Identify the most compelling idea in the input. Write it as a sharp, direct opening line — tightened from the author's words. Surface the author's best line; do not invent a new angle.`;
+
   return `You are a copy editor for a LinkedIn professional, not a ghostwriter.
 
 Your job is to take the author's own words and shape them into a high-impact LinkedIn post.
@@ -412,7 +431,7 @@ SPECIFICS ARE SACRED — NO EXCEPTIONS:
 Any number, percentage, named company, client role, timeframe, or measurable outcome in the source material must appear in the post VERBATIM. Never paraphrase, round, approximate, or generalise them. "31% reduction in 6 weeks for a Series B SaaS team" stays exactly that — not "around 30%", not "significant reduction", not "a fast-growing startup". If the source says it, the post says it the same way. This is what makes the post credible and unfakeable.
 
 RULES:
-1. HOOK (line 1): Identify the most compelling idea in the input. Write it as a sharp, direct opening line — tightened from the author's words. Surface the author's best line; do not invent a new angle.
+${hookRule}
 2. LINES 2–3 (above the fold): These are what decide whether someone clicks "see more". Do NOT use them for context, setup, or explanation. Use them to deepen the tension from the hook — a consequence, a contradiction, or a "here's why this changed everything" that makes the reader feel they'll miss something if they stop reading.
 3. BODY: Every sentence must trace back to something the author wrote. You may tighten, split, or reorder — you may not invent.
 4. TRIM: Remove sentences that are weak, redundant, or tangential to the central point.
@@ -521,28 +540,44 @@ function buildContentFeedback({ hasSpecific, hasTension }) {
   return `To push this post further: add ${missing.join(' and ')}.`;
 }
 
-async function restructureToPost(sourceText, userProfile, documentContext = null) {
+function buildSubstancePrompt({ hasSpecific, hasTension }) {
+  if (hasSpecific || hasTension) return null;
+  return 'This input has no specific outcome and no surprising angle — two things that drive LinkedIn reach. Add one sentence with a real number, result, or contrarian view and the post will perform significantly better.';
+}
+
+async function restructureToPost(sourceText, userProfile, documentContext = null, options = {}) {
   const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
   if (!apiKey) throw new Error('anthropic_api_key not configured');
   const client = new Anthropic({ apiKey });
 
-  const systemPrompt = buildRefineSystemPrompt(userProfile);
+  // Classify archetype + quality check in parallel before generation (both Haiku, fast)
+  const [hookResult, inputQuality] = await Promise.all([
+    selectHook(sourceText, userProfile),
+    assessInputQuality(sourceText, client),
+  ]);
+
+  if (!options.skipSubstanceCheck) {
+    const substancePrompt = buildSubstancePrompt(inputQuality);
+    if (substancePrompt) {
+      const err = new Error('missing_substance');
+      err.substancePrompt = substancePrompt;
+      throw err;
+    }
+  }
+
+  const systemPrompt = buildRefineSystemPrompt(userProfile, hookResult.hookInjection);
   const userPrompt   = buildRefineUserPrompt(sourceText, documentContext);
   let responseText   = '';
 
-  // Quality check runs in parallel with main generation — zero added latency
-  let message, inputQuality;
+  let message;
   try {
-    [message, inputQuality] = await Promise.all([
-      client.messages.create({
-        model:       'claude-sonnet-4-6',
-        max_tokens:  2000,
-        temperature: 0.3,
-        system:      systemPrompt,
-        messages:    [{ role: 'user', content: userPrompt }],
-      }),
-      assessInputQuality(sourceText, client),
-    ]);
+    message = await client.messages.create({
+      model:       'claude-sonnet-4-6',
+      max_tokens:  2000,
+      temperature: 0.3,
+      system:      systemPrompt,
+      messages:    [{ role: 'user', content: userPrompt }],
+    });
   } catch (err) {
     throw err;
   }
@@ -555,8 +590,8 @@ async function restructureToPost(sourceText, userProfile, documentContext = null
       synthesis:       validated.synthesis,
       post:            cleanPost,
       ctaAlternatives: validated.ctaAlternatives,
-      archetypeUsed:   'EDITORIAL',
-      hookConfidence:  1.0,
+      archetypeUsed:   hookResult.archetype,
+      hookConfidence:  hookResult.confidence,
       contentFeedback: buildContentFeedback(inputQuality),
     };
   } catch (firstErr) {
@@ -580,8 +615,8 @@ async function restructureToPost(sourceText, userProfile, documentContext = null
           synthesis:       validated.synthesis,
           post:            cleanPost,
           ctaAlternatives: validated.ctaAlternatives,
-          archetypeUsed:   'EDITORIAL',
-          hookConfidence:  1.0,
+          archetypeUsed:   hookResult.archetype,
+          hookConfidence:  hookResult.confidence,
           contentFeedback: buildContentFeedback(inputQuality),
         };
       } catch (retryErr) {

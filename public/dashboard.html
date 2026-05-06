@@ -62,6 +62,24 @@
       <ul class="checklist-items" id="checklist-items" aria-live="polite"></ul>
     </div>
 
+    <!-- Zone 1.6: Content Intelligence — shown once ≥3 posts are tagged -->
+    <div id="content-intelligence" class="posts-card ci-card" hidden role="region" aria-label="Content Intelligence">
+      <div class="card-header">
+        <span class="card-title">Content Intelligence</span>
+        <span class="ci-tag-count" id="ci-tag-count"></span>
+      </div>
+      <div id="ci-body" class="ci-body"></div>
+    </div>
+
+    <!-- Zone 1.7: Rate untagged published posts -->
+    <div id="perf-nudge" class="posts-card perf-nudge-card" hidden role="region" aria-label="Rate your recent posts">
+      <div class="card-header">
+        <span class="card-title">How did these posts perform?</span>
+        <span class="card-subtitle">Quick ratings help ScoutHook learn what works for you</span>
+      </div>
+      <div id="perf-nudge-list"></div>
+    </div>
+
     <!-- Zone 2: Recent posts -->
     <div class="posts-card" role="region" aria-label="Recent posts">
       <div class="card-header">

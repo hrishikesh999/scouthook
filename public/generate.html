@@ -617,6 +617,14 @@
 
           <div id="idea-error" role="alert">Add a thought before writing the post</div>
 
+          <!-- Substance warning — shown when input lacks specificity + tension -->
+          <div id="substance-warning" role="alert" style="display:none;background:color-mix(in srgb,#D97706 8%,transparent);border:1px solid color-mix(in srgb,#D97706 30%,transparent);border-radius:10px;padding:14px 16px;font-size:0.875rem;color:#92400E;line-height:1.5;">
+            <span id="substance-warning-text"></span>
+            <div style="margin-top:10px;display:flex;gap:12px;align-items:center;">
+              <button id="generate-btn-anyway" type="button" style="font-size:0.8125rem;font-weight:600;color:var(--brand);background:none;border:none;padding:0;cursor:pointer;text-decoration:underline;font-family:var(--font-sans);">Generate anyway →</button>
+            </div>
+          </div>
+
           <!-- Skeleton shown while generating -->
           <div id="generating-state" aria-busy="true" aria-label="Generating post">
             <div class="gen-skeleton-line" style="width: 60%"></div>

@@ -1,6 +1,6 @@
 # ScoutHook — Product Roadmap 2026
 
-*Strategic review and roadmap based on codebase audit and competitive analysis. Updated May 2026.*
+*Strategic review and roadmap based on codebase audit and competitive analysis. Updated 2026-05-06.*
 
 ---
 
@@ -20,6 +20,9 @@ ScoutHook is a fully-functional, end-to-end LinkedIn content SaaS — not a prot
 - Transactional email system via Resend — 10 templates (welcome, limit reached, pro activated, cancelled, expiring soon, payment failed, post published, post failed, LinkedIn reconnect, weekly digest) with deduplication so no email fires twice within a configurable window
 - New user onboarding checklist on dashboard — step-by-step setup guide (voice profile → brand settings → vault upload → LinkedIn connect → first publish); auto-hides on completion
 - **Auto-first comment on scheduled posts** — AI-suggested, editable; fires 60s after publish via BullMQ; keeps links/CTAs out of post body for better algorithmic reach *(shipped 2026-05-05)*
+- **Hook archetype injection in document flow** — `selectHook()` now runs on the editorial path (`restructureToPost`); vault seeds and idea inputs get proper archetype structure instead of generic reshaping; `archetype_used` persisted to `generated_posts` *(shipped 2026-05-06)*
+- **Post Performance Tagging** — 🔥/👍/👎 rating on published posts; dashboard "Rate your recent posts" nudge card; "Content Intelligence" card surfaces best archetype + best posting day once ≥3 posts rated; feeds the proof loop *(shipped 2026-05-06)*
+- **Viral tension pre-check** — `assessInputQuality()` now blocks generation (HTTP 422 `missing_substance`) when input has no specific outcome AND no surprising angle; amber warning shown inline with "Generate anyway" bypass; applies to both idea and from-doc paths *(shipped 2026-05-06)*
 
 The architecture is sound. The product premise is correct. The engine is better than most users will ever discover, because retention and daily engagement features are thin.
 
@@ -94,33 +97,20 @@ Build the proof loop first. Everything else compounds on top of it.
 
 ---
 
-### Sprint 1 — Generation quality + proof loop foundation
+### Sprint 1 — Generation quality + proof loop foundation ✅ *Shipped 2026-05-06*
 
-**Hook archetype injection in the document flow**
-The idea path runs Haiku hook classification → selects from 8 archetypes → injects the archetype's structural hook pattern into generation. The document path (`restructureToPost`) uses a separate editorial model with no hook logic at all. Fix: run `selectHook()` on the extracted document text, inject the archetype's structure into `buildRefineSystemPrompt()`. One function change, no new AI calls, no DB changes.
-
-*Why first:* A case study with a MYTH_BUST angle currently gets a generic editorial reshaping. With archetype injection it gets a properly structured myth-bust hook. The viral mechanics engine is already built — it just isn't wired to the document flow. Ships in hours.
+**Hook archetype injection in the document flow** ✅
+`selectHook()` now runs in parallel with `assessInputQuality()` on the editorial path (`restructureToPost`). The classified archetype's structural hook pattern is injected into `buildRefineSystemPrompt()` via the new `hookInjection` parameter, replacing the generic Rule 1. `archetype_used` is now persisted to `generated_posts` (migration 018). The quality gate and Content Intelligence card can now use real archetype data from all generation paths.
 
 ---
 
-**Post Performance Tagging — "What Worked"**
-After every published post, a 24-hour prompt appears: *"How did this post perform? Any leads, DM requests, or profile visits worth noting?"* User taps 🔥 Strong / 👍 Decent / 👎 Weak — plus an optional note. No LinkedIn API required — this is a form.
-
-Over time, ScoutHook correlates: hook archetype × funnel type × format × day of week × topic cluster → performance pattern. Every Monday, a "Content Intelligence" card: *"Your MYTH_BUST hooks outperform INSIGHT hooks 3:1. Your Tuesday posts get 2x the DMs of Thursday posts."* Next post generation automatically weights toward high-performing patterns.
-
-*Why this matters:*
-- Zero LinkedIn API dependency. It's a form. Works today.
-- Creates a retention flywheel. Month 3 ScoutHook is dramatically more valuable than Month 1.
-- Closes the proof gap. Users see that ScoutHook-generated posts drive leads. That's the testimonial, the word-of-mouth, the case study.
-- Justifies price increases. Six months of performance data = leverage for a $99/month "Advanced Intelligence" tier.
-- Feeds generation quality. High-performing posts auto-update writing samples and archetype weighting. Output quality compounds over time.
-
-No competitor is doing this for LinkedIn, because they're racing to get API access instead of building around the constraint.
+**Post Performance Tagging — "What Worked"** ✅
+`POST /api/posts/:postId/performance` stores 🔥/👍/👎 tags (+ optional note) against published posts. `GET /api/posts/performance-summary` returns aggregated Content Intelligence: best hook archetype by strong-rate, best day of week. Dashboard surfaces a "Rate your recent posts" nudge card for untagged published posts; "Content Intelligence" card appears once ≥3 posts are rated. Migration 018 adds `performance_tag`, `performance_note`, `performance_tagged_at` columns.
 
 ---
 
-**Viral tension pre-check before generation**
-`assessInputQuality()` already checks for specificity and tension on the idea path but produces only a passive feedback string. Make it active on both paths: if the document or idea lacks a concrete result or surprising angle, surface a blocking prompt before generation — *"This document has no specific client outcome. Add one sentence with a real number and the post will perform significantly better."* Halt-and-ask rather than generate-and-hope.
+**Viral tension pre-check before generation** ✅
+`assessInputQuality()` is now active (blocking) on both the idea path and from-doc path. When input has neither a concrete specific nor a surprising angle, the API returns HTTP 422 `missing_substance` with a targeted prompt. The frontend shows an amber inline warning with a "Generate anyway →" bypass. `skipSubstanceCheck` flag lets the bypass re-call without the block.
 
 ---
 

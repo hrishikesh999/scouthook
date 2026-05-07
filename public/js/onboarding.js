@@ -2,10 +2,9 @@
 
 /* ============================================================
    onboarding.js — Scouthook first-time wizard
-   7-screen PLG flow:
+   6-screen PLG flow:
      s1. Role
-     s2. Goal
-     s3. Post type
+     s2. Goal (auto-selects hard_won_lesson template)
      s4. Interview (one question per step)
      s5. Live named progress
      s6. Post revealed + LinkedIn blur gate
@@ -95,8 +94,8 @@ const Onboarding = (() => {
   }
 
   /* ── Screen navigation ──────────────────────────────── */
-  // Maps screen id → dot number (1–5)
-  const DOT_MAP = { s1: '1', s2: '1', s3: '2', s4: '3', s5: '3', s6: '4', s7: '5' };
+  // Maps screen id → dot number (1–4: role · goal · interview · done)
+  const DOT_MAP = { s1: '1', s2: '2', s4: '3', s5: '3', s6: '4', s7: '4' };
 
   function showScreen(id) {
     qsa('.ob-screen').forEach(s => s.classList.remove('active'));
@@ -146,26 +145,12 @@ const Onboarding = (() => {
         });
         card.classList.add('selected');
         card.setAttribute('aria-pressed', 'true');
-        state.goal       = card.dataset.goal;
-        state.funnelType = card.dataset.funnel;
-        setTimeout(() => showScreen('s3'), 200);
-      });
-    });
-  }
-
-  /* ── Screen 3: Post type ────────────────────────────── */
-  function initS3() {
-    qsa('.ob-type-card').forEach(card => {
-      card.addEventListener('click', () => {
-        qsa('.ob-type-card').forEach(c => {
-          c.classList.remove('selected');
-          c.setAttribute('aria-pressed', 'false');
-        });
-        card.classList.add('selected');
-        card.setAttribute('aria-pressed', 'true');
-        state.templateKey    = card.dataset.template;
-        state.questionIndex  = 0;
-        state.answers        = [];
+        state.goal        = card.dataset.goal;
+        state.funnelType  = card.dataset.funnel;
+        // Skip post-type selection — default to hard_won_lesson (easiest to answer)
+        state.templateKey   = 'hard_won_lesson';
+        state.questionIndex = 0;
+        state.answers       = [];
         const tmpl = TEMPLATES[state.templateKey];
         qs('ob-template-label').textContent   = tmpl.label;
         qs('ob-template-context').textContent = tmpl.context;
@@ -193,10 +178,10 @@ const Onboarding = (() => {
     // Update back button target
     const backBtn = qs('ob-s4-back');
     if (backBtn) {
-      backBtn.dataset.backTo = idx === 0 ? 's3' : null;
+      backBtn.dataset.backTo = idx === 0 ? 's2' : null;
       backBtn.onclick = () => {
         if (idx === 0) {
-          showScreen('s3');
+          showScreen('s2');
         } else {
           state.questionIndex--;
           renderQuestion();
@@ -627,7 +612,6 @@ const Onboarding = (() => {
 
     initS1();
     initS2();
-    initS3();
     initS4();
     initS6();
 

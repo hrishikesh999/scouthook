@@ -176,7 +176,9 @@ app.get('/auth/google', (req, res, next) => {
   if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
     return res.redirect('/login.html?error=google_not_configured');
   }
-  return passport.authenticate('google', { scope: ['profile', 'email'] })(req, res, next);
+  const opts = { scope: ['profile', 'email'] };
+  if (req.query.hint) opts.loginHint = req.query.hint;
+  return passport.authenticate('google', opts)(req, res, next);
 });
 
 app.get('/auth/google/callback',

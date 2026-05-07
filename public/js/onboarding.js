@@ -15,19 +15,20 @@ const Onboarding = (() => {
 
   /* ── Module state ─────────────────────────────────────── */
   const state = {
-    role:            null,
-    roleCustom:      null,
-    websiteUrl:      null,
-    docFile:         null,   // File object when user uploads a file
-    docUrl:          null,   // URL string when user pastes a URL
-    docPath:         false,  // true when generation came from doc upload
-    postId:          null,
-    post:            null,
-    quality:         null,
-    archetypeUsed:   null,
-    hookConfidence:  null,
-    currentScreen:   '1',
-    suggestionsOpen: false,
+    role:             null,
+    roleCustom:       null,
+    websiteUrl:       null,
+    docFile:          null,   // File object when user uploads a file
+    docUrl:           null,   // URL string when user pastes a URL
+    docPath:          false,  // true when generation came from doc upload
+    postId:           null,
+    post:             null,
+    quality:          null,
+    archetypeUsed:    null,
+    hookConfidence:   null,
+    currentScreen:    '1',
+    suggestionsOpen:  false,
+    linkedinConnected: false, // checked at init; used to gate post blur on Screen 4b
   };
 
   /* ── Role-specific prompt chips ────────────────────────── */
@@ -96,15 +97,17 @@ const Onboarding = (() => {
     updateDots(key);
   }
 
+  // Maps each screen key to a dot number (1–5: role, generate, draft, connect, done)
+  const SCREEN_DOT = { '1': '1', '3': '2', '4a': '3', '4b': '3', '5': '4', '6': '5' };
+
   function updateDots(screenKey) {
     const dots = qs('ob-step-dots');
     if (!dots) return;
-    const dotMap  = { '3': '3', '4b': '4b', '6': '6' };
-    const showFor = Object.keys(dotMap);
-    dots.hidden = !showFor.includes(screenKey);
+    const activeDot = SCREEN_DOT[screenKey];
+    dots.hidden = !activeDot;
     if (!dots.hidden) {
       qsa('.ob-dot').forEach(dot => {
-        dot.classList.toggle('active', dot.dataset.step === dotMap[screenKey]);
+        dot.classList.toggle('active', dot.dataset.step === activeDot);
       });
     }
   }
@@ -590,8 +593,9 @@ const Onboarding = (() => {
       const passed = !!(quality.passed || quality.passed_gate);
       const pill   = qs('ob-passfail-pill');
       if (pill) {
-        pill.textContent = passed ? '● Passed' : '● Needs work';
-        pill.className   = 'passfail-pill ' + (passed ? 'pass' : 'fail');
+        // Soft-fail during onboarding: never show red "Needs work" on first impression
+        pill.textContent = passed ? '● Passed' : '● Good start';
+        pill.className   = 'passfail-pill ' + (passed ? 'pass' : 'borderline');
       }
 
       const errors   = quality.errors   || [];
@@ -617,6 +621,32 @@ const Onboarding = (() => {
         });
       }
     }
+
+    applyPostLock();
+  }
+
+  /* ── Screen 4b: LinkedIn unlock gate ─────────────────────
+     Blurs the draft until the user connects LinkedIn.
+     Uses sessionStorage to survive the OAuth redirect. ── */
+  function applyPostLock() {
+    if (state.linkedinConnected) return;
+    const wrap    = qs('ob-post-wrap');
+    const overlay = qs('ob-unlock-overlay');
+    if (!wrap || !overlay) return;
+
+    wrap.classList.add('locked');
+    overlay.hidden = false;
+
+    qs('ob-unlock-cta')?.addEventListener('click', () => {
+      sessionStorage.setItem('ob_pending_post', JSON.stringify({
+        postId:        state.postId,
+        post:          state.post,
+        quality:       state.quality,
+        archetypeUsed: state.archetypeUsed,
+        docPath:       state.docPath,
+      }));
+      window.location.href = '/api/linkedin/connect?from=onboarding';
+    }, { once: true });
   }
 
   function fireConfetti() {
@@ -651,7 +681,7 @@ const Onboarding = (() => {
   function initScreen4b() {
     qs('ob-s4b-continue')?.addEventListener('click', () => {
       prepareScreen6();
-      showScreen(5);
+      showScreen(state.linkedinConnected ? 6 : 5);
     });
     qs('ob-s4b-skip')?.addEventListener('click', () => {
       markOnboardingComplete();
@@ -671,13 +701,34 @@ const Onboarding = (() => {
 
   function checkLinkedInReturn() {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('linkedin') === 'connected') {
-      markOnboardingComplete().finally(() => {
-        window.location.href = '/dashboard.html';
-      });
-      return true;
+    if (params.get('linkedin') !== 'connected') return false;
+
+    const saved = sessionStorage.getItem('ob_pending_post');
+    if (saved) {
+      try {
+        const pending = JSON.parse(saved);
+        sessionStorage.removeItem('ob_pending_post');
+        state.postId          = pending.postId;
+        state.post            = pending.post;
+        state.quality         = pending.quality;
+        state.archetypeUsed   = pending.archetypeUsed;
+        state.docPath         = pending.docPath;
+        state.linkedinConnected = true;
+        history.replaceState({}, '', '/onboarding.html');
+        initScreen1(); initScreen3(); initScreen4b(); initScreen5(); initScreen6();
+        renderPostAndScore(state);
+        showScreen('4b');
+        return true;
+      } catch {
+        sessionStorage.removeItem('ob_pending_post');
+      }
     }
-    return false;
+
+    // No pending post — mark complete and send to dashboard
+    markOnboardingComplete().finally(() => {
+      window.location.href = '/dashboard.html';
+    });
+    return true;
   }
 
   /* ── Screen 6: Voice deepening ────────────────────────── */
@@ -710,8 +761,6 @@ const Onboarding = (() => {
             onboarding_complete: 1,
           }),
         });
-        // Give fingerprint extraction a moment to kick off
-        await new Promise(r => setTimeout(r, 1800));
         window.location.href = dest();
       } catch (e) {
         console.error('[onboarding] screen 6 save error:', e);
@@ -776,11 +825,21 @@ const Onboarding = (() => {
 
     if (checkLinkedInReturn()) return;
 
+    // Kick off LinkedIn status check so Screen 4b knows whether to blur
+    fetch('/api/linkedin/status', { headers: apiHeaders() })
+      .then(r => r.json())
+      .then(d => { if (d.connected) state.linkedinConnected = true; })
+      .catch(() => {});
+
     initScreen1();
     initScreen3();
     initScreen4b();
     initScreen5();
     initScreen6();
+
+    qsa('.ob-back-btn').forEach(btn => {
+      btn.addEventListener('click', () => showScreen(btn.dataset.backTo));
+    });
 
     showScreen(1);
   }

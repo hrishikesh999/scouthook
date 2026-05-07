@@ -356,6 +356,62 @@ body.ob-shell {
 
 .ob-skip-link:hover { color: var(--text-secondary); }
 
+.ob-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 16px;
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 120ms ease;
+}
+
+.ob-back-btn:hover { color: var(--text-secondary); }
+
+/* ── LinkedIn unlock gate on Screen 4b ─────────────────── */
+.ob-post-wrap {
+  position: relative;
+}
+
+.ob-post-wrap.locked textarea {
+  filter: blur(5px);
+  pointer-events: none;
+  user-select: none;
+}
+
+.ob-unlock-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(3px);
+  border-radius: 8px;
+  padding: 24px;
+  text-align: center;
+}
+
+.ob-unlock-msg {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.ob-unlock-note {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
 .ob-cta-row {
   display: flex;
   flex-wrap: wrap;

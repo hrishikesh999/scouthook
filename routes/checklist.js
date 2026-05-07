@@ -7,7 +7,7 @@ const { db }  = require('../db');
 // ---------------------------------------------------------------------------
 // GET /api/checklist
 // Returns onboarding checklist state for the current user.
-// All 5 steps are derived from existing tables — no new schema needed.
+// All 3 steps are derived from existing tables — no new schema needed.
 // ---------------------------------------------------------------------------
 router.get('/', async (req, res) => {
   if (!req.userId) {
@@ -42,18 +42,6 @@ router.get('/', async (req, res) => {
     const connectUrl = `/api/linkedin/connect?_uid=${encodeURIComponent(uid)}&_tid=${encodeURIComponent(tid)}`;
 
     const steps = [
-      {
-        id:    'voice_profile',
-        label: 'Complete your voice profile',
-        done:  !!(profile?.content_niche),
-        href:  '/profile.html',
-      },
-      {
-        id:    'brand_settings',
-        label: 'Update your brand settings',
-        done:  !!(profile?.brand_name),
-        href:  '/brand.html',
-      },
       {
         id:    'vault_upload',
         label: 'Upload to Content Vault',

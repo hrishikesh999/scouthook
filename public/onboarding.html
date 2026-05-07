@@ -15,11 +15,13 @@
   <header class="ob-header">
     <img src="/images/sh-logo-dark.png" alt="Scouthook" class="ob-logo-img">
 
-    <!-- Step progress dots (shown on screens 3, 4b, 6) -->
+    <!-- Step progress dots (role → generate → draft → connect → done) -->
     <div id="ob-step-dots" class="ob-step-dots" hidden aria-hidden="true">
+      <span class="ob-dot" data-step="1"></span>
+      <span class="ob-dot" data-step="2"></span>
       <span class="ob-dot" data-step="3"></span>
-      <span class="ob-dot" data-step="4b"></span>
-      <span class="ob-dot" data-step="6"></span>
+      <span class="ob-dot" data-step="4"></span>
+      <span class="ob-dot" data-step="5"></span>
     </div>
   </header>
 
@@ -95,9 +97,10 @@
   <!-- ── Screen 3: First post generation ─────────────────── -->
   <section id="ob-screen-3" class="ob-screen" aria-label="Step 2: Generate your first post">
     <div class="ob-content">
+      <button class="ob-back-btn" data-back-to="1" type="button">← Back</button>
 
-      <!-- Doc path (shown by default) -->
-      <div id="ob-s3-doc-path">
+      <!-- Doc path (secondary option, hidden by default) -->
+      <div id="ob-s3-doc-path" hidden>
         <h1 class="ob-headline">Turn your existing work into your first post</h1>
         <p class="ob-subheadline">Upload something you've already written — a blog post, case study, talk notes, email. We'll pull out the strongest insight and turn it into a LinkedIn post.</p>
 
@@ -143,13 +146,13 @@
             Extract and generate →
           </button>
           <button id="ob-toggle-to-idea" class="ob-skip-link" style="margin-top:0;color:var(--text-secondary);font-size:13px;font-weight:500;" type="button">
-            I don't have a document, start from an idea instead
+            ← Back to idea
           </button>
         </div>
       </div>
 
-      <!-- Idea path (hidden by default, revealed via toggle) -->
-      <div id="ob-s3-idea-path" hidden>
+      <!-- Idea path (shown by default) -->
+      <div id="ob-s3-idea-path">
         <h1 class="ob-headline">Your first post starts here</h1>
         <p class="ob-subheadline">Pick a prompt or type your own idea. One real thought from your experience is enough.</p>
 
@@ -168,7 +171,7 @@
 
         <div class="ob-path-divider">
           <button id="ob-toggle-to-doc" class="ob-skip-link" type="button">
-            ← Back to document upload
+            I have a document to upload →
           </button>
         </div>
       </div>
@@ -193,6 +196,7 @@
   <!-- ── Screen 4a: Celebration + archetype reveal ────────── -->
   <section id="ob-screen-4a" class="ob-screen ob-screen--center" aria-label="Post generated">
     <div class="ob-content ob-content--center">
+      <button class="ob-back-btn" data-back-to="3" type="button">← Back</button>
       <div class="ob-celebration-emoji" aria-hidden="true">🎉</div>
       <h1 id="ob-4a-headline" class="ob-headline">Your first post is ready</h1>
       <p class="ob-subheadline">No AI-sounding language. No weak hook. Just a post worth publishing.</p>
@@ -209,6 +213,7 @@
   <!-- ── Screen 4b: Post + score ──────────────────────────── -->
   <section id="ob-screen-4b" class="ob-screen" aria-label="Your generated post">
     <div class="ob-content" style="max-width:600px">
+      <button class="ob-back-btn" data-back-to="3" type="button">← Back</button>
 
       <h1 class="ob-headline" style="margin-bottom:6px">Here's your first post</h1>
       <p class="ob-subheadline" style="margin-bottom:20px">
@@ -234,9 +239,16 @@
         </div>
       </div>
 
-      <!-- Generated post -->
-      <textarea id="ob-post-output" class="ob-textarea" readonly
-                aria-label="Generated post" rows="10"></textarea>
+      <!-- Generated post — locked until LinkedIn connected -->
+      <div id="ob-post-wrap" class="ob-post-wrap">
+        <textarea id="ob-post-output" class="ob-textarea" readonly
+                  aria-label="Generated post" rows="10"></textarea>
+        <div id="ob-unlock-overlay" class="ob-unlock-overlay" hidden aria-live="polite">
+          <p class="ob-unlock-msg">Connect LinkedIn to read your post</p>
+          <button id="ob-unlock-cta" class="ob-btn-primary" type="button">Connect LinkedIn →</button>
+          <p class="ob-unlock-note">One click — you'll come straight back here with your post ready.</p>
+        </div>
+      </div>
 
       <div class="ob-cta-row">
         <button id="ob-s4b-skip" class="ob-btn-primary" type="button">
@@ -252,6 +264,7 @@
   <!-- ── Screen 5: LinkedIn connection ────────────────────── -->
   <section id="ob-screen-5" class="ob-screen" aria-label="Connect LinkedIn">
     <div class="ob-content">
+      <button class="ob-back-btn" data-back-to="4b" type="button">← Back</button>
       <h1 class="ob-headline">One more step: connect to publish</h1>
       <p class="ob-subheadline">You have a post ready to go. Connect LinkedIn so you can schedule and publish it directly from here.</p>
 
@@ -275,6 +288,7 @@
   <!-- ── Screen 6: Voice deepening ────────────────────────── -->
   <section id="ob-screen-6" class="ob-screen" aria-label="Deepen your voice profile">
     <div class="ob-content" style="max-width:600px">
+      <button class="ob-back-btn" data-back-to="5" type="button">← Back</button>
       <h1 class="ob-headline">Give Scouthook your voice DNA</h1>
       <p class="ob-subheadline">
         Your writing samples train the engine behind every post — including your Content Vault,

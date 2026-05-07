@@ -47,7 +47,6 @@ const Onboarding = (() => {
       questions: [
         'What did you believe confidently for a long time?',
         'What specific event forced you to change that belief?',
-        'What did changing it cost you, or what did you lose?',
         'What do you know now that you wish you\'d known then?',
       ],
     },

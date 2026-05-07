@@ -43,11 +43,11 @@ const Onboarding = (() => {
     },
     hard_won_lesson: {
       label:    'Hard-Won Lesson',
-      context:  'A post built on something you believed confidently — and had to unlearn.',
+      context:  'A post built on real experience — your years in the work, a setback that taught you something, and a result that proves you figured it out.',
       questions: [
-        'What did you believe confidently for a long time?',
-        'What specific event forced you to change that belief?',
-        'What do you know now that you wish you\'d known then?',
+        'How many years have you been doing this work?',
+        'What\'s the biggest mistake or setback you hit early on?',
+        'What\'s one result you\'ve achieved that proves you figured it out?',
       ],
     },
     industry_take: {
@@ -155,14 +155,28 @@ const Onboarding = (() => {
         qs('ob-template-context').textContent = tmpl.context;
         setTimeout(() => {
           showScreen('s4');
-          renderQuestion();
+          showWebsiteStep();
         }, 200);
       });
     });
   }
 
   /* ── Screen 4: Interview ────────────────────────────── */
+  function showWebsiteStep() {
+    qs('ob-website-step').hidden  = false;
+    qs('ob-question-step').hidden = true;
+    const backBtn = qs('ob-s4-back');
+    if (backBtn) backBtn.onclick = () => showScreen('s2');
+    qs('ob-website-url')?.focus();
+  }
+
+  function showQuestionStep() {
+    qs('ob-website-step').hidden  = true;
+    qs('ob-question-step').hidden = false;
+  }
+
   function renderQuestion() {
+    showQuestionStep();
     const tmpl  = TEMPLATES[state.templateKey];
     const total = tmpl.questions.length;
     const idx   = state.questionIndex;
@@ -174,13 +188,11 @@ const Onboarding = (() => {
     answerEl.value = state.answers[idx]?.answer || '';
     answerEl.focus();
 
-    // Update back button target
     const backBtn = qs('ob-s4-back');
     if (backBtn) {
-      backBtn.dataset.backTo = idx === 0 ? 's2' : null;
       backBtn.onclick = () => {
         if (idx === 0) {
-          showScreen('s2');
+          showWebsiteStep();
         } else {
           state.questionIndex--;
           renderQuestion();
@@ -188,21 +200,69 @@ const Onboarding = (() => {
       };
     }
 
-    const nextLbl = idx === total - 1 ? 'Generate my post →' : 'Next →';
-    qs('ob-answer-next').textContent = nextLbl;
+    qs('ob-answer-next').textContent = idx === total - 1 ? 'Generate my post →' : 'Next →';
   }
 
   function initS4() {
+    // Website pre-step
+    qs('ob-website-next')?.addEventListener('click', submitWebsite);
+    qs('ob-website-skip')?.addEventListener('click', () => {
+      state.questionIndex = 0;
+      renderQuestion();
+    });
+    qs('ob-website-url')?.addEventListener('keydown', e => {
+      if (e.key === 'Enter') submitWebsite();
+    });
+
+    // Interview questions
     qs('ob-answer-next')?.addEventListener('click', advanceInterview);
     qs('ob-answer-skip')?.addEventListener('click', () => {
-      // Record empty answer then advance
       recordAnswer('');
       advanceInterview(null, true);
     });
-
     qs('ob-answer')?.addEventListener('keydown', e => {
       if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) advanceInterview();
     });
+  }
+
+  async function submitWebsite() {
+    const input   = qs('ob-website-url');
+    const errEl   = qs('ob-website-error');
+    const loadEl  = qs('ob-website-loading');
+    const nextBtn = qs('ob-website-next');
+    const url     = (input?.value || '').trim();
+
+    const valid = /^https?:\/\/.+\..+/.test(url);
+    errEl.hidden = valid;
+    if (!valid) { input?.focus(); return; }
+
+    nextBtn.disabled = true;
+    loadEl.hidden    = false;
+
+    try {
+      const res  = await fetch('/api/profile/extract-website', {
+        method:  'POST',
+        headers: apiHeaders(),
+        body:    JSON.stringify({ url }),
+      });
+      const data = await res.json();
+      // Save extracted fields to profile in background — non-blocking
+      if (data.ok && data.profile) {
+        fetch('/api/profile', {
+          method:  'POST',
+          headers: apiHeaders(),
+          body:    JSON.stringify(data.profile),
+        }).catch(() => {});
+      }
+    } catch {
+      // Non-fatal — proceed regardless
+    } finally {
+      nextBtn.disabled = false;
+      loadEl.hidden    = true;
+    }
+
+    state.questionIndex = 0;
+    renderQuestion();
   }
 
   function recordAnswer(override) {

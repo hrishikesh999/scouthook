@@ -91,19 +91,36 @@
         <p class="ob-interview-hint">Answer as if you're telling a colleague. Specific details make the best posts.</p>
       </div>
 
-      <!-- Right: one question at a time -->
+      <!-- Right: website pre-step + one question at a time -->
       <div class="ob-interview-right">
         <button class="ob-back-btn" id="ob-s4-back" type="button">← Back</button>
 
-        <p id="ob-q-progress" class="ob-q-progress" aria-live="polite"></p>
-        <p id="ob-q-text" class="ob-q-text"></p>
+        <!-- Website extraction pre-step (shown before Q1) -->
+        <div id="ob-website-step">
+          <p class="ob-q-text">What's your website?</p>
+          <p class="ob-website-hint">We'll read it in seconds to understand your background — so your post sounds like you, not a template.</p>
+          <input id="ob-website-url" class="ob-field" type="url"
+                 placeholder="https://yoursite.com" autocomplete="url" />
+          <p id="ob-website-error" class="ob-field-error" hidden>Please enter a valid URL starting with https://</p>
+          <div class="ob-interview-actions" style="margin-top:16px">
+            <button id="ob-website-next" class="ob-btn-primary" type="button">Continue →</button>
+            <button id="ob-website-skip" class="ob-skip-link" type="button">Skip — I don't have one</button>
+          </div>
+          <div id="ob-website-loading" class="ob-loading-state" hidden aria-live="polite">Reading your site…</div>
+        </div>
 
-        <textarea id="ob-answer" class="ob-textarea ob-textarea--interview" rows="5"
-                  placeholder="Write freely — you can edit the post afterwards"></textarea>
+        <!-- Interview questions (hidden until website step done) -->
+        <div id="ob-question-step" hidden>
+          <p id="ob-q-progress" class="ob-q-progress" aria-live="polite"></p>
+          <p id="ob-q-text" class="ob-q-text"></p>
 
-        <div class="ob-interview-actions">
-          <button id="ob-answer-next" class="ob-btn-primary" type="button">Next →</button>
-          <button id="ob-answer-skip" class="ob-skip-link" type="button">Skip this question</button>
+          <textarea id="ob-answer" class="ob-textarea ob-textarea--interview" rows="5"
+                    placeholder="Write freely — you can edit the post afterwards"></textarea>
+
+          <div class="ob-interview-actions">
+            <button id="ob-answer-next" class="ob-btn-primary" type="button">Next →</button>
+            <button id="ob-answer-skip" class="ob-skip-link" type="button">Skip this question</button>
+          </div>
         </div>
       </div>
 

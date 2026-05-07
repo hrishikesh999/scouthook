@@ -382,19 +382,6 @@ const Onboarding = (() => {
       autoGrow(postOut);
     }
 
-    // Enable editing
-    const editBtn = qs('ob-s6-edit-toggle');
-    const postEl  = qs('ob-post-output');
-    if (editBtn && postEl) {
-      editBtn.hidden = false;
-      editBtn.addEventListener('click', () => {
-        const isEditing = postEl.readOnly;
-        postEl.readOnly = !isEditing;
-        editBtn.textContent = isEditing ? 'Lock edits' : 'Edit post';
-        if (isEditing) postEl.focus();
-      });
-    }
-
     applyPostLock();
   }
 
@@ -427,59 +414,12 @@ const Onboarding = (() => {
   function unlockPost() {
     const wrap    = qs('ob-post-wrap');
     const overlay = qs('ob-unlock-overlay');
-    const pubBtn  = qs('ob-publish-btn');
     if (wrap)    wrap.classList.remove('locked');
     if (overlay) overlay.hidden = true;
-    if (pubBtn)  pubBtn.hidden  = false;
   }
 
-  /* ── Screen 6: Publish ───────────────────────────────── */
-  function initS6() {
-    qs('ob-publish-btn')?.addEventListener('click', async () => {
-      if (!state.linkedinConnected) {
-        // Shouldn't happen (button is hidden) but guard anyway
-        sessionStorage.setItem('ob_pending_post', JSON.stringify({
-          postId: state.postId, post: state.post,
-          role: state.role, goal: state.goal, funnelType: state.funnelType,
-        }));
-        window.location.href = '/api/linkedin/connect?from=onboarding';
-        return;
-      }
-
-      const btn   = qs('ob-publish-btn');
-      const load  = qs('ob-s6-loading');
-      const errEl = qs('ob-s6-error');
-
-      btn.disabled  = true;
-      load.hidden   = false;
-      errEl.hidden  = true;
-
-      const content = (qs('ob-post-output')?.value || state.post || '').trim();
-
-      try {
-        const res  = await fetch('/api/linkedin/publish', {
-          method:  'POST',
-          headers: apiHeaders(),
-          body:    JSON.stringify({ content, postId: state.postId }),
-        });
-        const data = await res.json();
-
-        if (!data.ok) {
-          throw new Error(data.error || 'Publish failed');
-        }
-
-        await markOnboardingComplete();
-        showScreen('s7');
-        initS7();
-        fireConfetti();
-      } catch (err) {
-        errEl.textContent = 'Could not publish — please try again.';
-        errEl.hidden = false;
-        btn.disabled = false;
-        load.hidden  = true;
-      }
-    });
-  }
+  /* ── Screen 6: no publish button — dashboard link shown after unlock ── */
+  function initS6() {}
 
   /* ── Screen 7: Celebration ───────────────────────────── */
   function initS7() {

@@ -160,16 +160,42 @@ const Onboarding = (() => {
 
   /* ── Screen 4: Interview ────────────────────────────── */
   function showWebsiteStep() {
-    qs('ob-website-step').hidden  = false;
-    qs('ob-question-step').hidden = true;
+    qs('ob-website-step').hidden    = false;
+    qs('ob-website-summary').hidden = true;
+    qs('ob-question-step').hidden   = true;
     const backBtn = qs('ob-s4-back');
     if (backBtn) backBtn.onclick = () => showScreen('s2');
     qs('ob-website-url')?.focus();
   }
 
+  function showSummaryStep(extracted) {
+    const LABELS = {
+      content_niche:    'What you do',
+      audience_role:    'Who you help',
+      audience_pain:    'Their main challenge',
+      contrarian_view:  'Your take',
+    };
+    const fields = qs('ob-summary-fields');
+    fields.innerHTML = '';
+    Object.entries(LABELS).forEach(([key, label]) => {
+      if (!extracted[key]) return;
+      const wrap = document.createElement('div');
+      wrap.className = 'ob-summary-field';
+      wrap.innerHTML = `<label class="ob-summary-label">${label}</label>
+        <textarea class="ob-textarea ob-textarea--summary" data-key="${key}" rows="2">${escHtml(extracted[key])}</textarea>`;
+      fields.appendChild(wrap);
+    });
+    qs('ob-website-step').hidden    = true;
+    qs('ob-website-summary').hidden = false;
+    qs('ob-question-step').hidden   = true;
+    const backBtn = qs('ob-s4-back');
+    if (backBtn) backBtn.onclick = () => showWebsiteStep();
+  }
+
   function showQuestionStep() {
-    qs('ob-website-step').hidden  = true;
-    qs('ob-question-step').hidden = false;
+    qs('ob-website-step').hidden    = true;
+    qs('ob-website-summary').hidden = true;
+    qs('ob-question-step').hidden   = false;
   }
 
   function renderQuestion() {
@@ -211,6 +237,9 @@ const Onboarding = (() => {
       if (e.key === 'Enter') submitWebsite();
     });
 
+    // Summary confirm
+    qs('ob-summary-confirm')?.addEventListener('click', confirmSummary);
+
     // Interview questions
     qs('ob-answer-next')?.addEventListener('click', advanceInterview);
     qs('ob-answer-skip')?.addEventListener('click', () => {
@@ -236,6 +265,7 @@ const Onboarding = (() => {
     nextBtn.disabled = true;
     loadEl.hidden    = false;
 
+    let extracted = {};
     try {
       const res  = await fetch('/api/profile/extract-website', {
         method:  'POST',
@@ -243,21 +273,39 @@ const Onboarding = (() => {
         body:    JSON.stringify({ url }),
       });
       const data = await res.json();
-      // Save extracted fields to profile in background — non-blocking
-      if (data.ok && data.profile) {
-        fetch('/api/profile', {
-          method:  'POST',
-          headers: apiHeaders(),
-          body:    JSON.stringify(data.profile),
-        }).catch(() => {});
+      if (data.ok) {
+        const { content_niche, audience_role, audience_pain, contrarian_view } = data;
+        extracted = { content_niche, audience_role, audience_pain, contrarian_view };
       }
     } catch {
-      // Non-fatal — proceed regardless
+      // Non-fatal — fall through to Q1
     } finally {
       nextBtn.disabled = false;
       loadEl.hidden    = true;
     }
 
+    const hasAny = Object.values(extracted).some(v => v);
+    if (hasAny) {
+      showSummaryStep(extracted);
+    } else {
+      state.questionIndex = 0;
+      renderQuestion();
+    }
+  }
+
+  function confirmSummary() {
+    const profile = {};
+    qs('ob-summary-fields').querySelectorAll('textarea[data-key]').forEach(el => {
+      const val = el.value.trim();
+      if (val) profile[el.dataset.key] = val;
+    });
+    if (Object.keys(profile).length) {
+      fetch('/api/profile', {
+        method:  'POST',
+        headers: apiHeaders(),
+        body:    JSON.stringify(profile),
+      }).catch(() => {});
+    }
     state.questionIndex = 0;
     renderQuestion();
   }

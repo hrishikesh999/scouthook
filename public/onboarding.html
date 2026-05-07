@@ -109,6 +109,15 @@
           <div id="ob-website-loading" class="ob-loading-state" hidden aria-live="polite">Reading your site…</div>
         </div>
 
+        <!-- Website summary — shown after extraction, hidden otherwise -->
+        <div id="ob-website-summary" hidden>
+          <p class="ob-q-text">Here's what we found — edit anything that's off.</p>
+          <div id="ob-summary-fields"></div>
+          <div class="ob-interview-actions" style="margin-top:16px">
+            <button id="ob-summary-confirm" class="ob-btn-primary" type="button">Looks right →</button>
+          </div>
+        </div>
+
         <!-- Interview questions (hidden until website step done) -->
         <div id="ob-question-step" hidden>
           <p id="ob-q-progress" class="ob-q-progress" aria-live="polite"></p>

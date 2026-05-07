@@ -144,7 +144,16 @@ router.post('/', async (req, res) => {
     });
   }
 
-  const { path: genPath, raw_idea, vault_idea_id, skip_substance_check } = req.body;
+  const { path: genPath, vault_idea_id, skip_substance_check, interview_answers, funnel_type: bodyFunnelType } = req.body;
+  let { raw_idea } = req.body;
+
+  // Interview path: format Q&A answers into a structured raw_idea string
+  if (!raw_idea?.trim() && Array.isArray(interview_answers) && interview_answers.length) {
+    raw_idea = interview_answers
+      .filter(a => a.answer?.trim())
+      .map(a => `${a.question}\n${a.answer.trim()}`)
+      .join('\n\n');
+  }
 
   if (!genPath) return res.status(400).json({ ok: false, error: 'missing_path' });
 
@@ -184,7 +193,7 @@ router.post('/', async (req, res) => {
     const sourceText = vaultIdea
       ? (vaultChunkText || vaultIdea.seed_text)
       : raw_idea;
-    const funnelTypeForGate = vaultIdea?.funnel_type || null;
+    const funnelTypeForGate = vaultIdea?.funnel_type || bodyFunnelType || null;
     ideaResult = await restructureWithQualityGate(userProfile, sourceText, funnelTypeForGate, {
       skipSubstanceCheck: !!skip_substance_check,
     });

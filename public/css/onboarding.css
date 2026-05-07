@@ -915,3 +915,337 @@ body.ob-shell {
     justify-content: center;
   }
 }
+
+/* ── Narrow content container ───────────────────────────── */
+.ob-content--narrow {
+  width: 100%;
+  max-width: 480px;
+}
+
+/* ── Role card icon (new .ob-role-icon, complementing .ob-role-emoji) */
+.ob-role-icon {
+  font-size: 26px;
+  line-height: 1;
+  margin-bottom: 2px;
+}
+
+/* ── Goal cards ─────────────────────────────────────────── */
+.ob-goal-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  margin-bottom: 20px;
+}
+
+.ob-goal-card {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 20px;
+  border-radius: 12px;
+  border: 1.5px solid var(--border);
+  background: var(--bg-surface);
+  cursor: pointer;
+  text-align: left;
+  font-family: var(--font-sans);
+  transition: border-color 180ms ease, background 180ms ease, transform 120ms ease, box-shadow 180ms ease;
+}
+
+.ob-goal-card:hover {
+  border-color: var(--brand);
+  background: rgba(15, 118, 110, 0.04);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
+}
+
+.ob-goal-card.selected {
+  border-color: var(--brand);
+  background: rgba(15, 118, 110, 0.06);
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.14);
+}
+
+.ob-goal-icon {
+  font-size: 28px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.ob-goal-label {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-heading);
+  letter-spacing: -0.02em;
+  display: block;
+}
+
+.ob-goal-desc {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  display: block;
+  margin-top: 2px;
+}
+
+/* ── Post type cards ─────────────────────────────────────── */
+.ob-type-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  margin-bottom: 20px;
+}
+
+.ob-type-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 20px 22px;
+  border-radius: 12px;
+  border: 1.5px solid var(--border);
+  background: var(--bg-surface);
+  cursor: pointer;
+  text-align: left;
+  font-family: var(--font-sans);
+  transition: border-color 180ms ease, background 180ms ease, transform 120ms ease, box-shadow 180ms ease;
+}
+
+.ob-type-card:hover {
+  border-color: var(--brand);
+  background: rgba(15, 118, 110, 0.04);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
+}
+
+.ob-type-card.selected {
+  border-color: var(--brand);
+  background: rgba(15, 118, 110, 0.06);
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.14);
+}
+
+.ob-type-label {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-heading);
+  letter-spacing: -0.02em;
+}
+
+.ob-type-desc {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+/* ── Interview layout ────────────────────────────────────── */
+.ob-interview-wrap {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 40px;
+  width: 100%;
+  max-width: 860px;
+  align-items: flex-start;
+}
+
+.ob-interview-left {
+  padding: 28px 24px;
+  background: var(--bg-subtle, #f9fafb);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  position: sticky;
+  top: 72px;
+}
+
+.ob-interview-template-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--brand);
+  margin: 0 0 10px;
+}
+
+.ob-interview-context {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-heading);
+  line-height: 1.5;
+  margin: 0 0 16px;
+}
+
+.ob-interview-hint {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.ob-interview-right {
+  display: flex;
+  flex-direction: column;
+  padding-top: 4px;
+}
+
+.ob-q-progress {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin: 0 0 14px;
+}
+
+.ob-q-text {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-heading);
+  line-height: 1.35;
+  letter-spacing: -0.02em;
+  margin: 0 0 20px;
+}
+
+.ob-textarea--interview {
+  min-height: 130px;
+  font-size: 15px;
+  margin-bottom: 16px;
+}
+
+.ob-interview-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+/* ── Live progress steps ─────────────────────────────────── */
+.ob-progress-steps {
+  list-style: none;
+  padding: 0;
+  margin: 32px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  max-width: 360px;
+  text-align: left;
+}
+
+.ob-progress-step {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 15px;
+  color: var(--text-muted);
+  font-weight: 500;
+  transition: color 300ms ease;
+}
+
+.ob-step-indicator {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  flex-shrink: 0;
+  transition: border-color 300ms ease, background 300ms ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+}
+
+.ob-progress-step.active {
+  color: var(--text-heading);
+}
+
+.ob-progress-step.active .ob-step-indicator {
+  border-color: var(--brand);
+  background: rgba(15, 118, 110, 0.1);
+  animation: ob-pulse 1.2s ease-in-out infinite;
+}
+
+.ob-progress-step.done {
+  color: var(--text-secondary);
+}
+
+.ob-progress-step.done .ob-step-indicator {
+  border-color: var(--brand);
+  background: var(--brand);
+  color: #fff;
+}
+
+.ob-progress-step.done .ob-step-indicator::after {
+  content: '✓';
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* ── Celebration (s7) ────────────────────────────────────── */
+.ob-posts-remaining {
+  font-size: 15px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin: 0 0 32px;
+  max-width: 380px;
+  text-align: center;
+}
+
+.ob-vault-teaser {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 20px 22px;
+  border: 1.5px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg-surface);
+  text-align: left;
+  width: 100%;
+  max-width: 420px;
+  margin-bottom: 8px;
+}
+
+.ob-vault-teaser-icon {
+  font-size: 28px;
+  line-height: 1;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.ob-vault-teaser-headline {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-heading);
+  margin: 0 0 4px;
+}
+
+.ob-vault-teaser-body {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin: 0 0 10px;
+}
+
+.ob-vault-teaser-link {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--brand);
+  text-decoration: none;
+}
+
+.ob-vault-teaser-link:hover { text-decoration: underline; }
+
+/* ── Interview mobile: stack panels ─────────────────────── */
+@media (max-width: 700px) {
+  .ob-interview-wrap {
+    grid-template-columns: 1fr;
+    gap: 24px;
+    max-width: 100%;
+  }
+
+  .ob-interview-left {
+    position: static;
+  }
+
+  .ob-ob-goal-grid,
+  .ob-type-grid {
+    gap: 10px;
+  }
+}

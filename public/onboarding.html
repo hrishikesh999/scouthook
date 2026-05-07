@@ -11,11 +11,9 @@
 </head>
 <body class="ob-shell">
 
-  <!-- ── Header ──────────────────────────────────────────── -->
   <header class="ob-header">
     <img src="/images/sh-logo-dark.png" alt="Scouthook" class="ob-logo-img">
-
-    <!-- Step progress dots (role → generate → draft → connect → done) -->
+    <!-- 5 dots: role · goal · post type · interview · done -->
     <div id="ob-step-dots" class="ob-step-dots" hidden aria-hidden="true">
       <span class="ob-dot" data-step="1"></span>
       <span class="ob-dot" data-step="2"></span>
@@ -25,224 +23,173 @@
     </div>
   </header>
 
-  <!-- ── Screen 1: Role + voice profile (combined) ───────── -->
-  <section id="ob-screen-1" class="ob-screen active" aria-label="Step 1: Your profile">
-    <div class="ob-content ob-content--wide">
-      <h1 class="ob-headline">Let's build your voice profile</h1>
-      <p class="ob-subheadline">Takes 2 minutes. Your first post generates automatically.</p>
+  <!-- ── Screen 1: Role ─────────────────────────────────────── -->
+  <section id="ob-s1" class="ob-screen ob-screen--center" aria-label="Step 1: Your role">
+    <div class="ob-content ob-content--narrow">
+      <h1 class="ob-headline">What best describes what you do?</h1>
+      <p class="ob-subheadline">This shapes the language and examples we use throughout.</p>
 
-      <div class="ob-role-grid" role="group" aria-label="Select your role">
-        <button class="ob-role-card" data-role="consultant" type="button" aria-pressed="false">
+      <div class="ob-role-grid" role="list">
+        <button class="ob-role-card" data-role="consultant" type="button" role="listitem" aria-pressed="false">
+          <span class="ob-role-icon">🎯</span>
           <span class="ob-role-label">Consultant</span>
-          <span class="ob-role-desc">Strategy, advisory or fractional work</span>
         </button>
-        <button class="ob-role-card" data-role="coach" type="button" aria-pressed="false">
+        <button class="ob-role-card" data-role="coach" type="button" role="listitem" aria-pressed="false">
+          <span class="ob-role-icon">🧭</span>
           <span class="ob-role-label">Coach</span>
-          <span class="ob-role-desc">Leadership, executive or business coaching</span>
         </button>
-        <button class="ob-role-card" data-role="freelancer" type="button" aria-pressed="false">
+        <button class="ob-role-card" data-role="freelancer" type="button" role="listitem" aria-pressed="false">
+          <span class="ob-role-icon">💼</span>
           <span class="ob-role-label">Freelancer</span>
-          <span class="ob-role-desc">Creative, technical or service-based work</span>
         </button>
-        <button class="ob-role-card" data-role="founder" type="button" aria-pressed="false">
-          <span class="ob-role-label">Founder or Owner</span>
-          <span class="ob-role-desc">Building a business and a personal brand</span>
+        <button class="ob-role-card" data-role="founder" type="button" role="listitem" aria-pressed="false">
+          <span class="ob-role-icon">🚀</span>
+          <span class="ob-role-label">Founder</span>
         </button>
-        <button class="ob-role-card" data-role="other" type="button" aria-pressed="false">
+        <button class="ob-role-card" data-role="other" type="button" role="listitem" aria-pressed="false">
+          <span class="ob-role-icon">✦</span>
           <span class="ob-role-label">Something else</span>
-          <span class="ob-role-desc">Tell us in your own words</span>
         </button>
       </div>
-
-      <div id="ob-role-custom-wrap" class="ob-role-custom-wrap" hidden>
-        <label class="ob-label" for="ob-role-custom">What do you do?</label>
-        <input id="ob-role-custom" class="ob-field" type="text"
-               placeholder="A few words is fine, e.g. Product Manager, Investor, Academic" />
-      </div>
-
-      <!-- Voice fields — slide in after role is selected -->
-      <div id="ob-voice-fields" class="ob-voice-fields" hidden>
-
-        <!-- Optional: website auto-fill -->
-        <div class="ob-field-group">
-          <label class="ob-label" for="ob-website">Your website <span class="ob-optional">(optional — we'll fill the fields below)</span></label>
-          <div class="ob-website-row">
-            <input id="ob-website" class="ob-field" type="url"
-                   placeholder="https://yourwebsite.com" autocomplete="url" />
-            <button id="ob-autofill-btn" class="ob-btn-secondary" type="button">Auto-fill →</button>
-          </div>
-          <div id="ob-autofill-loading" class="ob-loading-state" hidden aria-live="polite">Reading your website...</div>
-        </div>
-
-        <div class="ob-field-group">
-          <label class="ob-label" for="ob-niche">What do you write about?</label>
-          <input id="ob-niche" class="ob-field" type="text"
-                 placeholder="e.g. Helping B2B companies fix their sales process" />
-        </div>
-
-        <div class="ob-field-group">
-          <label class="ob-label" for="ob-audience">Who is your ideal client?</label>
-          <input id="ob-audience" class="ob-field" type="text"
-                 placeholder="e.g. Founders and sales leaders at growing startups" />
-        </div>
-
-        <p id="ob-s2-error" class="ob-field-error" hidden role="alert">Please fill in both fields to continue.</p>
-
-        <button id="ob-s2-cta" class="ob-btn-primary" type="button">Generate my first post →</button>
-        <div id="ob-s2-loading" class="ob-loading-state" hidden aria-live="polite">Saving your profile...</div>
-      </div>
     </div>
   </section>
 
-  <!-- ── Screen 3: First post generation ─────────────────── -->
-  <section id="ob-screen-3" class="ob-screen" aria-label="Step 2: Generate your first post">
-    <div class="ob-content">
-      <button class="ob-back-btn" data-back-to="1" type="button">← Back</button>
+  <!-- ── Screen 2: Goal ─────────────────────────────────────── -->
+  <section id="ob-s2" class="ob-screen ob-screen--center" aria-label="Step 2: Your goal">
+    <div class="ob-content ob-content--narrow">
+      <button class="ob-back-btn" data-back-to="s1" type="button">← Back</button>
+      <h1 class="ob-headline">What's your main goal on LinkedIn?</h1>
+      <p class="ob-subheadline">We'll calibrate every post to the outcome that matters most to you.</p>
 
-      <!-- Doc path (secondary option, hidden by default) -->
-      <div id="ob-s3-doc-path" hidden>
-        <h1 class="ob-headline">Turn your existing work into your first post</h1>
-        <p class="ob-subheadline">Upload something you've already written — a blog post, case study, talk notes, email. We'll pull out the strongest insight and turn it into a LinkedIn post.</p>
-
-        <!-- Drop zone -->
-        <div id="ob-dropzone" class="ob-dropzone" role="button" tabindex="0"
-             aria-label="Upload a file — PDF, DOCX, or TXT">
-          <svg class="ob-dropzone-icon" width="32" height="32" viewBox="0 0 24 24" fill="none"
-               stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"
-               aria-hidden="true">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-            <polyline points="17 8 12 3 7 8"/>
-            <line x1="12" y1="3" x2="12" y2="15"/>
-          </svg>
-          <p class="ob-dropzone-label">
-            Drag and drop a file here, or <span class="ob-dropzone-browse">click to browse</span>
-          </p>
-          <p class="ob-dropzone-types">PDF, DOCX, or TXT · 25 MB max</p>
-          <input id="ob-file-input" type="file" accept=".pdf,.docx,.txt" hidden aria-hidden="true" />
-        </div>
-
-        <!-- File badge (shown after file selected) -->
-        <div id="ob-file-badge" class="ob-file-badge" hidden>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-            <polyline points="14 2 14 8 20 8"/>
-          </svg>
-          <span id="ob-file-name" class="ob-file-badge-name"></span>
-          <button id="ob-file-clear" class="ob-file-clear" type="button" aria-label="Remove file">×</button>
-        </div>
-
-        <!-- URL alternative -->
-        <div class="ob-url-alt-row">
-          <span class="ob-url-alt-or">or</span>
-          <input id="ob-doc-url" class="ob-field" type="url"
-                 placeholder="Paste a URL — blog post, article, or web page" />
-        </div>
-
-        <p id="ob-s3-doc-error" class="ob-field-error" hidden role="alert">Please upload a file or enter a URL.</p>
-
-        <div style="display:flex;align-items:center;gap:16px;margin-top:16px;flex-wrap:wrap;">
-          <button id="ob-s3-doc-cta" class="ob-btn-primary" type="button">
-            Extract and generate →
-          </button>
-          <button id="ob-toggle-to-idea" class="ob-skip-link" style="margin-top:0;color:var(--text-secondary);font-size:13px;font-weight:500;" type="button">
-            ← Back to idea
-          </button>
-        </div>
-      </div>
-
-      <!-- Idea path (shown by default) -->
-      <div id="ob-s3-idea-path">
-        <h1 class="ob-headline">Your first post starts here</h1>
-        <p class="ob-subheadline">Pick a prompt or type your own idea. One real thought from your experience is enough.</p>
-
-        <div id="ob-chips" class="ob-chips" role="list">
-          <!-- Populated by JS based on role -->
-        </div>
-
-        <textarea id="ob-idea" class="ob-textarea" rows="4"
-                  placeholder="Or type your own thought here..."></textarea>
-
-        <p id="ob-s3-error" class="ob-field-error" hidden role="alert">Add a thought before generating.</p>
-
-        <button id="ob-s3-cta" class="ob-btn-primary" type="button" style="margin-top:16px">
-          Generate my first post →
+      <div class="ob-goal-grid" role="list">
+        <button class="ob-goal-card" data-goal="convert" data-funnel="convert" type="button" role="listitem" aria-pressed="false">
+          <span class="ob-goal-icon">💰</span>
+          <span class="ob-goal-label">Sell more</span>
+          <span class="ob-goal-desc">Attract clients and convert readers into conversations</span>
         </button>
+        <button class="ob-goal-card" data-goal="thought_leadership" data-funnel="thought_leadership" type="button" role="listitem" aria-pressed="false">
+          <span class="ob-goal-icon">🏆</span>
+          <span class="ob-goal-label">Build authority</span>
+          <span class="ob-goal-desc">Become the go-to expert in your niche</span>
+        </button>
+        <button class="ob-goal-card" data-goal="reach" data-funnel="reach" type="button" role="listitem" aria-pressed="false">
+          <span class="ob-goal-icon">📣</span>
+          <span class="ob-goal-label">Grow audience</span>
+          <span class="ob-goal-desc">Reach more people and expand your network</span>
+        </button>
+      </div>
+    </div>
+  </section>
 
-        <div class="ob-path-divider">
-          <button id="ob-toggle-to-doc" class="ob-skip-link" type="button">
-            I have a document to upload →
-          </button>
-        </div>
+  <!-- ── Screen 3: Post type ───────────────────────────────── -->
+  <section id="ob-s3" class="ob-screen ob-screen--center" aria-label="Step 3: Post type">
+    <div class="ob-content ob-content--narrow">
+      <button class="ob-back-btn" data-back-to="s2" type="button">← Back</button>
+      <h1 class="ob-headline">What's your first post about?</h1>
+      <p class="ob-subheadline">Pick the format that fits best. We'll ask you 3–4 questions to get the raw material.</p>
+
+      <div class="ob-type-grid" role="list">
+        <button class="ob-type-card" data-template="client_story" type="button" role="listitem" aria-pressed="false">
+          <span class="ob-type-label">Client Story</span>
+          <span class="ob-type-desc">Before → what changed → measurable result. Proof you deliver.</span>
+        </button>
+        <button class="ob-type-card" data-template="hard_won_lesson" type="button" role="listitem" aria-pressed="false">
+          <span class="ob-type-label">Hard-Won Lesson</span>
+          <span class="ob-type-desc">What you believed, what changed it, what it cost you. Earns trust.</span>
+        </button>
+        <button class="ob-type-card" data-template="industry_take" type="button" role="listitem" aria-pressed="false">
+          <span class="ob-type-label">Industry Take</span>
+          <span class="ob-type-desc">Something everyone gets wrong — and your evidence. Builds authority.</span>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Screen 4: Interview ───────────────────────────────── -->
+  <section id="ob-s4" class="ob-screen" aria-label="Step 4: Interview">
+    <div class="ob-interview-wrap">
+
+      <!-- Left: template context (static) -->
+      <div class="ob-interview-left" aria-hidden="true">
+        <p id="ob-template-label" class="ob-interview-template-label"></p>
+        <p id="ob-template-context" class="ob-interview-context"></p>
+        <p class="ob-interview-hint">Answer as if you're telling a colleague. Specific details make the best posts.</p>
       </div>
 
-      <!-- Post preview — shared between both paths -->
-      <div class="ob-post-preview ob-post-preview--inline" id="ob-post-preview" aria-live="polite" aria-label="Post preview">
-        <div id="ob-preview-empty" class="ob-preview-empty">
-          <p>Your post will appear here</p>
-        </div>
-        <div id="ob-preview-skeleton" class="ob-preview-skeleton" hidden aria-busy="true" aria-label="Generating post">
-          <div class="ob-skeleton-line" style="width:60%"></div>
-          <div class="ob-skeleton-line" style="width:90%"></div>
-          <div class="ob-skeleton-line" style="width:75%"></div>
-          <div class="ob-skeleton-line" style="width:85%"></div>
-          <div class="ob-skeleton-line" style="width:50%"></div>
+      <!-- Right: one question at a time -->
+      <div class="ob-interview-right">
+        <button class="ob-back-btn" id="ob-s4-back" type="button">← Back</button>
+
+        <p id="ob-q-progress" class="ob-q-progress" aria-live="polite"></p>
+        <p id="ob-q-text" class="ob-q-text"></p>
+
+        <textarea id="ob-answer" class="ob-textarea ob-textarea--interview" rows="5"
+                  placeholder="Write freely — you can edit the post afterwards"></textarea>
+
+        <div class="ob-interview-actions">
+          <button id="ob-answer-next" class="ob-btn-primary" type="button">Next →</button>
+          <button id="ob-answer-skip" class="ob-skip-link" type="button">Skip this question</button>
         </div>
       </div>
 
     </div>
   </section>
 
-  <!-- ── Screen 4a: Celebration + archetype reveal ────────── -->
-  <section id="ob-screen-4a" class="ob-screen ob-screen--center" aria-label="Post generated">
-    <div class="ob-content ob-content--center">
-      <button class="ob-back-btn" data-back-to="3" type="button">← Back</button>
-      <div class="ob-celebration-emoji" aria-hidden="true">🎉</div>
-      <h1 id="ob-4a-headline" class="ob-headline">Your first post is ready</h1>
-      <p class="ob-subheadline">No AI-sounding language. No weak hook. Just a post worth publishing.</p>
+  <!-- ── Screen 5: Live progress ──────────────────────────── -->
+  <section id="ob-s5" class="ob-screen ob-screen--center" aria-label="Generating your post">
+    <div class="ob-content ob-content--narrow">
+      <h1 class="ob-headline">Your post is being written</h1>
+      <p class="ob-subheadline">Scouthook is pulling out the strongest hook from your answers.</p>
 
-      <!-- Archetype reveal — populated by JS before showing this screen -->
-      <div id="ob-4a-archetype" class="ob-4a-archetype" hidden aria-live="polite">
-        <span id="ob-4a-archetype-badge" class="archetype-badge ob-4a-archetype-badge"></span>
-        <p id="ob-4a-archetype-desc" class="ob-4a-archetype-desc"></p>
-        <p id="ob-4a-archetype-example" class="ob-4a-archetype-example"></p>
-      </div>
+      <ol class="ob-progress-steps" aria-live="polite">
+        <li id="ob-step-1" class="ob-progress-step">
+          <span class="ob-step-indicator"></span>
+          <span class="ob-step-label">Extracting your expertise</span>
+        </li>
+        <li id="ob-step-2" class="ob-progress-step">
+          <span class="ob-step-indicator"></span>
+          <span class="ob-step-label">Selecting the strongest hook</span>
+        </li>
+        <li id="ob-step-3" class="ob-progress-step">
+          <span class="ob-step-indicator"></span>
+          <span class="ob-step-label">Running quality checks</span>
+        </li>
+        <li id="ob-step-4" class="ob-progress-step">
+          <span class="ob-step-indicator"></span>
+          <span class="ob-step-label">Finalising your post</span>
+        </li>
+      </ol>
     </div>
   </section>
 
-  <!-- ── Screen 4b: Post + score ──────────────────────────── -->
-  <section id="ob-screen-4b" class="ob-screen" aria-label="Your generated post">
+  <!-- ── Screen 6: Post revealed ──────────────────────────── -->
+  <section id="ob-s6" class="ob-screen" aria-label="Your first post">
     <div class="ob-content" style="max-width:600px">
-      <button class="ob-back-btn" data-back-to="3" type="button">← Back</button>
-
       <h1 class="ob-headline" style="margin-bottom:6px">Here's your first post</h1>
       <p class="ob-subheadline" style="margin-bottom:20px">
-        Scouthook identified the right hook pattern for your idea and ran 15+ quality checks. You can refine it further.
+        Scouthook identified the right hook pattern and ran quality checks. Edit if you'd like, then publish.
       </p>
 
-      <!-- Quality score bar -->
+      <!-- Quality score -->
       <div id="ob-score-bar" role="region" aria-label="Quality score">
         <div class="score-left">
-          <div id="ob-score-number" class="fail" aria-live="polite" aria-label="Quality score">0</div>
+          <div id="ob-score-number" class="borderline" aria-live="polite" aria-label="Quality score">0</div>
           <div class="score-label">Quality score</div>
         </div>
         <div class="score-right">
           <div class="score-top-row">
             <span id="ob-archetype-badge" class="archetype-badge" style="display:none"></span>
-            <span id="ob-passfail-pill"   class="passfail-pill pass"></span>
+            <span id="ob-passfail-pill" class="passfail-pill pass"></span>
           </div>
-          <!-- Why this hook — populated by JS -->
-          <p id="ob-4b-hook-why" class="ob-hook-why" hidden></p>
           <button id="ob-suggestions-toggle" class="suggestions-toggle"
                   aria-expanded="false">▸ 0 suggestions to review</button>
           <div id="ob-suggestions-list" class="suggestions-list" role="list"></div>
         </div>
       </div>
 
-      <!-- Generated post — locked until LinkedIn connected -->
+      <!-- Post with LinkedIn blur gate -->
       <div id="ob-post-wrap" class="ob-post-wrap">
-        <textarea id="ob-post-output" class="ob-textarea" readonly
-                  aria-label="Generated post" rows="10"></textarea>
+        <textarea id="ob-post-output" class="ob-textarea" aria-label="Generated post" rows="10"></textarea>
         <div id="ob-unlock-overlay" class="ob-unlock-overlay" hidden aria-live="polite">
           <p class="ob-unlock-msg">Connect LinkedIn to read your post</p>
           <button id="ob-unlock-cta" class="ob-btn-primary" type="button">Connect LinkedIn →</button>
@@ -250,106 +197,43 @@
         </div>
       </div>
 
-      <div class="ob-cta-row">
-        <button id="ob-s4b-skip" class="ob-btn-primary" type="button">
-          Publish this post →
+      <div class="ob-cta-row" id="ob-s6-actions">
+        <button id="ob-publish-btn" class="ob-btn-primary" type="button">
+          Publish to LinkedIn →
         </button>
-        <button id="ob-s4b-continue" class="ob-btn-golden" type="button">
-          Level up my next post
+        <button id="ob-s6-edit-toggle" class="ob-btn-secondary" type="button" hidden>
+          Edit post
         </button>
       </div>
+      <div id="ob-s6-loading" class="ob-loading-state" hidden aria-live="polite">Publishing…</div>
+      <p id="ob-s6-error" class="ob-field-error" hidden role="alert"></p>
     </div>
   </section>
 
-  <!-- ── Screen 5: LinkedIn connection ────────────────────── -->
-  <section id="ob-screen-5" class="ob-screen" aria-label="Connect LinkedIn">
-    <div class="ob-content">
-      <button class="ob-back-btn" data-back-to="4b" type="button">← Back</button>
-      <h1 class="ob-headline">One more step: connect to publish</h1>
-      <p class="ob-subheadline">You have a post ready to go. Connect LinkedIn so you can schedule and publish it directly from here.</p>
+  <!-- ── Screen 7: Celebration ────────────────────────────── -->
+  <section id="ob-s7" class="ob-screen ob-screen--center" aria-label="Post published">
+    <div class="ob-content ob-content--narrow">
+      <div class="ob-celebration-emoji" aria-hidden="true">🎉</div>
+      <h1 class="ob-headline">Your post is live.</h1>
+      <p id="ob-posts-remaining" class="ob-posts-remaining"></p>
 
-      <ul class="ob-trust-list">
-        <li>Publishes and schedules posts on your behalf — nothing else</li>
-        <li>Never reads your messages, connections list, or contacts</li>
-        <li>Revoke access any time from LinkedIn Settings</li>
-      </ul>
+      <!-- Vault teaser -->
+      <div class="ob-vault-teaser">
+        <div class="ob-vault-teaser-icon" aria-hidden="true">📁</div>
+        <div>
+          <p class="ob-vault-teaser-headline">Turn your documents into posts</p>
+          <p class="ob-vault-teaser-body">Upload a case study, talk notes, or newsletter — Scouthook extracts post ideas from your existing expertise.</p>
+          <a href="/vault.html" class="ob-vault-teaser-link">Open Content Vault →</a>
+        </div>
+      </div>
 
-      <a class="ob-btn-primary ob-linkedin-btn" href="/api/linkedin/connect?from=onboarding">
-        Connect with LinkedIn
-      </a>
-      <p class="ob-disconnect-note">You can disconnect at any time from Account Settings.</p>
-
-      <button id="ob-s5-skip" class="ob-skip-link" type="button">
-        Skip — I'll connect from Account Settings later
+      <button id="ob-goto-dashboard" class="ob-btn-primary" type="button" style="margin-top:24px">
+        Go to dashboard
       </button>
-    </div>
-  </section>
-
-  <!-- ── Screen 6: Voice deepening ────────────────────────── -->
-  <section id="ob-screen-6" class="ob-screen" aria-label="Deepen your voice profile">
-    <div class="ob-content" style="max-width:600px">
-      <button class="ob-back-btn" data-back-to="5" type="button">← Back</button>
-      <h1 class="ob-headline">Give Scouthook your voice DNA</h1>
-      <p class="ob-subheadline">
-        Your writing samples train the engine behind every post — including your Content Vault,
-        where one document becomes a week of posts in your voice.
-        All fields are optional.
-      </p>
-
-      <p id="ob-s6-vault-hint" class="ob-post-context" hidden>
-        Your document has been added to your Content Vault — explore it after this to generate a full week of posts.
-      </p>
-
-      <div class="ob-field-group">
-        <label class="ob-label" for="ob-pain">What keeps your audience up at night?</label>
-        <textarea id="ob-pain" class="ob-textarea ob-textarea--sm" rows="3"
-                  placeholder="e.g. They're generating leads but none of them convert into real clients"></textarea>
-        <p class="ob-helper">The more specific this is, the more your posts will resonate with exactly the right people.</p>
-      </div>
-
-      <div class="ob-field-group">
-        <label class="ob-label" for="ob-contrarian">What's your contrarian view?</label>
-        <textarea id="ob-contrarian" class="ob-textarea ob-textarea--sm" rows="3"
-                  placeholder="e.g. Most consultants don't have a visibility problem — they have a clarity problem"></textarea>
-        <p class="ob-helper">Your honest take on something most people in your field get wrong. Powers your strongest posts.</p>
-      </div>
-
-      <div class="ob-field-group">
-        <label class="ob-label" for="ob-samples">Paste 2–3 of your best LinkedIn posts</label>
-        <textarea id="ob-samples" class="ob-textarea ob-textarea--lg" rows="8"
-                  placeholder="Paste your posts here, separated by a blank line. Scouthook uses these to learn how you write — they are never shared or returned via the API."></textarea>
-        <p class="ob-helper">No posts yet? Paste anything you've written — an email, a proposal intro, a message you're proud of.</p>
-      </div>
-
-      <button id="ob-s6-cta" class="ob-btn-primary" type="button">Save &amp; open my post →</button>
-      <div id="ob-s6-loading" class="ob-loading-state" hidden aria-live="polite">
-        Scouthook is learning your voice...
-      </div>
-
-      <button id="ob-s6-skip" class="ob-skip-link" type="button">
-        Skip for now — open my post →
-      </button>
-    </div>
-  </section>
-
-  <!-- ── Screen: Confirmation / complete (safety net) ─────── -->
-  <section id="ob-screen-confirm" class="ob-screen ob-screen--center" aria-label="Setup complete">
-    <div class="ob-content ob-content--center">
-      <div class="ob-checkmark-wrap" aria-hidden="true">
-        <svg class="ob-checkmark" viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <circle class="ob-check-circle" cx="26" cy="26" r="25"/>
-          <path   class="ob-check-tick"   d="M14 27l8 8 16-16"/>
-        </svg>
-      </div>
-      <h1 class="ob-headline">Your voice profile is complete</h1>
-      <p class="ob-subheadline">
-        Every post from here gets sharper. Your draft is waiting whenever you're ready to publish.
-      </p>
-      <button id="ob-goto-draft" class="ob-btn-primary" type="button">Go to my draft →</button>
     </div>
   </section>
 
   <script src="/js/session.js"></script>
-  <script src="/js/onboarding.js"></script>
+  <script src="/js/onboarding.js" defer></script>
 </body>
 </html>

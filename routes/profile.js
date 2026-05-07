@@ -64,12 +64,12 @@ router.post('/', async (req, res) => {
 
   const { writing_samples, contrarian_view, audience_role, audience_pain, content_niche,
           brand_bg, brand_accent, brand_text, brand_name, brand_logo,
-          user_role, onboarding_complete, business_positioning, website_url } = req.body;
+          user_role, onboarding_complete, business_positioning, website_url, goal } = req.body;
 
   if (!audience_role && !audience_pain && !content_niche && !writing_samples && !contrarian_view
       && !brand_bg && !brand_accent && !brand_text && !brand_name && brand_logo === undefined
       && user_role === undefined && onboarding_complete === undefined && !business_positioning
-      && !website_url) {
+      && !website_url && !goal) {
     return res.status(400).json({ ok: false, error: 'no_fields_provided' });
   }
 
@@ -88,8 +88,8 @@ router.post('/', async (req, res) => {
 
   // Upsert profile row
   const result = await db.prepare(`
-    INSERT INTO user_profiles (user_id, tenant_id, writing_samples, contrarian_view, audience_role, audience_pain, content_niche, brand_bg, brand_accent, brand_text, brand_name, brand_logo, user_role, onboarding_complete, business_positioning, website_url, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    INSERT INTO user_profiles (user_id, tenant_id, writing_samples, contrarian_view, audience_role, audience_pain, content_niche, brand_bg, brand_accent, brand_text, brand_name, brand_logo, user_role, onboarding_complete, business_positioning, website_url, goal, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     ON CONFLICT(user_id, tenant_id) DO UPDATE SET
       writing_samples     = COALESCE(excluded.writing_samples, user_profiles.writing_samples),
       contrarian_view     = COALESCE(excluded.contrarian_view, user_profiles.contrarian_view),
@@ -105,11 +105,12 @@ router.post('/', async (req, res) => {
       onboarding_complete = COALESCE(excluded.onboarding_complete, user_profiles.onboarding_complete),
       business_positioning = COALESCE(excluded.business_positioning, user_profiles.business_positioning),
       website_url         = COALESCE(excluded.website_url, user_profiles.website_url),
+      goal                = COALESCE(excluded.goal, user_profiles.goal),
       updated_at          = CURRENT_TIMESTAMP
   RETURNING id
   `).run(userId, tenantId, writing_samples || null, contrarian_view || null, audience_role || null, audience_pain || null, content_niche || null,
          brand_bg || null, brand_accent || null, brand_text || null, brand_name || null, brand_logo || null,
-         user_role || null, obComplete, business_positioning || null, website_url || null);
+         user_role || null, obComplete, business_positioning || null, website_url || null, goal || null);
 
   const profileId = result.lastInsertRowid || existing?.id;
 

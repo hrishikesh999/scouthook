@@ -23,10 +23,7 @@ const Onboarding = (() => {
     answers:           [],   // [{ question, answer }]
     postId:            null,
     post:              null,
-    quality:           null,
-    archetypeUsed:     null,
     linkedinConnected: false,
-    suggestionsOpen:   false,
   };
 
   /* ── Interview templates ─────────────────────────────── */
@@ -358,10 +355,8 @@ const Onboarding = (() => {
       return;
     }
 
-    state.postId       = data.id;
-    state.post         = data.post;
-    state.quality      = data.quality;
-    state.archetypeUsed = data.archetypeUsed;
+    state.postId = data.id;
+    state.post   = data.post;
 
     // Small buffer so final progress step is visibly "done" before transitioning
     await new Promise(r => setTimeout(r, 600));
@@ -377,67 +372,14 @@ const Onboarding = (() => {
     if (errEl) { errEl.textContent = msg; errEl.hidden = false; }
   }
 
-  /* ── Screen 6: Post + quality score ─────────────────── */
+  /* ── Screen 6: Post revealed ────────────────────────── */
   function renderPost(data) {
     const post    = data.post || state.post || '';
-    const quality = data.quality;
 
     const postOut = qs('ob-post-output');
     if (postOut) {
       postOut.value = post;
       autoGrow(postOut);
-    }
-
-    if (quality) {
-      const scoreBar = qs('ob-score-bar');
-      if (scoreBar) scoreBar.classList.add('visible');
-
-      animateScore(quality.score || 0);
-
-      const scoreNum = qs('ob-score-number');
-      if (scoreNum) {
-        scoreNum.className = '';
-        const s = quality.score || 0;
-        if      (s >= 75) scoreNum.classList.add('pass');
-        else if (s >= 50) scoreNum.classList.add('borderline');
-        else              scoreNum.classList.add('borderline'); // soft-fail in onboarding
-      }
-
-      // Archetype badge
-      if (data.archetypeUsed) {
-        const badge = qs('ob-archetype-badge');
-        if (badge) { badge.textContent = data.archetypeUsed.toUpperCase(); badge.style.display = ''; }
-      }
-
-      // Soft-fail: never show red "Needs work" during onboarding
-      const passed = !!(quality.passed || quality.passed_gate);
-      const pill   = qs('ob-passfail-pill');
-      if (pill) {
-        pill.textContent = passed ? '● Passed' : '● Good start';
-        pill.className   = 'passfail-pill ' + (passed ? 'pass' : 'borderline');
-      }
-
-      // Suggestions
-      const errors   = quality.errors   || [];
-      const warnings = quality.warnings || [];
-      const items    = [...errors, ...warnings];
-      const sugBtn   = qs('ob-suggestions-toggle');
-      const sugList  = qs('ob-suggestions-list');
-      if (items.length && sugBtn && sugList) {
-        sugBtn.classList.add('visible');
-        sugBtn.textContent = `▸ ${items.length} suggestions to review`;
-        sugList.innerHTML  = items.map(t =>
-          `<div class="suggestion-item" role="listitem">· ${escHtml(t)}</div>`
-        ).join('');
-        sugBtn.addEventListener('click', () => {
-          state.suggestionsOpen = !state.suggestionsOpen;
-          sugList.classList.toggle('visible', state.suggestionsOpen);
-          sugBtn.textContent = state.suggestionsOpen
-            ? `▾ ${items.length} suggestions`
-            : `▸ ${items.length} suggestions to review`;
-          sugBtn.setAttribute('aria-expanded', String(state.suggestionsOpen));
-        });
-      }
     }
 
     // Enable editing
@@ -456,19 +398,7 @@ const Onboarding = (() => {
     applyPostLock();
   }
 
-  function animateScore(target) {
-    const el = qs('ob-score-number');
-    if (!el) return;
-    const start    = performance.now();
-    const duration = 600;
-    function step(now) {
-      const progress = Math.min((now - start) / duration, 1);
-      const eased    = 1 - Math.pow(1 - progress, 3);
-      el.textContent = Math.round(eased * target);
-      if (progress < 1) requestAnimationFrame(step);
-    }
-    requestAnimationFrame(step);
-  }
+
 
   /* ── LinkedIn blur gate ──────────────────────────────── */
   function applyPostLock() {
@@ -484,13 +414,11 @@ const Onboarding = (() => {
 
     qs('ob-unlock-cta')?.addEventListener('click', () => {
       sessionStorage.setItem('ob_pending_post', JSON.stringify({
-        postId:        state.postId,
-        post:          state.post,
-        quality:       state.quality,
-        archetypeUsed: state.archetypeUsed,
-        role:          state.role,
-        goal:          state.goal,
-        funnelType:    state.funnelType,
+        postId:     state.postId,
+        post:       state.post,
+        role:       state.role,
+        goal:       state.goal,
+        funnelType: state.funnelType,
       }));
       window.location.href = '/api/linkedin/connect?from=onboarding';
     }, { once: true });
@@ -511,9 +439,8 @@ const Onboarding = (() => {
       if (!state.linkedinConnected) {
         // Shouldn't happen (button is hidden) but guard anyway
         sessionStorage.setItem('ob_pending_post', JSON.stringify({
-          postId: state.postId, post: state.post, quality: state.quality,
-          archetypeUsed: state.archetypeUsed, role: state.role,
-          goal: state.goal, funnelType: state.funnelType,
+          postId: state.postId, post: state.post,
+          role: state.role, goal: state.goal, funnelType: state.funnelType,
         }));
         window.location.href = '/api/linkedin/connect?from=onboarding';
         return;
@@ -585,8 +512,6 @@ const Onboarding = (() => {
         sessionStorage.removeItem('ob_pending_post');
         state.postId          = pending.postId;
         state.post            = pending.post;
-        state.quality         = pending.quality;
-        state.archetypeUsed   = pending.archetypeUsed;
         state.role            = pending.role;
         state.goal            = pending.goal;
         state.funnelType      = pending.funnelType;

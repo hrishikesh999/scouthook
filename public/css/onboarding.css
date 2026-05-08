@@ -1271,3 +1271,34 @@ body.ob-shell {
   font-size: 14px;
   line-height: 1.5;
 }
+
+/* ── Narrative card (website summary aha moment) ─────────── */
+.ob-q-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--ob-muted, #8893a7);
+  margin: 0 0 10px;
+}
+
+.ob-narrative-card {
+  background: linear-gradient(135deg, #0f2044 0%, #0a3a2e 100%);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 12px;
+  padding: 20px 22px;
+  font-size: 16px;
+  line-height: 1.65;
+  color: #e8edf8;
+  margin-bottom: 24px;
+  font-style: italic;
+}
+
+.ob-summary-edit-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--ob-muted, #8893a7);
+  margin: 0 0 12px;
+}

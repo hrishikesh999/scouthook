@@ -168,13 +168,40 @@ const Onboarding = (() => {
     qs('ob-website-url')?.focus();
   }
 
+  function buildNarrative(e) {
+    const parts = [];
+
+    if (e.content_niche) {
+      const niche = e.content_niche.replace(/^helping\s+/i, 'You help ');
+      parts.push(niche.match(/[.!?]$/) ? niche : niche + '.');
+    } else if (e.audience_role) {
+      parts.push(`You work with ${e.audience_role}.`);
+    }
+
+    if (e.audience_pain) {
+      const pain = e.audience_pain.replace(/[.!?]$/, '');
+      parts.push(`The challenge they face: ${pain.charAt(0).toLowerCase() + pain.slice(1)}.`);
+    }
+
+    if (e.contrarian_view) {
+      const take = e.contrarian_view.replace(/[.!?]$/, '');
+      parts.push(`Your edge: ${take.charAt(0).toLowerCase() + take.slice(1)}.`);
+    }
+
+    return parts.join(' ');
+  }
+
   function showSummaryStep(extracted) {
     const LABELS = {
-      content_niche:    'What you do',
-      audience_role:    'Who you help',
-      audience_pain:    'Their main challenge',
-      contrarian_view:  'Your take',
+      content_niche:   'What you do',
+      audience_role:   'Who you help',
+      audience_pain:   'Their main challenge',
+      contrarian_view: 'Your take',
     };
+
+    const card = qs('ob-narrative-card');
+    if (card) card.textContent = buildNarrative(extracted);
+
     const fields = qs('ob-summary-fields');
     fields.innerHTML = '';
     Object.entries(LABELS).forEach(([key, label]) => {
@@ -185,6 +212,7 @@ const Onboarding = (() => {
         <textarea class="ob-textarea ob-textarea--summary" data-key="${key}" rows="2">${escHtml(extracted[key])}</textarea>`;
       fields.appendChild(wrap);
     });
+
     qs('ob-website-step').hidden    = true;
     qs('ob-website-summary').hidden = false;
     qs('ob-question-step').hidden   = true;

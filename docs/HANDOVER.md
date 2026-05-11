@@ -2,7 +2,7 @@
 
 **Product:** AI-powered LinkedIn content intelligence platform  
 **Stack:** Node.js + Express, PostgreSQL (Neon), Redis/BullMQ, Anthropic Claude, Google OAuth + LinkedIn OAuth  
-**Last updated:** 2026-05-06 (Sprint 1 — Hook injection, Performance Tagging, Viral tension pre-check)
+**Last updated:** 2026-05-11 (PLG onboarding wizard, email template logo branding)
 
 ---
 
@@ -107,12 +107,17 @@ Vault async background (setImmediate):
 │   ├── 004_metrics_retention.sql
 │   └── 005_vault.sql            # Vault tables + funnel columns on generated_posts
 ├── public/                      # Static frontend assets
+│   ├── onboarding.html          # PLG first-time wizard (new users auto-routed here)
 │   ├── vault.html               # Intelligence Vault page
 │   ├── ideas.html               # Ideas kanban (Fresh / Saved / Discarded)
 │   ├── generate.html            # Post generation (Tab A: write / Tab B: vault)
 │   ├── *.html                   # Other app pages (auth-gated)
 │   ├── css/
-│   └── js/
+│   │   └── onboarding.css
+│   ├── js/
+│   │   └── onboarding.js
+│   └── images/
+│       └── sh-logo-dark.png     # Logo used in email template headers
 ├── uploads/                     # Permanent user file uploads (local mode only)
 ├── generated/                   # Ephemeral generated visuals (local mode only)
 └── docs/
@@ -127,17 +132,24 @@ Vault async background (setImmediate):
 
 **`user_profiles`**
 ```
-user_id        TEXT  PK (composite with tenant_id)
-tenant_id      TEXT  DEFAULT 'default'
-brand_name     TEXT
-voice_prompt   TEXT  (extracted voice fingerprint)
-target_audience TEXT
-logo_url       TEXT
-brand_colors   JSONB
-created_at     TIMESTAMPTZ
-updated_at     TIMESTAMPTZ
+user_id                      TEXT  PK (composite with tenant_id)
+tenant_id                    TEXT  DEFAULT 'default'
+brand_name                   TEXT
+voice_prompt                 TEXT  (extracted voice fingerprint)
+target_audience              TEXT
+logo_url                     TEXT
+brand_colors                 JSONB
+user_role                    TEXT  (set during onboarding)            ← migration 013
+onboarding_complete          INTEGER DEFAULT 0                        ← migration 013
+business_positioning         VARCHAR(500)                             ← migration 014
+ghostwriter_prompt           TEXT                                     ← migration 014
+ghostwriter_prompt_built_at  TIMESTAMPTZ                              ← migration 014
+website_url                  TEXT  (extracted during onboarding)      ← migration 015
+goal                         TEXT  (set during onboarding)            ← migration 019
+created_at                   TIMESTAMPTZ
+updated_at                   TIMESTAMPTZ
 ```
-Row is created on first Google OAuth login (`ON CONFLICT DO NOTHING`).
+Row is created on first Google OAuth login (`ON CONFLICT DO NOTHING`). New users are routed to `/onboarding.html` until `onboarding_complete = 1`.
 
 **`generated_posts`**
 ```
@@ -161,6 +173,8 @@ published_at          TIMESTAMPTZ
 performance_tag       TEXT  NULLable  (strong | decent | weak) ← migration 018
 performance_note      TEXT  NULLable                           ← migration 018
 performance_tagged_at TIMESTAMPTZ NULLable                     ← migration 018
+batch_id              UUID  NULLable  (groups posts from a weekly batch) ← migration 014
+first_comment         TEXT  NULLable  (AI-drafted first comment)         ← migration 014
 ```
 
 **`linkedin_tokens`**
@@ -179,14 +193,16 @@ Token is automatically refreshed if within 24h of expiry. A `reconnect_required`
 
 **`scheduled_posts`**
 ```
-id             BIGSERIAL PK
-post_id        BIGINT FK → generated_posts.id
-user_id        TEXT
-tenant_id      TEXT
-scheduled_for  TIMESTAMPTZ
-status         TEXT  (pending | processing | sent | not_sent | cancelled)
-bull_job_id    TEXT  (BullMQ job reference)
-created_at     TIMESTAMPTZ
+id                    BIGSERIAL PK
+post_id               BIGINT FK → generated_posts.id
+user_id               TEXT
+tenant_id             TEXT
+scheduled_for         TIMESTAMPTZ
+status                TEXT  (pending | processing | sent | not_sent | cancelled)
+bull_job_id           TEXT  (BullMQ job reference)
+first_comment         TEXT  NULLable  (user-editable; posted 60s after publish) ← migration 015
+first_comment_status  TEXT  NULLable  (NULL | pending | posted | failed)         ← migration 015
+created_at            TIMESTAMPTZ
 ```
 
 **`scheduled_post_events`**
@@ -528,6 +544,7 @@ Core generation flow. Key functions:
 
 | Page | Route | Description |
 |------|-------|-------------|
+| `onboarding.html` | `/onboarding.html` | First-time PLG wizard. 6 screens: role → goal → website extraction + 3 interview questions (one per step) → live generation progress → post reveal with "Open in editor" CTA and LinkedIn connection strip. New users auto-routed here from Google OAuth callback; sets `onboarding_complete = 1` on completion. |
 | `dashboard.html` | `/dashboard.html` | Stats, recent posts, scheduled posts |
 | `generate.html` | `/generate.html` | Post generation. Left panel has Tab A ("Write an idea") and Tab B ("From your Vault"). Tab B loads vault seeds with funnel filter; "Use this idea" pre-fills Tab A and passes `vault_idea_id` to the generate API. Source badge shown below the generated post. |
 | `vault.html` | `/vault.html` | Upload docs (drag-and-drop PDF/DOCX/TXT) or paste a URL. Document list shows live status badges. "Generate Ideas" button triggers `POST /api/vault/mine` and returns immediately; status polling updates badges. |
@@ -707,6 +724,16 @@ tenants/{tenant_id}/users/{user_id}/vault/{filename}      ← vault source files
 ---
 
 ## Recent Changes
+
+### May 2026 — PLG onboarding wizard + email template logo
+
+| Change | Details |
+|--------|---------|
+| PLG onboarding wizard | `public/onboarding.html` + `public/js/onboarding.js` + `public/css/onboarding.css`. 6-screen flow: role (s1) → goal (s2) → website extraction + 3 interview questions one-per-step (s4) → live generation progress (s5) → post reveal (s6). Website URL extracted via `POST /api/generate/from-url` in the interview step. Goal and role stored on `user_profiles`. `onboarding_complete = 1` set on completion. New users auto-routed from Google OAuth callback; returning users go to dashboard. |
+| Email template logo | All 10 HTML templates in `emails/templates/` updated. Text header (`<p>ScoutHook</p>`) replaced with `<img src="{{app_url}}/images/sh-logo-dark.png" alt="ScoutHook" width="150" height="35">`. Uses the existing `{{app_url}}` substitution. |
+| Migrations | `013_onboarding.sql` — `user_role`, `onboarding_complete` on `user_profiles`. `014_ghostwriter.sql` — `business_positioning`, `ghostwriter_prompt`, `ghostwriter_prompt_built_at` on `user_profiles`; `batch_id`, `first_comment` on `generated_posts`. `015_website_url.sql` — `website_url` on `user_profiles`; `first_comment`, `first_comment_status` on `scheduled_posts`. `019_goal.sql` — `goal` on `user_profiles`. |
+
+---
 
 ### May 2026 — Sprint 1: Hook injection, Performance Tagging, Viral tension pre-check
 

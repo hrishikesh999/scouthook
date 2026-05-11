@@ -1,6 +1,6 @@
 # ScoutHook — Product Roadmap 2026
 
-*Strategic review and roadmap based on codebase audit and competitive analysis. Updated 2026-05-06.*
+*Strategic review and roadmap based on codebase audit and competitive analysis. Updated 2026-05-11.*
 
 ---
 
@@ -23,6 +23,8 @@ ScoutHook is a fully-functional, end-to-end LinkedIn content SaaS — not a prot
 - **Hook archetype injection in document flow** — `selectHook()` now runs on the editorial path (`restructureToPost`); vault seeds and idea inputs get proper archetype structure instead of generic reshaping; `archetype_used` persisted to `generated_posts` *(shipped 2026-05-06)*
 - **Post Performance Tagging** — 🔥/👍/👎 rating on published posts; dashboard "Rate your recent posts" nudge card; "Content Intelligence" card surfaces best archetype + best posting day once ≥3 posts rated; feeds the proof loop *(shipped 2026-05-06)*
 - **Viral tension pre-check** — `assessInputQuality()` now blocks generation (HTTP 422 `missing_substance`) when input has no specific outcome AND no surprising angle; amber warning shown inline with "Generate anyway" bypass; applies to both idea and from-doc paths *(shipped 2026-05-06)*
+- **PLG onboarding wizard** — 6-screen first-time user flow (`/onboarding.html`): role → goal → website extraction + 3 interview questions → live generation progress → post reveal with "Open in editor" CTA and LinkedIn connection strip; new users are auto-routed from Google OAuth callback; `onboarding_complete` flag gates the redirect *(shipped 2026-05-11)*
+- **Email template logo branding** — all 10 transactional email templates updated; text "ScoutHook" header replaced with `sh-logo-dark.png` image (150×35, retina-ready) served via `{{app_url}}/images/sh-logo-dark.png` *(shipped 2026-05-11)*
 
 The architecture is sound. The product premise is correct. The engine is better than most users will ever discover, because retention and daily engagement features are thin.
 

@@ -1056,28 +1056,44 @@ body.ob-shell {
   top: 72px;
 }
 
-.ob-interview-template-label {
-  font-size: 11px;
+.ob-guide-title {
+  font-size: 15px;
   font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--brand);
+  color: var(--text-heading);
   margin: 0 0 10px;
 }
 
-.ob-interview-context {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--text-heading);
-  line-height: 1.5;
-  margin: 0 0 16px;
+.ob-guide-body {
+  font-size: 14px;
+  color: var(--text-muted);
+  line-height: 1.6;
+  margin: 0 0 20px;
 }
 
-.ob-interview-hint {
+.ob-guide-tips {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ob-guide-tips li {
   font-size: 13px;
   color: var(--text-muted);
+  padding-left: 16px;
+  position: relative;
   line-height: 1.5;
-  margin: 0;
+}
+
+.ob-guide-tips li::before {
+  content: "✓";
+  position: absolute;
+  left: 0;
+  color: var(--brand, #0D7A5F);
+  font-size: 11px;
+  top: 1px;
 }
 
 .ob-interview-right {

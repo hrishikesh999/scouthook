@@ -84,11 +84,15 @@
   <section id="ob-s4" class="ob-screen" aria-label="Step 4: Interview">
     <div class="ob-interview-wrap">
 
-      <!-- Left: template context (static) -->
+      <!-- Left: coaching panel -->
       <div class="ob-interview-left" aria-hidden="true">
-        <p id="ob-template-label" class="ob-interview-template-label"></p>
-        <p id="ob-template-context" class="ob-interview-context"></p>
-        <p class="ob-interview-hint">Answer as if you're telling a colleague. Specific details make the best posts.</p>
+        <p class="ob-guide-title">You're almost there</p>
+        <p class="ob-guide-body">Three short questions. Your answers give Scouthook enough to write a post that sounds like you, not a template.</p>
+        <ul class="ob-guide-tips">
+          <li>No perfect answers. Just honest ones.</li>
+          <li>More specific beats more polished.</li>
+          <li>You can edit before publishing.</li>
+        </ul>
       </div>
 
       <!-- Right: website pre-step + one question at a time -->
@@ -98,13 +102,13 @@
         <!-- Website extraction pre-step (shown before Q1) -->
         <div id="ob-website-step">
           <p class="ob-q-text">What's your website?</p>
-          <p class="ob-website-hint">We'll read it in seconds to understand your background — so your post sounds like you, not a template.</p>
+          <p class="ob-website-hint">We read it in a few seconds to understand your background, so your post sounds like you.</p>
           <input id="ob-website-url" class="ob-field" type="url"
                  placeholder="https://yoursite.com" autocomplete="url" />
           <p id="ob-website-error" class="ob-field-error" hidden>Please enter a valid URL starting with https://</p>
           <div class="ob-interview-actions" style="margin-top:16px">
             <button id="ob-website-next" class="ob-btn-primary" type="button">Continue →</button>
-            <button id="ob-website-skip" class="ob-skip-link" type="button">Skip — I don't have one</button>
+            <button id="ob-website-skip" class="ob-skip-link" type="button">Skip, I don't have one</button>
           </div>
           <div id="ob-website-loading" class="ob-loading-state" hidden aria-live="polite">Reading your site…</div>
         </div>
@@ -114,7 +118,7 @@
           <p class="ob-q-label">Here's how we see you</p>
           <div id="ob-narrative-card" class="ob-narrative-card"></div>
           <div class="ob-interview-actions" style="margin-top:20px">
-            <button id="ob-summary-confirm" class="ob-btn-primary" type="button">Looks right — write my post →</button>
+            <button id="ob-summary-confirm" class="ob-btn-primary" type="button">Looks right, proceed →</button>
             <button id="ob-summary-edit-toggle" class="ob-skip-link" type="button">Edit details ↓</button>
           </div>
           <div id="ob-summary-fields" hidden></div>
@@ -123,7 +127,7 @@
         <!-- No-website profile question (shown when website is skipped) -->
         <div id="ob-profile-step" hidden>
           <p class="ob-q-text">What do you do, and who do you help?</p>
-          <p class="ob-website-hint">One sentence is enough — this shapes the language of your post.</p>
+          <p class="ob-website-hint">One sentence is enough. This shapes the language of your post.</p>
           <textarea id="ob-profile-answer" class="ob-textarea ob-textarea--interview" rows="3"
                     placeholder="e.g. I help early-stage founders close their first enterprise deals"></textarea>
           <div class="ob-interview-actions" style="margin-top:16px">
@@ -132,13 +136,22 @@
           </div>
         </div>
 
-        <!-- Interview questions (hidden until website step done) -->
+        <!-- Intro step: what happens next (shown before Q1) -->
+        <div id="ob-intro-step" hidden>
+          <p class="ob-q-text">Now Scouthook writes your post</p>
+          <p class="ob-website-hint">We'll ask you 3 short questions. Your answers are the raw material. No writing skill needed from you.</p>
+          <div class="ob-interview-actions" style="margin-top:24px">
+            <button id="ob-intro-start" class="ob-btn-primary" type="button">Let's go →</button>
+          </div>
+        </div>
+
+        <!-- Interview questions (hidden until intro step done) -->
         <div id="ob-question-step" hidden>
           <p id="ob-q-progress" class="ob-q-progress" aria-live="polite"></p>
           <p id="ob-q-text" class="ob-q-text"></p>
 
           <textarea id="ob-answer" class="ob-textarea ob-textarea--interview" rows="5"
-                    placeholder="Write freely — you can edit the post afterwards"></textarea>
+                    placeholder="Write freely. You can edit the post afterwards."></textarea>
 
           <div class="ob-interview-actions">
             <button id="ob-answer-next" class="ob-btn-primary" type="button">Next →</button>
@@ -182,7 +195,7 @@
     <div class="ob-content" style="max-width:600px">
       <h1 class="ob-headline" style="margin-bottom:6px">Here's your first post</h1>
       <p class="ob-subheadline" style="margin-bottom:20px">
-        Scouthook identified the right hook pattern and ran quality checks. Edit if you'd like, then publish.
+        Scouthook picked a hook pattern and ran quality checks. Read it, edit if you like, then publish.
       </p>
 
       <!-- Post with LinkedIn blur gate -->
@@ -191,39 +204,11 @@
         <div id="ob-unlock-overlay" class="ob-unlock-overlay" hidden aria-live="polite">
           <p class="ob-unlock-msg">Connect LinkedIn to read your post</p>
           <button id="ob-unlock-cta" class="ob-btn-primary" type="button">Connect LinkedIn →</button>
-          <p class="ob-unlock-note">One click — you'll come straight back here with your post ready.</p>
+          <p class="ob-unlock-note">One click. You'll come straight back here with your post ready.</p>
         </div>
       </div>
 
-      <div class="ob-cta-row" id="ob-s6-actions" style="margin-top:20px">
-        <button id="ob-s6-continue" class="ob-btn-primary" type="button" hidden>
-          Continue to dashboard →
-        </button>
-      </div>
       <p id="ob-s6-error" class="ob-field-error" hidden role="alert"></p>
-    </div>
-  </section>
-
-  <!-- ── Screen 7: Celebration ────────────────────────────── -->
-  <section id="ob-s7" class="ob-screen ob-screen--center" aria-label="Post published">
-    <div class="ob-content ob-content--narrow">
-      <div class="ob-celebration-emoji" aria-hidden="true">🎉</div>
-      <h1 class="ob-headline">Your post is live.</h1>
-      <p id="ob-posts-remaining" class="ob-posts-remaining"></p>
-
-      <!-- Vault teaser -->
-      <div class="ob-vault-teaser">
-        <div class="ob-vault-teaser-icon" aria-hidden="true">📁</div>
-        <div>
-          <p class="ob-vault-teaser-headline">Turn your documents into posts</p>
-          <p class="ob-vault-teaser-body">Upload a case study, talk notes, or newsletter — Scouthook extracts post ideas from your existing expertise.</p>
-          <a href="/vault.html" class="ob-vault-teaser-link">Open Content Vault →</a>
-        </div>
-      </div>
-
-      <button id="ob-goto-dashboard" class="ob-btn-primary" type="button" style="margin-top:24px">
-        Go to dashboard
-      </button>
     </div>
   </section>
 

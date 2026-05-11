@@ -39,12 +39,10 @@ const Onboarding = (() => {
       ],
     },
     hard_won_lesson: {
-      label:    'Hard-Won Lesson',
-      context:  'A post built on real experience — your years in the work, a setback that taught you something, and a result that proves you figured it out.',
       questions: [
-        'How many years have you been doing this work?',
-        'What\'s the biggest mistake or setback you hit early on?',
-        'What\'s one result you\'ve achieved that proves you figured it out?',
+        'What first drew you to this kind of work?',
+        'What took you the longest to figure out?',
+        'What is one result from your work that you are genuinely proud of?',
       ],
     },
     industry_take: {
@@ -147,9 +145,6 @@ const Onboarding = (() => {
         state.templateKey   = 'hard_won_lesson';
         state.questionIndex = 0;
         state.answers       = [];
-        const tmpl = TEMPLATES[state.templateKey];
-        qs('ob-template-label').textContent   = tmpl.label;
-        qs('ob-template-context').textContent = tmpl.context;
         setTimeout(() => {
           showScreen('s4');
           showWebsiteStep();
@@ -163,16 +158,28 @@ const Onboarding = (() => {
     qs('ob-website-step').hidden    = false;
     qs('ob-website-summary').hidden = true;
     qs('ob-profile-step').hidden    = true;
+    qs('ob-intro-step').hidden      = true;
     qs('ob-question-step').hidden   = true;
     const backBtn = qs('ob-s4-back');
     if (backBtn) backBtn.onclick = () => showScreen('s2');
     qs('ob-website-url')?.focus();
   }
 
+  function showIntroStep() {
+    qs('ob-website-step').hidden    = true;
+    qs('ob-website-summary').hidden = true;
+    qs('ob-profile-step').hidden    = true;
+    qs('ob-intro-step').hidden      = false;
+    qs('ob-question-step').hidden   = true;
+    const backBtn = qs('ob-s4-back');
+    if (backBtn) backBtn.onclick = () => showWebsiteStep();
+  }
+
   function showProfileStep() {
     qs('ob-website-step').hidden    = true;
     qs('ob-website-summary').hidden = true;
     qs('ob-profile-step').hidden    = false;
+    qs('ob-intro-step').hidden      = true;
     qs('ob-question-step').hidden   = true;
     const backBtn = qs('ob-s4-back');
     if (backBtn) backBtn.onclick = () => showWebsiteStep();
@@ -188,8 +195,7 @@ const Onboarding = (() => {
         body:    JSON.stringify({ content_niche: val }),
       }).catch(() => {});
     }
-    state.questionIndex = 0;
-    renderQuestion();
+    showIntroStep();
   }
 
   function buildNarrative(e) {
@@ -262,6 +268,7 @@ const Onboarding = (() => {
     qs('ob-website-step').hidden    = true;
     qs('ob-website-summary').hidden = true;
     qs('ob-profile-step').hidden    = true;
+    qs('ob-intro-step').hidden      = true;
     qs('ob-question-step').hidden   = false;
   }
 
@@ -306,7 +313,10 @@ const Onboarding = (() => {
 
     // No-website profile question
     qs('ob-profile-next')?.addEventListener('click', submitProfileQuestion);
-    qs('ob-profile-skip')?.addEventListener('click', () => {
+    qs('ob-profile-skip')?.addEventListener('click', showIntroStep);
+
+    // Intro step: what happens next
+    qs('ob-intro-start')?.addEventListener('click', () => {
       state.questionIndex = 0;
       renderQuestion();
     });
@@ -362,8 +372,7 @@ const Onboarding = (() => {
     if (hasAny) {
       showSummaryStep(extracted);
     } else {
-      state.questionIndex = 0;
-      renderQuestion();
+      showIntroStep();
     }
   }
 
@@ -380,8 +389,7 @@ const Onboarding = (() => {
         body:    JSON.stringify(profile),
       }).catch(() => {});
     }
-    state.questionIndex = 0;
-    renderQuestion();
+    showIntroStep();
   }
 
   function recordAnswer(override) {
@@ -519,12 +527,10 @@ const Onboarding = (() => {
     if (state.linkedinConnected) return;
     const wrap    = qs('ob-post-wrap');
     const overlay = qs('ob-unlock-overlay');
-    const pubBtn  = qs('ob-publish-btn');
     if (!wrap || !overlay) return;
 
     wrap.classList.add('locked');
     overlay.hidden = false;
-    if (pubBtn) pubBtn.hidden = true;
 
     qs('ob-unlock-cta')?.addEventListener('click', () => {
       sessionStorage.setItem('ob_pending_post', JSON.stringify({
@@ -539,34 +545,18 @@ const Onboarding = (() => {
   }
 
   function unlockPost() {
-    const wrap        = qs('ob-post-wrap');
-    const overlay     = qs('ob-unlock-overlay');
-    const continueBtn = qs('ob-s6-continue');
-    if (wrap)        wrap.classList.remove('locked');
-    if (overlay)     overlay.hidden = true;
-    if (continueBtn) continueBtn.hidden = false;
-  }
-
-  /* ── Screen 6: continue → celebration ───────────────── */
-  function initS6() {
-    qs('ob-s6-continue')?.addEventListener('click', async () => {
-      await markOnboardingComplete();
-      showScreen('s7');
-      initS7();
-      fireConfetti();
+    const wrap    = qs('ob-post-wrap');
+    const overlay = qs('ob-unlock-overlay');
+    if (wrap)    wrap.classList.remove('locked');
+    if (overlay) overlay.hidden = true;
+    // Celebrate and redirect to dashboard
+    fireConfetti();
+    markOnboardingComplete().finally(() => {
+      setTimeout(() => { window.location.href = '/dashboard.html'; }, 3000);
     });
   }
 
-  /* ── Screen 7: Celebration ───────────────────────────── */
-  function initS7() {
-    const remaining = qs('ob-posts-remaining');
-    if (remaining) {
-      remaining.textContent = 'You have 4 posts left this month. Post consistently and your next upgrade moment will come naturally.';
-    }
-    qs('ob-goto-dashboard')?.addEventListener('click', () => {
-      window.location.href = '/dashboard.html';
-    });
-  }
+  function initS6() {}
 
   function fireConfetti() {
     if (typeof confetti !== 'function') return;

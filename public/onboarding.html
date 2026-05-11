@@ -113,10 +113,22 @@
         <div id="ob-website-summary" hidden>
           <p class="ob-q-label">Here's how we see you</p>
           <div id="ob-narrative-card" class="ob-narrative-card"></div>
-          <p class="ob-summary-edit-label">Fine-tune anything below</p>
-          <div id="ob-summary-fields"></div>
           <div class="ob-interview-actions" style="margin-top:20px">
             <button id="ob-summary-confirm" class="ob-btn-primary" type="button">Looks right — write my post →</button>
+            <button id="ob-summary-edit-toggle" class="ob-skip-link" type="button">Edit details ↓</button>
+          </div>
+          <div id="ob-summary-fields" hidden></div>
+        </div>
+
+        <!-- No-website profile question (shown when website is skipped) -->
+        <div id="ob-profile-step" hidden>
+          <p class="ob-q-text">What do you do, and who do you help?</p>
+          <p class="ob-website-hint">One sentence is enough — this shapes the language of your post.</p>
+          <textarea id="ob-profile-answer" class="ob-textarea ob-textarea--interview" rows="3"
+                    placeholder="e.g. I help early-stage founders close their first enterprise deals"></textarea>
+          <div class="ob-interview-actions" style="margin-top:16px">
+            <button id="ob-profile-next" class="ob-btn-primary" type="button">Next →</button>
+            <button id="ob-profile-skip" class="ob-skip-link" type="button">Skip</button>
           </div>
         </div>
 
@@ -183,6 +195,11 @@
         </div>
       </div>
 
+      <div class="ob-cta-row" id="ob-s6-actions" style="margin-top:20px">
+        <button id="ob-s6-continue" class="ob-btn-primary" type="button" hidden>
+          Continue to dashboard →
+        </button>
+      </div>
       <p id="ob-s6-error" class="ob-field-error" hidden role="alert"></p>
     </div>
   </section>

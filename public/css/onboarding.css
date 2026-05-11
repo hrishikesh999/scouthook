@@ -1302,3 +1302,11 @@ body.ob-shell {
   color: var(--ob-muted, #8893a7);
   margin: 0 0 12px;
 }
+
+/* ── Profile question step (no-website path) ─────────────── */
+.ob-website-hint {
+  font-size: 13px;
+  color: var(--ob-muted, #8893a7);
+  margin: 4px 0 14px;
+  line-height: 1.5;
+}

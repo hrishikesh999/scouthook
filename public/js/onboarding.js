@@ -162,10 +162,34 @@ const Onboarding = (() => {
   function showWebsiteStep() {
     qs('ob-website-step').hidden    = false;
     qs('ob-website-summary').hidden = true;
+    qs('ob-profile-step').hidden    = true;
     qs('ob-question-step').hidden   = true;
     const backBtn = qs('ob-s4-back');
     if (backBtn) backBtn.onclick = () => showScreen('s2');
     qs('ob-website-url')?.focus();
+  }
+
+  function showProfileStep() {
+    qs('ob-website-step').hidden    = true;
+    qs('ob-website-summary').hidden = true;
+    qs('ob-profile-step').hidden    = false;
+    qs('ob-question-step').hidden   = true;
+    const backBtn = qs('ob-s4-back');
+    if (backBtn) backBtn.onclick = () => showWebsiteStep();
+    qs('ob-profile-answer')?.focus();
+  }
+
+  function submitProfileQuestion() {
+    const val = (qs('ob-profile-answer')?.value || '').trim();
+    if (val) {
+      fetch('/api/profile', {
+        method:  'POST',
+        headers: apiHeaders(),
+        body:    JSON.stringify({ content_niche: val }),
+      }).catch(() => {});
+    }
+    state.questionIndex = 0;
+    renderQuestion();
   }
 
   function buildNarrative(e) {
@@ -214,8 +238,22 @@ const Onboarding = (() => {
     });
 
     qs('ob-website-step').hidden    = true;
+    qs('ob-profile-step').hidden    = true;
     qs('ob-website-summary').hidden = false;
     qs('ob-question-step').hidden   = true;
+
+    // Fields hidden by default — revealed by toggle
+    const fieldsEl = qs('ob-summary-fields');
+    if (fieldsEl) fieldsEl.hidden = true;
+    const toggle = qs('ob-summary-edit-toggle');
+    if (toggle) {
+      toggle.onclick = () => {
+        if (!fieldsEl) return;
+        fieldsEl.hidden = !fieldsEl.hidden;
+        toggle.textContent = fieldsEl.hidden ? 'Edit details ↓' : 'Hide details ↑';
+      };
+    }
+
     const backBtn = qs('ob-s4-back');
     if (backBtn) backBtn.onclick = () => showWebsiteStep();
   }
@@ -223,6 +261,7 @@ const Onboarding = (() => {
   function showQuestionStep() {
     qs('ob-website-step').hidden    = true;
     qs('ob-website-summary').hidden = true;
+    qs('ob-profile-step').hidden    = true;
     qs('ob-question-step').hidden   = false;
   }
 
@@ -257,16 +296,23 @@ const Onboarding = (() => {
   function initS4() {
     // Website pre-step
     qs('ob-website-next')?.addEventListener('click', submitWebsite);
-    qs('ob-website-skip')?.addEventListener('click', () => {
-      state.questionIndex = 0;
-      renderQuestion();
-    });
+    qs('ob-website-skip')?.addEventListener('click', showProfileStep);
     qs('ob-website-url')?.addEventListener('keydown', e => {
       if (e.key === 'Enter') submitWebsite();
     });
 
     // Summary confirm
     qs('ob-summary-confirm')?.addEventListener('click', confirmSummary);
+
+    // No-website profile question
+    qs('ob-profile-next')?.addEventListener('click', submitProfileQuestion);
+    qs('ob-profile-skip')?.addEventListener('click', () => {
+      state.questionIndex = 0;
+      renderQuestion();
+    });
+    qs('ob-profile-answer')?.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submitProfileQuestion();
+    });
 
     // Interview questions
     qs('ob-answer-next')?.addEventListener('click', advanceInterview);
@@ -455,10 +501,15 @@ const Onboarding = (() => {
     const postOut = qs('ob-post-output');
     if (postOut) {
       postOut.value = post;
-      autoGrow(postOut);
+      // autoGrow needs the element to be visible — defer one frame
+      requestAnimationFrame(() => autoGrow(postOut));
     }
 
-    applyPostLock();
+    if (state.linkedinConnected) {
+      unlockPost();
+    } else {
+      applyPostLock();
+    }
   }
 
 
@@ -488,14 +539,23 @@ const Onboarding = (() => {
   }
 
   function unlockPost() {
-    const wrap    = qs('ob-post-wrap');
-    const overlay = qs('ob-unlock-overlay');
-    if (wrap)    wrap.classList.remove('locked');
-    if (overlay) overlay.hidden = true;
+    const wrap        = qs('ob-post-wrap');
+    const overlay     = qs('ob-unlock-overlay');
+    const continueBtn = qs('ob-s6-continue');
+    if (wrap)        wrap.classList.remove('locked');
+    if (overlay)     overlay.hidden = true;
+    if (continueBtn) continueBtn.hidden = false;
   }
 
-  /* ── Screen 6: no publish button — dashboard link shown after unlock ── */
-  function initS6() {}
+  /* ── Screen 6: continue → celebration ───────────────── */
+  function initS6() {
+    qs('ob-s6-continue')?.addEventListener('click', async () => {
+      await markOnboardingComplete();
+      showScreen('s7');
+      initS7();
+      fireConfetti();
+    });
+  }
 
   /* ── Screen 7: Celebration ───────────────────────────── */
   function initS7() {
@@ -533,10 +593,9 @@ const Onboarding = (() => {
         state.funnelType      = pending.funnelType;
         state.linkedinConnected = true;
         history.replaceState({}, '', '/onboarding.html');
-        renderPost(state);
-        unlockPost();
+        showScreen('s6');   // show first so autoGrow has a visible element
         initS6();
-        showScreen('s6');
+        renderPost(state);  // populates textarea + calls unlockPost (shows continue btn)
         return true;
       } catch {
         sessionStorage.removeItem('ob_pending_post');

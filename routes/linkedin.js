@@ -279,7 +279,9 @@ router.get('/callback', async (req, res) => {
 
   } catch (err) {
     console.error('[linkedin/callback] Error:', err.message);
-    res.redirect(`/account.html?linkedin_error=${encodeURIComponent(err.message)}`);
+    // Redirect errors back to the originating page so onboarding users aren't stranded on account.html
+    const errBase = stateData?.returnTo?.split('?')[0] || '/account.html';
+    res.redirect(`${errBase}?linkedin_error=${encodeURIComponent(err.message)}`);
   }
 });
 

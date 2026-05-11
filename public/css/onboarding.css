@@ -1326,3 +1326,76 @@ body.ob-shell {
   margin: 4px 0 14px;
   line-height: 1.5;
 }
+
+/* ── LinkedIn connection strip (s6) ─────────────────────── */
+.ob-linkedin-strip {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 24px;
+  padding: 16px 20px;
+  border: 1.5px solid #0077b5;
+  border-radius: 10px;
+  background: rgba(0, 119, 181, 0.06);
+}
+
+.ob-linkedin-strip-icon {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  background: #0077b5;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  letter-spacing: -.5px;
+}
+
+.ob-linkedin-strip-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.ob-linkedin-strip-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-heading);
+  margin: 0 0 2px;
+}
+
+.ob-linkedin-strip-body {
+  font-size: 13px;
+  color: var(--ob-muted, #8893a7);
+  margin: 0;
+}
+
+.ob-linkedin-strip-btn {
+  flex-shrink: 0;
+  padding: 8px 16px;
+  background: #0077b5;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+
+.ob-linkedin-strip-btn:hover {
+  background: #005f94;
+}
+
+@media (max-width: 500px) {
+  .ob-linkedin-strip {
+    flex-wrap: wrap;
+  }
+  .ob-linkedin-strip-btn {
+    width: 100%;
+    text-align: center;
+  }
+}

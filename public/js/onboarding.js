@@ -23,7 +23,6 @@ const Onboarding = (() => {
     answers:           [],   // [{ question, answer }]
     postId:            null,
     post:              null,
-    linkedinConnected: false,
   };
 
   /* ── Interview templates ─────────────────────────────── */
@@ -478,8 +477,10 @@ const Onboarding = (() => {
     // Small buffer so final progress step is visibly "done" before transitioning
     await new Promise(r => setTimeout(r, 600));
 
-    renderPost(data);
     showScreen('s6');
+    renderPost(data);
+    fireConfetti();
+    markOnboardingComplete().catch(() => {});
   }
 
   function showError(msg) {
@@ -500,50 +501,14 @@ const Onboarding = (() => {
       requestAnimationFrame(() => autoGrow(postOut));
     }
 
-    if (state.linkedinConnected) {
-      unlockPost();
-    } else {
-      applyPostLock();
-    }
   }
 
-
-
-  /* ── LinkedIn blur gate ──────────────────────────────── */
-  function applyPostLock() {
-    if (state.linkedinConnected) return;
-    const wrap    = qs('ob-post-wrap');
-    const overlay = qs('ob-unlock-overlay');
-    if (!wrap || !overlay) return;
-
-    wrap.classList.add('locked');
-    overlay.hidden = false;
-
-    qs('ob-unlock-cta')?.addEventListener('click', () => {
-      sessionStorage.setItem('ob_pending_post', JSON.stringify({
-        postId:     state.postId,
-        post:       state.post,
-        role:       state.role,
-        goal:       state.goal,
-        funnelType: state.funnelType,
-      }));
+  /* ── Screen 6: LinkedIn strip ────────────────────────── */
+  function initS6() {
+    qs('ob-connect-linkedin')?.addEventListener('click', () => {
       window.location.href = '/api/linkedin/connect?from=onboarding';
-    }, { once: true });
-  }
-
-  function unlockPost() {
-    const wrap    = qs('ob-post-wrap');
-    const overlay = qs('ob-unlock-overlay');
-    if (wrap)    wrap.classList.remove('locked');
-    if (overlay) overlay.hidden = true;
-    // Celebrate and redirect to dashboard
-    fireConfetti();
-    markOnboardingComplete().finally(() => {
-      setTimeout(() => { window.location.href = '/dashboard.html'; }, 3000);
     });
   }
-
-  function initS6() {}
 
   function fireConfetti() {
     if (typeof confetti !== 'function') return;
@@ -557,29 +522,7 @@ const Onboarding = (() => {
   function checkLinkedInReturn() {
     const params = new URLSearchParams(window.location.search);
     if (params.get('linkedin') !== 'connected') return false;
-
-    const saved = sessionStorage.getItem('ob_pending_post');
-    if (saved) {
-      try {
-        const pending = JSON.parse(saved);
-        sessionStorage.removeItem('ob_pending_post');
-        state.postId          = pending.postId;
-        state.post            = pending.post;
-        state.role            = pending.role;
-        state.goal            = pending.goal;
-        state.funnelType      = pending.funnelType;
-        state.linkedinConnected = true;
-        history.replaceState({}, '', '/onboarding.html');
-        showScreen('s6');   // show first so autoGrow has a visible element
-        initS6();
-        renderPost(state);  // populates textarea + calls unlockPost (shows continue btn)
-        return true;
-      } catch {
-        sessionStorage.removeItem('ob_pending_post');
-      }
-    }
-
-    // No pending post — mark complete and go to dashboard
+    // Onboarding is already complete at this point — just go to dashboard
     markOnboardingComplete().finally(() => {
       window.location.href = '/dashboard.html';
     });
@@ -634,12 +577,6 @@ const Onboarding = (() => {
     }
 
     if (checkLinkedInReturn()) return;
-
-    // Prefetch LinkedIn status so Screen 6 blur gate has the answer ready
-    fetch('/api/linkedin/status', { headers: apiHeaders() })
-      .then(r => r.json())
-      .then(d => { if (d.connected) state.linkedinConnected = true; })
-      .catch(() => {});
 
     // Wire back buttons
     qsa('.ob-back-btn[data-back-to]').forEach(btn => {

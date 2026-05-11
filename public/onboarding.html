@@ -184,19 +184,21 @@
   <!-- ── Screen 6: Post revealed ──────────────────────────── -->
   <section id="ob-s6" class="ob-screen" aria-label="Your first post">
     <div class="ob-content" style="max-width:600px">
-      <h1 class="ob-headline" style="margin-bottom:6px">Here's your first post</h1>
+      <h1 class="ob-headline" style="margin-bottom:6px">Your first post is ready</h1>
       <p class="ob-subheadline" style="margin-bottom:20px">
-        Scouthook picked a hook pattern and ran quality checks. Read it, edit if you like, then publish.
+        Read it, edit anything you want, then publish when you're ready.
       </p>
 
-      <!-- Post with LinkedIn blur gate -->
-      <div id="ob-post-wrap" class="ob-post-wrap">
-        <textarea id="ob-post-output" class="ob-textarea" aria-label="Generated post" rows="10"></textarea>
-        <div id="ob-unlock-overlay" class="ob-unlock-overlay" hidden aria-live="polite">
-          <p class="ob-unlock-msg">Connect LinkedIn to read your post</p>
-          <button id="ob-unlock-cta" class="ob-btn-primary" type="button">Connect LinkedIn →</button>
-          <p class="ob-unlock-note">One click. You'll come straight back here with your post ready.</p>
+      <textarea id="ob-post-output" class="ob-textarea" aria-label="Generated post" rows="12"></textarea>
+
+      <!-- LinkedIn connection strip -->
+      <div class="ob-linkedin-strip">
+        <div class="ob-linkedin-strip-icon" aria-hidden="true">in</div>
+        <div class="ob-linkedin-strip-text">
+          <p class="ob-linkedin-strip-title">Publish directly from Scouthook</p>
+          <p class="ob-linkedin-strip-body">Connect LinkedIn to post in one click, any time.</p>
         </div>
+        <button id="ob-connect-linkedin" class="ob-linkedin-strip-btn" type="button">Connect LinkedIn →</button>
       </div>
 
       <p id="ob-s6-error" class="ob-field-error" hidden role="alert"></p>

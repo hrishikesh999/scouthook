@@ -11,6 +11,7 @@
 const express = require('express');
 const router  = express.Router();
 const { db }  = require('../db');
+const { getUserPlan } = require('../services/subscription');
 
 const TARGET = { reach: 70, trust: 20, convert: 10 };
 
@@ -27,6 +28,9 @@ const RECIPE_SUGGESTION = {
 router.get('/health', async (req, res) => {
   const { userId, tenantId } = req;
   if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
+
+  const plan = await getUserPlan(userId);
+  if (plan !== 'pro') return res.status(403).json({ ok: false, error: 'pro_only' });
 
   // Count generated posts by funnel_type in the last 30 days
   const rows = await db.prepare(`

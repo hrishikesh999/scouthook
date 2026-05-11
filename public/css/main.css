@@ -4914,6 +4914,29 @@ body {
   font-family: var(--font-sans);
 }
 
+.ci-locked {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+  color: var(--text-tertiary);
+  padding: var(--space-3) 0;
+}
+.ci-locked svg { flex-shrink: 0; margin-top: 2px; }
+.ci-locked strong { display: block; font-size: 13px; color: var(--text-heading); margin-bottom: 4px; }
+.ci-locked p { font-size: 13px; margin: 0 0 10px; }
+.ci-upgrade-btn {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--brand, #0F766E);
+  background: none;
+  border: 1px solid var(--brand, #0F766E);
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.ci-upgrade-btn:hover { background: var(--brand, #0F766E); color: #fff; }
+
 /* ── Performance nudge card ─────────────────────────────────── */
 .perf-nudge-card .card-header {
   flex-direction: column;

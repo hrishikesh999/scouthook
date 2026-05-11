@@ -216,21 +216,60 @@ function escHtml(str) {
 
 /* ── Performance tagging ────────────────────────────────────── */
 async function loadPerformance() {
+  // Run both fetches in parallel — they are independent
+  await Promise.allSettled([
+    loadContentIntelligence(),
+    loadPerfNudge(),
+  ]);
+}
+
+async function loadContentIntelligence() {
   try {
-    const res  = await fetch('/api/posts/performance-summary', { headers: apiHeaders() });
+    const res = await fetch('/api/posts/performance-summary', { headers: apiHeaders() });
+    if (res.status === 403) {
+      renderContentIntelligenceLocked();
+      return;
+    }
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!data.ok || !data.enough_data) return;
+    renderContentIntelligence(data);
+  } catch {
+    // Non-fatal
+  }
+}
+
+async function loadPerfNudge() {
+  try {
+    const res = await fetch('/api/posts/untagged-published', { headers: apiHeaders() });
     if (!res.ok) return;
     const data = await res.json();
     if (!data.ok) return;
-
-    if (data.enough_data) {
-      renderContentIntelligence(data);
-    }
-    if (Array.isArray(data.untagged) && data.untagged.length > 0) {
-      renderPerfNudge(data.untagged);
+    if (Array.isArray(data.posts) && data.posts.length > 0) {
+      renderPerfNudge(data.posts);
     }
   } catch {
     // Non-fatal
   }
+}
+
+function renderContentIntelligenceLocked() {
+  const card = document.getElementById('content-intelligence');
+  const body = document.getElementById('ci-body');
+  const countEl = document.getElementById('ci-tag-count');
+  if (!card || !body) return;
+
+  if (countEl) countEl.textContent = '';
+  body.innerHTML = `
+    <div class="ci-locked">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+      <div>
+        <strong>Content Intelligence — Pro</strong>
+        <p>Discover your top hook archetypes and best posting days based on your rated posts.</p>
+        <button class="ci-upgrade-btn" type="button" onclick="window.PricingModal && window.PricingModal.open()">Upgrade to Pro →</button>
+      </div>
+    </div>`;
+  card.hidden = false;
 }
 
 function renderContentIntelligence(data) {

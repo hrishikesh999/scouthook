@@ -3,6 +3,7 @@
 const express = require('express');
 const router  = express.Router();
 const db      = require('../db');
+const { getUserPlan } = require('../services/subscription');
 
 const VALID_TAGS = new Set(['strong', 'decent', 'weak']);
 
@@ -45,6 +46,9 @@ router.get('/performance-summary', async (req, res) => {
   const userId   = req.userId;
   const tenantId = req.tenantId || 'default';
   if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
+
+  const plan = await getUserPlan(userId);
+  if (plan !== 'pro') return res.status(403).json({ ok: false, error: 'pro_only' });
 
   try {
     // Total tagged posts
@@ -110,7 +114,7 @@ router.get('/performance-summary', async (req, res) => {
 });
 
 // GET /api/posts/untagged-published
-// Returns published posts without a performance tag (for rating nudge).
+// Returns published posts without a performance tag (for rating nudge). Available on all plans.
 router.get('/untagged-published', async (req, res) => {
   const userId   = req.userId;
   const tenantId = req.tenantId || 'default';

@@ -58,6 +58,9 @@ function runCheck(envOverrides = {}) {
     if (process.env.NODE_ENV === 'production' && !process.env.ALLOWED_ORIGIN) {
       console.warn('[startup] WARNING: ALLOWED_ORIGIN is not set. If your frontend is on a different origin than the API, cross-origin requests will be rejected by the browser. Set ALLOWED_ORIGIN=https://app.yourdomain.com to enable CORS.');
     }
+    if (process.env.NODE_ENV === 'production' && !process.env.REDIS_URL) {
+      throw new Error('REDIS_URL is required in production. Set REDIS_URL to your Redis connection string.');
+    }
     console.log('STARTUP_OK');
   `;
 
@@ -148,6 +151,7 @@ test('valid 64-char hex TEK → no error, no warning', () => {
     SESSION_SECRET: 'a-valid-secret',
     TOKEN_ENCRYPTION_KEY: validKey,
     ALLOWED_ORIGIN: 'https://app.scouthook.com', // suppress CORS warning
+    REDIS_URL: 'redis://localhost:6379',          // suppress Redis warning
   });
   assert.strictEqual(status, 0, `Expected exit 0, got ${status}. stderr: ${stderr.slice(0, 200)}`);
   assert.ok(stdout.includes('STARTUP_OK'));
@@ -162,6 +166,7 @@ test('missing ALLOWED_ORIGIN in production → warns, does not throw', () => {
     NODE_ENV: 'production',
     SESSION_SECRET: 'a-valid-secret',
     TOKEN_ENCRYPTION_KEY: validKey,
+    REDIS_URL: 'redis://localhost:6379',
     // ALLOWED_ORIGIN omitted
   });
   assert.strictEqual(status, 0, `Must not throw for missing ALLOWED_ORIGIN — same-origin deployments are valid. stderr: ${stderr.slice(0,200)}`);
@@ -187,9 +192,50 @@ test('valid ALLOWED_ORIGIN in production → no CORS warning', () => {
     SESSION_SECRET: 'a-valid-secret',
     TOKEN_ENCRYPTION_KEY: validKey,
     ALLOWED_ORIGIN: 'https://app.scouthook.com',
+    REDIS_URL: 'redis://localhost:6379',
   });
   assert.strictEqual(status, 0);
   assert.ok(!stderr.includes('ALLOWED_ORIGIN'), 'Must not warn when ALLOWED_ORIGIN is set');
+});
+
+console.log('\n  REDIS_URL');
+
+test('missing REDIS_URL in production → throws', () => {
+  const validKey = 'a'.repeat(64);
+  const { status, stderr } = runCheck({
+    NODE_ENV: 'production',
+    SESSION_SECRET: 'a-valid-secret',
+    TOKEN_ENCRYPTION_KEY: validKey,
+    ALLOWED_ORIGIN: 'https://app.scouthook.com',
+    // REDIS_URL omitted
+  });
+  assert.notStrictEqual(status, 0, 'Must exit non-zero in production when REDIS_URL is missing');
+  assert.ok(stderr.includes('REDIS_URL'), `Must mention REDIS_URL, got: ${stderr.slice(0, 200)}`);
+});
+
+test('missing REDIS_URL in development → starts fine', () => {
+  const validKey = 'a'.repeat(64);
+  const { status, stdout } = runCheck({
+    NODE_ENV: 'development',
+    SESSION_SECRET: 'a-valid-secret',
+    TOKEN_ENCRYPTION_KEY: validKey,
+    // REDIS_URL omitted
+  });
+  assert.strictEqual(status, 0, 'Must not throw for missing REDIS_URL in development');
+  assert.ok(stdout.includes('STARTUP_OK'));
+});
+
+test('REDIS_URL present in production → starts fine', () => {
+  const validKey = 'a'.repeat(64);
+  const { status, stdout } = runCheck({
+    NODE_ENV: 'production',
+    SESSION_SECRET: 'a-valid-secret',
+    TOKEN_ENCRYPTION_KEY: validKey,
+    ALLOWED_ORIGIN: 'https://app.scouthook.com',
+    REDIS_URL: 'redis://localhost:6379',
+  });
+  assert.strictEqual(status, 0, `Expected exit 0, got ${status}`);
+  assert.ok(stdout.includes('STARTUP_OK'));
 });
 
 // ─── Summary ─────────────────────────────────────────────────────────────────

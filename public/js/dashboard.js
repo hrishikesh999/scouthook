@@ -9,6 +9,7 @@ const recentList = document.getElementById('recent-posts-list');
   loadRecentPosts();
   loadChecklist();
   loadPerformance();
+  loadLinkedInExpiryBanner();
 })();
 
 /* ── Recent posts ────────────────────────────────────────────── */
@@ -107,6 +108,30 @@ function collapseChecklist(section) {
     section.classList.remove('collapsing');
   }, { once: true });
   localStorage.setItem('sh_checklist_done', '1');
+}
+
+/* ── LinkedIn token expiry banner ────────────────────────────── */
+async function loadLinkedInExpiryBanner() {
+  const banner = document.getElementById('linkedin-expiry-banner');
+  if (!banner) return;
+
+  try {
+    const res = await fetch('/api/linkedin/status', { headers: apiHeaders() });
+    if (!res.ok) return;
+    const data = await res.json();
+
+    if (!data.connected || data.expires_in_days === null || data.expires_in_days > 7) return;
+
+    const days = data.expires_in_days;
+    const label = days <= 0 ? 'has expired' : `expires in ${days} day${days === 1 ? '' : 's'}`;
+    banner.innerHTML = `
+      <span>Your LinkedIn connection ${escHtml(label)} — scheduled posts will fail until you reconnect.</span>
+      <a href="/onboarding.html?step=linkedin">Reconnect now →</a>
+    `;
+    banner.hidden = false;
+  } catch {
+    // Non-fatal
+  }
 }
 
 /* ── Render rows ─────────────────────────────────────────────── */

@@ -70,7 +70,10 @@ const oauthStates = new Map(); // fallback for when Redis is unavailable
 async function setOAuthState(state, data) {
   const stored = await redisSet(`oauth_state:${state}`, data, 600); // 10 min TTL
   if (!stored) {
-    // Redis unavailable — fall back to in-memory with auto-expiry
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('Redis unavailable — cannot store OAuth CSRF state in production');
+    }
+    // Dev only: fall back to in-memory with auto-expiry
     oauthStates.set(state, data);
     setTimeout(() => oauthStates.delete(state), 10 * 60 * 1000);
   }
@@ -99,15 +102,21 @@ router.get('/status', (req, res) => {
 
   (async () => {
     const row = await db.prepare(
-      'SELECT linkedin_name, linkedin_photo, linkedin_headline FROM linkedin_tokens WHERE user_id = ? AND tenant_id = ?'
+      'SELECT linkedin_name, linkedin_photo, linkedin_headline, expires_at FROM linkedin_tokens WHERE user_id = ? AND tenant_id = ?'
     ).get(userId, tenantId);
 
+    let expiresInDays = null;
+    if (row?.expires_at) {
+      expiresInDays = Math.ceil((new Date(row.expires_at) - Date.now()) / 86400000);
+    }
+
     return res.json({
-      ok:        true,
-      connected: !!row,
-      name:      row?.linkedin_name || null,
-      photo_url: row?.linkedin_photo?.trim() || null,
-      headline:  row?.linkedin_headline || null,
+      ok:             true,
+      connected:      !!row,
+      name:           row?.linkedin_name || null,
+      photo_url:      row?.linkedin_photo?.trim() || null,
+      headline:       row?.linkedin_headline || null,
+      expires_in_days: expiresInDays,
     });
   })().catch(() => res.json({ ok: true, connected: false, name: null, photo_url: null }));
 });

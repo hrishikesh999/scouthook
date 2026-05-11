@@ -2897,6 +2897,31 @@ body {
   align-items: center;
 }
 
+/* ── LinkedIn token expiry banner ───────────────────────────── */
+.linkedin-expiry-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-6);
+  background: #fff8e1;
+  border: 1px solid #f59e0b;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  color: #92400e;
+}
+
+.linkedin-expiry-banner[hidden] {
+  display: none;
+}
+
+.linkedin-expiry-banner a {
+  color: #92400e;
+  font-weight: 600;
+  text-decoration: underline;
+  white-space: nowrap;
+}
+
 .hero-left {
   flex: 1;
 }

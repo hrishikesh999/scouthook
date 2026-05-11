@@ -87,6 +87,14 @@ if (process.env.NODE_ENV === 'production' && !process.env.ALLOWED_ORIGIN) {
   console.warn('[startup] WARNING: ALLOWED_ORIGIN is not set. If your frontend is on a different origin than the API, cross-origin requests will be rejected by the browser. Set ALLOWED_ORIGIN=https://app.yourdomain.com to enable CORS.');
 }
 
+// REDIS_URL: required in production. Without Redis, OAuth CSRF state uses an
+// in-process Map that breaks on multi-instance deployments (state stored by
+// one instance is invisible to others), causing LinkedIn OAuth to fail for ~50%
+// of logins. Scheduling also requires Redis (BullMQ).
+if (process.env.NODE_ENV === 'production' && !process.env.REDIS_URL) {
+  throw new Error('REDIS_URL is required in production. Set REDIS_URL to your Redis connection string.');
+}
+
 app.set('trust proxy', 1); // needed on Render/behind proxies for secure cookies
 
 const PgSession = connectPgSimple(session);

@@ -506,15 +506,41 @@ const Onboarding = (() => {
   /* ── Screen 6: editor CTA + LinkedIn strip ──────────── */
   function initS6() {
     qs('ob-open-editor')?.addEventListener('click', () => {
-      const dest = state.postId
-        ? `/preview.html?post_id=${state.postId}`
-        : '/preview.html';
-      window.location.href = dest;
+      showScreen('s7');
+      loadProPrice();
     });
 
     qs('ob-connect-linkedin')?.addEventListener('click', () => {
       if (state.postId) sessionStorage.setItem('ob_post_id', state.postId);
       window.location.href = '/api/linkedin/connect?from=onboarding';
+    });
+  }
+
+  async function loadProPrice() {
+    try {
+      const r = await fetch('/api/billing/config');
+      if (!r.ok) return;
+      const d = await r.json();
+      const priceEl = qs('ob-pro-price');
+      if (priceEl && d.proMonthlyPrice) priceEl.textContent = d.proMonthlyPrice;
+      const noteEl = qs('ob-founding-note');
+      if (noteEl && d.spotsRemaining > 0) {
+        noteEl.style.display = '';
+        noteEl.textContent = `${d.spotsRemaining} founding spot${d.spotsRemaining === 1 ? '' : 's'} left — price locked for life.`;
+      }
+    } catch {}
+  }
+
+  function initS7() {
+    qs('ob-choose-free')?.addEventListener('click', () => {
+      window.location.href = state.postId ? `/preview.html?post_id=${state.postId}` : '/dashboard.html';
+    });
+    qs('ob-choose-pro')?.addEventListener('click', () => {
+      if (window.PricingModal) {
+        window.PricingModal.open();
+      } else {
+        window.location.href = '/billing.html';
+      }
     });
   }
 
@@ -597,6 +623,7 @@ const Onboarding = (() => {
     initS2();
     initS4();
     initS6();
+    initS7();
 
     showScreen('s1');
   }

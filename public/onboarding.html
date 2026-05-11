@@ -211,7 +211,45 @@
     </div>
   </section>
 
+  <!-- ── Screen 7: Plan selection ────────────────────────── -->
+  <section id="ob-s7" class="ob-screen ob-screen--center" aria-label="Choose your plan">
+    <div class="ob-content ob-content--narrow" style="max-width:580px">
+      <h1 class="ob-headline" style="margin-bottom:6px">One last thing — choose your plan</h1>
+      <p class="ob-subheadline" style="margin-bottom:32px">
+        Start free and upgrade whenever you're ready, or go Pro now and unlock everything.
+      </p>
+      <div class="ob-plan-cards">
+        <div class="ob-plan-card">
+          <div class="ob-plan-card-name">Free</div>
+          <div class="ob-plan-card-price">$0 <span class="ob-plan-card-period">/ month</span></div>
+          <ul class="ob-plan-features">
+            <li>20 post generations / month</li>
+            <li>Unlimited vault documents</li>
+            <li>LinkedIn &amp; scheduled publishing</li>
+          </ul>
+          <button id="ob-choose-free" class="ob-btn-secondary ob-plan-cta" type="button">Continue on Free</button>
+        </div>
+        <div class="ob-plan-card ob-plan-card--featured">
+          <div class="ob-plan-card-name ob-plan-card-name--pro">Pro</div>
+          <div class="ob-plan-card-price">$<span id="ob-pro-price">39</span> <span class="ob-plan-card-period">/ month</span></div>
+          <ul class="ob-plan-features">
+            <li>Unlimited post generations</li>
+            <li>Unlimited visuals &amp; carousels</li>
+            <li>Hook A/B alternatives</li>
+            <li>Priority support</li>
+          </ul>
+          <div id="ob-founding-note" class="ob-plan-founding-note" style="display:none"></div>
+          <button id="ob-choose-pro" class="ob-btn-primary ob-plan-cta" type="button">Upgrade to Pro →</button>
+        </div>
+      </div>
+      <p style="text-align:center;font-size:12px;color:var(--text-muted);margin-top:20px">
+        You can upgrade or cancel anytime from your account settings.
+      </p>
+    </div>
+  </section>
+
   <script src="/js/session.js"></script>
+  <script src="/js/pricing-modal.js" defer></script>
   <script src="/js/onboarding.js" defer></script>
 </body>
 </html>

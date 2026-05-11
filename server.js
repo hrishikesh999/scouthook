@@ -152,6 +152,7 @@ if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
       if (result?.is_new_row && email) {
         const appUrl = process.env.APP_URL || '';
         sendEmail('welcome', email, { name: displayName.split(' ')[0] || displayName, app_url: appUrl });
+        require('./services/mailerlite').addFreeSubscriber(email, displayName).catch(() => {});
       }
     } catch (err) {
       console.error('[auth] user_profile bootstrap failed for', userId, err.message);
@@ -206,6 +207,7 @@ app.get('/auth/google', (req, res, next) => {
   if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
     return res.redirect('/login.html?error=google_not_configured');
   }
+  if (req.query.intent === 'pro') req.session.proIntent = true;
   const opts = { scope: ['profile', 'email'] };
   if (req.query.hint) opts.loginHint = req.query.hint;
   return passport.authenticate('google', opts)(req, res, next);
@@ -219,6 +221,10 @@ app.get('/auth/google/callback',
     return passport.authenticate('google', { failureRedirect: '/login.html?error=oauth_failed' })(req, res, next);
   },
   async (req, res) => {
+    // Consume pro intent once — always clear it regardless of path taken.
+    const proIntent = req.session.proIntent === true;
+    delete req.session.proIntent;
+
     // Route new users to the onboarding wizard; returning users go straight to dashboard.
     try {
       const row = await db.prepare(
@@ -228,7 +234,8 @@ app.get('/auth/google/callback',
     } catch {
       // Non-fatal — fall through to dashboard if the check fails.
     }
-    return res.redirect('/dashboard.html');
+    // Returning user with pro intent: open billing with auto-upgrade param.
+    return res.redirect(proIntent ? '/billing.html?upgrade=1' : '/dashboard.html');
   }
 );
 

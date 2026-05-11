@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <link rel="icon" type="image/png" href="/favicon.png">
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Scouthook — Sign in to your account</title>
+  <title>Scouthook — Sign up</title>
   <link rel="stylesheet" href="/css/main.css" />
   <link rel="stylesheet" href="/css/login.css" />
 </head>
@@ -33,13 +33,13 @@
       </div>
     </div>
 
-    <!-- Right: sign-in panel -->
+    <!-- Right: sign-up panel -->
     <div class="login-right">
       <div class="login-right-inner">
         <img src="/images/sh-logo-dark.png" alt="Scouthook" class="login-logo-img" />
 
-        <section class="login-card" role="region" aria-label="Sign in">
-          <h1 class="login-headline">Welcome back</h1>
+        <section class="login-card" role="region" aria-label="Sign up">
+          <h1 class="login-headline">Turn your knowledge into LinkedIn posts that attract your ideal clients</h1>
 
           <div id="errorBox" class="login-error" hidden></div>
 
@@ -58,16 +58,23 @@
                   <path fill="none" d="M1 1h46v46H1z"/>
                 </svg>
               </span>
-              <span>Sign in with Google</span>
+              <span>Sign up with Google</span>
             </button>
           </form>
 
-          <div class="login-tagline">
-            New to ScoutHook? <a href="/signup.html" class="login-switch-link">Sign up free →</a>
+          <div class="login-tagline">Free to start. No credit card needed.</div>
+
+          <div class="login-pro-entry">
+            <span class="login-pro-sep">or</span>
+            <a href="/auth/google?intent=pro" class="login-pro-link" id="login-pro-link">Start with Pro →</a>
           </div>
 
           <div class="login-meta">
             By continuing, you agree to the app's terms and privacy policy.
+          </div>
+
+          <div class="login-switch">
+            Already have an account? <a href="/login.html" class="login-switch-link">Sign in →</a>
           </div>
         </section>
       </div>
@@ -102,6 +109,16 @@
         if (!valid) { input?.focus(); return; }
         const url = '/auth/google' + (email ? '?hint=' + encodeURIComponent(email) : '');
         window.location.href = url;
+      });
+
+      // Thread typed email as hint into the "Start with Pro" link
+      const proLink = document.getElementById('login-pro-link');
+      document.getElementById('loginEmail')?.addEventListener('input', function () {
+        const email = (this.value || '').trim();
+        const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+        if (proLink) {
+          proLink.href = '/auth/google?intent=pro' + (valid ? '&hint=' + encodeURIComponent(email) : '');
+        }
       });
     })();
   </script>

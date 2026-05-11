@@ -1021,6 +1021,14 @@
         const d = await subRes.json();
         _subData = d;
         await render(d, _priceMap);
+
+        // Auto-open checkout for returning users arriving via "Start with Pro" on signup page.
+        // Guard: only fires when on Free plan to prevent accidental double-upgrade.
+        const upgradeParams = new URLSearchParams(window.location.search);
+        if (upgradeParams.get('upgrade') === '1' && d.plan !== 'pro') {
+          window.history.replaceState({}, '', '/billing.html');
+          window.PricingModal?.open();
+        }
       } catch {
         document.getElementById('billing-loading').innerHTML = `
           <div class="billing-card billing-card--full">

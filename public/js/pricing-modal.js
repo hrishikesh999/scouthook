@@ -287,15 +287,15 @@
           <ul class="pm-features">
             <li>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent,#10B981)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              3 post generations / month
+              <strong>30</strong>&nbsp;post generations / month
+            </li>
+            <li class="pm-feature-excluded">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#A1A1AA" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              Visuals — Pro only
             </li>
             <li>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent,#10B981)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              3 visuals in your first month
-            </li>
-            <li>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent,#10B981)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              1 vault document
+              Unlimited vault documents
             </li>
             <li>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent,#10B981)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
@@ -323,8 +323,8 @@
           <div id="pm-founding-badge" style="display:none;margin-bottom:6px;font-size:12px;font-weight:700;color:#059669;letter-spacing:0.01em;"></div>
           <div id="pm-price-monthly">
             <div class="pm-price" style="display:flex;align-items:baseline;gap:8px;">
-              <span><sup>$</sup><span id="pm-monthly-amount">49</span></span>
-              <span id="pm-strike-price" style="display:none;font-size:17px;font-weight:500;color:var(--text-muted,#A1A1AA);text-decoration:line-through;">$49</span>
+              <span><sup>$</sup><span id="pm-monthly-amount">39</span></span>
+              <span id="pm-strike-price" style="display:none;font-size:17px;font-weight:500;color:var(--text-muted,#A1A1AA);text-decoration:line-through;">$39</span>
             </div>
             <div class="pm-period">/ month</div>
           </div>
@@ -337,15 +337,15 @@
           <ul class="pm-features">
             <li>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent,#10B981)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              <strong>40</strong>&nbsp;post generations / month
+              <strong>Unlimited</strong>&nbsp;post generations
             </li>
             <li>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent,#10B981)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              <strong>20</strong>&nbsp;visuals / month (carousels, quotes, branded)
+              <strong>Unlimited</strong>&nbsp;visuals (carousels, quotes, branded)
             </li>
             <li>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent,#10B981)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              <strong>10</strong>&nbsp;vault docs / month
+              <strong>Unlimited</strong>&nbsp;vault docs
             </li>
             <li>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent,#10B981)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
@@ -380,8 +380,8 @@
   // ── State ────────────────────────────────────────────────────────────────────
   let priceIdMonthly  = '';
   let priceIdYearly   = '';
-  let proMonthlyPrice = 49;
-  let foundingTier    = 'regular';
+  let proMonthlyPrice = 39;
+  let foundingTier    = 'founding_2';
   let spotsRemaining  = 0;
   let configLoaded    = false;
 
@@ -447,8 +447,8 @@
       const d = await r.json();
       priceIdMonthly  = d.priceIdMonthly  || '';
       priceIdYearly   = d.priceIdYearly   || '';
-      proMonthlyPrice = d.proMonthlyPrice  || 49;
-      foundingTier    = d.foundingTier     || 'regular';
+      proMonthlyPrice = d.proMonthlyPrice  || 39;
+      foundingTier    = d.foundingTier     || 'founding_2';
       spotsRemaining  = d.spotsRemaining   || 0;
       paddleConfig    = d;
       configLoaded    = true;
@@ -470,38 +470,33 @@
     const annualPerMonthEl = $id('pm-annual-per-month');
     if (annualPerMonthEl) annualPerMonthEl.textContent = '$' + annualPerMonth;
 
-    // Show/hide the strikethrough $49 next to the founding price
+    // Show strikethrough $39 only for founding_1 ($29 savers)
     const strikeEl = $id('pm-strike-price');
     if (strikeEl) {
-      strikeEl.style.display = (foundingTier !== 'regular') ? '' : 'none';
+      strikeEl.style.display = (foundingTier === 'founding_1') ? '' : 'none';
     }
 
-    // Show founding badge for non-regular tiers
+    // Show founding badge only for founding_1
     const badgeEl = $id('pm-founding-badge');
     if (badgeEl) {
       if (foundingTier === 'founding_1') {
-        badgeEl.textContent  = 'Founding member -' + spotsRemaining + ' of 10 spots left';
-        badgeEl.style.display = '';
-      } else if (foundingTier === 'founding_2') {
-        badgeEl.textContent  = 'Early access -' + spotsRemaining + ' of 40 spots left';
+        badgeEl.textContent  = 'Founding member — ' + spotsRemaining + ' of 10 spots left';
         badgeEl.style.display = '';
       } else {
         badgeEl.style.display = 'none';
       }
     }
 
-    // Hide annual toggle for founding tiers (monthly-only offer)
+    // Annual toggle hidden — launch pricing is monthly-only
     const toggleRow = document.querySelector('.pm-toggle');
     if (toggleRow) {
-      toggleRow.style.display = (foundingTier === 'regular') ? '' : 'none';
+      toggleRow.style.display = 'none';
     }
-    // If annual toggle was on and we're now in a founding tier, reset to monthly
-    if (foundingTier !== 'regular') {
-      const toggle = $id('pm-annual-toggle');
-      if (toggle && toggle.checked) {
-        toggle.checked = false;
-        setAnnual(false);
-      }
+    // Reset to monthly if annual toggle was somehow on
+    const toggle = $id('pm-annual-toggle');
+    if (toggle && toggle.checked) {
+      toggle.checked = false;
+      setAnnual(false);
     }
   }
 

@@ -603,7 +603,7 @@
 
               <!-- Free nudge -->
               <div id="usage-upgrade-nudge" class="usage-nudge" style="display:none">
-                <span>You're on the Free plan - limits are tight.</span>
+                <span>Free plan — upgrade for unlimited generations, visuals, and more.</span>
                 <button type="button" id="btn-upgrade-nudge">Upgrade to Pro</button>
               </div>
 
@@ -651,15 +651,15 @@
                   <div class="upgrade-features">
                     <div class="upgrade-feature">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
-                      40 post generations / mo
+                      Unlimited post generations
                     </div>
                     <div class="upgrade-feature">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
-                      20 visual creations / mo
+                      Unlimited visual creations
                     </div>
                     <div class="upgrade-feature">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
-                      10 vault documents / mo
+                      Unlimited vault documents
                     </div>
                     <div class="upgrade-feature">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
@@ -760,7 +760,6 @@
         const map = {};
         if (d.priceIdFounding1) map[d.priceIdFounding1] = { label: '$29', period: '/month', tier: 'Founding Member · Tier 1' };
         if (d.priceIdFounding2) map[d.priceIdFounding2] = { label: '$39', period: '/month', tier: 'Founding Member · Tier 2' };
-        if (d.priceIdMonthly)   map[d.priceIdMonthly]   = { label: `$${d.proMonthlyPrice || 49}`, period: '/month', tier: null };
         if (d.priceIdYearly)    map[d.priceIdYearly]    = { label: '$490', period: '/year', tier: null };
         return { map, cfg: d };
       } catch { return { map: {}, cfg: {} }; }
@@ -862,9 +861,9 @@
       }
 
       // ── Usage meters ──────────────────────────────────────────
-      const gen   = sub.generations || { current: 0, limit: 3 };
-      const vis   = sub.visuals      || { current: 0, limit: isPro ? 20 : 3 };
-      const vault = sub.vault_docs   || { current: 0, limit: isPro ? 10 : 1 };
+      const gen   = sub.generations || { current: 0, limit: isPro ? null : 30 };
+      const vis   = sub.visuals      || { current: 0, limit: null };
+      const vault = sub.vault_docs   || { current: 0, limit: null };
 
       fillMeter(
         document.getElementById('gen-bar'),
@@ -872,14 +871,19 @@
         document.getElementById('gen-pct'),
         gen.current, gen.limit
       );
-      fillMeter(
-        document.getElementById('visual-bar'),
-        document.getElementById('visual-count'),
-        document.getElementById('visual-pct'),
-        vis.current, vis.limit
-      );
-
-      if (!isPro) document.getElementById('vault-label').textContent = 'Vault documents (total)';
+      if (!isPro) {
+        // Visuals are Pro-only — replace meter with a plain label
+        document.getElementById('visual-count').textContent = 'Pro only';
+        document.getElementById('visual-pct').textContent   = '';
+        document.getElementById('visual-bar').style.width   = '0%';
+      } else {
+        fillMeter(
+          document.getElementById('visual-bar'),
+          document.getElementById('visual-count'),
+          document.getElementById('visual-pct'),
+          vis.current, vis.limit
+        );
+      }
       fillMeter(
         document.getElementById('vault-bar'),
         document.getElementById('vault-count'),

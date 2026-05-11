@@ -6,21 +6,19 @@ const { Paddle, Environment } = require('@paddle/paddle-node-sdk');
 // ---------------------------------------------------------------------------
 // Plan limits
 // ---------------------------------------------------------------------------
-const FREE_GENERATION_LIMIT  = 20;  // quality-gate passes per calendar month
-const FREE_VISUAL_LIMIT      = 10;  // visuals in first calendar month of account only
+const FREE_GENERATION_LIMIT  = 30;  // quality-gate passes per calendar month
+const FREE_VISUAL_LIMIT      = 0;   // visuals are Pro-only — hard block for free users
 const FREE_VAULT_DOC_LIMIT   = 10;  // total documents
-const PRO_GENERATION_LIMIT   = 40;  // quality-gate passes per calendar month
-const PRO_VISUAL_LIMIT       = 20;  // visuals per calendar month
-const PRO_VAULT_DOC_LIMIT    = 10;  // vault documents per calendar month
+const PRO_GENERATION_LIMIT   = null; // unlimited — Pro tier at $29-39/mo
+const PRO_VISUAL_LIMIT       = null; // unlimited — Pro tier at $29-39/mo
+const PRO_VAULT_DOC_LIMIT    = null; // unlimited — Pro tier at $29-39/mo
 
 // ---------------------------------------------------------------------------
 // Founding tier configuration
 // Spots:  0–9   → Tier 1 ($29, env: PADDLE_PRICE_ID_FOUNDING_1)
-//         10–49 → Tier 2 ($39, env: PADDLE_PRICE_ID_FOUNDING_2)
-//         50+   → Regular ($49, env: PADDLE_PRICE_ID_MONTHLY)
+//         10+   → Tier 2 ($39, env: PADDLE_PRICE_ID_FOUNDING_2)
 // ---------------------------------------------------------------------------
 const FOUNDING_1_MAX = 10;
-const FOUNDING_2_MAX = 50;
 
 // ---------------------------------------------------------------------------
 // Paddle SDK singleton
@@ -111,7 +109,6 @@ async function getFoundingTierInfo() {
 
   const f1PriceId = process.env.PADDLE_PRICE_ID_FOUNDING_1;
   const f2PriceId = process.env.PADDLE_PRICE_ID_FOUNDING_2;
-  const regularPriceId = process.env.PADDLE_PRICE_ID_MONTHLY || '';
 
   if (count < FOUNDING_1_MAX && f1PriceId) {
     return {
@@ -121,18 +118,10 @@ async function getFoundingTierInfo() {
       spotsRemaining: FOUNDING_1_MAX - count,
     };
   }
-  if (count < FOUNDING_2_MAX && f2PriceId) {
-    return {
-      priceId: f2PriceId,
-      price: 39,
-      tier: 'founding_2',
-      spotsRemaining: FOUNDING_2_MAX - count,
-    };
-  }
   return {
-    priceId: regularPriceId,
-    price: 49,
-    tier: 'regular',
+    priceId: f2PriceId,
+    price: 39,
+    tier: 'founding_2',
     spotsRemaining: 0,
   };
 }
@@ -176,7 +165,7 @@ async function canGeneratePost(userId) {
     return { allowed: true, current: 0, limit, plan };
   }
 
-  return { allowed: current < limit, current, limit, plan };
+  return { allowed: limit === null || current < limit, current, limit, plan };
 }
 
 // ---------------------------------------------------------------------------
@@ -204,52 +193,11 @@ async function canGenerateVisual(userId, tenantId = 'default') {
       console.error('[subscription] canGenerateVisual pro count error:', err.message);
       return { allowed: true, current: 0, limit: PRO_VISUAL_LIMIT, plan };
     }
-    return { allowed: current < PRO_VISUAL_LIMIT, current, limit: PRO_VISUAL_LIMIT, plan };
+    return { allowed: PRO_VISUAL_LIMIT === null || current < PRO_VISUAL_LIMIT, current, limit: PRO_VISUAL_LIMIT, plan };
   }
 
-  // Free: check if current month is the user's first calendar month
-  let isFirstMonth = false;
-  try {
-    const profile = await db.prepare(
-      'SELECT MIN(created_at) AS first_seen FROM user_profiles WHERE user_id = ?'
-    ).get(userId);
-    if (profile?.first_seen) {
-      const firstDate = new Date(profile.first_seen);
-      const now = new Date();
-      isFirstMonth = (
-        firstDate.getUTCFullYear() === now.getUTCFullYear() &&
-        firstDate.getUTCMonth() === now.getUTCMonth()
-      );
-    }
-  } catch (err) {
-    console.error('[subscription] canGenerateVisual profile lookup error:', err.message);
-  }
-
-  if (!isFirstMonth) {
-    return { allowed: false, current: 0, limit: 0, plan: 'free', reason: 'first_month_only' };
-  }
-
-  let current = 0;
-  try {
-    const row = await db.prepare(`
-      SELECT COUNT(*) AS cnt
-      FROM visual_generation_log
-      WHERE user_id = ?
-        AND created_at >= ?
-        AND created_at < ?
-    `).get(userId, start, end);
-    current = parseInt(row?.cnt ?? 0, 10);
-  } catch (err) {
-    console.error('[subscription] canGenerateVisual free count error:', err.message);
-    return { allowed: true, current: 0, limit: FREE_VISUAL_LIMIT, plan: 'free' };
-  }
-
-  return {
-    allowed: current < FREE_VISUAL_LIMIT,
-    current,
-    limit: FREE_VISUAL_LIMIT,
-    plan: 'free',
-  };
+  // Free: visuals are Pro-only
+  return { allowed: false, current: 0, limit: null, plan: 'free', reason: 'pro_only' };
 }
 
 // ---------------------------------------------------------------------------

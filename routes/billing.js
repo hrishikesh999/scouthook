@@ -69,7 +69,7 @@ router.get('/config', async (req, res) => {
     ok: true,
     clientToken:    process.env.PADDLE_CLIENT_TOKEN || '',
     env:            paddleEnv === Environment.production ? 'production' : 'sandbox',
-    // priceIdMonthly returns the *currently active* tier price ID (29/39/49)
+    // priceIdMonthly returns the *currently active* tier price ID (29/39)
     priceIdMonthly:  tierInfo.priceId,
     priceIdYearly:   process.env.PADDLE_PRICE_ID_YEARLY || '',
     priceIdFounding1: process.env.PADDLE_PRICE_ID_FOUNDING_1 || '',
@@ -96,7 +96,6 @@ router.get('/subscription', requireAuth, async (req, res) => {
   const proPriceIds = [
     process.env.PADDLE_PRICE_ID_FOUNDING_1,
     process.env.PADDLE_PRICE_ID_FOUNDING_2,
-    process.env.PADDLE_PRICE_ID_MONTHLY,
     process.env.PADDLE_PRICE_ID_YEARLY,
   ].filter(Boolean);
 
@@ -346,7 +345,6 @@ router.post('/sync', requireAuth, async (req, res) => {
   const proPriceIds = [
     process.env.PADDLE_PRICE_ID_FOUNDING_1,
     process.env.PADDLE_PRICE_ID_FOUNDING_2,
-    process.env.PADDLE_PRICE_ID_MONTHLY,
     process.env.PADDLE_PRICE_ID_YEARLY,
   ].filter(Boolean);
 

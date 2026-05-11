@@ -513,6 +513,7 @@ const Onboarding = (() => {
     });
 
     qs('ob-connect-linkedin')?.addEventListener('click', () => {
+      if (state.postId) sessionStorage.setItem('ob_post_id', state.postId);
       window.location.href = '/api/linkedin/connect?from=onboarding';
     });
   }
@@ -529,9 +530,11 @@ const Onboarding = (() => {
   function checkLinkedInReturn() {
     const params = new URLSearchParams(window.location.search);
     if (params.get('linkedin') !== 'connected') return false;
-    // Onboarding is already complete at this point — just go to dashboard
+    const postId = sessionStorage.getItem('ob_post_id');
+    sessionStorage.removeItem('ob_post_id');
+    const dest = postId ? `/preview.html?post_id=${postId}` : '/preview.html';
     markOnboardingComplete().finally(() => {
-      window.location.href = '/dashboard.html';
+      window.location.href = dest;
     });
     return true;
   }

@@ -3,7 +3,8 @@
 const express = require('express');
 const { Environment } = require('@paddle/paddle-node-sdk');
 const router = express.Router();
-const { sendEmailToUser } = require('../emails');
+const { sendEmailToUser, getUserEmailInfo } = require('../emails');
+const mailerlite = require('../services/mailerlite');
 const {
   getPaddle,
   getPaddleEnvironment,
@@ -443,6 +444,16 @@ router.post('/sync', requireAuth, async (req, res) => {
       app_url: process.env.APP_URL || '',
     }, { dedupKey: `pro-activated:${subscription.id}`, withinHours: 365 * 24 });
   }
+
+  // Sync subscription state to Mailerlite (fire-and-forget, never throws).
+  getUserEmailInfo(userId, 'default').then(user => {
+    if (!user) return;
+    if (plan === 'pro' && ['active', 'trialing'].includes(subscription.status)) {
+      mailerlite.upgradeSubscriberToPro(user.email, user.name).catch(() => {});
+    } else if (['canceled', 'past_due', 'paused'].includes(subscription.status)) {
+      mailerlite.downgradeSubscriberToFree(user.email, user.name).catch(() => {});
+    }
+  }).catch(() => {});
 
   return res.json({ ok: true, plan, status: subscription.status });
 });

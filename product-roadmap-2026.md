@@ -1,6 +1,6 @@
 # ScoutHook — Product Roadmap 2026
 
-*Strategic review and roadmap based on codebase audit and competitive analysis. Updated 2026-05-11.*
+*Strategic review and roadmap based on codebase audit and competitive analysis. Updated 2026-05-11 (pricing simplified, Pro unlimited, free tier revised).*
 
 ---
 
@@ -9,7 +9,7 @@
 ScoutHook is a fully-functional, end-to-end LinkedIn content SaaS — not a prototype. In production today:
 
 - LinkedIn OAuth publishing + BullMQ scheduling with retry logic
-- Paddle billing — founding-tier sliding price ($29→$39→$49 by spots remaining), live subscription sync, auto-recovery if DB record is wiped, past-due detection, cancel flow, and customer portal
+- Paddle billing — two-tier launch pricing ($29/mo first 10 users → $39/mo thereafter, locked for life), live subscription sync, auto-recovery if DB record is wiped, past-due detection, cancel flow, and customer portal
 - Quality gating with 40+ AI-tell detection patterns
 - Vault document extraction (PDF, DOCX, TXT, URL)
 - Two-step image generation — user selects which content to include, then chooses between branded carousel (PDF) or quote card; full brand customization
@@ -85,7 +85,7 @@ ScoutHook's positioning is correct. The vault-first, expertise-extraction approa
 
 The gap is not in the generation pipeline — it's in the **proof loop**. Users need to see that ScoutHook-generated content is generating the outcome they care about: leads, DM requests, discovery calls — not just impressions.
 
-**The math:** $1M ARR = ~1,700 users at $49/month, or ~1,430 users at $59/month. This is 1,700 people — a realistic number if retention is strong.
+**The math:** $1M ARR = ~2,140 users at $39/month. This is a realistic number if retention is strong. A future $59/month tier (post-commenting features) would need ~1,430 users.
 
 **The retention problem is the revenue problem.** At 5-7% monthly churn (B2B SaaS baseline), you need 100+ new users/month just to stay flat. ScoutHook's ICP is coaches, consultants, and founders who want inbound leads. Their job-to-be-done is not "publish 5 posts/week" — it is *"get 3 discovery calls this month."* Everything below should be evaluated against that outcome.
 
@@ -201,9 +201,9 @@ Pricing: $9/month add-on, or included in a higher tier.
 ---
 
 **Free Tier Redesign**
-Current: 3 quality-gate passes/month. Problem: users hit the wall before proving value to themselves.
+Current state (2026-05-11): 20 quality-gate passes/month; visuals (carousels, quote cards, branded quotes) are Pro-only; scheduling is available on both plans.
 
-New model: **Unlimited generation + 3 publishable posts/month.** Let users see ScoutHook's quality on every post — they just can't publish the fourth. The upgrade trigger becomes emotional (*"I have this great post but I can't publish it"*) not mechanical (*"I hit my limit"*).
+Remaining direction: move from "limit generations" to "limit publishable posts" — **unlimited generation + 3 publishable posts/month.** This makes the upgrade trigger emotional (*"I have this great post but I can't publish it"*) rather than mechanical (*"I hit my limit"*). Requires a `publishable_posts_count` tracking column (small migration). Deferred to a future sprint.
 
 ---
 

@@ -2,7 +2,7 @@
 
 **Product:** AI-powered LinkedIn content intelligence platform  
 **Stack:** Node.js + Express, PostgreSQL (Neon), Redis/BullMQ, Anthropic Claude, Google OAuth + LinkedIn OAuth  
-**Last updated:** 2026-05-11 (PLG onboarding wizard, email template logo branding)
+**Last updated:** 2026-05-11 (pricing simplified to $29/$39, Pro unlimited, free tier revised)
 
 ---
 
@@ -85,10 +85,12 @@ Vault async background (setImmediate):
 │   ├── events.js                # Client event logging (copy, etc.)
 │   ├── media.js                 # File upload and management
 │   ├── visuals.js               # Visual generation (cards, carousels)
+│   ├── billing.js               # Paddle subscription: config, sync, cancel, portal
 │   ├── notifications.js         # In-app notifications
 │   └── admin.js                 # Admin settings panel
 ├── services/
 │   ├── storage.js               # Storage abstraction (local disk or Amazon S3)
+│   ├── subscription.js          # Plan limits, founding tier logic, Paddle SDK wrapper
 │   ├── vaultMiner.js            # Document extraction, chunking, Claude Sonnet mining
 │   ├── funnelClassifier.js      # Claude Haiku: funnel_type + hook_archetype per seed/post
 │   ├── linkedinOAuth.js         # Token encrypt/decrypt/store/refresh/revoke
@@ -411,6 +413,31 @@ Rate limit: 10 generations/hour per user (Redis sliding window, in-memory fallba
 | `DELETE` | `/api/linkedin/user-data` | GDPR deletion — revoke token, delete all user data |
 | `POST` | `/api/linkedin/sync-metrics` | Fetch engagement metrics for recent published posts |
 
+### Billing & Subscription
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/billing/config` | Returns active Paddle price IDs, current founding tier (`founding_1`\|`founding_2`), `proMonthlyPrice`, `spotsRemaining`, and client token for Paddle.js checkout |
+| `GET` | `/api/billing/subscription` | Returns plan (`free`\|`pro`), status, `current_period_end`, `canceled_at`, and usage vs limits for generations, visuals, and vault docs. Automatically live-syncs from Paddle if record is stale (>24h) or period has passed. |
+| `POST` | `/api/billing/sync` | Called after Paddle checkout completes. Body: `{ transactionId }`. Resolves transaction → subscription, upserts `user_subscriptions`, returns updated plan. |
+| `POST` | `/api/billing/cancel` | Cancels subscription at period end via Paddle SDK. Pro access retained until `current_period_end`. |
+| `GET` | `/api/billing/portal` | Returns `{ url }` — a one-time Paddle customer portal URL for the current user. |
+
+**Plan limits (enforced in `services/subscription.js`):**
+
+| Metric | Free | Pro |
+|--------|------|-----|
+| Post generations / month | 20 | Unlimited |
+| Visuals (carousels, quotes) / month | 0 — Pro only | Unlimited |
+| Vault document uploads | Unlimited | Unlimited |
+| Scheduling | ✅ | ✅ |
+
+**Founding tier logic (`getFoundingTierInfo`):**
+- Counts active Pro subscribers (`plan='pro'`, `status IN (active, trialing, past_due, paused)`)
+- Spots 0–9: `PADDLE_PRICE_ID_FOUNDING_1` at $29/mo
+- Spots 10+: `PADDLE_PRICE_ID_FOUNDING_2` at $39/mo (no upper cap — permanent launch price)
+- No $49 regular tier exists in the codebase
+
 ### Stats & Analytics
 
 | Method | Path | Description |
@@ -458,6 +485,19 @@ Generated files served at `/files/*` (auth-gated, cleaned after 24h). Permanent 
 ---
 
 ## Services Reference
+
+### `services/subscription.js`
+
+Paddle billing and plan enforcement layer.
+
+- **`getFoundingTierInfo()`** — Counts active Pro subscribers and returns the active price tier: `founding_1` ($29, spots 0–9) or `founding_2` ($39, spots 10+, no upper cap). No `regular`/`$49` tier exists.
+- **`getUserPlan(userId)`** — Returns `'pro'` if the user has an active/trialing subscription within `current_period_end`; otherwise `'free'`. Cancelled subscriptions retain Pro access until period end.
+- **`getUserSubscription(userId)`** — Returns the `user_subscriptions` row, or a synthetic free object if none.
+- **`canGeneratePost(userId)`** — Checks quality-gate passes this month. Pro: unlimited (`null` limit). Free: 20/month.
+- **`canGenerateVisual(userId)`** — Pro: unlimited. Free: always blocked (`reason: 'pro_only'`).
+- **`canUploadVaultDoc()`** — Always allowed for all plans.
+- **`logVisualGeneration(userId, ...)`** — Records a visual generation event for Pro usage tracking.
+- **Plan limit constants:** `PRO_GENERATION_LIMIT = null`, `PRO_VISUAL_LIMIT = null`, `FREE_GENERATION_LIMIT = 20`, `FREE_VISUAL_LIMIT = 0`.
 
 ### `services/vaultMiner.js` *(new)*
 
@@ -550,6 +590,7 @@ Core generation flow. Key functions:
 | `vault.html` | `/vault.html` | Upload docs (drag-and-drop PDF/DOCX/TXT) or paste a URL. Document list shows live status badges. "Generate Ideas" button triggers `POST /api/vault/mine` and returns immediately; status polling updates badges. |
 | `ideas.html` | `/ideas.html` | Seed bank kanban: Fresh / Saved / Discarded columns. Funnel health widget at top. "Grow this idea" navigates to `/generate.html?vault_idea_id=X&seed=...`. |
 | `profile.html` | `/profile.html` | Voice and brand settings |
+| `billing.html` | `/billing.html` | Subscription management — usage meters (gen/visuals/vault), plan status, upgrade CTA, cancel flow, Paddle customer portal link |
 | `connect-linkedin.html` | `/connect-linkedin.html` | LinkedIn OAuth consent page |
 
 **URL param handoff (ideas.html → generate.html):**
@@ -653,6 +694,14 @@ On `SIGTERM`: HTTP server drains in-flight requests, BullMQ worker closes, Redis
 | `NODE_ENV` | ⬜ | Set to `production` for secure cookies |
 | `ALLOWED_ORIGIN` | ⬜ | CORS allowed origin for cross-domain setups |
 | `API_RATE_LIMIT_MAX` | ⬜ | Override default 2000 req/15min API rate limit |
+| `PADDLE_API_KEY` | ⬜* | Paddle server-side API key (secret). Required for billing. |
+| `PADDLE_CLIENT_TOKEN` | ⬜* | Paddle client-side token for Paddle.js checkout (not secret). |
+| `PADDLE_WEBHOOK_SECRET` | ⬜* | Paddle webhook endpoint secret for verifying events. |
+| `PADDLE_PRICE_ID_FOUNDING_1` | ⬜* | Paddle price ID for $29/mo tier (first 10 users). |
+| `PADDLE_PRICE_ID_FOUNDING_2` | ⬜* | Paddle price ID for $39/mo tier (all users after first 10). |
+| `PADDLE_PRICE_ID_YEARLY` | ⬜ | Paddle price ID for annual plan (optional; annual toggle hidden at launch). |
+| `PADDLE_CUSTOMER_PORTAL_URL` | ⬜ | Paddle customer portal URL (from Paddle dashboard). |
+| `PADDLE_ENVIRONMENT` | ⬜ | Override Paddle environment: `sandbox` or `production`. Defaults to `NODE_ENV`. |
 | `STORAGE_BACKEND` | ⬜ | `local` (default) or `s3` |
 | `S3_BUCKET_NAME` | ⬜* | Required when `STORAGE_BACKEND=s3`. Dev: `scout-hook-dev`, Prod: `scout-hook-prod` |
 | `S3_REGION` | ⬜* | AWS region, e.g. `us-east-1` |
@@ -661,7 +710,7 @@ On `SIGTERM`: HTTP server drains in-flight requests, BullMQ worker closes, Redis
 | `S3_KEY_PREFIX` | ⬜ | Optional key prefix, e.g. `dev/` for env isolation within a bucket |
 | `S3_ENDPOINT` | ⬜ | Custom S3-compatible endpoint (MinIO, LocalStack) |
 
-> ✅ = required &nbsp;·&nbsp; ⬜ = optional &nbsp;·&nbsp; ⬜* = optional unless `STORAGE_BACKEND=s3`
+> ✅ = required &nbsp;·&nbsp; ⬜ = optional &nbsp;·&nbsp; ⬜* = optional unless feature is active (`STORAGE_BACKEND=s3` for S3; Paddle vars required for billing)
 
 ### S3 Bucket Configuration
 
@@ -724,6 +773,19 @@ tenants/{tenant_id}/users/{user_id}/vault/{filename}      ← vault source files
 ---
 
 ## Recent Changes
+
+### May 2026 — Pricing simplification + Pro unlimited + free tier revision
+
+| Change | Details |
+|--------|---------|
+| $49 tier removed entirely | `PADDLE_PRICE_ID_MONTHLY` removed from all code paths — no references, no fallbacks. `getFoundingTierInfo()` now returns `founding_2` ($39) unconditionally once past the first 10 subscribers. |
+| Two-tier launch pricing | Spots 0–9: $29/mo (`PADDLE_PRICE_ID_FOUNDING_1`). Spots 10+: $39/mo (`PADDLE_PRICE_ID_FOUNDING_2`), no upper cap. `founding_2` is the permanent launch price until a new tier is introduced. |
+| Pro plan limits set to unlimited | `PRO_GENERATION_LIMIT = null`, `PRO_VISUAL_LIMIT = null`. `canGeneratePost` and `canGenerateVisual` treat `null` as unlimited. Billing screen renders `∞` for all Pro usage meters. |
+| Visuals — Pro only | `canGenerateVisual` for free users now returns `{ allowed: false, reason: 'pro_only' }` immediately. Removed the "first month only" grace period. Billing screen shows "Pro only" instead of a usage bar for free users. |
+| Free generation limit | Raised from 3 (displayed) / 20 (enforced) inconsistency to a consistent **20/month** in both `services/subscription.js` and the pricing modal. |
+| Scheduling available on free plan | Backend never gated scheduling on plan. Pricing modal now accurately reflects this — scheduling is available on both Free and Pro. |
+| Pricing modal display fixed | Free tier: "3 gen / 3 visuals / 1 vault" stale copy replaced with "20 gen / Visuals — Pro only / Unlimited vault docs". Pro tier: "40 gen / 20 visuals / 10 vault docs" replaced with "Unlimited" across all three. |
+| Files changed | `services/subscription.js`, `routes/billing.js`, `public/js/pricing-modal.js`, `public/billing.html`, `.env.example` |
 
 ### May 2026 — PLG onboarding wizard + email template logo
 

@@ -158,28 +158,16 @@ const Onboarding = (() => {
     qs('ob-website-step').hidden    = false;
     qs('ob-website-summary').hidden = true;
     qs('ob-profile-step').hidden    = true;
-    qs('ob-intro-step').hidden      = true;
     qs('ob-question-step').hidden   = true;
     const backBtn = qs('ob-s4-back');
     if (backBtn) backBtn.onclick = () => showScreen('s2');
     qs('ob-website-url')?.focus();
   }
 
-  function showIntroStep() {
-    qs('ob-website-step').hidden    = true;
-    qs('ob-website-summary').hidden = true;
-    qs('ob-profile-step').hidden    = true;
-    qs('ob-intro-step').hidden      = false;
-    qs('ob-question-step').hidden   = true;
-    const backBtn = qs('ob-s4-back');
-    if (backBtn) backBtn.onclick = () => showWebsiteStep();
-  }
-
   function showProfileStep() {
     qs('ob-website-step').hidden    = true;
     qs('ob-website-summary').hidden = true;
     qs('ob-profile-step').hidden    = false;
-    qs('ob-intro-step').hidden      = true;
     qs('ob-question-step').hidden   = true;
     const backBtn = qs('ob-s4-back');
     if (backBtn) backBtn.onclick = () => showWebsiteStep();
@@ -195,7 +183,8 @@ const Onboarding = (() => {
         body:    JSON.stringify({ content_niche: val }),
       }).catch(() => {});
     }
-    showIntroStep();
+    state.questionIndex = 0;
+    renderQuestion();
   }
 
   function buildNarrative(e) {
@@ -268,7 +257,6 @@ const Onboarding = (() => {
     qs('ob-website-step').hidden    = true;
     qs('ob-website-summary').hidden = true;
     qs('ob-profile-step').hidden    = true;
-    qs('ob-intro-step').hidden      = true;
     qs('ob-question-step').hidden   = false;
   }
 
@@ -313,10 +301,7 @@ const Onboarding = (() => {
 
     // No-website profile question
     qs('ob-profile-next')?.addEventListener('click', submitProfileQuestion);
-    qs('ob-profile-skip')?.addEventListener('click', showIntroStep);
-
-    // Intro step: what happens next
-    qs('ob-intro-start')?.addEventListener('click', () => {
+    qs('ob-profile-skip')?.addEventListener('click', () => {
       state.questionIndex = 0;
       renderQuestion();
     });
@@ -372,7 +357,8 @@ const Onboarding = (() => {
     if (hasAny) {
       showSummaryStep(extracted);
     } else {
-      showIntroStep();
+      state.questionIndex = 0;
+      renderQuestion();
     }
   }
 
@@ -389,7 +375,8 @@ const Onboarding = (() => {
         body:    JSON.stringify(profile),
       }).catch(() => {});
     }
-    showIntroStep();
+    state.questionIndex = 0;
+    renderQuestion();
   }
 
   function recordAnswer(override) {

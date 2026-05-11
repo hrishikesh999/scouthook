@@ -503,8 +503,15 @@ const Onboarding = (() => {
 
   }
 
-  /* ── Screen 6: LinkedIn strip ────────────────────────── */
+  /* ── Screen 6: editor CTA + LinkedIn strip ──────────── */
   function initS6() {
+    qs('ob-open-editor')?.addEventListener('click', () => {
+      const dest = state.postId
+        ? `/preview.html?post_id=${state.postId}`
+        : '/preview.html';
+      window.location.href = dest;
+    });
+
     qs('ob-connect-linkedin')?.addEventListener('click', () => {
       window.location.href = '/api/linkedin/connect?from=onboarding';
     });

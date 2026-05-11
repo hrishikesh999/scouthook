@@ -9,14 +9,13 @@ const { db } = require('../db');
 // Returns profile fields. Never returns writing_samples or voice_fingerprint.
 // ---------------------------------------------------------------------------
 router.get('/:user_id', async (req, res) => {
-  // Must match POST /api/profile: use session/header identity (e.g. google:…) — not the
-  // URL segment alone. The client often still passes a stale localStorage u_* id in the path
-  // while the session user is the real account; that made saves "work" but loads look empty.
-  const user_id = req.userId || req.params.user_id;
+  // Identity comes exclusively from the authenticated session — never from the URL
+  // segment, which the client sends as a convenience but must not be trusted for access control.
+  const user_id = req.userId;
   const tenantId = req.tenantId;
 
   if (!user_id) {
-    return res.status(400).json({ ok: false, error: 'missing_user_id' });
+    return res.status(401).json({ ok: false, error: 'unauthenticated' });
   }
 
   const profile = await db

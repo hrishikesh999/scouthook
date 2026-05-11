@@ -65,6 +65,28 @@ if (!process.env.SESSION_SECRET) {
 }
 const SESSION_SECRET = process.env.SESSION_SECRET;
 
+// TOKEN_ENCRYPTION_KEY: required for LinkedIn token encryption/decryption.
+// Without it every LinkedIn connect and publish attempt throws at runtime.
+// In production we fail fast; in development we warn so local testing can run without LinkedIn.
+const _tek = (process.env.TOKEN_ENCRYPTION_KEY || '').trim();
+if (!_tek) {
+  const msg = 'TOKEN_ENCRYPTION_KEY is not set — LinkedIn connections will fail at runtime. Generate with: openssl rand -hex 32';
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(msg);
+  } else {
+    console.warn(`[startup] WARNING: ${msg}`);
+  }
+} else if (_tek.length !== 64) {
+  throw new Error('TOKEN_ENCRYPTION_KEY must be a 64-character hex string (32 bytes). Generate with: openssl rand -hex 32');
+}
+
+// ALLOWED_ORIGIN: only required when frontend and backend are on different origins.
+// If both are served from the same domain this can be left unset.
+// Warn in production so the operator knows it must be intentional.
+if (process.env.NODE_ENV === 'production' && !process.env.ALLOWED_ORIGIN) {
+  console.warn('[startup] WARNING: ALLOWED_ORIGIN is not set. If your frontend is on a different origin than the API, cross-origin requests will be rejected by the browser. Set ALLOWED_ORIGIN=https://app.yourdomain.com to enable CORS.');
+}
+
 app.set('trust proxy', 1); // needed on Render/behind proxies for secure cookies
 
 const PgSession = connectPgSimple(session);

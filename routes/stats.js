@@ -303,7 +303,7 @@ async function handleDeleteDraft(req, res) {
           WHERE post_id = ? AND user_id = ? AND tenant_id = ?
         )
       `).run(postId, userId, tenantId);
-      await tx.prepare('DELETE FROM copy_events WHERE post_id = ?').run(postId);
+      await tx.prepare('DELETE FROM copy_events WHERE post_id = ? AND user_id = ?').run(postId, userId);
       await tx.prepare(`
         DELETE FROM scheduled_posts
         WHERE post_id = ? AND user_id = ? AND tenant_id = ?

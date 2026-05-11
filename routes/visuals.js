@@ -20,12 +20,16 @@ router.post('/:postId', async (req, res) => {
   const tenantId = req.tenantId;
   const userId = req.userId;
 
+  if (!userId) {
+    return res.status(401).json({ ok: false, error: 'unauthenticated' });
+  }
+
   if (!['quote_card', 'carousel', 'branded_quote'].includes(visual_type)) {
     return res.status(400).json({ ok: false, error: 'invalid_visual_type' });
   }
 
   // Check visual generation limit only for render calls (extract produces no image)
-  if (mode === 'render' && userId) {
+  if (mode === 'render') {
     const visualCheck = await canGenerateVisual(userId, tenantId);
     if (!visualCheck.allowed) {
       return res.status(403).json({
@@ -39,17 +43,13 @@ router.post('/:postId', async (req, res) => {
     }
   }
 
-  // Load post and verify ownership
+  // Load post and verify ownership in one query
   const post = await db.prepare(
-    'SELECT * FROM generated_posts WHERE id = ? AND tenant_id = ?'
-  ).get(postId, tenantId);
+    'SELECT * FROM generated_posts WHERE id = ? AND user_id = ? AND tenant_id = ?'
+  ).get(postId, userId, tenantId);
 
   if (!post) {
     return res.status(404).json({ ok: false, error: 'post_not_found' });
-  }
-
-  if (userId && post.user_id !== userId) {
-    return res.status(403).json({ ok: false, error: 'forbidden' });
   }
 
   // Load brand settings from the post owner's profile (fall back to defaults)
@@ -136,21 +136,21 @@ router.post('/:postId', async (req, res) => {
       // Use provided content if present (user-edited), otherwise auto-extract
       const renderContent = content || await extractBrandedQuoteContent(post);
       const result = await renderBrandedQuote(post, brand, renderContent, { photoDataUri, name: displayName }, { userId, tenantId });
-      if (userId) await logVisualGeneration(userId, tenantId, postId, visual_type);
+      await logVisualGeneration(userId, tenantId, postId, visual_type);
       return res.json({ ok: true, ...result });
     }
 
     if (visual_type === 'quote_card') {
       const renderContent = content || await extractQuoteCardContent(post);
       const result = await renderQuoteCard(post, brand, renderContent, { userId, tenantId });
-      if (userId) await logVisualGeneration(userId, tenantId, postId, visual_type);
+      await logVisualGeneration(userId, tenantId, postId, visual_type);
       return res.json({ ok: true, ...result });
     }
 
     // carousel
     const renderContent = content || await extractCarouselContent(post);
     const result = await renderCarousel(post, brand, renderContent, { userId, tenantId });
-    if (userId) await logVisualGeneration(userId, tenantId, postId, visual_type);
+    await logVisualGeneration(userId, tenantId, postId, visual_type);
     return res.json({ ok: true, ...result });
   } catch (err) {
     console.error('[visuals] generation error:', err.message);

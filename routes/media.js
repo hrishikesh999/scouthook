@@ -197,7 +197,7 @@ router.delete('/:id', async (req, res) => {
   if (!file) return res.status(404).json({ ok: false, error: 'not_found' });
 
   await storage.delete(storage.buildKey(tenantId, userId, 'uploads', file.stored_name));
-  await db.prepare('DELETE FROM media_files WHERE id = ?').run(file.id);
+  await db.prepare('DELETE FROM media_files WHERE id = ? AND user_id = ? AND tenant_id = ?').run(file.id, userId, tenantId);
 
   return res.json({ ok: true });
 });

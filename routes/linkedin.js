@@ -8,6 +8,7 @@ const { storeTokens, getValidAccessToken, revokeLinkedInToken } = require('../se
 const { publishNow } = require('../services/linkedinPublisher');
 const { addScheduledJob, addCommentJob, removeScheduledJob, isSchedulerEnabled } = require('../services/scheduler');
 const { syncPostMetrics, RateLimitError } = require('../services/linkedinMetrics');
+const { getUserPlan } = require('../services/subscription');
 
 function sha256Hex(s) {
   return crypto.createHash('sha256').update(String(s || ''), 'utf8').digest('hex');
@@ -383,6 +384,9 @@ router.post('/schedule', async (req, res) => {
   const { content, scheduled_for, post_id, image_url, carousel_pdf_url, first_comment } = req.body;
 
   if (!userId)         return res.status(400).json({ ok: false, error: 'missing_user_id' });
+
+  const plan = await getUserPlan(userId);
+  if (plan !== 'pro') return res.status(403).json({ ok: false, error: 'pro_only' });
   if (!content?.trim()) return res.status(400).json({ ok: false, error: 'missing_content' });
   if (content.length > 3000) return res.status(400).json({ ok: false, error: 'content_too_long' });
   if (!scheduled_for)  return res.status(400).json({ ok: false, error: 'missing_scheduled_for' });

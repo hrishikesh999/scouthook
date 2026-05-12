@@ -6,7 +6,7 @@ const { Paddle, Environment } = require('@paddle/paddle-node-sdk');
 // ---------------------------------------------------------------------------
 // Plan limits
 // ---------------------------------------------------------------------------
-const FREE_GENERATION_LIMIT  = 20;  // quality-gate passes per calendar month
+const FREE_GENERATION_LIMIT  = 10;  // quality-gate passes per calendar month
 const FREE_VISUAL_LIMIT      = 0;   // visuals are Pro-only — hard block for free users
 const FREE_VAULT_DOC_LIMIT   = 10;  // total documents
 const PRO_GENERATION_LIMIT   = null; // unlimited — Pro tier at $29-39/mo

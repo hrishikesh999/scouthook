@@ -947,7 +947,20 @@ function showAutosaveState(state) {
 }
 
 /* ── 18. Schedule modal ──────────────────────────────────────── */
-scheduleBtn.addEventListener('click', () => openModal());
+scheduleBtn.addEventListener('click', async () => {
+  // Scheduling is Pro-only — check plan before opening the modal
+  try {
+    const subRes = await fetch('/api/billing/subscription', { headers: apiHeaders() });
+    const subData = subRes.ok ? await subRes.json() : null;
+    if (subData?.plan !== 'pro') {
+      if (window.PricingModal) window.PricingModal.open();
+      return;
+    }
+  } catch {
+    // On error, fall through and let the API call fail naturally
+  }
+  openModal();
+});
 scheduleCancel.addEventListener('click', () => closeModal());
 overlay.addEventListener('click', () => {
   if (scheduleModal.classList.contains('visible')) closeModal();
@@ -1099,6 +1112,7 @@ scheduleConfirm.addEventListener('click', async () => {
     });
     const data = await res.json();
     if (!res.ok || !data.ok) {
+      if (res.status === 403 && data.error === 'pro_only') { closeModal(); if (window.PricingModal) window.PricingModal.open(); return; }
       if (data.error === 'scheduling_unavailable') throw new Error('Scheduling is temporarily unavailable. Please try again in a few minutes.');
       if (data.error === 'scheduled_for_too_soon') throw new Error('Please schedule at least 5 minutes from now.');
       if (data.error === 'scheduled_for_too_far') throw new Error('Please pick a time within the next 30 days.');

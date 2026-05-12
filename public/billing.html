@@ -689,6 +689,8 @@
         <a href="https://www.scouthook.com/privacy" target="_blank" rel="noopener">Privacy Policy</a>
         <span class="app-footer-sep">|</span>
         <a href="https://www.scouthook.com/terms" target="_blank" rel="noopener">Terms of Service</a>
+        <span class="app-footer-sep">|</span>
+        <a href="/help.html">Help</a>
         <p class="app-footer-legal">© 2026 CopyPower Digital LLP. ScoutHook is an AI-powered authority engine.</p>
       </div>
     </footer>
@@ -778,7 +780,7 @@
         } else {
           if (window.toast) window.toast.error(
             d.error === 'portal_not_configured'
-              ? 'Billing portal is not configured. Please contact support.'
+              ? 'Billing portal is not configured. Please <a href="/help.html">get help</a>.'
               : 'Could not open billing portal. Please try again.'
           );
         }
@@ -969,7 +971,7 @@
           document.getElementById('plan-tier-bar').className = 'plan-tier-bar free';
           await render(d2, _priceMap);
         } else {
-          errEl.textContent = 'Could not cancel. Please try again or contact support.';
+          errEl.innerHTML = 'Could not cancel. Please try again or <a href="/help.html">get help</a>.';
           errEl.style.display = '';
           btn.disabled = false;
           btn.textContent = 'Yes, cancel';

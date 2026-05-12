@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Help Centre — Scouthook</title>
+  <link rel="stylesheet" href="/css/main.css">
+  <style>
+    .help-page {
+      padding: var(--space-8);
+      max-width: 720px;
+    }
+    .help-heading {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--text-heading);
+      margin: 0 0 var(--space-2);
+    }
+    .help-subheading {
+      font-size: 15px;
+      color: var(--text-secondary);
+      margin: 0 0 var(--space-8);
+    }
+
+    /* ── Section heading ─────────────────────────────────────── */
+    .help-section-title {
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: var(--text-muted);
+      margin: 0 0 12px;
+    }
+
+    /* ── FAQ accordion ───────────────────────────────────────── */
+    .faq-list {
+      list-style: none;
+      padding: 0;
+      margin: 0 0 48px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .faq-item {
+      border-bottom: 1px solid var(--border);
+    }
+    .faq-item:last-child { border-bottom: none; }
+
+    .faq-btn {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 18px 20px;
+      text-align: left;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-heading);
+      font-family: inherit;
+      transition: background 0.12s;
+    }
+    .faq-btn:hover { background: var(--bg-pill); }
+    .faq-btn[aria-expanded="true"] { color: var(--brand); }
+
+    .faq-chevron {
+      flex-shrink: 0;
+      transition: transform 0.2s;
+      color: var(--text-muted);
+    }
+    .faq-btn[aria-expanded="true"] .faq-chevron {
+      transform: rotate(180deg);
+      color: var(--brand);
+    }
+
+    .faq-body {
+      display: none;
+      padding: 0 20px 18px;
+      font-size: 14px;
+      color: var(--text-secondary);
+      line-height: 1.65;
+    }
+    .faq-body.open { display: block; }
+    .faq-body p { margin: 0 0 10px; }
+    .faq-body p:last-child { margin-bottom: 0; }
+    .faq-body a { color: var(--brand); text-decoration: none; }
+    .faq-body a:hover { text-decoration: underline; }
+
+    /* ── Support form card ───────────────────────────────────── */
+    .support-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 28px 28px 24px;
+      margin-bottom: 48px;
+    }
+    .support-card-title {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--text-heading);
+      margin: 0 0 4px;
+    }
+    .support-card-sub {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin: 0 0 20px;
+    }
+
+    .support-field { margin-bottom: 16px; }
+    .support-label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+    }
+    .support-select,
+    .support-textarea {
+      width: 100%;
+      box-sizing: border-box;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 14px;
+      color: var(--text-heading);
+      font-family: inherit;
+      background: var(--bg-surface);
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .support-select:focus,
+    .support-textarea:focus { border-color: var(--brand); }
+    .support-textarea {
+      min-height: 110px;
+      resize: vertical;
+    }
+    .support-textarea::placeholder { color: var(--text-muted); }
+
+    .support-actions {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 4px;
+    }
+    #support-submit {
+      background: var(--brand);
+      border: none;
+      border-radius: 8px;
+      padding: 10px 22px;
+      font-size: 14px;
+      font-weight: 600;
+      color: #fff;
+      cursor: pointer;
+      font-family: inherit;
+      transition: opacity 0.15s;
+    }
+    #support-submit:hover { opacity: 0.88; }
+    #support-submit:disabled { opacity: 0.5; cursor: default; }
+
+    .support-success {
+      display: none;
+      align-items: center;
+      gap: 10px;
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      border-radius: 8px;
+      padding: 14px 16px;
+      font-size: 14px;
+      color: #166534;
+      margin-top: 16px;
+    }
+    .support-success.visible { display: flex; }
+
+    .support-error {
+      display: none;
+      font-size: 13px;
+      color: #dc2626;
+      margin-top: 8px;
+    }
+    .support-error.visible { display: block; }
+  </style>
+</head>
+<body>
+
+  <!-- ── Sidebar ──────────────────────────────────────────── -->
+  <aside id="sidebar" role="navigation" aria-label="Main navigation">
+    <a href="/dashboard.html" class="sidebar-logo">
+      <img src="/images/scout-hook-logo.png" alt="ScoutHook" class="sidebar-logo-img">
+    </a>
+    <div class="sidebar-cta">
+      <a href="/generate.html?new=1" class="sidebar-cta-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Create Post</a>
+    </div>
+    <nav class="sidebar-nav">
+      <a href="/dashboard.html" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Dashboard</a>
+      <a href="/vault.html" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>Content Vault</a>
+      <a href="/drafts.html" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>Drafts</a>
+      <a href="/schedule.html" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Schedule</a>
+      <a href="/Published.html" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>Published</a>
+      <a href="/Media.html" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>Media</a>
+    </nav>
+    <div class="sidebar-bottom">
+      <a href="/account.html" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Account Settings</a>
+      <div id="sidebar-account-slot" aria-label="Signed-in account"></div>
+    </div>
+  </aside>
+
+  <!-- ── Main content ──────────────────────────────────────── -->
+  <div id="main-content">
+    <div class="help-page">
+
+      <h1 class="help-heading">Help Centre</h1>
+      <p class="help-subheading">Answers to common questions, and a way to reach us if you need more.</p>
+
+      <!-- ── FAQ ──────────────────────────────────────────── -->
+      <p class="help-section-title">Frequently asked questions</p>
+      <ul class="faq-list" role="list">
+
+        <li class="faq-item">
+          <button class="faq-btn" aria-expanded="false" aria-controls="faq-1">
+            How do I connect my LinkedIn account?
+            <svg class="faq-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <div id="faq-1" class="faq-body" role="region">
+            <p>Go to <a href="/account.html">Account Settings</a> and click <strong>Connect LinkedIn</strong>. You'll be redirected to LinkedIn to authorise ScoutHook — this takes about 30 seconds.</p>
+            <p>If the button is greyed out or the connection fails, try signing out of LinkedIn in your browser first, then reconnect. LinkedIn tokens expire after 60 days; ScoutHook will notify you before that happens.</p>
+          </div>
+        </li>
+
+        <li class="faq-item">
+          <button class="faq-btn" aria-expanded="false" aria-controls="faq-2">
+            Why does my voice profile take a few posts to improve?
+            <svg class="faq-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <div id="faq-2" class="faq-body" role="region">
+            <p>Your voice profile is built from examples you provide and the posts you generate. The AI needs a few samples to learn your tone, vocabulary, and style before posts start to feel consistently like you.</p>
+            <p>You can improve results faster by filling out your <a href="/profile.html">Voice Profile</a> in detail — especially your niche, audience, and preferred writing style.</p>
+          </div>
+        </li>
+
+        <li class="faq-item">
+          <button class="faq-btn" aria-expanded="false" aria-controls="faq-3">
+            What are Hooks and which one should I use?
+            <svg class="faq-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <div id="faq-3" class="faq-body" role="region">
+            <p>Hooks are the opening style of your post — the first line that makes someone stop scrolling. ScoutHook uses 8 archetypes: <strong>Number</strong>, <strong>Contrarian</strong>, <strong>Confession</strong>, <strong>Pattern Interrupt</strong>, <strong>Direct Address</strong>, <strong>Stakes</strong>, <strong>Before/After</strong>, and <strong>Insight</strong>.</p>
+            <p>ScoutHook automatically selects the best hook for your idea. You can swap to a different archetype on the preview screen if you want a different feel.</p>
+          </div>
+        </li>
+
+        <li class="faq-item">
+          <button class="faq-btn" aria-expanded="false" aria-controls="faq-4">
+            My post didn't publish to LinkedIn — what happened?
+            <svg class="faq-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <div id="faq-4" class="faq-body" role="region">
+            <p>The most common causes are an expired LinkedIn token (reconnect via <a href="/account.html">Account Settings</a>) or a temporary LinkedIn API outage.</p>
+            <p>If your token is still valid, wait a few minutes and try publishing again. LinkedIn occasionally rate-limits or rejects posts — if it keeps failing, submit a request below and include any error message you saw.</p>
+          </div>
+        </li>
+
+        <li class="faq-item">
+          <button class="faq-btn" aria-expanded="false" aria-controls="faq-5">
+            How does scheduling work?
+            <svg class="faq-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <div id="faq-5" class="faq-body" role="region">
+            <p>On the preview screen, click <strong>Schedule</strong> instead of Publish Now. Pick a date and time, and ScoutHook will publish automatically at that moment — you don't need to be logged in.</p>
+            <p>You can view, edit, or cancel scheduled posts from the <a href="/schedule.html">Schedule</a> page. Your LinkedIn token must still be valid at publish time.</p>
+          </div>
+        </li>
+
+        <li class="faq-item">
+          <button class="faq-btn" aria-expanded="false" aria-controls="faq-6">
+            How do I upgrade, downgrade, or cancel my plan?
+            <svg class="faq-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <div id="faq-6" class="faq-body" role="region">
+            <p>Go to <a href="/billing.html">Subscription</a> to manage your plan. You can upgrade immediately; downgrades and cancellations take effect at the end of your current billing period.</p>
+            <p>If you have a billing question that isn't answered there, use the form below and select <strong>Billing</strong> as the topic.</p>
+          </div>
+        </li>
+
+      </ul>
+
+      <!-- ── Support form ──────────────────────────────────── -->
+      <p class="help-section-title">Still need help?</p>
+      <div class="support-card">
+        <p class="support-card-title">Send us a message</p>
+        <p class="support-card-sub">We reply within 24 hours. Pro plan members get priority responses.</p>
+
+        <form id="support-form" novalidate>
+          <div class="support-field">
+            <label class="support-label" for="support-topic">Topic</label>
+            <select id="support-topic" class="support-select" required>
+              <option value="" disabled selected>Select a topic…</option>
+              <option value="LinkedIn connection">LinkedIn connection</option>
+              <option value="Publishing issue">Publishing issue</option>
+              <option value="Scheduling">Scheduling</option>
+              <option value="Billing">Billing</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+
+          <div class="support-field">
+            <label class="support-label" for="support-message">Message</label>
+            <textarea
+              id="support-message"
+              class="support-textarea"
+              placeholder="Describe what's happening…"
+              maxlength="2000"
+              required
+            ></textarea>
+          </div>
+
+          <div id="support-error" class="support-error" role="alert"></div>
+
+          <div class="support-actions">
+            <button type="submit" id="support-submit">Send message</button>
+          </div>
+        </form>
+
+        <div id="support-success" class="support-success" role="status">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#166534" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+          <span>Message sent! Check your email for a confirmation. We'll be in touch within 24 hours.</span>
+        </div>
+      </div>
+
+    </div><!-- /help-page -->
+
+    <footer class="app-footer" role="contentinfo">
+      <div class="app-footer-inner">
+        <a href="https://www.scouthook.com/privacy" target="_blank" rel="noopener">Privacy Policy</a>
+        <span class="app-footer-sep">|</span>
+        <a href="https://www.scouthook.com/terms" target="_blank" rel="noopener">Terms of Service</a>
+        <span class="app-footer-sep">|</span>
+        <a href="/help.html" aria-current="page">Help</a>
+        <p class="app-footer-legal">© 2026 CopyPower Digital LLP. ScoutHook is an AI-powered authority engine.</p>
+      </div>
+    </footer>
+
+  </div><!-- /main-content -->
+
+  <script src="/js/auth-guard.js"></script>
+  <script src="/js/account-bar.js"></script>
+  <script>
+    // ── FAQ accordion ──────────────────────────────────────────
+    document.querySelectorAll('.faq-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const expanded = btn.getAttribute('aria-expanded') === 'true';
+        const bodyId = btn.getAttribute('aria-controls');
+        const body = document.getElementById(bodyId);
+        btn.setAttribute('aria-expanded', String(!expanded));
+        body.classList.toggle('open', !expanded);
+      });
+    });
+
+    // ── Support form ───────────────────────────────────────────
+    document.getElementById('support-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const topic   = document.getElementById('support-topic').value;
+      const message = document.getElementById('support-message').value.trim();
+      const errorEl = document.getElementById('support-error');
+      const submitBtn = document.getElementById('support-submit');
+
+      errorEl.textContent = '';
+      errorEl.classList.remove('visible');
+
+      if (!topic) {
+        errorEl.textContent = 'Please select a topic.';
+        errorEl.classList.add('visible');
+        document.getElementById('support-topic').focus();
+        return;
+      }
+      if (!message) {
+        errorEl.textContent = 'Please describe your issue.';
+        errorEl.classList.add('visible');
+        document.getElementById('support-message').focus();
+        return;
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Sending…';
+
+      try {
+        const res = await fetch('/api/support', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ topic, message }),
+        });
+
+        const data = await res.json().catch(() => ({}));
+
+        if (!res.ok) {
+          throw new Error(data.error || 'request failed');
+        }
+
+        document.getElementById('support-form').style.display = 'none';
+        document.getElementById('support-success').classList.add('visible');
+      } catch (err) {
+        errorEl.textContent = 'Could not send your message — please try again.';
+        errorEl.classList.add('visible');
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Send message';
+      }
+    });
+  </script>
+</body>
+</html>

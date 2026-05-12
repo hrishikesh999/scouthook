@@ -46,15 +46,27 @@
     width: 100%;
     max-width: 720px;
     max-height: calc(100vh - 48px);
-    overflow-y: auto;
+    overflow: hidden;
     box-shadow: 0 8px 40px rgba(0,0,0,0.22);
-    position: relative;
-    padding: 36px 36px 40px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  #pm-close-row {
+    display: flex;
+    justify-content: flex-end;
+    padding: 12px 12px 0;
+    flex-shrink: 0;
+  }
+
+  #pm-modal-body {
+    overflow-y: auto;
+    padding: 4px 36px 40px;
+    flex: 1;
+    min-height: 0;
   }
 
   #pm-close {
-    position: absolute;
-    top: 14px; right: 14px;
     background: none;
     border: none;
     cursor: pointer;
@@ -138,7 +150,7 @@
     gap: 16px;
   }
   @media (max-width: 560px) {
-    #pm-modal { padding: 24px 18px 28px; }
+    #pm-modal-body { padding: 4px 18px 28px; }
     .pm-cards { grid-template-columns: 1fr; }
   }
 
@@ -255,10 +267,12 @@
   overlay.setAttribute('aria-label', 'Upgrade to Pro');
   overlay.innerHTML = `
     <div id="pm-modal">
-      <button id="pm-close" aria-label="Close">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-      </button>
-
+      <div id="pm-close-row">
+        <button id="pm-close" aria-label="Close">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div id="pm-modal-body">
       <div id="pm-header">
         <h2>Simple, transparent pricing</h2>
         <p>Start free. Upgrade when you're ready to go unlimited.</p>
@@ -381,6 +395,7 @@
         </div>
 
       </div><!-- /pm-cards -->
+      </div><!-- /pm-modal-body -->
     </div><!-- /pm-modal -->
   `;
   document.body.appendChild(overlay);

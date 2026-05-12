@@ -112,6 +112,14 @@
     document.head.appendChild(s);
   }
 
+  // Load feedback widget on all protected pages
+  if (!document.getElementById('feedback-widget-script')) {
+    const s = document.createElement('script');
+    s.id  = 'feedback-widget-script';
+    s.src = '/js/feedback-widget.js';
+    document.head.appendChild(s);
+  }
+
   const auth = window.scouthookAuthReady;
   if (auth && typeof auth.then === 'function') {
     auth

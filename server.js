@@ -297,6 +297,7 @@ app.use('/api/funnel', require('./routes/funnel'));
 app.use('/api/billing', require('./routes/billing'));
 app.use('/api/checklist', require('./routes/checklist'));
 app.use('/api/posts', require('./routes/performance'));
+app.use('/api/feedback', require('./routes/feedback'));
 app.use('/api', require('./routes/stats'));
 
 // Unmatched /api/* — avoid falling through to static/HTML 404

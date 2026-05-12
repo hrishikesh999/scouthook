@@ -144,6 +144,9 @@ let currentBatchId    = null;
 let batchPosts        = [];
 let currentBatchIndex = 0;
 
+/* ── User plan (fetched once on init) ────────────────────────── */
+let userPlan = null;
+
 /* ── 4. LinkedIn status ──────────────────────────────────────── */
 function buildLinkedInChip(name, photoUrl) {
   const initials = name
@@ -348,6 +351,11 @@ document.addEventListener('visibilitychange', () => {
 /* ── 6. Init ─────────────────────────────────────────────────── */
 (async function init() {
   await window.scouthookAuthReady;
+
+  fetch('/api/billing/subscription', { credentials: 'include' })
+    .then(r => r.json())
+    .then(d => { userPlan = d.plan || 'free'; })
+    .catch(() => {});
 
   await checkLinkedInStatus();
 
@@ -1245,6 +1253,10 @@ function setSlideOverState(state) {
 function openSlideOver(type, label) {
   if (scheduleEditLocked) return;
   if (!currentPostId) return;
+  if (userPlan === 'free') {
+    window.PricingModal?.open();
+    return;
+  }
 
   currentAssetType = type;
   currentAssetUrl  = null;

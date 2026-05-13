@@ -19,7 +19,9 @@ router.get('/', async (req, res) => {
 
   try {
     const profile = await db.prepare(`
-      SELECT display_name, writing_samples, content_niche, brand_name
+      SELECT display_name, writing_samples, content_niche, brand_name,
+             audience_role, audience_pain, business_positioning,
+             brand_bg, brand_accent, brand_text
       FROM   user_profiles
       WHERE  user_id = ? AND tenant_id = ?
     `).get(uid, tid);
@@ -40,13 +42,13 @@ router.get('/', async (req, res) => {
       {
         id:    'voice_profile',
         label: 'Complete your voice profile',
-        done:  !!(profile?.content_niche),
+        done:  !!(profile?.content_niche && profile?.audience_role && profile?.audience_pain && profile?.writing_samples && profile?.business_positioning),
         href:  '/profile.html',
       },
       {
         id:    'brand_settings',
         label: 'Update your brand settings',
-        done:  !!(profile?.brand_name),
+        done:  !!(profile?.brand_name && profile?.brand_bg && profile?.brand_accent && profile?.brand_text),
         href:  '/brand.html',
       },
       {

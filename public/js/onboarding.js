@@ -535,11 +535,22 @@ const Onboarding = (() => {
     qs('ob-choose-free')?.addEventListener('click', () => {
       window.location.href = state.postId ? `/preview.html?post_id=${state.postId}` : '/dashboard.html';
     });
-    qs('ob-choose-pro')?.addEventListener('click', () => {
-      if (window.PricingModal) {
-        window.PricingModal.open();
-      } else {
+    qs('ob-choose-pro')?.addEventListener('click', async function () {
+      const btn = this;
+      if (!window.PricingModal?.startCheckout) {
         window.location.href = '/billing.html';
+        return;
+      }
+      const orig = btn.textContent;
+      btn.disabled    = true;
+      btn.textContent = 'Loading…';
+      try {
+        await window.PricingModal.startCheckout();
+      } catch {
+        window.location.href = '/billing.html';
+      } finally {
+        btn.disabled    = false;
+        btn.textContent = orig;
       }
     });
   }

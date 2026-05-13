@@ -550,58 +550,51 @@
     if (e.key === 'Escape' && overlay.classList.contains('visible')) close();
   });
 
-  // ── Upgrade click ────────────────────────────────────────────────────────────
-  $id('pm-upgrade-btn').addEventListener('click', async function () {
-    const btn = this;
-    const isAnnual = $id('pm-annual-toggle').checked;
+  // ── Shared checkout launcher (used by modal button and onboarding page) ──────
+  async function startCheckout() {
+    if (!paddleConfig) await loadConfig();
+    if (!paddleConfig || !paddleConfig.clientToken) {
+      throw new Error('Checkout unavailable. Please try again later.');
+    }
+    await ensurePaddle(paddleConfig.clientToken, paddleConfig.env);
+
+    const isAnnual = $id('pm-annual-toggle')?.checked;
     const priceId  = isAnnual ? priceIdYearly : priceIdMonthly;
+    if (!priceId) throw new Error('Pricing is not configured yet. Please contact support.');
 
-    $id('pm-error').style.display = 'none';
-
-    if (!priceId) {
-      showError('Pricing is not configured yet. Please contact support.');
-      return;
+    let userId = null;
+    try {
+      const authData = await window.scouthookAuthReady;
+      userId = authData?.user?.user_id ?? null;
+    } catch { /* no-op */ }
+    if (!userId) {
+      try { userId = localStorage.getItem('scouthook_uid'); } catch { /* no-op */ }
     }
 
+    window.Paddle.Checkout.open({
+      items: [{ priceId, quantity: 1 }],
+      customData: userId ? { userId } : undefined,
+      settings: {
+        displayMode: 'overlay',
+        successUrl: window.location.origin + '/billing.html?checkout=success',
+      },
+    });
+  }
+
+  // ── Upgrade click (inside pricing modal) ─────────────────────────────────────
+  $id('pm-upgrade-btn').addEventListener('click', async function () {
+    const btn = this;
+    $id('pm-error').style.display = 'none';
     btn.disabled    = true;
     btn.textContent = 'Loading…';
-
     try {
-      // Ensure Paddle.js is loaded and initialised with the client token
-      if (!paddleConfig) await loadConfig();
-      if (!paddleConfig || !paddleConfig.clientToken) {
-        showError('Checkout unavailable. Please try again later.');
-        btn.disabled = false; btn.textContent = 'Upgrade to Pro'; return;
-      }
-      await ensurePaddle(paddleConfig.clientToken, paddleConfig.env);
-
-      // Resolve the current user for customData (userId is required by webhooks)
-      let userId = null;
-      try {
-        const authData = await window.scouthookAuthReady;
-        userId = authData?.user?.user_id ?? null;
-      } catch { /* no-op */ }
-      // Fallback: localStorage is set by session.js on every authenticated page load
-      if (!userId) {
-        try { userId = localStorage.getItem('scouthook_uid'); } catch { /* no-op */ }
-      }
-
-      // Open Paddle overlay checkout
-      window.Paddle.Checkout.open({
-        items: [{ priceId, quantity: 1 }],
-        customData: userId ? { userId } : undefined,
-        settings: {
-          displayMode: 'overlay',
-          successUrl: window.location.origin + '/billing.html?checkout=success',
-        },
-      });
-
-      // Reset button — user may close the overlay without completing
+      await startCheckout();
+      // Reset button — user may close the Paddle overlay without completing
       btn.disabled    = false;
       btn.textContent = 'Upgrade to Pro';
     } catch (err) {
       console.error('[pricing-modal] checkout error:', err);
-      showError('Unable to start checkout. Please try again.');
+      showError(err.message || 'Unable to start checkout. Please try again.');
       btn.disabled    = false;
       btn.textContent = 'Upgrade to Pro';
     }
@@ -695,5 +688,5 @@
   }
 
   // ── Expose globally ──────────────────────────────────────────────────────────
-  window.PricingModal = { open, close };
+  window.PricingModal = { open, close, startCheckout };
 })();

@@ -84,27 +84,25 @@
     slot.querySelector('.sidebar-account-foot-logout').addEventListener('click', logOut);
   }
 
-  // ── Global topbar (help + upgrade) ──────────────────────────
-  function renderTopbar() {
-    if (document.getElementById('app-topbar')) return;
-    const mainContent = document.getElementById('main-content');
-    if (!mainContent) return;
+  // ── Page header actions (help + upgrade) ────────────────────
+  function renderPageHeaderActions() {
+    const header = document.querySelector('#main-content .page-header');
+    if (!header || header.querySelector('.page-header-actions')) return;
 
-    const bar = document.createElement('div');
-    bar.id = 'app-topbar';
-    bar.className = 'app-topbar';
-    bar.innerHTML = `
-      <a href="/help.html" class="app-topbar-help">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-        Help &amp; Support
+    const actions = document.createElement('div');
+    actions.className = 'page-header-actions';
+    actions.innerHTML = `
+      <a href="/help.html" class="page-header-help">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        Help
       </a>
     `;
-    mainContent.insertBefore(bar, mainContent.firstChild);
+    header.appendChild(actions);
   }
 
-  async function renderTopbarUpgrade() {
-    const bar = document.getElementById('app-topbar');
-    if (!bar) return;
+  async function renderPageHeaderUpgrade() {
+    const actions = document.querySelector('#main-content .page-header-actions');
+    if (!actions) return;
     try {
       const r = await fetch('/api/billing/subscription');
       if (!r.ok) return;
@@ -113,14 +111,13 @@
 
       const btn = document.createElement('button');
       btn.type = 'button';
-      btn.className = 'app-topbar-upgrade';
+      btn.className = 'page-header-upgrade';
       btn.innerHTML = `
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
         Upgrade to Pro
       `;
       btn.addEventListener('click', () => window.PricingModal?.open());
-      // Insert before the help link so upgrade sits to the left of help
-      bar.insertBefore(btn, bar.querySelector('.app-topbar-help'));
+      actions.insertBefore(btn, actions.querySelector('.page-header-help'));
     } catch { /* ignore */ }
   }
 
@@ -140,11 +137,11 @@
   }
 
   // ── Boot ─────────────────────────────────────────────────────
-  // Render topbar immediately (help link doesn't need auth)
+  // Render page header actions immediately (help link doesn't need auth)
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', renderTopbar);
+    document.addEventListener('DOMContentLoaded', renderPageHeaderActions);
   } else {
-    renderTopbar();
+    renderPageHeaderActions();
   }
 
   const auth = window.scouthookAuthReady;
@@ -154,7 +151,7 @@
         const user = data && data.user;
         if (!user || !user.user_id) return;
         renderSidebarAccount(user);
-        renderTopbarUpgrade();
+        renderPageHeaderUpgrade();
       })
       .catch(() => { /* offline */ });
   }

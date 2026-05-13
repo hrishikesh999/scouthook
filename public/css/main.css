@@ -4611,20 +4611,26 @@ body {
   color: var(--text-danger);
 }
 
-/* ── Global app topbar (help + upgrade) ─────────────────────────────────── */
-.app-topbar {
+/* ── Page header row (title + actions) ───────────────────────────────────── */
+.page-header {
   display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: var(--space-2);
-  padding: 0 var(--space-8);
-  height: 48px;
-  background: var(--bg-surface);
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: nowrap;
 }
 
-.app-topbar-help {
+.page-header-content { flex: 1; min-width: 0; }
+
+.page-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+  padding-top: 4px;
+}
+
+.page-header-help {
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -4638,12 +4644,12 @@ body {
   white-space: nowrap;
 }
 
-.app-topbar-help:hover {
+.page-header-help:hover {
   color: var(--text-body);
   background: var(--bg-subtle);
 }
 
-.app-topbar-upgrade {
+.page-header-upgrade {
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -4661,10 +4667,10 @@ body {
   white-space: nowrap;
 }
 
-.app-topbar-upgrade:hover { opacity: 0.9; }
+.page-header-upgrade:hover { opacity: 0.9; }
 
-@media (max-width: 768px) {
-  .app-topbar { padding: 0 var(--space-4); }
+@media (max-width: 640px) {
+  .page-header-actions { display: none; }
 }
 
 /* ── Signed-in account bar (bottom-right) + sidebar account foot ─────────── */

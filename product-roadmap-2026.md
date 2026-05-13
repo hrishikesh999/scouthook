@@ -1,6 +1,6 @@
 # ScoutHook — Product Roadmap 2026
 
-*Strategic review and roadmap based on codebase audit and competitive analysis. Updated 2026-05-11 (pricing simplified, Pro unlimited, free tier revised).*
+*Strategic review and roadmap based on codebase audit and competitive analysis. Updated 2026-05-13 (launch hardening, security fixes, free plan tightened, signup flow, Mailerlite, help centre).*
 
 ---
 
@@ -25,6 +25,14 @@ ScoutHook is a fully-functional, end-to-end LinkedIn content SaaS — not a prot
 - **Viral tension pre-check** — `assessInputQuality()` now blocks generation (HTTP 422 `missing_substance`) when input has no specific outcome AND no surprising angle; amber warning shown inline with "Generate anyway" bypass; applies to both idea and from-doc paths *(shipped 2026-05-06)*
 - **PLG onboarding wizard** — 6-screen first-time user flow (`/onboarding.html`): role → goal → website extraction + 3 interview questions → live generation progress → post reveal with "Open in editor" CTA and LinkedIn connection strip; new users are auto-routed from Google OAuth callback; `onboarding_complete` flag gates the redirect *(shipped 2026-05-11)*
 - **Email template logo branding** — all 10 transactional email templates updated; text "ScoutHook" header replaced with `sh-logo-dark.png` image (150×35, retina-ready) served via `{{app_url}}/images/sh-logo-dark.png` *(shipped 2026-05-11)*
+- **Redis enforced in production; LinkedIn token expiry banner** — server throws on startup if `REDIS_URL` is missing in production; proactive reconnect banner shown in-app when LinkedIn token expires within 7 days *(shipped 2026-05-11)*
+- **Paid signup flow** — separate `/login.html` (returning users) and `/signup.html` (new users); new users see a plan-selection screen (ob-s7) at the end of onboarding that fetches live pricing from `/api/billing/config`; returning users with Pro intent are routed to `/billing.html?upgrade=1` *(shipped 2026-05-12)*
+- **Mailerlite integration** — free users added to the Mailerlite Free group on first login; Pro activation moves them to the Pro group; cancellation/past_due moves them back; fire-and-forget, non-fatal *(shipped 2026-05-12)*
+- **In-app feedback widget** — embedded on all app pages *(shipped 2026-05-12)*
+- **In-app help centre** — `/help.html` with FAQ accordion covering 6 common questions; support request form stores to `support_requests` table, emails admin with Pro/Free triage badge, sends user confirmation via Resend *(shipped 2026-05-12)*
+- **Security hardening** — Google account chooser forced on every auth (`prompt:'select_account'`) to prevent silent auto-login as the wrong Google account; logout now calls `req.session.destroy()` instead of `req.logout()` (fixes Passport v0.7 session leak where a new cookie was set after every logout); LinkedIn OAuth state validated against the authenticated session user *(shipped 2026-05-13)*
+- **Account consolidation on login** — on every Google login, any data stored under a stale `user_id` format (e.g. `google_email:x@y.com` fallback) is silently migrated into the canonical `google:${googleId}` id; self-healing and idempotent; prevents permanent data splits caused by account-picker auto-login bugs *(shipped 2026-05-13)*
+- **Launch hardening for 100-user scale** — DB connection pool raised from 10 → 30; Anthropic 429/529 rate-limit errors return HTTP 503 with a user-friendly "high demand" message instead of crashing the generation flow *(shipped 2026-05-13)*
 
 The architecture is sound. The product premise is correct. The engine is better than most users will ever discover, because retention and daily engagement features are thin.
 
@@ -201,7 +209,7 @@ Pricing: $9/month add-on, or included in a higher tier.
 ---
 
 **Free Tier Redesign**
-Current state (2026-05-11): 20 quality-gate passes/month; visuals (carousels, quote cards, branded quotes) are Pro-only; scheduling is available on both plans.
+Current state (2026-05-13): 10 posts/month on Free; visuals (carousels, quote cards, branded quotes), post scheduling, and analytics (dashboard stats) are Pro-only. Immediate LinkedIn publishing is available on Free.
 
 Remaining direction: move from "limit generations" to "limit publishable posts" — **unlimited generation + 3 publishable posts/month.** This makes the upgrade trigger emotional (*"I have this great post but I can't publish it"*) rather than mechanical (*"I hit my limit"*). Requires a `publishable_posts_count` tracking column (small migration). Deferred to a future sprint.
 

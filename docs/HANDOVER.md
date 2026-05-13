@@ -2,7 +2,7 @@
 
 **Product:** AI-powered LinkedIn content intelligence platform  
 **Stack:** Node.js + Express, PostgreSQL (Neon), Redis/BullMQ, Anthropic Claude, Google OAuth + LinkedIn OAuth  
-**Last updated:** 2026-05-11 (pricing simplified to $29/$39, Pro unlimited, free tier revised)
+**Last updated:** 2026-05-13 (launch hardening, security fixes, free plan tightened, signup flow, Mailerlite, help centre, LinkedIn API 202603)
 
 ---
 
@@ -87,6 +87,7 @@ Vault async background (setImmediate):
 │   ├── visuals.js               # Visual generation (cards, carousels)
 │   ├── billing.js               # Paddle subscription: config, sync, cancel, portal
 │   ├── notifications.js         # In-app notifications
+│   ├── support.js               # Help centre: support request form, admin email triage
 │   └── admin.js                 # Admin settings panel
 ├── services/
 │   ├── storage.js               # Storage abstraction (local disk or Amazon S3)
@@ -101,15 +102,19 @@ Vault async background (setImmediate):
 │   ├── hookSelector.js          # 8-archetype hook classification
 │   ├── qualityGate.js           # Quality scoring + retry enforcement
 │   ├── ideaPath.js              # Core generation flow (+ _funnelHint support)
+│   ├── mailerlite.js            # Mailerlite list sync (sign-up, plan-change events)
 │   └── voiceFingerprint.js      # Extract writing voice from profile text
 ├── migrations/
 │   ├── 001_initial.sql          # Core tables
 │   ├── 002_scheduled_post_events_cascade.sql
 │   ├── 003_publish_notifications.sql
 │   ├── 004_metrics_retention.sql
-│   └── 005_vault.sql            # Vault tables + funnel columns on generated_posts
+│   ├── 005_vault.sql            # Vault tables + funnel columns on generated_posts
+│   └── 021_support_requests.sql # support_requests table
 ├── public/                      # Static frontend assets
 │   ├── onboarding.html          # PLG first-time wizard (new users auto-routed here)
+│   ├── signup.html              # New-user signup page (separate from login.html)
+│   ├── help.html                # Help centre: FAQ accordion + support request form
 │   ├── vault.html               # Intelligence Vault page
 │   ├── ideas.html               # Ideas kanban (Fresh / Saved / Discarded)
 │   ├── generate.html            # Post generation (Tab A: write / Tab B: vault)
@@ -261,6 +266,18 @@ updated_at     TIMESTAMPTZ
 ```
 Stores: `anthropic_api_key`, `redis_url`, `token_encryption_key`.
 
+**`support_requests`**
+```
+id             BIGSERIAL PK
+user_id        TEXT
+email          TEXT
+plan           TEXT  (free | pro)
+topic          TEXT
+message        TEXT
+created_at     TIMESTAMPTZ
+```
+← migration 021. Admin email triage fires on submission; user receives a confirmation via Resend.
+
 ### Vault Tables (migration 005)
 
 **`vault_documents`**
@@ -332,6 +349,7 @@ All `/api/*` routes require an active session. API routes return JSON `{ ok: tru
 | `GET` | `/auth/google/callback` | Google OAuth callback → redirect to `/dashboard.html` |
 | `POST` | `/auth/logout` | Destroy session, clear cookie |
 | `GET` | `/api/auth/me` | Returns `{ user }` from session (null if unauthenticated) |
+| `GET` | `/api/auth/diag` | **Temporary diagnostic** — returns post counts across all `user_id` formats for the authenticated user's email; used to surface data splits. Remove before GA. |
 | `GET` | `/healthz` | Health check (pings DB) |
 
 ### Intelligence Vault
@@ -427,10 +445,12 @@ Rate limit: 10 generations/hour per user (Redis sliding window, in-memory fallba
 
 | Metric | Free | Pro |
 |--------|------|-----|
-| Post generations / month | 20 | Unlimited |
+| Post generations / month | 10 | Unlimited |
 | Visuals (carousels, quotes) / month | 0 — Pro only | Unlimited |
 | Vault document uploads | Unlimited | Unlimited |
-| Scheduling | ✅ | ✅ |
+| Scheduling | ❌ Pro only | ✅ |
+| Analytics (dashboard stats) | ❌ Pro only | ✅ |
+| Immediate LinkedIn publishing | ✅ | ✅ |
 
 **Founding tier logic (`getFoundingTierInfo`):**
 - Counts active Pro subscribers (`plan='pro'`, `status IN (active, trialing, past_due, paused)`)
@@ -474,6 +494,12 @@ Generated files served at `/files/*` (auth-gated, cleaned after 24h). Permanent 
 | `GET` | `/api/notifications` | Unread notifications, limit 50 |
 | `POST` | `/api/notifications/read` | Mark one (`{ id }`) or all notifications as read |
 
+### Support
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/support` | Submit a support request. Body: `{ topic, message }`. Stores to `support_requests`, emails admin with Pro/Free triage badge, sends user a confirmation email via Resend. |
+
 ### Admin
 
 | Method | Path | Description |
@@ -493,11 +519,12 @@ Paddle billing and plan enforcement layer.
 - **`getFoundingTierInfo()`** — Counts active Pro subscribers and returns the active price tier: `founding_1` ($29, spots 0–9) or `founding_2` ($39, spots 10+, no upper cap). No `regular`/`$49` tier exists.
 - **`getUserPlan(userId)`** — Returns `'pro'` if the user has an active/trialing subscription within `current_period_end`; otherwise `'free'`. Cancelled subscriptions retain Pro access until period end.
 - **`getUserSubscription(userId)`** — Returns the `user_subscriptions` row, or a synthetic free object if none.
-- **`canGeneratePost(userId)`** — Checks quality-gate passes this month. Pro: unlimited (`null` limit). Free: 20/month.
+- **`canGeneratePost(userId)`** — Checks quality-gate passes this month. Pro: unlimited (`null` limit). Free: 10/month.
 - **`canGenerateVisual(userId)`** — Pro: unlimited. Free: always blocked (`reason: 'pro_only'`).
+- **`canSchedulePost(userId)`** — Pro only; Free users receive `{ allowed: false, reason: 'pro_only' }`. `POST /api/linkedin/schedule` enforces this with a 403.
 - **`canUploadVaultDoc()`** — Always allowed for all plans.
 - **`logVisualGeneration(userId, ...)`** — Records a visual generation event for Pro usage tracking.
-- **Plan limit constants:** `PRO_GENERATION_LIMIT = null`, `PRO_VISUAL_LIMIT = null`, `FREE_GENERATION_LIMIT = 20`, `FREE_VISUAL_LIMIT = 0`.
+- **Plan limit constants:** `PRO_GENERATION_LIMIT = null`, `PRO_VISUAL_LIMIT = null`, `FREE_GENERATION_LIMIT = 10`, `FREE_VISUAL_LIMIT = 0`.
 
 ### `services/vaultMiner.js` *(new)*
 
@@ -539,7 +566,7 @@ Abstraction over local disk and Amazon S3.
 
 ### `services/linkedinPublisher.js`
 
-Composes and submits posts to LinkedIn's Posts API (API version `202501`):
+Composes and submits posts to LinkedIn's Posts API (API version `202603`):
 - Supports text-only, single image, and PDF carousel.
 - Idempotency guard checks `row.linkedin_post_id` before calling API.
 - `NON_RETRIABLE_ERRORS` set for permanent failures.
@@ -584,7 +611,9 @@ Core generation flow. Key functions:
 
 | Page | Route | Description |
 |------|-------|-------------|
-| `onboarding.html` | `/onboarding.html` | First-time PLG wizard. 6 screens: role → goal → website extraction + 3 interview questions (one per step) → live generation progress → post reveal with "Open in editor" CTA and LinkedIn connection strip. New users auto-routed here from Google OAuth callback; sets `onboarding_complete = 1` on completion. |
+| `signup.html` | `/signup.html` | New-user signup page. "Start with Pro →" CTA passes Pro intent through the Google OAuth session. Returning users with Pro intent land on `/billing.html?upgrade=1` which auto-opens the pricing modal. |
+| `onboarding.html` | `/onboarding.html` | First-time PLG wizard. 7 screens: role → goal → website extraction + 3 interview questions (one per step) → live generation progress → post reveal with "Open in editor" CTA and LinkedIn connection strip → plan selection (ob-s7). New users auto-routed here from Google OAuth callback; sets `onboarding_complete = 1` on completion. |
+| `help.html` | `/help.html` | Help centre. FAQ accordion covering 6 common topics; support request form (topic dropdown + message). Linked from footer of all 14 app pages. |
 | `dashboard.html` | `/dashboard.html` | Stats, recent posts, scheduled posts |
 | `generate.html` | `/generate.html` | Post generation. Left panel has Tab A ("Write an idea") and Tab B ("From your Vault"). Tab B loads vault seeds with funnel filter; "Use this idea" pre-fills Tab A and passes `vault_idea_id` to the generate API. Source badge shown below the generated post. |
 | `vault.html` | `/vault.html` | Upload docs (drag-and-drop PDF/DOCX/TXT) or paste a URL. Document list shows live status badges. "Generate Ideas" button triggers `POST /api/vault/mine` and returns immediately; status polling updates badges. |
@@ -603,6 +632,9 @@ An IIFE in `public/js/generate.js` reads `?vault_idea_id` and `?seed` on page lo
 ### Identity
 - User and tenant identity come **exclusively from the server-side session** — never from request headers or query parameters.
 - `req.userId` and `req.tenantId` are set from `req.user` (Passport session) in middleware after auth.
+- **Google OAuth** uses `prompt:'select_account'` on every auth flow — prevents silent auto-login as the last-used Google account, which was the root cause of cross-user data disappearance.
+- **Logout** calls `req.session.destroy()` (not `req.logout()`) — Passport v0.7's `req.logout()` internally calls `session.regenerate()` after `clearCookie`, causing the browser to retain a new dangling session cookie after every logout.
+- **LinkedIn OAuth** — the `state` blob includes the session `userId`; the callback validates it matches `req.user.id` and rejects with `session_mismatch` if they differ, preventing token swap attacks.
 
 ### Session
 - `httpOnly`, `sameSite: 'lax'`, `secure` in production.
@@ -639,7 +671,7 @@ Compliance measures:
 3. **Token revocation** — called via `/oauth/v2/revoke` on disconnect and GDPR delete.
 4. **GDPR data deletion** — `DELETE /api/linkedin/user-data` cascades across all user tables.
 5. **Engagement data retention** — LinkedIn metrics nulled after 90 days.
-6. **API versioning** — all calls use `LinkedIn-Version: 202501` + `X-Restli-Protocol-Version: 2.0.0`.
+6. **API versioning** — all calls use `LinkedIn-Version: 202603` + `X-Restli-Protocol-Version: 2.0.0`.
 7. **No unsolicited posting** — requires explicit user action.
 8. **No feed/message reading** — `w_member_social` write-only.
 
@@ -687,7 +719,8 @@ On `SIGTERM`: HTTP server drains in-flight requests, BullMQ worker closes, Redis
 | `LINKEDIN_CLIENT_ID` | ✅ | LinkedIn OAuth client ID |
 | `LINKEDIN_CLIENT_SECRET` | ✅ | LinkedIn OAuth client secret |
 | `ANTHROPIC_API_KEY` | ✅* | *Can be set via admin UI instead |
-| `REDIS_URL` | ⬜ | Required for scheduled post delivery |
+| `REDIS_URL` | ✅ in prod | Required for scheduled post delivery and OAuth CSRF state. Server throws on startup if missing when `NODE_ENV=production`. |
+| `PGPOOL_MAX` | ⬜ | DB connection pool size (default: 30) |
 | `TOKEN_ENCRYPTION_KEY` | ⬜ | 64-char hex AES key; can be set via admin UI. **Set once, never rotate.** |
 | `ADMIN_PASSWORD` | ⬜ | Admin panel password (default: `changeme`) |
 | `PORT` | ⬜ | HTTP port (default: `4000`) |
@@ -702,6 +735,9 @@ On `SIGTERM`: HTTP server drains in-flight requests, BullMQ worker closes, Redis
 | `PADDLE_PRICE_ID_YEARLY` | ⬜ | Paddle price ID for annual plan (optional; annual toggle hidden at launch). |
 | `PADDLE_CUSTOMER_PORTAL_URL` | ⬜ | Paddle customer portal URL (from Paddle dashboard). |
 | `PADDLE_ENVIRONMENT` | ⬜ | Override Paddle environment: `sandbox` or `production`. Defaults to `NODE_ENV`. |
+| `MAILERLITE_API_KEY` | ⬜* | Mailerlite API key. Required for sign-up / plan-change list sync. |
+| `MAILERLITE_GROUP_FREE` | ⬜* | Mailerlite group ID for Free users. |
+| `MAILERLITE_GROUP_PRO` | ⬜* | Mailerlite group ID for Pro users. |
 | `STORAGE_BACKEND` | ⬜ | `local` (default) or `s3` |
 | `S3_BUCKET_NAME` | ⬜* | Required when `STORAGE_BACKEND=s3`. Dev: `scout-hook-dev`, Prod: `scout-hook-prod` |
 | `S3_REGION` | ⬜* | AWS region, e.g. `us-east-1` |
@@ -773,6 +809,25 @@ tenants/{tenant_id}/users/{user_id}/vault/{filename}      ← vault source files
 ---
 
 ## Recent Changes
+
+### May 2026 — Free plan revision, signup flow, Mailerlite, help centre, security hardening, launch hardening
+
+| Change | Details |
+|--------|---------|
+| Free plan tightened | `FREE_GENERATION_LIMIT` reduced 20 → 10. Scheduling gated to Pro (`POST /api/linkedin/schedule` returns 403 `pro_only` for free users). Analytics (dashboard stats) gated to Pro. Pricing modal and onboarding copy updated throughout. |
+| Separate login/signup pages | `public/login.html` (returning users) and `public/signup.html` (new users). Onboarding extended with ob-s7 plan-selection screen that fetches live pricing from `/api/billing/config`; Pro intent carried through OAuth session into a `/billing.html?upgrade=1` redirect. |
+| Mailerlite integration | `services/mailerlite.js`. Free users added to Free group on first login; Pro activation / cancellation / past_due syncs to respective group. Fire-and-forget, non-fatal. Env vars: `MAILERLITE_API_KEY`, `MAILERLITE_GROUP_FREE`, `MAILERLITE_GROUP_PRO`. |
+| In-app feedback widget | Embedded on all app pages. |
+| In-app help centre | `public/help.html` + `routes/support.js`. FAQ accordion + support request form. `support_requests` table (migration 021). Admin triage email + user confirmation via Resend. |
+| Security hardening | `prompt:'select_account'` on Google OAuth (prevents silent auto-login as wrong account). Logout changed to `req.session.destroy()` — fixes Passport v0.7 session leak where `req.logout()` regenerated the session after `clearCookie`. LinkedIn OAuth state validated against `req.user.id` on callback; rejects with `session_mismatch` if they differ. |
+| Account consolidation | `server.js`: on every Google login, all data under any stale `user_id` format (e.g. `google_email:x@y.com`) is migrated into the canonical `google:${googleId}`. Idempotent + silent. Also tightened returning-user check: accounts created before 2026 bypass onboarding regardless of post count. |
+| Launch hardening for 100 users | `db/pg.js`: pool size 10 → 30. `routes/generate.js`: Anthropic 429/529 caught; returns HTTP 503 `high_demand` with user-facing message. `PGPOOL_MAX` and `REDIS_URL` (required in production) documented in `.env.example`. |
+| Upgrade modal UX | Dynamic founding price (hidden until config loads to prevent flash). Close button repositioned with larger hit area. Overlay scrolls instead of clipping on small screens. Visual Creations + Vault Documents usage bars removed from `billing.html` (unmetered). |
+| LinkedIn API version | `services/linkedinPublisher.js`: `LINKEDIN_API_VERSION` updated `202501` → `202603`. |
+| Temporary diagnostic endpoint | `GET /api/auth/diag` — returns post counts across all `user_id` formats for the authenticated user's email; surfaces historical data splits. Remove before GA. |
+| Files changed | `server.js`, `db/pg.js`, `routes/generate.js`, `routes/linkedin.js`, `routes/support.js`, `routes/billing.js`, `routes/stats.js`, `services/subscription.js`, `services/mailerlite.js`, `services/linkedinPublisher.js`, `public/login.html`, `public/signup.html`, `public/help.html`, `public/onboarding.html`, `public/billing.html`, `public/js/pricing-modal.js`, `public/js/preview.js`, `migrations/021_support_requests.sql` |
+
+---
 
 ### May 2026 — Pricing simplification + Pro unlimited + free tier revision
 

@@ -34,19 +34,20 @@ router.get('/', async (req, res) => {
       WHERE  user_id = ? AND tenant_id = ?
     `).get(uid, tid);
 
-    const vaultRow = await db.prepare(`
-      SELECT COUNT(*) AS n FROM vault_documents
-      WHERE  user_id = ? AND tenant_id = ?
-    `).get(uid, tid);
-
     const connectUrl = `/api/linkedin/connect?_uid=${encodeURIComponent(uid)}&_tid=${encodeURIComponent(tid)}`;
 
     const steps = [
       {
-        id:    'vault_upload',
-        label: 'Upload to Content Vault',
-        done:  (vaultRow?.n ?? 0) > 0,
-        href:  '/vault.html',
+        id:    'voice_profile',
+        label: 'Complete your voice profile',
+        done:  !!(profile?.content_niche),
+        href:  '/profile.html',
+      },
+      {
+        id:    'brand_settings',
+        label: 'Update your brand settings',
+        done:  !!(profile?.brand_name),
+        href:  '/brand.html',
       },
       {
         id:    'linkedin',

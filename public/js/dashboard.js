@@ -40,8 +40,13 @@ function showEmptyRecent() {
 
 /* ── Onboarding checklist ────────────────────────────────────── */
 async function loadChecklist() {
-  // Skip entirely if user has already completed and dismissed the checklist
-  if (localStorage.getItem('sh_checklist_done')) return;
+  // Scope the dismiss flag to the signed-in user — prevents a prior account's
+  // completed flag from hiding the checklist for a new account on the same browser.
+  const authData = await window.scouthookAuthReady;
+  const userId   = authData?.user?.user_id || 'anon';
+  const doneKey  = `sh_checklist_done_${userId}`;
+
+  if (localStorage.getItem(doneKey)) return;
 
   const section  = document.getElementById('onboarding-checklist');
   const barEl    = document.getElementById('checklist-bar');
@@ -57,7 +62,7 @@ async function loadChecklist() {
 
     // If all done on this load, collapse immediately and remember
     if (data.all_done) {
-      collapseChecklist(section);
+      collapseChecklist(section, doneKey);
       return;
     }
 
@@ -101,13 +106,13 @@ async function loadChecklist() {
   }
 }
 
-function collapseChecklist(section) {
+function collapseChecklist(section, doneKey) {
   section.classList.add('collapsing');
   section.addEventListener('transitionend', () => {
     section.hidden = true;
     section.classList.remove('collapsing');
   }, { once: true });
-  localStorage.setItem('sh_checklist_done', '1');
+  localStorage.setItem(doneKey, '1');
 }
 
 /* ── LinkedIn token expiry banner ────────────────────────────── */

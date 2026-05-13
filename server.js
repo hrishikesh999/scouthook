@@ -208,7 +208,9 @@ app.get('/auth/google', (req, res, next) => {
     return res.redirect('/login.html?error=google_not_configured');
   }
   if (req.query.intent === 'pro') req.session.proIntent = true;
-  const opts = { scope: ['profile', 'email'] };
+  // Always show the Google account chooser so users can't accidentally log in as
+  // the last Google account that was used in the browser.
+  const opts = { scope: ['profile', 'email'], prompt: 'select_account' };
   if (req.query.hint) opts.loginHint = req.query.hint;
   return passport.authenticate('google', opts)(req, res, next);
 });
@@ -244,13 +246,18 @@ app.post('/auth/logout', (req, res) => {
     res.clearCookie('scouthook.sid');
     res.json({ ok: true });
   };
-  if (req.logout) {
-    req.logout((err) => {
-      if (err) console.error('[logout]', err);
+  // Destroy the session entirely rather than calling req.logout().
+  // Passport v0.7's req.logout() calls session.regenerate(), which creates a new
+  // empty session. express-session then sets a cookie for that new session ID
+  // *after* clearCookie runs, so the browser retains a dangling session cookie.
+  // session.destroy() removes the session from the store and sets req.session to
+  // undefined; express-session skips shouldSetCookie when req.session is absent,
+  // leaving clearCookie as the only Set-Cookie header in the response.
+  if (req.session) {
+    req.session.destroy((err) => {
+      if (err) console.error('[logout] session.destroy:', err);
       finish();
     });
-  } else if (req.session) {
-    req.session.destroy(finish);
   } else {
     finish();
   }

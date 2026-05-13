@@ -184,6 +184,14 @@ router.get('/callback', async (req, res) => {
 
   const { userId, tenantId } = stateData;
 
+  // If a user is currently authenticated their session must match the state.
+  // A mismatch means the OAuth was initiated by a different user (stale state, session swap).
+  if (req.userId && req.userId !== userId) {
+    console.warn(`[linkedin/callback] Session user=${req.userId} doesn't match state user=${userId} — rejecting`);
+    const errBase = stateData?.returnTo?.split('?')[0] || '/account.html';
+    return res.redirect(`${errBase}?linkedin_error=session_mismatch`);
+  }
+
   try {
     const clientId     = (process.env.LINKEDIN_CLIENT_ID || '').trim();
     const clientSecret = (process.env.LINKEDIN_CLIENT_SECRET || '').trim();

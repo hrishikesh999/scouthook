@@ -186,48 +186,65 @@ let fromDocFile    = null;
 let fromDocVaultId = null; // vault_doc_id when picked from vault
 
 function initFromDocPane() {
-  const dropzone      = document.getElementById('gen-doc-dropzone');
-  const fileInput     = document.getElementById('gen-doc-file-input');
-  const fileBadge     = document.getElementById('gen-doc-file-badge');
-  const fileName      = document.getElementById('gen-doc-file-name');
-  const fileClear     = document.getElementById('gen-doc-file-clear');
-  const urlInput      = document.getElementById('gen-doc-url');
-  const genBtn        = document.getElementById('gen-doc-btn');
-  const errEl         = document.getElementById('gen-doc-error');
-  const pickerToggle  = document.getElementById('gen-vault-picker-toggle');
-  const pickerPanel   = document.getElementById('gen-vault-picker');
-  const pickerList    = document.getElementById('gen-vault-picker-list');
+  const dropzone         = document.getElementById('gen-doc-dropzone');
+  const fileInput        = document.getElementById('gen-doc-file-input');
+  const fileBadge        = document.getElementById('gen-doc-file-badge');
+  const fileName         = document.getElementById('gen-doc-file-name');
+  const badgeSource      = document.getElementById('gen-doc-badge-source');
+  const fileClear        = document.getElementById('gen-doc-file-clear');
+  const urlInput         = document.getElementById('gen-doc-url');
+  const genBtn           = document.getElementById('gen-doc-btn');
+  const errEl            = document.getElementById('gen-doc-error');
+  const pickerList       = document.getElementById('gen-vault-picker-list');
+  const dropzoneDefault  = dropzone.querySelector('.gen-doc-dropzone-default');
+  const dropzoneSelLabel = dropzone.querySelector('.gen-doc-dropzone-selected-label');
+  const dropzoneFilename = document.getElementById('gen-doc-dropzone-filename');
 
   const ACCEPTED_EXT = ['pdf', 'docx', 'pptx', 'txt'];
-  let pickerLoaded = false;
+
+  function markDropzoneSelected(name) {
+    dropzone.classList.add('selected');
+    dropzoneDefault.hidden = true;
+    dropzoneSelLabel.hidden = false;
+    dropzoneFilename.textContent = name;
+  }
+  function unmarkDropzone() {
+    dropzone.classList.remove('selected');
+    dropzoneDefault.hidden = false;
+    dropzoneSelLabel.hidden = true;
+    dropzoneFilename.textContent = '';
+  }
+  function showBadge(sourceLabel, name) {
+    badgeSource.textContent = sourceLabel;
+    fileName.textContent = name;
+    fileBadge.hidden = false;
+  }
+  function hideBadge() {
+    fileBadge.hidden = true;
+    badgeSource.textContent = '';
+    fileName.textContent = '';
+  }
 
   function showFile(file) {
     fromDocFile    = file;
     fromDocVaultId = null;
-    fileName.textContent = file.name;
-    fileBadge.hidden = false;
-    dropzone.hidden  = true;
+    pickerList.querySelectorAll('.gen-vault-picker-item').forEach(el => el.classList.remove('selected'));
+    markDropzoneSelected(file.name);
+    showBadge('Uploaded:', file.name);
     if (urlInput) urlInput.value = '';
   }
-
   function showVaultDoc(id, name) {
     fromDocFile    = null;
     fromDocVaultId = id;
-    fileName.textContent = name;
-    fileBadge.hidden = false;
-    dropzone.hidden  = true;
+    unmarkDropzone();
+    showBadge('From vault:', name);
     if (urlInput) urlInput.value = '';
-    // Close picker
-    pickerPanel.hidden = true;
-    pickerToggle.setAttribute('aria-expanded', 'false');
   }
-
   function clearFile() {
     fromDocFile    = null;
     fromDocVaultId = null;
-    fileBadge.hidden = true;
-    dropzone.hidden  = false;
-    // Deselect any picker item
+    unmarkDropzone();
+    hideBadge();
     pickerList.querySelectorAll('.gen-vault-picker-item').forEach(el => el.classList.remove('selected'));
   }
 
@@ -248,11 +265,8 @@ function initFromDocPane() {
     showFile(file);
   }
 
-  // Click / keyboard to browse
   dropzone.addEventListener('click', () => fileInput.click());
   dropzone.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') fileInput.click(); });
-
-  // Drag and drop
   dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('dragging'); });
   dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragging'));
   dropzone.addEventListener('drop', e => {
@@ -261,48 +275,37 @@ function initFromDocPane() {
     const file = e.dataTransfer.files?.[0];
     if (file) handleFile(file);
   });
-
   fileInput.addEventListener('change', () => {
     if (fileInput.files?.[0]) handleFile(fileInput.files[0]);
     fileInput.value = '';
+  });
+  if (urlInput) urlInput.addEventListener('input', () => {
+    if (urlInput.value.trim()) clearFile();
   });
 
   fileClear.addEventListener('click', clearFile);
   genBtn.addEventListener('click', runFromDocGeneration);
 
-  // ── Vault picker ──
-  pickerToggle.addEventListener('click', async () => {
-    const isOpen = !pickerPanel.hidden;
-    if (isOpen) {
-      pickerPanel.hidden = true;
-      pickerToggle.setAttribute('aria-expanded', 'false');
-      return;
-    }
-    pickerPanel.hidden = false;
-    pickerToggle.setAttribute('aria-expanded', 'true');
-
-    if (pickerLoaded) return;
-    pickerLoaded = true;
-
+  // Auto-load vault on init (no toggle needed)
+  (async function loadVault() {
     try {
       const res  = await fetch('/api/vault/documents', { headers: apiHeaders() });
       const data = await res.json();
-      const docs  = (data.documents || []).filter(d => d.status === 'ready');
-
+      const docs = (data.documents || []).filter(d => d.status === 'ready');
       if (docs.length === 0) {
-        pickerList.innerHTML = `<div class="gen-vault-picker-empty">No ready documents in your Vault yet. <a href="/vault.html" style="color:var(--brand)">Upload one →</a></div>`;
+        pickerList.innerHTML = `<div class="gen-vault-picker-empty">No documents yet. <a href="/vault.html" style="color:var(--brand)">Upload one →</a></div>`;
         return;
       }
-
       pickerList.innerHTML = docs.map(d => {
-        const date = d.created_at ? new Date(d.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '';
+        const date = d.created_at
+          ? new Date(d.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+          : '';
         return `<button type="button" class="gen-vault-picker-item" data-id="${d.id}" data-name="${escapeAttr(d.filename)}">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
           <span class="gen-vault-picker-item-name">${escapeHtml(d.filename)}</span>
           <span class="gen-vault-picker-item-date">${date}</span>
         </button>`;
       }).join('');
-
       pickerList.querySelectorAll('.gen-vault-picker-item').forEach(item => {
         item.addEventListener('click', () => {
           pickerList.querySelectorAll('.gen-vault-picker-item').forEach(el => el.classList.remove('selected'));
@@ -313,7 +316,7 @@ function initFromDocPane() {
     } catch {
       pickerList.innerHTML = '<div class="gen-vault-picker-empty">Could not load documents. Try refreshing.</div>';
     }
-  });
+  })();
 }
 
 function escapeHtml(str) {

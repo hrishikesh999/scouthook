@@ -18,7 +18,7 @@
 
     .idea-form {
       width: 100%;
-      max-width: 820px;
+      max-width: 660px;
       display: flex;
       flex-direction: column;
       gap: var(--space-4);
@@ -550,48 +550,30 @@
       color: var(--text-muted);
     }
 
-    /* ── Two-column doc pane layout ──────────────────────────── */
-    .gen-doc-two-col {
-      display: grid;
-      grid-template-columns: 1fr auto 1fr;
-      gap: 0;
-      align-items: start;
-    }
-    .gen-doc-col {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-    .gen-doc-col-label {
+    /* ── From-a-doc pane sections ────────────────────────────── */
+    .gen-doc-section-label {
       font-size: 0.6875rem;
       font-weight: 700;
       letter-spacing: 0.07em;
       text-transform: uppercase;
       color: var(--text-muted);
-      margin: 0;
+      margin: 0 0 10px;
     }
-    .gen-doc-col-divider {
+    .gen-doc-or-divider {
       display: flex;
-      flex-direction: column;
       align-items: center;
-      gap: 6px;
-      padding: 0 20px;
-      padding-top: 28px;
-      align-self: stretch;
-    }
-    .gen-doc-col-divider-line {
-      flex: 1;
-      width: 1px;
-      background: var(--border);
-      min-height: 20px;
-    }
-    .gen-doc-col-divider-or {
+      gap: var(--space-3);
       font-size: 0.6875rem;
       font-weight: 600;
       text-transform: uppercase;
       letter-spacing: 0.06em;
       color: var(--text-muted);
-      flex-shrink: 0;
+    }
+    .gen-doc-or-divider::before,
+    .gen-doc-or-divider::after {
+      content: '';
+      flex: 1;
+      border-top: 1px solid var(--border);
     }
     .gen-doc-dropzone.selected {
       border-color: var(--brand);
@@ -606,8 +588,7 @@
       font-weight: 500;
     }
     .gen-doc-dropzone-selected-label svg { flex-shrink: 0; color: var(--brand); }
-    .gen-vault-picker { flex: 1; }
-    .gen-vault-picker-list { max-height: 240px; }
+    .gen-vault-picker-list { max-height: 180px; }
     .gen-doc-badge-source-label {
       font-size: 0.75rem;
       font-weight: 600;
@@ -618,21 +599,6 @@
       background: rgba(15,118,110,0.08);
       border-left: 3px solid var(--brand) !important;
       padding-left: 11px;
-    }
-    @media (max-width: 640px) {
-      .gen-doc-two-col { grid-template-columns: 1fr; }
-      .gen-doc-col-divider {
-        flex-direction: row;
-        padding: 4px 0;
-        align-self: auto;
-      }
-      .gen-doc-col-divider-line {
-        flex: 1;
-        width: auto;
-        height: 1px;
-        min-height: unset;
-        min-width: 20px;
-      }
     }
 
     /* ── Voice indicator ─────────────────────────────────────── */
@@ -751,50 +717,40 @@
             <p class="idea-sub">Upload something you've already written — a blog post, case study, talk notes, or email. We'll extract the strongest insight and write a LinkedIn post in your voice.</p>
           </div>
 
-          <!-- Two-column grid: upload left, vault right -->
-          <div class="gen-doc-two-col">
-
-            <!-- Left column: upload -->
-            <div class="gen-doc-col">
-              <p class="gen-doc-col-label">Upload a file</p>
-              <div id="gen-doc-dropzone" class="gen-doc-dropzone" tabindex="0" role="button" aria-label="Upload document">
-                <input id="gen-doc-file-input" type="file" accept=".pdf,.docx,.pptx,.txt" hidden />
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                <p class="gen-doc-dropzone-label gen-doc-dropzone-default"><span class="gen-doc-dropzone-browse">Choose a file</span> or drag it here</p>
-                <p class="gen-doc-dropzone-label gen-doc-dropzone-selected-label" hidden>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
-                  <span id="gen-doc-dropzone-filename"></span>
-                </p>
-                <p class="gen-doc-dropzone-types">PDF · DOCX · PPTX · TXT · up to 25 MB</p>
-              </div>
-              <div class="gen-doc-url-section">
-                <p class="gen-doc-url-label">Or paste a URL</p>
-                <div class="gen-doc-url-group">
-                  <span class="gen-doc-url-prefix">https://</span>
-                  <input id="gen-doc-url" class="gen-doc-url-input" type="text"
-                         placeholder="yourblog.com/post" autocomplete="off" spellcheck="false" />
-                </div>
+          <!-- Upload section -->
+          <div>
+            <p class="gen-doc-section-label">Upload a file</p>
+            <div id="gen-doc-dropzone" class="gen-doc-dropzone" tabindex="0" role="button" aria-label="Upload document">
+              <input id="gen-doc-file-input" type="file" accept=".pdf,.docx,.pptx,.txt" hidden />
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              <p class="gen-doc-dropzone-label gen-doc-dropzone-default"><span class="gen-doc-dropzone-browse">Choose a file</span> or drag it here</p>
+              <p class="gen-doc-dropzone-label gen-doc-dropzone-selected-label" hidden>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+                <span id="gen-doc-dropzone-filename"></span>
+              </p>
+              <p class="gen-doc-dropzone-types">PDF · DOCX · PPTX · TXT · up to 25 MB</p>
+            </div>
+            <div class="gen-doc-url-section" style="margin-top: 12px;">
+              <p class="gen-doc-url-label">Or paste a URL</p>
+              <div class="gen-doc-url-group">
+                <span class="gen-doc-url-prefix">https://</span>
+                <input id="gen-doc-url" class="gen-doc-url-input" type="text"
+                       placeholder="yourblog.com/post" autocomplete="off" spellcheck="false" />
               </div>
             </div>
+          </div>
 
-            <!-- Column divider -->
-            <div class="gen-doc-col-divider" aria-hidden="true">
-              <span class="gen-doc-col-divider-line"></span>
-              <span class="gen-doc-col-divider-or">or</span>
-              <span class="gen-doc-col-divider-line"></span>
-            </div>
+          <!-- Horizontal OR divider -->
+          <div class="gen-doc-or-divider" aria-hidden="true">or pick from your recent uploads</div>
 
-            <!-- Right column: vault (always visible, auto-loaded) -->
-            <div class="gen-doc-col">
-              <p class="gen-doc-col-label">Your recent uploads</p>
-              <div id="gen-vault-picker" class="gen-vault-picker">
-                <div class="gen-vault-picker-list" id="gen-vault-picker-list">
-                  <div class="gen-vault-picker-loading">Loading…</div>
-                </div>
+          <!-- Vault section -->
+          <div>
+            <div id="gen-vault-picker" class="gen-vault-picker">
+              <div class="gen-vault-picker-list" id="gen-vault-picker-list">
+                <div class="gen-vault-picker-loading">Loading…</div>
               </div>
             </div>
-
-          </div><!-- /.gen-doc-two-col -->
+          </div>
 
           <!-- Selection badge (spans full width, shown when any source is selected) -->
           <div id="gen-doc-file-badge" class="gen-doc-file-badge" hidden>

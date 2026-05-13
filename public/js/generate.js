@@ -120,6 +120,8 @@ async function triggerGenerate(opts = {}) {
       showGenerateError(`You've reached the free plan generation limit.${used} <button type="button" onclick="window.PricingModal?.open()" style="background:none;border:none;padding:0;color:var(--brand);font-weight:600;cursor:pointer;font-size:inherit">Upgrade to Pro →</button>`);
     } else if (err.message === 'rate_limit_exceeded') {
       showGenerateError('You\'ve hit the hourly generation limit. Wait a few minutes and try again.');
+    } else if (err.message === 'high_demand') {
+      showGenerateError('ScoutHook is under high demand right now. Wait 30 seconds and try again.');
     } else {
       showGenerateError('Something went wrong. <a href="#">Try again →</a>');
     }

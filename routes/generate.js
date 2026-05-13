@@ -293,6 +293,11 @@ router.post('/', async (req, res) => {
     if (err.message === 'missing_substance') {
       return res.status(422).json({ ok: false, error: 'missing_substance', prompt: err.substancePrompt });
     }
+    // Anthropic rate-limit (429) or overload (529) — surface gracefully instead of crashing
+    if (err.status === 429 || err.status === 529) {
+      console.warn('[generate] Anthropic API capacity error:', err.status);
+      return res.status(503).json({ ok: false, error: 'high_demand', retry_after_sec: 30 });
+    }
     console.error('[generate] Error:', err.message);
     return res.status(500).json({ ok: false, error: err.message });
   }

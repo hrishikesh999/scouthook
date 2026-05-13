@@ -11,7 +11,7 @@ function createPool() {
   return new Pool({
     connectionString,
     ssl: { rejectUnauthorized: false },
-    max: Number(process.env.PGPOOL_MAX || 10),
+    max: Number(process.env.PGPOOL_MAX || 30),
     idleTimeoutMillis: Number(process.env.PGPOOL_IDLE_MS || 30_000),
     connectionTimeoutMillis: Number(process.env.PGPOOL_CONN_TIMEOUT_MS || 10_000),
   });

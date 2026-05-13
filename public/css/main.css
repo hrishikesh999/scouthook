@@ -133,15 +133,22 @@ body {
   color: var(--text-muted);
 }
 
-/* Page titles — heavy, tight tracking */
+/* Page titles — consistent across all pages */
 .page-title-h1,
-.published-title,
 .drafts-title,
-.schedule-title {
+.published-title,
+.schedule-title,
+.vault-title,
+.media-title,
+.brand-heading,
+.profile-heading,
+.help-heading {
   font-family: var(--font-sans);
-  font-weight: 800;
-  letter-spacing: -0.04em;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
   color: var(--text-heading);
+  margin: 0 0 var(--space-1);
 }
 
 a {
@@ -2369,13 +2376,6 @@ body {
   margin-bottom: var(--space-8);
 }
 
-.brand-heading {
-  font-size: 28px;
-  font-family: var(--font-sans);
-  color: var(--text-primary);
-  margin-bottom: var(--space-2);
-}
-
 .brand-subheading {
   font-size: 15px;
   color: var(--text-secondary);
@@ -2681,13 +2681,6 @@ body {
 /* ── Profile Page ───────────────────────────────────────────── */
 .profile-page {
   padding: var(--space-8);
-}
-
-.profile-heading {
-  font-size: 28px;
-  font-family: var(--font-sans);
-  color: var(--text-primary);
-  margin-bottom: var(--space-2);
 }
 
 .profile-subheading {
@@ -3448,10 +3441,6 @@ body {
   margin-bottom: var(--space-8);
 }
 
-.drafts-title {
-  font-size: 28px;
-}
-
 .drafts-sub {
   font-size: 14px;
   color: var(--text-tertiary);
@@ -3735,14 +3724,6 @@ body {
   margin-bottom: var(--space-6);
 }
 
-.published-title {
-  font-size: 28px;
-  font-family: var(--font-sans);
-  font-weight: 700;
-  color: var(--text-heading);
-  margin: 0 0 var(--space-1);
-}
-
 .published-subtitle {
   font-size: 14px;
   color: var(--text-secondary);
@@ -4001,14 +3982,6 @@ body {
 
 .schedule-header {
   margin-bottom: 22px;
-}
-
-.schedule-title {
-  font-size: 24px;
-  font-family: var(--font-sans);
-  font-weight: 700;
-  color: var(--text-heading);
-  margin: 0 0 3px;
 }
 
 .schedule-subtitle {
@@ -4359,15 +4332,6 @@ body {
 
 .media-page-header {
   margin-bottom: var(--space-6);
-}
-
-.media-title {
-  font-size: 28px;
-  font-family: var(--font-sans);
-  font-weight: 800;
-  color: var(--text-heading);
-  letter-spacing: -0.02em;
-  margin: 0 0 var(--space-1);
 }
 
 .media-subtitle {
@@ -5027,15 +4991,6 @@ body {
 
 .vault-header {
   margin-bottom: var(--space-6);
-}
-
-.vault-title {
-  font-size: 28px;
-  font-family: var(--font-sans);
-  font-weight: 700;
-  letter-spacing: -0.03em;
-  color: var(--text-heading);
-  margin: 0 0 var(--space-1);
 }
 
 .vault-subtitle {

@@ -160,6 +160,47 @@ if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
       // Still allow login — profile can be recovered, but log clearly so it's not silent.
     }
 
+    // Account consolidation: migrate data from any stale user_id that shares this email
+    // (e.g. google_email:x@y.com created when profile.id was temporarily null) into the
+    // canonical google:${googleId} user_id. Runs on every login — idempotent and self-healing.
+    if (googleId && email) {
+      try {
+        const staleProfiles = await db.prepare(`
+          SELECT user_id FROM user_profiles
+          WHERE email = ? AND tenant_id = 'default' AND user_id != ?
+        `).all(email, userId);
+
+        for (const stale of staleProfiles) {
+          const staleId = stale.user_id;
+          console.log(`[auth] consolidating stale user_id=${staleId} → ${userId}`);
+
+          // Re-parent all data tables
+          await db.prepare(`UPDATE generated_posts   SET user_id = ? WHERE user_id = ? AND tenant_id = 'default'`).run(userId, staleId);
+          await db.prepare(`UPDATE scheduled_posts   SET user_id = ? WHERE user_id = ? AND tenant_id = 'default'`).run(userId, staleId);
+          await db.prepare(`UPDATE linkedin_tokens   SET user_id = ? WHERE user_id = ?`).run(userId, staleId);
+          await db.prepare(`UPDATE post_ideas        SET user_id = ? WHERE user_id = ? AND tenant_id = 'default'`).run(userId, staleId).catch(() => {});
+          await db.prepare(`UPDATE voice_profiles    SET user_id = ? WHERE user_id = ? AND tenant_id = 'default'`).run(userId, staleId).catch(() => {});
+
+          // Carry forward onboarding_complete if stale profile had it set
+          await db.prepare(`
+            UPDATE user_profiles SET onboarding_complete = 1
+            WHERE user_id = ? AND tenant_id = 'default'
+              AND EXISTS (
+                SELECT 1 FROM user_profiles
+                WHERE user_id = ? AND tenant_id = 'default' AND onboarding_complete = 1
+              )
+          `).run(userId, staleId);
+
+          // Remove the now-empty stale profile
+          await db.prepare(`DELETE FROM user_profiles WHERE user_id = ? AND tenant_id = 'default'`).run(staleId);
+          console.log(`[auth] consolidation complete: ${staleId} → ${userId}`);
+        }
+      } catch (err) {
+        console.error('[auth] account consolidation failed:', err.message);
+        // Non-fatal — user still logs in; data stays split until next attempt.
+      }
+    }
+
     return done(null, {
       provider: 'google',
       id: googleId,
@@ -241,8 +282,14 @@ app.get('/auth/google/callback',
         const postCount = await db.prepare(
           'SELECT COUNT(*) AS cnt FROM generated_posts WHERE user_id = ? AND tenant_id = ?'
         ).get(req.user.user_id, 'default');
-        console.log(`[auth/google/callback] user_id=${req.user.user_id} post_count=${postCount?.cnt}`);
-        if (postCount?.cnt > 0) {
+        const profileCheck = await db.prepare(
+          'SELECT created_at FROM user_profiles WHERE user_id = ? AND tenant_id = ?'
+        ).get(req.user.user_id, 'default');
+        // Treat as returning user if they have any posts OR if profile was created before
+        // this deploy (i.e. an existing account that got backfilled to onboarding_complete=0)
+        const hasActivity = (postCount?.cnt > 0) || (profileCheck?.created_at && new Date(profileCheck.created_at) < new Date('2026-01-01'));
+        console.log(`[auth/google/callback] user_id=${req.user.user_id} post_count=${postCount?.cnt} has_activity=${hasActivity}`);
+        if (hasActivity) {
           await db.prepare(
             'UPDATE user_profiles SET onboarding_complete = 1 WHERE user_id = ? AND tenant_id = ?'
           ).run(req.user.user_id, 'default');

@@ -443,6 +443,15 @@
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ transactionId: tid }),
             }).catch(() => { /* page-load sync is the backup */ });
+
+            // Navigate the real browser tab, not Paddle's overlay iframe.
+            // window.top escapes the checkout frame; fallback to window.location
+            // in case cross-origin restrictions block access to window.top.
+            try {
+              window.top.location.href = '/billing.html?checkout=success';
+            } catch {
+              window.location.href = '/billing.html?checkout=success';
+            }
           }
         },
       });

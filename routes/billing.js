@@ -133,6 +133,17 @@ router.get('/subscription', requireAuth, async (req, res) => {
               priceId,
             });
 
+            // Keep MailerLite groups in sync whenever the stale-refresh updates
+            // subscription state (e.g. on renewal, plan change, or cancellation).
+            getUserEmailInfo(userId, 'default').then(user => {
+              if (!user) return;
+              if (plan === 'pro' && ['active', 'trialing'].includes(subscription.status)) {
+                mailerlite.upgradeSubscriberToPro(user.email, user.name).catch(() => {});
+              } else if (['canceled', 'past_due', 'paused'].includes(subscription.status)) {
+                mailerlite.downgradeSubscriberToFree(user.email, user.name).catch(() => {});
+              }
+            }).catch(() => {});
+
             // Send payment-failed email once per billing cycle when status becomes past_due.
             if (subscription.status === 'past_due') {
               const dedupKey = `past_due:${subscription.currentBillingPeriod?.endsAt || 'unknown'}`;

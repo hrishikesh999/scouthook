@@ -943,18 +943,35 @@
     document.getElementById('btn-upgrade-cta').addEventListener('click', openModal);
     document.getElementById('btn-upgrade-nudge').addEventListener('click', openModal);
 
-    // ── Post-checkout success banner ───────────────────────────
-    (() => {
-      const params = new URLSearchParams(window.location.search);
-      if (params.get('checkout') === 'success') {
-        document.getElementById('success-banner').style.display = '';
-        window.history.replaceState({}, '', '/billing.html');
-      }
-    })();
-
     // ── Bootstrap ──────────────────────────────────────────────
     (async () => {
       try {
+        const params = new URLSearchParams(window.location.search);
+
+        // ── Post-checkout sync ──────────────────────────────────
+        // When the user lands here after completing Paddle checkout, we must
+        // await /api/billing/sync *before* fetching subscription state.
+        // Without this, the DB still shows Free (the keepalive sync from
+        // pricing-modal.js can take up to ~7 s to poll Paddle) and the
+        // billing page would incorrectly render the Free plan.
+        if (params.get('checkout') === 'success') {
+          document.getElementById('success-banner').style.display = '';
+          window.history.replaceState({}, '', '/billing.html');
+
+          let tid = null;
+          try { tid = sessionStorage.getItem('scouthook_pending_paddle_txn'); } catch {}
+          try {
+            await fetch('/api/billing/sync', {
+              method: 'POST',
+              credentials: 'same-origin',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(tid ? { transactionId: tid } : {}),
+            });
+            try { if (tid) sessionStorage.removeItem('scouthook_pending_paddle_txn'); } catch {}
+          } catch { /* non-fatal — proceed to render whatever the DB has */ }
+        }
+
+        // ── Normal load ─────────────────────────────────────────
         const [{ map, cfg }, subRes] = await Promise.all([
           loadConfig(),
           fetch('/api/billing/subscription'),

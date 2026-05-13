@@ -1444,6 +1444,7 @@ body.ob-shell {
   flex-direction: column;
   gap: 6px;
   flex: 1;
+  text-align: left;
 }
 .ob-plan-features li {
   font-size: 13px;

@@ -133,6 +133,7 @@ if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
     const photo = profile?.photos?.[0]?.value || null;
     const googleId = profile?.id || null;
     const userId = googleId ? `google:${googleId}` : (email ? `google_email:${email}` : null);
+    console.log(`[auth/google] login email=${email} googleId=${googleId} userId=${userId}`);
     if (!userId) return done(null, false);
 
     // First login == "sign up": ensure an app profile row exists.
@@ -232,6 +233,7 @@ app.get('/auth/google/callback',
       const row = await db.prepare(
         'SELECT onboarding_complete FROM user_profiles WHERE user_id = ? AND tenant_id = ?'
       ).get(req.user.user_id, 'default');
+      console.log(`[auth/google/callback] user_id=${req.user.user_id} onboarding_complete=${row?.onboarding_complete}`);
       if (!row?.onboarding_complete) {
         // Before sending to onboarding, check if this is actually a returning user whose
         // onboarding_complete flag was reset (e.g. by the DEFAULT 0 migration backfill or
@@ -239,6 +241,7 @@ app.get('/auth/google/callback',
         const postCount = await db.prepare(
           'SELECT COUNT(*) AS cnt FROM generated_posts WHERE user_id = ? AND tenant_id = ?'
         ).get(req.user.user_id, 'default');
+        console.log(`[auth/google/callback] user_id=${req.user.user_id} post_count=${postCount?.cnt}`);
         if (postCount?.cnt > 0) {
           await db.prepare(
             'UPDATE user_profiles SET onboarding_complete = 1 WHERE user_id = ? AND tenant_id = ?'
@@ -247,7 +250,8 @@ app.get('/auth/google/callback',
           return res.redirect('/onboarding.html');
         }
       }
-    } catch {
+    } catch (err) {
+      console.error('[auth/google/callback] onboarding check failed:', err.message);
       // Non-fatal — fall through to dashboard if the check fails.
     }
     // Returning user with pro intent: open billing with auto-upgrade param.

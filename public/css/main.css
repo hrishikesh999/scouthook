@@ -4611,6 +4611,65 @@ body {
   color: var(--text-danger);
 }
 
+/* ── Global app topbar (help + upgrade) ─────────────────────────────────── */
+.app-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  padding: 0 var(--space-8);
+  height: 48px;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.app-topbar-help {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-decoration: none;
+  padding: 6px 10px;
+  border-radius: var(--radius-md);
+  transition: color 0.15s, background 0.15s;
+  white-space: nowrap;
+}
+
+.app-topbar-help:hover {
+  color: var(--text-body);
+  background: var(--bg-subtle);
+}
+
+.app-topbar-upgrade {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 14px;
+  background: linear-gradient(180deg, #0D9488 0%, #0F766E 100%);
+  color: #fff;
+  border: 1px solid #115E59;
+  border-radius: 8px;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 0 #5EEAD4, 0 2px 8px rgba(20,184,166,0.15);
+  transition: opacity 0.2s ease;
+  white-space: nowrap;
+}
+
+.app-topbar-upgrade:hover { opacity: 0.9; }
+
+@media (max-width: 768px) {
+  .app-topbar { padding: 0 var(--space-4); }
+}
+
 /* ── Signed-in account bar (bottom-right) + sidebar account foot ─────────── */
 .app-user-bar {
   position: fixed;

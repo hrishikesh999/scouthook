@@ -1,4 +1,4 @@
-/* account-bar.js — sidebar signed-in user + logout (no floating widget) */
+/* account-bar.js — sidebar signed-in user + logout + global topbar */
 
 (function () {
   function initials(name, email) {
@@ -35,6 +35,20 @@
     }
   }
 
+  function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function escapeAttr(str) {
+    return escapeHtml(str).replace(/'/g, '&#39;');
+  }
+
+  // ── Sidebar account foot ─────────────────────────────────────
   function renderSidebarAccount(user) {
     const sidebar = document.getElementById('sidebar');
     if (!sidebar) return;
@@ -70,41 +84,47 @@
     slot.querySelector('.sidebar-account-foot-logout').addEventListener('click', logOut);
   }
 
-  function escapeHtml(str) {
-    if (!str) return '';
-    return String(str)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
+  // ── Global topbar (help + upgrade) ──────────────────────────
+  function renderTopbar() {
+    if (document.getElementById('app-topbar')) return;
+    const mainContent = document.getElementById('main-content');
+    if (!mainContent) return;
+
+    const bar = document.createElement('div');
+    bar.id = 'app-topbar';
+    bar.className = 'app-topbar';
+    bar.innerHTML = `
+      <a href="/help.html" class="app-topbar-help">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        Help &amp; Support
+      </a>
+    `;
+    mainContent.insertBefore(bar, mainContent.firstChild);
   }
 
-  function escapeAttr(str) {
-    return escapeHtml(str).replace(/'/g, '&#39;');
-  }
-
-  async function renderUpgradePill() {
-    const sidebar = document.getElementById('sidebar');
-    if (!sidebar) return;
-    const bottom = sidebar.querySelector('.sidebar-bottom');
-    if (!bottom) return;
+  async function renderTopbarUpgrade() {
+    const bar = document.getElementById('app-topbar');
+    if (!bar) return;
     try {
       const r = await fetch('/api/billing/subscription');
       if (!r.ok) return;
       const d = await r.json();
       if (d.plan !== 'free') return;
-      // Insert upgrade button above the account slot
-      const pill = document.createElement('button');
-      pill.type = 'button';
-      pill.className = 'sidebar-link';
-      pill.style.cssText = 'color:var(--brand);font-weight:600;font-size:13px;margin-bottom:4px;background:none;border:none;cursor:pointer;width:100%;text-align:left;';
-      pill.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>Upgrade to Pro`;
-      pill.addEventListener('click', () => window.PricingModal?.open());
-      bottom.insertBefore(pill, bottom.firstChild);
+
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'app-topbar-upgrade';
+      btn.innerHTML = `
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+        Upgrade to Pro
+      `;
+      btn.addEventListener('click', () => window.PricingModal?.open());
+      // Insert before the help link so upgrade sits to the left of help
+      bar.insertBefore(btn, bar.querySelector('.app-topbar-help'));
     } catch { /* ignore */ }
   }
 
-  // Load pricing modal on all protected pages
+  // ── Load shared scripts ──────────────────────────────────────
   if (!document.getElementById('pricing-modal-script')) {
     const s = document.createElement('script');
     s.id  = 'pricing-modal-script';
@@ -112,12 +132,19 @@
     document.head.appendChild(s);
   }
 
-  // Load feedback widget on all protected pages
   if (!document.getElementById('feedback-widget-script')) {
     const s = document.createElement('script');
     s.id  = 'feedback-widget-script';
     s.src = '/js/feedback-widget.js';
     document.head.appendChild(s);
+  }
+
+  // ── Boot ─────────────────────────────────────────────────────
+  // Render topbar immediately (help link doesn't need auth)
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', renderTopbar);
+  } else {
+    renderTopbar();
   }
 
   const auth = window.scouthookAuthReady;
@@ -127,7 +154,7 @@
         const user = data && data.user;
         if (!user || !user.user_id) return;
         renderSidebarAccount(user);
-        renderUpgradePill();
+        renderTopbarUpgrade();
       })
       .catch(() => { /* offline */ });
   }

@@ -232,7 +232,21 @@ app.get('/auth/google/callback',
       const row = await db.prepare(
         'SELECT onboarding_complete FROM user_profiles WHERE user_id = ? AND tenant_id = ?'
       ).get(req.user.user_id, 'default');
-      if (!row?.onboarding_complete) return res.redirect('/onboarding.html');
+      if (!row?.onboarding_complete) {
+        // Before sending to onboarding, check if this is actually a returning user whose
+        // onboarding_complete flag was reset (e.g. by the DEFAULT 0 migration backfill or
+        // by a session mixup). Any user with existing posts is treated as complete.
+        const postCount = await db.prepare(
+          'SELECT COUNT(*) AS cnt FROM generated_posts WHERE user_id = ? AND tenant_id = ?'
+        ).get(req.user.user_id, 'default');
+        if (postCount?.cnt > 0) {
+          await db.prepare(
+            'UPDATE user_profiles SET onboarding_complete = 1 WHERE user_id = ? AND tenant_id = ?'
+          ).run(req.user.user_id, 'default');
+        } else {
+          return res.redirect('/onboarding.html');
+        }
+      }
     } catch {
       // Non-fatal — fall through to dashboard if the check fails.
     }

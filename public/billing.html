@@ -571,36 +571,6 @@
                 <div class="usage-track"><div class="usage-fill" id="gen-bar" style="width:0%"></div></div>
               </div>
 
-              <!-- Visual Creations -->
-              <div class="usage-meter">
-                <div class="usage-meter-top">
-                  <span class="usage-meter-label">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-                    Visual creations
-                  </span>
-                  <div class="usage-meter-right">
-                    <span class="usage-count" id="visual-count">— / —</span>
-                    <span class="usage-pct ok" id="visual-pct">0%</span>
-                  </div>
-                </div>
-                <div class="usage-track"><div class="usage-fill" id="visual-bar" style="width:0%"></div></div>
-              </div>
-
-              <!-- Vault Documents -->
-              <div class="usage-meter">
-                <div class="usage-meter-top">
-                  <span class="usage-meter-label">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
-                    <span id="vault-label">Vault documents</span>
-                  </span>
-                  <div class="usage-meter-right">
-                    <span class="usage-count" id="vault-count">— / —</span>
-                    <span class="usage-pct ok" id="vault-pct">0%</span>
-                  </div>
-                </div>
-                <div class="usage-track"><div class="usage-fill" id="vault-bar" style="width:0%"></div></div>
-              </div>
-
               <!-- Free nudge -->
               <div id="usage-upgrade-nudge" class="usage-nudge" style="display:none">
                 <span>Free plan — upgrade for unlimited generations, visuals, and more.</span>
@@ -863,34 +833,13 @@
       }
 
       // ── Usage meters ──────────────────────────────────────────
-      const gen   = sub.generations || { current: 0, limit: isPro ? null : 20 };
-      const vis   = sub.visuals      || { current: 0, limit: null };
-      const vault = sub.vault_docs   || { current: 0, limit: null };
+      const gen = sub.generations || { current: 0, limit: isPro ? null : 20 };
 
       fillMeter(
         document.getElementById('gen-bar'),
         document.getElementById('gen-count'),
         document.getElementById('gen-pct'),
         gen.current, gen.limit
-      );
-      if (!isPro) {
-        // Visuals are Pro-only — replace meter with a plain label
-        document.getElementById('visual-count').textContent = 'Pro only';
-        document.getElementById('visual-pct').textContent   = '';
-        document.getElementById('visual-bar').style.width   = '0%';
-      } else {
-        fillMeter(
-          document.getElementById('visual-bar'),
-          document.getElementById('visual-count'),
-          document.getElementById('visual-pct'),
-          vis.current, vis.limit
-        );
-      }
-      fillMeter(
-        document.getElementById('vault-bar'),
-        document.getElementById('vault-count'),
-        document.getElementById('vault-pct'),
-        vault.current, vault.limit
       );
 
       document.getElementById('reset-note').textContent = isPro ? resetNote() : '';

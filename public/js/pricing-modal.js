@@ -33,9 +33,10 @@
     z-index: 900;
     background: rgba(9,9,11,0.5);
     display: none;
-    align-items: center;
+    align-items: flex-start;
     justify-content: center;
     padding: 24px;
+    overflow-y: auto;
   }
   #pm-overlay.visible { display: flex; }
 
@@ -44,40 +45,33 @@
     border: 1px solid var(--border, #E4E4E7);
     border-radius: 16px;
     width: 100%;
-    max-width: 720px;
-    max-height: calc(100vh - 48px);
-    overflow: hidden;
+    max-width: 860px;
+    position: relative;
     box-shadow: 0 8px 40px rgba(0,0,0,0.22);
-    display: flex;
-    flex-direction: column;
-  }
-
-  #pm-close-row {
-    display: flex;
-    justify-content: flex-end;
-    padding: 12px 12px 0;
-    flex-shrink: 0;
+    margin: 0 auto;
   }
 
   #pm-modal-body {
-    overflow-y: auto;
-    padding: 4px 36px 40px;
-    flex: 1;
-    min-height: 0;
+    padding: 48px 36px 40px;
   }
 
   #pm-close {
+    position: absolute;
+    top: 12px;
+    right: 16px;
+    z-index: 2;
     background: none;
     border: none;
     cursor: pointer;
     color: var(--text-muted, #71717A);
-    padding: 4px;
+    padding: 8px;
     border-radius: 6px;
     line-height: 1;
     display: flex;
     align-items: center;
   }
   #pm-close:hover { background: var(--bg-pill, #F4F4F5); }
+  #pm-close svg { pointer-events: none; }
 
   #pm-header { text-align: center; margin-bottom: 28px; }
   #pm-header h2 {
@@ -150,7 +144,7 @@
     gap: 16px;
   }
   @media (max-width: 560px) {
-    #pm-modal-body { padding: 4px 18px 28px; }
+    #pm-modal-body { padding: 48px 18px 28px; }
     .pm-cards { grid-template-columns: 1fr; }
   }
 
@@ -267,18 +261,16 @@
   overlay.setAttribute('aria-label', 'Upgrade to Pro');
   overlay.innerHTML = `
     <div id="pm-modal">
-      <div id="pm-close-row">
-        <button id="pm-close" aria-label="Close">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-        </button>
-      </div>
+      <button id="pm-close" aria-label="Close">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
       <div id="pm-modal-body">
       <div id="pm-header">
         <h2>Simple, transparent pricing</h2>
         <p>Start free. Upgrade when you're ready to go unlimited.</p>
       </div>
 
-      <div class="pm-toggle">
+      <div class="pm-toggle" style="display:none">
         <span class="pm-toggle-label pm-active" id="pm-monthly-lbl">Monthly</span>
         <label class="pm-switch" aria-label="Switch to annual billing">
           <input type="checkbox" id="pm-annual-toggle">
@@ -349,7 +341,7 @@
           <div id="pm-founding-badge" style="display:none;margin-bottom:6px;font-size:12px;font-weight:700;color:#059669;letter-spacing:0.01em;"></div>
           <div id="pm-price-monthly">
             <div class="pm-price" style="display:flex;align-items:baseline;gap:8px;">
-              <span><sup>$</sup><span id="pm-monthly-amount">39</span></span>
+              <span><sup>$</sup><span id="pm-monthly-amount">—</span></span>
               <span id="pm-strike-price" style="display:none;font-size:17px;font-weight:500;color:var(--text-muted,#A1A1AA);text-decoration:line-through;">$39</span>
             </div>
             <div class="pm-period">/ month</div>

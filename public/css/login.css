@@ -22,7 +22,7 @@ html, body {
 }
 
 .login-left-inner {
-  max-width: 460px;
+  max-width: 440px;
   width: 100%;
 }
 
@@ -65,7 +65,7 @@ html, body {
 }
 
 .login-right-inner {
-  max-width: 420px;
+  max-width: 440px;
   width: 100%;
   display: flex;
   flex-direction: column;

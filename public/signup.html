@@ -49,17 +49,8 @@
 
           <div class="login-tagline">Free to start. No credit card needed.</div>
 
-          <div class="login-pro-entry">
-            <span class="login-pro-sep">or</span>
-            <a href="/auth/google?intent=pro" class="login-pro-link" id="login-pro-link">Start with Pro →</a>
-          </div>
-
           <div class="login-meta">
             By continuing, you agree to the app's terms and privacy policy.
-          </div>
-
-          <div class="login-switch">
-            Already have an account? <a href="/login.html" class="login-switch-link">Sign in →</a>
           </div>
         </section>
       </div>
@@ -96,15 +87,6 @@
         window.location.href = url;
       });
 
-      // Thread typed email as hint into the "Start with Pro" link
-      const proLink = document.getElementById('login-pro-link');
-      document.getElementById('loginEmail')?.addEventListener('input', function () {
-        const email = (this.value || '').trim();
-        const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-        if (proLink) {
-          proLink.href = '/auth/google?intent=pro' + (valid ? '&hint=' + encodeURIComponent(email) : '');
-        }
-      });
     })();
   </script>
 </body>

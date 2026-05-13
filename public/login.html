@@ -11,65 +11,33 @@
 <body>
   <div class="login-split">
 
-    <!-- Left: marketing panel -->
+    <!-- Left: welcome panel -->
     <div class="login-left">
       <div class="login-left-inner">
-        <p class="login-hero-headline">Turn your expertise into LinkedIn posts that attract clients</p>
-        <p class="login-hero-body">Most consultants, coaches and founders know they should be posting on LinkedIn. They just never get around to it. Scouthook turns your ideas into LinkedIn posts worth publishing — in under 60 seconds.</p>
-        <ul class="login-hero-list">
-          <li>
-            <span class="login-hero-check" aria-hidden="true">✓</span>
-            Posts that reflect your expertise and optimised for LinkedIn
-          </li>
-          <li>
-            <span class="login-hero-check" aria-hidden="true">✓</span>
-            Every post passes a 15-point quality gate before you see it
-          </li>
-          <li>
-            <span class="login-hero-check" aria-hidden="true">✓</span>
-            Publish, schedule and track — all in one place
-          </li>
-        </ul>
+        <img src="/images/scout-hook-logo.png" alt="Scouthook" class="login-left-logo" />
+        <h1 class="login-hero-headline">Welcome back to Scouthook</h1>
+        <p class="login-hero-signup">
+          New to Scouthook? <a href="/signup.html" class="login-signup-link">Sign up</a>
+        </p>
       </div>
     </div>
 
     <!-- Right: sign-in panel -->
     <div class="login-right">
       <div class="login-right-inner">
-        <img src="/images/sh-logo-dark.png" alt="Scouthook" class="login-logo-img" />
-
-        <section class="login-card" role="region" aria-label="Sign in">
-          <h1 class="login-headline">Welcome back</h1>
-
-          <div id="errorBox" class="login-error" hidden></div>
-
-          <form id="emailForm" class="login-email-form" novalidate>
-            <label class="login-email-label" for="loginEmail">Work email</label>
-            <input id="loginEmail" class="login-email-input" type="email"
-                   placeholder="you@company.com" autocomplete="email" required />
-            <p id="emailError" class="login-email-error" hidden>Please enter a valid email address.</p>
-            <button class="google-btn login-continue-btn" type="submit">
-              <span class="google-icon" aria-hidden="true">
-                <svg viewBox="0 0 48 48" width="18" height="18">
-                  <path fill="#EA4335" d="M24 9.5c3.54 0 6.08 1.53 7.48 2.81l5.1-4.9C33.44 4.59 29.17 2.5 24 2.5 14.74 2.5 6.94 7.82 3.1 15.6l6.35 4.93C11.34 14.1 17.14 9.5 24 9.5z"/>
-                  <path fill="#4285F4" d="M46.1 24.5c0-1.34-.12-2.63-.34-3.88H24v7.34h12.5c-.54 2.9-2.18 5.35-4.64 7.02v5.8h7.5c4.38-4.03 6.74-9.97 6.74-16.28z"/>
-                  <path fill="#FBBC05" d="M9.45 28.53c-.47-1.4-.74-2.9-.74-4.53s.27-3.13.74-4.53l-6.35-4.93C1.77 17.23 1 20.52 1 24s.77 6.77 2.1 9.46l6.35-4.93z"/>
-                  <path fill="#34A853" d="M24 45.5c5.17 0 9.5-1.7 12.66-4.62l-7.5-5.8c-2.08 1.4-4.74 2.23-5.16 2.23-6.86 0-12.66-4.6-14.55-11.03l-6.35 4.93C6.94 40.18 14.74 45.5 24 45.5z"/>
-                  <path fill="none" d="M1 1h46v46H1z"/>
-                </svg>
-              </span>
-              <span>Sign in with Google</span>
-            </button>
-          </form>
-
-          <div class="login-tagline">
-            New to ScoutHook? <a href="/signup.html" class="login-switch-link">Sign up free →</a>
-          </div>
-
-          <div class="login-meta">
-            By continuing, you agree to the app's terms and privacy policy.
-          </div>
-        </section>
+        <div id="errorBox" class="login-error" hidden></div>
+        <a href="/auth/google" class="google-btn">
+          <span class="google-icon" aria-hidden="true">
+            <svg viewBox="0 0 48 48" width="18" height="18">
+              <path fill="#EA4335" d="M24 9.5c3.54 0 6.08 1.53 7.48 2.81l5.1-4.9C33.44 4.59 29.17 2.5 24 2.5 14.74 2.5 6.94 7.82 3.1 15.6l6.35 4.93C11.34 14.1 17.14 9.5 24 9.5z"/>
+              <path fill="#4285F4" d="M46.1 24.5c0-1.34-.12-2.63-.34-3.88H24v7.34h12.5c-.54 2.9-2.18 5.35-4.64 7.02v5.8h7.5c4.38-4.03 6.74-9.97 6.74-16.28z"/>
+              <path fill="#FBBC05" d="M9.45 28.53c-.47-1.4-.74-2.9-.74-4.53s.27-3.13.74-4.53l-6.35-4.93C1.77 17.23 1 20.52 1 24s.77 6.77 2.1 9.46l6.35-4.93z"/>
+              <path fill="#34A853" d="M24 45.5c5.17 0 9.5-1.7 12.66-4.62l-7.5-5.8c-2.08 1.4-4.74 2.23-5.16 2.23-6.86 0-12.66-4.6-14.55-11.03l-6.35 4.93C6.94 40.18 14.74 45.5 24 45.5z"/>
+              <path fill="none" d="M1 1h46v46H1z"/>
+            </svg>
+          </span>
+          <span>Login with Google</span>
+        </a>
       </div>
     </div>
 
@@ -77,7 +45,6 @@
 
   <script>
     (function () {
-      // Show server-side error if redirected back with ?error=
       const params = new URLSearchParams(window.location.search);
       const error = params.get('error');
       if (error) {
@@ -90,19 +57,6 @@
           box.hidden = false;
         }
       }
-
-      // Email form → /auth/google?hint=<email>
-      document.getElementById('emailForm')?.addEventListener('submit', function (e) {
-        e.preventDefault();
-        const input    = document.getElementById('loginEmail');
-        const errEl    = document.getElementById('emailError');
-        const email    = (input?.value || '').trim();
-        const valid    = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-        errEl.hidden   = valid;
-        if (!valid) { input?.focus(); return; }
-        const url = '/auth/google' + (email ? '?hint=' + encodeURIComponent(email) : '');
-        window.location.href = url;
-      });
     })();
   </script>
 </body>

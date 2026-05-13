@@ -18,7 +18,7 @@
 
     .idea-form {
       width: 100%;
-      max-width: 660px;
+      max-width: 820px;
       display: flex;
       flex-direction: column;
       gap: var(--space-4);
@@ -406,18 +406,45 @@
     }
     .gen-doc-file-clear:hover { color: var(--red, #ef4444); }
 
-    .gen-doc-url-row {
+    .gen-doc-url-section {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .gen-doc-url-label {
+      font-size: 0.6875rem;
+      font-weight: 700;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin: 0;
+    }
+    .gen-doc-url-group {
+      display: flex;
+      align-items: stretch;
+      border: 1px solid #D1D5DB;
+      border-radius: var(--radius-md);
+      background: var(--bg-surface);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+      overflow: hidden;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .gen-doc-url-group:focus-within {
+      border-color: var(--brand);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 12%, transparent);
+    }
+    .gen-doc-url-prefix {
       display: flex;
       align-items: center;
-      gap: 12px;
-    }
-    .gen-doc-url-or {
-      flex-shrink: 0;
-      font-size: 0.6875rem;
-      font-weight: 600;
+      padding: 0 10px;
+      font-size: 0.875rem;
+      font-family: var(--font-sans);
       color: var(--text-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
+      background: var(--bg-subtle);
+      border-right: 1px solid #D1D5DB;
+      white-space: nowrap;
+      flex-shrink: 0;
+      user-select: none;
     }
     .gen-doc-url-input {
       flex: 1;
@@ -425,17 +452,10 @@
       font-family: var(--font-sans);
       font-size: 0.875rem;
       padding: 10px 14px;
-      border: 1px solid #D1D5DB;
-      border-radius: var(--radius-md);
-      color: var(--text-body);
-      background: var(--bg-surface);
+      border: none;
       outline: none;
-      transition: border-color 0.15s, box-shadow 0.15s;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
-    }
-    .gen-doc-url-input:focus {
-      border-color: var(--brand);
-      box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 12%, transparent);
+      background: transparent;
+      color: var(--text-body);
     }
     .gen-doc-url-input::placeholder { color: var(--text-muted); }
 
@@ -587,7 +607,7 @@
     }
     .gen-doc-dropzone-selected-label svg { flex-shrink: 0; color: var(--brand); }
     .gen-vault-picker { flex: 1; }
-    .gen-vault-picker-list { max-height: 220px; }
+    .gen-vault-picker-list { max-height: 240px; }
     .gen-doc-badge-source-label {
       font-size: 0.75rem;
       font-weight: 600;
@@ -747,9 +767,13 @@
                 </p>
                 <p class="gen-doc-dropzone-types">PDF · DOCX · PPTX · TXT · up to 25 MB</p>
               </div>
-              <div class="gen-doc-url-row">
-                <span class="gen-doc-url-or">or paste a URL</span>
-                <input id="gen-doc-url" class="gen-doc-url-input" type="url" placeholder="https://yourblog.com/post" />
+              <div class="gen-doc-url-section">
+                <p class="gen-doc-url-label">Or paste a URL</p>
+                <div class="gen-doc-url-group">
+                  <span class="gen-doc-url-prefix">https://</span>
+                  <input id="gen-doc-url" class="gen-doc-url-input" type="text"
+                         placeholder="yourblog.com/post" autocomplete="off" spellcheck="false" />
+                </div>
               </div>
             </div>
 

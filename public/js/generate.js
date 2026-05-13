@@ -331,15 +331,13 @@ async function runFromDocGeneration() {
   const statusEl = document.getElementById('gen-doc-status');
   const errEl    = document.getElementById('gen-doc-error');
   const urlInput = document.getElementById('gen-doc-url');
-  const docUrl   = (urlInput?.value || '').trim();
+  const rawUrl  = (urlInput?.value || '').trim();
+  const docUrl  = rawUrl
+    ? (/^https?:\/\//i.test(rawUrl) ? rawUrl : 'https://' + rawUrl)
+    : '';
 
   if (!fromDocFile && !docUrl && !fromDocVaultId) {
     errEl.textContent = 'Please upload a file, paste a URL, or pick from your Vault.';
-    errEl.style.display = '';
-    return;
-  }
-  if (docUrl && !/^https?:\/\//i.test(docUrl)) {
-    errEl.textContent = 'Please enter a valid URL (starting with https://).';
     errEl.style.display = '';
     return;
   }

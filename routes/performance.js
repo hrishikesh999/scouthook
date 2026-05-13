@@ -2,7 +2,7 @@
 
 const express = require('express');
 const router  = express.Router();
-const db      = require('../db');
+const { db }  = require('../db');
 const { getUserPlan } = require('../services/subscription');
 
 const VALID_TAGS = new Set(['strong', 'decent', 'weak']);

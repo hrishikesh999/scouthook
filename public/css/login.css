@@ -65,7 +65,7 @@ html, body {
 }
 
 .login-right-inner {
-  max-width: 440px;
+  max-width: 572px;
   width: 100%;
   display: flex;
   flex-direction: column;

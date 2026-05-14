@@ -1,15 +1,18 @@
-* { box-sizing: border-box; }
-
-html, body {
-  height: 100%;
+/* ── Reset body shell from main.css (sidebar flex layout) ─── */
+body {
+  display: block;
+  min-height: 100vh;
   margin: 0;
 }
+
+* { box-sizing: border-box; }
 
 /* ── Two-panel split ─────────────────────────────────────── */
 .login-split {
   display: grid;
   grid-template-columns: 1fr 1fr;
   min-height: 100vh;
+  width: 100%;
 }
 
 /* ── Left panel: dark ────────────────────────────────────── */
@@ -55,14 +58,14 @@ html, body {
 }
 .login-signup-link:hover { text-decoration: underline; }
 
-/* ── Right panel: app background ─────────────────────────── */
+/* ── Right panel: light ──────────────────────────────────── */
 .login-right {
   background: var(--bg-app);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 60px 56px;
+  padding: 60px 40px;
 }
 
 .login-right-inner {
@@ -70,7 +73,7 @@ html, body {
   max-width: 420px;
 }
 
-/* ── Sign-in / sign-up card ──────────────────────────────── */
+/* ── Card ────────────────────────────────────────────────── */
 .login-card {
   width: 100%;
   padding: 36px 32px;
@@ -125,7 +128,7 @@ html, body {
 
 /* ── Below-card copy ─────────────────────────────────────── */
 .login-tagline {
-  margin-top: 14px;
+  margin: 14px 0 0;
   font-size: 12px;
   color: var(--brand);
   font-weight: 600;
@@ -134,7 +137,7 @@ html, body {
 }
 
 .login-meta {
-  margin-top: 10px;
+  margin: 10px 0 0;
   font-size: 12px;
   color: var(--text-muted);
   line-height: 1.5;

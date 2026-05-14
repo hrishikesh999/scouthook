@@ -4,14 +4,15 @@
   <meta charset="UTF-8" />
   <link rel="icon" type="image/png" href="/favicon.png">
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Scouthook — Sign in to your account</title>
+  <title>Scouthook — Sign in</title>
   <link rel="stylesheet" href="/css/main.css" />
   <link rel="stylesheet" href="/css/login.css" />
 </head>
 <body>
+
   <div class="login-split">
 
-    <!-- Left: welcome panel -->
+    <!-- Left: dark branding panel -->
     <div class="login-left">
       <div class="login-left-inner">
         <img src="/images/scout-hook-logo.png" alt="Scouthook" class="login-left-logo" />
@@ -48,18 +49,19 @@
   <script>
     (function () {
       const params = new URLSearchParams(window.location.search);
-      const error = params.get('error');
+      const error  = params.get('error');
       if (error) {
         const box = document.getElementById('errorBox');
         if (box) {
           box.textContent =
             error === 'google_not_configured' ? 'Google sign-in is not configured on the server.' :
-            error === 'oauth_failed' ? 'Google sign-in failed. Please try again.' :
-            'Sign-in error. Please try again.';
+            error === 'oauth_failed'           ? 'Google sign-in failed. Please try again.' :
+                                                 'Sign-in error. Please try again.';
           box.hidden = false;
         }
       }
     })();
   </script>
+
 </body>
 </html>

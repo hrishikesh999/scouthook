@@ -5,24 +5,24 @@ html, body {
   margin: 0;
 }
 
-/* ── Full-height split ──────────────────────────────────── */
+/* ── Two-panel split ─────────────────────────────────────── */
 .login-split {
   display: grid;
-  grid-template-columns: 1.2fr 0.8fr;
+  grid-template-columns: 1fr 1fr;
   min-height: 100vh;
 }
 
-/* ── Left panel: dark ───────────────────────────────────── */
+/* ── Left panel: dark ────────────────────────────────────── */
 .login-left {
   background: #0F172A;
   display: flex;
-  align-items: center;
+  flex-direction: column;
   justify-content: center;
-  padding: 60px clamp(32px, 6vw, 80px);
+  padding: 60px 56px;
 }
 
 .login-left-inner {
-  max-width: 440px;
+  max-width: 400px;
   width: 100%;
 }
 
@@ -55,48 +55,29 @@ html, body {
 }
 .login-signup-link:hover { text-decoration: underline; }
 
-/* ── Right panel: app background ────────────────────────── */
+/* ── Right panel: app background ─────────────────────────── */
 .login-right {
   background: var(--bg-app);
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 60px 40px;
+  padding: 60px 56px;
 }
 
 .login-right-inner {
-  max-width: 572px;
   width: 100%;
-  margin: 0 auto;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 16px;
+  max-width: 420px;
 }
 
-.login-logo-img {
-  height: 34px;
-  width: auto;
-  display: block;
-}
-
-/* ── Sign-in card ───────────────────────────────────────── */
+/* ── Sign-in / sign-up card ──────────────────────────────── */
 .login-card {
   width: 100%;
-  padding: 32px 28px;
+  padding: 36px 32px;
   border-radius: 16px;
   background: #fff;
   border: 1px solid var(--border);
   box-shadow: var(--shadow-md);
-}
-
-.login-headline {
-  font-size: clamp(16px, 2vw, 20px);
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  line-height: 1.35;
-  margin: 0 0 24px;
-  color: var(--text-heading);
 }
 
 .login-error {
@@ -109,10 +90,11 @@ html, body {
   font-size: 13px;
 }
 
+/* ── Google button ───────────────────────────────────────── */
 .google-btn {
   width: 100%;
-  height: 44px;
-  display: inline-flex;
+  height: 46px;
+  display: flex;
   align-items: center;
   justify-content: center;
   gap: 10px;
@@ -123,26 +105,27 @@ html, body {
   font-weight: 700;
   font-size: 14px;
   border: 1.5px solid var(--border);
+  cursor: pointer;
   transition: transform 120ms ease, box-shadow 120ms ease;
 }
-
 .google-btn:hover {
   box-shadow: var(--shadow-md);
   transform: translateY(-1px);
 }
-
-.google-btn:active {
-  transform: translateY(0);
-}
+.google-btn:active { transform: translateY(0); }
 
 .google-icon {
   width: 18px;
   height: 18px;
-  display: inline-flex;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
+/* ── Below-card copy ─────────────────────────────────────── */
 .login-tagline {
-  margin-top: 12px;
+  margin-top: 14px;
   font-size: 12px;
   color: var(--brand);
   font-weight: 600;
@@ -150,7 +133,15 @@ html, body {
   text-align: center;
 }
 
-/* ── Email-first form ───────────────────────────────────── */
+.login-meta {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  text-align: center;
+}
+
+/* ── Email-first form (signup) ───────────────────────────── */
 .login-email-form {
   display: flex;
   flex-direction: column;
@@ -174,15 +165,13 @@ html, body {
   font-size: 15px;
   color: var(--text-primary);
   background: var(--surface);
-  transition: border-color 120ms ease, box-shadow 120ms ease;
   outline: none;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
 }
-
 .login-email-input:focus {
   border-color: var(--brand);
   box-shadow: 0 0 0 3px rgba(var(--brand-rgb, 99, 102, 241), 0.12);
 }
-
 .login-email-input::placeholder { color: var(--text-muted); }
 
 .login-email-error {
@@ -191,62 +180,14 @@ html, body {
   color: var(--text-danger);
 }
 
-.login-continue-btn {
-  margin-top: 6px;
-  cursor: pointer;
-}
+.login-continue-btn { margin-top: 6px; }
 
-.login-meta {
-  margin-top: 8px;
-  font-size: 12px;
-  color: var(--text-muted);
-  line-height: 1.5;
-  text-align: center;
-}
-
-/* ── Mobile: stack, hide left panel ────────────────────── */
+/* ── Mobile: single column, hide left panel ──────────────── */
 @media (max-width: 720px) {
-  .login-split {
-    grid-template-columns: 1fr;
-  }
-  .login-left { display: none; }
+  .login-split { grid-template-columns: 1fr; }
+  .login-left  { display: none; }
   .login-right {
     min-height: 100vh;
-    padding: 40px 20px;
-  }
-  .login-right-inner {
-    align-items: center;
+    padding: 40px 24px;
   }
 }
-
-/* ── Signup page: Pro entry link ────────────────────────── */
-.login-pro-entry {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  justify-content: center;
-  margin-top: 14px;
-}
-.login-pro-sep { font-size: 12px; color: var(--text-muted); }
-.login-pro-link {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--brand);
-  text-decoration: none;
-  letter-spacing: 0.01em;
-}
-.login-pro-link:hover { text-decoration: underline; }
-
-/* ── Cross-page switch link (login ↔ signup) ────────────── */
-.login-switch {
-  margin-top: 16px;
-  text-align: center;
-  font-size: 12px;
-  color: var(--text-muted);
-}
-.login-switch-link {
-  color: var(--brand);
-  font-weight: 600;
-  text-decoration: none;
-}
-.login-switch-link:hover { text-decoration: underline; }

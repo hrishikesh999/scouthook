@@ -9,9 +9,10 @@
   <link rel="stylesheet" href="/css/login.css" />
 </head>
 <body>
+
   <div class="login-split">
 
-    <!-- Left: welcome panel -->
+    <!-- Left: dark branding panel -->
     <div class="login-left">
       <div class="login-left-inner">
         <img src="/images/scout-hook-logo.png" alt="Scouthook" class="login-left-logo" />
@@ -47,11 +48,8 @@
             </button>
           </form>
 
-          <div class="login-tagline">Free to start. No credit card needed.</div>
-
-          <div class="login-meta">
-            By continuing, you agree to the app's terms and privacy policy.
-          </div>
+          <p class="login-tagline">Free to start. No credit card needed.</p>
+          <p class="login-meta">By continuing, you agree to the app's terms and privacy policy.</p>
         </section>
       </div>
     </div>
@@ -60,34 +58,31 @@
 
   <script>
     (function () {
-      // Show server-side error if redirected back with ?error=
       const params = new URLSearchParams(window.location.search);
-      const error = params.get('error');
+      const error  = params.get('error');
       if (error) {
         const box = document.getElementById('errorBox');
         if (box) {
           box.textContent =
             error === 'google_not_configured' ? 'Google sign-in is not configured on the server.' :
-            error === 'oauth_failed' ? 'Google sign-in failed. Please try again.' :
-            'Sign-in error. Please try again.';
+            error === 'oauth_failed'           ? 'Google sign-in failed. Please try again.' :
+                                                 'Sign-in error. Please try again.';
           box.hidden = false;
         }
       }
 
-      // Email form → /auth/google?hint=<email>
       document.getElementById('emailForm')?.addEventListener('submit', function (e) {
         e.preventDefault();
-        const input    = document.getElementById('loginEmail');
-        const errEl    = document.getElementById('emailError');
-        const email    = (input?.value || '').trim();
-        const valid    = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-        errEl.hidden   = valid;
+        const input = document.getElementById('loginEmail');
+        const errEl = document.getElementById('emailError');
+        const email = (input?.value || '').trim();
+        const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+        errEl.hidden = valid;
         if (!valid) { input?.focus(); return; }
-        const url = '/auth/google' + (email ? '?hint=' + encodeURIComponent(email) : '');
-        window.location.href = url;
+        window.location.href = '/auth/google' + (email ? '?hint=' + encodeURIComponent(email) : '');
       });
-
     })();
   </script>
+
 </body>
 </html>

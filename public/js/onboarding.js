@@ -533,7 +533,7 @@ const Onboarding = (() => {
 
   function initS7() {
     qs('ob-choose-free')?.addEventListener('click', () => {
-      window.location.href = state.postId ? `/preview.html?post_id=${state.postId}` : '/dashboard.html';
+      window.location.href = state.postId ? `/editor/${state.postId}` : '/dashboard.html';
     });
     qs('ob-choose-pro')?.addEventListener('click', async function () {
       const btn = this;
@@ -569,7 +569,7 @@ const Onboarding = (() => {
     if (params.get('linkedin') !== 'connected') return false;
     const postId = sessionStorage.getItem('ob_post_id');
     sessionStorage.removeItem('ob_post_id');
-    const dest = postId ? `/preview.html?post_id=${postId}` : '/preview.html';
+    const dest = postId ? `/editor/${postId}` : '/drafts.html';
     markOnboardingComplete().finally(() => {
       window.location.href = dest;
     });

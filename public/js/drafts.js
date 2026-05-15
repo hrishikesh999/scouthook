@@ -45,7 +45,7 @@ function renderList(posts) {
       : '';
     const archetype = toTitleCase(post.format_slug);
     const hook      = hookLine(post.content);
-    const url       = `/preview.html?post_id=${encodeURIComponent(post.id)}`;
+    const url       = `/editor/${encodeURIComponent(post.id)}`;
     const pid       = String(post.id);
     const score     = post.quality_score;
     const pillClass = qualityPillClass(score);

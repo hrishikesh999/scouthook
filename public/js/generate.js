@@ -104,7 +104,7 @@ async function triggerGenerate(opts = {}) {
       throw err;
     }
 
-    window.location.href = `/preview.html?post_id=${encodeURIComponent(data.id)}`;
+    window.location.href = `/editor/${encodeURIComponent(data.id)}`;
 
   } catch (err) {
     clearTimeout(timeoutId);
@@ -406,7 +406,7 @@ async function runFromDocGeneration() {
       return;
     }
 
-    window.location.href = `/preview.html?post_id=${encodeURIComponent(data.id)}`;
+    window.location.href = `/editor/${encodeURIComponent(data.id)}`;
 
   } catch (err) {
     clearTimeout(timeout);

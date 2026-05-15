@@ -1,0 +1,1173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Post Editor — ScoutHook</title>
+
+  <link rel="stylesheet" href="/css/main.css">
+
+  <style>
+    /*
+    ┌─────────────────────────────────────────────────────────────────────┐
+    │  STRUCTURAL LAYOUT — DO NOT EDIT OR REMOVE                         │
+    │  These rules lock in the layout geometry of this page.             │
+    │  They contain no colours, fonts, or decorative styles.             │
+    │  All visual styling comes from the existing app stylesheet.        │
+    └─────────────────────────────────────────────────────────────────────┘
+    */
+
+    /* Page fills the available content area inside the app shell */
+    #page-wrapper {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* Top bar: back link on the left, action buttons on the right */
+    #topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+
+    #topbar-left  { display: flex; align-items: center; gap: 12px; }
+    #topbar-right { display: flex; align-items: center; gap: 8px; }
+
+    /*
+      Content area: editor + right panel side by side.
+      position: relative is required — the carousel sheet anchors to this.
+    */
+    #content-area {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* Editor: takes remaining width, scrolls vertically */
+    #editor {
+      flex: 1;
+      overflow-y: auto;
+      min-width: 0;
+    }
+
+    /* Tab bar: tabs left, word count pushed to the right */
+    #tabs {
+      display: flex;
+      align-items: flex-end;
+    }
+
+    #word-count { margin-left: auto; }
+
+    /* Visual buttons row: horizontal, wraps if needed */
+    #visual-btns {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    /*
+      Right panel: fixed 260px wide, never shrinks, scrolls vertically.
+      Shows either #panel-score or #panel-generator — never both.
+    */
+    #right-panel {
+      width: 260px;
+      flex-shrink: 0;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Scoring panel: vertical stack, fills the right panel */
+    #panel-score {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+    }
+
+    /* Generator panel: column layout filling the right panel */
+    #panel-generator {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    #panel-gen-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+
+    #panel-gen-body   { flex: 1; overflow-y: auto; }
+    #panel-gen-footer { display: flex; gap: 8px; flex-shrink: 0; }
+    #btn-gen-go       { flex: 1; }
+
+    /* Style selector: equal-width options side by side */
+    #style-opts { display: flex; gap: 6px; }
+    .style-opt  { flex: 1; }
+
+    /*
+      Carousel bottom sheet.
+      Anchored to the bottom of #content-area.
+      Overlays the editor but sits below the top bar.
+      height: 78% gives enough room to see the post above.
+    */
+    #carousel-sheet {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 78%;
+      display: flex;
+      flex-direction: column;
+      z-index: 20;
+    }
+
+    #sheet-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+
+    #sheet-header-left  { display: flex; align-items: center; gap: 16px; }
+    #sheet-header-right { display: flex; align-items: center; gap: 10px; }
+
+    /* Style toggle: pill-shaped group of buttons */
+    #carousel-style-toggle { display: flex; }
+
+    /* Sheet body: slide strip (scrollable) + edit panel (fixed width) */
+    #sheet-body {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+    }
+
+    /*
+      Slide strip: horizontal scroll.
+      Thumbnails are injected here by JS as .slide-thumb elements.
+      #btn-add-slide is always the last item.
+    */
+    #slide-strip {
+      flex: 1;
+      display: flex;
+      flex-direction: row;
+      align-items: flex-start;
+      gap: 12px;
+      overflow-x: auto;
+      overflow-y: hidden;
+    }
+
+    /*
+      Each slide thumbnail: fixed width, cursor pointer.
+      .active is added by JS to the selected thumbnail.
+    */
+    .slide-thumb {
+      flex-shrink: 0;
+      width: 110px;
+      cursor: pointer;
+    }
+
+    /*
+      Slide mini-preview inside each thumbnail.
+      data-style="dark|light|brand" drives background/text colour — see below.
+    */
+    .slide-mini {
+      width: 100%;
+      height: 134px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    /* Slide edit panel: fixed width, scrollable */
+    #slide-edit {
+      width: 260px;
+      flex-shrink: 0;
+      overflow-y: auto;
+    }
+
+    /* Edit preview inside slide edit panel */
+    #slide-edit-preview {
+      display: flex;
+      flex-direction: column;
+    }
+
+    #slide-edit-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    /* Sheet footer: credit note on left, action buttons on right */
+    #sheet-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+
+    #sheet-actions { display: flex; gap: 8px; }
+
+    /*
+    ┌─────────────────────────────────────────────────────────────────────┐
+    │  CARD STYLE COLOURS                                                 │
+    │  These three rules are the ONLY colour/visual styles in this file. │
+    │  They drive the quote card and carousel slide previews.            │
+    │  Adjust the colour values to match the app's design system.        │
+    └─────────────────────────────────────────────────────────────────────┘
+    */
+    [data-style="dark"]  { background: #111815; color: #ffffff; }
+    [data-style="light"] { background: #f5f4f0; color: #1a1f1c; }
+    [data-style="brand"] { background: linear-gradient(135deg, #1D9E75, #085041); color: #ffffff; }
+  </style>
+
+</head>
+<body>
+
+  <!-- ── Sidebar ──────────────────────────────────────────── -->
+  <aside id="sidebar" role="navigation" aria-label="Main navigation">
+    <a href="/dashboard.html" class="sidebar-logo">
+      <img src="/images/scout-hook-logo.png" alt="ScoutHook" class="sidebar-logo-img">
+    </a>
+    <div class="sidebar-cta">
+      <a href="/generate.html?new=1" class="sidebar-cta-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Create Post</a>
+    </div>
+    <nav class="sidebar-nav">
+      <a href="/dashboard.html" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Dashboard</a>
+      <a href="/vault.html" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>Content Vault</a>
+      <a href="/drafts.html" class="sidebar-link active" aria-current="page"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>Drafts</a>
+      <a href="/schedule.html" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Schedule</a>
+      <a href="/Published.html" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>Published</a>
+      <a href="/Media.html" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>Media</a>
+    </nav>
+    <div class="sidebar-bottom">
+      <a href="/account.html" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Account Settings</a>
+      <div id="sidebar-account-slot" aria-label="Signed-in account"></div>
+    </div>
+  </aside>
+
+  <!-- ── Main content ──────────────────────────────────────── -->
+  <div id="main-content">
+  <div id="page-wrapper">
+
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       TOP BAR
+  ════════════════════════════════════════════════════════════════════ -->
+  <div id="topbar" class="page-header">
+
+    <div id="topbar-left">
+      <a href="/drafts.html" id="back-link" class="field-helper">← All drafts</a>
+      <span id="topbar-title" class="field-label"></span>
+    </div>
+
+    <div id="topbar-right" class="page-header-actions">
+      <button id="btn-regenerate" class="btn-secondary">Regenerate</button>
+      <button id="btn-schedule" class="btn-primary">Schedule</button>
+    </div>
+
+  </div>
+
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       CONTENT AREA
+  ════════════════════════════════════════════════════════════════════ -->
+  <div id="content-area">
+
+
+    <!-- ─────────────────────────────────────────────────────────────────
+         EDITOR
+    ──────────────────────────────────────────────────────────────────── -->
+    <div id="editor">
+
+      <!-- Tab bar -->
+      <div id="tabs" class="input-tab-bar">
+        <button class="tab input-tab active" data-tab="edit">Edit</button>
+        <button class="tab input-tab"        data-tab="preview">LinkedIn Preview</button>
+        <span id="word-count" class="word-count"></span>
+      </div>
+
+
+      <!-- Edit view -->
+      <div id="edit-view">
+
+        <div id="post-body">
+          <!-- paragraphs injected by JS -->
+        </div>
+
+        <div id="visuals-section">
+          <p id="visuals-label" class="score-label">Visuals</p>
+          <div id="visual-btns">
+            <button class="btn-visual btn-outlined" data-generator="carousel">Carousel</button>
+            <button class="btn-visual btn-outlined" data-generator="branded">Branded</button>
+            <button class="btn-visual btn-outlined" data-generator="quote">Quote card</button>
+            <button class="btn-visual btn-outlined" data-generator="media">Media</button>
+          </div>
+        </div>
+
+      </div>
+      <!-- /edit-view -->
+
+
+      <!-- LinkedIn preview view (hidden by default) -->
+      <div id="linkedin-preview" hidden>
+        <div id="li-header">
+          <div id="li-avatar" class="linkedin-avatar-initials"></div>
+          <div>
+            <p id="li-name" class="linkedin-name"></p>
+            <p id="li-meta" class="linkedin-headline"></p>
+          </div>
+        </div>
+        <div id="li-body-text" class="linkedin-body"></div>
+        <div id="preview-asset" class="preview-asset hidden" aria-hidden="true"></div>
+      </div>
+
+    </div>
+    <!-- /editor -->
+
+
+    <!-- ─────────────────────────────────────────────────────────────────
+         RIGHT PANEL
+    ──────────────────────────────────────────────────────────────────── -->
+    <div id="right-panel">
+
+
+      <!-- Scoring panel (default state) ─────────────────────────────── -->
+      <div id="panel-score">
+
+        <section>
+          <p class="panel-label score-label">Quality score</p>
+          <div id="score-display">
+            <span id="score-number"></span>
+            <span id="score-badge" class="passfail-pill pass" data-passed="true"></span>
+          </div>
+          <div id="score-bar" class="visible">
+            <div id="score-fill"></div>
+          </div>
+        </section>
+
+        <hr class="profile-divider">
+
+        <section>
+          <p class="panel-label score-label">Funnel type</p>
+          <span id="funnel-type" class="archetype-badge"></span>
+        </section>
+
+        <hr class="profile-divider">
+
+        <section>
+          <p class="panel-label score-label">Alternative hook</p>
+          <p id="alt-hook-text" class="field-helper"></p>
+          <button id="btn-use-hook" class="btn-outlined">Use this hook →</button>
+        </section>
+
+        <hr class="profile-divider">
+
+        <section>
+          <p class="panel-label score-label">Alternative closing</p>
+          <p id="alt-closing-text" class="field-helper"></p>
+        </section>
+
+        <hr class="profile-divider">
+
+        <section>
+          <p class="panel-label score-label">Checks</p>
+          <ul id="checks-list"></ul>
+          <button id="btn-toggle-checks" class="btn-outlined">View all checks →</button>
+        </section>
+
+      </div>
+      <!-- /panel-score -->
+
+
+      <!-- Generator panel ────────────────────────────────────────────── -->
+      <div id="panel-generator" hidden>
+
+        <div id="panel-gen-header">
+          <button id="btn-panel-back" class="btn-outlined">←</button>
+          <span id="panel-gen-title" class="field-label"></span>
+          <button id="btn-panel-close" class="slide-over-close">✕</button>
+        </div>
+
+        <div id="panel-gen-body">
+
+          <p id="panel-gen-hint" class="field-helper">Best quote from your post — max 160 characters.</p>
+
+          <div id="quote-preview-card" class="so-slide-card" data-style="dark">
+            <p id="quote-preview-text"></p>
+            <div id="quote-author">
+              <span id="quote-avatar" class="linkedin-avatar-initials"></span>
+              <span id="quote-author-name" class="field-helper"></span>
+            </div>
+          </div>
+
+          <div id="quote-field">
+            <label for="quote-input" class="field-label">Quote text</label>
+            <textarea id="quote-input" class="field-textarea"
+              placeholder="Pick the sharpest line from your post…"></textarea>
+            <span id="char-count" class="field-helper" data-over="false">0 / 160</span>
+          </div>
+
+          <div id="style-selector">
+            <p class="panel-label score-label">Style</p>
+            <div id="style-opts">
+              <button class="style-opt btn-outlined active" data-style="dark">Dark</button>
+              <button class="style-opt btn-outlined" data-style="light">Light</button>
+              <button class="style-opt btn-outlined" data-style="brand">Brand</button>
+            </div>
+          </div>
+
+        </div>
+        <!-- /panel-gen-body -->
+
+        <div id="panel-gen-footer">
+          <button id="btn-gen-go" class="btn-primary">Generate</button>
+          <button id="btn-gen-discard" class="btn-secondary">Discard</button>
+        </div>
+
+      </div>
+      <!-- /panel-generator -->
+
+
+    </div>
+    <!-- /right-panel -->
+
+
+    <!-- ─────────────────────────────────────────────────────────────────
+         CAROUSEL BOTTOM SHEET
+    ──────────────────────────────────────────────────────────────────── -->
+    <div id="carousel-sheet" hidden>
+
+      <div id="sheet-header">
+        <div id="sheet-header-left">
+          <span id="sheet-title" class="field-label">Carousel</span>
+          <span id="slide-count-label" class="field-helper"></span>
+        </div>
+        <div id="sheet-header-right">
+          <div id="carousel-style-toggle">
+            <button class="style-toggle-btn input-tab active" data-style="dark">Dark</button>
+            <button class="style-toggle-btn input-tab"        data-style="light">Light</button>
+            <button class="style-toggle-btn input-tab"        data-style="brand">Brand</button>
+          </div>
+          <button id="btn-sheet-close" class="slide-over-close">✕</button>
+        </div>
+      </div>
+
+      <div id="sheet-body">
+
+        <div id="slide-strip">
+          <div id="btn-add-slide" class="btn-outlined">+ Add slide</div>
+        </div>
+
+        <div id="slide-edit">
+          <!-- Populated by JS -->
+        </div>
+
+      </div>
+      <!-- /sheet-body -->
+
+      <div id="sheet-footer">
+        <span id="sheet-credit" class="field-helper">Uses 1 of your monthly carousel credits</span>
+        <div id="sheet-actions">
+          <button id="btn-carousel-discard" class="btn-secondary">Discard</button>
+          <button id="btn-carousel-generate" class="btn-primary">Generate carousel</button>
+        </div>
+      </div>
+
+    </div>
+    <!-- /carousel-sheet -->
+
+
+  </div>
+  <!-- /content-area -->
+
+  </div><!-- /page-wrapper -->
+  </div><!-- /main-content -->
+
+
+<script>
+/* ════════════════════════════════════════════════════════════════════════
+   STATIC DATA — used before API data loads
+════════════════════════════════════════════════════════════════════════ */
+const POST_PARAGRAPHS = [
+  { text: 'Loading post…' },
+];
+
+const CHECKS = [];
+
+const DEFAULT_SLIDES = [
+  { id: 1, type: 'Cover',    headline: '', subtext: '' },
+  { id: 2, type: 'Stat',     headline: '', subtext: '' },
+  { id: 3, type: 'Solution', headline: '', subtext: '' },
+  { id: 4, type: 'CTA',      headline: '', subtext: '' },
+];
+
+const SLIDE_TYPES = ['Cover', 'Stat', 'Problem', 'Solution', 'Reframe', 'CTA'];
+
+/* ════════════════════════════════════════════════════════════════════════
+   STATE
+════════════════════════════════════════════════════════════════════════ */
+const state = {
+  activeTab:     'edit',
+  rightPanel:    'score',
+  generatorType: null,
+  quoteText:     '',
+  quoteStyle:    'dark',
+  carouselOpen:  false,
+  carouselStyle: 'dark',
+  slides:        DEFAULT_SLIDES.map(s => ({ ...s })),
+  activeSlide:   0,
+  showAllChecks: false,
+};
+
+/* ════════════════════════════════════════════════════════════════════════
+   API HELPERS
+════════════════════════════════════════════════════════════════════════ */
+const postId = window.location.pathname.split('/').filter(Boolean).pop();
+
+let userPlan           = null;
+let attachedPreviewUrl = null;
+let attachedAssetType  = null;
+let attachedSlideCount = 0;
+let _apiChecks         = null;
+
+function getAuthToken() {
+  return localStorage.getItem('scouthook_token') || '';
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   ASSET PREVIEW (LinkedIn tab)
+════════════════════════════════════════════════════════════════════════ */
+function renderPreviewAsset() {
+  const el = document.getElementById('preview-asset');
+  if (!el || !attachedPreviewUrl) return;
+  el.innerHTML = '';
+  const img = document.createElement('img');
+  img.src = attachedPreviewUrl;
+  img.alt = attachedAssetType === 'carousel' ? 'Carousel preview' : 'Visual asset';
+  el.appendChild(img);
+  if (attachedAssetType === 'carousel' && attachedSlideCount > 1) {
+    const badge = document.createElement('div');
+    badge.className = 'preview-asset-badge';
+    badge.textContent = `Document · ${attachedSlideCount} slides`;
+    el.appendChild(badge);
+  }
+  el.classList.remove('hidden');
+  el.setAttribute('aria-hidden', 'false');
+}
+
+function clearPreviewAsset() {
+  const el = document.getElementById('preview-asset');
+  if (!el) return;
+  el.innerHTML = '';
+  el.classList.add('hidden');
+  el.setAttribute('aria-hidden', 'true');
+  attachedPreviewUrl = null;
+  attachedAssetType  = null;
+  attachedSlideCount = 0;
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   LOAD POST
+════════════════════════════════════════════════════════════════════════ */
+async function loadPost(id) {
+  document.getElementById('post-body').innerHTML = '<p class="field-helper">Loading…</p>';
+
+  try {
+    const res  = await fetch(`/api/generate/post/${encodeURIComponent(id)}`, { credentials: 'include' });
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || 'load_failed');
+
+    const p     = data.post;
+    const score = p.quality?.score ?? 0;
+    const passed = p.quality?.passed ?? (score >= 60);
+
+    /* Score number */
+    const scoreEl = document.getElementById('score-number');
+    scoreEl.textContent = score;
+    scoreEl.className   = score >= 80 ? 'pass' : score >= 60 ? 'borderline' : 'fail';
+
+    /* Pass/fail badge */
+    const badge = document.getElementById('score-badge');
+    badge.textContent      = passed ? 'Passed' : 'Needs work';
+    badge.dataset.passed   = String(passed);
+    badge.className        = `passfail-pill ${passed ? 'pass' : 'fail'}`;
+
+    /* Progress bar — override main.css #score-bar layout conflict via JS */
+    const scoreBar = document.getElementById('score-bar');
+    if (scoreBar) {
+      scoreBar.style.height      = '6px';
+      scoreBar.style.borderRadius = '3px';
+      scoreBar.style.background  = 'var(--border)';
+      scoreBar.style.flexDirection = 'row';
+      scoreBar.style.gap         = '0';
+      scoreBar.style.padding     = '0';
+      scoreBar.style.margin      = '8px 0 4px';
+      scoreBar.style.borderBottom = 'none';
+    }
+    const fill = document.getElementById('score-fill');
+    if (fill) {
+      fill.style.width        = score + '%';
+      fill.style.borderRadius = '3px';
+      fill.style.background   = score >= 80 ? 'var(--accent)' : score >= 60 ? 'var(--score-borderline)' : 'var(--score-fail)';
+    }
+
+    /* Funnel / alternatives */
+    document.getElementById('funnel-type').textContent      = p.funnelType || '';
+    document.getElementById('alt-hook-text').textContent    = p.hookB      || '';
+    document.getElementById('alt-closing-text').textContent = (p.ctaAlternatives || [])[0] || '';
+    document.getElementById('topbar-title').textContent =
+      p.funnelType ? `${p.funnelType}` : '';
+
+    /* Post body — split plain text into paragraphs */
+    const rawText = typeof p.content === 'string' ? p.content : '';
+    const paras   = rawText.split(/\n\n+/).filter(Boolean);
+    document.getElementById('post-body').innerHTML = paras.map((t, i) =>
+      `<p class="text-post" data-style="normal">${t.replace(/\n/g, '<br>')}</p>`
+    ).join('');
+
+    /* LinkedIn preview body */
+    document.getElementById('li-body-text').textContent = rawText;
+
+    /* Word count */
+    document.getElementById('word-count').textContent =
+      rawText.split(/\s+/).filter(Boolean).length + ' words';
+
+    /* Topbar title */
+    document.getElementById('topbar-title').textContent = p.funnelType
+      ? `${p.funnelType}`
+      : 'Draft';
+
+    /* Quality flags as checks */
+    const flags = p.quality?.flags || p.quality?.errors || [];
+    if (flags.length) {
+      _apiChecks = flags.map(f => ({ text: f, passed: false }));
+    } else {
+      _apiChecks = [
+        { text: 'No AI-sounding language', passed: true },
+        { text: 'Hook stops the scroll',   passed: passed },
+        { text: 'Clear CTA',               passed: passed },
+      ];
+    }
+    renderApiChecks();
+
+    /* Existing asset */
+    if (p.assetPreviewUrl) {
+      attachedPreviewUrl = p.assetPreviewUrl;
+      attachedAssetType  = p.assetType  || 'media_image';
+      attachedSlideCount = p.assetSlideCount || 0;
+      renderPreviewAsset();
+    }
+
+    /* Slide credit label */
+    document.getElementById('sheet-credit').textContent =
+      `Generates a LinkedIn carousel PDF`;
+
+  } catch (err) {
+    document.getElementById('post-body').innerHTML =
+      `<p class="field-helper">Failed to load post. <a href="/drafts.html">Back to Drafts</a></p>`;
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   QUALITY CHECKS
+════════════════════════════════════════════════════════════════════════ */
+function renderApiChecks() {
+  const checks  = _apiChecks;
+  if (!checks) return renderChecks();
+  const visible = state.showAllChecks ? checks : checks.slice(0, 3);
+  document.getElementById('checks-list').innerHTML = visible.map(c => {
+    const passed  = typeof c === 'object' ? !!c.passed : true;
+    const text    = typeof c === 'object' ? c.text     : c;
+    const itemCls = passed ? '' : 'suggestion-item';
+    const prefix  = passed ? '✓ ' : '✗ ';
+    return `<li data-passed="${passed}" class="${itemCls}">${prefix}${text}</li>`;
+  }).join('');
+  document.getElementById('btn-toggle-checks').textContent =
+    state.showAllChecks ? 'Show fewer' : `View all ${checks.length} checks →`;
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   RENDER (static fallback)
+════════════════════════════════════════════════════════════════════════ */
+function renderPost() {
+  document.getElementById('post-body').innerHTML =
+    POST_PARAGRAPHS.map(p =>
+      `<p class="text-post" data-style="${p.style || 'normal'}">${p.text.replace(/\n/g, '<br>')}</p>`
+    ).join('');
+  document.getElementById('li-body-text').textContent =
+    POST_PARAGRAPHS.map(p => p.text).join('\n\n');
+  document.getElementById('word-count').textContent =
+    POST_PARAGRAPHS.map(p => p.text).join(' ').split(/\s+/).filter(Boolean).length + ' words';
+}
+
+function renderScore() {
+  document.getElementById('score-number').textContent   = '';
+  document.getElementById('score-badge').textContent    = '';
+  document.getElementById('score-fill').style.width     = '0%';
+  document.getElementById('funnel-type').textContent    = '';
+  document.getElementById('alt-hook-text').textContent  = '';
+  document.getElementById('alt-closing-text').textContent = '';
+  document.getElementById('topbar-title').textContent   = 'Loading…';
+}
+
+function renderChecks() {
+  const checks  = CHECKS;
+  const visible = state.showAllChecks ? checks : checks.slice(0, 3);
+  document.getElementById('checks-list').innerHTML =
+    visible.map(c => `<li data-passed="true" class="">✓ ${c}</li>`).join('');
+  if (checks.length) {
+    document.getElementById('btn-toggle-checks').textContent =
+      state.showAllChecks ? 'Show fewer' : `View all ${checks.length} checks →`;
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   TABS
+════════════════════════════════════════════════════════════════════════ */
+function switchTab(tab) {
+  state.activeTab = tab;
+  document.querySelectorAll('.tab').forEach(b =>
+    b.classList.toggle('active', b.dataset.tab === tab)
+  );
+  document.getElementById('edit-view').hidden        = tab !== 'edit';
+  document.getElementById('linkedin-preview').hidden = tab !== 'preview';
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   RIGHT PANEL
+════════════════════════════════════════════════════════════════════════ */
+function showScorePanel() {
+  state.rightPanel = 'score';
+  document.getElementById('panel-score').hidden     = false;
+  document.getElementById('panel-generator').hidden = true;
+}
+
+function showGeneratorPanel(type) {
+  state.rightPanel    = 'generator';
+  state.generatorType = type;
+  document.getElementById('panel-score').hidden     = true;
+  document.getElementById('panel-generator').hidden = false;
+  document.getElementById('panel-gen-title').textContent =
+    type === 'quote' ? 'Quote card' : 'Branded quote';
+  document.getElementById('quote-input').value = state.quoteText;
+  updateQuotePreview();
+  updateCharCount();
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   QUOTE PREVIEW
+════════════════════════════════════════════════════════════════════════ */
+function updateQuotePreview() {
+  document.getElementById('quote-preview-text').textContent =
+    `"${state.quoteText || 'Your quote will appear here'}"`;
+  document.getElementById('quote-preview-card').dataset.style = state.quoteStyle;
+}
+
+function updateCharCount() {
+  const len = state.quoteText.length;
+  const el  = document.getElementById('char-count');
+  el.textContent  = `${len} / 160`;
+  el.dataset.over = len > 160 ? 'true' : 'false';
+  el.style.color  = len > 160 ? 'var(--text-danger)' : '';
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   CAROUSEL
+════════════════════════════════════════════════════════════════════════ */
+function openCarousel() {
+  state.carouselOpen = true;
+  document.getElementById('carousel-sheet').hidden = false;
+  renderSlideStrip();
+  renderSlideEdit();
+}
+
+function closeCarousel() {
+  state.carouselOpen = false;
+  document.getElementById('carousel-sheet').hidden = true;
+}
+
+function renderSlideStrip() {
+  const strip  = document.getElementById('slide-strip');
+  const addBtn = document.getElementById('btn-add-slide');
+  strip.querySelectorAll('.slide-thumb').forEach(el => el.remove());
+
+  state.slides.forEach((slide, i) => {
+    const el = document.createElement('div');
+    el.className     = 'slide-thumb' + (i === state.activeSlide ? ' active' : '');
+    el.dataset.index = i;
+    el.innerHTML = `
+      <div class="slide-mini so-slide-card" data-style="${state.carouselStyle}">
+        <p class="slide-mini-type so-slide-badge">${slide.type}</p>
+        <p class="slide-mini-headline field-label">${slide.headline || '…'}</p>
+        ${slide.subtext ? `<p class="slide-mini-sub field-helper">${slide.subtext}</p>` : ''}
+      </div>
+      <p class="slide-label field-helper">${i + 1} — ${slide.type}</p>
+    `;
+    el.addEventListener('click', () => selectSlide(i));
+    strip.insertBefore(el, addBtn);
+  });
+
+  document.getElementById('slide-count-label').textContent =
+    `${state.slides.length} slides`;
+}
+
+function renderSlideEdit() {
+  const panel     = document.getElementById('slide-edit');
+  const slide     = state.slides[state.activeSlide];
+  const canRemove = state.slides.length > 1;
+  const typeOpts  = SLIDE_TYPES.map(t =>
+    `<option value="${t}"${slide.type === t ? ' selected' : ''}>${t}</option>`
+  ).join('');
+
+  panel.innerHTML = `
+    <div id="slide-edit-header">
+      <span class="field-label">Slide ${state.activeSlide + 1} — ${slide.type}</span>
+      ${canRemove ? '<button id="btn-remove-slide" class="btn-outlined">Remove</button>' : ''}
+    </div>
+    <div id="slide-edit-preview" class="so-slide-card" data-style="${state.carouselStyle}">
+      <p id="live-headline" class="field-label">${slide.headline || 'Headline will appear here'}</p>
+      ${slide.subtext ? `<p id="live-sub" class="field-helper">${slide.subtext}</p>` : ''}
+    </div>
+    <label for="slide-headline" class="field-label">Headline</label>
+    <textarea id="slide-headline" class="field-textarea">${slide.headline}</textarea>
+    <label for="slide-subtext" class="field-label">Subtext (optional)</label>
+    <textarea id="slide-subtext" class="field-textarea" placeholder="Add a supporting line…">${slide.subtext}</textarea>
+    <label for="slide-type" class="field-label">Slide type</label>
+    <select id="slide-type" class="field-input">${typeOpts}</select>
+  `;
+
+  document.getElementById('slide-headline').addEventListener('input', function () {
+    state.slides[state.activeSlide].headline = this.value;
+    const lh = document.getElementById('live-headline');
+    if (lh) lh.textContent = this.value || 'Headline will appear here';
+    const t = document.querySelector(`.slide-thumb[data-index="${state.activeSlide}"] .slide-mini-headline`);
+    if (t) t.textContent = this.value || '…';
+  });
+
+  document.getElementById('slide-subtext').addEventListener('input', function () {
+    state.slides[state.activeSlide].subtext = this.value;
+  });
+
+  document.getElementById('slide-type').addEventListener('change', function () {
+    state.slides[state.activeSlide].type = this.value;
+    renderSlideStrip();
+    renderSlideEdit();
+  });
+
+  if (canRemove) {
+    document.getElementById('btn-remove-slide').addEventListener('click', () => {
+      state.slides.splice(state.activeSlide, 1);
+      state.activeSlide = Math.min(state.activeSlide, state.slides.length - 1);
+      renderSlideStrip();
+      renderSlideEdit();
+    });
+  }
+}
+
+function selectSlide(index) {
+  state.activeSlide = index;
+  renderSlideStrip();
+  renderSlideEdit();
+}
+
+function setCarouselStyle(s) {
+  state.carouselStyle = s;
+  document.querySelectorAll('#carousel-style-toggle .style-toggle-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.style === s)
+  );
+  renderSlideStrip();
+  renderSlideEdit();
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   EVENT BINDING
+════════════════════════════════════════════════════════════════════════ */
+function bindEvents() {
+  document.querySelectorAll('.tab').forEach(b =>
+    b.addEventListener('click', () => switchTab(b.dataset.tab))
+  );
+
+  document.querySelectorAll('.btn-visual').forEach(b =>
+    b.addEventListener('click', () => {
+      const t = b.dataset.generator;
+      if (t === 'carousel') openCarousel();
+      else if (t === 'quote' || t === 'branded') showGeneratorPanel(t);
+    })
+  );
+
+  document.getElementById('btn-toggle-checks').addEventListener('click', () => {
+    state.showAllChecks = !state.showAllChecks;
+    renderChecks();
+  });
+
+  document.getElementById('btn-panel-back').addEventListener('click',  showScorePanel);
+  document.getElementById('btn-panel-close').addEventListener('click', showScorePanel);
+  document.getElementById('btn-gen-discard').addEventListener('click', () => {
+    showScorePanel();
+    clearPreviewAsset();
+  });
+
+  document.getElementById('quote-input').addEventListener('input', function () {
+    state.quoteText = this.value;
+    updateQuotePreview();
+    updateCharCount();
+  });
+
+  document.querySelectorAll('#style-opts .style-opt').forEach(o =>
+    o.addEventListener('click', function () {
+      state.quoteStyle = this.dataset.style;
+      document.querySelectorAll('#style-opts .style-opt').forEach(x =>
+        x.classList.toggle('active', x === this)
+      );
+      updateQuotePreview();
+    })
+  );
+
+  document.getElementById('btn-sheet-close').addEventListener('click',      closeCarousel);
+  document.getElementById('btn-carousel-discard').addEventListener('click', () => {
+    closeCarousel();
+    clearPreviewAsset();
+  });
+
+  document.querySelectorAll('#carousel-style-toggle .style-toggle-btn').forEach(b =>
+    b.addEventListener('click', () => setCarouselStyle(b.dataset.style))
+  );
+
+  document.getElementById('btn-add-slide').addEventListener('click', () => {
+    state.slides.push({ id: Date.now(), type: 'Stat', headline: '', subtext: '' });
+    state.activeSlide = state.slides.length - 1;
+    renderSlideStrip();
+    renderSlideEdit();
+  });
+
+  /* Use hook — replace first paragraph */
+  document.getElementById('btn-use-hook').addEventListener('click', () => {
+    const hookText = document.getElementById('alt-hook-text').textContent;
+    if (!hookText) return;
+    const body  = document.getElementById('post-body');
+    const first = body.querySelector('p');
+    if (first) first.textContent = hookText.replace(/^["']|["']$/g, '');
+  });
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   API WIRES
+════════════════════════════════════════════════════════════════════════ */
+
+/* Regenerate */
+function wireRegenerate() {
+  document.getElementById('btn-regenerate').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-regenerate');
+    btn.textContent = 'Regenerating…';
+    btn.disabled    = true;
+    try {
+      const res  = await fetch(`/api/generate/regenerate/${encodeURIComponent(postId)}`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error('regenerate_failed');
+      await loadPost(postId);
+    } catch {
+      /* silent — post body already shows stale content */
+    } finally {
+      btn.textContent = 'Regenerate';
+      btn.disabled    = false;
+    }
+  });
+}
+
+/* Schedule */
+function wireSchedule() {
+  document.getElementById('btn-schedule').addEventListener('click', async () => {
+    if (userPlan === 'free') {
+      window.PricingModal?.open();
+      return;
+    }
+    const dt = prompt('Schedule for (YYYY-MM-DDTHH:MM) or leave blank to publish now:');
+    if (dt === null) return;
+    try {
+      await fetch('/api/linkedin/schedule', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ postId, scheduledAt: dt || null }),
+      });
+      alert(dt ? `Scheduled for ${dt}` : 'Published');
+    } catch {
+      alert('Could not schedule post. Please try again.');
+    }
+  });
+}
+
+/* Quote card generate */
+function wireQuoteCard() {
+  document.getElementById('btn-gen-go').addEventListener('click', async () => {
+    if (userPlan === 'free') {
+      window.PricingModal?.open();
+      return;
+    }
+    const btn = document.getElementById('btn-gen-go');
+    btn.textContent = 'Generating…';
+    btn.disabled    = true;
+    try {
+      /* Step 1: extract post content for visual */
+      const extRes  = await fetch(`/api/visuals/${encodeURIComponent(postId)}`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ visual_type: 'quote_card', mode: 'extract' }),
+      });
+      const extData = await extRes.json();
+      if (!extRes.ok || !extData.ok) throw new Error(extData.error || 'extract_failed');
+
+      /* Step 2: render with user's quote text and chosen style */
+      const content = { ...(extData.content || {}), quote: state.quoteText, style: state.quoteStyle };
+      const renRes  = await fetch(`/api/visuals/${encodeURIComponent(postId)}`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ visual_type: 'quote_card', mode: 'render', content }),
+      });
+      const renData = await renRes.json();
+      if (!renRes.ok || !renData.ok) throw new Error(renData.error || 'render_failed');
+
+      const imageUrl = renData.png_url || renData.imageUrl;
+      if (imageUrl) {
+        attachedPreviewUrl = imageUrl;
+        attachedAssetType  = 'quote_card';
+        attachedSlideCount = 0;
+        renderPreviewAsset();
+        window.open(imageUrl, '_blank');
+      }
+    } catch (err) {
+      alert('Could not generate quote card. Please try again.');
+    } finally {
+      btn.textContent = 'Generate';
+      btn.disabled    = false;
+    }
+  });
+}
+
+/* Carousel generate */
+function wireCarouselGenerate() {
+  document.getElementById('btn-carousel-generate').addEventListener('click', async () => {
+    if (userPlan === 'free') {
+      window.PricingModal?.open();
+      return;
+    }
+    const btn = document.getElementById('btn-carousel-generate');
+    btn.textContent = 'Generating…';
+    btn.disabled    = true;
+    try {
+      const res  = await fetch(`/api/visuals/${encodeURIComponent(postId)}`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          visual_type: 'carousel',
+          mode: 'render',
+          content: { slides: state.slides, style: state.carouselStyle },
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error || 'carousel_failed');
+
+      const pdfUrl     = data.pdf_url  || data.imageUrl;
+      const previewUrl = data.slides?.[0]?.png_url || pdfUrl;
+      const slideCount = data.slides?.length || state.slides.length;
+
+      if (previewUrl) {
+        attachedPreviewUrl = previewUrl;
+        attachedAssetType  = 'carousel';
+        attachedSlideCount = slideCount;
+        renderPreviewAsset();
+      }
+      if (pdfUrl) window.open(pdfUrl, '_blank');
+    } catch {
+      alert('Could not generate carousel. Please try again.');
+    } finally {
+      btn.textContent = 'Generate carousel';
+      btn.disabled    = false;
+    }
+  });
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   PLAN-GATE visual buttons (intercept before bindEvents listeners)
+════════════════════════════════════════════════════════════════════════ */
+function wirePlanGate() {
+  document.getElementById('visual-btns').addEventListener('click', e => {
+    const btn = e.target.closest('.btn-visual');
+    if (!btn) return;
+    if (userPlan === 'free') {
+      e.stopPropagation();
+      window.PricingModal?.open();
+    }
+  }, true /* capture phase — runs before bubble listeners */);
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   CHECKS TOGGLE — override after bindEvents so API checks are used
+════════════════════════════════════════════════════════════════════════ */
+function wireChecksToggle() {
+  const orig  = document.getElementById('btn-toggle-checks');
+  const clone = orig.cloneNode(true);
+  orig.parentNode.replaceChild(clone, orig);
+  clone.addEventListener('click', () => {
+    state.showAllChecks = !state.showAllChecks;
+    if (_apiChecks) renderApiChecks();
+    else renderChecks();
+  });
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   INIT
+════════════════════════════════════════════════════════════════════════ */
+function init() {
+  renderPost();
+  renderScore();
+  renderChecks();
+  updateQuotePreview();
+  updateCharCount();
+  bindEvents();
+
+  /* Override checks toggle AFTER bindEvents sets its own listener */
+  wireChecksToggle();
+
+  /* Plan-gate visual buttons */
+  wirePlanGate();
+
+  /* Wire API calls */
+  wireRegenerate();
+  wireSchedule();
+  wireQuoteCard();
+  wireCarouselGenerate();
+
+  /* Fetch plan (non-blocking) */
+  fetch('/api/billing/subscription', { credentials: 'include' })
+    .then(r => r.ok ? r.json() : { plan: 'free' })
+    .then(d => { userPlan = d.plan || 'free'; })
+    .catch(() => { userPlan = 'free'; });
+
+  /* Load real post data */
+  loadPost(postId);
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+
+  <script src="/js/session.js"></script>
+  <script src="/js/ui-toast.js"></script>
+  <script src="/js/account-bar.js"></script>
+  <script src="/js/pricing-modal.js"></script>
+</body>
+</html>

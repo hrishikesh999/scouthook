@@ -443,6 +443,12 @@ app.get([
   '/ideas.html',
 ], requireLoginHtml);
 
+// Post editor — path-based routing so postId is in the URL, not a query param
+app.get('/editor/:postId', requireLoginHtml, (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.sendFile(path.join(__dirname, 'public', 'editor.html'));
+});
+
 app.use(express.static(path.join(__dirname, 'public'), {
   setHeaders(res, filePath) {
     if (filePath.endsWith('.html')) {

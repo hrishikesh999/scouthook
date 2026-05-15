@@ -4,6 +4,7 @@
   "description": "LinkedIn content intelligence platform for founders and consultants",
   "main": "server.js",
   "scripts": {
+    "build": "npm install",
     "start": "node server.js",
     "dev": "node --watch server.js",
     "migrate": "node scripts/migrate.js"

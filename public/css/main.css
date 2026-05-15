@@ -2132,6 +2132,32 @@ body {
   display: block;
 }
 
+/* Free-plan publish-only modal */
+.modal--publish-only .schedule-consent-note,
+.modal--publish-only .schedule-section-label,
+.modal--publish-only .schedule-presets,
+.modal--publish-only .schedule-divider,
+.modal--publish-only .schedule-custom-row,
+.modal--publish-only .schedule-tz-label,
+.modal--publish-only #schedule-confirm-btn { display: none; }
+
+.modal--publish-only .free-upgrade-note { display: block; }
+
+.free-upgrade-note {
+  display: none;
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: -4px 0 var(--space-5);
+}
+
+.free-upgrade-link {
+  color: var(--teal);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.free-upgrade-link:hover { text-decoration: underline; }
+
 /* ── Slide-over ─────────────────────────────────────────────── */
 .slide-over {
   position: fixed;

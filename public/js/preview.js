@@ -956,12 +956,12 @@ function showAutosaveState(state) {
 
 /* ── 18. Schedule modal ──────────────────────────────────────── */
 scheduleBtn.addEventListener('click', async () => {
-  // Scheduling is Pro-only — check plan before opening the modal
   try {
     const subRes = await fetch('/api/billing/subscription', { headers: apiHeaders() });
     const subData = subRes.ok ? await subRes.json() : null;
     if (subData?.plan !== 'pro') {
-      if (window.PricingModal) window.PricingModal.open();
+      scheduleBtn.textContent = 'Publish to LinkedIn';
+      openModal(true);
       return;
     }
   } catch {
@@ -975,8 +975,13 @@ overlay.addEventListener('click', () => {
   if (slideOver.classList.contains('open')) closeSlideOver();
 });
 
-function openModal() {
+function openModal(freePlan = false) {
   if (scheduleEditLocked) return;
+  if (freePlan) {
+    scheduleModal.classList.add('modal--publish-only');
+  } else {
+    scheduleModal.classList.remove('modal--publish-only');
+  }
   scheduleModal.classList.add('visible');
   scheduleModal.setAttribute('aria-hidden', 'false');
   overlay.classList.add('visible');
@@ -991,7 +996,9 @@ function openModal() {
     const abbr = getUserTzAbbr();
     tzLabel.textContent = tz ? `Times shown in your local timezone: ${abbr} (${tz})` : '';
   }
-  const firstEl = scheduleModal.querySelector('button.schedule-preset-btn');
+  const firstEl = freePlan
+    ? scheduleModal.querySelector('#publish-now-btn')
+    : scheduleModal.querySelector('button.schedule-preset-btn');
   if (firstEl) firstEl.focus();
   trapFocus(scheduleModal);
 }
@@ -1044,10 +1051,11 @@ document.querySelectorAll('.schedule-preset-btn').forEach(btn => {
 });
 
 function closeModal() {
-  scheduleModal.classList.remove('visible');
+  scheduleModal.classList.remove('visible', 'modal--publish-only');
   scheduleModal.setAttribute('aria-hidden', 'true');
   overlay.classList.remove('visible');
   overlay.setAttribute('aria-hidden', 'true');
+  scheduleBtn.textContent = 'Schedule';
   publishNowBtn.textContent = 'Publish now';
   publishNowBtn.disabled = false;
 }

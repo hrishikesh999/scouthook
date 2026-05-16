@@ -645,7 +645,7 @@ async function loadPost(id) {
       renderPreviewAsset();
     }
 
-    if (p.status === 'scheduled' && p.scheduled_for) {
+    if (p.scheduled_for && ['scheduled', 'pending', 'processing'].includes(p.status)) {
       scheduleEditLocked = true;
       applyScheduleLockUi(p.scheduled_for);
     }

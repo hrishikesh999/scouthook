@@ -462,6 +462,7 @@ let attachedSlideCount = 0;
 let _apiChecks         = null;
 let currentAssetType   = null;
 let extractedContent   = null;
+let _soSkel            = null;  // Persists across innerHTML='' detachment
 let currentAssetUrl    = null;
 let currentPreviewUrl  = null;
 let currentSlideCount  = 0;
@@ -982,7 +983,7 @@ function openSlideOver(type, label) {
 
   const so      = document.getElementById('slide-over');
   const content = document.getElementById('slide-over-content');
-  const skel    = document.getElementById('slide-over-skeleton');
+  const skel    = _soSkel;
   const ov      = document.getElementById('overlay');
 
   document.getElementById('slide-over-label').textContent = label;
@@ -1040,7 +1041,7 @@ function restoreCachedPreview(type, cached) {
   content.appendChild(bar);
   document.getElementById('so-regen-btn').addEventListener('click', () => {
     visualCache.delete(`${currentPostId}:${type}`);
-    const skel = document.getElementById('slide-over-skeleton');
+    const skel = _soSkel;
     content.innerHTML = '';
     skel.style.display = '';
     content.appendChild(skel);
@@ -1059,7 +1060,7 @@ function visualErrorMessage(code) {
 
 async function extractContent(type) {
   const content = document.getElementById('slide-over-content');
-  const skel    = document.getElementById('slide-over-skeleton');
+  const skel    = _soSkel;
   try {
     const res = await fetch(`/api/visuals/${encodeURIComponent(String(currentPostId))}`, {
       method: 'POST',
@@ -1194,7 +1195,7 @@ function readEditorContent(type) {
 
 async function generateFromEditor(type) {
   const wrap    = document.getElementById('slide-over-content');
-  const skel    = document.getElementById('slide-over-skeleton');
+  const skel    = _soSkel;
   const genBtn  = document.getElementById('slide-over-generate');
   genBtn.disabled = true; genBtn.textContent = 'Generating…';
   const content = readEditorContent(type);
@@ -1581,6 +1582,7 @@ function wireSchedule() {
 }
 
 function wireVisualButtons() {
+  _soSkel = document.getElementById('slide-over-skeleton');
   document.getElementById('quote-card-btn').addEventListener('click', () => openSlideOver('quote_card', 'QUOTE CARD'));
   document.getElementById('branded-quote-btn').addEventListener('click', () => openSlideOver('branded_quote', 'BRANDED QUOTE'));
   document.getElementById('carousel-btn').addEventListener('click', () => openSlideOver('carousel', 'CAROUSEL'));

@@ -11,6 +11,7 @@
     #topbar { display: flex !important; align-items: center !important; justify-content: space-between !important; flex-shrink: 0 !important; width: 100% !important; padding: 12px 20px 12px 24px !important; background: var(--bg-surface, #fff) !important; border-bottom: 1px solid var(--border) !important; }
     #topbar-left  { display: flex !important; align-items: center !important; gap: 12px !important; }
     #topbar-right { display: flex !important; align-items: center !important; gap: 8px !important; }
+    #btn-schedule { min-width: 140px !important; padding-left: 24px !important; padding-right: 24px !important; }
     #content-area { display: flex !important; flex: 1 !important; overflow: hidden !important; position: relative !important; min-height: 0 !important; width: 100% !important; }
     #editor { flex: 1 !important; min-width: 0 !important; overflow-y: auto !important; overflow-x: hidden !important; height: 100% !important; }
     #tabs { display: flex !important; align-items: flex-end !important; justify-content: center !important; width: 100% !important; position: relative !important; }
@@ -99,6 +100,10 @@
     #checks-list { list-style: none; padding: 0; margin: 0; }
     #checks-list li { font-size: 12px; line-height: 1.5; color: var(--text-secondary); list-style: none; }
 
+
+    /* ── LinkedIn see more ── */
+    .li-see-more-btn { color: var(--text-secondary, #666); font-size: 14px; cursor: pointer; font-weight: 600; }
+    .li-see-more-btn:hover { color: var(--text-heading); }
 
     /* ── LinkedIn preview first comment ── */
     .li-first-comment { padding: 8px 12px 12px; }
@@ -593,9 +598,7 @@ async function loadPost(id) {
     document.getElementById('post-body').innerHTML = paras.map(t =>
       `<p class="text-post" data-style="normal">${escHtml(t).replace(/\n/g, '<br>')}</p>`
     ).join('');
-    document.getElementById('li-body-text').innerHTML = paras.map(t =>
-      `<p style="margin:0 0 12px">${escHtml(t).replace(/\n/g,'<br>')}</p>`
-    ).join('');
+    // li-body-text is synced from post-body when switching to preview tab
     document.getElementById('word-count').textContent =
       rawText.split(/\s+/).filter(Boolean).length + ' words';
 
@@ -707,11 +710,10 @@ function switchTab(tab) {
   document.getElementById('edit-view').hidden        = tab !== 'edit';
   document.getElementById('linkedin-preview').hidden = tab !== 'preview';
   if (tab === 'preview') {
-    const previewText = getPostContent();
-    const previewParas = previewText.split(/\n\n+/).filter(Boolean);
-    document.getElementById('li-body-text').innerHTML = previewParas.length
-      ? previewParas.map(t => `<p style="margin:0 0 12px">${escHtml(t).replace(/\n/g,'<br>')}</p>`).join('')
-      : '';
+    // Mirror edit-mode HTML directly so formatting is identical
+    document.getElementById('li-body-text').innerHTML =
+      document.getElementById('post-body').innerHTML;
+    renderLinkedInSeeMore();
     renderPreviewAsset();
     const fcText  = document.getElementById('first-comment-input')?.value?.trim();
     const fcEl    = document.getElementById('li-first-comment');
@@ -727,6 +729,48 @@ function switchTab(tab) {
       }
     }
   }
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   LINKEDIN SEE MORE
+════════════════════════════════════════════════════════════════════════ */
+const LI_CHAR_LIMIT = 280; // chars visible before "...see more"
+
+function renderLinkedInSeeMore() {
+  const body = document.getElementById('li-body-text');
+  if (!body) return;
+  body.querySelectorAll('.li-see-more-btn').forEach(el => el.remove());
+
+  const fullText = body.innerText || '';
+  if (fullText.length <= LI_CHAR_LIMIT) return;
+
+  // Walk child nodes and truncate visually
+  let charsLeft = LI_CHAR_LIMIT;
+  let truncated = false;
+  const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
+  let node;
+  while ((node = walker.nextNode())) {
+    if (truncated) { node.textContent = ''; continue; }
+    if (node.textContent.length <= charsLeft) {
+      charsLeft -= node.textContent.length;
+    } else {
+      node.textContent = node.textContent.slice(0, charsLeft);
+      truncated = true;
+    }
+  }
+
+  const seeMore = document.createElement('span');
+  seeMore.className = 'li-see-more-btn';
+  seeMore.textContent = '…see more';
+  seeMore.addEventListener('click', () => {
+    body.innerHTML = document.getElementById('post-body').innerHTML;
+    const less = document.createElement('span');
+    less.className = 'li-see-more-btn';
+    less.textContent = ' see less';
+    less.addEventListener('click', () => renderLinkedInSeeMore());
+    body.appendChild(less);
+  });
+  body.appendChild(seeMore);
 }
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -778,13 +822,14 @@ function applyScheduleLockUi(scheduledFor) {
   const topbarRight  = document.getElementById('topbar-right');
   if (scheduledBar) {
     if (labelEl) labelEl.textContent = when ? `Scheduled · ${when}` : 'Scheduled';
-    scheduledBar.style.display = 'flex';
+    scheduledBar.style.setProperty('display', 'flex', 'important');
   }
-  if (topbarLeft)  topbarLeft.style.display  = 'none';
-  if (topbarRight) topbarRight.style.display = 'none';
+  if (topbarLeft)  topbarLeft.style.setProperty('display',  'none', 'important');
+  if (topbarRight) topbarRight.style.setProperty('display', 'none', 'important');
   document.getElementById('topbar')?.classList.add('is-scheduled');
 
-  document.getElementById('btn-schedule').disabled     = true;
+  const schedBtn = document.getElementById('btn-schedule');
+  if (schedBtn) { schedBtn.disabled = true; schedBtn.style.setProperty('display', 'none', 'important'); }
   document.getElementById('post-body').contentEditable = 'false';
   ['quote-card-btn','carousel-btn','branded-quote-btn','media-library-btn'].forEach(id => {
     document.getElementById(id)?.classList.add('disabled');
@@ -798,13 +843,15 @@ function clearScheduleLockUi() {
   const scheduledBar = document.getElementById('topbar-scheduled');
   const topbarLeft   = document.getElementById('topbar-left');
   const topbarRight  = document.getElementById('topbar-right');
-  if (scheduledBar) scheduledBar.style.display = 'none';
-  if (topbarLeft)   topbarLeft.style.display   = '';
-  if (topbarRight)  topbarRight.style.display  = '';
+  if (scheduledBar) scheduledBar.style.removeProperty('display');
+  if (topbarLeft)   topbarLeft.style.removeProperty('display');
+  if (topbarRight)  topbarRight.style.removeProperty('display');
   document.getElementById('topbar')?.classList.remove('is-scheduled');
 
   document.getElementById('post-body').contentEditable = 'true';
-  if (linkedinConnected) document.getElementById('btn-schedule').disabled = false;
+  const schedBtnRestore = document.getElementById('btn-schedule');
+  if (schedBtnRestore) schedBtnRestore.style.removeProperty('display');
+  if (linkedinConnected && schedBtnRestore) schedBtnRestore.disabled = false;
   ['quote-card-btn','carousel-btn','branded-quote-btn','media-library-btn'].forEach(id => {
     document.getElementById(id)?.classList.remove('disabled');
   });
@@ -977,7 +1024,7 @@ async function extractContent(type) {
     const res = await fetch(`/api/visuals/${encodeURIComponent(String(currentPostId))}`, {
       method: 'POST', credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ visual_type: type, mode: 'extract' }),
+      body: JSON.stringify({ visual_type: type, mode: 'extract', content: getPostContent() }),
     });
     let data;
     try { data = await res.json(); } catch { throw new Error('Could not read server response.'); }
@@ -1000,6 +1047,11 @@ async function extractContent(type) {
 function renderEditorForm(type, content) {
   const wrap = document.getElementById('slide-over-content');
   wrap.innerHTML = '';
+  if (!content) {
+    wrap.innerHTML = '<p class="so-extract-error">Could not load suggestions — try again.</p>';
+    setSlideOverState('editing');
+    return;
+  }
 
   if (type === 'quote_card') {
     const q = content.quote || '';
@@ -1437,8 +1489,6 @@ function wireSchedule() {
       closeModal();
       scheduleEditLocked = true;
       applyScheduleLockUi(scheduledFor);
-      const dateStr = new Date(`${dateVal}T${timeVal}`).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZoneName: 'short' });
-      showPublishedState(`Scheduled · ${dateStr}`);
       if (window.toast?.success) window.toast.success('Post scheduled successfully.');
     } catch (err) {
       modalErr.textContent = err.message || 'Something went wrong. Try again.';

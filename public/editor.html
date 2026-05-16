@@ -1062,9 +1062,10 @@ async function extractContent(type) {
   const skel    = document.getElementById('slide-over-skeleton');
   try {
     const res = await fetch(`/api/visuals/${encodeURIComponent(String(currentPostId))}`, {
-      method: 'POST', credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ visual_type: type, mode: 'extract', content: getPostContent() }),
+      method: 'POST',
+      headers: apiHeaders(),
+      credentials: 'include',
+      body: JSON.stringify({ visual_type: type, mode: 'extract' }),
     });
     let data;
     try { data = await res.json(); } catch { throw new Error('Could not read server response.'); }
@@ -1076,26 +1077,11 @@ async function extractContent(type) {
     setSlideOverState('editing');
   } catch (e) {
     skel.style.display = 'none';
-    const errMsg = (e instanceof Error && e.message) ? e.message : 'Could not load suggestions. Try again.';
-    const errWrap = document.createElement('div');
-    errWrap.style.cssText = 'padding:16px;display:flex;flex-direction:column;gap:12px';
-    const errP = document.createElement('p');
-    errP.className = 'so-extract-error';
-    errP.innerHTML = errMsg;
-    const retryBtn = document.createElement('button');
-    retryBtn.className = 'btn-outlined';
-    retryBtn.textContent = 'Try again';
-    retryBtn.addEventListener('click', () => {
-      content.innerHTML = '';
-      skel.style.display = '';
-      content.appendChild(skel);
-      setSlideOverState('loading');
-      extractContent(type);
-    });
-    errWrap.appendChild(errP);
-    errWrap.appendChild(retryBtn);
-    content.appendChild(errWrap);
-    setSlideOverState('loading'); // keep Generate hidden — no form to read from
+    const err = document.createElement('p');
+    err.className = 'so-extract-error';
+    err.innerHTML = (e instanceof Error && e.message) ? e.message : 'Could not load suggestions. Try again.';
+    content.appendChild(err);
+    setSlideOverState('editing');
   }
 }
 
@@ -1217,8 +1203,9 @@ async function generateFromEditor(type) {
   wrap.appendChild(skel);
   try {
     const res = await fetch(`/api/visuals/${encodeURIComponent(String(currentPostId))}`, {
-      method: 'POST', credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+      headers: apiHeaders(),
+      credentials: 'include',
       body: JSON.stringify({ visual_type: type, mode: 'render', content }),
     });
     let data;
@@ -1675,13 +1662,6 @@ function wireFirstComment() {
   }
 }
 
-function wirePlanGate() {
-  document.getElementById('visual-btns').addEventListener('click', e => {
-    const btn = e.target.closest('.asset-action-btn');
-    if (!btn) return;
-    if (userPlan === 'free') { e.stopPropagation(); window.PricingModal?.open(); }
-  }, true);
-}
 
 /* ════════════════════════════════════════════════════════════════════════
    INIT
@@ -1696,7 +1676,6 @@ function init() {
   wireAssetChip();
   wireSchedulePause();
   wireFirstComment();
-  wirePlanGate();
 
   fetch('/api/billing/subscription', { credentials: 'include' })
     .then(r => r.ok ? r.json() : { plan: 'free' })

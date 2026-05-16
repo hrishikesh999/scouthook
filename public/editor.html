@@ -452,7 +452,7 @@
 const postId = window.location.pathname.split('/').filter(Boolean).pop();
 
 let currentPostId      = null;
-let userPlan           = 'free';
+let userPlan           = null;
 let linkedinConnected  = false;
 let scheduleEditLocked = false;
 let attachedAssetUrl   = null;
@@ -660,6 +660,8 @@ async function loadPost(id) {
       applyScheduleLockUi(p.scheduled_for);
     }
 
+    checkIfScheduled(currentPostId);
+
   } catch {
     document.getElementById('post-body').innerHTML =
       `<p class="field-helper">Failed to load post. <a href="/drafts.html">Back to Drafts</a></p>`;
@@ -685,7 +687,18 @@ async function checkLinkedInStatus() {
       const avatarEl = document.getElementById('li-avatar');
       if (nameEl)   nameEl.textContent = name;
       if (metaEl)   metaEl.textContent = data.headline || '';
-      if (avatarEl) avatarEl.textContent = name ? name.charAt(0).toUpperCase() : '';
+      if (avatarEl) {
+        if (data.photo_url) {
+          const img = document.createElement('img');
+          img.src = data.photo_url;
+          img.alt = name || 'LinkedIn profile';
+          img.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:50%';
+          avatarEl.textContent = '';
+          avatarEl.appendChild(img);
+        } else {
+          avatarEl.textContent = name ? name.charAt(0).toUpperCase() : '';
+        }
+      }
     } else {
       if (strip) strip.hidden = false;
       if (schedBtn) { schedBtn.disabled = true; schedBtn.title = 'Connect LinkedIn to schedule'; }
@@ -871,6 +884,21 @@ function clearScheduleLockUi() {
   if (chipRemove) chipRemove.style.display = '';
   const publishState = document.getElementById('post-publish-state');
   if (publishState) publishState.hidden = true;
+}
+
+async function checkIfScheduled(postId) {
+  if (scheduleEditLocked) return;
+  try {
+    const res  = await fetch('/api/linkedin/scheduled', { credentials: 'include' });
+    const data = await res.json();
+    if (!data.ok || !Array.isArray(data.posts)) return;
+    const match = data.posts.find(p =>
+      p.post_id === postId &&
+      p.scheduled_for &&
+      ['pending', 'processing', 'scheduled'].includes(p.status)
+    );
+    if (match) { scheduleEditLocked = true; applyScheduleLockUi(match.scheduled_for); }
+  } catch { /* non-fatal */ }
 }
 
 function showPublishedState(label) {

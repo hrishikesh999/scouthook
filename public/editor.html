@@ -8,7 +8,7 @@
   <link rel="stylesheet" href="/css/main.css">
   <style>
     #page-wrapper { display: flex !important; flex-direction: column !important; height: 100% !important; overflow: hidden !important; min-height: 0 !important; }
-    #topbar { display: flex !important; align-items: center !important; justify-content: space-between !important; flex-shrink: 0 !important; width: 100% !important; }
+    #topbar { display: flex !important; align-items: center !important; justify-content: space-between !important; flex-shrink: 0 !important; width: 100% !important; padding: 12px 20px 12px 24px !important; }
     #topbar-left  { display: flex !important; align-items: center !important; gap: 12px !important; }
     #topbar-right { display: flex !important; align-items: center !important; gap: 8px !important; }
     #content-area { display: flex !important; flex: 1 !important; overflow: hidden !important; position: relative !important; min-height: 0 !important; width: 100% !important; }
@@ -16,7 +16,7 @@
     #tabs { display: flex !important; align-items: flex-end !important; justify-content: center !important; width: 100% !important; position: relative !important; }
     #word-count { position: absolute !important; right: 16px !important; bottom: 8px !important; margin: 0 !important; }
     #visual-btns { display: flex !important; flex-wrap: wrap !important; gap: 8px !important; }
-    #right-panel { width: 260px !important; min-width: 260px !important; max-width: 260px !important; flex-shrink: 0 !important; flex-grow: 0 !important; overflow-y: auto !important; overflow-x: hidden !important; height: 100% !important; max-height: none !important; display: flex !important; flex-direction: column !important; position: relative !important; }
+    #right-panel { width: 280px !important; min-width: 280px !important; max-width: 280px !important; flex-shrink: 0 !important; flex-grow: 0 !important; overflow-y: auto !important; overflow-x: hidden !important; height: calc(100% - 24px) !important; max-height: none !important; display: flex !important; flex-direction: column !important; position: relative !important; align-self: flex-start !important; margin: 12px 16px 12px 0 !important; border-radius: var(--radius-lg) !important; }
     #panel-score { display: flex !important; flex-direction: column !important; width: 100% !important; }
     #panel-score[hidden] { display: none !important; }
     #score-bar  { overflow: hidden !important; width: 100% !important; }
@@ -29,7 +29,7 @@
     #btn-gen-go { flex: 1 !important; }
     #style-opts { display: flex !important; gap: 6px !important; width: 100% !important; }
     .style-opt  { flex: 1 !important; }
-    #carousel-sheet { position: absolute !important; bottom: 0 !important; left: 0 !important; right: 0 !important; height: 78% !important; display: none !important; flex-direction: column !important; z-index: 20 !important; }
+    #carousel-sheet { position: absolute !important; bottom: 0 !important; left: 0 !important; right: 312px !important; height: 78% !important; display: none !important; flex-direction: column !important; z-index: 20 !important; background: var(--bg-surface, #fff) !important; border-top: 1px solid var(--border) !important; border-right: 1px solid var(--border) !important; }
     #carousel-sheet:not([hidden]) { display: flex !important; }
     #sheet-header { display: flex !important; align-items: center !important; justify-content: space-between !important; flex-shrink: 0 !important; width: 100% !important; }
     #sheet-header-left  { display: flex !important; align-items: center !important; gap: 16px !important; }
@@ -48,7 +48,8 @@
     [data-style="brand"] { background: linear-gradient(135deg, #1D9E75, #085041) !important; color: #ffffff !important; }
     @media (max-width: 767px) {
       #content-area { flex-direction: column !important; }
-      #right-panel  { width: 100% !important; max-width: 100% !important; min-width: 0 !important; height: auto !important; }
+      #right-panel  { width: 100% !important; max-width: 100% !important; min-width: 0 !important; height: auto !important; margin: 0 !important; }
+      #carousel-sheet { right: 0 !important; }
     }
 
     /* ── Viewport containment ── */
@@ -78,9 +79,9 @@
     #score-number.fail { color: var(--score-fail, #e84e4e); }
 
     /* ── Right-panel section spacing ── */
-    #panel-score section { padding: 10px 16px; }
-    #panel-score section:first-child { padding-top: 14px; }
-    #panel-score section:last-child  { padding-bottom: 14px; }
+    #panel-score section { padding: 14px 18px; }
+    #panel-score section:first-child { padding-top: 18px; }
+    #panel-score section:last-child  { padding-bottom: 18px; }
     #panel-score .profile-divider { margin: 0; }
     #panel-gen-header { padding: 12px 16px; border-bottom: 1px solid var(--border); }
     #panel-gen-body   { padding: 12px 16px; }
@@ -139,7 +140,6 @@
         <span id="topbar-title" class="field-label"></span>
       </div>
       <div id="topbar-right" class="page-header-actions">
-        <button id="btn-regenerate" class="btn-secondary">Regenerate</button>
         <div id="post-publish-state" class="post-publish-state" aria-live="polite" hidden>
           <span id="published-label"></span>
         </div>
@@ -870,7 +870,6 @@ function applyScheduleLockUi(scheduledFor) {
   if (bannerText) bannerText.textContent = when
     ? `This post is scheduled for ${when}. Pause scheduling to edit.`
     : 'This post is scheduled. Pause scheduling to edit.';
-  document.getElementById('btn-regenerate').disabled = true;
   document.getElementById('btn-schedule').disabled   = true;
   document.getElementById('post-body').contentEditable = 'false';
   ['quote-card-btn','carousel-btn','branded-quote-btn','media-library-btn'].forEach(id => {
@@ -884,7 +883,6 @@ function clearScheduleLockUi() {
   document.getElementById('schedule-lock-banner')?.classList.add('hidden');
   const msg = document.getElementById('schedule-lock-banner-msg');
   if (msg) msg.textContent = '';
-  document.getElementById('btn-regenerate').disabled = false;
   document.getElementById('post-body').contentEditable = 'true';
   if (linkedinConnected) document.getElementById('btn-schedule').disabled = false;
   ['quote-card-btn','carousel-btn','branded-quote-btn','media-library-btn'].forEach(id => {
@@ -1478,21 +1476,6 @@ function bindEvents() {
 /* ════════════════════════════════════════════════════════════════════════
    API WIRES
 ════════════════════════════════════════════════════════════════════════ */
-function wireRegenerate() {
-  document.getElementById('btn-regenerate').addEventListener('click', async () => {
-    if (scheduleEditLocked) return;
-    const btn = document.getElementById('btn-regenerate');
-    btn.textContent = 'Regenerating…'; btn.disabled = true;
-    try {
-      const res  = await fetch(`/api/generate/regenerate/${encodeURIComponent(postId)}`, { method: 'POST', credentials: 'include' });
-      const data = await res.json();
-      if (!res.ok || !data.ok) throw new Error('regenerate_failed');
-      await loadPost(postId);
-    } catch { /* silent */ }
-    finally { btn.textContent = 'Regenerate'; btn.disabled = false; }
-  });
-}
-
 function wireSchedule() {
   document.getElementById('btn-schedule').addEventListener('click', async () => {
     if (scheduleEditLocked) return;
@@ -1738,7 +1721,6 @@ function init() {
   updateQuotePreview();
   updateCharCount();
   bindEvents();
-  wireRegenerate();
   wireSchedule();
   wireVisualButtons();
   wireAssetChip();

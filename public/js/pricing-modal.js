@@ -5,6 +5,8 @@
 (function () {
   'use strict';
 
+  if (window.PricingModal) return;
+
   /** Survives redirect when Paddle omits ?_ptxn= on successUrl (overlay checkout). */
   const PENDING_PADDLE_TXN_KEY = 'scouthook_pending_paddle_txn';
 

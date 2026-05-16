@@ -4917,6 +4917,30 @@ body {
   border-color: #3F3F46;
 }
 
+.sidebar-upgrade-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 10px;
+  margin-bottom: 6px;
+  background: rgba(20, 184, 166, 0.08);
+  color: #2DD4BF;
+  border: 1px solid rgba(20, 184, 166, 0.22);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  text-align: left;
+  box-sizing: border-box;
+}
+.sidebar-upgrade-btn:hover {
+  background: rgba(20, 184, 166, 0.14);
+  border-color: rgba(20, 184, 166, 0.38);
+}
+
 @media (max-width: 768px) {
   .app-user-bar {
     right: var(--space-4);

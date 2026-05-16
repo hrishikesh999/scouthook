@@ -100,9 +100,9 @@
     header.appendChild(actions);
   }
 
-  async function renderPageHeaderUpgrade() {
-    const actions = document.querySelector('#main-content .page-header-actions');
-    if (!actions) return;
+  async function renderSidebarUpgrade() {
+    const sidebarBottom = document.querySelector('#sidebar .sidebar-bottom');
+    if (!sidebarBottom) return;
     try {
       const r = await fetch('/api/billing/subscription');
       if (!r.ok) return;
@@ -111,13 +111,13 @@
 
       const btn = document.createElement('button');
       btn.type = 'button';
-      btn.className = 'page-header-upgrade';
+      btn.className = 'sidebar-upgrade-btn';
       btn.innerHTML = `
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
         Upgrade to Pro
       `;
       btn.addEventListener('click', () => window.PricingModal?.open());
-      actions.insertBefore(btn, actions.querySelector('.page-header-help'));
+      sidebarBottom.insertBefore(btn, sidebarBottom.firstChild);
     } catch { /* ignore */ }
   }
 
@@ -151,7 +151,7 @@
         const user = data && data.user;
         if (!user || !user.user_id) return;
         renderSidebarAccount(user);
-        renderPageHeaderUpgrade();
+        renderSidebarUpgrade();
       })
       .catch(() => { /* offline */ });
   }

@@ -16,7 +16,7 @@
     #tabs { display: flex !important; align-items: flex-end !important; justify-content: center !important; width: 100% !important; position: relative !important; }
     #word-count { position: absolute !important; right: 16px !important; bottom: 8px !important; margin: 0 !important; }
     #visual-btns { display: flex !important; flex-wrap: wrap !important; gap: 8px !important; }
-    #right-panel { width: 280px !important; min-width: 280px !important; max-width: 280px !important; flex-shrink: 0 !important; flex-grow: 0 !important; overflow-y: auto !important; overflow-x: hidden !important; height: 100% !important; max-height: none !important; display: flex !important; flex-direction: column !important; position: relative !important; align-self: flex-start !important; margin: 0 16px 0 0 !important; border-radius: var(--radius-lg) !important; }
+    #right-panel { width: 280px !important; min-width: 280px !important; max-width: 280px !important; flex-shrink: 0 !important; flex-grow: 0 !important; overflow-y: auto !important; overflow-x: hidden !important; height: calc(100% - 24px) !important; max-height: none !important; display: flex !important; flex-direction: column !important; position: relative !important; align-self: flex-start !important; margin: 12px 16px 12px 0 !important; border-radius: var(--radius-lg) !important; }
     #panel-score { display: flex !important; flex-direction: column !important; width: 100% !important; }
     #panel-score[hidden] { display: none !important; }
     #score-bar  { overflow: hidden !important; width: 100% !important; }
@@ -45,15 +45,15 @@
     #post-publish-state:not([hidden]) { display: flex !important; align-items: center !important; gap: 8px !important; }
 
     /* ── Edit view layout ── */
-    #edit-view:not([hidden]) { display: flex; flex-direction: column; gap: 16px; padding: 24px 48px 40px; }
-    #linkedin-preview:not([hidden]) { display: block; padding: 24px 48px 40px; }
+    #edit-view:not([hidden]) { display: flex; flex-direction: column; gap: 20px; padding: 28px 64px 48px; }
+    #linkedin-preview:not([hidden]) { display: block; padding: 28px 64px 48px; }
     #post-body { outline: none; cursor: text; min-height: 80px; }
     #post-body[contenteditable="false"] { cursor: default; opacity: 0.75; }
     #post-body p { margin: 0 0 12px; }
     #post-body p:last-child { margin-bottom: 0; }
 
     /* ── Tabs bottom border ── */
-    #tabs { border-bottom: 1px solid var(--border); padding: 0 48px; }
+    #tabs { border-bottom: 1px solid var(--border); padding: 0 64px; }
 
     /* ── Score area ── */
     #score-bar     { height: 6px; border-radius: 3px; background: var(--bg-pill); margin: 8px 0 4px; }
@@ -64,20 +64,20 @@
     #score-number.fail { color: var(--score-fail, #e84e4e); }
 
     /* ── Right-panel section spacing ── */
-    #panel-score section { padding: 14px 18px; }
-    #panel-score section:first-child { padding-top: 18px; }
-    #panel-score section:last-child  { padding-bottom: 18px; }
+    #panel-score section { padding: 14px 24px; }
+    #panel-score section:first-child { padding-top: 20px; }
+    #panel-score section:last-child  { padding-bottom: 20px; }
     #panel-score .profile-divider { margin: 0; }
-    #panel-gen-header { padding: 12px 16px; border-bottom: 1px solid var(--border); }
-    #panel-gen-body   { padding: 12px 16px; }
-    #panel-gen-footer { padding: 12px 16px; border-top: 1px solid var(--border); }
+    #panel-gen-header { padding: 12px 24px; border-bottom: 1px solid var(--border); }
+    #panel-gen-body   { padding: 12px 24px; }
+    #panel-gen-footer { padding: 12px 24px; border-top: 1px solid var(--border); }
 
     /* ── LinkedIn connect strip ── */
     #no-linkedin-actions:not([hidden]) { display: flex; align-items: center; justify-content: space-between; padding: 8px 20px; background: #EFF6FF; border-bottom: 1px solid #BFDBFE; gap: 12px; flex-shrink: 0; font-size: 13px; color: var(--text-body); }
     .linkedin-connect-banner-text { display: flex; align-items: center; gap: 8px; }
 
     /* ── Back link ── */
-    .back-to-new-post { font-size: 13px; color: var(--text-secondary); text-decoration: none; transition: color 0.12s; }
+    .back-to-new-post { font-size: 13px; color: var(--text-secondary); text-decoration: none; transition: color 0.12s; padding-right: 20px; }
     .back-to-new-post:hover { color: var(--text-heading); }
 
     /* ── Visuals section ── */
@@ -90,16 +90,15 @@
     .first-comment-footer      { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
 
     /* ── Post edit card ── */
-    .post-edit-card { background: #fff; border: 1px solid var(--border); border-radius: var(--radius-lg, 12px); padding: 20px 24px; }
+    .post-edit-card { background: #fff; border: 1px solid var(--border); border-radius: var(--radius-lg, 12px); padding: 28px 36px; }
 
     /* ── Visuals toolbar strip ── */
     #visuals-section { background: var(--bg-subtle, #f3f4f6) !important; border-radius: var(--radius-md, 8px) !important; padding: 12px 16px !important; gap: 10px !important; }
 
     /* ── Checks list ── */
-    #checks-list li { font-size: 12px; line-height: 1.5; color: var(--text-secondary); }
+    #checks-list { list-style: none; padding: 0; margin: 0; }
+    #checks-list li { font-size: 12px; line-height: 1.5; color: var(--text-secondary); list-style: none; }
 
-    /* ── Panel schedule action ── */
-    #panel-schedule-action { padding: 14px 18px; }
 
     /* ── LinkedIn preview first comment ── */
     .li-first-comment { padding: 8px 12px 12px; }
@@ -111,7 +110,9 @@
     .li-comment-text { font-size: 13px; color: #333; margin: 0; white-space: pre-wrap; }
 
     /* ── Topbar scheduled state ── */
-    #topbar-scheduled:not([hidden]) { display: flex !important; align-items: center; justify-content: space-between; width: 100%; gap: 16px; }
+    #topbar-scheduled { display: none; align-items: center; justify-content: space-between; width: 100%; gap: 16px; }
+    #topbar { transition: background 0.2s; }
+    #topbar.is-scheduled { background: #fefce8 !important; border-bottom-color: #fde68a !important; }
   </style>
 </head>
 <body>
@@ -151,6 +152,7 @@
         <div id="post-publish-state" class="post-publish-state" aria-live="polite" hidden>
           <span id="published-label"></span>
         </div>
+        <button id="btn-schedule" class="btn-primary" disabled>Schedule</button>
       </div>
       <!-- Scheduled state replaces topbar content -->
       <div id="topbar-scheduled" hidden>
@@ -158,7 +160,7 @@
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
           <span id="topbar-scheduled-label" style="font-size:14px;font-weight:500;color:var(--text-heading)"></span>
         </div>
-        <button id="btn-topbar-edit" class="btn-outlined" style="height:32px">Edit post</button>
+        <button id="btn-topbar-edit" class="btn-primary" style="height:32px">Edit post</button>
       </div>
     </div>
 
@@ -231,6 +233,7 @@
             <div class="first-comment-thread-line"></div>
             <div class="first-comment-box">
               <label class="field-label" for="first-comment-input">First comment (optional)</label>
+              <p class="field-helper" style="margin:4px 0 8px;font-size:12px;color:var(--text-secondary)">Add context, a resource link, or a CTA here. This comment is auto-published immediately after your post goes live — so followers see it pinned at the top of the thread.</p>
               <textarea id="first-comment-input" class="field-textarea" placeholder="Add a first comment to your post…" maxlength="1250"></textarea>
               <div class="first-comment-footer">
                 <span id="first-comment-char" class="field-helper">0 / 1250</span>
@@ -282,10 +285,6 @@
       <div id="right-panel">
 
         <div id="panel-score">
-          <div id="panel-schedule-action">
-            <button id="btn-schedule" class="btn-primary" disabled style="width:100%">Schedule</button>
-          </div>
-          <hr class="profile-divider">
           <section>
             <p class="panel-label score-label">Quality score</p>
             <div id="score-display">
@@ -298,17 +297,6 @@
           <section>
             <p class="panel-label score-label">Funnel type</p>
             <span id="funnel-type" class="archetype-badge"></span>
-          </section>
-          <hr class="profile-divider">
-          <section>
-            <p class="panel-label score-label">Alternative hook</p>
-            <p id="alt-hook-text" class="field-helper"></p>
-            <button id="btn-use-hook" class="btn-outlined">Use this hook →</button>
-          </section>
-          <hr class="profile-divider">
-          <section>
-            <p class="panel-label score-label">Alternative closing</p>
-            <p id="alt-closing-text" class="field-helper"></p>
           </section>
           <hr class="profile-divider">
           <section>
@@ -598,16 +586,16 @@ async function loadPost(id) {
       fill.style.background   = score >= 80 ? 'var(--accent)' : score >= 60 ? 'var(--score-borderline)' : 'var(--score-fail)';
     }
 
-    document.getElementById('funnel-type').textContent      = p.funnelType || '';
-    document.getElementById('alt-hook-text').textContent    = p.hookB      || '';
-    document.getElementById('alt-closing-text').textContent = (p.ctaAlternatives || [])[0] || '';
+    document.getElementById('funnel-type').textContent = p.funnelType || '';
 
     const rawText = typeof p.content === 'string' ? p.content : '';
     const paras   = rawText.split(/\n\n+/).filter(Boolean);
     document.getElementById('post-body').innerHTML = paras.map(t =>
       `<p class="text-post" data-style="normal">${escHtml(t).replace(/\n/g, '<br>')}</p>`
     ).join('');
-    document.getElementById('li-body-text').textContent = rawText;
+    document.getElementById('li-body-text').innerHTML = paras.map(t =>
+      `<p style="margin:0 0 12px">${escHtml(t).replace(/\n/g,'<br>')}</p>`
+    ).join('');
     document.getElementById('word-count').textContent =
       rawText.split(/\s+/).filter(Boolean).length + ' words';
 
@@ -657,7 +645,6 @@ async function loadPost(id) {
     if (p.status === 'scheduled' && p.scheduled_for) {
       scheduleEditLocked = true;
       applyScheduleLockUi(p.scheduled_for);
-      showPublishedState(`Scheduled · ${formatScheduledLocal(p.scheduled_for)}`);
     }
 
   } catch {
@@ -720,7 +707,11 @@ function switchTab(tab) {
   document.getElementById('edit-view').hidden        = tab !== 'edit';
   document.getElementById('linkedin-preview').hidden = tab !== 'preview';
   if (tab === 'preview') {
-    document.getElementById('li-body-text').textContent = getPostContent();
+    const previewText = getPostContent();
+    const previewParas = previewText.split(/\n\n+/).filter(Boolean);
+    document.getElementById('li-body-text').innerHTML = previewParas.length
+      ? previewParas.map(t => `<p style="margin:0 0 12px">${escHtml(t).replace(/\n/g,'<br>')}</p>`).join('')
+      : '';
     renderPreviewAsset();
     const fcText  = document.getElementById('first-comment-input')?.value?.trim();
     const fcEl    = document.getElementById('li-first-comment');
@@ -787,10 +778,11 @@ function applyScheduleLockUi(scheduledFor) {
   const topbarRight  = document.getElementById('topbar-right');
   if (scheduledBar) {
     if (labelEl) labelEl.textContent = when ? `Scheduled · ${when}` : 'Scheduled';
-    scheduledBar.hidden = false;
+    scheduledBar.style.display = 'flex';
   }
-  if (topbarLeft)  topbarLeft.hidden  = true;
-  if (topbarRight) topbarRight.hidden = true;
+  if (topbarLeft)  topbarLeft.style.display  = 'none';
+  if (topbarRight) topbarRight.style.display = 'none';
+  document.getElementById('topbar')?.classList.add('is-scheduled');
 
   document.getElementById('btn-schedule').disabled     = true;
   document.getElementById('post-body').contentEditable = 'false';
@@ -806,9 +798,10 @@ function clearScheduleLockUi() {
   const scheduledBar = document.getElementById('topbar-scheduled');
   const topbarLeft   = document.getElementById('topbar-left');
   const topbarRight  = document.getElementById('topbar-right');
-  if (scheduledBar) scheduledBar.hidden = true;
-  if (topbarLeft)   topbarLeft.hidden   = false;
-  if (topbarRight)  topbarRight.hidden  = false;
+  if (scheduledBar) scheduledBar.style.display = 'none';
+  if (topbarLeft)   topbarLeft.style.display   = '';
+  if (topbarRight)  topbarRight.style.display  = '';
+  document.getElementById('topbar')?.classList.remove('is-scheduled');
 
   document.getElementById('post-body').contentEditable = 'true';
   if (linkedinConnected) document.getElementById('btn-schedule').disabled = false;
@@ -1303,13 +1296,6 @@ function bindEvents() {
     })
   );
 
-  document.getElementById('btn-use-hook').addEventListener('click', () => {
-    const hookText = document.getElementById('alt-hook-text').textContent;
-    if (!hookText) return;
-    const first = document.getElementById('post-body').querySelector('p');
-    if (first) first.textContent = hookText.replace(/^["']|["']$/g, '');
-  });
-
   /* Slide-over */
   document.getElementById('slide-over-close').addEventListener('click',   closeSlideOver);
   document.getElementById('slide-over-discard').addEventListener('click', closeSlideOver);
@@ -1505,7 +1491,7 @@ function wireSchedule() {
 function wireVisualButtons() {
   document.getElementById('quote-card-btn').addEventListener('click', () => openSlideOver('quote_card', 'QUOTE CARD'));
   document.getElementById('branded-quote-btn').addEventListener('click', () => openSlideOver('branded_quote', 'BRANDED QUOTE'));
-  document.getElementById('carousel-btn').addEventListener('click', generateCarouselOneClick);
+  document.getElementById('carousel-btn').addEventListener('click', () => openSlideOver('carousel', 'CAROUSEL'));
   document.getElementById('media-library-btn').addEventListener('click', () => {
     if (scheduleEditLocked) return;
     if (userPlan === 'free') { window.PricingModal?.open(); return; }
@@ -1520,57 +1506,6 @@ function wireAssetChip() {
     document.getElementById('asset-chip-label').textContent = '';
     clearPreviewAssetDOM();
   });
-}
-
-async function generateCarouselOneClick() {
-  if (scheduleEditLocked) return;
-  if (userPlan === 'free') { window.PricingModal?.open(); return; }
-  const btn   = document.getElementById('carousel-btn');
-  const label = btn.querySelector('.asset-action-label');
-  const orig  = label.textContent;
-  label.textContent = 'Generating…';
-  btn.disabled = true;
-  try {
-    // Step 1: extract slides from post content
-    const extractRes = await fetch(`/api/visuals/${encodeURIComponent(postId)}`, {
-      method: 'POST', credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ visual_type: 'carousel', mode: 'extract', content: getPostContent() }),
-    });
-    const extractData = await extractRes.json();
-    if (!extractRes.ok || !extractData.ok) throw new Error('extract_failed');
-
-    // Step 2: render carousel PDF
-    const renderRes = await fetch(`/api/visuals/${encodeURIComponent(postId)}`, {
-      method: 'POST', credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ visual_type: 'carousel', mode: 'render', content: { slides: extractData.slides, style: 'brand' } }),
-    });
-    const renderData = await renderRes.json();
-    if (!renderRes.ok || !renderData.ok) throw new Error('render_failed');
-
-    const pdfUrl     = renderData.pdf_url || renderData.imageUrl;
-    const previewUrl = renderData.slides?.[0]?.png_url || pdfUrl;
-    const slideCount = renderData.slides?.length || extractData.slides?.length || 0;
-
-    attachedAssetUrl   = pdfUrl;
-    attachedAssetType  = 'carousel';
-    attachedPreviewUrl = previewUrl;
-    attachedSlideCount = slideCount;
-    const chipLabel = slideCount > 0 ? `Carousel · ${slideCount} slides` : 'Carousel';
-    document.getElementById('asset-chip-label').textContent = chipLabel;
-    document.getElementById('asset-chip').classList.remove('hidden');
-    renderPreviewAsset();
-    if (window.toast?.success) window.toast.success('Carousel generated!');
-  } catch (err) {
-    const msg = err.message === 'extract_failed' ? 'Could not extract slides from your post.'
-              : err.message === 'render_failed'  ? 'Could not render the carousel PDF.'
-              : 'Carousel generation failed. Please try again.';
-    if (window.toast?.error) window.toast.error(msg);
-  } finally {
-    label.textContent = orig;
-    btn.disabled = false;
-  }
 }
 
 function wireSchedulePause() {

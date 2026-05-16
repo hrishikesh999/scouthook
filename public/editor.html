@@ -76,9 +76,10 @@
     #score-number.fail { color: var(--score-fail, #e84e4e); }
 
     /* ── Right-panel section spacing ── */
-    #panel-score section { padding: 12px 16px; }
-    #panel-score section:first-child { padding-top: 16px; }
-    #panel-score section:last-child  { padding-bottom: 16px; }
+    #panel-score section { padding: 10px 16px; }
+    #panel-score section:first-child { padding-top: 14px; }
+    #panel-score section:last-child  { padding-bottom: 14px; }
+    #panel-score .profile-divider { margin: 0; }
     #panel-gen-header { padding: 12px 16px; border-bottom: 1px solid var(--border); }
     #panel-gen-body   { padding: 12px 16px; }
     #panel-gen-footer { padding: 12px 16px; border-top: 1px solid var(--border); }
@@ -224,15 +225,17 @@
 
         <!-- LinkedIn preview -->
         <div id="linkedin-preview" hidden>
-          <div id="li-header">
-            <div id="li-avatar" class="linkedin-avatar-initials"></div>
-            <div>
-              <p id="li-name" class="linkedin-name"></p>
-              <p id="li-meta" class="linkedin-headline"></p>
+          <div class="linkedin-card">
+            <div class="linkedin-card-header" id="li-header">
+              <div id="li-avatar" class="linkedin-avatar-initials"></div>
+              <div>
+                <p id="li-name" class="linkedin-name"></p>
+                <p id="li-meta" class="linkedin-headline"></p>
+              </div>
             </div>
+            <div id="li-body-text" class="linkedin-body"></div>
+            <div id="preview-asset-li" class="preview-asset hidden" aria-hidden="true"></div>
           </div>
-          <div id="li-body-text" class="linkedin-body"></div>
-          <div id="preview-asset-li" class="preview-asset hidden" aria-hidden="true"></div>
         </div>
 
       </div>

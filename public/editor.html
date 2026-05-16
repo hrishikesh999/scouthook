@@ -8,7 +8,7 @@
   <link rel="stylesheet" href="/css/main.css">
   <style>
     #page-wrapper { display: flex !important; flex-direction: column !important; height: 100% !important; overflow: hidden !important; min-height: 0 !important; }
-    #topbar { display: flex !important; align-items: center !important; justify-content: space-between !important; flex-shrink: 0 !important; width: 100% !important; padding: 12px 20px 12px 24px !important; }
+    #topbar { display: flex !important; align-items: center !important; justify-content: space-between !important; flex-shrink: 0 !important; width: 100% !important; padding: 12px 20px 12px 24px !important; background: var(--bg-surface, #fff) !important; border-bottom: 1px solid var(--border) !important; }
     #topbar-left  { display: flex !important; align-items: center !important; gap: 12px !important; }
     #topbar-right { display: flex !important; align-items: center !important; gap: 8px !important; }
     #content-area { display: flex !important; flex: 1 !important; overflow: hidden !important; position: relative !important; min-height: 0 !important; width: 100% !important; }
@@ -16,7 +16,7 @@
     #tabs { display: flex !important; align-items: flex-end !important; justify-content: center !important; width: 100% !important; position: relative !important; }
     #word-count { position: absolute !important; right: 16px !important; bottom: 8px !important; margin: 0 !important; }
     #visual-btns { display: flex !important; flex-wrap: wrap !important; gap: 8px !important; }
-    #right-panel { width: 280px !important; min-width: 280px !important; max-width: 280px !important; flex-shrink: 0 !important; flex-grow: 0 !important; overflow-y: auto !important; overflow-x: hidden !important; height: calc(100% - 24px) !important; max-height: none !important; display: flex !important; flex-direction: column !important; position: relative !important; align-self: flex-start !important; margin: 12px 16px 12px 0 !important; border-radius: var(--radius-lg) !important; }
+    #right-panel { width: 280px !important; min-width: 280px !important; max-width: 280px !important; flex-shrink: 0 !important; flex-grow: 0 !important; overflow-y: auto !important; overflow-x: hidden !important; height: 100% !important; max-height: none !important; display: flex !important; flex-direction: column !important; position: relative !important; align-self: flex-start !important; margin: 0 16px 0 0 !important; border-radius: var(--radius-lg) !important; }
     #panel-score { display: flex !important; flex-direction: column !important; width: 100% !important; }
     #panel-score[hidden] { display: none !important; }
     #score-bar  { overflow: hidden !important; width: 100% !important; }
@@ -88,6 +88,30 @@
     .first-comment-thread-line { width: 2px; height: 20px; background: var(--border); margin: 0 0 0 16px; }
     .first-comment-box         { border: 1px solid var(--border); border-radius: var(--radius-md, 8px); padding: 12px 14px; background: var(--bg-surface); }
     .first-comment-footer      { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
+
+    /* ── Post edit card ── */
+    .post-edit-card { background: #fff; border: 1px solid var(--border); border-radius: var(--radius-lg, 12px); padding: 20px 24px; }
+
+    /* ── Visuals toolbar strip ── */
+    #visuals-section { background: var(--bg-subtle, #f3f4f6) !important; border-radius: var(--radius-md, 8px) !important; padding: 12px 16px !important; gap: 10px !important; }
+
+    /* ── Checks list ── */
+    #checks-list li { font-size: 12px; line-height: 1.5; color: var(--text-secondary); }
+
+    /* ── Panel schedule action ── */
+    #panel-schedule-action { padding: 14px 18px; }
+
+    /* ── LinkedIn preview first comment ── */
+    .li-first-comment { padding: 8px 12px 12px; }
+    .li-comment-thread-line { width: 2px; height: 16px; background: #d0d0d0; margin: 0 0 6px 18px; }
+    .li-comment-body { display: flex; gap: 8px; align-items: flex-start; }
+    .li-comment-avatar { width: 32px; height: 32px; min-width: 32px; font-size: 13px; border-radius: 50%; }
+    .li-comment-content { background: #f3f2ef; border-radius: 0 8px 8px 8px; padding: 8px 12px; flex: 1; }
+    .li-comment-author { font-size: 13px; font-weight: 600; color: #000; margin: 0 0 2px; }
+    .li-comment-text { font-size: 13px; color: #333; margin: 0; white-space: pre-wrap; }
+
+    /* ── Topbar scheduled state ── */
+    #topbar-scheduled:not([hidden]) { display: flex !important; align-items: center; justify-content: space-between; width: 100%; gap: 16px; }
   </style>
 </head>
 <body>
@@ -122,13 +146,19 @@
     <div id="topbar" class="page-header">
       <div id="topbar-left">
         <a href="/drafts.html" id="back-link" class="back-to-new-post">← All drafts</a>
-        <span id="topbar-title" class="field-label"></span>
       </div>
       <div id="topbar-right" class="page-header-actions">
         <div id="post-publish-state" class="post-publish-state" aria-live="polite" hidden>
           <span id="published-label"></span>
         </div>
-        <button id="btn-schedule" class="btn-primary" disabled>Schedule</button>
+      </div>
+      <!-- Scheduled state replaces topbar content -->
+      <div id="topbar-scheduled" hidden>
+        <div style="display:flex;align-items:center;gap:8px">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          <span id="topbar-scheduled-label" style="font-size:14px;font-weight:500;color:var(--text-heading)"></span>
+        </div>
+        <button id="btn-topbar-edit" class="btn-outlined" style="height:32px">Edit post</button>
       </div>
     </div>
 
@@ -163,13 +193,15 @@
         <!-- Edit view -->
         <div id="edit-view">
 
-          <div id="post-body" contenteditable="true" spellcheck="true" role="textbox" aria-multiline="true" aria-label="Post content"></div>
+          <div class="post-edit-card">
+            <div id="post-body" contenteditable="true" spellcheck="true" role="textbox" aria-multiline="true" aria-label="Post content"></div>
 
-          <div id="preview-asset" class="preview-asset hidden" aria-hidden="true"></div>
+            <div id="preview-asset" class="preview-asset hidden" aria-hidden="true"></div>
 
-          <div id="asset-chip" class="asset-chip hidden" role="status" aria-live="polite">
-            <span id="asset-chip-label"></span>
-            <button id="asset-chip-remove" class="asset-chip-remove" aria-label="Remove attached asset">×</button>
+            <div id="asset-chip" class="asset-chip hidden" role="status" aria-live="polite">
+              <span id="asset-chip-label"></span>
+              <button id="asset-chip-remove" class="asset-chip-remove" aria-label="Remove attached asset">×</button>
+            </div>
           </div>
 
           <div id="visuals-section">
@@ -229,6 +261,17 @@
               <button class="linkedin-action"><svg viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>Repost</button>
               <button class="linkedin-action"><svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>Send</button>
             </div>
+            <!-- First comment in LinkedIn preview -->
+            <div id="li-first-comment" class="li-first-comment" hidden>
+              <div class="li-comment-thread-line"></div>
+              <div class="li-comment-body">
+                <div class="li-comment-avatar linkedin-avatar-initials" id="li-comment-avatar"></div>
+                <div class="li-comment-content">
+                  <p class="li-comment-author" id="li-comment-author"></p>
+                  <p class="li-comment-text" id="li-comment-text"></p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -239,6 +282,10 @@
       <div id="right-panel">
 
         <div id="panel-score">
+          <div id="panel-schedule-action">
+            <button id="btn-schedule" class="btn-primary" disabled style="width:100%">Schedule</button>
+          </div>
+          <hr class="profile-divider">
           <section>
             <p class="panel-label score-label">Quality score</p>
             <div id="score-display">
@@ -267,7 +314,6 @@
           <section>
             <p class="panel-label score-label">Checks</p>
             <ul id="checks-list"></ul>
-            <button id="btn-toggle-checks" class="btn-outlined">View all checks →</button>
           </section>
         </div>
         <!-- /panel-score -->
@@ -423,7 +469,6 @@ const visualCache = new Map();
 const state = {
   activeTab: 'edit', rightPanel: 'score', generatorType: null,
   quoteText: '', quoteStyle: 'dark',
-  showAllChecks: false,
 };
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -556,7 +601,6 @@ async function loadPost(id) {
     document.getElementById('funnel-type').textContent      = p.funnelType || '';
     document.getElementById('alt-hook-text').textContent    = p.hookB      || '';
     document.getElementById('alt-closing-text').textContent = (p.ctaAlternatives || [])[0] || '';
-    document.getElementById('topbar-title').textContent     = p.funnelType || 'Draft';
 
     const rawText = typeof p.content === 'string' ? p.content : '';
     const paras   = rawText.split(/\n\n+/).filter(Boolean);
@@ -571,9 +615,18 @@ async function loadPost(id) {
     _apiChecks = flags.length
       ? flags.map(f => ({ text: f, passed: false }))
       : [
-          { text: 'No AI-sounding language', passed: true },
-          { text: 'Hook stops the scroll',   passed: passed },
-          { text: 'Clear CTA',               passed: passed },
+          { text: 'No AI-sounding language',    passed: true },
+          { text: 'Hook stops the scroll',       passed: passed },
+          { text: 'Clear call-to-action',        passed: passed },
+          { text: 'Readable line length',        passed: true },
+          { text: 'Appropriate post length',     passed: passed },
+          { text: 'No keyword stuffing',         passed: true },
+          { text: 'Emotional resonance',         passed: passed },
+          { text: 'First-person voice',          passed: true },
+          { text: 'Strong opening line',         passed: passed },
+          { text: 'No jargon overload',          passed: true },
+          { text: 'Consistent tone',             passed: passed },
+          { text: 'Value for target audience',   passed: passed },
         ];
     renderChecks();
 
@@ -648,19 +701,14 @@ async function checkLinkedInStatus() {
    QUALITY CHECKS
 ════════════════════════════════════════════════════════════════════════ */
 function renderChecks() {
-  const checks   = _apiChecks || [];
-  const visible  = state.showAllChecks ? checks : checks.slice(0, 3);
-  const listEl   = document.getElementById('checks-list');
-  const toggleEl = document.getElementById('btn-toggle-checks');
+  const checks = _apiChecks || [];
+  const listEl = document.getElementById('checks-list');
   if (!listEl) return;
-  listEl.innerHTML = visible.map(c => {
+  listEl.innerHTML = checks.map(c => {
     const passed = typeof c === 'object' ? !!c.passed : true;
     const text   = typeof c === 'object' ? c.text     : c;
     return `<li data-passed="${passed}" class="${passed ? '' : 'suggestion-item'}">${passed ? '✓ ' : '✗ '}${escHtml(text)}</li>`;
   }).join('');
-  if (toggleEl && checks.length) {
-    toggleEl.textContent = state.showAllChecks ? 'Show fewer' : `View all ${checks.length} checks →`;
-  }
 }
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -674,6 +722,19 @@ function switchTab(tab) {
   if (tab === 'preview') {
     document.getElementById('li-body-text').textContent = getPostContent();
     renderPreviewAsset();
+    const fcText  = document.getElementById('first-comment-input')?.value?.trim();
+    const fcEl    = document.getElementById('li-first-comment');
+    const nameEl  = document.getElementById('li-name');
+    if (fcEl) {
+      if (fcText) {
+        document.getElementById('li-comment-avatar').textContent = nameEl?.textContent?.charAt(0)?.toUpperCase() || '';
+        document.getElementById('li-comment-author').textContent = nameEl?.textContent || 'You';
+        document.getElementById('li-comment-text').textContent   = fcText;
+        fcEl.hidden = false;
+      } else {
+        fcEl.hidden = true;
+      }
+    }
   }
 }
 
@@ -718,15 +779,20 @@ function updateCharCount() {
    SCHEDULE LOCK
 ════════════════════════════════════════════════════════════════════════ */
 function applyScheduleLockUi(scheduledFor) {
-  const banner = document.getElementById('schedule-lock-banner');
-  if (!banner) return;
-  banner.classList.remove('hidden');
-  const bannerText = document.getElementById('schedule-lock-banner-text');
+  // Replace topbar contents with scheduled state
   const when = scheduledFor ? formatScheduledLocal(scheduledFor) : '';
-  if (bannerText) bannerText.textContent = when
-    ? `This post is scheduled for ${when}. Pause scheduling to edit.`
-    : 'This post is scheduled. Pause scheduling to edit.';
-  document.getElementById('btn-schedule').disabled   = true;
+  const scheduledBar = document.getElementById('topbar-scheduled');
+  const labelEl      = document.getElementById('topbar-scheduled-label');
+  const topbarLeft   = document.getElementById('topbar-left');
+  const topbarRight  = document.getElementById('topbar-right');
+  if (scheduledBar) {
+    if (labelEl) labelEl.textContent = when ? `Scheduled · ${when}` : 'Scheduled';
+    scheduledBar.hidden = false;
+  }
+  if (topbarLeft)  topbarLeft.hidden  = true;
+  if (topbarRight) topbarRight.hidden = true;
+
+  document.getElementById('btn-schedule').disabled     = true;
   document.getElementById('post-body').contentEditable = 'false';
   ['quote-card-btn','carousel-btn','branded-quote-btn','media-library-btn'].forEach(id => {
     document.getElementById(id)?.classList.add('disabled');
@@ -736,9 +802,14 @@ function applyScheduleLockUi(scheduledFor) {
 }
 
 function clearScheduleLockUi() {
-  document.getElementById('schedule-lock-banner')?.classList.add('hidden');
-  const msg = document.getElementById('schedule-lock-banner-msg');
-  if (msg) msg.textContent = '';
+  // Restore normal topbar
+  const scheduledBar = document.getElementById('topbar-scheduled');
+  const topbarLeft   = document.getElementById('topbar-left');
+  const topbarRight  = document.getElementById('topbar-right');
+  if (scheduledBar) scheduledBar.hidden = true;
+  if (topbarLeft)   topbarLeft.hidden   = false;
+  if (topbarRight)  topbarRight.hidden  = false;
+
   document.getElementById('post-body').contentEditable = 'true';
   if (linkedinConnected) document.getElementById('btn-schedule').disabled = false;
   ['quote-card-btn','carousel-btn','branded-quote-btn','media-library-btn'].forEach(id => {
@@ -1208,9 +1279,9 @@ function bindEvents() {
     b.addEventListener('click', () => switchTab(b.dataset.tab))
   );
 
-  document.getElementById('btn-toggle-checks').addEventListener('click', () => {
-    state.showAllChecks = !state.showAllChecks;
-    renderChecks();
+  document.getElementById('btn-topbar-edit')?.addEventListener('click', () => {
+    // Delegate to the existing pause button which handles the API call + UI reset
+    document.getElementById('schedule-pause-btn')?.click();
   });
 
   document.getElementById('btn-panel-back').addEventListener('click',  showScorePanel);

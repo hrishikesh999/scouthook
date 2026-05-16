@@ -29,27 +29,12 @@
     #btn-gen-go { flex: 1 !important; }
     #style-opts { display: flex !important; gap: 6px !important; width: 100% !important; }
     .style-opt  { flex: 1 !important; }
-    #carousel-sheet { position: absolute !important; bottom: 0 !important; left: 0 !important; right: 312px !important; height: 78% !important; display: none !important; flex-direction: column !important; z-index: 20 !important; background: var(--bg-surface, #fff) !important; border-top: 1px solid var(--border) !important; border-right: 1px solid var(--border) !important; }
-    #carousel-sheet:not([hidden]) { display: flex !important; }
-    #sheet-header { display: flex !important; align-items: center !important; justify-content: space-between !important; flex-shrink: 0 !important; width: 100% !important; }
-    #sheet-header-left  { display: flex !important; align-items: center !important; gap: 16px !important; }
-    #sheet-header-right { display: flex !important; align-items: center !important; gap: 10px !important; }
-    #sheet-body { flex: 1 !important; display: flex !important; overflow: hidden !important; width: 100% !important; min-height: 0 !important; }
-    #slide-strip { flex: 1 !important; display: flex !important; flex-direction: row !important; align-items: flex-start !important; gap: 12px !important; overflow-x: auto !important; overflow-y: hidden !important; min-width: 0 !important; height: 100% !important; }
-    .slide-thumb { flex-shrink: 0 !important; width: 110px !important; cursor: pointer !important; }
-    .slide-mini { width: 100% !important; height: 134px !important; display: flex !important; flex-direction: column !important; justify-content: space-between !important; }
-    #slide-edit { width: 260px !important; min-width: 260px !important; max-width: 260px !important; flex-shrink: 0 !important; overflow-y: auto !important; height: 100% !important; }
-    #slide-edit-preview { display: flex !important; flex-direction: column !important; width: 100% !important; }
-    #slide-edit-header { display: flex !important; align-items: center !important; justify-content: space-between !important; width: 100% !important; }
-    #sheet-footer { display: flex !important; align-items: center !important; justify-content: space-between !important; flex-shrink: 0 !important; width: 100% !important; }
-    #sheet-actions { display: flex !important; gap: 8px !important; }
     [data-style="dark"]  { background: #111815 !important; color: #ffffff !important; }
     [data-style="light"] { background: #f5f4f0 !important; color: #1a1f1c !important; }
     [data-style="brand"] { background: linear-gradient(135deg, #1D9E75, #085041) !important; color: #ffffff !important; }
     @media (max-width: 767px) {
       #content-area { flex-direction: column !important; }
       #right-panel  { width: 100% !important; max-width: 100% !important; min-width: 0 !important; height: auto !important; margin: 0 !important; }
-      #carousel-sheet { right: 0 !important; }
     }
 
     /* ── Viewport containment ── */
@@ -326,32 +311,6 @@
       </div>
       <!-- /right-panel -->
 
-      <!-- Carousel bottom sheet -->
-      <div id="carousel-sheet" hidden>
-        <div id="sheet-header">
-          <div id="sheet-header-left">
-            <span id="sheet-title" class="field-label">Carousel</span>
-            <span id="slide-count-label" class="field-helper"></span>
-          </div>
-          <div id="sheet-header-right">
-            <button id="btn-sheet-close" class="slide-over-close">✕</button>
-          </div>
-        </div>
-        <div id="sheet-body">
-          <div id="slide-strip">
-            <div id="btn-add-slide" class="btn-outlined">+ Add slide</div>
-          </div>
-          <div id="slide-edit"></div>
-        </div>
-        <div id="sheet-footer">
-          <span id="sheet-credit" class="field-helper">Generates a LinkedIn carousel PDF</span>
-          <div id="sheet-actions">
-            <button id="btn-carousel-discard" class="btn-secondary">Discard</button>
-            <button id="btn-carousel-generate" class="btn-primary">Generate carousel</button>
-          </div>
-        </div>
-      </div>
-      <!-- /carousel-sheet -->
 
     </div>
     <!-- /content-area -->
@@ -460,20 +419,11 @@ let currentSlideCount  = 0;
 let slideOverState     = 'loading';
 
 const visualCache = new Map();
-const SLIDE_TYPES = ['Cover', 'Stat', 'Problem', 'Solution', 'Reframe', 'CTA'];
-const DEFAULT_SLIDES = [
-  { id: 1, type: 'Cover',    headline: '', subtext: '' },
-  { id: 2, type: 'Stat',     headline: '', subtext: '' },
-  { id: 3, type: 'Solution', headline: '', subtext: '' },
-  { id: 4, type: 'CTA',      headline: '', subtext: '' },
-];
 
 const state = {
   activeTab: 'edit', rightPanel: 'score', generatorType: null,
   quoteText: '', quoteStyle: 'dark',
-  carouselOpen: false, carouselStyle: 'brand',
-  slides: DEFAULT_SLIDES.map(s => ({ ...s })),
-  activeSlide: 0, showAllChecks: false,
+  showAllChecks: false,
 };
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -763,100 +713,6 @@ function updateCharCount() {
   el.style.color  = len > 160 ? 'var(--text-danger)' : '';
 }
 
-/* ════════════════════════════════════════════════════════════════════════
-   CAROUSEL (bottom sheet)
-════════════════════════════════════════════════════════════════════════ */
-function openCarousel() {
-  state.carouselOpen = true;
-  document.getElementById('carousel-sheet').hidden = false;
-  renderSlideStrip();
-  renderSlideEdit();
-}
-
-function closeCarousel() {
-  state.carouselOpen = false;
-  document.getElementById('carousel-sheet').hidden = true;
-}
-
-function renderSlideStrip() {
-  const strip  = document.getElementById('slide-strip');
-  const addBtn = document.getElementById('btn-add-slide');
-  strip.querySelectorAll('.slide-thumb').forEach(el => el.remove());
-  state.slides.forEach((slide, i) => {
-    const el = document.createElement('div');
-    el.className     = 'slide-thumb' + (i === state.activeSlide ? ' active' : '');
-    el.dataset.index = i;
-    el.innerHTML = `
-      <div class="slide-mini so-slide-card" data-style="${state.carouselStyle}">
-        <p class="slide-mini-type so-slide-badge">${slide.type}</p>
-        <p class="slide-mini-headline field-label">${slide.headline || '…'}</p>
-        ${slide.subtext ? `<p class="slide-mini-sub field-helper">${slide.subtext}</p>` : ''}
-      </div>
-      <p class="slide-label field-helper">${i + 1} — ${slide.type}</p>`;
-    el.addEventListener('click', () => selectSlide(i));
-    strip.insertBefore(el, addBtn);
-  });
-  document.getElementById('slide-count-label').textContent = `${state.slides.length} slides`;
-}
-
-function renderSlideEdit() {
-  const panel     = document.getElementById('slide-edit');
-  const slide     = state.slides[state.activeSlide];
-  const canRemove = state.slides.length > 1;
-  const typeOpts  = SLIDE_TYPES.map(t =>
-    `<option value="${t}"${slide.type === t ? ' selected' : ''}>${t}</option>`
-  ).join('');
-  panel.innerHTML = `
-    <div id="slide-edit-header">
-      <span class="field-label">Slide ${state.activeSlide + 1} — ${slide.type}</span>
-      ${canRemove ? '<button id="btn-remove-slide" class="btn-outlined">Remove</button>' : ''}
-    </div>
-    <div id="slide-edit-preview" class="so-slide-card" data-style="${state.carouselStyle}">
-      <p id="live-headline" class="field-label">${slide.headline || 'Headline will appear here'}</p>
-      ${slide.subtext ? `<p id="live-sub" class="field-helper">${slide.subtext}</p>` : ''}
-    </div>
-    <label for="slide-headline" class="field-label">Headline</label>
-    <textarea id="slide-headline" class="field-textarea">${slide.headline}</textarea>
-    <label for="slide-subtext" class="field-label">Subtext (optional)</label>
-    <textarea id="slide-subtext" class="field-textarea" placeholder="Add a supporting line…">${slide.subtext}</textarea>
-    <label for="slide-type" class="field-label">Slide type</label>
-    <select id="slide-type" class="field-input">${typeOpts}</select>`;
-
-  document.getElementById('slide-headline').addEventListener('input', function () {
-    state.slides[state.activeSlide].headline = this.value;
-    const lh = document.getElementById('live-headline');
-    if (lh) lh.textContent = this.value || 'Headline will appear here';
-    const t = document.querySelector(`.slide-thumb[data-index="${state.activeSlide}"] .slide-mini-headline`);
-    if (t) t.textContent = this.value || '…';
-  });
-  document.getElementById('slide-subtext').addEventListener('input', function () {
-    state.slides[state.activeSlide].subtext = this.value;
-  });
-  document.getElementById('slide-type').addEventListener('change', function () {
-    state.slides[state.activeSlide].type = this.value;
-    renderSlideStrip(); renderSlideEdit();
-  });
-  if (canRemove) {
-    document.getElementById('btn-remove-slide').addEventListener('click', () => {
-      state.slides.splice(state.activeSlide, 1);
-      state.activeSlide = Math.min(state.activeSlide, state.slides.length - 1);
-      renderSlideStrip(); renderSlideEdit();
-    });
-  }
-}
-
-function selectSlide(index) {
-  state.activeSlide = index;
-  renderSlideStrip(); renderSlideEdit();
-}
-
-function setCarouselStyle(s) {
-  state.carouselStyle = s;
-  document.querySelectorAll('#carousel-style-toggle .style-toggle-btn').forEach(b =>
-    b.classList.toggle('active', b.dataset.style === s)
-  );
-  renderSlideStrip(); renderSlideEdit();
-}
 
 /* ════════════════════════════════════════════════════════════════════════
    SCHEDULE LOCK
@@ -1376,15 +1232,6 @@ function bindEvents() {
     })
   );
 
-  document.getElementById('btn-sheet-close').addEventListener('click',      closeCarousel);
-  document.getElementById('btn-carousel-discard').addEventListener('click', closeCarousel);
-
-  document.getElementById('btn-add-slide').addEventListener('click', () => {
-    state.slides.push({ id: Date.now(), type: 'Stat', headline: '', subtext: '' });
-    state.activeSlide = state.slides.length - 1;
-    renderSlideStrip(); renderSlideEdit();
-  });
-
   document.getElementById('btn-use-hook').addEventListener('click', () => {
     const hookText = document.getElementById('alt-hook-text').textContent;
     if (!hookText) return;
@@ -1587,11 +1434,7 @@ function wireSchedule() {
 function wireVisualButtons() {
   document.getElementById('quote-card-btn').addEventListener('click', () => openSlideOver('quote_card', 'QUOTE CARD'));
   document.getElementById('branded-quote-btn').addEventListener('click', () => openSlideOver('branded_quote', 'BRANDED QUOTE'));
-  document.getElementById('carousel-btn').addEventListener('click', () => {
-    if (scheduleEditLocked) return;
-    if (userPlan === 'free') { window.PricingModal?.open(); return; }
-    openCarousel();
-  });
+  document.getElementById('carousel-btn').addEventListener('click', generateCarouselOneClick);
   document.getElementById('media-library-btn').addEventListener('click', () => {
     if (scheduleEditLocked) return;
     if (userPlan === 'free') { window.PricingModal?.open(); return; }
@@ -1608,39 +1451,55 @@ function wireAssetChip() {
   });
 }
 
-function wireCarouselGenerate() {
-  document.getElementById('btn-carousel-generate').addEventListener('click', async () => {
-    if (userPlan === 'free') { window.PricingModal?.open(); return; }
-    const btn = document.getElementById('btn-carousel-generate');
-    btn.textContent = 'Generating…'; btn.disabled = true;
-    try {
-      const res  = await fetch(`/api/visuals/${encodeURIComponent(postId)}`, {
-        method: 'POST', credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ visual_type: 'carousel', mode: 'render', content: { slides: state.slides, style: state.carouselStyle } }),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.ok) throw new Error(data.error || 'carousel_failed');
-      const pdfUrl     = data.pdf_url  || data.imageUrl;
-      const previewUrl = data.slides?.[0]?.png_url || pdfUrl;
-      const slideCount = data.slides?.length || state.slides.length;
-      if (previewUrl) {
-        attachedAssetUrl   = pdfUrl;
-        attachedAssetType  = 'carousel';
-        attachedPreviewUrl = previewUrl;
-        attachedSlideCount = slideCount;
-        document.getElementById('asset-chip-label').textContent = 'Carousel';
-        document.getElementById('asset-chip').classList.remove('hidden');
-        renderPreviewAsset();
-      }
-      closeCarousel();
-      if (window.toast?.success) window.toast.success('Carousel generated!');
-    } catch {
-      if (window.toast?.error) window.toast.error('Could not generate carousel. Please try again.');
-    } finally {
-      btn.textContent = 'Generate carousel'; btn.disabled = false;
-    }
-  });
+async function generateCarouselOneClick() {
+  if (scheduleEditLocked) return;
+  if (userPlan === 'free') { window.PricingModal?.open(); return; }
+  const btn   = document.getElementById('carousel-btn');
+  const label = btn.querySelector('.asset-action-label');
+  const orig  = label.textContent;
+  label.textContent = 'Generating…';
+  btn.disabled = true;
+  try {
+    // Step 1: extract slides from post content
+    const extractRes = await fetch(`/api/visuals/${encodeURIComponent(postId)}`, {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ visual_type: 'carousel', mode: 'extract', content: getPostContent() }),
+    });
+    const extractData = await extractRes.json();
+    if (!extractRes.ok || !extractData.ok) throw new Error('extract_failed');
+
+    // Step 2: render carousel PDF
+    const renderRes = await fetch(`/api/visuals/${encodeURIComponent(postId)}`, {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ visual_type: 'carousel', mode: 'render', content: { slides: extractData.slides, style: 'brand' } }),
+    });
+    const renderData = await renderRes.json();
+    if (!renderRes.ok || !renderData.ok) throw new Error('render_failed');
+
+    const pdfUrl     = renderData.pdf_url || renderData.imageUrl;
+    const previewUrl = renderData.slides?.[0]?.png_url || pdfUrl;
+    const slideCount = renderData.slides?.length || extractData.slides?.length || 0;
+
+    attachedAssetUrl   = pdfUrl;
+    attachedAssetType  = 'carousel';
+    attachedPreviewUrl = previewUrl;
+    attachedSlideCount = slideCount;
+    const chipLabel = slideCount > 0 ? `Carousel · ${slideCount} slides` : 'Carousel';
+    document.getElementById('asset-chip-label').textContent = chipLabel;
+    document.getElementById('asset-chip').classList.remove('hidden');
+    renderPreviewAsset();
+    if (window.toast?.success) window.toast.success('Carousel generated!');
+  } catch (err) {
+    const msg = err.message === 'extract_failed' ? 'Could not extract slides from your post.'
+              : err.message === 'render_failed'  ? 'Could not render the carousel PDF.'
+              : 'Carousel generation failed. Please try again.';
+    if (window.toast?.error) window.toast.error(msg);
+  } finally {
+    label.textContent = orig;
+    btn.disabled = false;
+  }
 }
 
 function wireSchedulePause() {
@@ -1724,7 +1583,6 @@ function init() {
   wireSchedule();
   wireVisualButtons();
   wireAssetChip();
-  wireCarouselGenerate();
   wireSchedulePause();
   wireFirstComment();
   wirePlanGate();

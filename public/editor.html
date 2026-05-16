@@ -16,22 +16,24 @@
     #tabs { display: flex !important; align-items: flex-end !important; width: 100% !important; }
     #word-count { margin-left: auto !important; }
     #visual-btns { display: flex !important; flex-wrap: wrap !important; gap: 8px !important; }
-    #right-panel { width: 260px !important; min-width: 260px !important; max-width: 260px !important; flex-shrink: 0 !important; flex-grow: 0 !important; overflow-y: auto !important; overflow-x: hidden !important; height: 100% !important; display: flex !important; flex-direction: column !important; position: relative !important; }
+    #right-panel { width: 260px !important; min-width: 260px !important; max-width: 260px !important; flex-shrink: 0 !important; flex-grow: 0 !important; overflow-y: auto !important; overflow-x: hidden !important; height: 100% !important; max-height: none !important; display: flex !important; flex-direction: column !important; position: relative !important; }
     #panel-score { display: flex !important; flex-direction: column !important; width: 100% !important; }
+    #panel-score[hidden] { display: none !important; }
     #score-bar  { overflow: hidden !important; width: 100% !important; }
     #score-fill { height: 100% !important; width: 0 !important; transition: width 0.5s ease !important; display: block !important; }
-    #panel-generator { display: flex !important; flex-direction: column !important; flex: 1 !important; overflow: hidden !important; width: 100% !important; }
+    #panel-generator { display: none !important; flex-direction: column !important; flex: 1 !important; overflow: hidden !important; width: 100% !important; }
+    #panel-generator:not([hidden]) { display: flex !important; }
     #panel-gen-header { display: flex !important; align-items: center !important; justify-content: space-between !important; flex-shrink: 0 !important; width: 100% !important; }
     #panel-gen-body   { flex: 1 !important; overflow-y: auto !important; width: 100% !important; }
     #panel-gen-footer { display: flex !important; gap: 8px !important; flex-shrink: 0 !important; width: 100% !important; }
     #btn-gen-go { flex: 1 !important; }
     #style-opts { display: flex !important; gap: 6px !important; width: 100% !important; }
     .style-opt  { flex: 1 !important; }
-    #carousel-sheet { position: absolute !important; bottom: 0 !important; left: 0 !important; right: 0 !important; height: 78% !important; display: flex !important; flex-direction: column !important; z-index: 20 !important; }
+    #carousel-sheet { position: absolute !important; bottom: 0 !important; left: 0 !important; right: 0 !important; height: 78% !important; display: none !important; flex-direction: column !important; z-index: 20 !important; }
+    #carousel-sheet:not([hidden]) { display: flex !important; }
     #sheet-header { display: flex !important; align-items: center !important; justify-content: space-between !important; flex-shrink: 0 !important; width: 100% !important; }
     #sheet-header-left  { display: flex !important; align-items: center !important; gap: 16px !important; }
     #sheet-header-right { display: flex !important; align-items: center !important; gap: 10px !important; }
-    #carousel-style-toggle { display: flex !important; }
     #sheet-body { flex: 1 !important; display: flex !important; overflow: hidden !important; width: 100% !important; min-height: 0 !important; }
     #slide-strip { flex: 1 !important; display: flex !important; flex-direction: row !important; align-items: flex-start !important; gap: 12px !important; overflow-x: auto !important; overflow-y: hidden !important; min-width: 0 !important; height: 100% !important; }
     .slide-thumb { flex-shrink: 0 !important; width: 110px !important; cursor: pointer !important; }
@@ -48,6 +50,55 @@
       #content-area { flex-direction: column !important; }
       #right-panel  { width: 100% !important; max-width: 100% !important; min-width: 0 !important; height: auto !important; }
     }
+
+    /* ── Viewport containment ── */
+    html, body { height: 100% !important; }
+    #main-content { height: 100vh !important; min-height: 0 !important; overflow: hidden !important; }
+
+    /* ── Post-publish state (overrides main.css .post-publish-state { display:none }) ── */
+    #post-publish-state:not([hidden]) { display: flex !important; align-items: center !important; gap: 8px !important; }
+
+    /* ── Edit view layout ── */
+    #edit-view:not([hidden]) { display: flex; flex-direction: column; gap: 16px; padding: 16px 20px 24px; }
+    #linkedin-preview:not([hidden]) { display: block; padding: 16px 20px; }
+    #post-body p { margin: 0 0 12px; }
+    #post-body p:last-child { margin-bottom: 0; }
+
+    /* ── Tabs bottom border ── */
+    #tabs { border-bottom: 1px solid var(--border); }
+
+    /* ── Score area ── */
+    #score-bar     { height: 6px; border-radius: 3px; background: var(--bg-pill); margin: 8px 0 4px; }
+    #score-fill    { background: var(--teal, #1D9E75); border-radius: 3px; }
+    #score-display { display: flex; align-items: center; gap: 8px; margin: 6px 0 4px; }
+    #score-number  { font-size: 26px; font-weight: 700; color: var(--text-heading); line-height: 1; }
+    #score-number.pass { color: var(--text-teal, #1D9E75); }
+    #score-number.fail { color: var(--score-fail, #e84e4e); }
+
+    /* ── Right-panel section spacing ── */
+    #panel-score section { padding: 12px 16px; }
+    #panel-score section:first-child { padding-top: 16px; }
+    #panel-score section:last-child  { padding-bottom: 16px; }
+    #panel-gen-header { padding: 12px 16px; border-bottom: 1px solid var(--border); }
+    #panel-gen-body   { padding: 12px 16px; }
+    #panel-gen-footer { padding: 12px 16px; border-top: 1px solid var(--border); }
+
+    /* ── LinkedIn connect strip ── */
+    #no-linkedin-actions:not([hidden]) { display: flex; align-items: center; justify-content: space-between; padding: 8px 20px; background: #EFF6FF; border-bottom: 1px solid #BFDBFE; gap: 12px; flex-shrink: 0; font-size: 13px; color: var(--text-body); }
+    .linkedin-connect-banner-text { display: flex; align-items: center; gap: 8px; }
+
+    /* ── Back link ── */
+    .back-to-new-post { font-size: 13px; color: var(--text-secondary); text-decoration: none; transition: color 0.12s; }
+    .back-to-new-post:hover { color: var(--text-heading); }
+
+    /* ── Visuals section ── */
+    #visuals-section { display: flex; flex-direction: column; gap: 8px; }
+
+    /* ── First comment ── */
+    #first-comment-section:not([hidden]) { display: flex; flex-direction: column; }
+    .first-comment-thread-line { width: 2px; height: 20px; background: var(--border); margin: 0 0 0 16px; }
+    .first-comment-box         { border: 1px solid var(--border); border-radius: var(--radius-md, 8px); padding: 12px 14px; background: var(--bg-surface); }
+    .first-comment-footer      { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
   </style>
 </head>
 <body>
@@ -271,11 +322,6 @@
             <span id="slide-count-label" class="field-helper"></span>
           </div>
           <div id="sheet-header-right">
-            <div id="carousel-style-toggle">
-              <button class="style-toggle-btn input-tab active" data-style="dark">Dark</button>
-              <button class="style-toggle-btn input-tab" data-style="light">Light</button>
-              <button class="style-toggle-btn input-tab" data-style="brand">Brand</button>
-            </div>
             <button id="btn-sheet-close" class="slide-over-close">✕</button>
           </div>
         </div>
@@ -413,7 +459,7 @@ const DEFAULT_SLIDES = [
 const state = {
   activeTab: 'edit', rightPanel: 'score', generatorType: null,
   quoteText: '', quoteStyle: 'dark',
-  carouselOpen: false, carouselStyle: 'dark',
+  carouselOpen: false, carouselStyle: 'brand',
   slides: DEFAULT_SLIDES.map(s => ({ ...s })),
   activeSlide: 0, showAllChecks: false,
 };
@@ -1317,10 +1363,6 @@ function bindEvents() {
 
   document.getElementById('btn-sheet-close').addEventListener('click',      closeCarousel);
   document.getElementById('btn-carousel-discard').addEventListener('click', closeCarousel);
-
-  document.querySelectorAll('#carousel-style-toggle .style-toggle-btn').forEach(b =>
-    b.addEventListener('click', () => setCarouselStyle(b.dataset.style))
-  );
 
   document.getElementById('btn-add-slide').addEventListener('click', () => {
     state.slides.push({ id: Date.now(), type: 'Stat', headline: '', subtext: '' });

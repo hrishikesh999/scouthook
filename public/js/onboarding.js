@@ -2,70 +2,79 @@
 
 /* ============================================================
    onboarding.js — Scouthook first-time wizard
-   6-screen PLG flow:
-     s1. Role
-     s2. Goal (auto-selects hard_won_lesson template)
-     s4. Interview (one question per step)
-     s5. Live named progress
-     s6. Post revealed + LinkedIn blur gate
-     s7. Celebration + vault teaser
+   4-step PLG flow:
+     s1. Role (5 cards, auto-advance)
+     s4. Interview (website → questions)
+     s5. Live progress (role-injected copy)
+     s6. Post revealed (badges + hook chips + 2 CTAs)
+
+   Removed from previous version:
+     s2. Goal — deleted (state.funnelType removed)
+     s7. Plan selection — deleted (Paddle references removed)
    ============================================================ */
 
 const Onboarding = (() => {
 
   /* ── State ─────────────────────────────────────────────── */
   const state = {
-    role:              null,
-    goal:              null,
-    funnelType:        null,
-    templateKey:       null,
-    questionIndex:     0,
-    answers:           [],   // [{ question, answer }]
-    postId:            null,
-    post:              null,
+    role:          null,   // e.g. 'consultant', 'coach', 'freelancer', 'founder', 'other'
+    questionIndex: 0,
+    answers:       [],     // [{ question, answer, field }] — field maps to DB column
+    postId:        null,
+    post:          null,
   };
 
-  /* ── Interview templates ─────────────────────────────── */
-  const TEMPLATES = {
-    client_story: {
-      label:    'Client Story',
-      context:  'A post that takes the reader from where your client started to the result you created together.',
-      questions: [
-        'What situation was your client in before working with you?',
-        'What was the real problem they hadn\'t seen clearly?',
-        'What did you do differently from the obvious approach?',
-        'What measurable result did they get?',
-      ],
+  /* ── Interview questions ─────────────────────────────────
+     Three fixed questions in order. context is the badge shown above each.
+     field is the DB column the answer writes to (plus special handling for q1 → contrarian_view).
+  ──────────────────────────────────────────────────────── */
+  const QUESTIONS = [
+    {
+      context:     'Your POV — This shapes the perspective behind every post we write for you.',
+      text:        'What do most people in your field get wrong — and what do you believe instead?',
+      hint:        'Your honest take. The more specific, the better.',
+      placeholder: 'e.g. Most consultants lead with methodology. I think that\'s backwards — clients need to see a specific outcome first.',
+      field:       'onboarding_q1',
     },
-    hard_won_lesson: {
-      questions: [
-        'What first drew you to this kind of work?',
-        'What took you the longest to figure out?',
-        'What is one result from your work that you are genuinely proud of?',
-      ],
+    {
+      context:     'Your voice — This is how we make posts sound like you, not a template.',
+      text:        'If a close friend asked what you actually do all day, what would you tell them?',
+      hint:        'Be as casual as you\'d actually be. Don\'t pitch — just describe.',
+      placeholder: 'e.g. Honestly? I spend most of my time helping founders figure out why their pipeline is broken. Usually it\'s not what they think it is.',
+      field:       'onboarding_q2',
     },
-    industry_take: {
-      label:    'Industry Take',
-      context:  'A post that challenges something widely accepted in your field.',
-      questions: [
-        'What does everyone in your field believe that you think is wrong?',
-        'What\'s your evidence — a number, a case, or a pattern you\'ve seen?',
-        'What do they miss by believing the conventional view?',
-        'What should someone do differently based on your take?',
-      ],
+    {
+      context:     'Your proof — Specific results make posts credible. Numbers beat adjectives every time.',
+      text:        'Describe a specific result your work produced. Numbers if you have them.',
+      hint:        'A client win, a project outcome, a measurable change you caused.',
+      placeholder: 'e.g. Helped a B2B SaaS founder go from zero inbound to 4 qualified calls a month in 6 weeks — no paid ads.',
+      field:       'onboarding_q3',
     },
+  ];
+
+  /* ── Archetype labels for hook badge ─────────────────── */
+  const ARCHETYPE_LABELS = {
+    NUMBER:           'Number hook',
+    CONTRARIAN:       'Contrarian',
+    CONFESSION:       'Confession',
+    PATTERN_INTERRUPT:'Pattern interrupt',
+    DIRECT_ADDRESS:   'Direct address',
+    STAKES:           'Stakes',
+    BEFORE_AFTER:     'Before/After',
+    INSIGHT:          'Insight',
   };
 
-  /* ── Archetype metadata ──────────────────────────────── */
-  const ARCHETYPE_META = {
-    NUMBER:           { desc: 'Opens with a specific number, timeframe, or measurable result' },
-    CONTRARIAN:       { desc: 'Challenges a popular belief directly' },
-    CONFESSION:       { desc: 'Opens with a personal mistake or failure' },
-    PATTERN_INTERRUPT:{ desc: 'A counterintuitive truth under 8 words' },
-    DIRECT_ADDRESS:   { desc: 'Speaks directly to a specific person in a specific situation' },
-    STAKES:           { desc: 'Opens with consequence or cost before cause or context' },
-    BEFORE_AFTER:     { desc: 'Two contrasting states showing a transformation' },
-    INSIGHT:          { desc: 'A clean declarative observation about your field' },
+  /* ── Alternative archetypes for hook chips ───────────── */
+  const ALT_ARCHETYPES = ['NUMBER', 'BEFORE_AFTER', 'CONTRARIAN', 'INSIGHT', 'DIRECT_ADDRESS'];
+
+  /* ── Role label map for processing screen ────────────── */
+  const ROLE_LABELS = {
+    consultant: 'consultant',
+    coach:      'coach',
+    fractional: 'fractional executive',
+    freelancer: 'freelancer',
+    founder:    'founder',
+    other:      'your',
   };
 
   /* ── Utilities ───────────────────────────────────────── */
@@ -86,9 +95,16 @@ const Onboarding = (() => {
     el.style.height = el.scrollHeight + 'px';
   }
 
+  function safeParseJSON(val, fallback) {
+    if (!val) return fallback;
+    try { return JSON.parse(val); } catch { return fallback; }
+  }
+
   /* ── Screen navigation ──────────────────────────────── */
-  // Maps screen id → dot number (1–4: role · goal · interview · done)
-  const DOT_MAP = { s1: '1', s2: '2', s4: '3', s5: '3', s6: '4', s7: '4' };
+  // Maps screen id → progress dot number (1–4)
+  // s4 covers both website and questions (dot 2)
+  // s5 is generating (dot 3), s6 is reveal (dot 4)
+  const DOT_MAP = { s1: '1', s4: '2', s5: '3', s6: '4' };
 
   function showScreen(id) {
     qsa('.ob-screen').forEach(s => s.classList.remove('active'));
@@ -123,27 +139,6 @@ const Onboarding = (() => {
         card.classList.add('selected');
         card.setAttribute('aria-pressed', 'true');
         state.role = card.dataset.role;
-        setTimeout(() => showScreen('s2'), 200);
-      });
-    });
-  }
-
-  /* ── Screen 2: Goal ─────────────────────────────────── */
-  function initS2() {
-    qsa('.ob-goal-card').forEach(card => {
-      card.addEventListener('click', () => {
-        qsa('.ob-goal-card').forEach(c => {
-          c.classList.remove('selected');
-          c.setAttribute('aria-pressed', 'false');
-        });
-        card.classList.add('selected');
-        card.setAttribute('aria-pressed', 'true');
-        state.goal        = card.dataset.goal;
-        state.funnelType  = card.dataset.funnel;
-        // Skip post-type selection — default to hard_won_lesson (easiest to answer)
-        state.templateKey   = 'hard_won_lesson';
-        state.questionIndex = 0;
-        state.answers       = [];
         setTimeout(() => {
           showScreen('s4');
           showWebsiteStep();
@@ -159,7 +154,7 @@ const Onboarding = (() => {
     qs('ob-profile-step').hidden    = true;
     qs('ob-question-step').hidden   = true;
     const backBtn = qs('ob-s4-back');
-    if (backBtn) backBtn.onclick = () => showScreen('s2');
+    if (backBtn) backBtn.onclick = () => showScreen('s1');
     qs('ob-website-url')?.focus();
   }
 
@@ -188,24 +183,20 @@ const Onboarding = (() => {
 
   function buildNarrative(e) {
     const parts = [];
-
     if (e.content_niche) {
       const niche = e.content_niche.replace(/^helping\s+/i, 'You help ');
       parts.push(niche.match(/[.!?]$/) ? niche : niche + '.');
     } else if (e.audience_role) {
       parts.push(`You work with ${e.audience_role}.`);
     }
-
     if (e.audience_pain) {
       const pain = e.audience_pain.replace(/[.!?]$/, '');
       parts.push(`The challenge they face: ${pain.charAt(0).toLowerCase() + pain.slice(1)}.`);
     }
-
     if (e.contrarian_view) {
       const take = e.contrarian_view.replace(/[.!?]$/, '');
       parts.push(`Your edge: ${take.charAt(0).toLowerCase() + take.slice(1)}.`);
     }
-
     return parts.join(' ');
   }
 
@@ -236,7 +227,6 @@ const Onboarding = (() => {
     qs('ob-website-summary').hidden = false;
     qs('ob-question-step').hidden   = true;
 
-    // Fields hidden by default — revealed by toggle
     const fieldsEl = qs('ob-summary-fields');
     if (fieldsEl) fieldsEl.hidden = true;
     const toggle = qs('ob-summary-edit-toggle');
@@ -261,15 +251,17 @@ const Onboarding = (() => {
 
   function renderQuestion() {
     showQuestionStep();
-    const tmpl  = TEMPLATES[state.templateKey];
-    const total = tmpl.questions.length;
+    const q     = QUESTIONS[state.questionIndex];
+    const total = QUESTIONS.length;
     const idx   = state.questionIndex;
 
     qs('ob-q-progress').textContent = `Question ${idx + 1} of ${total}`;
-    qs('ob-q-text').textContent     = tmpl.questions[idx];
+    qs('ob-q-context').textContent  = q.context;
+    qs('ob-q-text').textContent     = q.text;
 
     const answerEl = qs('ob-answer');
-    answerEl.value = state.answers[idx]?.answer || '';
+    answerEl.value       = state.answers[idx]?.answer || '';
+    answerEl.placeholder = q.placeholder;
     answerEl.focus();
 
     const backBtn = qs('ob-s4-back');
@@ -379,18 +371,18 @@ const Onboarding = (() => {
   }
 
   function recordAnswer(override) {
-    const tmpl = TEMPLATES[state.templateKey];
-    const val  = override !== undefined ? override : (qs('ob-answer').value || '').trim();
+    const q   = QUESTIONS[state.questionIndex];
+    const val = override !== undefined ? override : (qs('ob-answer').value || '').trim();
     state.answers[state.questionIndex] = {
-      question: tmpl.questions[state.questionIndex],
+      question: q.text,
       answer:   val,
+      field:    q.field,
     };
   }
 
   function advanceInterview(e, skipping = false) {
     if (!skipping) recordAnswer();
-    const tmpl = TEMPLATES[state.templateKey];
-    if (state.questionIndex < tmpl.questions.length - 1) {
+    if (state.questionIndex < QUESTIONS.length - 1) {
       state.questionIndex++;
       renderQuestion();
     } else {
@@ -400,14 +392,20 @@ const Onboarding = (() => {
 
   /* ── Screen 5: Live progress + generation ───────────── */
   const PROGRESS_STEPS = [
-    { id: 'ob-step-1', label: 'Extracting your expertise',     ms: 900 },
-    { id: 'ob-step-2', label: 'Selecting the strongest hook',  ms: 1600 },
-    { id: 'ob-step-3', label: 'Running quality checks',        ms: 1200 },
-    { id: 'ob-step-4', label: 'Finalising your post',          ms: 700  },
+    { id: 'ob-step-1', ms: 900  },
+    { id: 'ob-step-2', ms: 1600 },
+    { id: 'ob-step-3', ms: 1200 },
+    { id: 'ob-step-4', ms: 900  },
+    { id: 'ob-step-5', ms: 700  },
   ];
 
+  function injectProcessingCopy() {
+    const roleLabel = ROLE_LABELS[state.role] || 'your';
+    const step2Label = qs('ob-step-2-label');
+    if (step2Label) step2Label.textContent = `Applying your ${roleLabel} context`;
+  }
+
   function animateProgress(generationPromise) {
-    // Reset all steps
     PROGRESS_STEPS.forEach(s => {
       const li = qs(s.id);
       if (li) li.className = 'ob-progress-step';
@@ -418,7 +416,6 @@ const Onboarding = (() => {
       setTimeout(() => {
         const li = qs(step.id);
         if (!li) return;
-        // Mark previous as done
         if (i > 0) {
           const prev = qs(PROGRESS_STEPS[i - 1].id);
           if (prev) prev.className = 'ob-progress-step done';
@@ -428,7 +425,6 @@ const Onboarding = (() => {
       elapsed += step.ms;
     });
 
-    // When generation resolves, mark last step done then transition
     generationPromise.then(() => {
       const last = qs(PROGRESS_STEPS[PROGRESS_STEPS.length - 1].id);
       if (last) last.className = 'ob-progress-step done';
@@ -437,21 +433,40 @@ const Onboarding = (() => {
 
   async function saveProfileAndGenerate() {
     showScreen('s5');
+    injectProcessingCopy();
 
-    // Save role + goal to profile (fire and forget — non-blocking)
+    // Build Q&A payload for DB — map each answer to its field
+    const qPayload = {
+      user_role:                 state.role,
+      onboarding_q_completed_at: new Date().toISOString(),
+    };
+    state.answers.forEach(a => {
+      if (a.field && a.answer) qPayload[a.field] = a.answer;
+    });
+    // Q1 also writes to contrarian_view for backward compat with prompt builders
+    if (qPayload.onboarding_q1) {
+      qPayload.contrarian_view = qPayload.onboarding_q1;
+    }
+
+    // Save role + Q&A answers to profile (fire-and-forget)
     fetch('/api/profile', {
       method:  'POST',
       headers: apiHeaders(),
-      body:    JSON.stringify({ user_role: state.role, goal: state.goal }),
+      body:    JSON.stringify(qPayload),
     }).catch(() => {});
+
+    // Build interview_answers in the legacy format the generate endpoint expects
+    const interviewAnswers = state.answers
+      .filter(a => a.answer)
+      .map(a => ({ question: a.question, answer: a.answer }));
 
     const genPromise = fetch('/api/generate', {
       method:  'POST',
       headers: apiHeaders(),
       body:    JSON.stringify({
-        path:             'idea',
-        interview_answers: state.answers,
-        funnel_type:       state.funnelType,
+        path:                 'idea',
+        interview_answers:    interviewAnswers,
+        source:               'onboarding',
         skip_substance_check: true,
       }),
     }).then(r => r.json());
@@ -478,80 +493,144 @@ const Onboarding = (() => {
     await new Promise(r => setTimeout(r, 600));
 
     showScreen('s6');
-    renderPost(data);
+    await renderPost(data);
     fireConfetti();
     markOnboardingComplete().catch(() => {});
   }
 
   function showError(msg) {
-    // Fall back to s6 with an error message visible
     showScreen('s6');
     const errEl = qs('ob-s6-error');
     if (errEl) { errEl.textContent = msg; errEl.hidden = false; }
   }
 
   /* ── Screen 6: Post revealed ────────────────────────── */
-  function renderPost(data) {
-    const post    = data.post || state.post || '';
+  async function renderPost(data) {
+    const post = data.post || state.post || '';
 
     const postOut = qs('ob-post-output');
     if (postOut) {
       postOut.value = post;
-      // autoGrow needs the element to be visible — defer one frame
       requestAnimationFrame(() => autoGrow(postOut));
     }
 
+    // Re-fetch profile to get freshest voice extraction result (may have finished in parallel)
+    let freshProfile = {};
+    try {
+      const profRes = await fetch('/api/profile/' + encodeURIComponent(getUserId()), {
+        headers: apiHeaders(),
+      });
+      const profData = await profRes.json();
+      freshProfile = profData.profile || {};
+    } catch { /* non-fatal */ }
+
+    // Quality badge
+    const qualityBadgeEl = qs('ob-badge-quality');
+    if (qualityBadgeEl && data.quality) {
+      const score = data.quality.score ?? '';
+      qualityBadgeEl.textContent = score
+        ? `${data.quality.passed ? '✓ ' : ''}${score}/100 · Ready to publish`
+        : 'Quality checked';
+    }
+
+    // Hook badge
+    const hookBadgeEl = qs('ob-badge-hook');
+    if (hookBadgeEl && data.archetypeUsed) {
+      hookBadgeEl.textContent = `Hook: ${ARCHETYPE_LABELS[data.archetypeUsed] || data.archetypeUsed}`;
+    }
+
+    // Voice badge — three-level fallback: fingerprint.tone → content_niche → role label
+    const voiceBadgeEl = qs('ob-badge-voice');
+    if (voiceBadgeEl) {
+      const fp   = safeParseJSON(freshProfile.voice_fingerprint, {});
+      const tone = fp.tone
+        || freshProfile.content_niche
+        || (state.role && state.role !== 'other' ? ROLE_LABELS[state.role] : null)
+        || 'your voice';
+      voiceBadgeEl.textContent = `Voice: ${tone}`;
+    }
+
+    const badgesEl = qs('ob-badges');
+    if (badgesEl) badgesEl.style.display = 'flex';
+
+    // Alternative hook chips (exclude archetype already used)
+    if (data.archetypeUsed) {
+      const chips = ALT_ARCHETYPES
+        .filter(a => a !== data.archetypeUsed)
+        .slice(0, 3);
+
+      if (chips.length > 0) {
+        const chipsRow = qs('ob-hook-chips-row');
+        if (chipsRow) {
+          chipsRow.innerHTML = '';
+          chips.forEach(archetype => {
+            const btn = document.createElement('button');
+            btn.type      = 'button';
+            btn.className = 'ob-hook-chip';
+            btn.textContent = ARCHETYPE_LABELS[archetype] || archetype;
+            btn.dataset.archetype = archetype;
+            btn.addEventListener('click', () => regenerateWithHook(archetype, btn));
+            chipsRow.appendChild(btn);
+          });
+        }
+        const chipsContainer = qs('ob-hook-chips');
+        if (chipsContainer) chipsContainer.style.display = 'block';
+      }
+    }
   }
 
-  /* ── Screen 6: editor CTA + LinkedIn strip ──────────── */
+  async function regenerateWithHook(archetype, chipBtn) {
+    chipBtn.disabled    = true;
+    chipBtn.textContent = '…';
+
+    const interviewAnswers = state.answers
+      .filter(a => a.answer)
+      .map(a => ({ question: a.question, answer: a.answer }));
+
+    try {
+      const res  = await fetch('/api/generate', {
+        method:  'POST',
+        headers: apiHeaders(),
+        body:    JSON.stringify({
+          path:               'idea',
+          interview_answers:  interviewAnswers,
+          archetype_override: archetype,
+          source:             'onboarding',
+          skip_substance_check: true,
+        }),
+      });
+      const data = await res.json();
+      if (data.ok && data.post) {
+        const postOut = qs('ob-post-output');
+        if (postOut) {
+          postOut.value = data.post;
+          requestAnimationFrame(() => autoGrow(postOut));
+        }
+        state.postId = data.id;
+        state.post   = data.post;
+        const hookBadgeEl = qs('ob-badge-hook');
+        if (hookBadgeEl) {
+          hookBadgeEl.textContent = `Hook: ${ARCHETYPE_LABELS[archetype] || archetype}`;
+        }
+      }
+    } catch { /* non-fatal */ }
+
+    chipBtn.disabled    = false;
+    chipBtn.textContent = ARCHETYPE_LABELS[archetype] || archetype;
+  }
+
+  /* ── Screen 6: CTAs ──────────────────────────────────── */
   function initS6() {
     qs('ob-open-editor')?.addEventListener('click', () => {
-      showScreen('s7');
-      loadProPrice();
+      if (state.postId) {
+        window.location.href = `/editor/${state.postId}`;
+      } else {
+        window.location.href = '/dashboard.html';
+      }
     });
 
-    qs('ob-connect-linkedin')?.addEventListener('click', () => {
-      if (state.postId) sessionStorage.setItem('ob_post_id', state.postId);
-      window.location.href = '/api/linkedin/connect?from=onboarding';
-    });
-  }
-
-  async function loadProPrice() {
-    try {
-      const r = await fetch('/api/billing/config');
-      if (!r.ok) return;
-      const d = await r.json();
-      const priceEl = qs('ob-pro-price');
-      if (priceEl && d.proMonthlyPrice) priceEl.textContent = d.proMonthlyPrice;
-      const noteEl = qs('ob-founding-note');
-      if (noteEl && d.spotsRemaining > 0) {
-        noteEl.style.display = '';
-        noteEl.textContent = `${d.spotsRemaining} founding spot${d.spotsRemaining === 1 ? '' : 's'} left — price locked for life.`;
-      }
-    } catch {}
-  }
-
-  function initS7() {
-    qs('ob-choose-free')?.addEventListener('click', () => {
-      window.location.href = state.postId ? `/editor/${state.postId}` : '/dashboard.html';
-    });
-    qs('ob-choose-pro')?.addEventListener('click', async function () {
-      const btn = this;
-      if (!window.PricingModal?.startCheckout) {
-        window.location.href = '/billing.html';
-        return;
-      }
-      const orig = btn.textContent;
-      btn.disabled    = true;
-      btn.textContent = 'Loading…';
-      try {
-        await window.PricingModal.startCheckout();
-      } catch {
-        window.location.href = '/billing.html';
-      } finally {
-        btn.disabled    = false;
-        btn.textContent = orig;
-      }
+    qs('ob-save-drafts')?.addEventListener('click', () => {
+      window.location.href = '/dashboard.html';
     });
   }
 
@@ -569,7 +648,7 @@ const Onboarding = (() => {
     if (params.get('linkedin') !== 'connected') return false;
     const postId = sessionStorage.getItem('ob_post_id');
     sessionStorage.removeItem('ob_post_id');
-    const dest = postId ? `/editor/${postId}` : '/drafts.html';
+    const dest = postId ? `/editor/${postId}` : '/dashboard.html';
     markOnboardingComplete().finally(() => {
       window.location.href = dest;
     });
@@ -582,7 +661,10 @@ const Onboarding = (() => {
       await fetch('/api/profile', {
         method:  'POST',
         headers: apiHeaders(),
-        body:    JSON.stringify({ onboarding_complete: 1 }),
+        body:    JSON.stringify({
+          onboarding_complete:     1,
+          onboarding_completed_at: new Date().toISOString(),
+        }),
       });
     } catch {
       // Non-fatal
@@ -625,16 +707,9 @@ const Onboarding = (() => {
 
     if (checkLinkedInReturn()) return;
 
-    // Wire back buttons
-    qsa('.ob-back-btn[data-back-to]').forEach(btn => {
-      btn.addEventListener('click', () => showScreen(btn.dataset.backTo));
-    });
-
     initS1();
-    initS2();
     initS4();
     initS6();
-    initS7();
 
     showScreen('s1');
   }

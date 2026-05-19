@@ -4,6 +4,30 @@ const express = require('express');
 const router = express.Router();
 const { db } = require('../db');
 const { removeScheduledJob } = require('../services/scheduler');
+const { captureVoiceRefinement } = require('../services/voiceExtraction');
+
+// Lightweight Levenshtein distance — used only for edit-ratio comparison.
+// Uses single-array DP for O(min(m,n)) space. Safe for post-length strings (~500 chars).
+function levenshteinDistance(a, b) {
+  if (a === b) return 0;
+  if (a.length === 0) return b.length;
+  if (b.length === 0) return a.length;
+  // Ensure a is the shorter string
+  if (a.length > b.length) { [a, b] = [b, a]; }
+  let row = Array.from({ length: a.length + 1 }, (_, i) => i);
+  for (let j = 1; j <= b.length; j++) {
+    let prev = j;
+    for (let i = 1; i <= a.length; i++) {
+      const val = b[j - 1] === a[i - 1]
+        ? row[i - 1]
+        : 1 + Math.min(row[i - 1], row[i], prev);
+      row[i - 1] = prev;
+      prev = val;
+    }
+    row[a.length] = prev;
+  }
+  return row[a.length];
+}
 
 // ---------------------------------------------------------------------------
 // GET /api/stats
@@ -196,7 +220,7 @@ router.patch('/posts/:id', async (req, res) => {
 
   try {
     const existing = await db.prepare(`
-      SELECT status FROM generated_posts
+      SELECT status, content AS old_content FROM generated_posts
       WHERE id = ? AND user_id = ? AND tenant_id = ?
     `).get(postId, userId, tenantId);
 
@@ -237,7 +261,22 @@ router.patch('/posts/:id', async (req, res) => {
     if (result.changes === 0) {
       return res.status(409).json({ ok: false, error: 'post_not_editable' });
     }
-    return res.json({ ok: true });
+
+    // Voice refinement capture — fire-and-forget when edit ratio > 30%
+    let voiceRefined = false;
+    const oldContent = existing.old_content || '';
+    if (oldContent && content) {
+      const maxLen = Math.max(oldContent.length, content.length);
+      if (maxLen > 0) {
+        const editRatio = levenshteinDistance(oldContent, content) / maxLen;
+        if (editRatio > 0.30) {
+          captureVoiceRefinement(userId, tenantId, oldContent, content).catch(() => {});
+          voiceRefined = true;
+        }
+      }
+    }
+
+    return res.json({ ok: true, voiceRefined });
   } catch (err) {
     console.error('[stats] PATCH /api/posts/:id error:', err);
     return res.status(500).json({ ok: false, error: err.message });

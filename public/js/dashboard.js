@@ -10,6 +10,7 @@ const recentList = document.getElementById('recent-posts-list');
   loadChecklist();
   loadPerformance();
   loadLinkedInExpiryBanner();
+  loadVoiceProfileCard();
 })();
 
 /* ── Recent posts ────────────────────────────────────────────── */
@@ -335,3 +336,75 @@ function renderPerfNudge(posts) {
 
   card.hidden = false;
 }
+
+/* ── Voice Profile Card ──────────────────────────────────────── */
+// Shown until voice_profile_completion_pct >= 80.
+// Shows the next highest-value action with a link to the wizard.
+async function loadVoiceProfileCard() {
+  const card = document.getElementById('voice-profile-card');
+  if (!card) return;
+
+  try {
+    const uid = getUserId();
+    const res = await fetch('/api/profile/' + encodeURIComponent(uid), { headers: apiHeaders() });
+    if (!res.ok) return;
+    const data = await res.json();
+    const profile = data.profile;
+    if (!profile) return;
+
+    const pct = profile.voice_profile_completion_pct || 0;
+
+    // Hide once >= 80%
+    if (pct >= 80) return;
+
+    // Update bar + percentage
+    const fill  = document.getElementById('vp-bar-fill');
+    const pctEl = document.getElementById('vp-bar-pct');
+    if (fill)  fill.style.width  = pct + '%';
+    if (pctEl) pctEl.textContent = pct + '%';
+
+    // Determine next highest-value action and link
+    const nextEl = document.getElementById('vp-card-next');
+    const ctaEl  = document.getElementById('vp-card-cta');
+
+    function safeParseJSON(val, fallback) {
+      try { return val ? JSON.parse(val) : fallback; } catch { return fallback; }
+    }
+
+    let nextText = 'Complete your voice profile.';
+    let ctaHref  = '/settings.html';
+
+    const samples     = safeParseJSON(profile.writing_samples, []);
+    const statements  = safeParseJSON(profile.authority_statements, []);
+    const ctas        = safeParseJSON(profile.cta_library, []);
+    const themes      = safeParseJSON(profile.content_themes, []);
+
+    if (!profile.onboarding_q1 || !profile.onboarding_q2 || !profile.onboarding_q3) {
+      nextText = 'Answer 3 quick questions to get your baseline voice. +15%';
+      ctaHref  = '/settings.html#voice-stage-1';
+    } else if (!profile.has_fingerprint && samples.length < 3) {
+      nextText = 'Add 3+ writing samples for a sharper voice match. +20%';
+      ctaHref  = '/profile.html';
+    } else if (statements.length < 3) {
+      nextText = 'Add credibility statements so posts include real proof points. +10%';
+      ctaHref  = '/settings.html#voice-stage-2';
+    } else if (ctas.length < 2) {
+      nextText = 'Add 2+ CTAs so posts close with your actual words. +10%';
+      ctaHref  = '/settings.html#voice-stage-3';
+    } else if (themes.length === 0) {
+      nextText = 'Confirm your content themes — AI will suggest them. +5%';
+      ctaHref  = '/settings.html#voice-stage-1';
+    } else {
+      nextText = 'Connect LinkedIn to unlock the deepest voice match. +20%';
+      ctaHref  = '/settings.html#voice-stage-5';
+    }
+
+    if (nextEl) nextEl.textContent = nextText;
+    if (ctaEl)  ctaEl.href = ctaHref;
+
+    card.hidden = false;
+  } catch {
+    // Non-fatal — voice profile card is progressive enhancement
+  }
+}
+

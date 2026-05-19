@@ -1485,3 +1485,123 @@ body.ob-shell {
   transition: background 0.15s, color 0.15s;
 }
 .ob-btn-secondary:hover { background: var(--bg-subtle); color: var(--text-heading); }
+
+/* ── Interview: context badge above each question ────────── */
+.ob-question-context {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--brand, #0d7a5f);
+  background: rgba(13, 122, 95, 0.08);
+  border: 1px solid rgba(13, 122, 95, 0.18);
+  border-radius: 100px;
+  padding: 3px 10px;
+  margin: 0 0 14px;
+  line-height: 1.5;
+}
+
+/* ── Post reveal: quality / hook / voice badges ──────────── */
+.ob-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.ob-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 12px;
+  border-radius: 100px;
+  white-space: nowrap;
+}
+
+.ob-badge--quality {
+  background: rgba(13, 122, 95, 0.1);
+  color: #0d7a5f;
+  border: 1px solid rgba(13, 122, 95, 0.25);
+}
+
+.ob-badge--hook {
+  background: rgba(99, 102, 241, 0.1);
+  color: #6366f1;
+  border: 1px solid rgba(99, 102, 241, 0.25);
+}
+
+.ob-badge--voice {
+  background: rgba(245, 158, 11, 0.1);
+  color: #b45309;
+  border: 1px solid rgba(245, 158, 11, 0.25);
+}
+
+/* ── Post reveal: alternative hook chips ─────────────────── */
+.ob-hook-chips {
+  margin-top: 12px;
+}
+
+.ob-hook-chips-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+
+.ob-hook-chips-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ob-hook-chip {
+  display: inline-flex;
+  align-items: center;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 6px 14px;
+  border-radius: 100px;
+  border: 1.5px solid var(--border);
+  background: var(--bg-surface);
+  color: var(--text-body);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+
+.ob-hook-chip:hover:not(:disabled) {
+  background: var(--bg-subtle);
+  border-color: var(--brand);
+  color: var(--text-heading);
+}
+
+.ob-hook-chip:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* ── Post reveal: voice nudge / LinkedIn nudge ───────────── */
+.ob-voice-nudge {
+  margin-top: 16px;
+  text-align: center;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.ob-linkedin-nudge {
+  margin-top: 8px;
+  text-align: center;
+  font-size: 13px;
+}
+
+.ob-linkedin-nudge a {
+  color: var(--brand);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.ob-linkedin-nudge a:hover {
+  text-decoration: underline;
+}

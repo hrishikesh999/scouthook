@@ -18,6 +18,7 @@
 const Anthropic = require('@anthropic-ai/sdk');
 const { getSetting } = require('../db');
 const { extractJsonFromResponse } = require('./voiceFingerprint');
+const { buildVoiceDNABlock } = require('./voiceExtraction');
 
 const SONNET_MODEL = 'claude-sonnet-4-6';
 const HAIKU_MODEL  = 'claude-haiku-4-5-20251001';
@@ -51,7 +52,7 @@ VOICE (write seed ideas that feel native to this voice):
 }
 
 function buildSystemPrompt(userProfile) {
-  const fingerprintBlock = buildFingerprintBlock(userProfile);
+  const fingerprintBlock = buildVoiceDNABlock(userProfile);
   const niche = userProfile.content_niche || 'their professional field';
 
   return `You are a reach content strategist for a ${niche} professional.

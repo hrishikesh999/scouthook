@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Voice Profile — Scouthook</title>
+  <link rel="stylesheet" href="/css/main.css">
+  <link rel="stylesheet" href="/css/settings.css">
+</head>
+<body>
+
+  <!-- ── Sidebar ──────────────────────────────────────────── -->
+  <aside id="sidebar" role="navigation" aria-label="Main navigation">
+    <a href="/dashboard.html" class="sidebar-logo">
+      <img src="/images/scout-hook-logo.png" alt="ScoutHook" class="sidebar-logo-img">
+    </a>
+    <div class="sidebar-cta">
+      <a href="/generate.html?new=1" class="sidebar-cta-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Create Post</a>
+    </div>
+    <nav class="sidebar-nav">
+      <a href="/dashboard.html" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Dashboard</a>
+      <a href="/vault.html" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>Content Vault</a>
+      <a href="/drafts.html" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>Drafts</a>
+      <a href="/schedule.html" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Schedule</a>
+      <a href="/Published.html" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>Published</a>
+      <a href="/Media.html" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>Media</a>
+    </nav>
+    <div class="sidebar-bottom">
+      <a href="/account.html" class="sidebar-link active" aria-current="page"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Account Settings</a>
+      <div id="sidebar-account-slot" aria-label="Signed-in account"></div>
+    </div>
+  </aside>
+
+  <!-- ── Main content ──────────────────────────────────────── -->
+  <div id="main-content">
+  <div class="profile-page">
+
+    <nav class="account-tabs" aria-label="Account settings">
+      <a href="/account.html" class="account-tab">My account</a>
+      <a href="/profile.html" class="account-tab">Voice profile</a>
+      <a href="/settings.html" class="account-tab active" aria-current="page">Voice wizard</a>
+      <a href="/brand.html" class="account-tab">Brand settings</a>
+      <a href="/billing.html" class="account-tab">Subscription</a>
+    </nav>
+
+    <div class="page-header">
+      <div>
+        <h1 class="profile-heading">Voice Profile Wizard</h1>
+        <p class="profile-subheading">Give Scouthook the raw material it needs to write posts that genuinely sound like you.</p>
+      </div>
+    </div>
+
+    <!-- Completion bar -->
+    <div class="vw-completion-bar-wrap">
+      <div class="vw-completion-bar">
+        <div class="vw-completion-fill" id="vw-completion-fill" style="width:0%"></div>
+      </div>
+      <span class="vw-completion-label" id="vw-completion-label">Voice profile 0% complete</span>
+    </div>
+
+    <!-- Wizard body: stage nav + content -->
+    <div class="vw-body">
+
+      <!-- Stage navigation sidebar -->
+      <nav class="vw-stages" aria-label="Wizard stages">
+        <a href="#voice-stage-1" class="vw-stage-link" data-stage="1">
+          <span class="vw-stage-num">1</span>
+          <span class="vw-stage-info">
+            <span class="vw-stage-name">Core themes</span>
+            <span class="vw-stage-desc">What you write about</span>
+          </span>
+          <span class="vw-stage-check" id="vw-check-1" hidden>✓</span>
+        </a>
+        <a href="#voice-stage-2" class="vw-stage-link" data-stage="2">
+          <span class="vw-stage-num">2</span>
+          <span class="vw-stage-info">
+            <span class="vw-stage-name">Credibility</span>
+            <span class="vw-stage-desc">Results and proof points</span>
+          </span>
+          <span class="vw-stage-check" id="vw-check-2" hidden>✓</span>
+        </a>
+        <a href="#voice-stage-3" class="vw-stage-link" data-stage="3">
+          <span class="vw-stage-num">3</span>
+          <span class="vw-stage-info">
+            <span class="vw-stage-name">Calls to action</span>
+            <span class="vw-stage-desc">How you close posts</span>
+          </span>
+          <span class="vw-stage-check" id="vw-check-3" hidden>✓</span>
+        </a>
+        <a href="#voice-stage-4" class="vw-stage-link" data-stage="4">
+          <span class="vw-stage-num">4</span>
+          <span class="vw-stage-info">
+            <span class="vw-stage-name">Rules</span>
+            <span class="vw-stage-desc">What to always / never do</span>
+          </span>
+          <span class="vw-stage-check" id="vw-check-4" hidden>✓</span>
+        </a>
+        <a href="#voice-stage-5" class="vw-stage-link" data-stage="5">
+          <span class="vw-stage-num">5</span>
+          <span class="vw-stage-info">
+            <span class="vw-stage-name">LinkedIn</span>
+            <span class="vw-stage-desc">Import your posts for deeper voice</span>
+          </span>
+          <span class="vw-stage-check" id="vw-check-5" hidden>✓</span>
+        </a>
+      </nav>
+
+      <!-- Stage content panels -->
+      <div class="vw-content">
+
+        <!-- ── Stage 1: Core Themes ──────────────────────── -->
+        <section id="voice-stage-1" class="vw-stage-panel">
+          <div class="vw-stage-header">
+            <h2 class="vw-stage-title">Core themes</h2>
+            <p class="vw-stage-subtitle">The recurring topics you have real opinions about. AI will suggest based on your profile — confirm the ones that fit, remove any that don't.</p>
+          </div>
+
+          <div class="vw-chips-area" id="vw-themes-chips" aria-label="Content themes" role="group"></div>
+
+          <div class="vw-add-row">
+            <input id="vw-themes-input" class="vw-add-input" type="text"
+                   placeholder="Add a theme…" autocomplete="off" />
+            <button id="vw-themes-add" class="vw-add-btn" type="button">Add</button>
+          </div>
+
+          <div class="vw-stage-actions">
+            <button id="vw-themes-save" class="vw-save-btn" type="button">Save themes →</button>
+            <span class="vw-save-status" id="vw-themes-status" hidden></span>
+          </div>
+          <p class="vw-stage-hint" id="vw-themes-suggest-hint">
+            <button id="vw-themes-suggest" class="vw-suggest-link" type="button">✦ Suggest themes from my profile</button>
+          </p>
+        </section>
+
+        <!-- ── Stage 2: Credibility ──────────────────────── -->
+        <section id="voice-stage-2" class="vw-stage-panel">
+          <div class="vw-stage-header">
+            <h2 class="vw-stage-title">Credibility statements</h2>
+            <p class="vw-stage-subtitle">Specific results your work has produced. Pulled from your onboarding answer — confirm what's accurate, remove what isn't, add more if you have them.</p>
+            <p class="vw-stage-note">These are woven naturally into posts when relevant. Never listed verbatim.</p>
+          </div>
+
+          <div class="vw-chips-area" id="vw-authority-chips" aria-label="Authority statements" role="group"></div>
+
+          <div class="vw-add-row">
+            <input id="vw-authority-input" class="vw-add-input" type="text"
+                   placeholder="e.g. Helped a founder close $400k in 6 weeks…" autocomplete="off" />
+            <button id="vw-authority-add" class="vw-add-btn" type="button">Add</button>
+          </div>
+
+          <div class="vw-stage-actions">
+            <button id="vw-authority-save" class="vw-save-btn" type="button">Save statements →</button>
+            <span class="vw-save-status" id="vw-authority-status" hidden></span>
+          </div>
+        </section>
+
+        <!-- ── Stage 3: Calls to action ─────────────────── -->
+        <section id="voice-stage-3" class="vw-stage-panel">
+          <div class="vw-stage-header">
+            <h2 class="vw-stage-title">Calls to action</h2>
+            <p class="vw-stage-subtitle">How you close posts. Scouthook will rotate between these rather than inventing generic CTAs. Add at least 2.</p>
+          </div>
+
+          <!-- Suggested CTA pills -->
+          <div class="vw-cta-suggestions">
+            <p class="vw-suggestions-label">Common examples — tap to add:</p>
+            <div class="vw-cta-pills" id="vw-cta-pills">
+              <button class="vw-cta-pill" data-cta="DM me if this resonates." type="button">DM me if this resonates.</button>
+              <button class="vw-cta-pill" data-cta="What's your take?" type="button">What's your take?</button>
+              <button class="vw-cta-pill" data-cta="Drop a comment below." type="button">Drop a comment below.</button>
+              <button class="vw-cta-pill" data-cta="Link to my work in the comments." type="button">Link in comments.</button>
+              <button class="vw-cta-pill" data-cta="Book a call — link in bio." type="button">Book a call — link in bio.</button>
+              <button class="vw-cta-pill" data-cta="Follow for more on this." type="button">Follow for more on this.</button>
+            </div>
+          </div>
+
+          <div class="vw-chips-area" id="vw-cta-chips" aria-label="CTA library" role="group"></div>
+
+          <div class="vw-add-row">
+            <input id="vw-cta-input" class="vw-add-input" type="text"
+                   placeholder="Your own CTA…" autocomplete="off" />
+            <button id="vw-cta-add" class="vw-add-btn" type="button">Add</button>
+          </div>
+
+          <div class="vw-stage-actions">
+            <button id="vw-cta-save" class="vw-save-btn" type="button">Save CTAs →</button>
+            <span class="vw-save-status" id="vw-cta-status" hidden></span>
+          </div>
+        </section>
+
+        <!-- ── Stage 4: Rules ────────────────────────────── -->
+        <section id="voice-stage-4" class="vw-stage-panel">
+          <div class="vw-stage-header">
+            <h2 class="vw-stage-title">Content rules</h2>
+            <p class="vw-stage-subtitle">Instructions that apply to every post. Most users skip this. Only add a rule if you've seen Scouthook consistently do something you don't like.</p>
+          </div>
+
+          <details class="vw-advanced-toggle">
+            <summary class="vw-advanced-label">Advanced rules (optional)</summary>
+            <div class="vw-advanced-content">
+              <p class="vw-stage-note">Examples: "Always end with a question", "Never use bullet lists", "Keep every post under 150 words"</p>
+
+              <div class="vw-chips-area" id="vw-principles-chips" aria-label="Content principles" role="group"></div>
+
+              <div class="vw-add-row">
+                <input id="vw-principles-input" class="vw-add-input" type="text"
+                       placeholder="e.g. Never use bullet lists" autocomplete="off" />
+                <button id="vw-principles-add" class="vw-add-btn" type="button">Add</button>
+              </div>
+
+              <div class="vw-stage-actions">
+                <button id="vw-principles-save" class="vw-save-btn" type="button">Save rules →</button>
+                <span class="vw-save-status" id="vw-principles-status" hidden></span>
+              </div>
+            </div>
+          </details>
+        </section>
+
+        <!-- ── Stage 5: LinkedIn ─────────────────────────── -->
+        <section id="voice-stage-5" class="vw-stage-panel">
+          <div class="vw-stage-header">
+            <h2 class="vw-stage-title">Connect LinkedIn</h2>
+            <p class="vw-stage-subtitle">The single highest-value action for voice quality. Connecting lets Scouthook read your actual LinkedIn posts to learn your real sentence rhythm, opening patterns, and signature moves.</p>
+          </div>
+
+          <div id="vw-linkedin-connected" class="vw-linkedin-connected" hidden>
+            <div class="vw-connected-badge">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              LinkedIn connected
+            </div>
+            <p class="vw-stage-note">Your recent posts are being used to sharpen your voice profile.</p>
+          </div>
+
+          <div id="vw-linkedin-connect" class="vw-linkedin-connect">
+            <div class="vw-linkedin-value-props">
+              <div class="vw-value-prop">
+                <span class="vw-value-icon">🎯</span>
+                <span>Posts sound like your actual writing, not a template</span>
+              </div>
+              <div class="vw-value-prop">
+                <span class="vw-value-icon">📈</span>
+                <span>Voice profile jumps from baseline to full quality</span>
+              </div>
+              <div class="vw-value-prop">
+                <span class="vw-value-icon">🔄</span>
+                <span>Profile keeps improving as you publish more</span>
+              </div>
+            </div>
+            <a id="vw-linkedin-btn" href="/connect-linkedin.html?return=/settings.html%23voice-stage-5"
+               class="vw-linkedin-btn" type="button">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6zM2 9h4v12H2z"/><circle cx="4" cy="4" r="2"/></svg>
+              Connect LinkedIn
+            </a>
+          </div>
+        </section>
+
+      </div><!-- /.vw-content -->
+    </div><!-- /.vw-body -->
+
+  </div><!-- /.profile-page -->
+  </div><!-- /#main-content -->
+
+  <script src="/js/session.js"></script>
+  <script src="/js/settings.js" defer></script>
+</body>
+</html>

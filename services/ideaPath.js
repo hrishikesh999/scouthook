@@ -3,6 +3,7 @@
 const Anthropic = require('@anthropic-ai/sdk');
 const { getSetting } = require('../db');
 const { extractJsonFromResponse } = require('./voiceFingerprint');
+const { buildVoiceDNABlock } = require('./voiceExtraction');
 const { selectHook, buildHookInjection } = require('./hookSelector');
 const { HOOK_ARCHETYPES } = require('./hookArchetypes');
 const { AI_TELLS_PROHIBITION, sanitiseAiTells } = require('./postSanitiser');
@@ -54,8 +55,12 @@ async function ideaToPost(rawIdea, userProfile, options = {}) {
   if (!apiKey) throw new Error('anthropic_api_key not configured');
   const client = new Anthropic({ apiKey });
 
+  // If caller supplies archetype_override, skip selectHook and use it directly
+  const archetypeOverride = options.archetypeOverride || null;
+  const overrideRecord    = archetypeOverride ? (HOOK_ARCHETYPES[archetypeOverride] || HOOK_ARCHETYPES.INSIGHT) : null;
+
   const [hookResult, inputQuality] = await Promise.all([
-    selectHook(rawIdea, userProfile),
+    archetypeOverride ? Promise.resolve({ archetype: archetypeOverride, hookInjection: buildHookInjection(overrideRecord), confidence: 1 }) : selectHook(rawIdea, userProfile),
     assessInputQuality(rawIdea, client),
   ]);
 
@@ -133,7 +138,7 @@ ${funnelInstruction}${hintLine}`;
 }
 
 function buildSystemPrompt(userProfile, hookInjectionBlock, ctaInstruction = '') {
-  const fingerprintBlock = buildFingerprintBlock(userProfile);
+  const fingerprintBlock = buildVoiceDNABlock(userProfile);
   return `You are an editorial thinking partner for a professional who creates LinkedIn content. Your job is to take a raw idea and transform it into one polished, high-quality LinkedIn post that sounds exactly like the author — not like AI.
 
 Produce exactly **one** post. The structure and opening of that post are determined entirely by the HOOK ARCHETYPE and HOOK INSTRUCTION below. Do not follow any other named format (no "stat hook", "hot take", or "story" templates).
@@ -550,9 +555,13 @@ async function restructureToPost(sourceText, userProfile, documentContext = null
   if (!apiKey) throw new Error('anthropic_api_key not configured');
   const client = new Anthropic({ apiKey });
 
+  // If caller supplies archetypeOverride, skip selectHook and force that archetype
+  const archetypeOverride = options.archetypeOverride || null;
+  const overrideRecord    = archetypeOverride ? (HOOK_ARCHETYPES[archetypeOverride] || HOOK_ARCHETYPES.INSIGHT) : null;
+
   // Classify archetype + quality check in parallel before generation (both Haiku, fast)
   const [hookResult, inputQuality] = await Promise.all([
-    selectHook(sourceText, userProfile),
+    archetypeOverride ? Promise.resolve({ archetype: archetypeOverride, hookInjection: buildHookInjection(overrideRecord), confidence: 1 }) : selectHook(sourceText, userProfile),
     assessInputQuality(sourceText, client),
   ]);
 

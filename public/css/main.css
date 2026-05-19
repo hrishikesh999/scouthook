@@ -5381,3 +5381,61 @@ body {
   .vault-page    { padding: var(--space-5); }
   .vault-layout  { grid-template-columns: 1fr; }
 }
+
+/* ── Voice profile card (dashboard) ─────────────────────────── */
+.voice-profile-card .card-header {
+  margin-bottom: 14px;
+}
+
+.vp-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.vp-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.vp-bar-track {
+  flex: 1;
+  height: 6px;
+  background: var(--bg-subtle, #f4f4f5);
+  border-radius: 100px;
+  overflow: hidden;
+}
+
+.vp-bar-fill {
+  height: 100%;
+  background: var(--brand, #0d7a5f);
+  border-radius: 100px;
+  transition: width 0.4s ease;
+}
+
+.vp-bar-pct {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+  white-space: nowrap;
+  min-width: 28px;
+  text-align: right;
+}
+
+.vp-card-next {
+  font-size: 13px;
+  color: var(--text-body);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.vp-card-cta {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--brand, #0d7a5f);
+  text-decoration: none;
+  align-self: flex-start;
+}
+
+.vp-card-cta:hover { text-decoration: underline; }

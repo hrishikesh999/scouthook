@@ -1,0 +1,468 @@
+/* ============================================================
+   settings.css — Voice Profile Wizard
+   ============================================================ */
+
+/* ── Completion bar ──────────────────────────────────────── */
+.vw-completion-bar-wrap {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 0 0 32px;
+  max-width: 720px;
+}
+
+.vw-completion-bar {
+  flex: 1;
+  height: 6px;
+  background: var(--bg-subtle, #1a2540);
+  border-radius: 100px;
+  overflow: hidden;
+}
+
+.vw-completion-fill {
+  height: 100%;
+  background: var(--brand, #0d7a5f);
+  border-radius: 100px;
+  transition: width 0.6s ease;
+}
+
+.vw-completion-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* ── Wizard layout ───────────────────────────────────────── */
+.vw-body {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 40px;
+  align-items: start;
+  max-width: 920px;
+}
+
+@media (max-width: 700px) {
+  .vw-body { grid-template-columns: 1fr; gap: 24px; }
+}
+
+/* ── Stage navigation ────────────────────────────────────── */
+.vw-stages {
+  position: sticky;
+  top: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.vw-stage-link {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  text-decoration: none;
+  color: var(--text-body);
+  transition: background 0.15s;
+}
+
+.vw-stage-link:hover {
+  background: var(--bg-subtle, #1a2540);
+}
+
+.vw-stage-link--active {
+  background: var(--bg-subtle, #1a2540);
+  color: var(--text-heading);
+}
+
+.vw-stage-link--active .vw-stage-num {
+  background: var(--brand, #0d7a5f);
+  color: #fff;
+  border-color: var(--brand, #0d7a5f);
+}
+
+.vw-stage-num {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border, #1f2d4a);
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  margin-top: 1px;
+}
+
+.vw-stage-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+  min-width: 0;
+}
+
+.vw-stage-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-heading);
+  line-height: 1.3;
+}
+
+.vw-stage-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.vw-stage-check {
+  font-size: 12px;
+  color: var(--brand, #0d7a5f);
+  font-weight: 700;
+  flex-shrink: 0;
+  margin-top: 4px;
+}
+
+/* ── Stage panels ────────────────────────────────────────── */
+.vw-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.vw-stage-panel {
+  padding: 32px 0;
+  border-bottom: 1px solid var(--border, #1f2d4a);
+  scroll-margin-top: 24px;
+}
+
+.vw-stage-panel:last-child {
+  border-bottom: none;
+}
+
+.vw-stage-header {
+  margin-bottom: 20px;
+}
+
+.vw-stage-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-heading);
+  margin: 0 0 6px;
+  letter-spacing: -0.01em;
+}
+
+.vw-stage-subtitle {
+  font-size: 14px;
+  color: var(--text-muted);
+  line-height: 1.55;
+  margin: 0 0 4px;
+}
+
+.vw-stage-note {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-style: italic;
+  margin: 6px 0 0;
+}
+
+/* ── Chip list ───────────────────────────────────────────── */
+.vw-chips-area {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 44px;
+  padding: 4px 0 12px;
+}
+
+.vw-chips-empty {
+  font-size: 13px;
+  color: var(--text-muted);
+  font-style: italic;
+  margin: 0;
+}
+
+.vw-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 5px 10px 5px 12px;
+  border-radius: 100px;
+  background: var(--bg-subtle, #1a2540);
+  border: 1px solid var(--border, #1f2d4a);
+  color: var(--text-body);
+}
+
+.vw-chip-text {
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vw-chip-remove {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 16px;
+  line-height: 1;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  transition: color 0.1s;
+}
+
+.vw-chip-remove:hover {
+  color: var(--text-heading);
+}
+
+/* ── Add chip row ────────────────────────────────────────── */
+.vw-add-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  max-width: 480px;
+}
+
+.vw-add-input {
+  flex: 1;
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--border, #1f2d4a);
+  border-radius: 8px;
+  background: var(--bg-input, #0d1930);
+  color: var(--text-heading);
+  font-size: 14px;
+}
+
+.vw-add-input:focus {
+  outline: none;
+  border-color: var(--brand, #0d7a5f);
+  box-shadow: 0 0 0 2px rgba(13,122,95,0.15);
+}
+
+.vw-add-btn {
+  height: 38px;
+  padding: 0 16px;
+  border-radius: 8px;
+  border: 1px solid var(--border, #1f2d4a);
+  background: var(--bg-subtle, #1a2540);
+  color: var(--text-body);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+
+.vw-add-btn:hover {
+  background: var(--bg-card, #111d36);
+  color: var(--text-heading);
+}
+
+/* ── Stage actions ───────────────────────────────────────── */
+.vw-stage-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.vw-save-btn {
+  height: 40px;
+  padding: 0 20px;
+  border-radius: 8px;
+  background: var(--brand, #0d7a5f);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+}
+
+.vw-save-btn:hover:not(:disabled) {
+  background: #0b6b52;
+}
+
+.vw-save-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.vw-save-status {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.vw-save-status--ok    { color: var(--brand, #0d7a5f); }
+.vw-save-status--error { color: #e05252; }
+
+/* ── Stage hint (suggest button) ─────────────────────────── */
+.vw-stage-hint {
+  margin: 12px 0 0;
+}
+
+.vw-suggest-link {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-muted);
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: color 0.15s;
+}
+
+.vw-suggest-link:hover:not(:disabled) { color: var(--text-heading); }
+.vw-suggest-link:disabled { opacity: 0.5; cursor: default; }
+
+/* ── CTA suggestion pills ────────────────────────────────── */
+.vw-cta-suggestions {
+  margin-bottom: 16px;
+}
+
+.vw-suggestions-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin: 0 0 8px;
+}
+
+.vw-cta-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.vw-cta-pill {
+  font-size: 13px;
+  padding: 5px 12px;
+  border-radius: 100px;
+  border: 1px dashed var(--border, #1f2d4a);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.vw-cta-pill:hover:not(:disabled) {
+  background: var(--bg-subtle, #1a2540);
+  border-color: var(--text-muted);
+  color: var(--text-body);
+}
+
+.vw-cta-pill--added,
+.vw-cta-pill:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* ── Advanced rules toggle (Stage 4) ─────────────────────── */
+.vw-advanced-toggle {
+  border: 1px solid var(--border, #1f2d4a);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.vw-advanced-label {
+  padding: 14px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-body);
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  user-select: none;
+}
+
+.vw-advanced-label:hover { color: var(--text-heading); }
+
+.vw-advanced-label::before {
+  content: '▶';
+  font-size: 10px;
+  color: var(--text-muted);
+  transition: transform 0.2s;
+}
+
+details[open] .vw-advanced-label::before { transform: rotate(90deg); }
+
+.vw-advanced-content {
+  padding: 0 16px 20px;
+}
+
+/* ── LinkedIn stage (Stage 5) ────────────────────────────── */
+.vw-linkedin-connected {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.vw-connected-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--brand, #0d7a5f);
+  background: rgba(13,122,95,0.08);
+  border: 1px solid rgba(13,122,95,0.2);
+  border-radius: 8px;
+  padding: 8px 16px;
+}
+
+.vw-linkedin-connect {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.vw-linkedin-value-props {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 420px;
+}
+
+.vw-value-prop {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--text-body);
+  line-height: 1.45;
+}
+
+.vw-value-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.vw-linkedin-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 22px;
+  border-radius: 8px;
+  background: #0077b5;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s;
+  align-self: flex-start;
+}
+
+.vw-linkedin-btn:hover {
+  background: #006396;
+}

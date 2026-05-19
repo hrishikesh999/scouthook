@@ -1,0 +1,336 @@
+'use strict';
+
+/* ============================================================
+   settings.js — Voice Profile Wizard
+   5 stages: Core Themes · Credibility · CTAs · Rules · LinkedIn
+   ============================================================ */
+
+(async () => {
+
+  await window.scouthookAuthReady;
+
+  const uid = getUserId();
+
+  /* ── Helpers ────────────────────────────────────────────── */
+
+  function qs(id) { return document.getElementById(id); }
+
+  function safeParseJSON(val, fallback) {
+    try { return val ? JSON.parse(val) : fallback; } catch { return fallback; }
+  }
+
+  function showStatus(el, msg, isError = false) {
+    if (!el) return;
+    el.textContent = msg;
+    el.className = 'vw-save-status' + (isError ? ' vw-save-status--error' : ' vw-save-status--ok');
+    el.hidden = false;
+    setTimeout(() => { el.hidden = true; }, 3000);
+  }
+
+  /* ── Chip list builder ──────────────────────────────────── */
+  // Renders a list of removable chip tags into a container.
+  // items: string[]
+  // onChange: (items: string[]) => void — called when list changes
+  function makeChipList(containerId, items, onChange) {
+    const container = qs(containerId);
+    if (!container) return;
+
+    function render() {
+      container.innerHTML = '';
+      if (items.length === 0) {
+        const empty = document.createElement('p');
+        empty.className = 'vw-chips-empty';
+        empty.textContent = 'None added yet.';
+        container.appendChild(empty);
+        return;
+      }
+      items.forEach((item, i) => {
+        const chip = document.createElement('span');
+        chip.className = 'vw-chip';
+        chip.innerHTML = `<span class="vw-chip-text">${escapeHtml(item)}</span>
+          <button class="vw-chip-remove" aria-label="Remove" data-index="${i}" type="button">×</button>`;
+        container.appendChild(chip);
+      });
+    }
+
+    container.addEventListener('click', e => {
+      const btn = e.target.closest('.vw-chip-remove');
+      if (!btn) return;
+      const idx = Number(btn.dataset.index);
+      items.splice(idx, 1);
+      render();
+      onChange(items);
+    });
+
+    render();
+  }
+
+  function escapeHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  /* ── Wire an add-chip input + button ───────────────────── */
+  function wireAddChip(inputId, btnId, items, renderFn) {
+    const input = qs(inputId);
+    const btn   = qs(btnId);
+    if (!input || !btn) return;
+
+    function tryAdd() {
+      const val = input.value.trim();
+      if (!val || items.includes(val)) return;
+      items.push(val);
+      input.value = '';
+      renderFn(items);
+    }
+
+    btn.addEventListener('click', tryAdd);
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); tryAdd(); }
+    });
+  }
+
+  /* ── Profile save helper ────────────────────────────────── */
+  async function saveProfile(payload) {
+    const res = await fetch('/api/profile', {
+      method:  'POST',
+      headers: apiHeaders(),
+      body:    JSON.stringify(payload),
+    });
+    return res.json();
+  }
+
+  /* ── Load profile ───────────────────────────────────────── */
+  let profile = {};
+  try {
+    const r = await fetch('/api/profile/' + encodeURIComponent(uid), { headers: apiHeaders() });
+    const d = await r.json();
+    profile  = d.profile || {};
+  } catch { /* use empty profile */ }
+
+  /* ── Completion bar ─────────────────────────────────────── */
+  function updateCompletionBar(pct) {
+    const fill  = qs('vw-completion-fill');
+    const label = qs('vw-completion-label');
+    if (fill)  fill.style.width  = `${pct}%`;
+    if (label) label.textContent = `Voice profile ${pct}% complete`;
+  }
+  updateCompletionBar(profile.voice_profile_completion_pct || 0);
+
+  // Check which stages have content and mark them
+  function updateStageChecks(themes, statements, ctas, principles, hasLinkedIn) {
+    if (themes.length > 0)      { const el = qs('vw-check-1'); if (el) el.hidden = false; }
+    if (statements.length > 0)  { const el = qs('vw-check-2'); if (el) el.hidden = false; }
+    if (ctas.length > 0)        { const el = qs('vw-check-3'); if (el) el.hidden = false; }
+    if (principles.length > 0)  { const el = qs('vw-check-4'); if (el) el.hidden = false; }
+    if (hasLinkedIn)             { const el = qs('vw-check-5'); if (el) el.hidden = false; }
+  }
+
+  /* ── Stage 1: Core Themes ───────────────────────────────── */
+  let themes = safeParseJSON(profile.content_themes, []);
+  // Fallback: if content_themes is empty but content_niche is a comma-separated list, parse it
+  if (themes.length === 0 && profile.content_niche) {
+    // Don't pre-populate from content_niche string — it may be free text, not themes
+  }
+
+  function renderThemes(t) {
+    makeChipList('vw-themes-chips', t, () => {});
+  }
+  renderThemes(themes);
+  wireAddChip('vw-themes-input', 'vw-themes-add', themes, renderThemes);
+
+  // Suggest themes button
+  const suggestBtn = qs('vw-themes-suggest');
+  if (suggestBtn) {
+    suggestBtn.addEventListener('click', async () => {
+      suggestBtn.textContent = 'Thinking…';
+      suggestBtn.disabled = true;
+      try {
+        const r = await fetch('/api/profile/suggest-themes', {
+          method: 'POST', headers: apiHeaders(), body: '{}',
+        });
+        const d = await r.json();
+        if (d.ok && Array.isArray(d.themes) && d.themes.length > 0) {
+          // Add any suggestions not already in the list
+          d.themes.forEach(t => { if (!themes.includes(t)) themes.push(t); });
+          renderThemes(themes);
+          suggestBtn.textContent = 'Suggestions added ✓';
+        } else {
+          suggestBtn.textContent = '✦ Suggest themes from my profile';
+        }
+      } catch {
+        suggestBtn.textContent = '✦ Suggest themes from my profile';
+      }
+      suggestBtn.disabled = false;
+    });
+  }
+
+  // Save themes
+  qs('vw-themes-save')?.addEventListener('click', async () => {
+    const btn = qs('vw-themes-save');
+    btn.disabled = true;
+    btn.textContent = 'Saving…';
+    try {
+      const d = await saveProfile({ content_themes: JSON.stringify(themes) });
+      if (d.ok) {
+        showStatus(qs('vw-themes-status'), 'Saved ✓');
+        if (themes.length > 0) { const el = qs('vw-check-1'); if (el) el.hidden = false; }
+      } else {
+        showStatus(qs('vw-themes-status'), 'Save failed', true);
+      }
+    } catch {
+      showStatus(qs('vw-themes-status'), 'Save failed', true);
+    }
+    btn.textContent = 'Save themes →';
+    btn.disabled = false;
+  });
+
+  /* ── Stage 2: Authority Statements ─────────────────────── */
+  let statements = safeParseJSON(profile.authority_statements, []);
+
+  function renderStatements(s) {
+    makeChipList('vw-authority-chips', s, () => {});
+  }
+  renderStatements(statements);
+  wireAddChip('vw-authority-input', 'vw-authority-add', statements, renderStatements);
+
+  qs('vw-authority-save')?.addEventListener('click', async () => {
+    const btn = qs('vw-authority-save');
+    btn.disabled = true;
+    btn.textContent = 'Saving…';
+    try {
+      const d = await saveProfile({ authority_statements: JSON.stringify(statements) });
+      if (d.ok) {
+        showStatus(qs('vw-authority-status'), 'Saved ✓');
+        if (statements.length > 0) { const el = qs('vw-check-2'); if (el) el.hidden = false; }
+      } else {
+        showStatus(qs('vw-authority-status'), 'Save failed', true);
+      }
+    } catch {
+      showStatus(qs('vw-authority-status'), 'Save failed', true);
+    }
+    btn.textContent = 'Save statements →';
+    btn.disabled = false;
+  });
+
+  /* ── Stage 3: CTA Library ──────────────────────────────── */
+  let ctas = safeParseJSON(profile.cta_library, []);
+
+  function renderCTAs(c) {
+    makeChipList('vw-cta-chips', c, () => {});
+  }
+  renderCTAs(ctas);
+  wireAddChip('vw-cta-input', 'vw-cta-add', ctas, renderCTAs);
+
+  // Suggested CTA pills
+  document.querySelectorAll('.vw-cta-pill').forEach(pill => {
+    pill.addEventListener('click', () => {
+      const val = pill.dataset.cta;
+      if (val && !ctas.includes(val)) {
+        ctas.push(val);
+        renderCTAs(ctas);
+        pill.disabled = true;
+        pill.classList.add('vw-cta-pill--added');
+      }
+    });
+  });
+
+  qs('vw-cta-save')?.addEventListener('click', async () => {
+    const btn = qs('vw-cta-save');
+    btn.disabled = true;
+    btn.textContent = 'Saving…';
+    try {
+      const d = await saveProfile({ cta_library: JSON.stringify(ctas) });
+      if (d.ok) {
+        showStatus(qs('vw-cta-status'), 'Saved ✓');
+        if (ctas.length > 0) { const el = qs('vw-check-3'); if (el) el.hidden = false; }
+      } else {
+        showStatus(qs('vw-cta-status'), 'Save failed', true);
+      }
+    } catch {
+      showStatus(qs('vw-cta-status'), 'Save failed', true);
+    }
+    btn.textContent = 'Save CTAs →';
+    btn.disabled = false;
+  });
+
+  /* ── Stage 4: Content Principles ───────────────────────── */
+  let principles = safeParseJSON(profile.content_principles, []);
+
+  function renderPrinciples(p) {
+    makeChipList('vw-principles-chips', p, () => {});
+  }
+  renderPrinciples(principles);
+  wireAddChip('vw-principles-input', 'vw-principles-add', principles, renderPrinciples);
+
+  qs('vw-principles-save')?.addEventListener('click', async () => {
+    const btn = qs('vw-principles-save');
+    btn.disabled = true;
+    btn.textContent = 'Saving…';
+    try {
+      const d = await saveProfile({ content_principles: JSON.stringify(principles) });
+      if (d.ok) {
+        showStatus(qs('vw-principles-status'), 'Saved ✓');
+        if (principles.length > 0) { const el = qs('vw-check-4'); if (el) el.hidden = false; }
+      } else {
+        showStatus(qs('vw-principles-status'), 'Save failed', true);
+      }
+    } catch {
+      showStatus(qs('vw-principles-status'), 'Save failed', true);
+    }
+    btn.textContent = 'Save rules →';
+    btn.disabled = false;
+  });
+
+  /* ── Stage 5: LinkedIn ──────────────────────────────────── */
+  // Check LinkedIn connection status
+  try {
+    const r = await fetch('/api/linkedin/status', { headers: apiHeaders() });
+    const d = await r.json();
+    if (d.connected) {
+      qs('vw-linkedin-connected')?.removeAttribute('hidden');
+      qs('vw-linkedin-connect')?.setAttribute('hidden', '');
+      const el = qs('vw-check-5');
+      if (el) el.hidden = false;
+    }
+  } catch { /* non-fatal — show connect button */ }
+
+  /* ── Stage check marks (initial state) ─────────────────── */
+  const hasLinkedIn = !qs('vw-linkedin-connect') || qs('vw-linkedin-connect').hasAttribute('hidden');
+  updateStageChecks(themes, statements, ctas, principles, hasLinkedIn);
+
+  /* ── Hash-based scroll ──────────────────────────────────── */
+  function scrollToStage(hash) {
+    const target = document.querySelector(hash);
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      // Highlight active stage link
+      document.querySelectorAll('.vw-stage-link').forEach(a => {
+        a.classList.toggle('vw-stage-link--active', a.getAttribute('href') === hash);
+      });
+    }
+  }
+
+  // Scroll to hash on load
+  if (window.location.hash) {
+    setTimeout(() => scrollToStage(window.location.hash), 100);
+  }
+
+  // Update active link on scroll (IntersectionObserver)
+  const panels = document.querySelectorAll('.vw-stage-panel');
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const hash = '#' + entry.target.id;
+        document.querySelectorAll('.vw-stage-link').forEach(a => {
+          a.classList.toggle('vw-stage-link--active', a.getAttribute('href') === hash);
+        });
+      }
+    });
+  }, { threshold: 0.4 });
+  panels.forEach(p => observer.observe(p));
+
+})();

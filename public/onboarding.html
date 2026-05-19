@@ -13,7 +13,7 @@
 
   <header class="ob-header">
     <img src="/images/sh-logo-dark.png" alt="Scouthook" class="ob-logo-img">
-    <!-- 4 dots: role · goal · interview · done -->
+    <!-- 4 dots: role · website · interview · done -->
     <div id="ob-step-dots" class="ob-step-dots" hidden aria-hidden="true">
       <span class="ob-dot" data-step="1"></span>
       <span class="ob-dot" data-step="2"></span>
@@ -53,35 +53,8 @@
     </div>
   </section>
 
-  <!-- ── Screen 2: Goal ─────────────────────────────────────── -->
-  <section id="ob-s2" class="ob-screen ob-screen--center" aria-label="Step 2: Your goal">
-    <div class="ob-content ob-content--narrow">
-      <button class="ob-back-btn" data-back-to="s1" type="button">← Back</button>
-      <h1 class="ob-headline">What's your main goal on LinkedIn?</h1>
-      <p class="ob-subheadline">We'll calibrate every post to the outcome that matters most to you.</p>
-
-      <div class="ob-goal-grid" role="list">
-        <button class="ob-goal-card" data-goal="convert" data-funnel="convert" type="button" role="listitem" aria-pressed="false">
-          <span class="ob-goal-icon">💰</span>
-          <span class="ob-goal-label">Sell more</span>
-          <span class="ob-goal-desc">Attract clients and convert readers into conversations</span>
-        </button>
-        <button class="ob-goal-card" data-goal="thought_leadership" data-funnel="thought_leadership" type="button" role="listitem" aria-pressed="false">
-          <span class="ob-goal-icon">🏆</span>
-          <span class="ob-goal-label">Build authority</span>
-          <span class="ob-goal-desc">Become the go-to expert in your niche</span>
-        </button>
-        <button class="ob-goal-card" data-goal="reach" data-funnel="reach" type="button" role="listitem" aria-pressed="false">
-          <span class="ob-goal-icon">📣</span>
-          <span class="ob-goal-label">Grow audience</span>
-          <span class="ob-goal-desc">Reach more people and expand your network</span>
-        </button>
-      </div>
-    </div>
-  </section>
-
   <!-- ── Screen 4: Interview ───────────────────────────────── -->
-  <section id="ob-s4" class="ob-screen" aria-label="Step 4: Interview">
+  <section id="ob-s4" class="ob-screen" aria-label="Step 2: Your background and answers">
     <div class="ob-interview-wrap">
 
       <!-- Left: coaching panel -->
@@ -139,6 +112,7 @@
         <!-- Interview questions -->
         <div id="ob-question-step" hidden>
           <p id="ob-q-progress" class="ob-q-progress" aria-live="polite"></p>
+          <p id="ob-q-context" class="ob-question-context"></p>
           <p id="ob-q-text" class="ob-q-text"></p>
 
           <textarea id="ob-answer" class="ob-textarea ob-textarea--interview" rows="5"
@@ -158,24 +132,28 @@
   <section id="ob-s5" class="ob-screen ob-screen--center" aria-label="Generating your post">
     <div class="ob-content ob-content--narrow">
       <h1 class="ob-headline">Your post is being written</h1>
-      <p class="ob-subheadline">Scouthook is pulling out the strongest hook from your answers.</p>
+      <p class="ob-subheadline" id="ob-s5-subhead">Scouthook is pulling out the strongest hook from your answers.</p>
 
       <ol class="ob-progress-steps" aria-live="polite">
         <li id="ob-step-1" class="ob-progress-step">
           <span class="ob-step-indicator"></span>
-          <span class="ob-step-label">Extracting your expertise</span>
+          <span class="ob-step-label" id="ob-step-1-label">Reading your website profile</span>
         </li>
         <li id="ob-step-2" class="ob-progress-step">
           <span class="ob-step-indicator"></span>
-          <span class="ob-step-label">Selecting the strongest hook</span>
+          <span class="ob-step-label" id="ob-step-2-label">Applying your context</span>
         </li>
         <li id="ob-step-3" class="ob-progress-step">
           <span class="ob-step-indicator"></span>
-          <span class="ob-step-label">Running quality checks</span>
+          <span class="ob-step-label">Extracting your voice from your answers</span>
         </li>
         <li id="ob-step-4" class="ob-progress-step">
           <span class="ob-step-indicator"></span>
-          <span class="ob-step-label">Finalising your post</span>
+          <span class="ob-step-label">Drafting your first post</span>
+        </li>
+        <li id="ob-step-5" class="ob-progress-step">
+          <span class="ob-step-indicator"></span>
+          <span class="ob-step-label">Running quality checks</span>
         </li>
       </ol>
     </div>
@@ -185,74 +163,47 @@
   <section id="ob-s6" class="ob-screen" aria-label="Your first post">
     <div class="ob-content" style="max-width:600px">
       <h1 class="ob-headline" style="margin-bottom:6px">Your first post is ready</h1>
-      <p class="ob-subheadline" style="margin-bottom:20px">
+      <p class="ob-subheadline" style="margin-bottom:16px">
         Read it, edit anything you want, then publish when you're ready.
       </p>
 
+      <!-- Quality badges -->
+      <div id="ob-badges" class="ob-badges" style="display:none; margin-bottom:16px">
+        <span id="ob-badge-quality" class="ob-badge ob-badge--quality"></span>
+        <span id="ob-badge-hook"    class="ob-badge ob-badge--hook"></span>
+        <span id="ob-badge-voice"   class="ob-badge ob-badge--voice"></span>
+      </div>
+
       <textarea id="ob-post-output" class="ob-textarea" aria-label="Generated post" rows="12"></textarea>
 
-      <div style="margin-top:20px">
+      <!-- Alternative hook chips -->
+      <div id="ob-hook-chips" class="ob-hook-chips" style="display:none; margin-top:12px">
+        <p class="ob-hook-chips-label">Try a different hook:</p>
+        <div id="ob-hook-chips-row" class="ob-hook-chips-row"></div>
+      </div>
+
+      <div style="margin-top:20px; display:flex; flex-direction:column; gap:10px">
         <button id="ob-open-editor" class="ob-btn-primary" type="button" style="width:100%">
           Open in editor →
         </button>
+        <button id="ob-save-drafts" class="ob-btn-secondary" type="button" style="width:100%">
+          Save to drafts
+        </button>
       </div>
 
-      <!-- LinkedIn connection strip -->
-      <div class="ob-linkedin-strip" style="margin-top:12px">
-        <div class="ob-linkedin-strip-icon" aria-hidden="true">in</div>
-        <div class="ob-linkedin-strip-text">
-          <p class="ob-linkedin-strip-title">Publish directly from Scouthook</p>
-          <p class="ob-linkedin-strip-body">Connect LinkedIn to post in one click, any time.</p>
-        </div>
-        <button id="ob-connect-linkedin" class="ob-linkedin-strip-btn" type="button">Connect LinkedIn →</button>
-      </div>
+      <p class="ob-voice-nudge" style="margin-top:16px; text-align:center; font-size:14px; color:var(--text-muted)">
+        Your voice profile is building. It gets sharper every time you publish.
+      </p>
+
+      <p class="ob-linkedin-nudge" style="margin-top:8px; text-align:center; font-size:13px">
+        <a href="/settings.html#voice-stage-5">Connect LinkedIn to sharpen your profile →</a>
+      </p>
 
       <p id="ob-s6-error" class="ob-field-error" hidden role="alert"></p>
     </div>
   </section>
 
-  <!-- ── Screen 7: Plan selection ────────────────────────── -->
-  <section id="ob-s7" class="ob-screen ob-screen--center" aria-label="Choose your plan">
-    <div class="ob-content ob-content--narrow" style="max-width:580px">
-      <h1 class="ob-headline" style="margin-bottom:6px">One last thing, choose your plan</h1>
-      <p class="ob-subheadline" style="margin-bottom:32px">
-        Start free and upgrade whenever you're ready, or go Pro now and unlock everything.
-      </p>
-      <div class="ob-plan-cards">
-        <div class="ob-plan-card">
-          <div class="ob-plan-card-name">Free</div>
-          <div class="ob-plan-card-price">$0 <span class="ob-plan-card-period">/ month</span></div>
-          <ul class="ob-plan-features">
-            <li>10 quality-checked posts / month</li>
-            <li>All 8 hook archetypes + Hook B alternative</li>
-            <li>Content Vault</li>
-            <li>LinkedIn publishing</li>
-            <li>Draft hub &amp; post archive</li>
-          </ul>
-          <button id="ob-choose-free" class="ob-btn-secondary ob-plan-cta" type="button">Continue on Free</button>
-        </div>
-        <div class="ob-plan-card ob-plan-card--featured">
-          <div class="ob-plan-card-name ob-plan-card-name--pro">Pro</div>
-          <div class="ob-plan-card-price">$<span id="ob-pro-price">39</span> <span class="ob-plan-card-period">/ month</span></div>
-          <ul class="ob-plan-features">
-            <li>Everything in Free</li>
-            <li>Unlimited post generations</li>
-            <li>Unlimited visuals &amp; carousels</li>
-            <li>Post scheduling — up to 30 days ahead</li>
-            <li>Performance &amp; funnel analytics</li>
-          </ul>
-          <div id="ob-founding-note" class="ob-plan-founding-note" style="display:none"></div>
-          <button id="ob-choose-pro" class="ob-btn-primary ob-plan-cta" type="button">Upgrade to Pro →</button>
-        </div>
-      </div>
-      <p style="text-align:center;font-size:12px;color:var(--text-muted);margin-top:20px">
-        You can upgrade or cancel anytime from your account settings.
-      </p>
-    </div>
-  </section>
-
   <script src="/js/session.js"></script>
-  <script src="/js/pricing-modal.js" defer></script>
   <script src="/js/onboarding.js" defer></script>
 </body>
 </html>

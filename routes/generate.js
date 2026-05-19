@@ -144,7 +144,8 @@ router.post('/', async (req, res) => {
     });
   }
 
-  const { path: genPath, vault_idea_id, skip_substance_check, interview_answers, funnel_type: bodyFunnelType } = req.body;
+  const { path: genPath, vault_idea_id, skip_substance_check, interview_answers, funnel_type: bodyFunnelType,
+          archetype_override, source } = req.body;
   let { raw_idea } = req.body;
 
   // Interview path: format Q&A answers into a structured raw_idea string
@@ -195,7 +196,8 @@ router.post('/', async (req, res) => {
       : raw_idea;
     const funnelTypeForGate = vaultIdea?.funnel_type || bodyFunnelType || null;
     ideaResult = await restructureWithQualityGate(userProfile, sourceText, funnelTypeForGate, {
-      skipSubstanceCheck: !!skip_substance_check,
+      skipSubstanceCheck:  !!skip_substance_check,
+      archetypeOverride:   archetype_override || null,
     });
 
     {
@@ -239,8 +241,8 @@ router.post('/', async (req, res) => {
 
       const postsInsert = db.prepare(`
         INSERT INTO generated_posts
-          (run_id, user_id, tenant_id, format_slug, content, quality_score, quality_flags, passed_gate, funnel_type, vault_source_ref, hook_b, cta_alternatives, idea_input, archetype_used)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          (run_id, user_id, tenant_id, format_slug, content, quality_score, quality_flags, passed_gate, funnel_type, vault_source_ref, hook_b, cta_alternatives, idea_input, archetype_used, source)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         RETURNING id
       `);
 
@@ -258,7 +260,8 @@ router.post('/', async (req, res) => {
         null,
         ctaAlternatives?.length ? JSON.stringify(ctaAlternatives) : null,
         inputData.raw_idea || null,
-        archetypeUsed || null
+        archetypeUsed || null,
+        source || null
       );
       const primaryId = primaryInsert.lastInsertRowid;
 

@@ -620,6 +620,68 @@
     .voice-indicator-dot--red   { background: #ef4444; }
     .edit-link { color: #111111; text-decoration: none; }
     .edit-link:hover { color: var(--brand); }
+
+    /* ── Topic starter suggestions ───────────────────────────── */
+    #gen-topic-starters {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .gen-starters-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin: 0 0 4px;
+      letter-spacing: 0.01em;
+    }
+    .gen-starter-btn {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      width: 100%;
+      padding: 11px 14px;
+      border: 1px solid var(--border, #E4E4E7);
+      border-radius: 10px;
+      background: var(--bg-surface, #fff);
+      cursor: pointer;
+      text-align: left;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .gen-starter-btn:hover {
+      border-color: var(--brand, #0d7a5f);
+      background: rgba(13,122,95,0.04);
+    }
+    .gen-starter-btn-inner { flex: 1; min-width: 0; }
+    .gen-starter-btn-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-heading);
+      margin: 0 0 2px;
+      line-height: 1.35;
+    }
+    .gen-starter-btn-desc {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin: 0;
+      line-height: 1.4;
+    }
+    .gen-starter-arrow {
+      flex-shrink: 0;
+      font-size: 14px;
+      color: var(--brand, #0d7a5f);
+      margin-top: 1px;
+    }
+    .gen-starter-skeleton {
+      height: 54px;
+      background: linear-gradient(90deg, var(--bg-subtle, #F4F4F5) 25%, var(--bg-surface, #fff) 50%, var(--bg-subtle, #F4F4F5) 75%);
+      background-size: 200% 100%;
+      animation: starter-sweep 1.4s ease-in-out infinite;
+      border-radius: 10px;
+    }
+    @keyframes starter-sweep {
+      0%   { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
   </style>
 </head>
 <body>
@@ -665,6 +727,16 @@
           ></textarea>
 
           <div id="idea-char-count" class="gen-char-count" aria-live="polite"></div>
+
+          <!-- Topic starters — shown when idea input is empty, hidden on first keystroke -->
+          <div id="gen-topic-starters" style="display:none" aria-label="Suggested topics">
+            <p class="gen-starters-label">Not sure where to start? Pick a topic from your niche:</p>
+            <div id="gen-starters-list">
+              <div class="gen-starter-skeleton"></div>
+              <div class="gen-starter-skeleton"></div>
+              <div class="gen-starter-skeleton"></div>
+            </div>
+          </div>
 
           <div id="idea-error" role="alert">Add a thought before writing the post</div>
 

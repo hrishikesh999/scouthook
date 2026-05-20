@@ -422,7 +422,58 @@ async function runFromDocGeneration() {
   }
 }
 
-/* ── 9. Init ─────────────────────────────────────────────────── */
+/* ── 9. Topic starters ───────────────────────────────────────── */
+async function loadTopicStarters() {
+  const startersEl = document.getElementById('gen-topic-starters');
+  const listEl     = document.getElementById('gen-starters-list');
+  if (!startersEl || !listEl) return;
+
+  // Only show starters when idea input is empty
+  if (ideaInput && ideaInput.value.trim()) return;
+
+  try {
+    const res  = await fetch('/api/vault/suggest-topics', { headers: apiHeaders() });
+    const data = await res.json();
+    if (!data.ok || !data.topics?.length) return;
+
+    listEl.innerHTML = data.topics.map(t => `
+      <button class="gen-starter-btn" type="button"
+              data-title="${t.title.replace(/"/g,'&quot;')}"
+              data-desc="${t.description.replace(/"/g,'&quot;')}">
+        <div class="gen-starter-btn-inner">
+          <p class="gen-starter-btn-title">${escapeHtml(t.title)}</p>
+          <p class="gen-starter-btn-desc">${escapeHtml(t.description)}</p>
+        </div>
+        <span class="gen-starter-arrow" aria-hidden="true">→</span>
+      </button>
+    `).join('');
+
+    // Wire click handlers — fill textarea and hide suggestions
+    listEl.querySelectorAll('.gen-starter-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const title = btn.dataset.title;
+        const desc  = btn.dataset.desc;
+        if (ideaInput) {
+          ideaInput.value = title + '\n\n' + desc;
+          ideaInput.focus();
+          // Trigger char count update
+          ideaInput.dispatchEvent(new Event('input'));
+        }
+        startersEl.style.display = 'none';
+      });
+    });
+
+    startersEl.style.display = '';
+  } catch { /* non-fatal — just don't show starters */ }
+}
+
+function escapeHtml(str) {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/* ── 10. Init ────────────────────────────────────────────────── */
 (async function init() {
   await window.scouthookAuthReady;
   await loadProfile();
@@ -436,7 +487,19 @@ async function runFromDocGeneration() {
   if (urlMode === 'from-doc') {
     document.querySelector(`[data-mode="${urlMode}"]`)?.click();
   } else {
-    if (urlIdea && ideaInput) ideaInput.value = urlIdea;
+    if (urlIdea && ideaInput) {
+      ideaInput.value = urlIdea;
+    } else {
+      // Load topic starters only when no pre-filled idea
+      loadTopicStarters();
+      // Hide starters on first real keystroke
+      ideaInput?.addEventListener('input', () => {
+        if (ideaInput.value.trim()) {
+          const el = document.getElementById('gen-topic-starters');
+          if (el) el.style.display = 'none';
+        }
+      }, { once: true });
+    }
     ideaInput.focus();
   }
 })();

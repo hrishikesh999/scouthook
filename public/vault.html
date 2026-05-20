@@ -6,6 +6,83 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Content Vault — ScoutHook</title>
   <link rel="stylesheet" href="/css/main.css">
+  <style>
+    /* ── Blank vault topic suggestions ──────────────────────── */
+    .vault-topic-suggestions {
+      margin-top: 20px;
+      text-align: left;
+      width: 100%;
+    }
+    .vault-topic-suggestions-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin: 0 0 10px;
+    }
+    .vault-topic-cards {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .vault-topic-card {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 14px;
+      background: var(--bg-surface, #fff);
+      border: 1px solid var(--border, #E4E4E7);
+      border-radius: 10px;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .vault-topic-card:hover {
+      border-color: var(--brand, #0d7a5f);
+      box-shadow: 0 1px 4px rgba(13,122,95,0.1);
+    }
+    .vault-topic-card-body { flex: 1; min-width: 0; }
+    .vault-topic-card-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-heading);
+      margin: 0 0 2px;
+      line-height: 1.35;
+    }
+    .vault-topic-card-desc {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin: 0;
+      line-height: 1.4;
+    }
+    .vault-topic-card-btn {
+      flex-shrink: 0;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--brand, #0d7a5f);
+      text-decoration: none;
+      white-space: nowrap;
+      padding: 5px 10px;
+      border-radius: 6px;
+      border: 1px solid rgba(13,122,95,0.3);
+      transition: background 0.15s, color 0.15s;
+    }
+    .vault-topic-card-btn:hover {
+      background: rgba(13,122,95,0.08);
+      color: #0b6b52;
+    }
+    .vault-topic-skeleton {
+      height: 58px;
+      background: linear-gradient(90deg, var(--bg-subtle, #F4F4F5) 25%, var(--bg-surface, #fff) 50%, var(--bg-subtle, #F4F4F5) 75%);
+      background-size: 200% 100%;
+      animation: skeleton-sweep 1.4s ease-in-out infinite;
+      border-radius: 10px;
+    }
+    @keyframes skeleton-sweep {
+      0%   { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+  </style>
 </head>
 <body>
 
@@ -53,6 +130,17 @@
             <svg class="vault-empty-icon" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
             <p class="vault-empty-label">No documents yet</p>
             <p class="vault-empty-sub">Upload a PDF, DOCX, or paste a URL to get started.</p>
+
+            <!-- AI-suggested topics — loaded async, shown when profile has data -->
+            <div id="vault-topic-suggestions" class="vault-topic-suggestions" hidden>
+              <p class="vault-topic-suggestions-label">Or start with a topic from your niche</p>
+              <div id="vault-topic-cards" class="vault-topic-cards">
+                <!-- skeleton loading state -->
+                <div class="vault-topic-skeleton"></div>
+                <div class="vault-topic-skeleton"></div>
+                <div class="vault-topic-skeleton"></div>
+              </div>
+            </div>
           </div>
 
           <div id="vault-doc-list" class="vault-doc-list" style="display:none"></div>
@@ -211,6 +299,7 @@
       docList.style.display  = 'none';
       return;
     }
+    // Hide the whole empty state (including topic suggestions) once docs exist
     docEmpty.style.display = 'none';
     docList.style.display  = '';
     docList.innerHTML      = documents.map(renderDocCard).join('');
@@ -289,7 +378,40 @@
     }
   }
 
+  // ── Suggested topics: load and render in blank vault state ──
+  async function loadTopicSuggestions() {
+    const suggestionsEl = document.getElementById('vault-topic-suggestions');
+    const cardsEl       = document.getElementById('vault-topic-cards');
+    if (!suggestionsEl || !cardsEl) return;
+
+    try {
+      const res  = await fetch('/api/vault/suggest-topics');
+      const data = await res.json();
+      if (!data.ok || !data.topics?.length) {
+        suggestionsEl.hidden = true;
+        return;
+      }
+
+      cardsEl.innerHTML = data.topics.map(t => `
+        <div class="vault-topic-card">
+          <div class="vault-topic-card-body">
+            <p class="vault-topic-card-title">${escHtml(t.title)}</p>
+            <p class="vault-topic-card-desc">${escHtml(t.description)}</p>
+          </div>
+          <a href="/generate.html?idea=${encodeURIComponent(t.title)}" class="vault-topic-card-btn">
+            Write about this →
+          </a>
+        </div>
+      `).join('');
+
+      suggestionsEl.hidden = false;
+    } catch {
+      if (suggestionsEl) suggestionsEl.hidden = true;
+    }
+  }
+
   loadDocuments();
+  loadTopicSuggestions();
   </script>
 </body>
 </html>

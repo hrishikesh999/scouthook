@@ -338,6 +338,91 @@ router.get('/ideas', async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// GET /api/vault/suggest-topics
+// Returns 3 AI-suggested post topics based on the user's profile + LinkedIn headline.
+// Used to populate the blank vault state with actionable starting points.
+// Non-fatal: returns empty array on any failure.
+// ---------------------------------------------------------------------------
+router.get('/suggest-topics', async (req, res) => {
+  const { userId, tenantId } = req;
+  if (!requireUser(req, res)) return;
+
+  try {
+    const profile = await db.prepare(
+      `SELECT content_niche, audience_role, business_positioning, onboarding_q1
+       FROM user_profiles WHERE user_id = ? AND tenant_id = ?`
+    ).get(userId, tenantId);
+
+    const liRow = await db.prepare(
+      'SELECT linkedin_headline FROM linkedin_tokens WHERE user_id = ? AND tenant_id = ?'
+    ).get(userId, tenantId);
+
+    const niche       = profile?.content_niche        || '';
+    const audience    = profile?.audience_role         || '';
+    const positioning = profile?.business_positioning  || '';
+    const headline    = liRow?.linkedin_headline        || '';
+    const contrarian  = profile?.onboarding_q1         || '';
+
+    if (!niche && !audience && !positioning && !headline) {
+      return res.json({ ok: true, topics: [] });
+    }
+
+    const Anthropic  = require('@anthropic-ai/sdk');
+    const { getSetting } = require('../db');
+    const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
+    if (!apiKey) return res.json({ ok: true, topics: [] });
+
+    const client = new Anthropic({ apiKey });
+
+    const context = [
+      niche       && `Niche: ${niche}`,
+      audience    && `Audience: ${audience}`,
+      positioning && `Positioning: ${positioning}`,
+      headline    && `LinkedIn headline: ${headline}`,
+      contrarian  && `Their contrarian POV: ${contrarian}`,
+    ].filter(Boolean).join('\n');
+
+    const message = await client.messages.create({
+      model:      'claude-haiku-4-5',
+      max_tokens: 400,
+      messages: [{
+        role: 'user',
+        content: `Generate 3 specific LinkedIn post topics for this professional.
+
+${context}
+
+Each topic must:
+- Be a concrete, opinionated premise — not a generic category
+- Reflect a real tension, lesson, or contrarian view specific to their niche
+- Feel like something only this person could write
+
+Return ONLY a JSON array of 3 objects, no other text:
+[
+  { "title": "3-7 word opinionated topic", "description": "One sentence explaining the angle or tension" },
+  ...
+]`,
+      }],
+    });
+
+    const raw = message.content[0]?.text || '[]';
+    let topics = [];
+    try {
+      const match = raw.match(/\[[\s\S]*\]/);
+      topics = JSON.parse(match ? match[0] : raw);
+      if (!Array.isArray(topics)) topics = [];
+      topics = topics
+        .filter(t => t && typeof t.title === 'string' && typeof t.description === 'string')
+        .slice(0, 3);
+    } catch { /* return empty on parse failure */ }
+
+    return res.json({ ok: true, topics });
+  } catch (err) {
+    console.error('[vault/suggest-topics] error (non-fatal):', err.message);
+    return res.json({ ok: true, topics: [] });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // POST /api/vault/brainstorm — generate reach ideas from a topic
 // Body: { topic: string }
 // ---------------------------------------------------------------------------

@@ -429,10 +429,14 @@ async function runFromDocGeneration() {
   initFromDocPane();
 
   // Auto-switch tab if ?mode=from-doc is in the URL
-  const urlMode = new URLSearchParams(location.search).get('mode');
+  const urlParams = new URLSearchParams(location.search);
+  const urlMode   = urlParams.get('mode');
+  const urlIdea   = urlParams.get('idea');
+
   if (urlMode === 'from-doc') {
     document.querySelector(`[data-mode="${urlMode}"]`)?.click();
   } else {
+    if (urlIdea && ideaInput) ideaInput.value = urlIdea;
     ideaInput.focus();
   }
 })();

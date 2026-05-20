@@ -1692,7 +1692,6 @@ function wireVisualButtons() {
   document.getElementById('carousel-btn').addEventListener('click', () => openSlideOver('carousel', 'CAROUSEL'));
   document.getElementById('media-library-btn').addEventListener('click', () => {
     if (scheduleEditLocked) return;
-    if (userPlan === 'free') { window.PricingModal?.open(); return; }
     openMediaDrawer();
   });
 }

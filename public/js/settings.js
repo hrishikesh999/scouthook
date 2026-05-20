@@ -28,12 +28,13 @@
   }
 
   /* ── Chip list builder ──────────────────────────────────── */
-  // Renders a list of removable chip tags into a container.
-  // items: string[]
+  // Sets up a removable chip list in a container. Call ONCE per list.
+  // Returns a render() function — call it to refresh the display after mutations.
+  // items: string[] (mutated in-place on remove)
   // onChange: (items: string[]) => void — called when list changes
   function makeChipList(containerId, items, onChange) {
     const container = qs(containerId);
-    if (!container) return;
+    if (!container) return () => {};
 
     function render() {
       container.innerHTML = '';
@@ -53,6 +54,7 @@
       });
     }
 
+    // Register listener exactly once — not on every render call
     container.addEventListener('click', e => {
       const btn = e.target.closest('.vw-chip-remove');
       if (!btn) return;
@@ -63,6 +65,7 @@
     });
 
     render();
+    return render;
   }
 
   function escapeHtml(str) {
@@ -129,17 +132,46 @@
     if (hasLinkedIn)             { const el = qs('vw-check-5'); if (el) el.hidden = false; }
   }
 
+  /* ── Profile basics ────────────────────────────────────── */
+  const basicsFields = {
+    'profile-positioning': 'business_positioning',
+    'profile-website':     'website_url',
+    'profile-niche':       'content_niche',
+    'profile-audience':    'audience_role',
+    'profile-pain':        'audience_pain',
+    'profile-contrarian':  'contrarian_view',
+    'profile-samples':     'writing_samples',
+  };
+
+  // Populate basics fields from profile
+  Object.entries(basicsFields).forEach(([elId, key]) => {
+    const el = qs(elId);
+    if (el && profile[key]) el.value = profile[key];
+  });
+
+  qs('save-basics-btn')?.addEventListener('click', async () => {
+    const btn = qs('save-basics-btn');
+    btn.disabled = true;
+    btn.textContent = 'Saving…';
+    const payload = {};
+    Object.entries(basicsFields).forEach(([elId, key]) => {
+      const el = qs(elId);
+      if (el) payload[key] = el.value.trim() || null;
+    });
+    try {
+      const d = await saveProfile(payload);
+      showStatus(qs('save-basics-status'), d.ok ? 'Saved ✓' : 'Save failed', !d.ok);
+    } catch {
+      showStatus(qs('save-basics-status'), 'Save failed', true);
+    }
+    btn.textContent = 'Save basics';
+    btn.disabled = false;
+  });
+
   /* ── Stage 1: Core Themes ───────────────────────────────── */
   let themes = safeParseJSON(profile.content_themes, []);
-  // Fallback: if content_themes is empty but content_niche is a comma-separated list, parse it
-  if (themes.length === 0 && profile.content_niche) {
-    // Don't pre-populate from content_niche string — it may be free text, not themes
-  }
 
-  function renderThemes(t) {
-    makeChipList('vw-themes-chips', t, () => {});
-  }
-  renderThemes(themes);
+  const renderThemes = makeChipList('vw-themes-chips', themes, () => {});
   wireAddChip('vw-themes-input', 'vw-themes-add', themes, renderThemes);
 
   // Suggest themes button
@@ -191,10 +223,7 @@
   /* ── Stage 2: Authority Statements ─────────────────────── */
   let statements = safeParseJSON(profile.authority_statements, []);
 
-  function renderStatements(s) {
-    makeChipList('vw-authority-chips', s, () => {});
-  }
-  renderStatements(statements);
+  const renderStatements = makeChipList('vw-authority-chips', statements, () => {});
   wireAddChip('vw-authority-input', 'vw-authority-add', statements, renderStatements);
 
   qs('vw-authority-save')?.addEventListener('click', async () => {
@@ -219,10 +248,7 @@
   /* ── Stage 3: CTA Library ──────────────────────────────── */
   let ctas = safeParseJSON(profile.cta_library, []);
 
-  function renderCTAs(c) {
-    makeChipList('vw-cta-chips', c, () => {});
-  }
-  renderCTAs(ctas);
+  const renderCTAs = makeChipList('vw-cta-chips', ctas, () => {});
   wireAddChip('vw-cta-input', 'vw-cta-add', ctas, renderCTAs);
 
   // Suggested CTA pills
@@ -260,10 +286,7 @@
   /* ── Stage 4: Content Principles ───────────────────────── */
   let principles = safeParseJSON(profile.content_principles, []);
 
-  function renderPrinciples(p) {
-    makeChipList('vw-principles-chips', p, () => {});
-  }
-  renderPrinciples(principles);
+  const renderPrinciples = makeChipList('vw-principles-chips', principles, () => {});
   wireAddChip('vw-principles-input', 'vw-principles-add', principles, renderPrinciples);
 
   qs('vw-principles-save')?.addEventListener('click', async () => {

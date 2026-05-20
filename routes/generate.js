@@ -453,7 +453,8 @@ router.get('/post/:postId', async (req, res) => {
     row = await db.prepare(`
       SELECT id, content, quality_score, quality_flags, passed_gate,
              hook_b, cta_alternatives, format_slug, funnel_type,
-             asset_url, asset_preview_url, asset_type, asset_slide_count, first_comment
+             asset_url, asset_preview_url, asset_type, asset_slide_count, first_comment,
+             archetype_used, idea_input
       FROM generated_posts
       WHERE id = ? AND user_id = ? AND tenant_id = ?
     `).get(postId, userId, tenantId);
@@ -481,7 +482,8 @@ router.get('/post/:postId', async (req, res) => {
       quality:         { score: row.quality_score || 0, passed: row.passed_gate === 1, flags, errors: flags, warnings: [] },
       hookB:           row.hook_b || null,
       ctaAlternatives,
-      archetype:       null,
+      archetypeUsed:   row.archetype_used || null,
+      ideaInput:       row.idea_input     || null,
       funnelType:      row.funnel_type || null,
       assetUrl:        row.asset_url        || null,
       assetPreviewUrl: row.asset_preview_url || null,

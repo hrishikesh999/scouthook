@@ -258,6 +258,8 @@ const Onboarding = (() => {
     qs('ob-q-progress').textContent = `Question ${idx + 1} of ${total}`;
     qs('ob-q-context').textContent  = q.context;
     qs('ob-q-text').textContent     = q.text;
+    const hintEl = qs('ob-q-hint');
+    if (hintEl) hintEl.textContent  = q.hint || '';
 
     const answerEl = qs('ob-answer');
     answerEl.value       = state.answers[idx]?.answer || '';
@@ -636,10 +638,22 @@ const Onboarding = (() => {
 
   function fireConfetti() {
     if (typeof confetti !== 'function') return;
-    const burst = opts => confetti({ startVelocity: 30, spread: 70, ticks: 80, zIndex: 999, ...opts });
-    burst({ particleCount: 80, origin: { x: 0.5, y: 0.55 } });
-    setTimeout(() => burst({ particleCount: 50, origin: { x: 0.25, y: 0.6 } }), 220);
-    setTimeout(() => burst({ particleCount: 50, origin: { x: 0.75, y: 0.6 } }), 380);
+    // Opening salvo — center blast
+    confetti({ particleCount: 160, startVelocity: 45, spread: 80, origin: { x: 0.5, y: 0.6 }, ticks: 120, zIndex: 999 });
+    // Left and right cannons
+    setTimeout(() => {
+      confetti({ particleCount: 100, startVelocity: 55, spread: 55, angle: 60, origin: { x: 0, y: 0.65 }, ticks: 120, zIndex: 999 });
+      confetti({ particleCount: 100, startVelocity: 55, spread: 55, angle: 120, origin: { x: 1, y: 0.65 }, ticks: 120, zIndex: 999 });
+    }, 150);
+    // Follow-through shower
+    setTimeout(() => {
+      confetti({ particleCount: 80, startVelocity: 35, spread: 100, origin: { x: 0.3, y: 0.5 }, ticks: 100, zIndex: 999 });
+      confetti({ particleCount: 80, startVelocity: 35, spread: 100, origin: { x: 0.7, y: 0.5 }, ticks: 100, zIndex: 999 });
+    }, 400);
+    // Final drift
+    setTimeout(() => {
+      confetti({ particleCount: 60, startVelocity: 20, spread: 120, origin: { x: 0.5, y: 0.4 }, gravity: 0.6, ticks: 150, zIndex: 999 });
+    }, 700);
   }
 
   /* ── LinkedIn OAuth return handler ───────────────────── */

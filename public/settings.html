@@ -38,16 +38,77 @@
 
     <nav class="account-tabs" aria-label="Account settings">
       <a href="/account.html" class="account-tab">My account</a>
-      <a href="/profile.html" class="account-tab">Voice profile</a>
-      <a href="/settings.html" class="account-tab active" aria-current="page">Voice wizard</a>
+      <a href="/settings.html" class="account-tab active" aria-current="page">Voice profile</a>
       <a href="/brand.html" class="account-tab">Brand settings</a>
       <a href="/billing.html" class="account-tab">Subscription</a>
     </nav>
 
     <div class="page-header">
       <div>
-        <h1 class="profile-heading">Voice Profile Wizard</h1>
-        <p class="profile-subheading">Give Scouthook the raw material it needs to write posts that genuinely sound like you.</p>
+        <h1 class="profile-heading">Voice profile</h1>
+        <p class="profile-subheading">Everything Scouthook needs to write posts that sound like you.</p>
+      </div>
+    </div>
+
+    <!-- Profile basics -->
+    <div class="profile-card vw-basics-card">
+      <div class="vw-basics-header">
+        <h2 class="vw-basics-title">Profile basics</h2>
+        <p class="vw-basics-subtitle">Your positioning and writing style. Used in every post Scouthook generates.</p>
+      </div>
+
+      <div class="profile-field">
+        <label class="field-label" for="profile-positioning">How do you help your clients?</label>
+        <input type="text" id="profile-positioning" class="field-input"
+               placeholder='e.g. "Turn your email list into consistent revenue"'
+               style="width:100%" />
+        <p class="field-helper">One sentence, the result you deliver.</p>
+      </div>
+
+      <div class="profile-field">
+        <label class="field-label" for="profile-website">Your website</label>
+        <input type="url" id="profile-website" class="field-input"
+               placeholder="https://yourwebsite.com" autocomplete="url" style="width:100%" />
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div class="profile-field" style="margin-bottom:0">
+          <label class="field-label" for="profile-niche">Content niche</label>
+          <input type="text" id="profile-niche" class="field-input"
+                 placeholder="e.g. SaaS growth, leadership coaching" style="width:100%" />
+        </div>
+        <div class="profile-field" style="margin-bottom:0">
+          <label class="field-label" for="profile-audience">Who do you write for?</label>
+          <input type="text" id="profile-audience" class="field-input"
+                 placeholder="e.g. B2B founders doing $1M–$10M ARR" style="width:100%" />
+        </div>
+      </div>
+
+      <div class="profile-field">
+        <label class="field-label" for="profile-pain">What keeps your audience up at night?</label>
+        <textarea id="profile-pain" class="field-textarea profile-textarea-sm"
+                  placeholder="e.g. Revenue feels unpredictable and dependent on them showing up"></textarea>
+      </div>
+
+      <div class="profile-field">
+        <label class="field-label" for="profile-contrarian">Your contrarian view</label>
+        <textarea id="profile-contrarian" class="field-textarea profile-textarea-sm"
+                  placeholder="e.g. Most founders don't have a sales problem — they have a positioning problem"></textarea>
+        <p class="field-helper">Your hot take. Used to generate Contrarian archetype posts.</p>
+      </div>
+
+      <hr class="profile-divider" aria-hidden="true" />
+
+      <div class="profile-field">
+        <label class="field-label" for="profile-samples">Writing samples</label>
+        <textarea id="profile-samples" class="field-textarea profile-textarea-lg"
+                  placeholder="Paste 2–3 of your best LinkedIn posts here. Scouthook uses these to learn your voice."></textarea>
+        <p class="field-helper">Minimum 2 posts for best results.</p>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:12px;margin-top:4px">
+        <button id="save-basics-btn" class="btn-primary" style="height:36px;padding:0 20px">Save basics</button>
+        <span id="save-basics-status" class="vw-save-status" hidden></span>
       </div>
     </div>
 

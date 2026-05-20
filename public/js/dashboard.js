@@ -384,7 +384,7 @@ async function loadVoiceProfileCard() {
       ctaHref  = '/settings.html#voice-stage-1';
     } else if (!profile.has_fingerprint && samples.length < 3) {
       nextText = 'Add 3+ writing samples for a sharper voice match. +20%';
-      ctaHref  = '/profile.html';
+      ctaHref  = '/settings.html';
     } else if (statements.length < 3) {
       nextText = 'Add credibility statements so posts include real proof points. +10%';
       ctaHref  = '/settings.html#voice-stage-2';

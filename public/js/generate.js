@@ -47,12 +47,12 @@ async function loadProfile() {
     const profile = data.profile;
     const complete = profile && profile.content_niche && profile.audience_role && profile.audience_pain;
     if (complete) {
-      voiceIndicator.innerHTML = `<div class="voice-indicator"><span class="voice-indicator-dot voice-indicator-dot--green"></span><a href="/profile.html" class="edit-link">Created using your voice profile</a></div>`;
+      voiceIndicator.innerHTML = `<div class="voice-indicator"><span class="voice-indicator-dot voice-indicator-dot--green"></span><a href="/settings.html" class="edit-link">Created using your voice profile</a></div>`;
     } else {
-      voiceIndicator.innerHTML = `<div class="voice-indicator"><span class="voice-indicator-dot voice-indicator-dot--red"></span><a href="/profile.html" class="edit-link">Voice profile incomplete, complete it for better results</a></div>`;
+      voiceIndicator.innerHTML = `<div class="voice-indicator"><span class="voice-indicator-dot voice-indicator-dot--red"></span><a href="/settings.html" class="edit-link">Voice profile incomplete, complete it for better results</a></div>`;
     }
   } catch {
-    voiceIndicator.innerHTML = `<div class="voice-indicator"><span class="voice-indicator-dot voice-indicator-dot--red"></span><a href="/profile.html" class="edit-link">Voice profile incomplete, complete it for better results</a></div>`;
+    voiceIndicator.innerHTML = `<div class="voice-indicator"><span class="voice-indicator-dot voice-indicator-dot--red"></span><a href="/settings.html" class="edit-link">Voice profile incomplete, complete it for better results</a></div>`;
   }
 }
 
@@ -113,7 +113,7 @@ async function triggerGenerate(opts = {}) {
     } else if (err.message === 'missing_substance') {
       showSubstanceWarning(err.substancePrompt || 'Add a specific outcome or contrarian view to improve this post.');
     } else if (err.message === 'complete_profile_first') {
-      showGenerateError('Your voice profile is incomplete — posts need it to generate. <a href="/profile.html">Complete it →</a>');
+      showGenerateError('Your voice profile is incomplete — posts need it to generate. <a href="/settings.html">Complete it →</a>');
     } else if (err.message === 'plan_limit_exceeded') {
       const used = (err.planCurrent !== undefined && err.planLimit !== undefined)
         ? ` You've used ${err.planCurrent} of ${err.planLimit} this month.` : '';
@@ -391,7 +391,7 @@ async function runFromDocGeneration() {
       const msg = data.error === 'plan_limit_exceeded'
         ? 'You\'ve reached your generation limit. <a href="/billing.html">Upgrade →</a>'
         : data.error === 'complete_profile_first'
-        ? 'Complete your <a href="/profile.html">voice profile</a> first.'
+        ? 'Complete your <a href="/settings.html">voice profile</a> first.'
         : data.error === 'doc_too_short'
         ? 'The document didn\'t have enough text to work with. Try a longer file or URL.'
         : data.error === 'url_fetch_failed'

@@ -466,3 +466,26 @@ details[open] .vw-advanced-label::before { transform: rotate(90deg); }
 .vw-linkedin-btn:hover {
   background: #006396;
 }
+
+/* ── Profile basics card ─────────────────────────────────────────────────── */
+
+.vw-basics-card {
+  margin-bottom: 28px;
+}
+
+.vw-basics-header {
+  margin-bottom: 20px;
+}
+
+.vw-basics-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-heading);
+  margin: 0 0 4px;
+}
+
+.vw-basics-subtitle {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 0;
+}

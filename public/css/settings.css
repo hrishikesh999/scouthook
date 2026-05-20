@@ -128,17 +128,16 @@
 .vw-content {
   display: flex;
   flex-direction: column;
-  gap: 0;
+  gap: 12px;
 }
 
 .vw-stage-panel {
-  padding: 32px 0;
-  border-bottom: 1px solid var(--border, #1f2d4a);
+  padding: 32px;
+  background: var(--bg-surface, #fff);
+  border: 1px solid var(--border, #E4E4E7);
+  border-radius: 12px;
   scroll-margin-top: 24px;
-}
-
-.vw-stage-panel:last-child {
-  border-bottom: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
 .vw-stage-header {

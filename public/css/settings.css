@@ -557,3 +557,60 @@ details[open] .vw-advanced-label::before { transform: rotate(90deg); }
 .profile-textarea-xl {
   min-height: 260px;
 }
+
+/* ── Stage panel field overrides ─────────────────────────────
+   Scoped to .vw-stage-panel so main.css global defaults are
+   untouched on other pages. Goal: smaller type, airier spacing.
+   ─────────────────────────────────────────────────────────── */
+
+/* Labels — smaller, lighter, more subdued */
+.vw-stage-panel .field-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary, #52525B);
+  margin-bottom: 6px;
+  letter-spacing: 0.01em;
+}
+
+/* Inputs — bring font down from 17px to 14px, tighten padding */
+.vw-stage-panel .field-input,
+.vw-stage-panel .field-textarea {
+  font-size: 14px;
+  padding: 9px 13px;
+  line-height: 1.5;
+}
+
+.vw-stage-panel .field-input {
+  height: 40px;
+}
+
+/* More air between fields — was 16px */
+.vw-stage-panel .profile-field {
+  margin-bottom: 24px;
+}
+
+/* Helper text — slightly smaller than label, clearly subordinate */
+.vw-stage-panel .field-helper {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 5px;
+  line-height: 1.45;
+}
+
+/* 2-column field grid for niche + audience row */
+.vw-field-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  margin-bottom: 24px; /* matches .profile-field spacing */
+}
+
+/* Grid children don't need their own bottom margin — gap handles column spacing */
+.vw-field-grid .profile-field {
+  margin-bottom: 0;
+}
+
+@media (max-width: 600px) {
+  .vw-field-grid { grid-template-columns: 1fr; }
+  .vw-field-grid .profile-field { margin-bottom: 0; }
+}

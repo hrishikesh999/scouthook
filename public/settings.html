@@ -75,7 +75,7 @@
           <span class="vw-stage-num">2</span>
           <span class="vw-stage-info">
             <span class="vw-stage-name">Core themes</span>
-            <span class="vw-stage-desc">What you write about</span>
+            <span class="vw-stage-desc">Specific angles within your niche</span>
           </span>
           <span class="vw-stage-check" id="vw-check-2" hidden>✓</span>
         </a>
@@ -145,16 +145,18 @@
                    placeholder="https://yourwebsite.com" autocomplete="url" style="width:100%" />
           </div>
 
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-            <div class="profile-field" style="margin-bottom:0">
-              <label class="field-label" for="profile-niche">Content niche</label>
+          <div class="vw-field-grid">
+            <div class="profile-field">
+              <label class="field-label" for="profile-niche">Your niche</label>
               <input type="text" id="profile-niche" class="field-input"
-                     placeholder="e.g. SaaS growth, leadership coaching" style="width:100%" />
+                     placeholder="e.g. B2B SaaS, executive coaching, DTC brands" style="width:100%" />
+              <p class="field-helper">One broad category label. Stage 2 captures the specific angles within it.</p>
             </div>
-            <div class="profile-field" style="margin-bottom:0">
-              <label class="field-label" for="profile-audience">Who do you write for?</label>
+            <div class="profile-field">
+              <label class="field-label" for="profile-audience">Who you write for</label>
               <input type="text" id="profile-audience" class="field-input"
                      placeholder="e.g. B2B founders doing $1M–$10M ARR" style="width:100%" />
+              <p class="field-helper">The specific role or profile of your ideal reader.</p>
             </div>
           </div>
 
@@ -181,7 +183,8 @@
         <section id="voice-stage-2" class="vw-stage-panel">
           <div class="vw-stage-header">
             <h2 class="vw-stage-title">Core themes</h2>
-            <p class="vw-stage-subtitle">The recurring topics you have real opinions about. AI will suggest based on your profile — confirm the ones that fit, remove any that don't.</p>
+            <p class="vw-stage-subtitle">The specific angles, stances, and lenses you bring to your niche. More granular than a category — these are the ideas you return to. AI will suggest a starting set based on your profile.</p>
+            <p class="vw-stage-note">Think "founder-led sales" or "pricing psychology", not "B2B SaaS" — that's your niche in Stage 1.</p>
           </div>
 
           <div class="vw-chips-area" id="vw-themes-chips" aria-label="Content themes" role="group"></div>

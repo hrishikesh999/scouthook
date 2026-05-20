@@ -46,6 +46,8 @@
   var svgCalendly  = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M8 14h.01M12 14h.01M16 14h.01"/></svg>';
   var svgPlus      = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
 
+  var CALENDLY_URL = 'https://calendly.com/contact-scouthook/scouthook';
+
   var html = [
     '<aside id="sidebar" role="navigation" aria-label="Main navigation">',
     '  <a href="/dashboard.html" class="sidebar-logo">',
@@ -63,7 +65,7 @@
     '    ' + link('/Media.html',     svgMedia,     'Media'),
     '  </nav>',
     '  <div class="sidebar-bottom">',
-    '    <a href="" class="sidebar-onboarding-btn" onclick="Calendly.initPopupWidget({url:\'https://calendly.com/contact-scouthook/scouthook\'});return false;">' + svgCalendly + 'Free Onboarding Call</a>',
+    '    <a href="" id="sidebar-calendly-btn" class="sidebar-onboarding-btn">' + svgCalendly + 'Free Onboarding Call</a>',
     '    ' + link('/settings.html', svgSettings, 'Settings'),
     '    <div id="sidebar-account-slot" aria-label="Signed-in account"></div>',
     '  </div>',
@@ -74,4 +76,24 @@
   el.innerHTML = html;
   var aside = el.firstChild;
   document.body.insertBefore(aside, document.body.firstChild);
+
+  // Wire Calendly button — lazy-loads the script on first click if not ready yet
+  var calendlyBtn = document.getElementById('sidebar-calendly-btn');
+  if (calendlyBtn) {
+    calendlyBtn.addEventListener('click', function (e) {
+      e.preventDefault();
+      function openCalendly() {
+        window.Calendly.initPopupWidget({ url: CALENDLY_URL });
+      }
+      if (window.Calendly) {
+        openCalendly();
+      } else {
+        var s = document.createElement('script');
+        s.src = 'https://assets.calendly.com/assets/external/widget.js';
+        s.type = 'text/javascript';
+        s.onload = openCalendly;
+        document.head.appendChild(s);
+      }
+    });
+  }
 })();

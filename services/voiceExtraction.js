@@ -507,13 +507,27 @@ Return valid JSON only, no commentary:
 
     if (!extracted || typeof extracted !== 'object') return { updated: [] };
 
-    // Only fill fields that are currently empty — never overwrite user data
+    // ── Source-aware merge strategy ─────────────────────────────────────────
+    // LinkedIn headline is the BEST signal for persona/positioning fields
+    // (user-crafted professional identity > website marketing copy).
+    // So: always write content_niche, audience_role, business_positioning from
+    // LinkedIn when we have a value — this correctly overrides website-extracted
+    // values which are often generic copywriter language.
+    //
+    // Q&A-sourced fields (voice_fingerprint, authority_statements,
+    // banned_patterns) are NEVER touched here — those come from the user's own
+    // spoken-word interview answers and are a stronger signal.
+    //
+    // content_themes is always additive: merge, never remove.
+    // ────────────────────────────────────────────────────────────────────────
     const updates = {};
-    if (!profile.content_niche?.trim()         && extracted.content_niche)        updates.content_niche        = extracted.content_niche;
-    if (!profile.audience_role?.trim()          && extracted.audience_role)        updates.audience_role        = extracted.audience_role;
-    if (!profile.business_positioning?.trim()   && extracted.business_positioning) updates.business_positioning = extracted.business_positioning;
 
-    // Merge suggested themes (only add new ones, never remove existing)
+    // Persona fields — LinkedIn wins over website extraction
+    if (extracted.content_niche)        updates.content_niche        = extracted.content_niche;
+    if (extracted.audience_role)        updates.audience_role        = extracted.audience_role;
+    if (extracted.business_positioning) updates.business_positioning = extracted.business_positioning;
+
+    // Themes — always additive (merge new ones in, never remove existing)
     const existingThemes = safeParseJSON(profile.content_themes, []);
     const suggestedThemes = Array.isArray(extracted.suggested_themes)
       ? extracted.suggested_themes.filter(t => typeof t === 'string' && t.trim())
@@ -525,7 +539,7 @@ Return valid JSON only, no commentary:
     }
 
     if (Object.keys(updates).length === 0) {
-      console.log('[voiceExtraction] extractVoiceDNAFromLinkedIn: all fields already populated', { userId });
+      console.log('[voiceExtraction] extractVoiceDNAFromLinkedIn: nothing to update', { userId });
       return { updated: [] };
     }
 

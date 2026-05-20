@@ -380,32 +380,39 @@
         const statusD = await statusR.json();
         if (statusD.connected) renderLinkedInProfile(statusD);
 
-        // Backfill Stage 1 fields that were just auto-populated (only if currently blank in the UI)
+        // Update Stage 1 persona fields with LinkedIn-sourced values.
+        // LinkedIn headline is a stronger signal than website extraction for
+        // these fields, so we always update them (not just when blank).
         if (d.profile) {
           const fieldMap = {
             'profile-niche':       d.profile.content_niche,
             'profile-audience':    d.profile.audience_role,
             'profile-positioning': d.profile.business_positioning,
           };
-          let filledCount = 0;
+          let updatedCount = 0;
           Object.entries(fieldMap).forEach(([elId, val]) => {
             const el = qs(elId);
-            if (el && !el.value.trim() && val) { el.value = val; filledCount++; }
+            if (el && val) {
+              const changed = el.value.trim() !== val;
+              el.value = val;
+              if (changed) updatedCount++;
+            }
           });
 
-          // Merge new themes into the chip list (add only, don't remove existing)
+          // Merge new themes into the chip list (additive — never remove existing)
           if (d.profile.content_themes) {
-            const incoming = JSON.parse(d.profile.content_themes || '[]');
+            let incoming = [];
+            try { incoming = JSON.parse(d.profile.content_themes); } catch { /* ignore */ }
             incoming.forEach(t => { if (!themes.includes(t)) themes.push(t); });
             renderThemes(themes);
           }
 
           const msg = d.updated?.length > 0
-            ? `Profile data imported ✓ — ${filledCount} fields filled`
-            : 'Profile data refreshed ✓ (all fields already populated)';
+            ? `LinkedIn profile synced ✓${updatedCount > 0 ? ` — ${updatedCount} field${updatedCount > 1 ? 's' : ''} updated` : ''}`
+            : 'LinkedIn profile already up to date ✓';
           showStatus(statusEl, msg);
         } else {
-          showStatus(statusEl, 'Profile data refreshed ✓');
+          showStatus(statusEl, 'LinkedIn profile synced ✓');
         }
       } else {
         showStatus(statusEl, 'Refresh failed', true);

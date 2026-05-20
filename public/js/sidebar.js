@@ -1,0 +1,58 @@
+/* sidebar.js — shared sidebar component, auto-injected into every app page */
+
+(function () {
+  // Pages that activate a nav link other than their own href
+  var activeOverrides = {
+    '/settings.html': '/account.html',
+    '/billing.html': '/account.html',
+    '/brand.html': '/account.html',
+    '/editor.html': '/drafts.html',
+  };
+
+  var pathname = window.location.pathname;
+  var activeHref = activeOverrides[pathname] || pathname;
+
+  function link(href, svg, label) {
+    var isActive = activeHref === href;
+    var cls = 'sidebar-link' + (isActive ? ' active' : '');
+    var aria = isActive ? ' aria-current="page"' : '';
+    return '<a href="' + href + '" class="' + cls + '"' + aria + '>' + svg + label + '</a>';
+  }
+
+  var svgDashboard = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>';
+  var svgVault     = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>';
+  var svgDrafts    = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>';
+  var svgSchedule  = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
+  var svgPublished = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>';
+  var svgMedia     = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>';
+  var svgAccount   = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
+  var svgPlus      = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
+
+  var html = [
+    '<aside id="sidebar" role="navigation" aria-label="Main navigation">',
+    '  <a href="/dashboard.html" class="sidebar-logo">',
+    '    <img src="/images/scout-hook-logo.png" alt="ScoutHook" class="sidebar-logo-img">',
+    '  </a>',
+    '  <div class="sidebar-cta">',
+    '    <a href="/generate.html?new=1" class="sidebar-cta-btn">' + svgPlus + 'Create Post</a>',
+    '  </div>',
+    '  <nav class="sidebar-nav">',
+    '    ' + link('/dashboard.html', svgDashboard, 'Dashboard'),
+    '    ' + link('/vault.html',     svgVault,     'Content Vault'),
+    '    ' + link('/drafts.html',    svgDrafts,    'Drafts'),
+    '    ' + link('/schedule.html',  svgSchedule,  'Schedule'),
+    '    ' + link('/Published.html', svgPublished, 'Published'),
+    '    ' + link('/Media.html',     svgMedia,     'Media'),
+    '  </nav>',
+    '  <div class="sidebar-bottom">',
+    '    ' + link('/account.html', svgAccount, 'Account Settings'),
+    '    <div id="sidebar-account-slot" aria-label="Signed-in account"></div>',
+    '  </div>',
+    '</aside>',
+  ].join('\n');
+
+  var el = document.createElement('div');
+  el.innerHTML = html;
+  var aside = el.firstChild;
+  document.body.insertBefore(aside, document.body.firstChild);
+})();

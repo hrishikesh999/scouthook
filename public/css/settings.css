@@ -2,35 +2,62 @@
    settings.css — Voice Profile Wizard
    ============================================================ */
 
-/* ── Completion bar ──────────────────────────────────────── */
-.vw-completion-bar-wrap {
+/* ── Completion card ─────────────────────────────────────── */
+.vw-completion-card {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 14px;
+  padding: 18px 22px;
   margin: 0 0 32px;
   max-width: 720px;
+  background: linear-gradient(135deg, rgba(13,184,166,0.07) 0%, rgba(59,130,246,0.04) 100%);
+  border: 1px solid rgba(13,184,166,0.25);
+  border-radius: 14px;
+}
+
+.vw-completion-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.vw-completion-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-heading);
+  margin: 0 0 3px;
+  letter-spacing: -0.01em;
+}
+
+.vw-completion-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.vw-completion-pct {
+  font-size: 32px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: #14b8a6;
+  flex-shrink: 0;
 }
 
 .vw-completion-bar {
-  flex: 1;
-  height: 6px;
-  background: var(--bg-subtle, #1a2540);
+  height: 10px;
+  background: rgba(13,184,166,0.12);
   border-radius: 100px;
   overflow: hidden;
 }
 
 .vw-completion-fill {
   height: 100%;
-  background: var(--brand, #0d7a5f);
+  background: linear-gradient(90deg, #0d9488 0%, #2dd4bf 100%);
   border-radius: 100px;
-  transition: width 0.6s ease;
-}
-
-.vw-completion-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-muted);
-  white-space: nowrap;
+  transition: width 0.7s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 0 8px rgba(45,212,191,0.4);
 }
 
 /* ── Wizard layout ───────────────────────────────────────── */

@@ -116,10 +116,22 @@
 
   /* ── Completion bar ─────────────────────────────────────── */
   function updateCompletionBar(pct) {
-    const fill  = qs('vw-completion-fill');
-    const label = qs('vw-completion-label');
-    if (fill)  fill.style.width  = `${pct}%`;
-    if (label) label.textContent = `Voice profile ${pct}% complete`;
+    const fill   = qs('vw-completion-fill');
+    const label  = qs('vw-completion-label');
+    const pctEl  = qs('vw-completion-pct');
+    if (fill)  fill.style.width    = `${pct}%`;
+    if (pctEl) pctEl.textContent   = `${pct}%`;
+    if (label) {
+      if (pct === 100) {
+        label.textContent = 'Your voice profile is complete — posts will sound just like you ✓';
+      } else if (pct >= 70) {
+        label.textContent = 'Almost there — a couple more stages will sharpen your posts significantly';
+      } else if (pct >= 30) {
+        label.textContent = 'Good progress — keep going to unlock your full voice quality';
+      } else {
+        label.textContent = 'Fill in more stages to improve post quality';
+      }
+    }
   }
   updateCompletionBar(profile.voice_profile_completion_pct || 0);
 

@@ -364,20 +364,51 @@
     }
   } catch { /* non-fatal — show connect button */ }
 
-  // Refresh profile data button
+  // Refresh profile data button — calls /extract-profile to auto-populate empty fields,
+  // then refreshes the LinkedIn profile card display and any Stage 1 fields that changed.
   qs('vw-linkedin-refresh')?.addEventListener('click', async () => {
     const btn = qs('vw-linkedin-refresh');
     btn.disabled = true;
     btn.querySelector('svg')?.classList.add('spin');
     const statusEl = qs('vw-linkedin-refresh-status');
     try {
-      const r = await fetch('/api/linkedin/status', { headers: apiHeaders() });
+      const r = await fetch('/api/linkedin/extract-profile', { method: 'POST', headers: apiHeaders() });
       const d = await r.json();
-      if (d.connected) {
-        renderLinkedInProfile(d);
-        showStatus(statusEl, 'Profile data refreshed ✓');
+      if (d.ok) {
+        // Refresh profile card display
+        const statusR = await fetch('/api/linkedin/status', { headers: apiHeaders() });
+        const statusD = await statusR.json();
+        if (statusD.connected) renderLinkedInProfile(statusD);
+
+        // Backfill Stage 1 fields that were just auto-populated (only if currently blank in the UI)
+        if (d.profile) {
+          const fieldMap = {
+            'profile-niche':       d.profile.content_niche,
+            'profile-audience':    d.profile.audience_role,
+            'profile-positioning': d.profile.business_positioning,
+          };
+          let filledCount = 0;
+          Object.entries(fieldMap).forEach(([elId, val]) => {
+            const el = qs(elId);
+            if (el && !el.value.trim() && val) { el.value = val; filledCount++; }
+          });
+
+          // Merge new themes into the chip list (add only, don't remove existing)
+          if (d.profile.content_themes) {
+            const incoming = JSON.parse(d.profile.content_themes || '[]');
+            incoming.forEach(t => { if (!themes.includes(t)) themes.push(t); });
+            renderThemes(themes);
+          }
+
+          const msg = d.updated?.length > 0
+            ? `Profile data imported ✓ — ${filledCount} fields filled`
+            : 'Profile data refreshed ✓ (all fields already populated)';
+          showStatus(statusEl, msg);
+        } else {
+          showStatus(statusEl, 'Profile data refreshed ✓');
+        }
       } else {
-        showStatus(statusEl, 'Not connected', true);
+        showStatus(statusEl, 'Refresh failed', true);
       }
     } catch {
       showStatus(statusEl, 'Refresh failed', true);

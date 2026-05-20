@@ -345,27 +345,31 @@ function buildVoiceDNABlock(userProfile) {
 function calculateCompletionPct(userProfile, hasLinkedIn = false) {
   let score = 0;
 
-  if (userProfile.user_role)         score += 5;
-  if (userProfile.website_url)       score += 5;
-  if (userProfile.onboarding_q1)     score += 5;
-  if (userProfile.onboarding_q2)     score += 5;
-  if (userProfile.onboarding_q3)     score += 5;
-  if (userProfile.voice_fingerprint) score += 5;
+  if (userProfile.user_role)            score += 5;
+  if (userProfile.website_url)          score += 5;
+  if (userProfile.onboarding_q1)        score += 5;
+  if (userProfile.onboarding_q2)        score += 5;
+  if (userProfile.onboarding_q3)        score += 5;
+  if (userProfile.voice_fingerprint)    score += 5;
+  if (userProfile.business_positioning) score += 3;
+  if (userProfile.content_niche)        score += 2;
 
-  const samples = safeParseJSON(userProfile.writing_samples, []);
-  if (samples.length >= 3)           score += 20;
-  if (samples.length >= 8)           score += 5;
+  // writing_samples is a plain string (textarea), not a JSON array.
+  // Credit based on character length: 200+ chars = baseline, 600+ chars = richer sample.
+  const samplesStr = (userProfile.writing_samples || '').trim();
+  if (samplesStr.length >= 200)         score += 15;
+  if (samplesStr.length >= 600)         score += 5;
 
   const statements = safeParseJSON(userProfile.authority_statements, []);
-  if (statements.length >= 3)        score += 10;
+  if (statements.length >= 3)           score += 10;
 
   const ctas = safeParseJSON(userProfile.cta_library, []);
-  if (ctas.length >= 2)              score += 10;
+  if (ctas.length >= 2)                 score += 10;
 
   const principles = safeParseJSON(userProfile.content_principles, []);
-  if (principles.length >= 3)        score += 5;
+  if (principles.length >= 3)           score += 5;
 
-  if (hasLinkedIn)                   score += 20;
+  if (hasLinkedIn)                      score += 20;
 
   return Math.min(score, 100);
 }
@@ -438,16 +442,115 @@ Return only the rule, no commentary. Example: "Prefers shorter sentences — nev
   }
 }
 
-/* ── 5. extractVoiceDNAFromLinkedIn — STUB ──────────────────────────────
-   Phase A spike deferred to post-Sprint 2.
-   Current OAuth scope: openid profile w_member_social
-   r_member_social (past posts) is LinkedIn partner-only.
-   Spike: test GET /v2/me?projection=(summary,positions) with current scope.
+/* ── 5. extractVoiceDNAFromLinkedIn ────────────────────────────────────
+   Uses the linkedin_headline (collected during OAuth) to auto-populate
+   empty profile fields: content_niche, audience_role, business_positioning,
+   and suggested content themes.
+   Only fills fields that are currently blank — never overwrites user data.
+   Fire-and-forget safe. Called after OAuth callback and on manual refresh.
    ──────────────────────────────────────────────────────────────────────── */
 
 async function extractVoiceDNAFromLinkedIn(userId, tenantId) {
-  // STUB — deferred pending Phase A spike result
-  console.log('[voiceExtraction] extractVoiceDNAFromLinkedIn: stubbed, spike pending', { userId });
+  try {
+    // Read LinkedIn profile data (stored during OAuth callback)
+    const liRow = await db.prepare(
+      'SELECT linkedin_name, linkedin_headline FROM linkedin_tokens WHERE user_id = ? AND tenant_id = ?'
+    ).get(userId, tenantId);
+
+    if (!liRow?.linkedin_headline) {
+      console.log('[voiceExtraction] extractVoiceDNAFromLinkedIn: no headline, skipping', { userId });
+      return { updated: [] };
+    }
+
+    // Read current profile
+    const profile = await db.prepare(
+      `SELECT content_niche, audience_role, business_positioning, content_themes,
+              voice_fingerprint, authority_statements, banned_patterns, writing_samples,
+              cta_library, content_principles, user_role, website_url,
+              onboarding_q1, onboarding_q2, onboarding_q3, voice_refinements
+       FROM user_profiles WHERE user_id = ? AND tenant_id = ?`
+    ).get(userId, tenantId);
+
+    if (!profile) return { updated: [] };
+
+    const client = await getAnthropicClient();
+
+    const prompt = `You are extracting a LinkedIn creator's professional profile from their LinkedIn headline.
+
+LinkedIn headline: "${liRow.linkedin_headline}"
+${liRow.linkedin_name ? `Name: ${liRow.linkedin_name}` : ''}
+
+Extract the following from the headline only. Be specific and grounded — do not invent.
+
+Return valid JSON only, no commentary:
+{
+  "content_niche": "2-4 word niche label (e.g. 'B2B SaaS growth', 'executive leadership coaching', 'DTC e-commerce')",
+  "audience_role": "who they help, 5-10 words (e.g. 'early-stage B2B SaaS founders', 'mid-market sales leaders')",
+  "business_positioning": "one sentence: what they do and for whom (derived from headline — verbatim words preferred)",
+  "suggested_themes": ["3-5 content themes this person would naturally write about on LinkedIn — short phrases"]
+}`;
+
+    const message = await client.messages.create({
+      model:      'claude-haiku-4-5',
+      max_tokens: 512,
+      messages:   [{ role: 'user', content: prompt }],
+    });
+
+    const responseText = getAnthropicMessageText(message);
+    let extracted;
+    try {
+      extracted = extractJsonFromResponse(responseText);
+    } catch (parseErr) {
+      console.error('[voiceExtraction] extractVoiceDNAFromLinkedIn: JSON parse failed', parseErr.message);
+      return { updated: [] };
+    }
+
+    if (!extracted || typeof extracted !== 'object') return { updated: [] };
+
+    // Only fill fields that are currently empty — never overwrite user data
+    const updates = {};
+    if (!profile.content_niche?.trim()         && extracted.content_niche)        updates.content_niche        = extracted.content_niche;
+    if (!profile.audience_role?.trim()          && extracted.audience_role)        updates.audience_role        = extracted.audience_role;
+    if (!profile.business_positioning?.trim()   && extracted.business_positioning) updates.business_positioning = extracted.business_positioning;
+
+    // Merge suggested themes (only add new ones, never remove existing)
+    const existingThemes = safeParseJSON(profile.content_themes, []);
+    const suggestedThemes = Array.isArray(extracted.suggested_themes)
+      ? extracted.suggested_themes.filter(t => typeof t === 'string' && t.trim())
+      : [];
+    const mergedThemes = [...existingThemes];
+    suggestedThemes.forEach(t => { if (!mergedThemes.includes(t)) mergedThemes.push(t); });
+    if (mergedThemes.length > existingThemes.length) {
+      updates.content_themes = JSON.stringify(mergedThemes);
+    }
+
+    if (Object.keys(updates).length === 0) {
+      console.log('[voiceExtraction] extractVoiceDNAFromLinkedIn: all fields already populated', { userId });
+      return { updated: [] };
+    }
+
+    // Recalculate completion pct with the new values
+    const linkedInRow = await db.prepare(
+      'SELECT 1 FROM linkedin_tokens WHERE user_id = ? AND tenant_id = ?'
+    ).get(userId, tenantId);
+    const updatedProfile = { ...profile, ...updates };
+    const completionPct = calculateCompletionPct(updatedProfile, !!linkedInRow);
+    updates.voice_profile_completion_pct = completionPct;
+
+    // Build parameterised UPDATE from the updates object
+    const keys = Object.keys(updates);
+    const setClauses = keys.map(k => `${k} = ?`).join(', ');
+    await db.prepare(
+      `UPDATE user_profiles SET ${setClauses}, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND tenant_id = ?`
+    ).run(...keys.map(k => updates[k]), userId, tenantId);
+
+    console.log('[voiceExtraction] extractVoiceDNAFromLinkedIn: complete', { userId, updated: keys });
+    return { updated: keys, completionPct };
+
+  } catch (err) {
+    console.error('[voiceExtraction] extractVoiceDNAFromLinkedIn: error (non-fatal):', err.message);
+    return { updated: [] };
+  }
 }
 
 module.exports = {

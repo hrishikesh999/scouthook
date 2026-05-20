@@ -374,29 +374,32 @@ async function loadVoiceProfileCard() {
     let nextText = 'Complete your voice profile.';
     let ctaHref  = '/settings.html';
 
-    const samples     = safeParseJSON(profile.writing_samples, []);
+    const samples     = profile.writing_samples?.trim() || '';
     const statements  = safeParseJSON(profile.authority_statements, []);
     const ctas        = safeParseJSON(profile.cta_library, []);
     const themes      = safeParseJSON(profile.content_themes, []);
 
-    if (!profile.onboarding_q1 || !profile.onboarding_q2 || !profile.onboarding_q3) {
-      nextText = 'Answer 3 quick questions to get your baseline voice. +15%';
+    if (!profile.business_positioning && !profile.content_niche) {
+      nextText = 'Fill in your profile basics to personalise every post. +15%';
       ctaHref  = '/settings.html#voice-stage-1';
-    } else if (!profile.has_fingerprint && samples.length < 3) {
-      nextText = 'Add 3+ writing samples for a sharper voice match. +20%';
-      ctaHref  = '/settings.html';
-    } else if (statements.length < 3) {
-      nextText = 'Add credibility statements so posts include real proof points. +10%';
-      ctaHref  = '/settings.html#voice-stage-2';
-    } else if (ctas.length < 2) {
-      nextText = 'Add 2+ CTAs so posts close with your actual words. +10%';
-      ctaHref  = '/settings.html#voice-stage-3';
+    } else if (!profile.onboarding_q1 || !profile.onboarding_q2 || !profile.onboarding_q3) {
+      nextText = 'Complete onboarding to capture your baseline voice. +15%';
+      ctaHref  = '/onboarding.html';
     } else if (themes.length === 0) {
       nextText = 'Confirm your content themes — AI will suggest them. +5%';
-      ctaHref  = '/settings.html#voice-stage-1';
+      ctaHref  = '/settings.html#voice-stage-2';
+    } else if (statements.length < 3) {
+      nextText = 'Add credibility statements so posts include real proof points. +10%';
+      ctaHref  = '/settings.html#voice-stage-3';
+    } else if (ctas.length < 2) {
+      nextText = 'Add 2+ CTAs so posts close with your actual words. +10%';
+      ctaHref  = '/settings.html#voice-stage-4';
+    } else if (!samples) {
+      nextText = 'Add writing samples for the sharpest voice match. +20%';
+      ctaHref  = '/settings.html#voice-stage-7';
     } else {
       nextText = 'Connect LinkedIn to unlock the deepest voice match. +20%';
-      ctaHref  = '/settings.html#voice-stage-5';
+      ctaHref  = '/settings.html#voice-stage-6';
     }
 
     if (nextEl) nextEl.textContent = nextText;

@@ -9,6 +9,7 @@ const { publishNow } = require('../services/linkedinPublisher');
 const { addScheduledJob, addCommentJob, removeScheduledJob, isSchedulerEnabled } = require('../services/scheduler');
 const { syncPostMetrics, RateLimitError } = require('../services/linkedinMetrics');
 const { getUserPlan } = require('../services/subscription');
+const { extractVoiceDNAFromLinkedIn } = require('../services/voiceExtraction');
 
 function sha256Hex(s) {
   return crypto.createHash('sha256').update(String(s || ''), 'utf8').digest('hex');
@@ -120,6 +121,32 @@ router.get('/status', (req, res) => {
       expires_in_days: expiresInDays,
     });
   })().catch(() => res.json({ ok: true, connected: false, name: null, photo_url: null }));
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/linkedin/extract-profile
+// Re-run extractVoiceDNAFromLinkedIn on demand (called by "Refresh profile data"
+// button in Voice Profile Stage 6). Returns which profile fields were updated.
+// ---------------------------------------------------------------------------
+router.post('/extract-profile', async (req, res) => {
+  const userId   = req.userId;
+  const tenantId = req.tenantId;
+
+  if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
+
+  try {
+    const result = await extractVoiceDNAFromLinkedIn(userId, tenantId);
+    // Return fresh profile basics so the UI can update Stage 1 fields in-place
+    const profile = await db.prepare(
+      `SELECT content_niche, audience_role, business_positioning, content_themes,
+              voice_profile_completion_pct
+       FROM user_profiles WHERE user_id = ? AND tenant_id = ?`
+    ).get(userId, tenantId);
+    return res.json({ ok: true, updated: result.updated || [], profile: profile || {} });
+  } catch (err) {
+    console.error('[linkedin/extract-profile] Error:', err.message);
+    return res.status(500).json({ ok: false, error: err.message });
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -307,6 +334,12 @@ router.get('/callback', async (req, res) => {
     });
 
     console.log(`[linkedin/callback] Connected user=${userId} as ${linkedin_name} (${linkedin_user_id})`);
+
+    // Fire-and-forget: use LinkedIn headline to auto-populate empty profile fields
+    extractVoiceDNAFromLinkedIn(userId, tenantId).catch(e =>
+      console.warn('[linkedin/callback] extractVoiceDNAFromLinkedIn failed (non-fatal):', e.message)
+    );
+
     res.redirect(stateData.returnTo || '/account.html?linkedin_connected=true');
 
   } catch (err) {

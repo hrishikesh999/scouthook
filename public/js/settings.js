@@ -2,7 +2,7 @@
 
 /* ============================================================
    settings.js — Voice Profile Wizard
-   5 stages: Core Themes · Credibility · CTAs · Rules · LinkedIn
+   7 stages: Basics · Core Themes · Credibility · CTAs · Rules · LinkedIn · Samples
    ============================================================ */
 
 (async () => {
@@ -124,15 +124,17 @@
   updateCompletionBar(profile.voice_profile_completion_pct || 0);
 
   // Check which stages have content and mark them
-  function updateStageChecks(themes, statements, ctas, principles, hasLinkedIn) {
-    if (themes.length > 0)      { const el = qs('vw-check-1'); if (el) el.hidden = false; }
-    if (statements.length > 0)  { const el = qs('vw-check-2'); if (el) el.hidden = false; }
-    if (ctas.length > 0)        { const el = qs('vw-check-3'); if (el) el.hidden = false; }
-    if (principles.length > 0)  { const el = qs('vw-check-4'); if (el) el.hidden = false; }
-    if (hasLinkedIn)             { const el = qs('vw-check-5'); if (el) el.hidden = false; }
+  function updateStageChecks(basics, themes, statements, ctas, principles, hasLinkedIn, samples) {
+    if (basics)           { const el = qs('vw-check-1'); if (el) el.hidden = false; }
+    if (themes.length > 0)      { const el = qs('vw-check-2'); if (el) el.hidden = false; }
+    if (statements.length > 0)  { const el = qs('vw-check-3'); if (el) el.hidden = false; }
+    if (ctas.length > 0)        { const el = qs('vw-check-4'); if (el) el.hidden = false; }
+    if (principles.length > 0)  { const el = qs('vw-check-5'); if (el) el.hidden = false; }
+    if (hasLinkedIn)             { const el = qs('vw-check-6'); if (el) el.hidden = false; }
+    if (samples)                 { const el = qs('vw-check-7'); if (el) el.hidden = false; }
   }
 
-  /* ── Profile basics ────────────────────────────────────── */
+  /* ── Stage 1: Profile Basics ────────────────────────────── */
   const basicsFields = {
     'profile-positioning': 'business_positioning',
     'profile-website':     'website_url',
@@ -140,7 +142,6 @@
     'profile-audience':    'audience_role',
     'profile-pain':        'audience_pain',
     'profile-contrarian':  'contrarian_view',
-    'profile-samples':     'writing_samples',
   };
 
   // Populate basics fields from profile
@@ -149,8 +150,16 @@
     if (el && profile[key]) el.value = profile[key];
   });
 
-  qs('save-basics-btn')?.addEventListener('click', async () => {
-    const btn = qs('save-basics-btn');
+  // Determine if basics has meaningful content
+  function basicsHasContent() {
+    return Object.keys(basicsFields).some(elId => {
+      const el = qs(elId);
+      return el && el.value.trim().length > 0;
+    });
+  }
+
+  qs('vw-basics-save')?.addEventListener('click', async () => {
+    const btn = qs('vw-basics-save');
     btn.disabled = true;
     btn.textContent = 'Saving…';
     const payload = {};
@@ -160,15 +169,20 @@
     });
     try {
       const d = await saveProfile(payload);
-      showStatus(qs('save-basics-status'), d.ok ? 'Saved ✓' : 'Save failed', !d.ok);
+      if (d.ok) {
+        showStatus(qs('vw-basics-status'), 'Saved ✓');
+        if (basicsHasContent()) { const el = qs('vw-check-1'); if (el) el.hidden = false; }
+      } else {
+        showStatus(qs('vw-basics-status'), 'Save failed', true);
+      }
     } catch {
-      showStatus(qs('save-basics-status'), 'Save failed', true);
+      showStatus(qs('vw-basics-status'), 'Save failed', true);
     }
-    btn.textContent = 'Save basics';
+    btn.textContent = 'Save basics →';
     btn.disabled = false;
   });
 
-  /* ── Stage 1: Core Themes ───────────────────────────────── */
+  /* ── Stage 2: Core Themes ───────────────────────────────── */
   let themes = safeParseJSON(profile.content_themes, []);
 
   const renderThemes = makeChipList('vw-themes-chips', themes, () => {});
@@ -209,7 +223,7 @@
       const d = await saveProfile({ content_themes: JSON.stringify(themes) });
       if (d.ok) {
         showStatus(qs('vw-themes-status'), 'Saved ✓');
-        if (themes.length > 0) { const el = qs('vw-check-1'); if (el) el.hidden = false; }
+        if (themes.length > 0) { const el = qs('vw-check-2'); if (el) el.hidden = false; }
       } else {
         showStatus(qs('vw-themes-status'), 'Save failed', true);
       }
@@ -220,7 +234,7 @@
     btn.disabled = false;
   });
 
-  /* ── Stage 2: Authority Statements ─────────────────────── */
+  /* ── Stage 3: Authority Statements ─────────────────────── */
   let statements = safeParseJSON(profile.authority_statements, []);
 
   const renderStatements = makeChipList('vw-authority-chips', statements, () => {});
@@ -234,7 +248,7 @@
       const d = await saveProfile({ authority_statements: JSON.stringify(statements) });
       if (d.ok) {
         showStatus(qs('vw-authority-status'), 'Saved ✓');
-        if (statements.length > 0) { const el = qs('vw-check-2'); if (el) el.hidden = false; }
+        if (statements.length > 0) { const el = qs('vw-check-3'); if (el) el.hidden = false; }
       } else {
         showStatus(qs('vw-authority-status'), 'Save failed', true);
       }
@@ -245,7 +259,7 @@
     btn.disabled = false;
   });
 
-  /* ── Stage 3: CTA Library ──────────────────────────────── */
+  /* ── Stage 4: CTA Library ──────────────────────────────── */
   let ctas = safeParseJSON(profile.cta_library, []);
 
   const renderCTAs = makeChipList('vw-cta-chips', ctas, () => {});
@@ -272,7 +286,7 @@
       const d = await saveProfile({ cta_library: JSON.stringify(ctas) });
       if (d.ok) {
         showStatus(qs('vw-cta-status'), 'Saved ✓');
-        if (ctas.length > 0) { const el = qs('vw-check-3'); if (el) el.hidden = false; }
+        if (ctas.length > 0) { const el = qs('vw-check-4'); if (el) el.hidden = false; }
       } else {
         showStatus(qs('vw-cta-status'), 'Save failed', true);
       }
@@ -283,7 +297,7 @@
     btn.disabled = false;
   });
 
-  /* ── Stage 4: Content Principles ───────────────────────── */
+  /* ── Stage 5: Content Principles ───────────────────────── */
   let principles = safeParseJSON(profile.content_principles, []);
 
   const renderPrinciples = makeChipList('vw-principles-chips', principles, () => {});
@@ -297,7 +311,7 @@
       const d = await saveProfile({ content_principles: JSON.stringify(principles) });
       if (d.ok) {
         showStatus(qs('vw-principles-status'), 'Saved ✓');
-        if (principles.length > 0) { const el = qs('vw-check-4'); if (el) el.hidden = false; }
+        if (principles.length > 0) { const el = qs('vw-check-5'); if (el) el.hidden = false; }
       } else {
         showStatus(qs('vw-principles-status'), 'Save failed', true);
       }
@@ -308,22 +322,102 @@
     btn.disabled = false;
   });
 
-  /* ── Stage 5: LinkedIn ──────────────────────────────────── */
+  /* ── Stage 6: LinkedIn ──────────────────────────────────── */
+
+  // Show LinkedIn profile data in the connected card
+  function renderLinkedInProfile(data) {
+    const card = qs('vw-linkedin-profile-card');
+    if (!card) return;
+    const photo    = qs('vw-linkedin-photo');
+    const nameEl   = qs('vw-linkedin-name');
+    const headlineEl = qs('vw-linkedin-headline');
+    if (data.photo_url && photo) {
+      photo.src = data.photo_url;
+      photo.hidden = false;
+    }
+    if (data.name && nameEl)       nameEl.textContent = data.name;
+    if (data.headline && headlineEl) headlineEl.textContent = data.headline;
+    if ((data.name || data.headline) && card) card.hidden = false;
+  }
+
   // Check LinkedIn connection status
+  let linkedInData = null;
   try {
     const r = await fetch('/api/linkedin/status', { headers: apiHeaders() });
     const d = await r.json();
     if (d.connected) {
+      linkedInData = d;
       qs('vw-linkedin-connected')?.removeAttribute('hidden');
       qs('vw-linkedin-connect')?.setAttribute('hidden', '');
-      const el = qs('vw-check-5');
+      renderLinkedInProfile(d);
+      const el = qs('vw-check-6');
       if (el) el.hidden = false;
+
+      // If redirected back after connect, show a success flash
+      if (window.location.search.includes('linkedin_connected=true')) {
+        showStatus(qs('vw-linkedin-refresh-status'), 'LinkedIn connected ✓');
+        // Clean up the URL param
+        const url = new URL(window.location.href);
+        url.searchParams.delete('linkedin_connected');
+        window.history.replaceState({}, '', url.toString());
+      }
     }
   } catch { /* non-fatal — show connect button */ }
 
+  // Refresh profile data button
+  qs('vw-linkedin-refresh')?.addEventListener('click', async () => {
+    const btn = qs('vw-linkedin-refresh');
+    btn.disabled = true;
+    btn.querySelector('svg')?.classList.add('spin');
+    const statusEl = qs('vw-linkedin-refresh-status');
+    try {
+      const r = await fetch('/api/linkedin/status', { headers: apiHeaders() });
+      const d = await r.json();
+      if (d.connected) {
+        renderLinkedInProfile(d);
+        showStatus(statusEl, 'Profile data refreshed ✓');
+      } else {
+        showStatus(statusEl, 'Not connected', true);
+      }
+    } catch {
+      showStatus(statusEl, 'Refresh failed', true);
+    }
+    btn.disabled = false;
+    btn.querySelector('svg')?.classList.remove('spin');
+  });
+
+  /* ── Stage 7: Writing Samples ───────────────────────────── */
+  const samplesEl = qs('profile-samples');
+  if (samplesEl && profile.writing_samples) samplesEl.value = profile.writing_samples;
+
+  qs('vw-samples-save')?.addEventListener('click', async () => {
+    const btn = qs('vw-samples-save');
+    btn.disabled = true;
+    btn.textContent = 'Saving…';
+    const val = samplesEl?.value.trim() || null;
+    try {
+      const d = await saveProfile({ writing_samples: val });
+      if (d.ok) {
+        showStatus(qs('vw-samples-status'), 'Saved ✓');
+        if (val) { const el = qs('vw-check-7'); if (el) el.hidden = false; }
+      } else {
+        showStatus(qs('vw-samples-status'), 'Save failed', true);
+      }
+    } catch {
+      showStatus(qs('vw-samples-status'), 'Save failed', true);
+    }
+    btn.textContent = 'Save samples →';
+    btn.disabled = false;
+  });
+
   /* ── Stage check marks (initial state) ─────────────────── */
+  const basicsPopulated = Object.keys(basicsFields).some(elId => {
+    const el = qs(elId);
+    return el && el.value.trim().length > 0;
+  });
   const hasLinkedIn = !qs('vw-linkedin-connect') || qs('vw-linkedin-connect').hasAttribute('hidden');
-  updateStageChecks(themes, statements, ctas, principles, hasLinkedIn);
+  const hasSamples  = !!(samplesEl?.value.trim());
+  updateStageChecks(basicsPopulated, themes, statements, ctas, principles, hasLinkedIn, hasSamples);
 
   /* ── Hash-based scroll ──────────────────────────────────── */
   function scrollToStage(hash) {
@@ -337,8 +431,10 @@
     }
   }
 
-  // Scroll to hash on load
-  if (window.location.hash) {
+  // Scroll to hash on load (or to stage 6 if just connected LinkedIn)
+  if (window.location.search.includes('linkedin_connected=true') && !window.location.hash) {
+    setTimeout(() => scrollToStage('#voice-stage-6'), 100);
+  } else if (window.location.hash) {
     setTimeout(() => scrollToStage(window.location.hash), 100);
   }
 

@@ -151,6 +151,8 @@ router.get('/connect', async (req, res) => {
     ? '/generate.html?linkedin=connected'
     : from === 'preview'
     ? '/preview.html?linkedin=connected'
+    : from === 'settings'
+    ? '/settings.html?linkedin_connected=true#voice-stage-6'
     : '/account.html?linkedin_connected=true';
   await setOAuthState(state, { userId, tenantId, returnTo });
 

@@ -232,10 +232,10 @@
   flex: 1;
   height: 38px;
   padding: 0 12px;
-  border: 1px solid var(--border, #1f2d4a);
+  border: 1px solid var(--border, #E4E4E7);
   border-radius: 8px;
-  background: var(--bg-input, #0d1930);
-  color: var(--text-heading);
+  background: var(--bg-surface, #fff);
+  color: var(--text-body, #09090B);
   font-size: 14px;
 }
 
@@ -467,25 +467,93 @@ details[open] .vw-advanced-label::before { transform: rotate(90deg); }
   background: #006396;
 }
 
-/* ── Profile basics card ─────────────────────────────────────────────────── */
+/* ── LinkedIn profile card (connected state) ─────────────────────────────── */
 
-.vw-basics-card {
-  margin-bottom: 28px;
+.vw-linkedin-profile-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border: 1px solid var(--border, #E4E4E7);
+  border-radius: 10px;
+  background: var(--bg-subtle, #FAFAFA);
+  margin: 12px 0 4px;
+  max-width: 380px;
 }
 
-.vw-basics-header {
-  margin-bottom: 20px;
+.vw-linkedin-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  border: 2px solid var(--border, #E4E4E7);
 }
 
-.vw-basics-title {
-  font-size: 17px;
-  font-weight: 700;
+.vw-linkedin-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.vw-linkedin-name {
+  font-size: 14px;
+  font-weight: 600;
   color: var(--text-heading);
-  margin: 0 0 4px;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.vw-basics-subtitle {
-  font-size: 13px;
-  color: var(--text-secondary);
+.vw-linkedin-headline {
+  font-size: 12px;
+  color: var(--text-muted);
   margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Refresh button ──────────────────────────────────────── */
+.vw-refresh-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 16px;
+  border-radius: 8px;
+  border: 1px solid var(--border, #E4E4E7);
+  background: var(--bg-surface, #fff);
+  color: var(--text-body);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.vw-refresh-btn:hover:not(:disabled) {
+  background: var(--bg-subtle, #FAFAFA);
+  border-color: var(--text-muted);
+}
+
+.vw-refresh-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* Spin animation for refresh icon */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+.spin {
+  animation: spin 0.8s linear infinite;
+}
+
+/* ── Writing samples — larger textarea ───────────────────── */
+.profile-textarea-xl {
+  min-height: 260px;
 }

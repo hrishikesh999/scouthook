@@ -120,9 +120,22 @@
   </footer>
 
   <script>
+    // Forward the `from` query param so the OAuth callback knows where to redirect back.
+    // e.g. /connect-linkedin.html?from=settings → /api/linkedin/connect?from=settings
+    const _from = new URLSearchParams(window.location.search).get('from');
     document.getElementById('connect-btn').addEventListener('click', () => {
-      window.location.href = '/api/linkedin/connect';
+      const url = _from
+        ? `/api/linkedin/connect?from=${encodeURIComponent(_from)}`
+        : '/api/linkedin/connect';
+      window.location.href = url;
     });
+
+    // Also update the "Cancel — go back" link to return to the originating page
+    const _cancelLink = document.querySelector('a[href="/account.html"]');
+    if (_cancelLink && _from === 'settings') {
+      _cancelLink.href = '/settings.html#voice-stage-6';
+      _cancelLink.textContent = 'Cancel — go back';
+    }
   </script>
 
 </body>

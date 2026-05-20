@@ -613,6 +613,42 @@ details[open] .vw-advanced-label::before { transform: rotate(90deg); }
   animation: spin 0.8s linear infinite;
 }
 
+/* ── Field label row (label + inline action button) ─────── */
+.vw-field-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+/* Override the stage-panel .field-label margin when inside a label row */
+.vw-stage-panel .vw-field-label-row .field-label {
+  margin-bottom: 0;
+}
+
+.vw-generate-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--brand, #0d7a5f);
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: color 0.15s, opacity 0.15s;
+  flex-shrink: 0;
+}
+
+.vw-generate-btn:hover:not(:disabled) {
+  color: #0b6b52;
+}
+
+.vw-generate-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 /* ── Writing samples — larger textarea ───────────────────── */
 .profile-textarea-xl {
   min-height: 260px;

@@ -77,7 +77,7 @@ async function extractVoiceDNAFromQA(userId, tenantId) {
     // Read fresh profile from DB
     const profile = await db.prepare(
       `SELECT user_role, website_summary, onboarding_q1, onboarding_q2, onboarding_q3,
-              voice_fingerprint, authority_statements, banned_patterns
+              voice_fingerprint, authority_statements, banned_patterns, business_positioning
        FROM user_profiles WHERE user_id = ? AND tenant_id = ?`
     ).get(userId, tenantId);
 
@@ -119,6 +119,9 @@ async function extractVoiceDNAFromQA(userId, tenantId) {
     }
 
     if (!extracted || typeof extracted !== 'object') return;
+
+    // Business positioning — derive from positioning.outcome if currently blank
+    const positioningOutcome = (extracted.positioning?.outcome || '').trim() || null;
 
     // Merge into existing voice_fingerprint (preserve existing fields, add new ones)
     const existingFp = safeParseJSON(profile.voice_fingerprint, {});
@@ -166,6 +169,8 @@ async function extractVoiceDNAFromQA(userId, tenantId) {
       voice_fingerprint: JSON.stringify(mergedFp),
       authority_statements: JSON.stringify(mergedStatements),
       banned_patterns: JSON.stringify(mergedBanned),
+      // business_positioning: use existing value if already set, otherwise use derived outcome
+      business_positioning: profile.business_positioning || positioningOutcome,
     };
     const completionPct = calculateCompletionPct(updatedProfile, hasLinkedIn);
 
@@ -174,6 +179,7 @@ async function extractVoiceDNAFromQA(userId, tenantId) {
          voice_fingerprint            = ?,
          authority_statements         = ?,
          banned_patterns              = ?,
+         business_positioning         = COALESCE(business_positioning, ?),
          voice_extraction_source      = 'qa_answers',
          voice_extraction_quality     = 'baseline',
          voice_profile_completion_pct = ?,
@@ -183,6 +189,7 @@ async function extractVoiceDNAFromQA(userId, tenantId) {
       JSON.stringify(mergedFp),
       JSON.stringify(mergedStatements),
       JSON.stringify(mergedBanned),
+      positioningOutcome,
       completionPct,
       userId,
       tenantId

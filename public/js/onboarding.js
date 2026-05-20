@@ -202,10 +202,11 @@ const Onboarding = (() => {
 
   function showSummaryStep(extracted) {
     const LABELS = {
-      content_niche:   'What you do',
-      audience_role:   'Who you help',
-      audience_pain:   'Their main challenge',
-      contrarian_view: 'Your take',
+      content_niche:        'What you do',
+      audience_role:        'Who you help',
+      audience_pain:        'Their main challenge',
+      contrarian_view:      'Your take',
+      business_positioning: 'How you help them',
     };
 
     const card = qs('ob-narrative-card');
@@ -336,8 +337,8 @@ const Onboarding = (() => {
       });
       const data = await res.json();
       if (data.ok) {
-        const { content_niche, audience_role, audience_pain, contrarian_view } = data;
-        extracted = { content_niche, audience_role, audience_pain, contrarian_view };
+        const { content_niche, audience_role, audience_pain, contrarian_view, business_positioning } = data;
+        extracted = { content_niche, audience_role, audience_pain, contrarian_view, business_positioning };
       }
     } catch {
       // Non-fatal — fall through to Q1

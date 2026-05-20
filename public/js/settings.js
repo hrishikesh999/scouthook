@@ -194,6 +194,42 @@
     btn.disabled = false;
   });
 
+  /* ── Generate positioning statement ────────────────────── */
+  qs('vw-generate-positioning')?.addEventListener('click', async () => {
+    const btn = qs('vw-generate-positioning');
+    const posEl = qs('profile-positioning');
+    if (!btn || !posEl) return;
+
+    const content_niche  = qs('profile-niche')?.value.trim()    || '';
+    const audience_role  = qs('profile-audience')?.value.trim() || '';
+    const audience_pain  = qs('profile-pain')?.value.trim()     || '';
+
+    if (!content_niche && !audience_role) {
+      showStatus(qs('vw-basics-status'), 'Add your niche or audience first', true);
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = '…';
+    try {
+      const r = await fetch('/api/profile/generate-positioning', {
+        method: 'POST',
+        headers: apiHeaders(),
+        body: JSON.stringify({ content_niche, audience_role, audience_pain }),
+      });
+      const d = await r.json();
+      if (d.ok && d.business_positioning) {
+        posEl.value = d.business_positioning;
+      } else {
+        showStatus(qs('vw-basics-status'), 'Generation failed — try again', true);
+      }
+    } catch {
+      showStatus(qs('vw-basics-status'), 'Generation failed — try again', true);
+    }
+    btn.disabled = false;
+    btn.textContent = '✦ Generate';
+  });
+
   /* ── Stage 2: Core Themes ───────────────────────────────── */
   let themes = safeParseJSON(profile.content_themes, []);
 

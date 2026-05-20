@@ -246,11 +246,12 @@ router.post('/extract-website', async (req, res) => {
 Website content:
 ${truncated}
 
-Return a JSON object with these fields (concise, 1-2 sentences each):
-- content_niche: What this person/business writes or talks about professionally. Frame as "Helping [who] [do what]" if possible.
+Return a JSON object with these fields (concise):
+- content_niche: What this person/business writes or talks about professionally. 2-4 word label. E.g. "B2B SaaS growth" or "executive leadership coaching"
 - audience_role: Who their ideal client is. E.g. "Founders and sales leaders at growing startups"
 - audience_pain: The main problem their audience faces (only if clearly inferable)
 - contrarian_view: A strong opinion or unconventional stance visible on the site (only if clearly inferable)
+- business_positioning: A single sentence — what this person does and for whom. E.g. "I help DTC founders scale from $1M to $10M revenue without hiring a big agency." (only if clearly inferable from the site)
 
 Return null for any field you cannot confidently infer. Return only the JSON object, no other text.`,
       }],
@@ -354,6 +355,51 @@ Return ONLY a JSON array of strings:
   } catch (err) {
     console.error('[profile] suggest-themes error:', err.message);
     return res.json({ ok: true, themes: [] }); // non-fatal: return empty
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/profile/generate-positioning
+// Generates a one-sentence positioning statement from niche + audience + pain.
+// Returns the suggestion — does NOT save to DB. Client saves via POST /api/profile.
+// ---------------------------------------------------------------------------
+router.post('/generate-positioning', async (req, res) => {
+  if (!req.userId) return res.status(401).json({ ok: false, error: 'unauthenticated' });
+
+  const { content_niche, audience_role, audience_pain } = req.body;
+  if (!content_niche && !audience_role) {
+    return res.status(400).json({ ok: false, error: 'missing_fields', message: 'Provide at least content_niche or audience_role' });
+  }
+
+  const Anthropic = require('@anthropic-ai/sdk');
+  const { getSetting } = require('../db');
+
+  try {
+    const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
+    if (!apiKey) return res.status(500).json({ ok: false, error: 'no_api_key' });
+
+    const client = new Anthropic({ apiKey });
+    const message = await client.messages.create({
+      model: 'claude-haiku-4-5',
+      max_tokens: 100,
+      messages: [{
+        role: 'user',
+        content: `Generate a one-sentence LinkedIn positioning statement.
+
+Niche: ${content_niche || 'not specified'}
+Audience: ${audience_role || 'not specified'}
+Their pain: ${audience_pain || 'not specified'}
+
+Format: "I help [specific audience] [achieve specific result] [without/by doing X]."
+Be concrete — use the exact audience and niche provided. No preamble, no quotes around the sentence.`,
+      }],
+    });
+
+    const positioning = (message.content[0]?.text || '').trim();
+    return res.json({ ok: true, business_positioning: positioning });
+  } catch (err) {
+    console.error('[profile] generate-positioning error:', err.message);
+    return res.status(500).json({ ok: false, error: 'generation_failed' });
   }
 });
 

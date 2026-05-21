@@ -29,47 +29,71 @@
       font-weight: 700;
       color: var(--text-heading);
       line-height: 1.3;
-      margin: 0 0 var(--space-2);
+      margin: 0 0 var(--space-3);
       text-align: center;
     }
     #mix-nudge {
       font-size: 0.8125rem;
       color: var(--text-muted);
       text-align: center;
-      margin: -8px 0 8px;
+      margin: -10px 0 10px;
       display: none;
     }
 
-    /* ── Type chips ──────────────────────────────────────────── */
+    /* ── Type cards (2×2 grid) ───────────────────────────────── */
     #type-selector {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      justify-content: center;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
     }
     .type-chip {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      font-family: var(--font-sans);
-      font-size: 0.9375rem;
-      font-weight: 500;
-      padding: 10px 18px;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 14px;
+      padding: 20px 20px 18px;
       border: 1.5px solid var(--border);
-      border-radius: 999px;
+      border-radius: 14px;
       background: var(--bg-surface);
       color: var(--text-body);
       cursor: pointer;
-      transition: border-color 0.15s, background 0.15s;
-      white-space: nowrap;
+      text-align: left;
+      transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+      font-family: var(--font-sans);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+      width: 100%;
     }
     .type-chip:hover {
       border-color: var(--brand);
-      background: color-mix(in srgb, var(--brand) 5%, transparent);
+      background: color-mix(in srgb, var(--brand) 4%, transparent);
+      box-shadow: 0 2px 8px rgba(15,118,110,0.08);
     }
     .type-chip--recommended {
       border-color: var(--brand);
-      background: color-mix(in srgb, var(--brand) 6%, transparent);
+      background: color-mix(in srgb, var(--brand) 5%, transparent);
+    }
+    .type-chip-icon {
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: color-mix(in srgb, var(--brand) 9%, transparent);
+      border-radius: 10px;
+      color: var(--brand);
+      flex-shrink: 0;
+    }
+    .type-chip-body { display: flex; flex-direction: column; gap: 5px; }
+    .type-chip-title {
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--text-heading);
+      line-height: 1.25;
+    }
+    .type-chip-desc {
+      font-size: 0.8125rem;
+      color: var(--text-muted);
+      line-height: 1.45;
     }
 
     /* ── Guided chat ─────────────────────────────────────────── */
@@ -87,11 +111,22 @@
 
     .chat-type-header {
       display: flex;
-      align-items: center;
-      gap: 8px;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    .chat-type-info { display: flex; flex-direction: column; gap: 3px; }
+    #chat-type-title {
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--text-heading);
+    }
+    #chat-type-desc {
       font-size: 0.8125rem;
       color: var(--text-muted);
-      font-weight: 500;
+      line-height: 1.45;
     }
     #chat-change-btn {
       font-size: 0.8125rem;
@@ -100,9 +135,11 @@
       background: none;
       border: none;
       cursor: pointer;
-      padding: 0;
+      padding: 2px 0 0;
       font-family: var(--font-sans);
       text-decoration: underline;
+      white-space: nowrap;
+      flex-shrink: 0;
     }
 
     #chat-thread {
@@ -164,6 +201,30 @@
       border-color: var(--brand);
       background: color-mix(in srgb, var(--brand) 5%, transparent);
     }
+
+    /* ── Suggest me button ───────────────────────────────────── */
+    #suggest-me-row { display: flex; align-items: center; }
+    #suggest-me-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-family: var(--font-sans);
+      font-size: 0.8125rem;
+      font-weight: 600;
+      color: var(--brand);
+      background: none;
+      border: 1.5px solid color-mix(in srgb, var(--brand) 30%, transparent);
+      border-radius: 999px;
+      padding: 7px 14px;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+      white-space: nowrap;
+    }
+    #suggest-me-btn:hover {
+      background: color-mix(in srgb, var(--brand) 6%, transparent);
+      border-color: var(--brand);
+    }
+    #suggest-me-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
     /* ── Chat input row ──────────────────────────────────────── */
     .chat-input-row {
@@ -324,20 +385,83 @@
           <p class="gen-question" id="gen-question">What do you want this post to do?</p>
           <p id="mix-nudge"></p>
           <div id="type-selector">
-            <button class="type-chip" data-type="reach">📣 Reach new people</button>
-            <button class="type-chip" data-type="trust">🎯 Build authority</button>
-            <button class="type-chip" data-type="convert">💬 Start a conversation</button>
-            <button class="type-chip" data-type="lead_magnet">🎁 Run a lead magnet</button>
+
+            <button class="type-chip" data-type="reach">
+              <div class="type-chip-icon">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                  <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+                  <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+                </svg>
+              </div>
+              <div class="type-chip-body">
+                <span class="type-chip-title">Reach new people</span>
+                <span class="type-chip-desc">Share a story or moment that makes strangers feel seen.</span>
+              </div>
+            </button>
+
+            <button class="type-chip" data-type="trust">
+              <div class="type-chip-icon">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                  <polyline points="9 12 11 14 15 10"/>
+                </svg>
+              </div>
+              <div class="type-chip-body">
+                <span class="type-chip-title">Build authority</span>
+                <span class="type-chip-desc">Lead with an insight or opinion that only you could write.</span>
+              </div>
+            </button>
+
+            <button class="type-chip" data-type="convert">
+              <div class="type-chip-icon">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                </svg>
+              </div>
+              <div class="type-chip-body">
+                <span class="type-chip-title">Start a conversation</span>
+                <span class="type-chip-desc">Make a direct ask anchored in a real result or client win.</span>
+              </div>
+            </button>
+
+            <button class="type-chip" data-type="lead_magnet">
+              <div class="type-chip-icon">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <polyline points="20 12 20 22 4 22 4 12"/>
+                  <rect x="2" y="7" width="20" height="5"/>
+                  <line x1="12" y1="22" x2="12" y2="7"/>
+                  <path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/>
+                  <path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/>
+                </svg>
+              </div>
+              <div class="type-chip-body">
+                <span class="type-chip-title">Run a lead magnet</span>
+                <span class="type-chip-desc">Give something valuable away and build your DM list.</span>
+              </div>
+            </button>
+
           </div>
         </div>
 
         <!-- ── Guided chat ─────────────────────────────────────── -->
         <div id="guided-chat">
           <div class="chat-type-header">
-            <span id="chat-type-label"></span>
+            <div class="chat-type-info">
+              <span id="chat-type-title"></span>
+              <span id="chat-type-desc"></span>
+            </div>
             <button id="chat-change-btn" type="button">change</button>
           </div>
           <div id="chat-thread"></div>
+          <div id="suggest-me-row">
+            <button id="suggest-me-btn" type="button">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="flex-shrink:0">
+                <path d="M12 1l2.09 7.91L22 12l-7.91 2.09L12 23l-2.09-7.91L2 12l7.91-2.09z"/>
+              </svg>
+              Suggest me something
+            </button>
+          </div>
           <div id="chat-error" role="alert"></div>
           <div id="chat-substance-warning" role="alert">
             <span id="chat-substance-text"></span>

@@ -18,8 +18,10 @@ let mixRecommended = null;
 const typeSelectorSection = document.getElementById('type-selector-section');
 const typeChips           = document.querySelectorAll('.type-chip');
 const guidedChat          = document.getElementById('guided-chat');
-const chatTypeLabel       = document.getElementById('chat-type-label');
+const chatTypeTitle       = document.getElementById('chat-type-title');
+const chatTypeDesc        = document.getElementById('chat-type-desc');
 const chatChangeBtn       = document.getElementById('chat-change-btn');
+const suggestMeBtn        = document.getElementById('suggest-me-btn');
 const chatThread          = document.getElementById('chat-thread');
 const chatInput           = document.getElementById('chat-input');
 const chatSendBtn         = document.getElementById('chat-send-btn');
@@ -31,10 +33,16 @@ const attachBtn           = document.getElementById('attach-btn');
 const attachFileInput     = document.getElementById('attach-file-input');
 const processingScreen    = document.getElementById('processing-screen');
 
+/* ── Suggest-me constants ────────────────────────────────────── */
+const SPARK_SVG = `<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="flex-shrink:0"><path d="M12 1l2.09 7.91L22 12l-7.91 2.09L12 23l-2.09-7.91L2 12l7.91-2.09z"/></svg>`;
+const SUGGEST_BTN_DEFAULT = `${SPARK_SVG} Suggest me something`;
+
 /* ── Per-type chat configs ───────────────────────────────────── */
 const CHAT_CONFIGS = {
   reach: {
-    label: '📣 Reach post',
+    label:     '📣 Reach post',
+    chatTitle: 'You are creating a Reach post',
+    chatDesc:  'Reach posts grow your audience. Share a story, contradiction, or moment that makes a stranger stop scrolling and feel understood.',
     steps: [{
       question:    "What's the story, moment, or observation you want to build from?",
       placeholder: "A lesson learned, a result you got, something that surprised you…",
@@ -42,7 +50,9 @@ const CHAT_CONFIGS = {
     }],
   },
   trust: {
-    label: '🎯 Authority post',
+    label:     '🎯 Authority post',
+    chatTitle: 'You are creating an Authority post',
+    chatDesc:  'Authority posts build your reputation as an expert. Lead with a non-obvious insight, a contrarian view, or a framework only you could have written.',
     steps: [{
       question:    "What's the insight, opinion, or expertise you want to lead with?",
       placeholder: "A contrarian view, a framework you use, a mistake you see others making…",
@@ -50,7 +60,9 @@ const CHAT_CONFIGS = {
     }],
   },
   convert: {
-    label: '💬 Conversation post',
+    label:     '💬 Conversation post',
+    chatTitle: 'You are creating a Conversation post',
+    chatDesc:  'Conversation posts drive immediate action. Anchor the post in a real result or client win, then make a direct ask that moves readers toward a reply or DM.',
     steps: [{
       question:    "What result, outcome, or proof point should this post anchor in?",
       placeholder: "A client win, a specific result, a before/after…",
@@ -58,7 +70,9 @@ const CHAT_CONFIGS = {
     }],
   },
   lead_magnet: {
-    label: '🎁 Lead magnet',
+    label:     '🎁 Lead magnet',
+    chatTitle: 'You are creating a Lead Magnet post',
+    chatDesc:  'Lead magnet posts build your DM pipeline. Give away something genuinely useful, ask readers to comment a keyword, and deliver it in their inbox.',
     steps: [
       {
         question:    "What are you giving away?",
@@ -126,7 +140,10 @@ function selectType(type) {
   processingScreen.classList.remove('visible');
   guidedChat.classList.add('visible');
 
-  chatTypeLabel.textContent = CHAT_CONFIGS[type].label;
+  chatTypeTitle.textContent = CHAT_CONFIGS[type].chatTitle;
+  chatTypeDesc.textContent  = CHAT_CONFIGS[type].chatDesc;
+  suggestMeBtn.disabled     = false;
+  suggestMeBtn.innerHTML    = SUGGEST_BTN_DEFAULT;
   hideChatError();
   hideSubstanceWarning();
 
@@ -149,6 +166,8 @@ function resetType() {
   chatSendBtn.disabled     = false;
   attachBtn.disabled       = false;
   chatInput.classList.remove('error');
+  suggestMeBtn.disabled  = false;
+  suggestMeBtn.innerHTML = SUGGEST_BTN_DEFAULT;
   hideChatError();
   hideSubstanceWarning();
 
@@ -369,6 +388,101 @@ const chat = (() => {
 
   return { init, advance };
 })();
+
+/* ── "Suggest me something" ──────────────────────────────────── */
+suggestMeBtn.addEventListener('click', async () => {
+  if (!selectedType) return;
+  suggestMeBtn.disabled  = true;
+  suggestMeBtn.innerHTML = `<span class="proc-spinner" style="width:12px;height:12px;border-width:1.5px;vertical-align:middle"></span> Thinking…`;
+
+  try {
+    const suggestion = await getSuggestedAnswer(selectedType, chatStep);
+    if (suggestion) {
+      chatInput.value        = suggestion;
+      chatInput.style.height = 'auto';
+      chatInput.style.height = chatInput.scrollHeight + 'px';
+      chatInput.classList.remove('error');
+      hideChatError();
+      chatInput.focus();
+    } else {
+      // Briefly signal nothing was found without blocking the user
+      suggestMeBtn.innerHTML = `${SPARK_SVG} Nothing found — add your own`;
+      setTimeout(() => { suggestMeBtn.innerHTML = SUGGEST_BTN_DEFAULT; }, 2200);
+    }
+  } catch {
+    suggestMeBtn.innerHTML = SUGGEST_BTN_DEFAULT;
+  } finally {
+    suggestMeBtn.disabled = false;
+    if (suggestMeBtn.innerHTML.includes('Thinking')) suggestMeBtn.innerHTML = SUGGEST_BTN_DEFAULT;
+  }
+});
+
+async function getSuggestedAnswer(type, step) {
+  if (type !== 'lead_magnet') {
+    // 1. User's own vault ideas — most personalised source
+    try {
+      const res   = await fetch(`/api/vault/ideas?status=fresh&funnel_type=${type}`, { headers: apiHeaders() });
+      const data  = await res.json();
+      const ideas = (data.ideas || []).filter(i => i.seed_text?.trim());
+      if (ideas.length) {
+        const pick = ideas[Math.floor(Math.random() * Math.min(ideas.length, 3))];
+        return pick.seed_text.slice(0, 500);
+      }
+    } catch { /* fall through */ }
+
+    // 2. AI suggestions derived from voice profile
+    try {
+      const res    = await fetch(`/api/vault/suggest-topics?post_type=${type}`, { headers: apiHeaders() });
+      const data   = await res.json();
+      const topics = (data.topics || []).filter(t => t.title && t.description);
+      if (topics.length) {
+        const t = topics[Math.floor(Math.random() * topics.length)];
+        return `${t.title}\n\n${t.description}`;
+      }
+    } catch { /* fall through */ }
+
+    // 3. Generic instructional fallback
+    const fb = FALLBACK_CHIPS[type] || [];
+    return fb[Math.floor(Math.random() * fb.length)] || '';
+  }
+
+  // Lead magnet steps
+  if (step === 0) {
+    const opts = LM_CHIPS[0];
+    return opts[Math.floor(Math.random() * opts.length)] || '';
+  }
+  if (step === 1) {
+    // Try vault for a sense of what the user teaches before falling back to a template
+    try {
+      const res  = await fetch('/api/vault/ideas?status=fresh', { headers: apiHeaders() });
+      const data = await res.json();
+      const ideas = (data.ideas || []).filter(i => i.seed_text?.trim());
+      if (ideas.length) {
+        const pick = ideas[Math.floor(Math.random() * Math.min(ideas.length, 3))];
+        return pick.seed_text.slice(0, 300);
+      }
+    } catch { /* fall through */ }
+    return 'Step-by-step instructions you can follow right away\nReal examples showing what works in practice\nCommon mistakes to avoid and how to sidestep them';
+  }
+  if (step === 2) {
+    // Proof must come from the user — try vault for result-containing seeds, else return empty
+    try {
+      const res   = await fetch('/api/vault/ideas?status=fresh', { headers: apiHeaders() });
+      const data  = await res.json();
+      const ideas = (data.ideas || []).filter(i => i.seed_text && /\d/.test(i.seed_text));
+      if (ideas.length) {
+        const pick = ideas[Math.floor(Math.random() * Math.min(ideas.length, 3))];
+        return pick.seed_text.slice(0, 300);
+      }
+    } catch { /* fall through */ }
+    return ''; // don't fabricate proof
+  }
+  if (step === 3) {
+    const opts = LM_CHIPS[3];
+    return opts[Math.floor(Math.random() * opts.length)] || '';
+  }
+  return '';
+}
 
 /* ── Chat input wiring ───────────────────────────────────────── */
 chatSendBtn.addEventListener('click', () => chat.advance());

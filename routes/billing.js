@@ -217,7 +217,7 @@ router.get('/subscription', requireAuth, async (req, res) => {
 
   return res.json({
     ok: true,
-    plan: sub.plan,
+    plan: genCheck.plan,  // effective plan: 'free' once grace period has expired
     status: sub.status,
     price_id: sub.price_id ?? null,
     current_period_end: sub.current_period_end ?? null,

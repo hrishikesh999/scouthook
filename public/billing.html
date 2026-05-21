@@ -591,6 +591,16 @@
               </div>
             </div>
 
+            <!-- Free (formerly Pro, expired): subscription ended note -->
+            <div id="expired-info" style="display:none">
+              <div class="billing-card-body">
+                <div class="billing-alert warn" style="margin-bottom:0">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                  <span id="expired-info-text"></span>
+                </div>
+              </div>
+            </div>
+
             <!-- Free: upgrade CTA -->
             <div id="upgrade-cta" style="display:none">
               <div class="billing-card-header">
@@ -847,6 +857,11 @@
           document.getElementById('cancel-zone').style.display = '';
         }
       } else {
+        if (isCanceled && sub.current_period_end) {
+          document.getElementById('expired-info').style.display = '';
+          document.getElementById('expired-info-text').textContent =
+            `Your Pro subscription ended on ${fmt(sub.current_period_end)}. You are now on the Free plan.`;
+        }
         document.getElementById('upgrade-cta').style.display = '';
       }
 
@@ -896,7 +911,7 @@
           _subData  = d2;
           // Reset all dynamic elements before re-render
           ['canceled-banner','pro-actions','free-actions','plan-price-block','renewal-line',
-           'plan-tier-badge','usage-upgrade-nudge','cancel-zone','canceled-info','upgrade-cta']
+           'plan-tier-badge','usage-upgrade-nudge','cancel-zone','canceled-info','expired-info','upgrade-cta']
             .forEach(id => {
               const el = document.getElementById(id);
               if (el) el.style.display = 'none';

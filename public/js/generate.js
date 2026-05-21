@@ -428,8 +428,8 @@ function showProcessingScreen(rawIdea, postType) {
 function finaliseProcessingSteps(data) {
   const archetype = data.archetypeUsed || data.archetype_used;
   const step2 = document.getElementById('proc-step-2');
-  if (step2 && archetype) {
-    step2.querySelector('.proc-step-text').textContent = `Hook type: ${archetype}`;
+  if (step2) {
+    step2.querySelector('.proc-step-text').textContent = archetype ? `Hook type: ${archetype}` : 'Selecting template structure…';
     step2.querySelector('.proc-step-icon').innerHTML = '✅';
     step2.classList.add('done');
   }
@@ -574,7 +574,7 @@ const lm = (() => {
     } else {
       $inputRow().style.display = 'none';
       const btn = $genBtn();
-      if (btn) { btn.style.display = ''; btn.addEventListener('click', triggerLmGenerate, { once: true }); }
+      if (btn) { btn.style.display = ''; btn.addEventListener('click', triggerLmGenerate); }
     }
   }
 
@@ -635,7 +635,11 @@ const lm = (() => {
     const inputRow = $inputRow();
     if (inputRow) inputRow.style.display = '';
     const btn = $genBtn();
-    if (btn) btn.style.display = 'none';
+    if (btn) {
+      btn.style.display = 'none';
+      const nb = btn.cloneNode(true);
+      btn.parentNode.replaceChild(nb, btn);
+    }
 
     // Re-wire listeners by cloning to drop old handlers
     const oldSend = $send();

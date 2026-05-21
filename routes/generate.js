@@ -228,14 +228,14 @@ router.post('/', async (req, res) => {
         INSERT INTO generated_posts
           (run_id, user_id, tenant_id, format_slug, content, quality_score, quality_flags, passed_gate,
            funnel_type, vault_source_ref, hook_b, cta_alternatives, idea_input, archetype_used, source,
-           post_type, quality_verdict)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           post_type, quality_verdict, lead_magnet_template, lead_magnet_inputs)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         RETURNING id
       `).run(
         runId, userId, tenantId, IDEA_SLUG,
         post, lmGate.score, JSON.stringify(lmGate.flags), lmGate.passed_gate ? 1 : 0,
         'convert', null, null, null, null, null, source || null,
-        'lead_magnet', lmGate.verdict || null
+        'lead_magnet', lmGate.verdict || null, template || null, JSON.stringify(inputs)
       );
       const primaryId = primaryInsert.lastInsertRowid;
 
@@ -536,7 +536,8 @@ router.get('/post/:postId', async (req, res) => {
       SELECT id, content, quality_score, quality_flags, passed_gate,
              hook_b, cta_alternatives, format_slug, funnel_type,
              asset_url, asset_preview_url, asset_type, asset_slide_count, first_comment,
-             archetype_used, idea_input, post_type, quality_verdict
+             archetype_used, idea_input, post_type, quality_verdict,
+             lead_magnet_template, lead_magnet_inputs
       FROM generated_posts
       WHERE id = ? AND user_id = ? AND tenant_id = ?
     `).get(postId, userId, tenantId);
@@ -555,24 +556,28 @@ router.get('/post/:postId', async (req, res) => {
   try { flags = JSON.parse(row.quality_flags || '[]'); } catch {}
   let ctaAlternatives = [];
   try { ctaAlternatives = JSON.parse(row.cta_alternatives || '[]'); } catch {}
+  let leadMagnetInputs = null;
+  try { leadMagnetInputs = row.lead_magnet_inputs ? JSON.parse(row.lead_magnet_inputs) : null; } catch {}
 
   return res.json({
     ok: true,
     post: {
-      id:              row.id,
-      content:         row.content,
-      quality:         { score: row.quality_score || 0, passed: row.passed_gate === 1, flags, errors: flags, warnings: [], verdict: row.quality_verdict || null },
-      hookB:           row.hook_b || null,
+      id:                  row.id,
+      content:             row.content,
+      quality:             { score: row.quality_score || 0, passed: row.passed_gate === 1, flags, errors: flags, warnings: [], verdict: row.quality_verdict || null },
+      hookB:               row.hook_b || null,
       ctaAlternatives,
-      archetypeUsed:   row.archetype_used || null,
-      ideaInput:       row.idea_input     || null,
-      funnelType:      row.funnel_type || null,
-      postType:        row.post_type || null,
-      qualityVerdict:  row.quality_verdict || null,
-      assetUrl:        row.asset_url        || null,
-      assetPreviewUrl: row.asset_preview_url || null,
-      assetType:       row.asset_type        || null,
-      assetSlideCount: row.asset_slide_count || 0,
+      archetypeUsed:       row.archetype_used || null,
+      ideaInput:           row.idea_input     || null,
+      funnelType:          row.funnel_type || null,
+      postType:            row.post_type || null,
+      qualityVerdict:      row.quality_verdict || null,
+      assetUrl:            row.asset_url        || null,
+      assetPreviewUrl:     row.asset_preview_url || null,
+      assetType:           row.asset_type        || null,
+      assetSlideCount:     row.asset_slide_count || 0,
+      leadMagnetTemplate:  row.lead_magnet_template || null,
+      leadMagnetInputs,
     },
   });
 });

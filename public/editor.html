@@ -109,6 +109,24 @@
     .hook-chip-btn:hover { border-color: var(--accent, #1D9E75); color: var(--accent, #1D9E75); background: rgba(29,158,117,.06); }
     .hook-chip-btn:disabled { opacity: 0.5; cursor: default; }
 
+    /* ── Sprint 3 additions ── */
+    #reveal-intro { font-size: 0.875rem; color: var(--text-muted); font-style: italic; line-height: 1.5; margin: 0 0 20px; display: none; }
+    #reveal-intro.visible { display: block; }
+    #quality-verdict { font-size: 0.875rem; line-height: 1.5; margin: 6px 0 0; }
+    #quality-verdict.pass { color: #065F46; }
+    #quality-verdict.fail { color: #92400E; }
+    #hook-explanation { font-size: 0.8125rem; color: var(--text-muted); line-height: 1.5; margin-bottom: 8px; }
+    #post-type-badge { font-size: 0.8125rem; font-weight: 500; color: var(--text-body); margin-top: 4px; }
+    #lm-template-change { font-size: 0.8125rem; color: var(--brand); font-weight: 500; background: none; border: none; cursor: pointer; padding: 0; font-family: var(--font-sans); text-decoration: underline; margin-left: 6px; }
+    #lm-template-picker { display: none; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    #lm-template-picker.visible { display: flex; }
+    .lm-template-btn { font-size: 0.75rem; font-weight: 600; padding: 4px 10px; border-radius: 100px; border: 1.5px solid var(--border); background: var(--bg-subtle); color: var(--text-secondary); cursor: pointer; transition: border-color 0.12s, color 0.12s; white-space: nowrap; }
+    .lm-template-btn:hover { border-color: var(--accent, #1D9E75); color: var(--accent, #1D9E75); }
+    #retro-type-label { font-size: 0.75rem; color: var(--text-muted); margin: 0 0 6px; }
+    #retro-type-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .retro-chip { font-size: 0.8125rem; font-weight: 500; padding: 6px 14px; border-radius: 999px; border: 1.5px solid var(--border); background: var(--bg-surface); color: var(--text-body); cursor: pointer; font-family: var(--font-sans); transition: border-color 0.15s, background 0.15s; }
+    .retro-chip:hover { border-color: var(--brand); background: color-mix(in srgb, var(--brand) 5%, transparent); }
+
 
     /* ── LinkedIn preview body — matches real LinkedIn feed rendering ── */
     #li-body-text { font-size: 14px; line-height: 1.5; color: #000; font-family: -apple-system, system-ui, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; white-space: pre-wrap; word-break: break-word; }
@@ -193,6 +211,8 @@
 
         <!-- Edit view -->
         <div id="edit-view">
+
+          <p id="reveal-intro"></p>
 
           <div class="post-edit-card">
             <div id="post-body" contenteditable="true" spellcheck="true" role="textbox" aria-multiline="true" aria-label="Post content"></div>
@@ -294,17 +314,30 @@
 
         <div id="panel-score">
           <section>
-            <p class="panel-label score-label">Quality score</p>
-            <div id="score-display">
+            <p class="panel-label score-label">Quality</p>
+            <div id="quality-verdict"></div>
+            <!-- hidden — kept for regen hooks that read score -->
+            <div id="score-display" style="display:none">
               <span id="score-number"></span>
               <span id="score-badge" class="passfail-pill" data-passed="true"></span>
             </div>
-            <div id="score-bar" class="visible"><div id="score-fill"></div></div>
+            <div id="score-bar" style="display:none"><div id="score-fill"></div></div>
+          </section>
+          <hr class="profile-divider">
+          <section>
+            <p class="panel-label score-label">Post type</p>
+            <div id="post-type-badge"></div>
+            <div id="lm-template-picker"></div>
+            <div id="retro-type-section" style="display:none;margin-top:10px">
+              <p id="retro-type-label">What was this post for?</p>
+              <div id="retro-type-chips"></div>
+            </div>
           </section>
           <hr class="profile-divider">
           <section>
             <p class="panel-label score-label">Hook</p>
-            <span id="funnel-type" class="archetype-badge" style="margin-bottom:10px;display:inline-block"></span>
+            <span id="funnel-type" class="archetype-badge" style="margin-bottom:6px;display:inline-block"></span>
+            <div id="hook-explanation"></div>
             <div id="hook-chips-row" style="display:none;flex-wrap:wrap;gap:6px;margin-top:4px"></div>
             <p id="hook-chips-label" style="display:none;font-size:11px;color:var(--text-secondary);margin:8px 0 6px 0;font-weight:600;text-transform:uppercase;letter-spacing:.04em">Try a different hook:</p>
           </section>
@@ -567,38 +600,31 @@ async function loadPost(id) {
     if (!res.ok || !data.ok) throw new Error(data.error || 'load_failed');
 
     const p      = data.post;
-    const score  = p.quality?.score ?? 0;
-    const passed = p.quality?.passed ?? (score >= 60);
+    const score   = p.quality?.score ?? 0;
+    const passed  = p.quality?.passed ?? (score >= 60);
+    const verdict = p.qualityVerdict || p.quality?.verdict || (passed
+      ? 'Your hook is doing exactly what it should. This one will stop people mid-scroll.'
+      : 'The first line doesn\'t create tension yet. Try opening with what changed or what you got wrong.');
 
+    // Hidden score elements (used by regen hooks)
     const scoreEl = document.getElementById('score-number');
-    scoreEl.textContent = score;
-    scoreEl.className   = score >= 80 ? 'pass' : score >= 60 ? 'borderline' : 'fail';
-
+    if (scoreEl) { scoreEl.textContent = score; scoreEl.className = score >= 80 ? 'pass' : score >= 60 ? 'borderline' : 'fail'; }
     const badge = document.getElementById('score-badge');
-    badge.textContent    = passed ? 'Passed' : 'Needs work';
-    badge.dataset.passed = String(passed);
-    badge.className      = `passfail-pill ${passed ? 'pass' : 'fail'}`;
-
-    const scoreBar = document.getElementById('score-bar');
-    if (scoreBar) {
-      scoreBar.style.height       = '6px';
-      scoreBar.style.borderRadius = '3px';
-      scoreBar.style.background   = 'var(--border)';
-      scoreBar.style.flexDirection = 'row';
-      scoreBar.style.gap          = '0';
-      scoreBar.style.padding      = '0';
-      scoreBar.style.margin       = '8px 0 4px';
-      scoreBar.style.borderBottom = 'none';
-    }
+    if (badge)  { badge.textContent = passed ? 'Passed' : 'Needs work'; badge.dataset.passed = String(passed); badge.className = `passfail-pill ${passed ? 'pass' : 'fail'}`; }
     const fill = document.getElementById('score-fill');
-    if (fill) {
-      fill.style.setProperty('width', score + '%', 'important');
-      fill.style.borderRadius = '3px';
-      fill.style.background   = score >= 80 ? 'var(--accent)' : score >= 60 ? 'var(--score-borderline)' : 'var(--score-fail)';
+    if (fill)  { fill.style.setProperty('width', score + '%', 'important'); fill.style.background = score >= 80 ? 'var(--accent)' : score >= 60 ? 'var(--score-borderline)' : 'var(--score-fail)'; }
+
+    // Quality verdict (replaces numeric score display)
+    const verdictEl = document.getElementById('quality-verdict');
+    if (verdictEl) {
+      verdictEl.textContent = (passed ? '🟢 ' : '🟡 ') + verdict;
+      verdictEl.className = 'quality-verdict ' + (passed ? 'pass' : 'fail');
     }
 
     document.getElementById('funnel-type').textContent = p.funnelType || '';
     renderHookSection(p);
+    renderPostTypeBadge(p);
+    renderRevealIntro(p);
 
     const rawText = typeof p.content === 'string' ? p.content : '';
     const paras   = rawText.split(/\n\n+/).filter(Boolean);
@@ -692,6 +718,13 @@ function renderHookSection(p) {
   const funnelEl = document.getElementById('funnel-type');
   if (funnelEl && archetypeLabel) funnelEl.textContent = archetypeLabel;
 
+  const explainEl = document.getElementById('hook-explanation');
+  if (explainEl) {
+    const explanation = HOOK_EXPLANATIONS[_currentArchetype] || '';
+    explainEl.textContent = explanation;
+    explainEl.style.display = explanation ? '' : 'none';
+  }
+
   const chipsRow   = document.getElementById('hook-chips-row');
   const chipsLabel = document.getElementById('hook-chips-label');
   if (!chipsRow) return;
@@ -771,6 +804,197 @@ async function regenWithHook(archetype, chipBtn) {
 
   chipBtn.disabled    = false;
   chipBtn.textContent = ARCHETYPE_LABELS_ED[archetype] || archetype;
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   HOOK EXPLANATION
+════════════════════════════════════════════════════════════════════════ */
+const HOOK_EXPLANATIONS = {
+  NUMBER:           'Opens with a specific number — stops readers who scan for proof and makes them wonder what changed.',
+  CONTRARIAN:       'Challenges a widely-held belief — stops readers who already have an opinion on this topic.',
+  CONFESSION:       'Leads with a personal mistake or past belief — readers who\'ve made the same mistake feel instantly seen.',
+  PATTERN_INTERRUPT:'Says something that contradicts what readers expect — makes them stop scrolling to resolve the cognitive dissonance.',
+  DIRECT_ADDRESS:   'Speaks directly to a specific person in a specific situation — readers who recognise themselves feel individually called out.',
+  STAKES:           'Opens with a consequence before the cause — readers feel what\'s at risk before they know what to do about it.',
+  BEFORE_AFTER:     'Contrasts two states side by side — readers who are in the \'before\' state can see exactly where they\'re headed.',
+  INSIGHT:          'States a non-obvious truth as plain fact — stops readers who\'ve been thinking this but never heard it articulated.',
+};
+
+/* ════════════════════════════════════════════════════════════════════════
+   POST TYPE BADGE + RETROACTIVE TAGGER
+════════════════════════════════════════════════════════════════════════ */
+const POST_TYPE_LABELS = {
+  reach: '📣 Reach post', trust: '🎯 Trust post',
+  convert: '📞 Convert post', lead_magnet: '🎁 Lead magnet',
+};
+const LM_TEMPLATE_LABELS = {
+  research_drop: 'Research Drop', system_giveaway: 'System Giveaway',
+  transformation: 'Transformation', breaking_news: 'Breaking News',
+};
+
+function renderPostTypeBadge(p) {
+  const badgeEl     = document.getElementById('post-type-badge');
+  const retroSec    = document.getElementById('retro-type-section');
+  const lmPickerEl  = document.getElementById('lm-template-picker');
+  if (!badgeEl) return;
+
+  const pt = p.postType || null;
+
+  if (!pt) {
+    // Retroactive type tagger — null post_type from free-write path
+    badgeEl.textContent = '—';
+    if (retroSec) {
+      retroSec.style.display = '';
+      const chipsEl = document.getElementById('retro-type-chips');
+      if (chipsEl) {
+        chipsEl.innerHTML = [
+          ['reach', '📣 Reach'],
+          ['trust', '🎯 Trust'],
+          ['convert', '📞 Convert'],
+        ].map(([type, label]) =>
+          `<button class="retro-chip" data-type="${type}">${label}</button>`
+        ).join('');
+        chipsEl.querySelectorAll('.retro-chip').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            try {
+              await fetch(`/api/posts/${currentPostId}/type`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ post_type: btn.dataset.type }),
+              });
+              badgeEl.textContent = POST_TYPE_LABELS[btn.dataset.type] || btn.dataset.type;
+              retroSec.style.display = 'none';
+            } catch { /* non-fatal */ }
+          });
+        });
+      }
+    }
+    return;
+  }
+
+  if (retroSec) retroSec.style.display = 'none';
+
+  if (pt === 'lead_magnet') {
+    const tmpl = p.lead_magnet_template || '';
+    const tmplLabel = LM_TEMPLATE_LABELS[tmpl] || '';
+    badgeEl.innerHTML = `🎁 Lead magnet${tmplLabel ? ' · <span style="color:var(--text-muted)">' + escHtml(tmplLabel) + '</span>' : ''}`
+      + `<button id="lm-template-change" type="button">Change →</button>`;
+    if (lmPickerEl) {
+      lmPickerEl.innerHTML = Object.entries(LM_TEMPLATE_LABELS).map(([key, label]) =>
+        `<button class="lm-template-btn" data-template="${key}">${label}</button>`
+      ).join('');
+      document.getElementById('lm-template-change')?.addEventListener('click', () => {
+        lmPickerEl.classList.toggle('visible');
+      });
+      lmPickerEl.querySelectorAll('.lm-template-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          lmPickerEl.classList.remove('visible');
+          regenLeadMagnetTemplate(btn.dataset.template);
+        });
+      });
+    }
+  } else {
+    badgeEl.textContent = POST_TYPE_LABELS[pt] || pt;
+    if (lmPickerEl) lmPickerEl.classList.remove('visible');
+  }
+}
+
+async function regenLeadMagnetTemplate(template) {
+  const bodyEl = document.getElementById('post-body');
+  if (!bodyEl) return;
+  bodyEl.contentEditable = 'false';
+
+  try {
+    // Re-use the post's existing idea_input as raw_idea, override template
+    const res = await fetch('/api/generate', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        post_type: 'lead_magnet',
+        lead_magnet_inputs: { template },
+        regenerate_from: currentPostId,
+      }),
+    });
+    const data = await res.json();
+    if (data.ok && data.post) {
+      const paras = data.post.split(/\n\n+/).filter(Boolean);
+      bodyEl.innerHTML = paras.map(t =>
+        `<p class="text-post" data-style="normal">${escHtml(t).replace(/\n/g, '<br>')}</p>`
+      ).join('');
+    }
+  } catch { /* non-fatal */ }
+
+  bodyEl.contentEditable = 'true';
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   REVEAL INTRO SENTENCE
+════════════════════════════════════════════════════════════════════════ */
+const REVEAL_LINES = {
+  reach: {
+    BEFORE_AFTER:      "Here's your reach post — I opened with a before/after hook to show the transformation clearly.",
+    CONFESSION:        "Here's your reach post — I led with a confession to give it a human entry point that pulls new readers in.",
+    PATTERN_INTERRUPT: "Here's your reach post — I disrupted the expected opening so it stops the scroll before the reader decides whether to engage.",
+    CONTRARIAN:        "Here's your reach post — I opened with a challenge to the obvious take. Contrarian hooks reach the furthest.",
+    NUMBER:            "Here's your reach post — I opened with a specific number to give strangers a reason to stop.",
+    STAKES:            "Here's your reach post — I led with the stakes so new readers feel the tension before they know the context.",
+    DIRECT_ADDRESS:    "Here's your reach post — I addressed your reader directly so they feel called in, not broadcast at.",
+    INSIGHT:           "Here's your reach post — I opened with a non-obvious truth. That's the kind of line people screenshot.",
+  },
+  trust: {
+    INSIGHT:           "Here's your trust post — I led with the insight so your POV is the first thing readers absorb.",
+    CONTRARIAN:        "Here's your trust post — I opened with a challenge to conventional wisdom. That's where authority lives.",
+    DIRECT_ADDRESS:    "Here's your trust post — I addressed your reader directly upfront. They'll feel spoken to, not broadcast at.",
+    NUMBER:            "Here's your trust post — I led with a specific number because specificity is what earns authority.",
+    CONFESSION:        "Here's your trust post — I opened with a confession to make the expertise feel earned, not assumed.",
+    BEFORE_AFTER:      "Here's your trust post — I used a before/after hook to show the depth of your experience.",
+    PATTERN_INTERRUPT: "Here's your trust post — I disrupted the expected opening to make your POV land harder.",
+    STAKES:            "Here's your trust post — I opened with what's at risk because that's what makes authority feel relevant.",
+  },
+  convert: {
+    NUMBER:            "Here's your convert post — I led with a specific number. Specificity is what makes readers stop and think 'that could be me'.",
+    STAKES:            "Here's your convert post — I opened with what's at risk. Stakes posts convert because they make the cost of inaction visible.",
+    BEFORE_AFTER:      "Here's your convert post — I used a before/after hook to make the transformation feel real and reachable.",
+    CONTRARIAN:        "Here's your convert post — I challenged the obvious take to make warm readers lean in.",
+    INSIGHT:           "Here's your convert post — I opened with an insight to make the ask feel earned.",
+    DIRECT_ADDRESS:    "Here's your convert post — I addressed your reader directly so they feel individually called out.",
+    CONFESSION:        "Here's your convert post — I led with a confession to build trust before the ask.",
+    PATTERN_INTERRUPT: "Here's your convert post — I disrupted the expected opening to stop readers who'd otherwise scroll past.",
+  },
+  lead_magnet: {
+    research_drop:   "Here's your lead magnet — I used a research drop structure because your proof positions you as someone who studied the data.",
+    system_giveaway: "Here's your lead magnet — I used a system giveaway structure because your proof shows a repeatable result.",
+    transformation:  "Here's your lead magnet — I used a before/after transformation because your proof has a clear starting point and outcome.",
+    breaking_news:   "Here's your lead magnet — I used a breaking news structure to tie your resource to something timely.",
+  },
+};
+
+function renderRevealIntro(p) {
+  const el = document.getElementById('reveal-intro');
+  if (!el) return;
+
+  const pt       = p.postType || null;
+  const archetype = p.archetypeUsed || null;
+  const tmpl     = p.lead_magnet_template || null;
+
+  let line = '';
+  if (pt === 'lead_magnet' && tmpl && REVEAL_LINES.lead_magnet[tmpl]) {
+    line = REVEAL_LINES.lead_magnet[tmpl];
+  } else if (pt && archetype && REVEAL_LINES[pt]?.[archetype]) {
+    line = REVEAL_LINES[pt][archetype];
+  } else if (archetype) {
+    const arch = archetype.replace(/_/g, ' ').toLowerCase();
+    line = `Here's your post — I used a ${arch} hook based on the angle you gave me.`;
+  }
+
+  if (line) {
+    el.textContent = line;
+    el.classList.add('visible');
+  } else {
+    el.classList.remove('visible');
+  }
 }
 
 /* ════════════════════════════════════════════════════════════════════════

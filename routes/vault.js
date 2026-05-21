@@ -20,6 +20,8 @@ const { classifyContent } = require('../services/funnelClassifier');
 const { brainstorm }     = require('../services/reachBrainstormer');
 const { canUploadVaultDoc } = require('../services/subscription');
 
+const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
+
 const ALLOWED_MIME = new Set(['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/vnd.openxmlformats-officedocument.presentationml.presentation', 'text/plain']);
 const MIME_TO_TYPE = {
   'application/pdf': 'pdf',
@@ -164,6 +166,32 @@ async function processUrl(docId, url, filename, userId, tenantId) {
   }
 }
 
+// ── Background: generate a one-line hook preview for a vault idea ─────────────
+async function generateHookPreview(ideaId, seedText) {
+  try {
+    const { getSetting } = require('../db');
+    const Anthropic = require('@anthropic-ai/sdk');
+    const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
+    if (!apiKey) return;
+
+    const client = new Anthropic({ apiKey });
+    const message = await client.messages.create({
+      model:      HAIKU_MODEL,
+      max_tokens: 60,
+      messages: [{
+        role:    'user',
+        content: `Write a single compelling LinkedIn hook line (max 12 words) that could open a post based on this idea. Return only the hook line, no quotes, no explanation.\n\nIdea: ${seedText}`,
+      }],
+    });
+    const hookPreview = message.content[0]?.text?.trim();
+    if (hookPreview) {
+      await db.prepare('UPDATE vault_ideas SET hook_preview = ? WHERE id = ?').run(hookPreview, ideaId);
+    }
+  } catch (err) {
+    console.error(`[vault/hook_preview] idea=${ideaId} failed (non-fatal):`, err.message);
+  }
+}
+
 // ── Save chunks to DB and mark document ready ─────────────────────────────────
 async function saveChunks(docId, chunks, userId, tenantId) {
   if (!chunks || chunks.length === 0) {
@@ -276,11 +304,15 @@ router.post('/mine', async (req, res) => {
         const docFilename = filename.length > 60 ? filename.slice(0, 57) + '…' : filename;
         const sourceRef   = `From: "${docFilename}" · ${seed.source_ref}`;
 
-        await db.prepare(`
+        const insertResult = await db.prepare(`
           INSERT INTO vault_ideas
             (user_id, tenant_id, document_id, chunk_id, seed_text, source_ref, funnel_type, hook_archetype)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          RETURNING id
         `).run(userId, tenantId, docId, seed.chunkId, seed.seed_text, sourceRef, funnelType, hookArchetype);
+
+        const ideaId = insertResult.lastInsertRowid;
+        setImmediate(() => generateHookPreview(ideaId, seed.seed_text));
 
         totalSeeds++;
       }
@@ -315,7 +347,7 @@ router.get('/ideas', async (req, res) => {
   const { status, funnel_type } = req.query;
 
   let sql    = `SELECT id, document_id, seed_text, source_ref, funnel_type, hook_archetype,
-                       status, generated_post_id, created_at
+                       status, generated_post_id, hook_preview, created_at
                 FROM   vault_ideas
                 WHERE  user_id = ? AND tenant_id = ?`;
   const args = [userId, tenantId];
@@ -346,6 +378,8 @@ router.get('/ideas', async (req, res) => {
 router.get('/suggest-topics', async (req, res) => {
   const { userId, tenantId } = req;
   if (!requireUser(req, res)) return;
+
+  const { post_type } = req.query;
 
   try {
     const profile = await db.prepare(
@@ -382,15 +416,26 @@ router.get('/suggest-topics', async (req, res) => {
       contrarian  && `Their contrarian POV: ${contrarian}`,
     ].filter(Boolean).join('\n');
 
+    const TYPE_GUIDANCE = {
+      reach: `Goal: REACH (grow audience)\nFocus: relatable stories, personal contradictions, lessons learned the hard way, before/after moments. Topics that make strangers feel seen and want to share.`,
+      trust: `Goal: TRUST (build authority)\nFocus: non-obvious insights, contrarian positions, expertise demonstrations, industry myths busted. Topics that make readers think "I've never heard it put that way."`,
+      convert: `Goal: CONVERT (drive leads)\nFocus: outcome-first hooks, specific client results, problem-solution frames, "here's what actually works" angles. Topics that make ideal buyers lean in.`,
+      lead_magnet: `Goal: LEAD MAGNET (grow DM list)\nFocus: free resource ideas, system giveaways, checklists, frameworks, templates this person could credibly offer. Topics that position a specific deliverable.`,
+    };
+
+    const typeGuidanceBlock = TYPE_GUIDANCE[post_type]
+      ? `\nPOST TYPE CONTEXT:\n${TYPE_GUIDANCE[post_type]}\nBias your 3 topics toward this goal.\n`
+      : '';
+
     const message = await client.messages.create({
-      model:      'claude-haiku-4-5',
+      model:      HAIKU_MODEL,
       max_tokens: 400,
       messages: [{
         role: 'user',
         content: `Generate 3 specific LinkedIn post topics for this professional.
 
 ${context}
-
+${typeGuidanceBlock}
 Each topic must:
 - Be a concrete, opinionated premise — not a generic category
 - Reflect a real tension, lesson, or contrarian view specific to their niche
@@ -465,7 +510,8 @@ router.post('/brainstorm', async (req, res) => {
     `);
 
     for (const idea of ideas) {
-      insert.run(userId, tenantId, idea.seed_text, `Brainstormed: "${topicLabel}"`, idea.hook_archetype);
+      const insertResult = insert.run(userId, tenantId, idea.seed_text, `Brainstormed: "${topicLabel}"`, idea.hook_archetype);
+      setImmediate(() => generateHookPreview(insertResult.lastInsertRowid, idea.seed_text));
     }
 
     return res.json({ ok: true, count: ideas.length });

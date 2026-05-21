@@ -365,6 +365,99 @@ router.delete('/posts/:id', handleDeleteDraft);
 router.post('/posts/:id/delete', handleDeleteDraft);
 
 // ---------------------------------------------------------------------------
+// PATCH /api/posts/:id/type
+// Retroactively tag a post's type (reach | trust | convert). Lead magnet excluded.
+// ---------------------------------------------------------------------------
+router.patch('/posts/:id/type', async (req, res) => {
+  const userId   = req.userId;
+  const tenantId = req.tenantId || 'default';
+  const postId   = req.params.id;
+  const { post_type } = req.body;
+
+  if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
+  if (!['reach', 'trust', 'convert'].includes(post_type)) {
+    return res.status(400).json({ ok: false, error: 'invalid_type' });
+  }
+
+  try {
+    const result = await db.prepare(`
+      UPDATE generated_posts SET post_type = ?
+      WHERE id = ? AND user_id = ? AND tenant_id = ?
+    `).run(post_type, postId, userId, tenantId);
+
+    if (result.changes === 0) {
+      return res.status(404).json({ ok: false, error: 'post_not_found' });
+    }
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('[stats] PATCH /api/posts/:id/type error:', err);
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/posts/mix-recommendation
+// Returns recommended post type based on 50/30/20 target (reach/trust/convert).
+// Lead magnet excluded from mix calc.
+// ---------------------------------------------------------------------------
+router.get('/posts/mix-recommendation', async (req, res) => {
+  const userId   = req.userId;
+  const tenantId = req.tenantId || 'default';
+
+  if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
+
+  try {
+    const rows = await db.prepare(`
+      SELECT post_type, COUNT(*) AS n
+      FROM   generated_posts
+      WHERE  user_id = ? AND tenant_id = ?
+        AND  status = 'published'
+        AND  post_type IN ('reach', 'trust', 'convert')
+        AND  published_at > NOW() - INTERVAL '30 days'
+      GROUP  BY post_type
+    `).all(userId, tenantId);
+
+    const total = rows.reduce((s, r) => s + Number(r.n), 0);
+
+    if (total < 4) {
+      return res.json({ ok: true, has_enough_data: false, recommended_type: null, nudge: null });
+    }
+
+    const counts = { reach: 0, trust: 0, convert: 0 };
+    for (const row of rows) counts[row.post_type] = Number(row.n);
+
+    const targets = { reach: 0.50, trust: 0.30, convert: 0.20 };
+    let worstType = null;
+    let worstDelta = -Infinity;
+
+    for (const [type, target] of Object.entries(targets)) {
+      const actual = counts[type] / total;
+      const delta = target - actual; // positive = underweight
+      if (delta > worstDelta) {
+        worstDelta = delta;
+        worstType = type;
+      }
+    }
+
+    const lastTypes = rows.sort((a, b) => Number(b.n) - Number(a.n)).map(r => r.post_type);
+    const dominantType = lastTypes[0] || null;
+    const nudge = dominantType && dominantType !== worstType
+      ? `Your last ${total} posts were mostly ${dominantType} — time to balance your mix?`
+      : null;
+
+    return res.json({
+      ok: true,
+      has_enough_data: true,
+      recommended_type: worstType,
+      nudge,
+    });
+  } catch (err) {
+    console.error('[stats] GET /api/posts/mix-recommendation error:', err);
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // GET /api/posts[?status=draft|published]
 // Returns generated posts for the user filtered by status (default: draft).
 // When status=published, also returns metrics and linkedin_post_id columns.

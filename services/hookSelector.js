@@ -9,6 +9,12 @@ const HAIKU_MODEL = 'claude-haiku-4-5';
 
 const SYSTEM_PROMPT = `You are a LinkedIn content strategist. Your only job is to classify a raw thought into one of eight hook archetypes. You must return only a valid JSON object with two keys: 'archetype' (one of the eight archetype names in uppercase) and 'confidence' (a number between 0 and 1). No other output.`;
 
+const ARCHETYPE_PREFERENCES = {
+  reach:   ['BEFORE_AFTER', 'CONFESSION', 'PATTERN_INTERRUPT'],
+  trust:   ['INSIGHT', 'CONTRARIAN', 'DIRECT_ADDRESS'],
+  convert: ['NUMBER', 'STAKES', 'BEFORE_AFTER'],
+};
+
 function buildArchetypeListForPrompt() {
   return ARCHETYPE_KEYS.map(key => {
     const a = HOOK_ARCHETYPES[key];
@@ -38,10 +44,11 @@ function insightFallback(reason) {
 /**
  * Classify raw thought into a hook archetype (Haiku). Never throws.
  * @param {string} rawThought
- * @param {object} voiceProfile — full user_profiles row (voice_fingerprint JSON string; reserved for future prompt enrichment)
+ * @param {object} voiceProfile — full user_profiles row
+ * @param {string|null} postType — 'reach' | 'trust' | 'convert' | null
  * @returns {Promise<{ archetype: string, confidence: number, structureInstruction: string, exampleHook: string, hookInjection: string }>}
  */
-async function selectHook(rawThought, voiceProfile) {
+async function selectHook(rawThought, voiceProfile, postType = null) {
   void voiceProfile;
 
   const thought = (rawThought || '').trim();
@@ -59,8 +66,11 @@ async function selectHook(rawThought, voiceProfile) {
     const client = new Anthropic({ apiKey });
 
     const archetypeLines = buildArchetypeListForPrompt();
+    const postTypeBlock = postType && ARCHETYPE_PREFERENCES[postType]
+      ? `\nPOST GOAL: ${postType.toUpperCase()}\nPreferred archetypes for this goal: ${ARCHETYPE_PREFERENCES[postType].join(', ')}\nWeight your selection toward these when the input could work with multiple archetypes.\n`
+      : '';
     const userPrompt = `${archetypeLines}
-
+${postTypeBlock}
 RAW THOUGHT:
 ${rawThought || ''}
 

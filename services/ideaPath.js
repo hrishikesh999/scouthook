@@ -16,6 +16,45 @@ function getLengthGuidance(funnelType) {
   return (targets[funnelType] || targets.default).guidance;
 }
 
+function buildPostTypeBlock(postType) {
+  const blocks = {
+    reach: `POST GOAL: REACH
+This post must attract new readers outside the author's existing audience.
+Body structure: Hook → tension or contradiction → resolution → open question
+Hook preference (in order): BEFORE_AFTER, CONFESSION, PATTERN_INTERRUPT
+Closing: An open question or binary choice. No selling. No DM asks.
+Aim for 200–300 words. Reach posts that exceed this rarely outperform shorter ones.`,
+    trust: `POST GOAL: TRUST
+This post must deepen credibility with readers who already follow the author.
+Body structure: State a belief → provide evidence or reasoning → land the implication
+Hook preference (in order): INSIGHT, CONTRARIAN, DIRECT_ADDRESS
+Closing: A reframe or reflection question that cements authority. No direct selling.
+Aim for 250–400 words. Trust posts need enough depth to earn authority.`,
+    convert: `POST GOAL: CONVERT
+This post must move warm readers toward a DM, call, or next step.
+Body structure: Name a specific problem → describe the solution → state the specific result → invite action
+Hook preference (in order): NUMBER, STAKES, BEFORE_AFTER
+Closing: One direct ask. DM, comment a word, or follow. One ask only. No "link in bio."
+Aim for 150–250 words. Convert posts that bury the CTA in 400 words don't convert.`,
+  };
+  return postType && blocks[postType] ? `\n${blocks[postType]}\n` : '';
+}
+
+const SPECIFICITY_MANDATE = `
+SPECIFICITY RULE:
+Every claim needs a number, a name, a timeframe, or a concrete scene.
+If the raw idea is missing specifics: use [SPECIFIC NEEDED] as a marker — do NOT fabricate statistics or invent metrics.
+A placeholder is honest. A fabricated number destroys trust when the reader asks for the source.`;
+
+const SELF_CHECK = `
+SELF-CHECK BEFORE OUTPUTTING:
+1. Does line 1 stop the scroll without needing context? If not, rewrite it.
+2. Is there a concrete number, scene, or named moment? If vague, use [SPECIFIC NEEDED].
+3. Are any banned words or em dashes present? If yes, replace them.
+4. Does the closing match the post goal? (reach=open question, trust=reframe, convert=direct ask)
+5. Would someone who knows this author think "that sounds like them"? If not, rewrite.
+Only output the JSON after all five pass.`;
+
 /**
  * Generate a single alternative first line (hook B) using Haiku.
  * Gives the user a second hook option without regenerating the whole post.
@@ -58,9 +97,11 @@ async function ideaToPost(rawIdea, userProfile, options = {}) {
   // If caller supplies archetype_override, skip selectHook and use it directly
   const archetypeOverride = options.archetypeOverride || null;
   const overrideRecord    = archetypeOverride ? (HOOK_ARCHETYPES[archetypeOverride] || HOOK_ARCHETYPES.INSIGHT) : null;
+  const postType          = options.postType || null;
+  const convertCtaIntent  = options.convertCtaIntent || null;
 
   const [hookResult, inputQuality] = await Promise.all([
-    archetypeOverride ? Promise.resolve({ archetype: archetypeOverride, hookInjection: buildHookInjection(overrideRecord), confidence: 1 }) : selectHook(rawIdea, userProfile),
+    archetypeOverride ? Promise.resolve({ archetype: archetypeOverride, hookInjection: buildHookInjection(overrideRecord), confidence: 1 }) : selectHook(rawIdea, userProfile, postType),
     assessInputQuality(rawIdea, client),
   ]);
 
@@ -81,6 +122,8 @@ async function ideaToPost(rawIdea, userProfile, options = {}) {
     archetypeUsed: hookResult.archetype,
     hookConfidence: hookResult.confidence,
     contentFeedback: buildContentFeedback(inputQuality),
+    postType,
+    convertCtaIntent,
   });
 }
 
@@ -125,11 +168,13 @@ VOICE FINGERPRINT (strictly follow these patterns):
 `;
 }
 
-function buildCtaInstruction(funnelType, ctaHint) {
+function buildCtaInstruction(funnelType, ctaHint, convertCtaIntent = null) {
   const funnelInstructions = {
     reach:   "End with one specific question inviting the reader to share their own experience with the post's central tension. Specific beats vague — 'What did you do when X happened?' beats 'What do you think?' Do NOT use 'Thoughts?' or 'What do you think?' verbatim.",
     trust:   "End with a reflection question that challenges the reader to examine their own practice, OR a forward-facing declarative that cements your authority position. The close should feel earned, not appended.",
-    convert: "End with a soft, one-line conversion invite — offer to DM, mention a resource in the comments, or invite them to follow for more. One ask only. Keep it conversational. No 'Check out my link' phrasing.",
+    convert: convertCtaIntent
+      ? `End with this specific ask: "${convertCtaIntent}". Make it conversational and direct. Never 'check my link in bio' or 'check comments'.`
+      : "End with a warm, low-friction invitation: 'If this resonates, send me a DM. I read every one.' or similar. One ask only. No link, no hard sell.",
   };
   const funnelInstruction = funnelInstructions[funnelType] || funnelInstructions.trust;
   const hintLine = ctaHint ? `\nARCHETYPE CTA DIRECTION: ${ctaHint}` : '';
@@ -137,13 +182,14 @@ function buildCtaInstruction(funnelType, ctaHint) {
 ${funnelInstruction}${hintLine}`;
 }
 
-function buildSystemPrompt(userProfile, hookInjectionBlock, ctaInstruction = '') {
+function buildSystemPrompt(userProfile, hookInjectionBlock, ctaInstruction = '', postType = null) {
   const fingerprintBlock = buildVoiceDNABlock(userProfile);
+  const postTypeBlock = buildPostTypeBlock(postType);
   return `You are an editorial thinking partner for a professional who creates LinkedIn content. Your job is to take a raw idea and transform it into one polished, high-quality LinkedIn post that sounds exactly like the author — not like AI.
 
 Produce exactly **one** post. The structure and opening of that post are determined entirely by the HOOK ARCHETYPE and HOOK INSTRUCTION below. Do not follow any other named format (no "stat hook", "hot take", or "story" templates).
 
-${fingerprintBlock}
+${fingerprintBlock}${postTypeBlock}
 ${hookInjectionBlock}
 
 CONTENT NICHE: ${userProfile.content_niche || 'not specified'}
@@ -167,7 +213,8 @@ ABOVE THE FOLD (critical for reach):
 - Avoid "not X, not Y" patterns — they are safe but flat. Instead, add a second sharp fact, a stark contrast, or a consequence that makes the hook land harder.
 - Lines 2–3 should make the reader feel they will miss something if they do not click "see more".
 - Never use lines 2–3 for background, setup, or "let me tell you about X" framing.
-${AI_TELLS_PROHIBITION}${ctaInstruction}`;
+${AI_TELLS_PROHIBITION}${SPECIFICITY_MANDATE}${ctaInstruction}
+${SELF_CHECK}`;
 }
 
 function buildUserPrompt(rawIdea) {
@@ -175,8 +222,6 @@ function buildUserPrompt(rawIdea) {
 ${rawIdea}
 
 EXTRACTION INSTRUCTION: Before structuring the post, identify the most specific experience, result, or data point in the raw idea. If the input is too vague (no concrete outcome, no opinion, no specific moment), ground the post in a plausible but clearly author-attributed specific scenario rather than staying at the level of the vague input.
-
-LENGTH: ${getLengthGuidance('default')}
 
 Return ONLY valid JSON in this exact structure:
 {
@@ -281,14 +326,17 @@ async function runSinglePostGeneration({
   userPromptOverride,
   funnelType = null,
   systemOverride = null,
+  postType = null,
+  convertCtaIntent = null,
 }) {
   const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
   if (!apiKey) throw new Error('anthropic_api_key not configured');
   const client = new Anthropic({ apiKey });
 
   const ctaHint = HOOK_ARCHETYPES[archetypeUsed]?.ctaHint || null;
-  const ctaInstruction = buildCtaInstruction(funnelType, ctaHint);
-  const systemPrompt = systemOverride || buildSystemPrompt(userProfile, hookInjection, ctaInstruction);
+  const effectiveFunnelType = funnelType || postType;
+  const ctaInstruction = buildCtaInstruction(effectiveFunnelType, ctaHint, convertCtaIntent);
+  const systemPrompt = systemOverride || buildSystemPrompt(userProfile, hookInjection, ctaInstruction, postType);
   let userPrompt = userPromptOverride || buildUserPrompt(rawIdea);
 
   const extraHints = [
@@ -415,17 +463,30 @@ async function vaultSeedToPost(vaultIdea, chunkText, userProfile, options = {}) 
 // Editorial path: copy editor model — reshapes author's own words, adds nothing.
 // ---------------------------------------------------------------------------
 
-function buildRefineSystemPrompt(userProfile, hookInjection = null) {
+function buildRefineSystemPrompt(userProfile, hookInjection = null, postType = null, convertCtaIntent = null) {
   const hookRule = hookInjection
     ? `1. HOOK (line 1): Use the archetype structure below — applied to the author's own words, not invented from scratch. The hook must surface the author's strongest idea in this structural form; do not invent new facts or angles.
 ${hookInjection}`
     : `1. HOOK (line 1): Identify the most compelling idea in the input. Write it as a sharp, direct opening line — tightened from the author's words. Surface the author's best line; do not invent a new angle.`;
 
+  const postTypeBlock = buildPostTypeBlock(postType);
+
+  const ctaRules = {
+    reach:   "End with one specific question inviting the reader to share their own experience. Specific beats vague. Do NOT use 'Thoughts?' or 'What do you think?' verbatim.",
+    trust:   "End with a reflection question that challenges the reader to examine their own practice, OR a forward-facing declarative that cements authority. The close must feel earned.",
+    convert: convertCtaIntent
+      ? `End with this specific ask: "${convertCtaIntent}". Make it conversational and direct.`
+      : "End with a warm, low-friction invite to DM, reply, or follow. One ask only. No links.",
+  };
+  const ctaRule = postType && ctaRules[postType]
+    ? `5. CTA: ${ctaRules[postType]}`
+    : `5. CTA: Write one closing question that invites a specific personal memory or experience — not a generic opinion. Bad: "What do you think?" Good: "What's the hardest thing you had to unlearn in your first year leading a team?" The best CTAs make readers want to answer because they already have the answer.`;
+
   return `You are a copy editor for a LinkedIn professional, not a ghostwriter.
 
 Your job is to take the author's own words and shape them into a high-impact LinkedIn post.
 You sharpen what is already there. You do not add what is not.
-
+${postTypeBlock}
 THE LINE YOU MUST NEVER CROSS:
 - You may tighten a sentence — cut flab, strengthen verbs, remove hedging.
 - You may NOT add a new fact, statistic, example, story beat, or claim the author did not provide.
@@ -440,7 +501,7 @@ ${hookRule}
 2. LINES 2–3 (above the fold): These are what decide whether someone clicks "see more". Do NOT use them for context, setup, or explanation. Use them to deepen the tension from the hook — a consequence, a contradiction, or a "here's why this changed everything" that makes the reader feel they'll miss something if they stop reading.
 3. BODY: Every sentence must trace back to something the author wrote. You may tighten, split, or reorder — you may not invent.
 4. TRIM: Remove sentences that are weak, redundant, or tangential to the central point.
-5. CTA: Write one closing question that invites a specific personal memory or experience — not a generic opinion. Bad: "What do you think?" Good: "What's the hardest thing you had to unlearn in your first year leading a team?" The best CTAs make readers want to answer because they already have the answer.
+${ctaRule}
 6. FORMAT: One sentence per line. Blank line between every 2–3 lines. No bullet lists. No headers. No paragraph blocks.
 
 AUTHOR CONTEXT:
@@ -448,7 +509,8 @@ AUTHOR CONTEXT:
 - Audience: ${userProfile.audience_role || 'professionals in the author\'s field'}
 - Audience pain: ${userProfile.audience_pain || 'professional challenges in their field'}
 
-${AI_TELLS_PROHIBITION}`;
+${AI_TELLS_PROHIBITION}${SPECIFICITY_MANDATE}
+${SELF_CHECK}`;
 }
 
 function buildRefineUserPrompt(sourceText, documentContext = null) {
@@ -558,10 +620,12 @@ async function restructureToPost(sourceText, userProfile, documentContext = null
   // If caller supplies archetypeOverride, skip selectHook and force that archetype
   const archetypeOverride = options.archetypeOverride || null;
   const overrideRecord    = archetypeOverride ? (HOOK_ARCHETYPES[archetypeOverride] || HOOK_ARCHETYPES.INSIGHT) : null;
+  const postType          = options.postType || null;
+  const convertCtaIntent  = options.convertCtaIntent || null;
 
   // Classify archetype + quality check in parallel before generation (both Haiku, fast)
   const [hookResult, inputQuality] = await Promise.all([
-    archetypeOverride ? Promise.resolve({ archetype: archetypeOverride, hookInjection: buildHookInjection(overrideRecord), confidence: 1 }) : selectHook(sourceText, userProfile),
+    archetypeOverride ? Promise.resolve({ archetype: archetypeOverride, hookInjection: buildHookInjection(overrideRecord), confidence: 1 }) : selectHook(sourceText, userProfile, postType),
     assessInputQuality(sourceText, client),
   ]);
 
@@ -574,7 +638,7 @@ async function restructureToPost(sourceText, userProfile, documentContext = null
     }
   }
 
-  const systemPrompt = buildRefineSystemPrompt(userProfile, hookResult.hookInjection);
+  const systemPrompt = buildRefineSystemPrompt(userProfile, hookResult.hookInjection, postType, convertCtaIntent);
   const userPrompt   = buildRefineUserPrompt(sourceText, documentContext);
   let responseText   = '';
 

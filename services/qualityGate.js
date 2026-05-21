@@ -139,6 +139,8 @@ function buildRecommendation(errors, flags, warnings) {
  *   hookConfidence?: number|null,
  *   formatSlug?: string,
  *   path?: string,
+ *   postType?: string|null,
+ *   keyword?: string|null,
  * }} options
  */
 function runQualityGate(postText, options = {}) {
@@ -149,6 +151,8 @@ function runQualityGate(postText, options = {}) {
     formatSlug = '',
     path = 'idea',
     funnelType = null,
+    postType = null,
+    keyword = null,
   } = options;
 
   const text = postText || '';
@@ -391,11 +395,37 @@ function runQualityGate(postText, options = {}) {
     score -= 30;
   }
 
+  // Lead magnet keyword confirmation — hard error if keyword not in post
+  if (postType === 'lead_magnet' && keyword) {
+    const kw = keyword.trim().toUpperCase();
+    if (!text.toUpperCase().includes(kw)) {
+      errors.push(`Lead magnet keyword "${keyword}" not found in post — CTA is broken without it`);
+      flags.push('KEYWORD_MISSING');
+      score -= 40;
+    }
+  }
+
   score = Math.max(0, Math.min(100, score));
 
   const passed = errors.length === 0;
 
   const recommendation = buildRecommendation(errors, flags, warnings);
+
+  // Derive a single actionable verdict string
+  let verdict;
+  if (passed) {
+    verdict = 'Your hook is doing exactly what it should. This one will stop people mid-scroll.';
+  } else if (flags.includes('KEYWORD_MISSING')) {
+    verdict = `The keyword didn't make it into the CTA. Check the post manually — it must say "Comment ${keyword || '[KEYWORD]'}" for the lead magnet to work.`;
+  } else if (flags.includes('WEAK_HOOK_OPENER') || flags.includes('HOOK_TOO_LONG')) {
+    verdict = "The first line doesn't create tension yet. Try opening with what changed or what you got wrong.";
+  } else if (flags.includes('AI_LANGUAGE_DETECTED')) {
+    verdict = 'This reads like AI wrote it. Regenerate or rewrite the flagged sections before posting.';
+  } else if (flags.includes('CLICHE_DETECTED')) {
+    verdict = 'Several overused phrases are making this invisible. Regenerate to clear them.';
+  } else {
+    verdict = 'Review the issues above before publishing.';
+  }
 
   return {
     passed,
@@ -404,6 +434,7 @@ function runQualityGate(postText, options = {}) {
     warnings,
     flags,
     recommendation,
+    verdict,
     // Back-compat for DB columns (aligned with hard-error gate only)
     passed_gate: passed,
   };

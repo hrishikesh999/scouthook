@@ -5,6 +5,7 @@ const router = express.Router();
 const { db, getSetting } = require('../db');
 const { runQualityGate } = require('../services/qualityGate');
 const { ideaToPost, restructureToPost } = require('../services/ideaPath');
+const { generateLeadMagnetPost } = require('../services/leadMagnetPath');
 const { classifyContent } = require('../services/funnelClassifier');
 const { canGeneratePost } = require('../services/subscription');
 const { sendEmailToUser } = require('../emails');
@@ -96,14 +97,17 @@ async function restructureWithQualityGate(userProfile, sourceText, funnelType, o
 
   const primaryGate = runQualityGate(
     post,
-    gateOptions(
-      { format_slug: IDEA_SLUG, content: post },
-      userProfile,
-      'idea',
-      archetypeUsed,
-      hookConfidence,
-      funnelType || null
-    )
+    {
+      ...gateOptions(
+        { format_slug: IDEA_SLUG, content: post },
+        userProfile,
+        'idea',
+        archetypeUsed,
+        hookConfidence,
+        funnelType || options.postType || null
+      ),
+      postType: options.postType || null,
+    }
   );
 
   return { synthesis, post, ctaAlternatives, archetypeUsed, hookConfidence, primaryGate, contentFeedback };
@@ -145,7 +149,7 @@ router.post('/', async (req, res) => {
   }
 
   const { path: genPath, vault_idea_id, skip_substance_check, interview_answers, funnel_type: bodyFunnelType,
-          archetype_override, source } = req.body;
+          archetype_override, source, post_type, lead_magnet_inputs, convert_cta_intent } = req.body;
   let { raw_idea } = req.body;
 
   // Interview path: format Q&A answers into a structured raw_idea string
@@ -166,7 +170,8 @@ router.post('/', async (req, res) => {
     return res.status(400).json({ ok: false, error: 'complete_profile_first' });
   }
 
-  if (!raw_idea?.trim()) {
+  // Lead magnet posts don't require raw_idea — they use lead_magnet_inputs
+  if (post_type !== 'lead_magnet' && !raw_idea?.trim()) {
     return res.status(400).json({ ok: false, error: 'missing_raw_idea' });
   }
 
@@ -189,7 +194,79 @@ router.post('/', async (req, res) => {
   }
 
   try {
+    // ── Lead magnet path ────────────────────────────────────────────────────
+    if (post_type === 'lead_magnet') {
+      const inputs = lead_magnet_inputs || {};
+      const lmErrors = [];
+      if (!inputs.resourceName?.trim()) lmErrors.push('What are you giving away? Add a name first.');
+      if (!Array.isArray(inputs.deliverables) || inputs.deliverables.filter(d => d?.trim()).length < 3) {
+        lmErrors.push('Add at least 3 specific items — readers decide whether to comment based on what\'s inside.');
+      }
+      if (!inputs.proof?.trim()) lmErrors.push('What\'s your real result? This must come from you — ScoutHook won\'t invent it.');
+      if (!inputs.keyword?.trim()) lmErrors.push('What word should people comment to receive this?');
+      if (inputs.keyword && !/^\S+$/.test(inputs.keyword.trim())) lmErrors.push('Keyword must be a single word with no spaces.');
+      if (lmErrors.length) return res.status(422).json({ ok: false, error: 'invalid_lead_magnet_inputs', messages: lmErrors });
+
+      const lmResult = await generateLeadMagnetPost(inputs, userProfile);
+      const { post, template, hookUsed, keywordConfirmed } = lmResult;
+
+      const lmGate = runQualityGate(post, {
+        voiceProfile: userProfile,
+        path: 'idea',
+        postType: 'lead_magnet',
+        keyword: inputs.keyword.trim(),
+      });
+
+      const runResult = await db.prepare(`
+        INSERT INTO generation_runs (user_id, tenant_id, path, input_data, synthesis)
+        VALUES (?, ?, ?, ?, ?)
+        RETURNING id
+      `).run(userId, tenantId, 'lead_magnet', JSON.stringify({ lead_magnet_inputs: inputs }), JSON.stringify({ hook_used: hookUsed, template }));
+      const runId = runResult.lastInsertRowid;
+
+      const primaryInsert = await db.prepare(`
+        INSERT INTO generated_posts
+          (run_id, user_id, tenant_id, format_slug, content, quality_score, quality_flags, passed_gate,
+           funnel_type, vault_source_ref, hook_b, cta_alternatives, idea_input, archetype_used, source,
+           post_type, quality_verdict)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        RETURNING id
+      `).run(
+        runId, userId, tenantId, IDEA_SLUG,
+        post, lmGate.score, JSON.stringify(lmGate.flags), lmGate.passed_gate ? 1 : 0,
+        'convert', null, null, null, null, null, source || null,
+        'lead_magnet', lmGate.verdict || null
+      );
+      const primaryId = primaryInsert.lastInsertRowid;
+
+      const lmQuality = buildQualityPayload(lmGate, 1, true);
+
+      return res.json({
+        ok: true,
+        run_id:           runId,
+        synthesis:        { suggested_angle: hookUsed, recommended_structure: template, supporting_insight: keywordConfirmed },
+        post,
+        hookB:            null,
+        ctaAlternatives:  [],
+        id:               primaryId,
+        archetypeUsed:    null,
+        hookConfidence:   null,
+        quality:          { ...lmQuality, verdict: lmGate.verdict },
+        alternative:      null,
+        funnel_type:      'convert',
+        post_type:        'lead_magnet',
+        lead_magnet_template: template,
+        vault_source_ref: null,
+        content_feedback: null,
+      });
+    }
+
+    // ── Standard path (Reach / Trust / Convert / free-write) ────────────────
     let ideaResult;
+
+    if (!raw_idea?.trim()) {
+      return res.status(400).json({ ok: false, error: 'missing_raw_idea' });
+    }
 
     const sourceText = vaultIdea
       ? (vaultChunkText || vaultIdea.seed_text)
@@ -198,6 +275,8 @@ router.post('/', async (req, res) => {
     ideaResult = await restructureWithQualityGate(userProfile, sourceText, funnelTypeForGate, {
       skipSubstanceCheck:  !!skip_substance_check,
       archetypeOverride:   archetype_override || null,
+      postType:            post_type || null,
+      convertCtaIntent:    convert_cta_intent || null,
     });
 
     {
@@ -236,17 +315,17 @@ router.post('/', async (req, res) => {
       // Funnel type: honour the source vault idea's classification when available.
       // Reclassifying the generated post text causes drift (well-written posts
       // read as "trust" even when the seed idea was explicitly reach/convert).
-      const funnelType = vaultIdea?.funnel_type || (await classifyContent(post)).funnelType;
+      const funnelType = vaultIdea?.funnel_type || post_type || (await classifyContent(post)).funnelType;
       const vaultSourceRef = vaultIdea?.source_ref || null;
 
-      const postsInsert = db.prepare(`
+      const primaryInsert = await db.prepare(`
         INSERT INTO generated_posts
-          (run_id, user_id, tenant_id, format_slug, content, quality_score, quality_flags, passed_gate, funnel_type, vault_source_ref, hook_b, cta_alternatives, idea_input, archetype_used, source)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          (run_id, user_id, tenant_id, format_slug, content, quality_score, quality_flags, passed_gate,
+           funnel_type, vault_source_ref, hook_b, cta_alternatives, idea_input, archetype_used, source,
+           post_type, quality_verdict)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         RETURNING id
-      `);
-
-      const primaryInsert = await postsInsert.run(
+      `).run(
         runId,
         userId,
         tenantId,
@@ -261,7 +340,9 @@ router.post('/', async (req, res) => {
         ctaAlternatives?.length ? JSON.stringify(ctaAlternatives) : null,
         inputData.raw_idea || null,
         archetypeUsed || null,
-        source || null
+        source || null,
+        post_type || null,
+        primaryGate.verdict || null
       );
       const primaryId = primaryInsert.lastInsertRowid;
 
@@ -284,9 +365,10 @@ router.post('/', async (req, res) => {
         id: primaryId,
         archetypeUsed,
         hookConfidence,
-        quality: primaryQuality,
+        quality: { ...primaryQuality, verdict: primaryGate.verdict },
         alternative: null,
         funnel_type: funnelType,
+        post_type: post_type || null,
         vault_source_ref: vaultSourceRef,
         content_feedback: contentFeedback || null,
       });
@@ -454,7 +536,7 @@ router.get('/post/:postId', async (req, res) => {
       SELECT id, content, quality_score, quality_flags, passed_gate,
              hook_b, cta_alternatives, format_slug, funnel_type,
              asset_url, asset_preview_url, asset_type, asset_slide_count, first_comment,
-             archetype_used, idea_input
+             archetype_used, idea_input, post_type, quality_verdict
       FROM generated_posts
       WHERE id = ? AND user_id = ? AND tenant_id = ?
     `).get(postId, userId, tenantId);
@@ -479,12 +561,14 @@ router.get('/post/:postId', async (req, res) => {
     post: {
       id:              row.id,
       content:         row.content,
-      quality:         { score: row.quality_score || 0, passed: row.passed_gate === 1, flags, errors: flags, warnings: [] },
+      quality:         { score: row.quality_score || 0, passed: row.passed_gate === 1, flags, errors: flags, warnings: [], verdict: row.quality_verdict || null },
       hookB:           row.hook_b || null,
       ctaAlternatives,
       archetypeUsed:   row.archetype_used || null,
       ideaInput:       row.idea_input     || null,
       funnelType:      row.funnel_type || null,
+      postType:        row.post_type || null,
+      qualityVerdict:  row.quality_verdict || null,
       assetUrl:        row.asset_url        || null,
       assetPreviewUrl: row.asset_preview_url || null,
       assetType:       row.asset_type        || null,

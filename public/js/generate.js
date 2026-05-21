@@ -580,7 +580,7 @@ async function handleAttachment(file) {
     } else if (err.message === 'plan_limit_exceeded') {
       const used = (err.planCurrent != null && err.planLimit != null)
         ? ` You've used ${err.planCurrent} of ${err.planLimit} this month.` : '';
-      showChatError(`You've reached the free plan limit.${used} <button type="button" onclick="window.PricingModal?.open()" style="background:none;border:none;padding:0;color:var(--brand);font-weight:600;cursor:pointer;font-size:inherit">Upgrade to Pro →</button>`);
+      showChatError(`You've reached the free plan limit.${used} <a href="/billing.html" class="js-upgrade-cta">Upgrade to Pro →</a>`);
     } else {
       showChatError('Something went wrong processing your file. <a href="#">Try again →</a>');
     }
@@ -634,7 +634,7 @@ async function triggerGenerate(opts = {}) {
     } else if (err.message === 'plan_limit_exceeded') {
       const used = (err.planCurrent != null && err.planLimit != null)
         ? ` You've used ${err.planCurrent} of ${err.planLimit} this month.` : '';
-      showChatError(`You've reached the free plan limit.${used} <button type="button" onclick="window.PricingModal?.open()" style="background:none;border:none;padding:0;color:var(--brand);font-weight:600;cursor:pointer;font-size:inherit">Upgrade to Pro →</button>`);
+      showChatError(`You've reached the free plan limit.${used} <a href="/billing.html" class="js-upgrade-cta">Upgrade to Pro →</a>`);
     } else if (err.message === 'rate_limit_exceeded') {
       showChatError("You've hit the hourly generation limit. Wait a few minutes and try again.");
     } else if (err.message === 'high_demand') {
@@ -763,6 +763,9 @@ function showChatError(html) {
   chatError.innerHTML = html;
   chatError.classList.add('visible');
   chatError.querySelector('a[href="#"]')?.addEventListener('click', e => { e.preventDefault(); triggerGenerate(); });
+  chatError.querySelector('a.js-upgrade-cta')?.addEventListener('click', e => {
+    if (window.PricingModal) { e.preventDefault(); window.PricingModal.open(); }
+  });
 }
 function hideChatError() {
   chatError.classList.remove('visible');

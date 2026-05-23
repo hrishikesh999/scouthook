@@ -171,6 +171,16 @@ router.post('/', async (req, res) => {
 
   // Trigger fingerprint extraction async — never block the response on it
   if (samplesChanged) {
+    const { seedPhrasesFromWritingSamples } = require('../services/writingSampleSeeder');
+    seedPhrasesFromWritingSamples(userId, tenantId, writing_samples)
+      .then(phrases => {
+        if (phrases.length) {
+          return db.prepare('UPDATE user_profiles SET writing_sample_phrases = ? WHERE user_id = ? AND tenant_id = ?')
+            .run(JSON.stringify(phrases), userId, tenantId);
+        }
+      })
+      .catch(err => console.error('[profile] Phrase seeding failed (non-fatal):', err.message));
+
     const { extractFingerprint } = require('../services/voiceFingerprint');
     const { calculateCompletionPct } = require('../services/voiceExtraction');
     extractFingerprint(writing_samples)

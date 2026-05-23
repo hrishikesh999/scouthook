@@ -91,6 +91,25 @@ function buildQualityPayload(gate, synthesisAttempt, isPrimary) {
 const IDEA_SLUG = 'idea';
 const IDEA_INSIGHT_SLUG = 'idea_insight';
 
+function assembleExtractionInputs(postType, answers, tensionStatement) {
+  const parts = [];
+  if (tensionStatement) parts.push(`CENTRAL TENSION: ${tensionStatement}`);
+  if (postType === 'reach') {
+    if (answers.moment)  parts.push(`WHAT HAPPENED: ${answers.moment}`);
+    if (answers.lesson)  parts.push(`WHAT TO DO: ${answers.lesson}`);
+    if (answers.angle)   parts.push(`WHAT MOST PEOPLE GET WRONG: ${answers.angle}`);
+  } else if (postType === 'trust') {
+    if (answers.contrarian) parts.push(`THE BELIEF: ${answers.contrarian}`);
+    if (answers.proof)      parts.push(`THE PROOF: ${answers.proof}`);
+    if (answers.audience)   parts.push(`WHO THIS IS FOR: ${answers.audience}`);
+  } else if (postType === 'convert') {
+    if (answers.result)    parts.push(`THE RESULT: ${answers.result}`);
+    if (answers.mechanism) parts.push(`WHAT DROVE IT: ${answers.mechanism}`);
+    if (answers.target)    parts.push(`WHO SHOULD ACT: ${answers.target}`);
+  }
+  return parts.join('\n\n');
+}
+
 async function restructureWithQualityGate(userProfile, sourceText, funnelType, options = {}) {
   const { synthesis, post, ctaAlternatives, archetypeUsed, hookConfidence, contentFeedback } =
     await restructureToPost(sourceText, userProfile, null, options);
@@ -149,7 +168,8 @@ router.post('/', async (req, res) => {
   }
 
   const { path: genPath, vault_idea_id, skip_substance_check, interview_answers, funnel_type: bodyFunnelType,
-          archetype_override, source, post_type, lead_magnet_inputs, convert_cta_intent } = req.body;
+          archetype_override, source, post_type, lead_magnet_inputs, convert_cta_intent,
+          tension_statement } = req.body;
   let { raw_idea } = req.body;
 
   // Interview path: format Q&A answers into a structured raw_idea string
@@ -168,6 +188,21 @@ router.post('/', async (req, res) => {
 
   if (!userProfile) {
     return res.status(400).json({ ok: false, error: 'complete_profile_first' });
+  }
+
+  // Lazy seed: populate phrase library on first generation if writing samples exist but phrases haven't been extracted yet
+  if (!userProfile.writing_sample_phrases && userProfile.writing_samples?.length >= 100) {
+    try {
+      const { seedPhrasesFromWritingSamples } = require('../services/writingSampleSeeder');
+      const phrases = await seedPhrasesFromWritingSamples(userId, tenantId, userProfile.writing_samples);
+      if (phrases.length) {
+        await db.prepare('UPDATE user_profiles SET writing_sample_phrases = ? WHERE user_id = ? AND tenant_id = ?')
+          .run(JSON.stringify(phrases), userId, tenantId);
+        userProfile.writing_sample_phrases = JSON.stringify(phrases);
+      }
+    } catch (err) {
+      console.warn('[generate] Phrase seeding failed (non-fatal):', err.message);
+    }
   }
 
   // Lead magnet posts don't require raw_idea — they use lead_magnet_inputs
@@ -884,6 +919,30 @@ router.post('/quality-check', async (req, res) => {
   });
 
   return res.json({ ok: true, quality });
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/generate/extract-tension
+// Runs Haiku tension extraction on Q1 answer. Never blocking — returns
+// { tension: null, missing: null } on any error.
+// Body: { post_type, answer }
+// ---------------------------------------------------------------------------
+router.post('/extract-tension', async (req, res) => {
+  const userId = req.userId;
+  if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
+
+  const { post_type, answer } = req.body;
+  if (!post_type || !answer?.trim()) {
+    return res.status(400).json({ ok: false, error: 'post_type and answer are required' });
+  }
+
+  try {
+    const { extractTension } = require('../services/tensionExtractor');
+    const result = await extractTension(post_type, answer);
+    return res.json({ ok: true, tension: result.tension, missing: result.missing });
+  } catch {
+    return res.json({ ok: true, tension: null, missing: null });
+  }
 });
 
 module.exports = router;

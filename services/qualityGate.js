@@ -272,7 +272,7 @@ function runQualityGate(postText, options = {}) {
   const lowerLastLine = (lastLine || '').toLowerCase();
   const hasClosingQuestion = lastLine && lastLine.trim().endsWith('?');
   const hasConversionCta = /\b(dm me|dm us|drop a comment|link in (the )?comments?|follow|reply below|reach out|message me)\b/.test(lowerLastLine);
-  const isGenericCta = /\bwhat do you think\??\s*$|^thoughts\??\s*$|^agree\??\s*$|^sound familiar\??\s*$|^can you relate\??\s*$|^yes or no\??\s*$/i.test((lastLine || '').trim());
+  const isGenericCta = /\bwhat do you think\??\s*$|^thoughts\??\s*$|^agree\??\s*$|^sound familiar\??\s*$|^can you relate\??\s*$|^yes or no\??\s*$|let me know (your thoughts|in the comments)|curious (to hear|what you think)|have you experienced this\?/i.test((lastLine || '').trim());
 
   if (!hasClosingQuestion && !hasConversionCta) {
     warnings.push('No closing CTA detected — end with a specific question or a soft invite to drive engagement');
@@ -356,6 +356,15 @@ function runQualityGate(postText, options = {}) {
     } else {
       run = 0;
     }
+  }
+
+  // Check 11 — Lesson summary close (warning, -12)
+  const LESSON_SUMMARY_CLOSE = /\b(the (real |key |main )?(takeaway|lesson|point|moral) (here |from this )?is|what this means (for you )?is|here'?s what (i learned|this taught me)|here'?s the lesson|the bottom line[: ])/i;
+  const last200 = text.slice(-200);
+  if (LESSON_SUMMARY_CLOSE.test(last200)) {
+    warnings.push('Lesson summary closing detected — the post should land without explaining itself. Cut or rewrite the last line.');
+    flags.push('LESSON_SUMMARY_CLOSE');
+    score -= 12;
   }
 
   // Legacy — generic hook (niche exclusions)

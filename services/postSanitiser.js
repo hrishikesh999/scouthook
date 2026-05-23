@@ -27,6 +27,18 @@ CONVICTION — commit to a point of view. Hedged posts feel timid and get scroll
 - Never use "in many cases", "often times", "it depends" as a conclusion — those are non-answers
 - Never soften a strong claim with "I think" or "in my opinion" — state it as true
 - If the post challenges a belief, do so directly — not with "you might want to consider"
+
+FORBIDDEN STRUCTURES — these reveal AI authorship through pattern, not vocabulary:
+- Never use three parallel points of equal length (First... Second... Third... or 1. 2. 3.)
+  If listing, use unequal-weight line breaks, not numbers.
+- Never write the fake vulnerability arc: failure → lesson → wisdom.
+  Give the mess without the tidy resolution, or skip the resolution entirely.
+- Never close with a lesson summary: "The real takeaway here is...", "What this means is...",
+  "The bottom line:", "Here's what I learned:", "Here's the lesson:".
+  The post should land without explaining itself.
+- Never present both sides without choosing one. A post with no verdict has no reason to exist.
+- Never write "What do you think? Let me know in the comments."
+  or "Curious to hear your thoughts." These signal nothing was at stake.
 `;
 
 /**

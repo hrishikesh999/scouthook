@@ -124,6 +124,7 @@ async function ideaToPost(rawIdea, userProfile, options = {}) {
     contentFeedback: buildContentFeedback(inputQuality),
     postType,
     convertCtaIntent,
+    tensionStatement: options.tensionStatement || null,
   });
 }
 
@@ -154,6 +155,40 @@ async function generateInsightAlternativePost(rawIdea, userProfile, options = {}
   };
 }
 
+function buildTensionBlock(tension) {
+  if (!tension) return '';
+  return `\nCENTRAL TENSION (the only reason this post exists):
+${tension}
+
+Every sentence must earn the right to be in this post by building toward, deepening, or resolving this tension.
+If a sentence does not serve the tension — cut it.
+The hook opens on the tension. The body unpacks it. The close lands it.\n`;
+}
+
+function buildPhraseLibraryBlock(userProfile) {
+  if (!userProfile.writing_sample_phrases) return '';
+  let phrases;
+  try {
+    phrases = JSON.parse(userProfile.writing_sample_phrases);
+  } catch {
+    return '';
+  }
+  if (!Array.isArray(phrases) || !phrases.length) return '';
+  const top = phrases
+    .filter(p => p.phrase && typeof p.specificity_score === 'number')
+    .sort((a, b) => b.specificity_score - a.specificity_score)
+    .slice(0, 15);
+  if (!top.length) return '';
+  const lines = top.map(p => `• ${p.phrase}`).join('\n');
+  // Type labels omitted intentionally — showing them changes how the model
+  // uses phrases (weights by classification rather than natural fit).
+  return `\nPHRASE LIBRARY — exact language from the author's own writing:
+${lines}
+
+Use these verbatim where they fit the shape naturally.
+Do not force inclusion — if a phrase requires restructuring the argument, leave it out.\n`;
+}
+
 function buildFingerprintBlock(userProfile) {
   const fingerprint = userProfile.voice_fingerprint
     ? JSON.parse(userProfile.voice_fingerprint)
@@ -182,15 +217,30 @@ function buildCtaInstruction(funnelType, ctaHint, convertCtaIntent = null) {
 ${funnelInstruction}${hintLine}`;
 }
 
-function buildSystemPrompt(userProfile, hookInjectionBlock, ctaInstruction = '', postType = null) {
+function buildSystemPrompt(userProfile, hookInjectionBlock, ctaInstruction = '', postType = null, tensionStatement = null) {
+  const tensionBlock = buildTensionBlock(tensionStatement);
+  const phraseLibraryBlock = buildPhraseLibraryBlock(userProfile);
   const fingerprintBlock = buildVoiceDNABlock(userProfile);
   const postTypeBlock = buildPostTypeBlock(postType);
   return `You are an editorial thinking partner for a professional who creates LinkedIn content. Your job is to take a raw idea and transform it into one polished, high-quality LinkedIn post that sounds exactly like the author — not like AI.
-
-Produce exactly **one** post. The structure and opening of that post are determined entirely by the HOOK ARCHETYPE and HOOK INSTRUCTION below. Do not follow any other named format (no "stat hook", "hot take", or "story" templates).
-
+${tensionBlock}${phraseLibraryBlock}
 ${fingerprintBlock}${postTypeBlock}
 ${hookInjectionBlock}
+
+GENERATION TASK — two separate jobs:
+
+PART 1 — FIND THE SHAPE:
+Build the structure that best serves the central tension above.
+What sequence of moves — opening, body, close — resolves this contradiction most clearly?
+The reader should arrive at the main insight through the evidence before you name it.
+Do not announce the conclusion — earn it.
+Do this work first. The shape is determined by the tension, not the hook archetype.
+
+PART 2 — FIND THE VOICE:
+For any claim, explanation, or description, check the phrase library above.
+Use exact language where it fits the shape you built.
+If no phrase fits without restructuring the argument — use plain, specific language instead.
+The shape is non-negotiable. The phrases are available material.
 
 CONTENT NICHE: ${userProfile.content_niche || 'not specified'}
 
@@ -213,6 +263,11 @@ ABOVE THE FOLD (critical for reach):
 - Avoid "not X, not Y" patterns — they are safe but flat. Instead, add a second sharp fact, a stark contrast, or a consequence that makes the hook land harder.
 - Lines 2–3 should make the reader feel they will miss something if they do not click "see more".
 - Never use lines 2–3 for background, setup, or "let me tell you about X" framing.
+
+POINT OF VIEW (non-negotiable):
+Take the strongest defensible position the raw idea supports — not the safest one.
+Never present both sides without choosing one. A hedged first draft cannot be sharpened; a strong one can be dialled back.
+If the idea contains a provocative angle, lead with it — do not bury it in the body.
 ${AI_TELLS_PROHIBITION}${SPECIFICITY_MANDATE}${ctaInstruction}
 ${SELF_CHECK}`;
 }
@@ -221,7 +276,7 @@ function buildUserPrompt(rawIdea) {
   return `RAW IDEA:
 ${rawIdea}
 
-EXTRACTION INSTRUCTION: Before structuring the post, identify the most specific experience, result, or data point in the raw idea. If the input is too vague (no concrete outcome, no opinion, no specific moment), ground the post in a plausible but clearly author-attributed specific scenario rather than staying at the level of the vague input.
+EXTRACTION INSTRUCTION: Before structuring the post, identify the most specific experience, result, or data point in the raw idea. If the input is too vague (no concrete outcome, no opinion, no specific moment), mark missing specifics with [SPECIFIC NEEDED]. Never invent numbers, names, timeframes, or outcomes.
 
 Return ONLY valid JSON in this exact structure:
 {
@@ -328,6 +383,7 @@ async function runSinglePostGeneration({
   systemOverride = null,
   postType = null,
   convertCtaIntent = null,
+  tensionStatement = null,
 }) {
   const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
   if (!apiKey) throw new Error('anthropic_api_key not configured');
@@ -336,7 +392,7 @@ async function runSinglePostGeneration({
   const ctaHint = HOOK_ARCHETYPES[archetypeUsed]?.ctaHint || null;
   const effectiveFunnelType = funnelType || postType;
   const ctaInstruction = buildCtaInstruction(effectiveFunnelType, ctaHint, convertCtaIntent);
-  const systemPrompt = systemOverride || buildSystemPrompt(userProfile, hookInjection, ctaInstruction, postType);
+  const systemPrompt = systemOverride || buildSystemPrompt(userProfile, hookInjection, ctaInstruction, postType, tensionStatement);
   let userPrompt = userPromptOverride || buildUserPrompt(rawIdea);
 
   const extraHints = [

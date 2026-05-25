@@ -292,11 +292,16 @@ router.post('/mine', async (req, res) => {
     byDoc.get(chunk.document_id).chunks.push(chunk);
   }
 
+  // Fetch user profile once for audience-aware mining
+  const userProfile = await db.prepare(
+    'SELECT content_niche, audience_role, audience_pain, contrarian_view FROM user_profiles WHERE user_id = ? AND tenant_id = ?'
+  ).get(userId, tenantId) || {};
+
   let totalSeeds = 0;
 
   for (const [docId, { filename, chunks }] of byDoc) {
     try {
-      const seeds = await mineChunks(chunks, filename);
+      const seeds = await mineChunks(chunks, filename, userProfile);
 
       for (const seed of seeds) {
         const { funnelType, hookArchetype } = await classifyContent(seed.seed_text);
@@ -304,15 +309,12 @@ router.post('/mine', async (req, res) => {
         const docFilename = filename.length > 60 ? filename.slice(0, 57) + '…' : filename;
         const sourceRef   = `From: "${docFilename}" · ${seed.source_ref}`;
 
-        const insertResult = await db.prepare(`
+        // hook_line extracted during mining — store directly as hook_preview (no separate Haiku call needed)
+        await db.prepare(`
           INSERT INTO vault_ideas
-            (user_id, tenant_id, document_id, chunk_id, seed_text, source_ref, funnel_type, hook_archetype)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-          RETURNING id
-        `).run(userId, tenantId, docId, seed.chunkId, seed.seed_text, sourceRef, funnelType, hookArchetype);
-
-        const ideaId = insertResult.lastInsertRowid;
-        setImmediate(() => generateHookPreview(ideaId, seed.seed_text));
+            (user_id, tenant_id, document_id, chunk_id, seed_text, source_ref, funnel_type, hook_archetype, hook_preview)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(userId, tenantId, docId, seed.chunkId, seed.seed_text, sourceRef, funnelType, hookArchetype, seed.hook_line || null);
 
         totalSeeds++;
       }

@@ -547,11 +547,13 @@ This is the core contradiction the post must resolve. Every structural decision 
 `
     : '';
 
+  const phraseLibraryBlock = buildPhraseLibraryBlock(userProfile);
+
   return `You are a copy editor for a LinkedIn professional, not a ghostwriter.
 
 Your job is to take the author's own words and shape them into a high-impact LinkedIn post.
 You sharpen what is already there. You do not add what is not.
-${postTypeBlock}${tensionBlock}THE LINE YOU MUST NEVER CROSS:
+${postTypeBlock}${tensionBlock}${phraseLibraryBlock}THE LINE YOU MUST NEVER CROSS:
 - You may tighten a sentence — cut flab, strengthen verbs, remove hedging.
 - You may NOT add a new fact, statistic, example, story beat, or claim the author did not provide.
 - If the author said "I think pricing is something most founders get wrong", you may sharpen it to "Most founders get pricing wrong." You may not add "In my experience working with 50+ startups" if the author did not write that.

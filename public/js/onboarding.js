@@ -22,6 +22,7 @@ const Onboarding = (() => {
     answers:       [],     // [{ question, answer, field }] — field maps to DB column
     postId:        null,
     post:          null,
+    vaultDocId:    null,   // set if user uploads a doc in the vault step
   };
 
   /* ── Interview questions ─────────────────────────────────
@@ -104,7 +105,7 @@ const Onboarding = (() => {
   // Maps screen id → progress dot number (1–4)
   // s4 covers both website and questions (dot 2)
   // s5 is generating (dot 3), s6 is reveal (dot 4)
-  const DOT_MAP = { s1: '1', s4: '2', s5: '3', s6: '4' };
+  const DOT_MAP = { s1: '1', s4: '2', s3: '3', s5: '4', s6: '5' };
 
   function showScreen(id) {
     qsa('.ob-screen').forEach(s => s.classList.remove('active'));
@@ -389,8 +390,112 @@ const Onboarding = (() => {
       state.questionIndex++;
       renderQuestion();
     } else {
-      saveProfileAndGenerate();
+      showScreen('s3');
     }
+  }
+
+  /* ── Screen 3: Vault upload ─────────────────────────── */
+  function initS3() {
+    const dropzone  = qs('ob-vault-dropzone');
+    const fileInput = qs('ob-vault-file');
+    const fileBadge = qs('ob-vault-file-badge');
+    const fileName  = qs('ob-vault-file-name');
+    const fileClear = qs('ob-vault-file-clear');
+    const urlInput  = qs('ob-vault-url');
+    const uploadBtn = qs('ob-vault-upload-btn');
+    const skipBtn   = qs('ob-vault-skip-btn');
+    const statusEl  = qs('ob-vault-status');
+
+    let pendingFile = null;
+
+    function setStatus(msg, type) {
+      if (!statusEl) return;
+      statusEl.textContent   = msg;
+      statusEl.style.display = msg ? '' : 'none';
+      statusEl.className     = type === 'error' ? 'ob-field-error' : '';
+    }
+
+    function selectFile(f) {
+      const ok = /\.(pdf|docx|txt)$/i.test(f.name);
+      if (!ok) { setStatus('Only PDF, DOCX, or TXT files are supported.', 'error'); return; }
+      pendingFile = f;
+      if (fileName)   fileName.textContent    = f.name;
+      if (fileBadge)  fileBadge.style.display = '';
+      if (dropzone)   dropzone.style.display  = 'none';
+      if (urlInput)   urlInput.value          = '';
+      setStatus('', '');
+    }
+
+    dropzone?.addEventListener('dragover',  e => { e.preventDefault(); dropzone.classList.add('dragging'); });
+    dropzone?.addEventListener('dragleave', ()  => dropzone.classList.remove('dragging'));
+    dropzone?.addEventListener('drop', e => {
+      e.preventDefault(); dropzone.classList.remove('dragging');
+      const f = e.dataTransfer.files[0]; if (f) selectFile(f);
+    });
+    // Keyboard access: label handles click natively; keydown fires explicit click for Enter/Space
+    dropzone?.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput?.click(); }
+    });
+    fileInput?.addEventListener('change', () => { if (fileInput.files[0]) selectFile(fileInput.files[0]); });
+
+    fileClear?.addEventListener('click', e => {
+      e.stopPropagation();
+      pendingFile = null;
+      if (fileBadge) fileBadge.style.display = 'none';
+      if (dropzone)  dropzone.style.display  = '';
+      if (fileInput) fileInput.value         = '';
+      if (urlInput)  urlInput.value          = '';
+      setStatus('', '');
+    });
+
+    skipBtn?.addEventListener('click', () => saveProfileAndGenerate());
+
+    uploadBtn?.addEventListener('click', async () => {
+      const url = (urlInput?.value || '').trim();
+      if (!pendingFile && !url) { saveProfileAndGenerate(); return; }
+
+      uploadBtn.disabled = true;
+      setStatus('Uploading…', '');
+
+      try {
+        let res, data;
+        if (pendingFile) {
+          res  = await fetch('/api/vault/upload', {
+            method:  'POST',
+            headers: { ...apiHeaders(), 'Content-Type': pendingFile.type || 'application/octet-stream', 'X-Filename': encodeURIComponent(pendingFile.name) },
+            body:    pendingFile,
+          });
+          data = await res.json();
+        } else {
+          res  = await fetch('/api/vault/upload', {
+            method:  'POST',
+            headers: { ...apiHeaders(), 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ url }),
+          });
+          data = await res.json();
+        }
+
+        if (data.ok) {
+          state.vaultDocId = data.document?.id || null;
+          // Trigger mining in background so vault ideas are ready for next session
+          fetch('/api/vault/mine', { method: 'POST', headers: apiHeaders() }).catch(() => {});
+          setStatus('', '');
+        } else {
+          if (data.error === 'plan_limit_exceeded') {
+            setStatus('Vault limit reached on your current plan. Continuing without upload.', 'error');
+          } else {
+            setStatus('Upload failed — continuing without it.', 'error');
+          }
+          await new Promise(r => setTimeout(r, 1500));
+        }
+      } catch {
+        setStatus('Upload failed — continuing without it.', 'error');
+        await new Promise(r => setTimeout(r, 1500));
+      }
+
+      uploadBtn.disabled = false;
+      saveProfileAndGenerate();
+    });
   }
 
   /* ── Screen 5: Live progress + generation ───────────── */
@@ -723,6 +828,7 @@ const Onboarding = (() => {
     if (checkLinkedInReturn()) return;
 
     initS1();
+    initS3();
     initS4();
     initS6();
 

@@ -774,6 +774,21 @@ function showProfileNudge() {
   guidedChat.insertAdjacentElement('beforebegin', nudge);
 }
 
+/* ── Vault empty-state quality banner ───────────────────────── */
+async function checkVaultEmptyState() {
+  try {
+    const res  = await fetch('/api/vault/documents', { headers: apiHeaders() });
+    const data = await res.json();
+    if (!data.ok || (data.documents || []).length > 0) return;
+    const banner = document.getElementById('vault-quality-banner');
+    if (!banner) return;
+    banner.innerHTML =
+      '<p class="vqb-text">Posts grounded in your real work are far more specific than anything generated from scratch.</p>' +
+      '<a class="vqb-cta" href="/vault.html">Upload a case study →</a>';
+    banner.style.display = '';
+  } catch { /* non-fatal */ }
+}
+
 /* ── Init ────────────────────────────────────────────────────── */
 (async function init() {
   await window.scouthookAuthReady;
@@ -781,8 +796,9 @@ function showProfileNudge() {
   // Default to reach immediately; loadMixRecommendation may update this
   selectType('reach');
 
-  loadMixRecommendation(); // fire-and-forget — updates active btn if mix recommends a type
-  checkProfileGate();      // fire-and-forget — nudge appears if profile is empty
+  loadMixRecommendation();    // fire-and-forget — updates active btn if mix recommends a type
+  checkProfileGate();         // fire-and-forget — nudge appears if profile is empty
+  checkVaultEmptyState();     // fire-and-forget — banner appears if user has no vault docs
 
   const urlParams = new URLSearchParams(location.search);
   const urlType   = urlParams.get('type');

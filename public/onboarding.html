@@ -13,12 +13,13 @@
 
   <header class="ob-header">
     <img src="/images/sh-logo-dark.png" alt="Scouthook" class="ob-logo-img">
-    <!-- 4 dots: role · website · interview · done -->
+    <!-- 5 dots: role · interview · vault · generating · done -->
     <div id="ob-step-dots" class="ob-step-dots" hidden aria-hidden="true">
       <span class="ob-dot" data-step="1"></span>
       <span class="ob-dot" data-step="2"></span>
       <span class="ob-dot" data-step="3"></span>
       <span class="ob-dot" data-step="4"></span>
+      <span class="ob-dot" data-step="5"></span>
     </div>
   </header>
 
@@ -126,6 +127,39 @@
         </div>
       </div>
 
+    </div>
+  </section>
+
+  <!-- ── Screen 3: Vault upload ──────────────────────────────── -->
+  <section id="ob-s3" class="ob-screen ob-screen--center" aria-label="Step 3: Upload your best work">
+    <div class="ob-content ob-content--narrow">
+      <h1 class="ob-headline" style="font-size:1.5rem">This is what makes ScoutHook different from every other AI writing tool.</h1>
+      <p class="ob-subheadline">Most AI tools write from thin air. ScoutHook writes from your actual work — your case studies, proposals, and frameworks. Upload one document and the difference is immediate.</p>
+
+      <label class="ob-dropzone" id="ob-vault-dropzone" tabindex="0" aria-label="Drop a file here or click to browse">
+        <input type="file" id="ob-vault-file" accept=".pdf,.docx,.txt" style="display:none" aria-hidden="true">
+        <svg class="ob-dropzone-icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <p class="ob-dropzone-label"><span class="ob-dropzone-browse">Click to browse</span> or drop a file here</p>
+        <p class="ob-dropzone-types">PDF, DOCX, or TXT · up to 25 MB</p>
+      </label>
+
+      <div id="ob-vault-file-badge" class="ob-file-badge" style="display:none">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        <span class="ob-file-badge-name" id="ob-vault-file-name"></span>
+        <button class="ob-file-clear" id="ob-vault-file-clear" type="button" aria-label="Remove file">×</button>
+      </div>
+
+      <div class="ob-url-alt-row">
+        <span class="ob-url-alt-or">or</span>
+        <input id="ob-vault-url" class="ob-field" type="url" placeholder="Paste a URL (blog post, case study…)" />
+      </div>
+
+      <p id="ob-vault-status" class="ob-field-error" style="display:none" role="status" aria-live="polite"></p>
+
+      <div class="ob-interview-actions" style="margin-top:20px">
+        <button id="ob-vault-upload-btn" class="ob-btn-primary" type="button">Upload and continue →</button>
+        <button id="ob-vault-skip-btn" class="ob-skip-link" type="button">I'll add this later →</button>
+      </div>
     </div>
   </section>
 

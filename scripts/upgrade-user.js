@@ -34,15 +34,15 @@ async function run() {
   try {
     // 1. Find user_id
     const userRes = await client.query(
-      `SELECT user_id, name FROM user_profiles WHERE email = $1 AND tenant_id = 'default' LIMIT 1`,
+      `SELECT user_id, display_name FROM user_profiles WHERE email = $1 AND tenant_id = 'default' LIMIT 1`,
       [email]
     );
     if (userRes.rows.length === 0) {
       console.error(`No user found with email: ${email}`);
       process.exit(1);
     }
-    const { user_id, name } = userRes.rows[0];
-    console.log(`Found user: ${name} (${user_id})`);
+    const { user_id, display_name } = userRes.rows[0];
+    console.log(`Found user: ${display_name} (${user_id})`);
 
     // 2. Set period end to 1 year from today
     const periodEnd = new Date();

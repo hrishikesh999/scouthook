@@ -4,7 +4,7 @@ const express = require('express');
 const router = express.Router();
 const { db, getSetting } = require('../db');
 const { runQualityGate } = require('../services/qualityGate');
-const { ideaToPost, restructureToPost } = require('../services/ideaPath');
+const { ideaToPost, restructureToPost, vaultSeedToPost } = require('../services/ideaPath');
 const { generateLeadMagnetPost } = require('../services/leadMagnetPath');
 const { classifyContent } = require('../services/funnelClassifier');
 const { canGeneratePost } = require('../services/subscription');
@@ -210,9 +210,10 @@ router.post('/', async (req, res) => {
     return res.status(400).json({ ok: false, error: 'missing_raw_idea' });
   }
 
-  // Resolve vault idea + source chunk when growing from a seed
-  let vaultIdea = null;
-  let vaultChunkText = null;
+  // Resolve vault idea + source chunk (+ neighboring chunks) when growing from a seed
+  let vaultIdea          = null;
+  let vaultChunkText     = null;
+  let vaultNeighborContext = null;
   if (vault_idea_id) {
     vaultIdea = await db.prepare(`
       SELECT id, seed_text, source_ref, funnel_type, hook_archetype, chunk_id
@@ -222,9 +223,22 @@ router.post('/', async (req, res) => {
 
     if (vaultIdea?.chunk_id) {
       const chunk = await db.prepare(
-        'SELECT content FROM vault_chunks WHERE id = ? AND user_id = ? AND tenant_id = ?'
+        'SELECT content, chunk_index, document_id FROM vault_chunks WHERE id = ? AND user_id = ? AND tenant_id = ?'
       ).get(vaultIdea.chunk_id, userId, tenantId);
-      vaultChunkText = chunk?.content || null;
+      if (chunk) {
+        vaultChunkText = chunk.content || null;
+        // Fetch immediately adjacent chunks for surrounding context
+        const neighbors = await db.prepare(`
+          SELECT content FROM vault_chunks
+          WHERE  document_id = ? AND user_id = ? AND tenant_id = ?
+            AND  chunk_index IN (?, ?)
+          ORDER  BY chunk_index
+        `).all(chunk.document_id, userId, tenantId,
+               chunk.chunk_index - 1, chunk.chunk_index + 1);
+        if (neighbors.length) {
+          vaultNeighborContext = neighbors.map(n => n.content).join('\n\n---\n\n');
+        }
+      }
     }
   }
 
@@ -303,19 +317,52 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ ok: false, error: 'missing_raw_idea' });
     }
 
-    // When vault_idea_id + raw_idea are both present (user picked a vault idea then added
-    // Q1/Q2/Q3 context): use the assembled inputs as source, vault chunk as factual grounding.
-    // raw_idea is guaranteed non-empty at this point (checked above).
-    const documentContext   = vaultIdea && vaultChunkText ? vaultChunkText : null;
-    const funnelTypeForGate = vaultIdea?.funnel_type || bodyFunnelType || null;
-    ideaResult = await restructureWithQualityGate(userProfile, raw_idea, funnelTypeForGate, {
-      skipSubstanceCheck:  !!skip_substance_check,
-      archetypeOverride:   archetype_override || null,
-      postType:            post_type || null,
-      convertCtaIntent:    convert_cta_intent || null,
-      documentContext,
-      tensionStatement:    tension_statement || null,
-    });
+    const funnelTypeForGate = vaultIdea?.funnel_type || post_type || bodyFunnelType || null;
+
+    if (vaultIdea) {
+      // ── Vault path ────────────────────────────────────────────────────────
+      // Purpose-built generation: expert source framing, full chunk + neighbor
+      // context, stored archetype, substance check bypassed (vault = grounded).
+      const vaultResult = await vaultSeedToPost(vaultIdea, vaultChunkText, userProfile, {
+        rawIdea:         raw_idea,
+        neighborContext: vaultNeighborContext || null,
+        postType:        post_type || vaultIdea.funnel_type || null,
+        tensionStatement: tension_statement || null,
+        skipSubstanceCheck: true,
+      });
+      const primaryGate = runQualityGate(
+        vaultResult.post,
+        {
+          ...gateOptions(
+            { format_slug: IDEA_SLUG, content: vaultResult.post },
+            userProfile,
+            'idea',
+            vaultResult.archetypeUsed,
+            vaultResult.hookConfidence,
+            funnelTypeForGate
+          ),
+          postType: post_type || vaultIdea.funnel_type || null,
+        }
+      );
+      ideaResult = {
+        synthesis:       vaultResult.synthesis,
+        post:            vaultResult.post,
+        ctaAlternatives: vaultResult.ctaAlternatives || [],
+        archetypeUsed:   vaultResult.archetypeUsed,
+        hookConfidence:  vaultResult.hookConfidence,
+        primaryGate,
+        contentFeedback: null,
+      };
+    } else {
+      // ── Standard path for free-typed ideas ───────────────────────────────
+      ideaResult = await restructureWithQualityGate(userProfile, raw_idea, funnelTypeForGate, {
+        skipSubstanceCheck:  !!skip_substance_check,
+        archetypeOverride:   archetype_override || null,
+        postType:            post_type || null,
+        convertCtaIntent:    convert_cta_intent || null,
+        tensionStatement:    tension_statement || null,
+      });
+    }
 
     {
       const {
@@ -490,7 +537,7 @@ router.post('/regenerate/:postId', async (req, res) => {
     let ideaResult;
 
     if (inputData.vault_idea_id) {
-      // Re-grow from the original vault seed using the vault path
+      // Re-grow from the original vault seed — same vault path as first generation
       const regenVaultIdea = await db.prepare(`
         SELECT id, seed_text, source_ref, funnel_type, hook_archetype, chunk_id
         FROM   vault_ideas
@@ -498,20 +545,49 @@ router.post('/regenerate/:postId', async (req, res) => {
       `).get(inputData.vault_idea_id, userId, tenantId);
 
       if (regenVaultIdea) {
-        let regenChunkText = null;
+        let regenChunkText       = null;
+        let regenNeighborContext = null;
         if (regenVaultIdea.chunk_id) {
           const chunk = await db.prepare(
-            'SELECT content FROM vault_chunks WHERE id = ? AND user_id = ? AND tenant_id = ?'
+            'SELECT content, chunk_index, document_id FROM vault_chunks WHERE id = ? AND user_id = ? AND tenant_id = ?'
           ).get(regenVaultIdea.chunk_id, userId, tenantId);
-          regenChunkText = chunk?.content || null;
+          if (chunk) {
+            regenChunkText = chunk.content || null;
+            const neighbors = await db.prepare(`
+              SELECT content FROM vault_chunks
+              WHERE  document_id = ? AND user_id = ? AND tenant_id = ?
+                AND  chunk_index IN (?, ?)
+              ORDER  BY chunk_index
+            `).all(chunk.document_id, userId, tenantId,
+                   chunk.chunk_index - 1, chunk.chunk_index + 1);
+            if (neighbors.length) {
+              regenNeighborContext = neighbors.map(n => n.content).join('\n\n---\n\n');
+            }
+          }
         }
-        // Use stored raw_idea as source, vault chunk as grounding context (same as first generation)
-        const regenSource      = inputData.raw_idea || regenVaultIdea.seed_text;
-        const regenDocContext  = regenChunkText || null;
-        ideaResult = await restructureWithQualityGate(
-          userProfile, regenSource, regenVaultIdea.funnel_type || null,
-          { documentContext: regenDocContext, _regenerateHint: regenHint }
-        );
+        const regenSource = inputData.raw_idea || regenVaultIdea.seed_text;
+        ideaResult = await vaultSeedToPost(regenVaultIdea, regenChunkText, userProfile, {
+          rawIdea:         regenSource,
+          neighborContext: regenNeighborContext,
+          postType:        regenVaultIdea.funnel_type || null,
+          skipSubstanceCheck: true,
+          _regenerateHint: regenHint,
+        });
+        // Wrap with quality gate (vaultSeedToPost returns raw result, not wrapped)
+        const regenGate = runQualityGate(ideaResult.post, {
+          ...gateOptions(
+            { format_slug: IDEA_SLUG, content: ideaResult.post },
+            userProfile, 'idea',
+            ideaResult.archetypeUsed, ideaResult.hookConfidence,
+            regenVaultIdea.funnel_type || null
+          ),
+          postType: regenVaultIdea.funnel_type || null,
+        });
+        ideaResult = {
+          ...ideaResult,
+          primaryGate:     regenGate,
+          contentFeedback: null,
+        };
       }
     }
 

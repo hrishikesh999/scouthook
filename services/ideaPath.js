@@ -298,21 +298,41 @@ No markdown fences. No explanation. Only the JSON object.`;
 /**
  * User prompt for trust/convert vault posts. Frames the input as expert source material
  * so Claude preserves depth and specificity rather than genericising.
+ *
+ * @param {object} vaultIdea
+ * @param {string|null} chunkText       — primary source chunk (full text, no truncation)
+ * @param {object} [options]
+ * @param {string} [options.rawIdea]    — user's textarea value (may differ from seed_text if edited)
+ * @param {string} [options.neighborContext] — text of adjacent chunks for surrounding context
  */
-function buildVaultUserPrompt(vaultIdea, chunkText) {
+function buildVaultUserPrompt(vaultIdea, chunkText, options = {}) {
+  // Use the user's textarea value if it differs meaningfully from the seed;
+  // otherwise fall back to the mined seed. Preserves any extra context the user added.
+  const insightText = (options.rawIdea && options.rawIdea.trim().length > 20)
+    ? options.rawIdea.trim()
+    : vaultIdea.seed_text;
+
   const sourceNote = vaultIdea.source_ref ? `\nSOURCE: ${vaultIdea.source_ref}` : '';
 
+  // Full primary chunk — no truncation. A 500-word chunk is ~3 200 chars, well within context.
   const chunkSection = chunkText
-    ? `\n\nORIGINAL PASSAGE (the source text this insight was extracted from — draw on it to preserve depth and specificity):\n${chunkText.slice(0, 2000)}`
+    ? `\n\nORIGINAL PASSAGE (source text this insight was extracted from — preserve every specific number, named outcome, timeframe, and proprietary framing you find here):\n${chunkText}`
     : '';
 
-  return `VAULT SEED (distilled insight from the author's own expert source material):
-${vaultIdea.seed_text}${sourceNote}${chunkSection}
+  // Adjacent chunks give surrounding context without overwhelming the prompt.
+  const neighborSection = options.neighborContext
+    ? `\n\nSURROUNDING CONTEXT (passages immediately before/after the insight in the same document):\n${options.neighborContext.slice(0, 2500)}`
+    : '';
 
-This insight was mined from the author's own documents. Expand it into a LinkedIn post that:
-- Preserves the depth, specificity, and any proprietary framing from the source
-- Does NOT genericise, water down, or replace concrete details with vague language
-- Reads as the author sharing hard-won, specific knowledge — not a summary of it
+  return `VAULT INSIGHT (distilled from the author's own expert source material):
+${insightText}${sourceNote}${chunkSection}${neighborSection}
+
+This insight was mined from the author's own documents.
+Write a LinkedIn post that:
+- Opens on the sharpest specific from the source — a number, outcome, or named scenario that is ALREADY in the text above
+- Preserves depth and proprietary framing from the original passage — do NOT genericise, approximate, or replace concrete details with vague language
+- Reads as the author sharing hard-won, specific knowledge — not an AI summary of it
+- Every factual claim must trace back to the source text above; use [SPECIFIC NEEDED] for anything not grounded there
 
 LENGTH: ${getLengthGuidance(vaultIdea.funnel_type)}
 
@@ -336,10 +356,18 @@ No markdown fences. No explanation. Only the JSON object.`;
 /**
  * User prompt for reach vault posts. Frames the input as an angle or observation
  * to develop into a broad, relatable post — not expert material to preserve.
+ *
+ * @param {object} vaultIdea
+ * @param {object} [options]
+ * @param {string} [options.rawIdea] — user's textarea value (may differ from seed_text if edited)
  */
-function buildReachUserPrompt(vaultIdea) {
+function buildReachUserPrompt(vaultIdea, options = {}) {
+  const insightText = (options.rawIdea && options.rawIdea.trim().length > 20)
+    ? options.rawIdea.trim()
+    : vaultIdea.seed_text;
+
   return `REACH ANGLE:
-${vaultIdea.seed_text}
+${insightText}
 
 Develop this into a LinkedIn post optimised for reach — designed to attract new audiences and spark broad engagement.
 
@@ -486,6 +514,22 @@ function validateSinglePostResponse(parsed) {
  * @param {object} userProfile
  * @param {object} [options]
  */
+/**
+ * Vault path: generate a LinkedIn post from a pre-classified vault seed.
+ *
+ * Differences from ideaToPost / restructureToPost:
+ * - Skips Haiku hook reclassification — uses stored hook_archetype directly.
+ * - Uses buildVaultUserPrompt so Claude knows the input is expert source material.
+ * - Passes full primary chunk text + optional neighbor context — no truncation.
+ * - Skips substance check — vault ideas are grounded by definition.
+ *
+ * @param {object}      vaultIdea          — row from vault_ideas
+ * @param {string|null} chunkText          — full text of the source chunk
+ * @param {object}      userProfile
+ * @param {object}      [options]
+ * @param {string}      [options.rawIdea]  — user's textarea value (may differ from seed_text)
+ * @param {string}      [options.neighborContext] — adjacent chunk text for surrounding context
+ */
 async function vaultSeedToPost(vaultIdea, chunkText, userProfile, options = {}) {
   const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
   if (!apiKey) throw new Error('anthropic_api_key not configured');
@@ -494,16 +538,17 @@ async function vaultSeedToPost(vaultIdea, chunkText, userProfile, options = {}) 
   const archetypeRecord = HOOK_ARCHETYPES[archetype] || HOOK_ARCHETYPES.INSIGHT;
   const hookInjection = buildHookInjection(archetypeRecord);
 
-  // Reach ideas have no source document — use a prompt focused on resonance and
-  // relatability rather than depth/specificity preservation.
+  // Reach ideas: resonance/relatability prompt (no source-preservation instruction).
+  // Trust/Convert: expert-source prompt with full chunk + neighbor context.
   const userPromptOverride = vaultIdea.funnel_type === 'reach'
-    ? buildReachUserPrompt(vaultIdea)
-    : buildVaultUserPrompt(vaultIdea, chunkText);
-
-  const systemOverride = null;
+    ? buildReachUserPrompt(vaultIdea, { rawIdea: options.rawIdea })
+    : buildVaultUserPrompt(vaultIdea, chunkText, {
+        rawIdea:         options.rawIdea,
+        neighborContext: options.neighborContext || null,
+      });
 
   return runSinglePostGeneration({
-    rawIdea: vaultIdea.seed_text,
+    rawIdea:      options.rawIdea || vaultIdea.seed_text,
     userProfile,
     options,
     hookInjection,
@@ -511,7 +556,9 @@ async function vaultSeedToPost(vaultIdea, chunkText, userProfile, options = {}) 
     hookConfidence: 1.0,
     userPromptOverride,
     funnelType:     vaultIdea.funnel_type || null,
-    systemOverride,
+    systemOverride: null,
+    postType:       options.postType || vaultIdea.funnel_type || null,
+    tensionStatement: options.tensionStatement || null,
   });
 }
 

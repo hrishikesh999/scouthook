@@ -9,10 +9,11 @@ function escapeHtml(str) {
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 /* ── State ───────────────────────────────────────────────────── */
-let selectedType   = null; // 'reach'|'trust'|'convert'|'lead_magnet'
-let chatStep       = 0;
-let chatAnswers    = {};
-let mixRecommended = null;
+let selectedType        = null; // 'reach'|'trust'|'convert'|'lead_magnet'
+let chatStep            = 0;
+let chatAnswers         = {};
+let mixRecommended      = null;
+let selectedVaultIdeaId = null; // set when user picks a vault idea in Q1
 
 /* ── DOM refs ────────────────────────────────────────────────── */
 const typeSelectorSection = document.getElementById('type-selector-section');
@@ -227,9 +228,10 @@ function selectType(type) {
 }
 
 function resetType() {
-  selectedType = null;
-  chatStep     = 0;
-  chatAnswers  = {};
+  selectedType        = null;
+  chatStep            = 0;
+  chatAnswers         = {};
+  selectedVaultIdeaId = null;
 
   guidedChat.classList.remove('visible');
   processingScreen.classList.remove('visible');
@@ -411,6 +413,7 @@ const chat = (() => {
           chatInput.classList.remove('error');
           hideChatError();
           chatInput.focus();
+          selectedVaultIdeaId   = idea.id;
           vaultBody.classList.remove('visible');
           toggleBtn.textContent = 'From your vault →';
           chatThread.scrollTop  = chatThread.scrollHeight;
@@ -478,9 +481,10 @@ const chat = (() => {
   }
 
   function init(type) {
-    _type           = type;
-    _lmProofMode    = 'metric';
-    _tensionPromise = null;
+    _type               = type;
+    _lmProofMode        = 'metric';
+    _tensionPromise     = null;
+    selectedVaultIdeaId = null;
 
     chatThread.innerHTML = '';
     hideTensionConfirm();
@@ -666,8 +670,9 @@ async function triggerGenerate(opts = {}) {
 
   try {
     const body = { path: 'idea', raw_idea: idea, post_type: selectedType || null };
-    if (tensionStmt)             body.tension_statement  = tensionStmt;
+    if (tensionStmt)             body.tension_statement   = tensionStmt;
     if (opts.skipSubstanceCheck) body.skip_substance_check = true;
+    if (selectedVaultIdeaId)     body.vault_idea_id        = selectedVaultIdeaId;
 
     const res  = await fetch('/api/generate', {
       method: 'POST', headers: apiHeaders(), body: JSON.stringify(body), signal: controller.signal,

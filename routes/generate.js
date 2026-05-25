@@ -112,7 +112,7 @@ function assembleExtractionInputs(postType, answers, tensionStatement) {
 
 async function restructureWithQualityGate(userProfile, sourceText, funnelType, options = {}) {
   const { synthesis, post, ctaAlternatives, archetypeUsed, hookConfidence, contentFeedback } =
-    await restructureToPost(sourceText, userProfile, null, options);
+    await restructureToPost(sourceText, userProfile, options.documentContext || null, options);
 
   const primaryGate = runQualityGate(
     post,
@@ -303,15 +303,17 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ ok: false, error: 'missing_raw_idea' });
     }
 
-    const sourceText = vaultIdea
-      ? (vaultChunkText || vaultIdea.seed_text)
-      : raw_idea;
+    // When vault_idea_id + raw_idea are both present (user picked a vault idea then added
+    // Q1/Q2/Q3 context): use the assembled inputs as source, vault chunk as factual grounding.
+    // raw_idea is guaranteed non-empty at this point (checked above).
+    const documentContext   = vaultIdea && vaultChunkText ? vaultChunkText : null;
     const funnelTypeForGate = vaultIdea?.funnel_type || bodyFunnelType || null;
-    ideaResult = await restructureWithQualityGate(userProfile, sourceText, funnelTypeForGate, {
+    ideaResult = await restructureWithQualityGate(userProfile, raw_idea, funnelTypeForGate, {
       skipSubstanceCheck:  !!skip_substance_check,
       archetypeOverride:   archetype_override || null,
       postType:            post_type || null,
       convertCtaIntent:    convert_cta_intent || null,
+      documentContext,
     });
 
     {
@@ -329,9 +331,9 @@ router.post('/', async (req, res) => {
         throw new Error('generation returned no post content');
       }
 
-      // For vault posts store seed_text as the canonical input so regenerate works correctly
+      // Store vault_idea_id alongside raw_idea so regenerate can reinject chunk context
       const inputData = vaultIdea
-        ? { raw_idea: vaultIdea.seed_text, vault_idea_id: vaultIdea.id }
+        ? { raw_idea, vault_idea_id: vaultIdea.id }
         : { raw_idea };
 
       const runResult = await db.prepare(`
@@ -502,8 +504,13 @@ router.post('/regenerate/:postId', async (req, res) => {
           ).get(regenVaultIdea.chunk_id, userId, tenantId);
           regenChunkText = chunk?.content || null;
         }
-        const regenSource = regenChunkText || regenVaultIdea.seed_text;
-        ideaResult = await restructureWithQualityGate(userProfile, regenSource, regenVaultIdea.funnel_type || null);
+        // Use stored raw_idea as source, vault chunk as grounding context (same as first generation)
+        const regenSource      = inputData.raw_idea || regenVaultIdea.seed_text;
+        const regenDocContext  = regenChunkText || null;
+        ideaResult = await restructureWithQualityGate(
+          userProfile, regenSource, regenVaultIdea.funnel_type || null,
+          { documentContext: regenDocContext, _regenerateHint: regenHint }
+        );
       }
     }
 

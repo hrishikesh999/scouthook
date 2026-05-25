@@ -202,6 +202,9 @@
       for (const doc of documents) {
         if (doc.status === 'indexing' || doc.status === 'pending') pollDocumentStatus(doc.id);
       }
+      // Auto-mine any ready documents whose chunks haven't been mined yet
+      const hasUnmined = documents.some(d => d.status === 'ready' && !d.ideas_mined);
+      if (hasUnmined) triggerMining();
     } catch { /* non-fatal */ }
   }
 
@@ -223,7 +226,7 @@
     const icon   = docIcon(doc.source_type);
     const badge  = statusBadge(doc.status);
     const date   = new Date(doc.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-    const meta   = `${doc.source_type.toUpperCase()} · ${date}${doc.chunk_count ? ` · ${doc.chunk_count} sections` : ''}`;
+    const meta   = `${doc.source_type.toUpperCase()} · ${date}${doc.chunk_count ? ` · ${doc.chunk_count} sections` : ''}${doc.ideas_mined ? ` · ${doc.ideas_mined} idea${doc.ideas_mined !== 1 ? 's' : ''} found` : ''}`;
     const errMsg = doc.status === 'error' && doc.error_message
       ? `<p style="font-size:0.75rem;color:var(--text-danger);margin:4px 0 0 0">${escHtml(doc.error_message)}</p>` : '';
     return `
@@ -258,6 +261,12 @@
     renderDocuments();
   }
 
+  async function triggerMining() {
+    try {
+      await fetch('/api/vault/mine', { method: 'POST' });
+    } catch { /* non-fatal — mining is fire-and-forget */ }
+  }
+
   function pollDocumentStatus(docId) {
     const interval = setInterval(async () => {
       try {
@@ -270,7 +279,10 @@
         if (idx !== -1) { documents[idx] = updated; renderDocuments(); }
         if (updated.status !== 'indexing' && updated.status !== 'pending') {
           clearInterval(interval);
-          if (updated.status === 'ready') clearUploadStatus();
+          if (updated.status === 'ready') {
+            clearUploadStatus();
+            triggerMining();
+          }
         }
       } catch { /* non-fatal */ }
     }, 3000);

@@ -13,7 +13,9 @@ let selectedType        = null; // 'reach'|'trust'|'convert'|'lead_magnet'
 let chatStep            = 0;
 let chatAnswers         = {};
 let mixRecommended      = null;
-let selectedVaultIdeaId = null; // set when user picks a vault idea in Q1
+let selectedVaultIdeaId = null; // set when user picks a vault idea
+let _tensionResult      = null; // { tension, missing } from silent extraction
+let _tensionDebounce    = null; // debounce timer for extraction on input
 
 /* ── DOM refs ────────────────────────────────────────────────── */
 const typeSelectorSection = document.getElementById('type-selector-section');
@@ -31,13 +33,6 @@ const chatSubstanceText   = document.getElementById('chat-substance-text');
 const chatGenerateAnyway  = document.getElementById('chat-generate-anyway');
 const processingScreen    = document.getElementById('processing-screen');
 const chatInputRow        = document.querySelector('.chat-input-row');
-const skipRow             = document.getElementById('skip-row');
-const skipBtn             = document.getElementById('skip-btn');
-const tensionConfirm      = document.getElementById('tension-confirm');
-const tensionInput        = document.getElementById('tension-input');
-const tensionGapText      = document.getElementById('tension-gap-text');
-const tensionGenerateBtn  = document.getElementById('tension-generate-btn');
-const tensionGenerateAnywayBtn = document.getElementById('tension-generate-anyway-btn');
 
 /* ── Per-type chat configs ───────────────────────────────────── */
 const CHAT_CONFIGS = {
@@ -187,24 +182,6 @@ const EXTRACTION_QUESTIONS = {
   ],
 };
 
-function assembleExtractionInputs(postType, answers, tensionStatement) {
-  const parts = [];
-  if (tensionStatement) parts.push(`CENTRAL TENSION: ${tensionStatement}`);
-  if (postType === 'reach') {
-    if (answers.moment) parts.push(`WHAT HAPPENED: ${answers.moment}`);
-    if (answers.lesson) parts.push(`WHAT TO DO: ${answers.lesson}`);
-    if (answers.angle)  parts.push(`WHAT MOST PEOPLE GET WRONG: ${answers.angle}`);
-  } else if (postType === 'trust') {
-    if (answers.contrarian) parts.push(`THE BELIEF: ${answers.contrarian}`);
-    if (answers.proof)      parts.push(`THE PROOF: ${answers.proof}`);
-    if (answers.audience)   parts.push(`WHO THIS IS FOR: ${answers.audience}`);
-  } else if (postType === 'convert') {
-    if (answers.result)    parts.push(`THE RESULT: ${answers.result}`);
-    if (answers.mechanism) parts.push(`WHAT DROVE IT: ${answers.mechanism}`);
-    if (answers.target)    parts.push(`WHO SHOULD ACT: ${answers.target}`);
-  }
-  return parts.join('\n\n');
-}
 
 /* ── Type selection ──────────────────────────────────────────── */
 typeChips.forEach(chip => chip.addEventListener('click', () => selectType(chip.dataset.type)));
@@ -232,6 +209,8 @@ function resetType() {
   chatStep            = 0;
   chatAnswers         = {};
   selectedVaultIdeaId = null;
+  _tensionResult      = null;
+  clearTimeout(_tensionDebounce);
 
   guidedChat.classList.remove('visible');
   processingScreen.classList.remove('visible');
@@ -243,8 +222,8 @@ function resetType() {
   chatInput.disabled       = false;
   chatSendBtn.disabled     = false;
   chatInput.classList.remove('error');
-  skipRow.style.display  = 'none';
-  chat.hideTensionConfirm();
+  const vaultPanel = document.getElementById('vault-panel');
+  if (vaultPanel) { vaultPanel.style.display = 'none'; vaultPanel.innerHTML = ''; }
   hideChatError();
   hideSubstanceWarning();
 
@@ -277,53 +256,67 @@ function markRecommendedChip() {
   });
 }
 
+/* ── Vault panel ─────────────────────────────────────────────── */
+async function loadVaultPanel(type) {
+  const panel = document.getElementById('vault-panel');
+  if (!panel) return;
+  panel.style.display = 'none';
+  panel.innerHTML = '';
+  try {
+    const res  = await fetch(`/api/vault/ideas?status=fresh&funnel_type=${type}`, { headers: apiHeaders() });
+    const data = await res.json();
+    const ideas = (data.ideas || []).slice(0, 3);
+    if (ideas.length) {
+      renderVaultPanel(panel,
+        ideas.map(i => ({ text: i.seed_text, label: i.hook_preview || i.seed_text.slice(0, 80), id: i.id })),
+        'From your vault:');
+      return;
+    }
+    const sugRes  = await fetch(`/api/vault/suggest-topics?post_type=${type}`, { headers: apiHeaders() });
+    const sugData = await sugRes.json();
+    const topics  = (sugData.topics || []).slice(0, 3);
+    if (topics.length) {
+      renderVaultPanel(panel,
+        topics.map(t => ({ text: t.description || t.title, label: t.title, id: null })),
+        'Need a starting point?');
+    }
+  } catch { /* non-fatal */ }
+}
+
+function renderVaultPanel(panel, items, title) {
+  panel.innerHTML =
+    `<div class="vault-panel-header"><span class="vault-panel-title">${escapeHtml(title)}</span></div>` +
+    `<div class="vault-panel-items">${items.map((item, i) =>
+      `<button class="vault-panel-item" type="button" data-idx="${i}">${escapeHtml(item.label)}</button>`
+    ).join('')}</div>`;
+  panel.querySelectorAll('.vault-panel-item').forEach((btn, i) => {
+    btn.addEventListener('click', () => {
+      selectedVaultIdeaId    = items[i].id;
+      chatInput.value        = items[i].text;
+      chatInput.style.height = 'auto';
+      chatInput.style.height = chatInput.scrollHeight + 'px';
+      chatInput.classList.remove('error');
+      hideChatError();
+      chatInput.focus();
+      if (items[i].text.length >= 30) chat.fireTensionExtraction(items[i].text);
+    });
+  });
+  panel.style.display = '';
+}
+
 /* ── Chat module ─────────────────────────────────────────────── */
 const chat = (() => {
-  let _type           = null;
-  let _lmProofMode    = 'metric'; // 'metric' | 'description' for LM step 2
-  let _tensionPromise = null;
+  let _type        = null;
+  let _lmProofMode = 'metric'; // 'metric' | 'description' for LM step 2
 
   function addBot(text, opts = {}) {
     const div = document.createElement('div');
     div.className = 'chat-bubble-bot';
 
-    if (opts.label) {
-      const labelEl = document.createElement('div');
-      labelEl.className = 'chat-bubble-label';
-      labelEl.textContent = opts.label;
-      div.appendChild(labelEl);
-    }
-
     const mainEl = document.createElement('div');
     mainEl.className = 'chat-bubble-main';
     mainEl.textContent = text;
     div.appendChild(mainEl);
-
-    if (opts.nudge) {
-      const nudgeEl = document.createElement('div');
-      nudgeEl.className = 'chat-bubble-nudge';
-      nudgeEl.textContent = opts.nudge;
-      div.appendChild(nudgeEl);
-    }
-
-    if (opts.example) {
-      const toggleBtn = document.createElement('button');
-      toggleBtn.className = 'chat-bubble-example-toggle';
-      toggleBtn.textContent = 'See what works well →';
-
-      const exampleBody = document.createElement('div');
-      exampleBody.className = 'chat-bubble-example-body';
-      exampleBody.textContent = opts.example;
-
-      toggleBtn.addEventListener('click', () => {
-        const open = exampleBody.classList.toggle('visible');
-        toggleBtn.textContent = open ? 'Hide examples ↑' : 'See what works well →';
-        chatThread.scrollTop = chatThread.scrollHeight;
-      });
-
-      div.appendChild(toggleBtn);
-      div.appendChild(exampleBody);
-    }
 
     if (opts.hasEscape) {
       const btn = document.createElement('button');
@@ -370,194 +363,47 @@ const chat = (() => {
       const isLast = chatStep >= CHAT_CONFIGS.lead_magnet.steps.length - 1;
       chatSendBtn.textContent = isLast ? 'Write my lead magnet →' : 'Next →';
     } else {
-      chatSendBtn.textContent = 'Continue →';
+      chatSendBtn.textContent = 'Generate →';
     }
   }
 
-  async function _loadVaultIdeas(type, bubbleDiv) {
-    try {
-      const res   = await fetch(`/api/vault/ideas?status=fresh&funnel_type=${type}`, { headers: apiHeaders() });
-      const data  = await res.json();
-      const ideas = (data.ideas || []).slice(0, 3);
-
-      if (ideas.length) {
-        // ── Vault ideas found ──────────────────────────────────────────────────
-        const toggleBtn = document.createElement('button');
-        toggleBtn.className   = 'chat-bubble-vault-toggle';
-        toggleBtn.textContent = 'From your vault →';
-
-        const vaultBody = document.createElement('div');
-        vaultBody.className = 'chat-bubble-vault-body';
-
-        ideas.forEach(idea => {
-          const item = document.createElement('button');
-          item.type      = 'button';
-          item.className = 'vault-idea-item';
-
-          const preview = document.createElement('div');
-          preview.className   = 'vault-idea-preview';
-          preview.textContent = idea.hook_preview || idea.seed_text.slice(0, 100);
-          item.appendChild(preview);
-
-          if (idea.source_ref) {
-            const source = document.createElement('div');
-            source.className   = 'vault-idea-source';
-            source.textContent = idea.source_ref;
-            item.appendChild(source);
-          }
-
-          item.addEventListener('click', () => {
-            chatInput.value        = idea.seed_text;
-            chatInput.style.height = 'auto';
-            chatInput.style.height = chatInput.scrollHeight + 'px';
-            chatInput.classList.remove('error');
-            hideChatError();
-            chatInput.focus();
-            selectedVaultIdeaId   = idea.id;
-            vaultBody.classList.remove('visible');
-            toggleBtn.textContent = 'From your vault →';
-            chatThread.scrollTop  = chatThread.scrollHeight;
-          });
-
-          vaultBody.appendChild(item);
-        });
-
-        toggleBtn.addEventListener('click', () => {
-          const open = vaultBody.classList.toggle('visible');
-          toggleBtn.textContent = open ? 'Hide vault ideas ↑' : 'From your vault →';
-          chatThread.scrollTop  = chatThread.scrollHeight;
-        });
-
-        bubbleDiv.appendChild(toggleBtn);
-        bubbleDiv.appendChild(vaultBody);
-        chatThread.scrollTop = chatThread.scrollHeight;
-        return;
-      }
-
-      // ── No vault ideas — fall back to profile-grounded suggestions ───────────
-      const sugRes  = await fetch(`/api/vault/suggest-topics?post_type=${type}`, { headers: apiHeaders() });
-      const sugData = await sugRes.json();
-      const topics  = (sugData.topics || []).slice(0, 3);
-      if (!topics.length) return;
-
-      const toggleBtn = document.createElement('button');
-      toggleBtn.className   = 'chat-bubble-vault-toggle';
-      toggleBtn.textContent = 'Need a starting point? →';
-
-      const sugBody = document.createElement('div');
-      sugBody.className = 'chat-bubble-vault-body';
-
-      topics.forEach(topic => {
-        const item = document.createElement('button');
-        item.type      = 'button';
-        item.className = 'vault-idea-item';
-
-        const preview = document.createElement('div');
-        preview.className   = 'vault-idea-preview';
-        preview.textContent = topic.title;
-        item.appendChild(preview);
-
-        if (topic.description) {
-          const desc = document.createElement('div');
-          desc.className   = 'vault-idea-source';
-          desc.textContent = topic.description;
-          item.appendChild(desc);
-        }
-
-        item.addEventListener('click', () => {
-          // Fill Q1 with the angle/tension description as a concrete starting point
-          chatInput.value        = topic.description || topic.title;
-          chatInput.style.height = 'auto';
-          chatInput.style.height = chatInput.scrollHeight + 'px';
-          chatInput.classList.remove('error');
-          hideChatError();
-          chatInput.focus();
-          // No vault_idea_id — profile suggestions have no chunk grounding
-          sugBody.classList.remove('visible');
-          toggleBtn.textContent = 'Need a starting point? →';
-          chatThread.scrollTop  = chatThread.scrollHeight;
-        });
-
-        sugBody.appendChild(item);
-      });
-
-      toggleBtn.addEventListener('click', () => {
-        const open = sugBody.classList.toggle('visible');
-        toggleBtn.textContent = open ? 'Hide suggestions ↑' : 'Need a starting point? →';
-        chatThread.scrollTop  = chatThread.scrollHeight;
-      });
-
-      bubbleDiv.appendChild(toggleBtn);
-      bubbleDiv.appendChild(sugBody);
-      chatThread.scrollTop = chatThread.scrollHeight;
-    } catch { /* non-fatal */ }
-  }
-
   function fireTensionExtraction(answer) {
-    _tensionPromise = fetch('/api/generate/extract-tension', {
+    _tensionResult = null;
+    fetch('/api/generate/extract-tension', {
       method:  'POST',
       headers: apiHeaders(),
       body:    JSON.stringify({ post_type: _type, answer }),
     })
       .then(r => r.json())
-      .then(d => d.ok ? { tension: d.tension, missing: d.missing } : { tension: null, missing: null })
-      .catch(() => ({ tension: null, missing: null }));
-  }
-
-  async function showTensionConfirm() {
-    chatInputRow.style.display  = 'none';
-    skipRow.style.display       = 'none';
-    chatInput.disabled          = true;
-    chatSendBtn.disabled        = true;
-
-    const result = await (_tensionPromise || Promise.resolve({ tension: null, missing: null }));
-
-    tensionConfirm.classList.add('visible');
-
-    if (result.tension) {
-      tensionInput.style.display    = '';
-      tensionGapText.style.display  = 'none';
-      tensionInput.value            = result.tension;
-      tensionGenerateAnywayBtn.style.display = 'none';
-    } else {
-      tensionInput.style.display    = 'none';
-      tensionGapText.style.display  = '';
-      tensionGapText.textContent    = result.missing
-        ? `We need a bit more. ${result.missing}`
-        : "We couldn't identify a clear tension yet — but you can still generate with what you have.";
-      tensionGenerateAnywayBtn.style.display = '';
-    }
-  }
-
-  function hideTensionConfirm() {
-    tensionConfirm.classList.remove('visible');
-    tensionInput.style.display             = 'none';
-    tensionGapText.style.display           = 'none';
-    tensionGenerateAnywayBtn.style.display = 'none';
-    chatInputRow.style.display             = '';
-    chatInput.disabled    = false;
-    chatSendBtn.disabled  = false;
+      .then(d => { _tensionResult = d.ok ? { tension: d.tension, missing: d.missing } : { tension: null, missing: null }; })
+      .catch(() => { _tensionResult = { tension: null, missing: null }; });
   }
 
   function init(type) {
-    _type               = type;
-    _lmProofMode        = 'metric';
-    _tensionPromise     = null;
+    _type        = type;
+    _lmProofMode = 'metric';
+    _tensionResult      = null;
     selectedVaultIdeaId = null;
 
     chatThread.innerHTML = '';
-    hideTensionConfirm();
-    skipRow.style.display = 'none';
+    const vaultPanel = document.getElementById('vault-panel');
 
     if (type === 'lead_magnet') {
+      if (vaultPanel) { vaultPanel.style.display = 'none'; vaultPanel.innerHTML = ''; }
+      chatThread.style.display = '';
       const step0 = CHAT_CONFIGS.lead_magnet.steps[0];
       addBot(step0.question, { hasEscape: step0.hasEscape });
       setInputState(step0);
     } else {
-      const q0    = EXTRACTION_QUESTIONS[type][0];
-      const q0Div = addBot(q0.question, { label: q0.label, example: q0.example });
-      setInputState({ placeholder: q0.placeholder, multiline: true });
-      _loadVaultIdeas(type, q0Div);
+      chatThread.style.display = 'none';
+      const q0 = EXTRACTION_QUESTIONS[type][0];
+      chatInput.placeholder     = q0.placeholder;
+      chatInput.rows            = 4;
+      chatInput.style.minHeight = '100px';
+      chatInput.value           = '';
+      chatInput.style.height    = '';
+      chatInput.classList.remove('error');
+      loadVaultPanel(type);
     }
     updateSendBtn();
     chatInput.focus();
@@ -569,7 +415,7 @@ const chat = (() => {
 
     const val = chatInput.value.trim();
 
-    // ── Lead magnet path (unchanged logic) ─────────────────────
+    // ── Lead magnet path (unchanged) ────────────────────────────
     if (_type === 'lead_magnet') {
       const cfg = CHAT_CONFIGS.lead_magnet;
 
@@ -613,80 +459,26 @@ const chat = (() => {
       return;
     }
 
-    // ── Extraction path (reach / trust / convert) ───────────────
-    const questions = EXTRACTION_QUESTIONS[_type];
-    const currentQ  = questions[chatStep];
-
+    // ── Extraction path: single input → generate directly ───────
     if (!val) {
-      showChatInputError(currentQ.errorMsg || 'Add something before continuing.');
+      showChatInputError('Add something before generating.');
       chatInput.focus();
       return;
     }
-    if (currentQ.minChars && val.length < currentQ.minChars) {
-      showChatInputError(currentQ.errorMsg || `Add a bit more — aim for at least ${currentQ.minChars} characters.`);
+    if (val.length < 30) {
+      showChatInputError('Add a bit more — the more specific, the better the post.');
       chatInput.focus();
       return;
     }
-
-    addUser(val);
-    chatAnswers[currentQ.key] = val;
-
-    if (chatStep === 0) fireTensionExtraction(val);
-
-    chatStep++;
-    skipRow.style.display = 'none';
-
-    if (chatStep < questions.length) {
-      const nextQ = questions[chatStep];
-      setTimeout(() => {
-        addBot(nextQ.question, { label: nextQ.label, nudge: nextQ.nudge });
-        setInputState({ placeholder: nextQ.placeholder, multiline: true });
-        if (!nextQ.required) skipRow.style.display = '';
-        updateSendBtn();
-        chatInput.value = '';
-        chatInput.focus();
-      }, 300);
-    } else {
-      showTensionConfirm();
-    }
+    if (!_tensionResult && val.length >= 30) fireTensionExtraction(val);
+    triggerGenerate({});
   }
 
-  function skip() {
-    hideChatError();
-    const questions = EXTRACTION_QUESTIONS[_type];
-    const currentQ  = questions[chatStep];
-    chatAnswers[currentQ.key] = null;
-    chatStep++;
-    skipRow.style.display = 'none';
-
-    if (chatStep < questions.length) {
-      const nextQ = questions[chatStep];
-      setTimeout(() => {
-        addBot(nextQ.question, { label: nextQ.label, nudge: nextQ.nudge });
-        setInputState({ placeholder: nextQ.placeholder, multiline: true });
-        if (!nextQ.required) skipRow.style.display = '';
-        updateSendBtn();
-        chatInput.value = '';
-        chatInput.focus();
-      }, 300);
-    } else {
-      showTensionConfirm();
-    }
-  }
-
-  return { init, advance, skip, hideTensionConfirm };
+  return { init, advance, fireTensionExtraction };
 })();
 
 /* ── Chat input wiring ───────────────────────────────────────── */
 chatSendBtn.addEventListener('click', () => chat.advance());
-skipBtn.addEventListener('click', () => chat.skip());
-tensionGenerateBtn.addEventListener('click', () => {
-  const ts = tensionInput.value.trim() || null;
-  triggerGenerate({ tensionStatement: ts });
-});
-tensionGenerateAnywayBtn.addEventListener('click', () => {
-  triggerGenerate({ skipSubstanceCheck: true });
-});
 
 chatInput.addEventListener('input', () => {
   chatInput.style.height = 'auto';
@@ -694,22 +486,35 @@ chatInput.addEventListener('input', () => {
   chatInput.classList.remove('error');
   hideChatError();
   hideSubstanceWarning();
+
+  // Debounced silent tension extraction for reach/trust/convert
+  if (selectedType && selectedType !== 'lead_magnet') {
+    clearTimeout(_tensionDebounce);
+    _tensionResult = null;
+    const val = chatInput.value.trim();
+    if (val.length >= 40) {
+      _tensionDebounce = setTimeout(() => chat.fireTensionExtraction(val), 600);
+    }
+  }
 });
 
 chatInput.addEventListener('keydown', e => {
   if (e.key !== 'Enter') return;
-  const step = CHAT_CONFIGS[selectedType]?.steps[chatStep];
+  if (selectedType && selectedType !== 'lead_magnet') {
+    // Extraction path: always multiline — only Cmd/Ctrl+Enter submits
+    if (e.metaKey || e.ctrlKey) { e.preventDefault(); chat.advance(); }
+    return;
+  }
+  const step = CHAT_CONFIGS.lead_magnet?.steps[chatStep];
   if (!step?.multiline || e.metaKey || e.ctrlKey) {
     e.preventDefault();
     chat.advance();
   }
 });
 
-
-/* ── Generate (Reach / Trust / Convert) ─────────────────────── */
+/* ── Generate ────────────────────────────────────────────────── */
 chatGenerateAnyway.addEventListener('click', () => {
-  const ts = tensionConfirm.classList.contains('visible') ? (tensionInput.value.trim() || null) : null;
-  triggerGenerate({ skipSubstanceCheck: true, tensionStatement: ts });
+  triggerGenerate({ skipSubstanceCheck: true });
 });
 
 async function triggerGenerate(opts = {}) {
@@ -717,10 +522,10 @@ async function triggerGenerate(opts = {}) {
   hideSubstanceWarning();
 
   const isExtraction = selectedType && selectedType !== 'lead_magnet';
-  const tensionStmt  = opts.tensionStatement !== undefined ? opts.tensionStatement : null;
-  const idea         = isExtraction
-    ? assembleExtractionInputs(selectedType, chatAnswers, tensionStmt)
-    : (chatAnswers.step0 || '');
+  const idea         = isExtraction ? chatInput.value.trim() : (chatAnswers.step0 || '');
+  const tensionStmt  = opts.tensionStatement !== undefined
+    ? opts.tensionStatement
+    : (_tensionResult?.tension || null);
 
   showProcessingScreen(idea, selectedType);
 
@@ -729,9 +534,9 @@ async function triggerGenerate(opts = {}) {
 
   try {
     const body = { path: 'idea', raw_idea: idea, post_type: selectedType || null };
-    if (tensionStmt)             body.tension_statement   = tensionStmt;
+    if (tensionStmt)             body.tension_statement    = tensionStmt;
     if (opts.skipSubstanceCheck) body.skip_substance_check = true;
-    if (selectedVaultIdeaId)     body.vault_idea_id        = selectedVaultIdeaId;
+    if (selectedVaultIdeaId)     body.vault_idea_id         = selectedVaultIdeaId;
 
     const res  = await fetch('/api/generate', {
       method: 'POST', headers: apiHeaders(), body: JSON.stringify(body), signal: controller.signal,
@@ -912,10 +717,31 @@ function hideSubstanceWarning() {
   chatSubstanceWarn.classList.remove('visible');
 }
 
+/* ── Profile gate ────────────────────────────────────────────── */
+async function checkProfileGate() {
+  try {
+    const res  = await fetch('/api/profile', { headers: apiHeaders() });
+    const data = await res.json();
+    if (!data.ok) return;
+    const profile = data.profile || {};
+    if (!profile.content_niche?.trim()) showProfileNudge();
+  } catch { /* gate fails open */ }
+}
+
+function showProfileNudge() {
+  if (document.getElementById('profile-gate-nudge')) return;
+  const nudge = document.createElement('div');
+  nudge.id        = 'profile-gate-nudge';
+  nudge.className = 'profile-gate-nudge';
+  nudge.innerHTML = '<strong>Your voice profile is empty.</strong> Posts will be generic until you tell ScoutHook your niche and audience. <a href="/settings.html#voice">Set it up now →</a>';
+  typeSelectorSection.insertAdjacentElement('beforebegin', nudge);
+}
+
 /* ── Init ────────────────────────────────────────────────────── */
 (async function init() {
   await window.scouthookAuthReady;
   await loadMixRecommendation();
+  checkProfileGate(); // fire-and-forget — nudge appears if profile is empty
 
   const urlParams = new URLSearchParams(location.search);
   const urlType   = urlParams.get('type');

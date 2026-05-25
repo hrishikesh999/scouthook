@@ -519,7 +519,7 @@ async function vaultSeedToPost(vaultIdea, chunkText, userProfile, options = {}) 
 // Editorial path: copy editor model — reshapes author's own words, adds nothing.
 // ---------------------------------------------------------------------------
 
-function buildRefineSystemPrompt(userProfile, hookInjection = null, postType = null, convertCtaIntent = null) {
+function buildRefineSystemPrompt(userProfile, hookInjection = null, postType = null, convertCtaIntent = null, tensionStatement = null) {
   const hookRule = hookInjection
     ? `1. HOOK (line 1): Use the archetype structure below — applied to the author's own words, not invented from scratch. The hook must surface the author's strongest idea in this structural form; do not invent new facts or angles.
 ${hookInjection}`
@@ -538,12 +538,20 @@ ${hookInjection}`
     ? `5. CTA: ${ctaRules[postType]}`
     : `5. CTA: Write one closing question that invites a specific personal memory or experience — not a generic opinion. Bad: "What do you think?" Good: "What's the hardest thing you had to unlearn in your first year leading a team?" The best CTAs make readers want to answer because they already have the answer.`;
 
+  const tensionBlock = tensionStatement
+    ? `CENTRAL TENSION TO EXPRESS:
+${tensionStatement}
+
+This is the core contradiction the post must resolve. Every structural decision — the hook, the body, the close — should serve this tension. The reader should feel it in line 1 and understand its resolution by the end.
+
+`
+    : '';
+
   return `You are a copy editor for a LinkedIn professional, not a ghostwriter.
 
 Your job is to take the author's own words and shape them into a high-impact LinkedIn post.
 You sharpen what is already there. You do not add what is not.
-${postTypeBlock}
-THE LINE YOU MUST NEVER CROSS:
+${postTypeBlock}${tensionBlock}THE LINE YOU MUST NEVER CROSS:
 - You may tighten a sentence — cut flab, strengthen verbs, remove hedging.
 - You may NOT add a new fact, statistic, example, story beat, or claim the author did not provide.
 - If the author said "I think pricing is something most founders get wrong", you may sharpen it to "Most founders get pricing wrong." You may not add "In my experience working with 50+ startups" if the author did not write that.
@@ -565,6 +573,11 @@ AUTHOR CONTEXT:
 - Audience: ${userProfile.audience_role || 'professionals in the author\'s field'}
 - Audience pain: ${userProfile.audience_pain || 'professional challenges in their field'}
 
+POINT OF VIEW (non-negotiable):
+Take the strongest defensible position the raw idea supports — not the safest one.
+Never present both sides without choosing one. A hedged first draft cannot be sharpened; a strong one can be dialled back.
+If the idea contains a provocative angle, lead with it — do not bury it in the body.
+
 ${AI_TELLS_PROHIBITION}${SPECIFICITY_MANDATE}
 ${SELF_CHECK}`;
 }
@@ -578,6 +591,8 @@ ${documentContext.slice(0, 2000)}
 
 Key insight to focus on:
 ${sourceText}
+
+SPECIFICITY CHECK: Before shaping the post, identify the most concrete experience, result, or data point in the insight and source. If the insight is too vague (no specific outcome, no named result, no concrete moment), mark each gap with [SPECIFIC NEEDED] in the post rather than proceeding with vague content.
 
 INSTRUCTION:
 1. Open with the strongest, most memorable idea from the insight and source material.
@@ -605,6 +620,8 @@ No markdown fences. No explanation. Only the JSON object.`;
 
   return `AUTHOR'S TEXT:
 ${sourceText}
+
+SPECIFICITY CHECK: Before shaping the post, identify the most concrete experience, result, or data point in the author's text. If the input is too vague (no specific outcome, no named result, no concrete moment), mark each gap with [SPECIFIC NEEDED] in the post rather than proceeding with vague content.
 
 INSTRUCTION:
 1. Find the author's strongest idea. Open with it — sharpened from their words, not rewritten from scratch.
@@ -678,6 +695,7 @@ async function restructureToPost(sourceText, userProfile, documentContext = null
   const overrideRecord    = archetypeOverride ? (HOOK_ARCHETYPES[archetypeOverride] || HOOK_ARCHETYPES.INSIGHT) : null;
   const postType          = options.postType || null;
   const convertCtaIntent  = options.convertCtaIntent || null;
+  const tensionStatement  = options.tensionStatement || null;
 
   // Classify archetype + quality check in parallel before generation (both Haiku, fast)
   const [hookResult, inputQuality] = await Promise.all([
@@ -694,7 +712,7 @@ async function restructureToPost(sourceText, userProfile, documentContext = null
     }
   }
 
-  const systemPrompt = buildRefineSystemPrompt(userProfile, hookResult.hookInjection, postType, convertCtaIntent);
+  const systemPrompt = buildRefineSystemPrompt(userProfile, hookResult.hookInjection, postType, convertCtaIntent, tensionStatement);
   const userPrompt   = buildRefineUserPrompt(sourceText, documentContext);
   let responseText   = '';
 

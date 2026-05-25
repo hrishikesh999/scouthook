@@ -314,6 +314,7 @@ router.post('/', async (req, res) => {
       postType:            post_type || null,
       convertCtaIntent:    convert_cta_intent || null,
       documentContext,
+      tensionStatement:    tension_statement || null,
     });
 
     {

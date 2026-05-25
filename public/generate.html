@@ -42,115 +42,63 @@
       display: none;
     }
 
-    /* ── Type cards (2×2 grid) ───────────────────────────────── */
-    #type-selector {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 16px;
-    }
-    .type-chip {
-      display: flex;
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 16px;
-      padding: 28px 20px 24px;
-      border: 1.5px solid var(--border);
-      border-radius: 16px;
-      background: var(--bg-surface);
-      color: var(--text-body);
-      cursor: pointer;
-      text-align: left;
-      transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
-      font-family: var(--font-sans);
-      box-shadow: 0 1px 3px rgba(0,0,0,0.07), 0 4px 12px rgba(0,0,0,0.05);
-      width: 100%;
-    }
-    .type-chip:hover {
-      border-color: var(--brand);
-      background: var(--bg-surface);
-      box-shadow: 0 4px 16px rgba(15,118,110,0.10), 0 0 0 3px color-mix(in srgb, var(--brand) 10%, transparent);
-    }
-    .type-chip:active {
-      border-color: var(--brand);
-      background: color-mix(in srgb, var(--brand) 6%, var(--bg-surface));
-    }
-    .type-chip--recommended {
-      border-color: var(--brand);
-      background: var(--bg-surface);
-      box-shadow: 0 1px 4px rgba(0,0,0,0.05), 0 0 0 3px color-mix(in srgb, var(--brand) 10%, transparent);
-    }
-    .type-chip-icon {
-      width: 52px;
-      height: 52px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: color-mix(in srgb, var(--brand) 18%, #fff);
-      border-radius: 14px;
-      color: var(--brand);
-      flex-shrink: 0;
-    }
-    .type-chip-body { display: flex; flex-direction: column; gap: 6px; }
-    .type-chip-title {
-      font-size: 1.0625rem;
-      font-weight: 700;
-      color: var(--text-heading);
-      line-height: 1.25;
-    }
-    .type-chip-desc {
-      font-size: 0.8125rem;
-      color: var(--text-muted);
-      line-height: 1.5;
-    }
-    @media (max-width: 600px) {
-      #type-selector { grid-template-columns: 1fr; }
-    }
-
-    /* ── Guided chat ─────────────────────────────────────────── */
+    /* ── Generate form (always visible) ─────────────────────── */
     #guided-chat {
-      display: none;
+      display: flex;
       flex-direction: column;
-      gap: 14px;
+      gap: 12px;
       background: var(--bg-surface);
       border: 1px solid var(--border);
       border-radius: 16px;
       padding: 24px 24px 20px;
       box-shadow: 0 1px 4px rgba(0,0,0,0.05);
     }
-    #guided-chat.visible { display: flex; }
+    #guided-chat.hidden { display: none; }
 
-    .chat-type-header {
+    /* ── Intent row ──────────────────────────────────────────── */
+    #intent-row {
       display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 12px;
-      padding-bottom: 14px;
-      border-bottom: 1px solid var(--border);
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+      padding-top: 4px;
     }
-    .chat-type-info { display: flex; flex-direction: column; gap: 3px; }
-    #chat-type-title {
-      font-size: 1rem;
-      font-weight: 700;
-      color: var(--text-heading);
-    }
-    #chat-type-desc {
+    .intent-label {
       font-size: 0.8125rem;
       color: var(--text-muted);
-      line-height: 1.45;
-    }
-    #chat-change-btn {
-      font-size: 0.8125rem;
-      color: var(--brand);
-      font-weight: 500;
-      background: none;
-      border: none;
-      cursor: pointer;
-      padding: 2px 0 0;
-      font-family: var(--font-sans);
-      text-decoration: underline;
       white-space: nowrap;
-      flex-shrink: 0;
+      margin-right: 2px;
     }
+    .intent-btn {
+      font-size: 0.8125rem;
+      font-family: var(--font-sans);
+      padding: 6px 13px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: var(--bg-surface);
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: border-color 0.12s, color 0.12s, background 0.12s;
+      white-space: nowrap;
+    }
+    .intent-btn:hover {
+      border-color: var(--brand);
+      color: var(--text-body);
+    }
+    .intent-btn.active {
+      border-color: var(--brand);
+      background: color-mix(in srgb, var(--brand) 10%, var(--bg-surface));
+      color: var(--brand);
+      font-weight: 600;
+    }
+    .intent-btn.recommended::after {
+      content: ' ✦';
+      font-size: 0.6rem;
+      vertical-align: super;
+      color: var(--brand);
+      opacity: 0.7;
+    }
+    #intent-spacer { flex: 1; }
 
     #chat-thread {
       display: flex;
@@ -264,14 +212,9 @@
       color: var(--text-muted);
     }
 
-    /* ── Chat input row ──────────────────────────────────────── */
-    .chat-input-row {
-      display: flex;
-      gap: 8px;
-      align-items: flex-end;
-    }
+    /* ── Textarea (standalone, full-width) ──────────────────────── */
     #chat-input {
-      flex: 1;
+      width: 100%;
       font-family: var(--font-sans);
       font-size: 0.9375rem;
       line-height: 1.5;
@@ -282,8 +225,8 @@
       color: var(--text-body);
       outline: none;
       resize: none;
-      min-height: 44px;
-      max-height: 200px;
+      min-height: 96px;
+      max-height: 280px;
       transition: border-color 0.15s, box-shadow 0.15s;
       box-shadow: 0 1px 3px rgba(0,0,0,0.05);
       box-sizing: border-box;
@@ -296,15 +239,15 @@
 
     #chat-send-btn {
       flex-shrink: 0;
-      height: 44px;
-      padding: 0 18px;
+      padding: 0 16px;
+      height: 34px;
       font-family: var(--font-sans);
-      font-size: 0.875rem;
+      font-size: 0.8125rem;
       font-weight: 700;
       background: linear-gradient(135deg, #0D9488 0%, #0F766E 100%);
       color: #fff;
       border: 1px solid #115E59;
-      border-radius: var(--radius-lg);
+      border-radius: 999px;
       cursor: pointer;
       white-space: nowrap;
       box-shadow: inset 0 1px 0 rgba(94,234,212,0.2), 0 2px 6px rgba(20,184,166,0.15);
@@ -471,88 +414,26 @@
     <div id="idea-page">
       <div class="idea-form">
 
-        <!-- ── Entry screen ────────────────────────────────────── -->
-        <div id="type-selector-section">
-          <p class="gen-question" id="gen-question">What are you creating today?</p>
-          <p id="mix-nudge"></p>
-          <div id="type-selector">
+        <p class="gen-question" id="gen-question">What do you want to post about?</p>
+        <p id="mix-nudge"></p>
 
-            <button class="type-chip" data-type="reach">
-              <div class="type-chip-icon">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
-                  <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
-                  <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
-                </svg>
-              </div>
-              <div class="type-chip-body">
-                <span class="type-chip-title">Get in front of new people</span>
-                <span class="type-chip-desc">A story or moment that resonates beyond your existing audience</span>
-              </div>
-            </button>
-
-            <button class="type-chip" data-type="trust">
-              <div class="type-chip-icon">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-                  <polyline points="9 12 11 14 15 10"/>
-                </svg>
-              </div>
-              <div class="type-chip-body">
-                <span class="type-chip-title">Build authority</span>
-                <span class="type-chip-desc">A perspective that deepens trust with people already following you</span>
-              </div>
-            </button>
-
-            <button class="type-chip" data-type="convert">
-              <div class="type-chip-icon">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                </svg>
-              </div>
-              <div class="type-chip-body">
-                <span class="type-chip-title">Move warm readers toward a conversation</span>
-                <span class="type-chip-desc">A specific result that makes the right person reach out</span>
-              </div>
-            </button>
-
-            <button class="type-chip" data-type="lead_magnet">
-              <div class="type-chip-icon">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <polyline points="20 12 20 22 4 22 4 12"/>
-                  <rect x="2" y="7" width="20" height="5"/>
-                  <line x1="12" y1="22" x2="12" y2="7"/>
-                  <path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/>
-                  <path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/>
-                </svg>
-              </div>
-              <div class="type-chip-body">
-                <span class="type-chip-title">Give away something valuable</span>
-                <span class="type-chip-desc">Capture who wants it with a resource and a comment keyword</span>
-              </div>
-            </button>
-
-          </div>
-        </div>
-
-        <!-- ── Guided chat ─────────────────────────────────────── -->
+        <!-- ── Generate form (always visible) ─────────────────── -->
         <div id="guided-chat">
-          <div class="chat-type-header">
-            <div class="chat-type-info">
-              <span id="chat-type-title"></span>
-              <span id="chat-type-desc"></span>
-            </div>
-            <button id="chat-change-btn" type="button">change</button>
-          </div>
           <div id="vault-panel" class="vault-panel" style="display:none"></div>
-          <div id="chat-thread"></div>
+          <div id="chat-thread" style="display:none"></div>
           <div id="chat-error" role="alert"></div>
           <div id="chat-substance-warning" role="alert">
             <span id="chat-substance-text"></span>
             <button id="chat-generate-anyway" type="button">Generate anyway →</button>
           </div>
-          <div class="chat-input-row">
-            <textarea id="chat-input" rows="1" aria-label="Your answer"></textarea>
+          <textarea id="chat-input" rows="4" aria-label="Your idea"></textarea>
+          <div id="intent-row">
+            <span class="intent-label">This post should →</span>
+            <button class="intent-btn" data-type="reach" type="button">Grow my audience</button>
+            <button class="intent-btn" data-type="trust" type="button">Build my credibility</button>
+            <button class="intent-btn" data-type="convert" type="button">Get client enquiries</button>
+            <button class="intent-btn" data-type="lead_magnet" type="button">Give something away</button>
+            <span id="intent-spacer"></span>
             <button id="chat-send-btn" type="button">Generate →</button>
           </div>
         </div>

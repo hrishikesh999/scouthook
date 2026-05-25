@@ -18,12 +18,8 @@ let _tensionResult      = null; // { tension, missing } from silent extraction
 let _tensionDebounce    = null; // debounce timer for extraction on input
 
 /* ── DOM refs ────────────────────────────────────────────────── */
-const typeSelectorSection = document.getElementById('type-selector-section');
-const typeChips           = document.querySelectorAll('.type-chip');
 const guidedChat          = document.getElementById('guided-chat');
-const chatTypeTitle       = document.getElementById('chat-type-title');
-const chatTypeDesc        = document.getElementById('chat-type-desc');
-const chatChangeBtn       = document.getElementById('chat-change-btn');
+const intentBtns          = document.querySelectorAll('.intent-btn');
 const chatThread          = document.getElementById('chat-thread');
 const chatInput           = document.getElementById('chat-input');
 const chatSendBtn         = document.getElementById('chat-send-btn');
@@ -32,7 +28,6 @@ const chatSubstanceWarn   = document.getElementById('chat-substance-warning');
 const chatSubstanceText   = document.getElementById('chat-substance-text');
 const chatGenerateAnyway  = document.getElementById('chat-generate-anyway');
 const processingScreen    = document.getElementById('processing-screen');
-const chatInputRow        = document.querySelector('.chat-input-row');
 
 /* ── Per-type chat configs ───────────────────────────────────── */
 const CHAT_CONFIGS = {
@@ -184,50 +179,21 @@ const EXTRACTION_QUESTIONS = {
 
 
 /* ── Type selection ──────────────────────────────────────────── */
-typeChips.forEach(chip => chip.addEventListener('click', () => selectType(chip.dataset.type)));
-chatChangeBtn.addEventListener('click', resetType);
+intentBtns.forEach(btn => btn.addEventListener('click', () => selectType(btn.dataset.type)));
 
 function selectType(type) {
-  selectedType = type;
-  chatStep     = 0;
-  chatAnswers  = {};
-
-  typeSelectorSection.style.display = 'none';
-  processingScreen.classList.remove('visible');
-  guidedChat.classList.add('visible');
-
-  chatTypeTitle.textContent = CHAT_CONFIGS[type].chatTitle;
-  chatTypeDesc.textContent  = CHAT_CONFIGS[type].chatDesc;
-  hideChatError();
-  hideSubstanceWarning();
-
-  chat.init(type);
-}
-
-function resetType() {
-  selectedType        = null;
+  selectedType        = type;
   chatStep            = 0;
   chatAnswers         = {};
   selectedVaultIdeaId = null;
   _tensionResult      = null;
   clearTimeout(_tensionDebounce);
 
-  guidedChat.classList.remove('visible');
-  processingScreen.classList.remove('visible');
-  typeSelectorSection.style.display = '';
-
-  chatThread.innerHTML     = '';
-  chatInput.value          = '';
-  chatInput.style.height   = '';
-  chatInput.disabled       = false;
-  chatSendBtn.disabled     = false;
-  chatInput.classList.remove('error');
-  const vaultPanel = document.getElementById('vault-panel');
-  if (vaultPanel) { vaultPanel.style.display = 'none'; vaultPanel.innerHTML = ''; }
+  intentBtns.forEach(b => b.classList.toggle('active', b.dataset.type === type));
   hideChatError();
   hideSubstanceWarning();
 
-  markRecommendedChip();
+  chat.init(type);
 }
 
 /* ── Mix recommendation ──────────────────────────────────────── */
@@ -246,13 +212,16 @@ async function loadMixRecommendation() {
       if (questionEl)   questionEl.textContent = 'Time to mix it up?';
     }
 
-    markRecommendedChip();
+    markRecommendedBtn();
+    if (mixRecommended && mixRecommended !== selectedType && !chatInput.value.trim()) {
+      selectType(mixRecommended);
+    }
   } catch { /* non-fatal */ }
 }
 
-function markRecommendedChip() {
-  typeChips.forEach(chip => {
-    chip.classList.toggle('type-chip--recommended', chip.dataset.type === mixRecommended);
+function markRecommendedBtn() {
+  intentBtns.forEach(btn => {
+    btn.classList.toggle('recommended', btn.dataset.type === mixRecommended);
   });
 }
 
@@ -635,7 +604,7 @@ function extractAngleLabel(rawIdea) {
 }
 
 function showProcessingScreen(rawIdea, postType) {
-  guidedChat.classList.remove('visible');
+  guidedChat.classList.add('hidden');
   processingScreen.classList.add('visible');
 
   const steps = [
@@ -689,7 +658,7 @@ function finaliseProcessingSteps(data) {
 
 function hideProcessingScreen() {
   processingScreen.classList.remove('visible');
-  guidedChat.classList.add('visible');
+  guidedChat.classList.remove('hidden');
 }
 
 /* ── Error helpers ───────────────────────────────────────────── */
@@ -734,14 +703,18 @@ function showProfileNudge() {
   nudge.id        = 'profile-gate-nudge';
   nudge.className = 'profile-gate-nudge';
   nudge.innerHTML = '<strong>Your voice profile is empty.</strong> Posts will be generic until you tell ScoutHook your niche and audience. <a href="/settings.html#voice">Set it up now →</a>';
-  typeSelectorSection.insertAdjacentElement('beforebegin', nudge);
+  guidedChat.insertAdjacentElement('beforebegin', nudge);
 }
 
 /* ── Init ────────────────────────────────────────────────────── */
 (async function init() {
   await window.scouthookAuthReady;
-  await loadMixRecommendation();
-  checkProfileGate(); // fire-and-forget — nudge appears if profile is empty
+
+  // Default to reach immediately; loadMixRecommendation may update this
+  selectType('reach');
+
+  loadMixRecommendation(); // fire-and-forget — updates active btn if mix recommends a type
+  checkProfileGate();      // fire-and-forget — nudge appears if profile is empty
 
   const urlParams = new URLSearchParams(location.search);
   const urlType   = urlParams.get('type');
@@ -755,7 +728,6 @@ function showProfileNudge() {
       chatInput.style.height = chatInput.scrollHeight + 'px';
     }
   } else if (urlIdea) {
-    selectType('reach');
     chatInput.value        = urlIdea;
     chatInput.style.height = 'auto';
     chatInput.style.height = chatInput.scrollHeight + 'px';

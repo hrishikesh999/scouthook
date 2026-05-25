@@ -379,57 +379,116 @@ const chat = (() => {
       const res   = await fetch(`/api/vault/ideas?status=fresh&funnel_type=${type}`, { headers: apiHeaders() });
       const data  = await res.json();
       const ideas = (data.ideas || []).slice(0, 3);
-      if (!ideas.length) return;
+
+      if (ideas.length) {
+        // ── Vault ideas found ──────────────────────────────────────────────────
+        const toggleBtn = document.createElement('button');
+        toggleBtn.className   = 'chat-bubble-vault-toggle';
+        toggleBtn.textContent = 'From your vault →';
+
+        const vaultBody = document.createElement('div');
+        vaultBody.className = 'chat-bubble-vault-body';
+
+        ideas.forEach(idea => {
+          const item = document.createElement('button');
+          item.type      = 'button';
+          item.className = 'vault-idea-item';
+
+          const preview = document.createElement('div');
+          preview.className   = 'vault-idea-preview';
+          preview.textContent = idea.hook_preview || idea.seed_text.slice(0, 100);
+          item.appendChild(preview);
+
+          if (idea.source_ref) {
+            const source = document.createElement('div');
+            source.className   = 'vault-idea-source';
+            source.textContent = idea.source_ref;
+            item.appendChild(source);
+          }
+
+          item.addEventListener('click', () => {
+            chatInput.value        = idea.seed_text;
+            chatInput.style.height = 'auto';
+            chatInput.style.height = chatInput.scrollHeight + 'px';
+            chatInput.classList.remove('error');
+            hideChatError();
+            chatInput.focus();
+            selectedVaultIdeaId   = idea.id;
+            vaultBody.classList.remove('visible');
+            toggleBtn.textContent = 'From your vault →';
+            chatThread.scrollTop  = chatThread.scrollHeight;
+          });
+
+          vaultBody.appendChild(item);
+        });
+
+        toggleBtn.addEventListener('click', () => {
+          const open = vaultBody.classList.toggle('visible');
+          toggleBtn.textContent = open ? 'Hide vault ideas ↑' : 'From your vault →';
+          chatThread.scrollTop  = chatThread.scrollHeight;
+        });
+
+        bubbleDiv.appendChild(toggleBtn);
+        bubbleDiv.appendChild(vaultBody);
+        chatThread.scrollTop = chatThread.scrollHeight;
+        return;
+      }
+
+      // ── No vault ideas — fall back to profile-grounded suggestions ───────────
+      const sugRes  = await fetch(`/api/vault/suggest-topics?post_type=${type}`, { headers: apiHeaders() });
+      const sugData = await sugRes.json();
+      const topics  = (sugData.topics || []).slice(0, 3);
+      if (!topics.length) return;
 
       const toggleBtn = document.createElement('button');
       toggleBtn.className   = 'chat-bubble-vault-toggle';
-      toggleBtn.textContent = 'From your vault →';
+      toggleBtn.textContent = 'Need a starting point? →';
 
-      const vaultBody = document.createElement('div');
-      vaultBody.className = 'chat-bubble-vault-body';
+      const sugBody = document.createElement('div');
+      sugBody.className = 'chat-bubble-vault-body';
 
-      ideas.forEach(idea => {
+      topics.forEach(topic => {
         const item = document.createElement('button');
         item.type      = 'button';
         item.className = 'vault-idea-item';
 
         const preview = document.createElement('div');
         preview.className   = 'vault-idea-preview';
-        preview.textContent = idea.hook_preview || idea.seed_text.slice(0, 100);
-
+        preview.textContent = topic.title;
         item.appendChild(preview);
 
-        if (idea.source_ref) {
-          const source = document.createElement('div');
-          source.className   = 'vault-idea-source';
-          source.textContent = idea.source_ref;
-          item.appendChild(source);
+        if (topic.description) {
+          const desc = document.createElement('div');
+          desc.className   = 'vault-idea-source';
+          desc.textContent = topic.description;
+          item.appendChild(desc);
         }
 
         item.addEventListener('click', () => {
-          chatInput.value        = idea.seed_text;
+          // Fill Q1 with the angle/tension description as a concrete starting point
+          chatInput.value        = topic.description || topic.title;
           chatInput.style.height = 'auto';
           chatInput.style.height = chatInput.scrollHeight + 'px';
           chatInput.classList.remove('error');
           hideChatError();
           chatInput.focus();
-          selectedVaultIdeaId   = idea.id;
-          vaultBody.classList.remove('visible');
-          toggleBtn.textContent = 'From your vault →';
+          // No vault_idea_id — profile suggestions have no chunk grounding
+          sugBody.classList.remove('visible');
+          toggleBtn.textContent = 'Need a starting point? →';
           chatThread.scrollTop  = chatThread.scrollHeight;
         });
 
-        vaultBody.appendChild(item);
+        sugBody.appendChild(item);
       });
 
       toggleBtn.addEventListener('click', () => {
-        const open = vaultBody.classList.toggle('visible');
-        toggleBtn.textContent = open ? 'Hide vault ideas ↑' : 'From your vault →';
+        const open = sugBody.classList.toggle('visible');
+        toggleBtn.textContent = open ? 'Hide suggestions ↑' : 'Need a starting point? →';
         chatThread.scrollTop  = chatThread.scrollHeight;
       });
 
       bubbleDiv.appendChild(toggleBtn);
-      bubbleDiv.appendChild(vaultBody);
+      bubbleDiv.appendChild(sugBody);
       chatThread.scrollTop = chatThread.scrollHeight;
     } catch { /* non-fatal */ }
   }

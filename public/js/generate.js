@@ -21,7 +21,6 @@ const guidedChat          = document.getElementById('guided-chat');
 const chatTypeTitle       = document.getElementById('chat-type-title');
 const chatTypeDesc        = document.getElementById('chat-type-desc');
 const chatChangeBtn       = document.getElementById('chat-change-btn');
-const suggestMeBtn        = document.getElementById('suggest-me-btn');
 const chatThread          = document.getElementById('chat-thread');
 const chatInput           = document.getElementById('chat-input');
 const chatSendBtn         = document.getElementById('chat-send-btn');
@@ -29,10 +28,7 @@ const chatError           = document.getElementById('chat-error');
 const chatSubstanceWarn   = document.getElementById('chat-substance-warning');
 const chatSubstanceText   = document.getElementById('chat-substance-text');
 const chatGenerateAnyway  = document.getElementById('chat-generate-anyway');
-const attachBtn           = document.getElementById('attach-btn');
-const attachFileInput     = document.getElementById('attach-file-input');
 const processingScreen    = document.getElementById('processing-screen');
-const suggestMeRow        = document.getElementById('suggest-me-row');
 const chatInputRow        = document.querySelector('.chat-input-row');
 const skipRow             = document.getElementById('skip-row');
 const skipBtn             = document.getElementById('skip-btn');
@@ -41,10 +37,6 @@ const tensionInput        = document.getElementById('tension-input');
 const tensionGapText      = document.getElementById('tension-gap-text');
 const tensionGenerateBtn  = document.getElementById('tension-generate-btn');
 const tensionGenerateAnywayBtn = document.getElementById('tension-generate-anyway-btn');
-
-/* ── Suggest-me constants ────────────────────────────────────── */
-const SPARK_SVG = `<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="flex-shrink:0"><path d="M12 1l2.09 7.91L22 12l-7.91 2.09L12 23l-2.09-7.91L2 12l7.91-2.09z"/></svg>`;
-const SUGGEST_BTN_DEFAULT = `${SPARK_SVG} Suggest me something`;
 
 /* ── Per-type chat configs ───────────────────────────────────── */
 const CHAT_CONFIGS = {
@@ -107,34 +99,6 @@ const CHAT_CONFIGS = {
     ],
   },
 };
-
-/* ── Suggestion chip sources ─────────────────────────────────── */
-const FALLBACK_CHIPS = {
-  reach: [
-    "A mistake I made that taught me something",
-    "A result that surprised me",
-    "Something I believed, then changed my mind about",
-  ],
-  trust: [
-    "A common misconception in my field",
-    "The framework I use that others don't",
-    "What most people get wrong about X",
-  ],
-  convert: [
-    "A specific client result from the last 90 days",
-    "A before/after transformation I helped create",
-    "The outcome my best clients consistently get",
-  ],
-};
-
-const LM_CHIPS = {
-  0: ["LinkedIn Hook Templates", "Client Onboarding Checklist", "90-Day LinkedIn Playbook"],
-  1: [],
-  2: [],
-  3: ["HOOKS", "TEMPLATE", "PLAYBOOK"],
-};
-
-const suggestionCache = {};
 
 /* ── Extraction questions (reach / trust / convert) ──────────── */
 const EXTRACTION_QUESTIONS = {
@@ -256,8 +220,6 @@ function selectType(type) {
 
   chatTypeTitle.textContent = CHAT_CONFIGS[type].chatTitle;
   chatTypeDesc.textContent  = CHAT_CONFIGS[type].chatDesc;
-  suggestMeBtn.disabled     = false;
-  suggestMeBtn.innerHTML    = SUGGEST_BTN_DEFAULT;
   hideChatError();
   hideSubstanceWarning();
 
@@ -278,10 +240,7 @@ function resetType() {
   chatInput.style.height   = '';
   chatInput.disabled       = false;
   chatSendBtn.disabled     = false;
-  attachBtn.disabled       = false;
   chatInput.classList.remove('error');
-  suggestMeBtn.disabled  = false;
-  suggestMeBtn.innerHTML = SUGGEST_BTN_DEFAULT;
   skipRow.style.display  = 'none';
   chat.hideTensionConfirm();
   hideChatError();
@@ -412,56 +371,6 @@ const chat = (() => {
     }
   }
 
-  async function loadSuggestions(type, step) {
-    if (type === 'lead_magnet') {
-      const chips = LM_CHIPS[step] || [];
-      if (chips.length) renderSuggestions(chips);
-      return;
-    }
-
-    if (step !== 0) return;
-
-    if (suggestionCache[type]) {
-      renderSuggestions(suggestionCache[type]);
-      return;
-    }
-
-    try {
-      const res  = await fetch(`/api/vault/suggest-topics?post_type=${type}`, { headers: apiHeaders() });
-      const data = await res.json();
-      if (data.ok && data.topics?.length) {
-        const chips = data.topics.map(t => t.title);
-        suggestionCache[type] = chips;
-        renderSuggestions(chips);
-      } else {
-        renderSuggestions(FALLBACK_CHIPS[type] || []);
-      }
-    } catch {
-      renderSuggestions(FALLBACK_CHIPS[type] || []);
-    }
-  }
-
-  function renderSuggestions(chips) {
-    if (!chips.length) return;
-    const row = document.createElement('div');
-    row.className = 'suggestion-chips-row';
-    chips.forEach(label => {
-      const btn = document.createElement('button');
-      btn.type        = 'button';
-      btn.className   = 'suggestion-chip';
-      btn.textContent = label;
-      btn.addEventListener('click', () => {
-        chatInput.value        = label;
-        chatInput.style.height = 'auto';
-        chatInput.style.height = chatInput.scrollHeight + 'px';
-        chatInput.focus();
-      });
-      row.appendChild(btn);
-    });
-    chatThread.appendChild(row);
-    chatThread.scrollTop = chatThread.scrollHeight;
-  }
-
   function fireTensionExtraction(answer) {
     _tensionPromise = fetch('/api/generate/extract-tension', {
       method:  'POST',
@@ -476,11 +385,8 @@ const chat = (() => {
   async function showTensionConfirm() {
     chatInputRow.style.display  = 'none';
     skipRow.style.display       = 'none';
-    suggestMeRow.style.display  = 'none';
     chatInput.disabled          = true;
     chatSendBtn.disabled        = true;
-    attachBtn.disabled          = true;
-    suggestMeBtn.disabled       = true;
 
     const result = await (_tensionPromise || Promise.resolve({ tension: null, missing: null }));
 
@@ -507,11 +413,8 @@ const chat = (() => {
     tensionGapText.style.display           = 'none';
     tensionGenerateAnywayBtn.style.display = 'none';
     chatInputRow.style.display             = '';
-    suggestMeRow.style.display             = '';
     chatInput.disabled    = false;
     chatSendBtn.disabled  = false;
-    attachBtn.disabled    = false;
-    suggestMeBtn.disabled = false;
   }
 
   function init(type) {
@@ -531,12 +434,9 @@ const chat = (() => {
       const q0 = EXTRACTION_QUESTIONS[type][0];
       addBot(q0.question, { label: q0.label, example: q0.example });
       setInputState({ placeholder: q0.placeholder, multiline: true });
-      loadSuggestions(type, 0);
     }
     updateSendBtn();
     chatInput.focus();
-
-    if (type === 'lead_magnet') loadSuggestions(type, 0);
   }
 
   function advance() {
@@ -581,7 +481,6 @@ const chat = (() => {
           addBot(nextStep.question, { hasEscape: nextStep.hasEscape });
           setInputState(nextStep);
           updateSendBtn();
-          loadSuggestions(_type, chatStep);
           chatInput.focus();
         }, 300);
       } else {
@@ -654,101 +553,6 @@ const chat = (() => {
   return { init, advance, skip, hideTensionConfirm };
 })();
 
-/* ── "Suggest me something" ──────────────────────────────────── */
-suggestMeBtn.addEventListener('click', async () => {
-  if (!selectedType) return;
-  suggestMeBtn.disabled  = true;
-  suggestMeBtn.innerHTML = `<span class="proc-spinner" style="width:12px;height:12px;border-width:1.5px;vertical-align:middle"></span> Thinking…`;
-
-  try {
-    const suggestion = await getSuggestedAnswer(selectedType, chatStep);
-    if (suggestion) {
-      chatInput.value        = suggestion;
-      chatInput.style.height = 'auto';
-      chatInput.style.height = chatInput.scrollHeight + 'px';
-      chatInput.classList.remove('error');
-      hideChatError();
-      chatInput.focus();
-    } else {
-      // Briefly signal nothing was found without blocking the user
-      suggestMeBtn.innerHTML = `${SPARK_SVG} Nothing found — add your own`;
-      setTimeout(() => { suggestMeBtn.innerHTML = SUGGEST_BTN_DEFAULT; }, 2200);
-    }
-  } catch {
-    suggestMeBtn.innerHTML = SUGGEST_BTN_DEFAULT;
-  } finally {
-    suggestMeBtn.disabled = false;
-    if (suggestMeBtn.innerHTML.includes('Thinking')) suggestMeBtn.innerHTML = SUGGEST_BTN_DEFAULT;
-  }
-});
-
-async function getSuggestedAnswer(type, step) {
-  if (type !== 'lead_magnet') {
-    // 1. User's own vault ideas — most personalised source
-    try {
-      const res   = await fetch(`/api/vault/ideas?status=fresh&funnel_type=${type}`, { headers: apiHeaders() });
-      const data  = await res.json();
-      const ideas = (data.ideas || []).filter(i => i.seed_text?.trim());
-      if (ideas.length) {
-        const pick = ideas[Math.floor(Math.random() * Math.min(ideas.length, 3))];
-        return pick.seed_text.slice(0, 500);
-      }
-    } catch { /* fall through */ }
-
-    // 2. AI suggestions derived from voice profile
-    try {
-      const res    = await fetch(`/api/vault/suggest-topics?post_type=${type}`, { headers: apiHeaders() });
-      const data   = await res.json();
-      const topics = (data.topics || []).filter(t => t.title && t.description);
-      if (topics.length) {
-        const t = topics[Math.floor(Math.random() * topics.length)];
-        return `${t.title}\n\n${t.description}`;
-      }
-    } catch { /* fall through */ }
-
-    // 3. Generic instructional fallback
-    const fb = FALLBACK_CHIPS[type] || [];
-    return fb[Math.floor(Math.random() * fb.length)] || '';
-  }
-
-  // Lead magnet steps
-  if (step === 0) {
-    const opts = LM_CHIPS[0];
-    return opts[Math.floor(Math.random() * opts.length)] || '';
-  }
-  if (step === 1) {
-    // Try vault for a sense of what the user teaches before falling back to a template
-    try {
-      const res  = await fetch('/api/vault/ideas?status=fresh', { headers: apiHeaders() });
-      const data = await res.json();
-      const ideas = (data.ideas || []).filter(i => i.seed_text?.trim());
-      if (ideas.length) {
-        const pick = ideas[Math.floor(Math.random() * Math.min(ideas.length, 3))];
-        return pick.seed_text.slice(0, 300);
-      }
-    } catch { /* fall through */ }
-    return 'Step-by-step instructions you can follow right away\nReal examples showing what works in practice\nCommon mistakes to avoid and how to sidestep them';
-  }
-  if (step === 2) {
-    // Proof must come from the user — try vault for result-containing seeds, else return empty
-    try {
-      const res   = await fetch('/api/vault/ideas?status=fresh', { headers: apiHeaders() });
-      const data  = await res.json();
-      const ideas = (data.ideas || []).filter(i => i.seed_text && /\d/.test(i.seed_text));
-      if (ideas.length) {
-        const pick = ideas[Math.floor(Math.random() * Math.min(ideas.length, 3))];
-        return pick.seed_text.slice(0, 300);
-      }
-    } catch { /* fall through */ }
-    return ''; // don't fabricate proof
-  }
-  if (step === 3) {
-    const opts = LM_CHIPS[3];
-    return opts[Math.floor(Math.random() * opts.length)] || '';
-  }
-  return '';
-}
-
 /* ── Chat input wiring ───────────────────────────────────────── */
 chatSendBtn.addEventListener('click', () => chat.advance());
 skipBtn.addEventListener('click', () => chat.skip());
@@ -777,88 +581,6 @@ chatInput.addEventListener('keydown', e => {
   }
 });
 
-/* ── Attachment ──────────────────────────────────────────────── */
-attachBtn.addEventListener('click', () => attachFileInput.click());
-attachFileInput.addEventListener('change', () => {
-  const file = attachFileInput.files?.[0];
-  attachFileInput.value = '';
-  if (file) handleAttachment(file);
-});
-
-const ATTACH_MIME = new Set([
-  'application/pdf',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'text/plain',
-]);
-
-async function handleAttachment(file) {
-  if (!ATTACH_MIME.has(file.type)) {
-    showChatError('Supported formats: PDF, Word (.docx), plain text (.txt)');
-    return;
-  }
-  if (file.size > 25 * 1024 * 1024) {
-    showChatError('File is too large — maximum 25 MB.');
-    return;
-  }
-
-  const userDiv = document.createElement('div');
-  userDiv.className   = 'chat-bubble-user';
-  userDiv.textContent = `📎 ${file.name} attached`;
-  chatThread.appendChild(userDiv);
-  chatThread.scrollTop = chatThread.scrollHeight;
-
-  if (selectedType === 'lead_magnet') {
-    // For LM: note the attachment and continue the guided flow
-    return;
-  }
-
-  // 1-turn types: go straight to from-doc generation
-  chatInput.disabled   = true;
-  chatSendBtn.disabled = true;
-  attachBtn.disabled   = true;
-  showProcessingScreen(file.name, selectedType);
-
-  const controller = new AbortController();
-  const timeoutId  = setTimeout(() => controller.abort(), 90_000);
-
-  try {
-    const res = await fetch('/api/generate/from-doc', {
-      method:  'POST',
-      headers: { ...apiHeaders(), 'Content-Type': file.type, 'X-Filename': encodeURIComponent(file.name) },
-      body:    file,
-      signal:  controller.signal,
-    });
-    clearTimeout(timeoutId);
-    const data = await res.json();
-
-    if (!res.ok || !data.ok) {
-      const err = new Error(data.error || 'generation_failed');
-      if (data.error === 'plan_limit_exceeded') { err.planCurrent = data.current; err.planLimit = data.limit; }
-      throw err;
-    }
-
-    finaliseProcessingSteps(data);
-    await sleep(600);
-    window.location.href = `/editor/${encodeURIComponent(data.id)}`;
-
-  } catch (err) {
-    clearTimeout(timeoutId);
-    hideProcessingScreen();
-    chatInput.disabled   = false;
-    chatSendBtn.disabled = false;
-    attachBtn.disabled   = false;
-
-    if (err.name === 'AbortError') {
-      showChatError('This is taking longer than expected. <a href="#">Try again →</a>');
-    } else if (err.message === 'plan_limit_exceeded') {
-      const used = (err.planCurrent != null && err.planLimit != null)
-        ? ` You've used ${err.planCurrent} of ${err.planLimit} this month.` : '';
-      showChatError(`You've reached the free plan limit.${used} <a href="/billing.html" class="js-upgrade-cta">Upgrade to Pro →</a>`);
-    } else {
-      showChatError('Something went wrong processing your file. <a href="#">Try again →</a>');
-    }
-  }
-}
 
 /* ── Generate (Reach / Trust / Convert) ─────────────────────── */
 chatGenerateAnyway.addEventListener('click', () => {

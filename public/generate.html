@@ -213,58 +213,6 @@
     }
     .chat-bubble-example-body.visible { display: block; }
 
-    /* ── Suggestion chips ────────────────────────────────────── */
-    .suggestion-chips-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 7px;
-      align-self: flex-start;
-      margin-top: -4px;
-    }
-    .suggestion-chip {
-      display: inline-flex;
-      align-items: center;
-      font-family: var(--font-sans);
-      font-size: 0.8125rem;
-      font-weight: 500;
-      padding: 7px 14px;
-      border: 1.5px solid var(--border);
-      border-radius: 999px;
-      background: var(--bg-surface);
-      color: var(--text-body);
-      cursor: pointer;
-      transition: border-color 0.15s, background 0.15s;
-      white-space: nowrap;
-    }
-    .suggestion-chip:hover {
-      border-color: var(--brand);
-      background: color-mix(in srgb, var(--brand) 5%, transparent);
-    }
-
-    /* ── Suggest me button ───────────────────────────────────── */
-    #suggest-me-row { display: flex; align-items: center; }
-    #suggest-me-btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      font-family: var(--font-sans);
-      font-size: 0.8125rem;
-      font-weight: 600;
-      color: var(--brand);
-      background: none;
-      border: 1.5px solid color-mix(in srgb, var(--brand) 30%, transparent);
-      border-radius: 999px;
-      padding: 7px 14px;
-      cursor: pointer;
-      transition: background 0.15s, border-color 0.15s;
-      white-space: nowrap;
-    }
-    #suggest-me-btn:hover {
-      background: color-mix(in srgb, var(--brand) 6%, transparent);
-      border-color: var(--brand);
-    }
-    #suggest-me-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
     /* ── Chat input row ──────────────────────────────────────── */
     .chat-input-row {
       display: flex;
@@ -294,24 +242,6 @@
       box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 12%, transparent);
     }
     #chat-input.error { border-color: var(--red, #ef4444); }
-
-    #attach-btn {
-      flex-shrink: 0;
-      height: 44px;
-      width: 40px;
-      background: none;
-      border: 1.5px solid var(--border);
-      border-radius: var(--radius-md);
-      cursor: pointer;
-      font-size: 16px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: border-color 0.15s;
-      color: var(--text-muted);
-    }
-    #attach-btn:hover { border-color: var(--brand); }
-    #attach-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 
     #chat-send-btn {
       flex-shrink: 0;
@@ -597,14 +527,6 @@
             <button id="chat-change-btn" type="button">change</button>
           </div>
           <div id="chat-thread"></div>
-          <div id="suggest-me-row">
-            <button id="suggest-me-btn" type="button">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="flex-shrink:0">
-                <path d="M12 1l2.09 7.91L22 12l-7.91 2.09L12 23l-2.09-7.91L2 12l7.91-2.09z"/>
-              </svg>
-              Suggest me something
-            </button>
-          </div>
           <div id="chat-error" role="alert"></div>
           <div id="chat-substance-warning" role="alert">
             <span id="chat-substance-text"></span>
@@ -612,8 +534,6 @@
           </div>
           <div class="chat-input-row">
             <textarea id="chat-input" rows="1" aria-label="Your answer"></textarea>
-            <input type="file" id="attach-file-input" accept=".pdf,.docx,.txt" style="display:none">
-            <button id="attach-btn" type="button" title="Attach a document" aria-label="Attach document">📎</button>
             <button id="chat-send-btn" type="button">Write the post →</button>
           </div>
           <div id="skip-row">

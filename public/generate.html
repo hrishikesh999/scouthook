@@ -213,6 +213,57 @@
     }
     .chat-bubble-example-body.visible { display: block; }
 
+    /* ── Vault idea toggle (Q1) ─────────────────────────────── */
+    .chat-bubble-vault-toggle {
+      display: inline-block;
+      margin-top: 8px;
+      font-size: 0.8125rem;
+      color: var(--brand);
+      font-weight: 500;
+      background: none;
+      border: none;
+      padding: 0;
+      cursor: pointer;
+      text-decoration: underline;
+      font-family: var(--font-sans);
+      text-align: left;
+    }
+    .chat-bubble-vault-body {
+      display: none;
+      margin-top: 10px;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .chat-bubble-vault-body.visible { display: flex; }
+    .vault-idea-item {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      padding: 10px 12px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      cursor: pointer;
+      text-align: left;
+      font-family: var(--font-sans);
+      width: 100%;
+      transition: border-color 0.12s, background 0.12s;
+    }
+    .vault-idea-item:hover {
+      border-color: var(--brand);
+      background: color-mix(in srgb, var(--brand) 4%, var(--bg-surface));
+    }
+    .vault-idea-preview {
+      font-size: 0.8125rem;
+      font-weight: 500;
+      color: var(--text-body);
+      line-height: 1.4;
+    }
+    .vault-idea-source {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
     /* ── Chat input row ──────────────────────────────────────── */
     .chat-input-row {
       display: flex;

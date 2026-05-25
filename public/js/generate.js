@@ -342,6 +342,7 @@ const chat = (() => {
 
     chatThread.appendChild(div);
     chatThread.scrollTop = chatThread.scrollHeight;
+    return div;
   }
 
   function addUser(text) {
@@ -369,6 +370,65 @@ const chat = (() => {
     } else {
       chatSendBtn.textContent = 'Continue →';
     }
+  }
+
+  async function _loadVaultIdeas(type, bubbleDiv) {
+    try {
+      const res   = await fetch(`/api/vault/ideas?status=fresh&funnel_type=${type}`, { headers: apiHeaders() });
+      const data  = await res.json();
+      const ideas = (data.ideas || []).slice(0, 3);
+      if (!ideas.length) return;
+
+      const toggleBtn = document.createElement('button');
+      toggleBtn.className   = 'chat-bubble-vault-toggle';
+      toggleBtn.textContent = 'From your vault →';
+
+      const vaultBody = document.createElement('div');
+      vaultBody.className = 'chat-bubble-vault-body';
+
+      ideas.forEach(idea => {
+        const item = document.createElement('button');
+        item.type      = 'button';
+        item.className = 'vault-idea-item';
+
+        const preview = document.createElement('div');
+        preview.className   = 'vault-idea-preview';
+        preview.textContent = idea.hook_preview || idea.seed_text.slice(0, 100);
+
+        item.appendChild(preview);
+
+        if (idea.source_ref) {
+          const source = document.createElement('div');
+          source.className   = 'vault-idea-source';
+          source.textContent = idea.source_ref;
+          item.appendChild(source);
+        }
+
+        item.addEventListener('click', () => {
+          chatInput.value        = idea.seed_text;
+          chatInput.style.height = 'auto';
+          chatInput.style.height = chatInput.scrollHeight + 'px';
+          chatInput.classList.remove('error');
+          hideChatError();
+          chatInput.focus();
+          vaultBody.classList.remove('visible');
+          toggleBtn.textContent = 'From your vault →';
+          chatThread.scrollTop  = chatThread.scrollHeight;
+        });
+
+        vaultBody.appendChild(item);
+      });
+
+      toggleBtn.addEventListener('click', () => {
+        const open = vaultBody.classList.toggle('visible');
+        toggleBtn.textContent = open ? 'Hide vault ideas ↑' : 'From your vault →';
+        chatThread.scrollTop  = chatThread.scrollHeight;
+      });
+
+      bubbleDiv.appendChild(toggleBtn);
+      bubbleDiv.appendChild(vaultBody);
+      chatThread.scrollTop = chatThread.scrollHeight;
+    } catch { /* non-fatal */ }
   }
 
   function fireTensionExtraction(answer) {
@@ -431,9 +491,10 @@ const chat = (() => {
       addBot(step0.question, { hasEscape: step0.hasEscape });
       setInputState(step0);
     } else {
-      const q0 = EXTRACTION_QUESTIONS[type][0];
-      addBot(q0.question, { label: q0.label, example: q0.example });
+      const q0    = EXTRACTION_QUESTIONS[type][0];
+      const q0Div = addBot(q0.question, { label: q0.label, example: q0.example });
       setInputState({ placeholder: q0.placeholder, multiline: true });
+      _loadVaultIdeas(type, q0Div);
     }
     updateSendBtn();
     chatInput.focus();

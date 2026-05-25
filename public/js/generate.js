@@ -142,11 +142,12 @@ const EXTRACTION_QUESTIONS = {
     {
       key:         'moment',
       label:       '1 of 3',
-      question:    'What happened, and what made it different from what you expected?',
-      placeholder: 'e.g. I sent a proposal Friday afternoon. The client signed within 2 hours with no negotiation. I had barely prepared.',
+      question:    "What's a specific moment or result that surprised you?",
+      placeholder: "e.g. I sent a one-line proposal with no deck. They signed the same day — every other agency had sent 40 slides.",
       required:    true,
       minChars:    60,
-      errorMsg:    'Describe the surprise — what you expected and what actually happened.',
+      errorMsg:    'Give us the moment — what specifically happened?',
+      example:     'Moments that tend to work well:\n\n"Sent a one-line proposal with no deck. Client signed the same day — every other agency had sent 40 slides."\n\n"Posted for the first time in 8 months. That one post generated more inbound in 48 hours than the previous year combined."\n\n"Turned down a promotion. Three months later, got an offer at double the salary from a competitor."\n\nSpecific + surprising = good material. The AI finds the tension.',
     },
     {
       key:         'lesson',
@@ -344,6 +345,25 @@ const chat = (() => {
       div.appendChild(nudgeEl);
     }
 
+    if (opts.example) {
+      const toggleBtn = document.createElement('button');
+      toggleBtn.className = 'chat-bubble-example-toggle';
+      toggleBtn.textContent = 'See what works well →';
+
+      const exampleBody = document.createElement('div');
+      exampleBody.className = 'chat-bubble-example-body';
+      exampleBody.textContent = opts.example;
+
+      toggleBtn.addEventListener('click', () => {
+        const open = exampleBody.classList.toggle('visible');
+        toggleBtn.textContent = open ? 'Hide examples ↑' : 'See what works well →';
+        chatThread.scrollTop = chatThread.scrollHeight;
+      });
+
+      div.appendChild(toggleBtn);
+      div.appendChild(exampleBody);
+    }
+
     if (opts.hasEscape) {
       const btn = document.createElement('button');
       btn.style.cssText = 'display:block;margin-top:10px;font-size:0.8125rem;color:var(--brand);' +
@@ -509,7 +529,7 @@ const chat = (() => {
       setInputState(step0);
     } else {
       const q0 = EXTRACTION_QUESTIONS[type][0];
-      addBot(q0.question, { label: q0.label });
+      addBot(q0.question, { label: q0.label, example: q0.example });
       setInputState({ placeholder: q0.placeholder, multiline: true });
       loadSuggestions(type, 0);
     }

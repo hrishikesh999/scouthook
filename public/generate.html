@@ -184,6 +184,35 @@
       white-space: pre-wrap;
     }
 
+    /* ── Example toggle (Q1 thought-provoker) ───────────────── */
+    .chat-bubble-example-toggle {
+      display: inline-block;
+      margin-top: 10px;
+      font-size: 0.8125rem;
+      color: var(--brand);
+      font-weight: 500;
+      background: none;
+      border: none;
+      padding: 0;
+      cursor: pointer;
+      text-decoration: underline;
+      font-family: var(--font-sans);
+      text-align: left;
+    }
+    .chat-bubble-example-body {
+      display: none;
+      margin-top: 10px;
+      padding: 12px 14px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 0.8125rem;
+      color: var(--text-muted);
+      line-height: 1.65;
+      white-space: pre-wrap;
+    }
+    .chat-bubble-example-body.visible { display: block; }
+
     /* ── Suggestion chips ────────────────────────────────────── */
     .suggestion-chips-row {
       display: flex;

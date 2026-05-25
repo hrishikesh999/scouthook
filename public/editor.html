@@ -1815,13 +1815,8 @@ function bindEvents() {
    API WIRES
 ════════════════════════════════════════════════════════════════════════ */
 function wireSchedule() {
-  document.getElementById('btn-schedule').addEventListener('click', async () => {
+  document.getElementById('btn-schedule').addEventListener('click', () => {
     if (scheduleEditLocked) return;
-    try {
-      const sub = await fetch('/api/billing/subscription', { credentials: 'include' });
-      const sd  = sub.ok ? await sub.json() : null;
-      if (sd?.plan !== 'pro') { openModal(true); return; }
-    } catch { /* fall through */ }
     openModal(false);
   });
 

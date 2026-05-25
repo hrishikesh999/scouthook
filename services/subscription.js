@@ -6,9 +6,9 @@ const { Paddle, Environment } = require('@paddle/paddle-node-sdk');
 // ---------------------------------------------------------------------------
 // Plan limits
 // ---------------------------------------------------------------------------
-const FREE_GENERATION_LIMIT  = 10;  // quality-gate passes per calendar month
-const FREE_VISUAL_LIMIT      = 0;   // visuals are Pro-only — hard block for free users
-const FREE_VAULT_DOC_LIMIT   = 10;  // total documents
+const FREE_GENERATION_LIMIT  = null; // unlimited — limits lifted for open testing
+const FREE_VISUAL_LIMIT      = null; // unlimited — limits lifted for open testing
+const FREE_VAULT_DOC_LIMIT   = null; // unlimited — limits lifted for open testing
 const PRO_GENERATION_LIMIT   = null; // unlimited — Pro tier at $29-39/mo
 const PRO_VISUAL_LIMIT       = null; // unlimited — Pro tier at $29-39/mo
 const PRO_VAULT_DOC_LIMIT    = null; // unlimited — Pro tier at $29-39/mo
@@ -175,29 +175,25 @@ async function canGeneratePost(userId) {
 //             up to FREE_VISUAL_LIMIT generations.
 // ---------------------------------------------------------------------------
 async function canGenerateVisual(userId, tenantId = 'default') {
-  const plan = await getUserPlan(userId);
+  const plan  = await getUserPlan(userId);
+  const limit = plan === 'pro' ? PRO_VISUAL_LIMIT : FREE_VISUAL_LIMIT;
   const [start, end] = calendarMonthBounds();
 
-  if (plan === 'pro') {
-    let current = 0;
-    try {
-      const row = await db.prepare(`
-        SELECT COUNT(*) AS cnt
-        FROM visual_generation_log
-        WHERE user_id = ?
-          AND created_at >= ?
-          AND created_at < ?
-      `).get(userId, start, end);
-      current = parseInt(row?.cnt ?? 0, 10);
-    } catch (err) {
-      console.error('[subscription] canGenerateVisual pro count error:', err.message);
-      return { allowed: true, current: 0, limit: PRO_VISUAL_LIMIT, plan };
-    }
-    return { allowed: PRO_VISUAL_LIMIT === null || current < PRO_VISUAL_LIMIT, current, limit: PRO_VISUAL_LIMIT, plan };
+  let current = 0;
+  try {
+    const row = await db.prepare(`
+      SELECT COUNT(*) AS cnt
+      FROM visual_generation_log
+      WHERE user_id = ?
+        AND created_at >= ?
+        AND created_at < ?
+    `).get(userId, start, end);
+    current = parseInt(row?.cnt ?? 0, 10);
+  } catch (err) {
+    console.error('[subscription] canGenerateVisual count error:', err.message);
+    return { allowed: true, current: 0, limit, plan };
   }
-
-  // Free: visuals are Pro-only
-  return { allowed: false, current: 0, limit: null, plan: 'free', reason: 'pro_only' };
+  return { allowed: limit === null || current < limit, current, limit, plan };
 }
 
 // ---------------------------------------------------------------------------

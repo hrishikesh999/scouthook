@@ -955,18 +955,7 @@ function showAutosaveState(state) {
 }
 
 /* ── 18. Schedule modal ──────────────────────────────────────── */
-scheduleBtn.addEventListener('click', async () => {
-  try {
-    const subRes = await fetch('/api/billing/subscription', { headers: apiHeaders() });
-    const subData = subRes.ok ? await subRes.json() : null;
-    if (subData?.plan !== 'pro') {
-      scheduleBtn.textContent = 'Publish to LinkedIn';
-      openModal(true);
-      return;
-    }
-  } catch {
-    // On error, fall through and let the API call fail naturally
-  }
+scheduleBtn.addEventListener('click', () => {
   openModal();
 });
 scheduleCancel.addEventListener('click', () => closeModal());
@@ -1261,11 +1250,6 @@ function setSlideOverState(state) {
 function openSlideOver(type, label) {
   if (scheduleEditLocked) return;
   if (!currentPostId) return;
-  if (userPlan === 'free') {
-    window.PricingModal?.open();
-    return;
-  }
-
   currentAssetType = type;
   currentAssetUrl  = null;
   extractedContent = null;

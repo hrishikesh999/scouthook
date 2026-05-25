@@ -47,9 +47,6 @@ router.get('/performance-summary', async (req, res) => {
   const tenantId = req.tenantId || 'default';
   if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
 
-  const plan = await getUserPlan(userId);
-  if (plan !== 'pro') return res.status(403).json({ ok: false, error: 'pro_only' });
-
   try {
     // Total tagged posts
     const countRow = await db.prepare(`

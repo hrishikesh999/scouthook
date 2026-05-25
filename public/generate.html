@@ -256,6 +256,23 @@
     #chat-send-btn:hover:not(:disabled) { opacity: 0.92; }
     #chat-send-btn:disabled { opacity: 0.55; cursor: not-allowed; }
 
+    /* ── Specificity nudge ──────────────────────────────────── */
+    #specificity-nudge {
+      display: none;
+      font-size: 0.8125rem;
+      color: var(--text-muted);
+      line-height: 1.45;
+      padding: 0 2px;
+    }
+    #specificity-nudge.visible {
+      display: block;
+      animation: nudge-in 0.18s ease;
+    }
+    @keyframes nudge-in {
+      from { opacity: 0; transform: translateY(-3px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
     /* ── Chat error + substance warning ─────────────────────── */
     #chat-error {
       font-size: 0.875rem;
@@ -427,6 +444,7 @@
             <button id="chat-generate-anyway" type="button">Generate anyway →</button>
           </div>
           <textarea id="chat-input" rows="4" aria-label="Your idea"></textarea>
+          <div id="specificity-nudge" role="status" aria-live="polite"></div>
           <div id="intent-row">
             <span class="intent-label">This post should →</span>
             <button class="intent-btn" data-type="reach" type="button">Grow my audience</button>

@@ -28,6 +28,8 @@ const chatSubstanceWarn   = document.getElementById('chat-substance-warning');
 const chatSubstanceText   = document.getElementById('chat-substance-text');
 const chatGenerateAnyway  = document.getElementById('chat-generate-anyway');
 const processingScreen    = document.getElementById('processing-screen');
+const specificityNudge    = document.getElementById('specificity-nudge');
+let _nudgeDebounce        = null;
 
 /* ── Per-type chat configs ───────────────────────────────────── */
 const CHAT_CONFIGS = {
@@ -192,6 +194,7 @@ function selectType(type) {
   intentBtns.forEach(b => b.classList.toggle('active', b.dataset.type === type));
   hideChatError();
   hideSubstanceWarning();
+  hideSpecificityNudge();
 
   chat.init(type);
 }
@@ -246,7 +249,7 @@ async function loadVaultPanel(type) {
     const topics  = (sugData.topics || []).slice(0, 3);
     if (topics.length) {
       renderVaultPanel(panel,
-        topics.map(t => ({ text: t.description || t.title, label: t.title, id: null })),
+        topics.map(t => ({ text: t.textarea_input || t.description || t.title, label: t.title, id: null })),
         'Need a starting point?');
     }
   } catch { /* non-fatal */ }
@@ -259,8 +262,10 @@ function renderVaultPanel(panel, items, title) {
       `<button class="vault-panel-item" type="button" data-idx="${i}">${escapeHtml(item.label)}</button>`
     ).join('')}</div>`;
   panel.querySelectorAll('.vault-panel-item').forEach((btn, i) => {
-    btn.addEventListener('click', () => {
-      selectedVaultIdeaId    = items[i].id;
+    btn.addEventListener('click', async () => {
+      selectedVaultIdeaId = items[i].id;
+
+      // Fill immediately with seed_text for instant feedback
       chatInput.value        = items[i].text;
       chatInput.style.height = 'auto';
       chatInput.style.height = chatInput.scrollHeight + 'px';
@@ -268,6 +273,28 @@ function renderVaultPanel(panel, items, title) {
       hideChatError();
       chatInput.focus();
       if (items[i].text.length >= 30) chat.fireTensionExtraction(items[i].text);
+
+      // Vault ideas: enrich from the source chunk in the background
+      if (items[i].id && selectedType && selectedType !== 'lead_magnet') {
+        const seedVal = items[i].text;
+        showSpecificityNudge('Pulling specifics from your vault…');
+        try {
+          const r = await fetch(
+            `/api/vault/expand-idea?id=${encodeURIComponent(items[i].id)}&post_type=${encodeURIComponent(selectedType)}`,
+            { headers: apiHeaders() }
+          );
+          const d = await r.json();
+          // Only replace if user hasn't started editing
+          if (d.ok && d.expanded_input && chatInput.value === seedVal) {
+            chatInput.value        = d.expanded_input;
+            chatInput.style.height = 'auto';
+            chatInput.style.height = chatInput.scrollHeight + 'px';
+            chat.fireTensionExtraction(d.expanded_input);
+          }
+        } catch { /* non-fatal — keep seed_text */ }
+        hideSpecificityNudge();
+        checkSpecificityNudge(chatInput.value.trim());
+      }
     });
   });
   panel.style.display = '';
@@ -349,9 +376,10 @@ const chat = (() => {
   }
 
   function init(type) {
-    _type        = type;
-    _lmProofMode = 'metric';
-    _tensionResult      = null;
+    const prevType   = _type;
+    _type            = type;
+    _lmProofMode     = 'metric';
+    _tensionResult   = null;
     selectedVaultIdeaId = null;
 
     chatThread.innerHTML = '';
@@ -362,16 +390,25 @@ const chat = (() => {
       chatThread.style.display = '';
       const step0 = CHAT_CONFIGS.lead_magnet.steps[0];
       addBot(step0.question, { hasEscape: step0.hasEscape });
-      setInputState(step0);
+      setInputState(step0);  // clears input — structured flow needs a clean start
     } else {
       chatThread.style.display = 'none';
       const q0 = EXTRACTION_QUESTIONS[type][0];
-      chatInput.placeholder     = q0.placeholder;
-      chatInput.rows            = 4;
+      chatInput.placeholder = q0.placeholder;
+      chatInput.rows        = 4;
       chatInput.style.minHeight = '100px';
-      chatInput.value           = '';
-      chatInput.style.height    = '';
       chatInput.classList.remove('error');
+
+      // Preserve input when switching between reach/trust/convert.
+      // Clear only when coming from lead_magnet (where the value belongs to its flow).
+      if (!prevType || prevType === 'lead_magnet') {
+        chatInput.value      = '';
+        chatInput.style.height = '';
+      } else {
+        chatInput.style.height = 'auto';
+        chatInput.style.height = chatInput.scrollHeight + 'px';
+      }
+
       loadVaultPanel(type);
     }
     updateSendBtn();
@@ -456,15 +493,21 @@ chatInput.addEventListener('input', () => {
   hideChatError();
   hideSubstanceWarning();
 
+  const val = chatInput.value.trim();
+
   // Debounced silent tension extraction for reach/trust/convert
   if (selectedType && selectedType !== 'lead_magnet') {
     clearTimeout(_tensionDebounce);
     _tensionResult = null;
-    const val = chatInput.value.trim();
     if (val.length >= 40) {
       _tensionDebounce = setTimeout(() => chat.fireTensionExtraction(val), 600);
     }
   }
+
+  // Debounced specificity nudge
+  clearTimeout(_nudgeDebounce);
+  specificityNudge.classList.remove('visible');
+  _nudgeDebounce = setTimeout(() => checkSpecificityNudge(val), 1200);
 });
 
 chatInput.addEventListener('keydown', e => {
@@ -496,6 +539,7 @@ async function triggerGenerate(opts = {}) {
     ? opts.tensionStatement
     : (_tensionResult?.tension || null);
 
+  hideSpecificityNudge();
   showProcessingScreen(idea, selectedType);
 
   const controller = new AbortController();
@@ -659,6 +703,30 @@ function finaliseProcessingSteps(data) {
 function hideProcessingScreen() {
   processingScreen.classList.remove('visible');
   guidedChat.classList.remove('hidden');
+  // Re-evaluate nudge state when user returns to edit after an error
+  checkSpecificityNudge(chatInput.value.trim());
+}
+
+/* ── Specificity nudge ───────────────────────────────────────── */
+function checkSpecificityNudge(val) {
+  if (!val || !selectedType || selectedType === 'lead_magnet') { hideSpecificityNudge(); return; }
+  const hasNumbers = /\d/.test(val);
+  if (val.length < 30) { hideSpecificityNudge(); return; }
+  if (val.length < 80 && !hasNumbers) {
+    showSpecificityNudge('Add a specific result, number, or decision — generic inputs produce generic posts.');
+  } else if (val.length >= 80 && !hasNumbers) {
+    showSpecificityNudge('No numbers yet — a percentage, revenue figure, or timeframe makes this far more memorable.');
+  } else {
+    hideSpecificityNudge();
+  }
+}
+function showSpecificityNudge(msg) {
+  specificityNudge.textContent = '↑ ' + msg;
+  specificityNudge.classList.add('visible');
+}
+function hideSpecificityNudge() {
+  specificityNudge.classList.remove('visible');
+  clearTimeout(_nudgeDebounce);
 }
 
 /* ── Error helpers ───────────────────────────────────────────── */

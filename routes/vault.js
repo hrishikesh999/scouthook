@@ -431,7 +431,7 @@ router.get('/suggest-topics', async (req, res) => {
 
     const message = await client.messages.create({
       model:      HAIKU_MODEL,
-      max_tokens: 400,
+      max_tokens: 700,
       messages: [{
         role: 'user',
         content: `Generate 3 specific LinkedIn post topics for this professional.
@@ -443,9 +443,15 @@ Each topic must:
 - Reflect a real tension, lesson, or contrarian view specific to their niche
 - Feel like something only this person could write
 
+For each topic also write a "textarea_input": 2–3 sentences in FIRST PERSON that this author would type as their raw starting material. It should sound like they're briefing a ghostwriter — personal, specific, with at least one concrete detail (number, timeframe, named situation). NOT a drafted post.
+
 Return ONLY a JSON array of 3 objects, no other text:
 [
-  { "title": "3-7 word opinionated topic", "description": "One sentence explaining the angle or tension" },
+  {
+    "title": "3-7 word opinionated topic",
+    "description": "One sentence explaining the angle or tension",
+    "textarea_input": "2-3 sentence first-person raw input the author would type"
+  },
   ...
 ]`,
       }],
@@ -466,6 +472,92 @@ Return ONLY a JSON array of 3 objects, no other text:
   } catch (err) {
     console.error('[vault/suggest-topics] error (non-fatal):', err.message);
     return res.json({ ok: true, topics: [] });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/vault/expand-idea — turn a vault idea seed into a rich textarea input
+// Query params: id (vault idea id), post_type
+// ---------------------------------------------------------------------------
+router.get('/expand-idea', async (req, res) => {
+  const { userId, tenantId } = req;
+  if (!requireUser(req, res)) return;
+
+  const { id, post_type } = req.query;
+  if (!id) return res.status(400).json({ ok: false, error: 'missing_id' });
+
+  try {
+    const idea = db.prepare(`
+      SELECT vi.id, vi.seed_text, vi.hook_archetype, vi.source_ref,
+             vc.content AS chunk_content, vc.source_ref AS chunk_source_ref
+      FROM   vault_ideas  vi
+      LEFT JOIN vault_chunks vc ON vc.id = vi.chunk_id
+      WHERE  vi.id = ? AND vi.user_id = ? AND vi.tenant_id = ?
+    `).get(id, userId, tenantId);
+
+    if (!idea) return res.status(404).json({ ok: false, error: 'not_found' });
+
+    const profile = db.prepare(
+      `SELECT content_niche, audience_role, audience_pain, contrarian_view, onboarding_q2
+       FROM   user_profiles WHERE user_id = ? AND tenant_id = ?`
+    ).get(userId, tenantId);
+
+    const niche      = profile?.content_niche    || '';
+    const audience   = profile?.audience_role    || '';
+    const contrarian = profile?.contrarian_view  || '';
+    const voiceQ2    = profile?.onboarding_q2    || '';
+
+    const TYPE_GUIDANCE = {
+      reach:   'REACH (story/lesson): relatable moment, before/after, personal lesson learned the hard way',
+      trust:   'AUTHORITY (insight): contrarian position, non-obvious expertise, industry myth busted',
+      convert: 'CONVERSION (result): specific client outcome, problem → solution, outcome-first',
+    };
+    const guidance = TYPE_GUIDANCE[post_type] || TYPE_GUIDANCE.reach;
+
+    const profileBlock = [
+      niche      && `Niche: ${niche}`,
+      audience   && `Audience: ${audience}`,
+      contrarian && `Their contrarian POV: ${contrarian}`,
+      voiceQ2    && `How they describe their work (voice sample): "${voiceQ2.slice(0, 180)}"`,
+    ].filter(Boolean).join('\n');
+
+    const chunkContent = (idea.chunk_content || '').slice(0, 1400);
+    const sourceLabel  = idea.chunk_source_ref || idea.source_ref || 'their document';
+
+    const Anthropic = require('@anthropic-ai/sdk');
+    const { getSetting } = require('../db');
+    const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
+    if (!apiKey) return res.json({ ok: true, expanded_input: idea.seed_text });
+
+    const client  = new Anthropic({ apiKey });
+    const message = await client.messages.create({
+      model:      HAIKU_MODEL,
+      max_tokens: 280,
+      messages: [{
+        role: 'user',
+        content: `${profileBlock ? profileBlock + '\n\n' : ''}POST TYPE: ${guidance}
+
+VAULT MATERIAL (${sourceLabel}):
+${chunkContent}
+
+IDEA SEED: ${idea.seed_text}
+
+Write 3–4 sentences in first person that this author would type as their raw starting material for a LinkedIn post. Requirements:
+- First-person voice ("I", "my", "we")
+- Include at least one specific number, timeframe, or named outcome pulled directly from the vault content
+- State the central tension or contrarian point from the seed
+- Raw and personal — NOT a drafted post, NOT a summary. Think: what would they tell a ghostwriter?
+
+Reply with ONLY the expanded input text. No intro, no formatting.`,
+      }],
+    });
+
+    const expanded = message.content[0]?.text?.trim() || idea.seed_text;
+    return res.json({ ok: true, expanded_input: expanded });
+
+  } catch (err) {
+    console.error('[vault/expand-idea] error (non-fatal):', err.message);
+    return res.json({ ok: false, error: 'expansion_failed' });
   }
 });
 

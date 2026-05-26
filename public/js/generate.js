@@ -28,7 +28,7 @@ const chatSendBtn         = document.getElementById('chat-send-btn');
 const chatError           = document.getElementById('chat-error');
 const chatSubstanceWarn   = document.getElementById('chat-substance-warning');
 const chatSubstanceText   = document.getElementById('chat-substance-text');
-const chatGenerateAnyway  = document.getElementById('chat-generate-anyway');
+const chatImproveInput    = document.getElementById('chat-improve-input');
 const processingScreen    = document.getElementById('processing-screen');
 const specificityNudge    = document.getElementById('specificity-nudge');
 let _nudgeDebounce        = null;
@@ -532,8 +532,11 @@ chatInput.addEventListener('keydown', e => {
 });
 
 /* ── Generate ────────────────────────────────────────────────── */
-chatGenerateAnyway.addEventListener('click', () => {
-  triggerGenerate({ skipSubstanceCheck: true });
+chatImproveInput.addEventListener('click', () => {
+  hideSubstanceWarning();
+  const panel = document.getElementById('micro-interview');
+  if (panel) panel.classList.add('visible');
+  document.getElementById('mi-q1')?.focus();
 });
 
 async function triggerGenerate(opts = {}) {
@@ -567,7 +570,7 @@ async function triggerGenerate(opts = {}) {
     if (!res.ok || !data.ok) {
       const err = new Error(data.error || 'generation_failed');
       if (data.error === 'plan_limit_exceeded') { err.planCurrent = data.current; err.planLimit = data.limit; }
-      if (data.error === 'missing_substance')   err.substancePrompt = data.prompt;
+      if (data.error === 'missing_substance') { err.substancePrompt = data.prompt; err.substanceTier = data.substance_tier; }
       throw err;
     }
 

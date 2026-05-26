@@ -462,7 +462,7 @@ router.post('/', async (req, res) => {
 
   } catch (err) {
     if (err.message === 'missing_substance') {
-      return res.status(422).json({ ok: false, error: 'missing_substance', prompt: err.substancePrompt });
+      return res.status(422).json({ ok: false, error: 'missing_substance', prompt: err.substancePrompt, substance_tier: err.substanceTier || 'warn' });
     }
     // Anthropic rate-limit (429) or overload (529) — surface gracefully instead of crashing
     if (err.status === 429 || err.status === 529) {
@@ -594,7 +594,8 @@ router.post('/regenerate/:postId', async (req, res) => {
 
     if (!ideaResult) {
       // Standard idea path (free-typed ideas, or vault idea no longer exists)
-      ideaResult = await restructureWithQualityGate(userProfile, inputData.raw_idea, null);
+      // Skip substance check on regenerate — user already committed to this input
+      ideaResult = await restructureWithQualityGate(userProfile, inputData.raw_idea, null, { skipSubstanceCheck: true });
     }
 
     const isInsightRow = post.format_slug === IDEA_INSIGHT_SLUG;
@@ -937,7 +938,7 @@ router.post('/from-doc', async (req, res) => {
 
   } catch (err) {
     if (err.message === 'missing_substance') {
-      return res.status(422).json({ ok: false, error: 'missing_substance', prompt: err.substancePrompt });
+      return res.status(422).json({ ok: false, error: 'missing_substance', prompt: err.substancePrompt, substance_tier: err.substanceTier || 'warn' });
     }
     console.error('[generate/from-doc] Error:', err.message);
     return res.status(500).json({ ok: false, error: err.message });

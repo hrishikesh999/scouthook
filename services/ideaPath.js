@@ -128,14 +128,15 @@ async function ideaToPost(rawIdea, userProfile, options = {}) {
           hook_draft: '',
         })
       : buildStructureBlueprint(rawIdea, postType, client),
-    assessInputQuality(rawIdea, client),
+    assessInputQuality(rawIdea, client, userProfile),
   ]);
 
   if (!options.skipSubstanceCheck) {
-    const substancePrompt = buildSubstancePrompt(inputQuality);
-    if (substancePrompt) {
+    const substanceResult = buildSubstancePrompt(inputQuality, userProfile);
+    if (substanceResult) {
       const err = new Error('missing_substance');
-      err.substancePrompt = substancePrompt;
+      err.substancePrompt = substanceResult.message;
+      err.substanceTier   = substanceResult.tier;
       throw err;
     }
   }
@@ -904,42 +905,92 @@ Return ONLY valid JSON:
 No markdown fences. No explanation. Only the JSON object.`;
 }
 
-async function assessInputQuality(text, client) {
+async function assessInputQuality(text, client, userProfile = {}) {
+  const niche    = userProfile.content_niche || '';
+  const audience = userProfile.audience_role || '';
   try {
     const response = await client.messages.create({
       model:       HAIKU_MODEL,
-      max_tokens:  80,
+      max_tokens:  120,
       temperature: 0,
-      system:      'You assess LinkedIn post inputs. Return only valid JSON, nothing else.',
+      system:      'You assess LinkedIn post inputs for quality. Return only valid JSON, nothing else.',
       messages: [{
         role:    'user',
-        content: `Does this text contain:
-1. A CONCRETE SPECIFIC — any of: a real number or metric, a named scenario or situation, a specific decision that was made, a before/after state (even without numbers), a named role or type of person, a specific moment in time, or a particular action taken? Note: specificity does NOT require numbers. "I stopped sending follow-up emails" is specific. "I changed my approach" is not.
-2. GENUINE TENSION — a surprising outcome, unpopular opinion, personal failure, counterintuitive result, or a belief that contradicts conventional wisdom?
+        content: `Evaluate this LinkedIn post input on four dimensions:
+
+1. CONCRETE SPECIFIC — does it contain a real number, named scenario, specific decision, before/after state, named role, specific moment, or particular action? "I stopped sending cold emails" is specific. "I changed my approach" is not.
+2. GENUINE TENSION — does it contain a surprising outcome, unpopular opinion, personal failure, counterintuitive result, or belief contradicting conventional wisdom?
+3. NICHE RELEVANCE — is this content clearly relevant to the niche "${niche || 'professional work'}" aimed at "${audience || 'professionals'}"? If no niche is set, return true.
+4. NOT A CLICHÉ — is this a genuinely fresh angle? Only return false if the input is clearly a recycled overused idea ("hustle is dead", "wake up grateful", "leadership is about people not profits", "mindset is everything"). Return true if there is any specific detail or nuance.
 
 TEXT: ${text.slice(0, 1200)}
 
-Return only: {"has_specific": true/false, "has_tension": true/false}`,
+Return only: {"has_specific": true/false, "has_tension": true/false, "has_relevance": true/false, "has_novelty": true/false}`,
       }],
     });
     const parsed = JSON.parse(response.content[0].text.trim());
-    return { hasSpecific: !!parsed.has_specific, hasTension: !!parsed.has_tension };
+    return {
+      hasSpecific:  !!parsed.has_specific,
+      hasTension:   !!parsed.has_tension,
+      hasRelevance: niche ? (parsed.has_relevance !== false) : true,
+      hasNovelty:   parsed.has_novelty !== false,
+    };
   } catch {
-    return { hasSpecific: true, hasTension: true }; // fail open — never block on error
+    return { hasSpecific: true, hasTension: true, hasRelevance: true, hasNovelty: true }; // fail open
   }
 }
 
-function buildContentFeedback({ hasSpecific, hasTension }) {
-  if (hasSpecific && hasTension) return null;
-  const missing = [];
-  if (!hasSpecific) missing.push('a concrete scenario, specific decision, or named situation');
-  if (!hasTension)  missing.push('a surprising outcome, an unpopular view, or a personal failure');
-  return `To push this post further: add ${missing.join(' and ')}.`;
+function buildContentFeedback(quality) {
+  const { hasSpecific, hasTension, hasRelevance, hasNovelty } = quality;
+  const passCount = [hasSpecific, hasTension, hasRelevance, hasNovelty].filter(Boolean).length;
+  if (passCount >= 3) {
+    if (!hasNovelty)   return 'Consider adding a fresh angle or specific detail that makes this distinctly yours.';
+    if (!hasRelevance) return 'Adding a direct reference to your specific audience or niche will strengthen the post.';
+    if (!hasTension)   return 'Adding a counterintuitive element or surprising outcome will make this post more shareable.';
+    if (!hasSpecific)  return 'Adding a specific moment, result, or decision will make this post significantly stronger.';
+  }
+  return null;
 }
 
-function buildSubstancePrompt({ hasSpecific, hasTension }) {
-  if (hasSpecific || hasTension) return null;
-  return 'This input is quite general — add the specific situation, decision, or moment behind it and the post will be significantly stronger. What exactly happened? Who was involved? What specifically changed?';
+function buildSubstanceWarnMessage({ hasSpecific, hasTension, hasRelevance }, niche) {
+  if (!hasSpecific && !hasTension) {
+    const ctx = niche ? ` in ${niche}` : '';
+    return `Add the specific situation${ctx} — the moment, the decision, who was involved — plus what made it surprising or counterintuitive.`;
+  }
+  if (!hasSpecific) return 'Add what specifically happened — the moment, the client, the number — and this post will perform significantly better.';
+  if (!hasTension)  return 'What makes this surprising? Add the counterintuitive outcome, the unpopular view, or the moment where something didn\'t go as expected.';
+  if (!hasRelevance) {
+    const ctx = niche ? ` for ${niche} professionals` : '';
+    return `This input doesn\'t clearly connect to your audience${ctx}. Add what specific problem this solves or insight it provides for them.`;
+  }
+  return 'Add a specific scenario and what made it surprising or valuable.';
+}
+
+function buildSubstanceBlockMessage({ hasSpecific, hasTension }, niche, userProfile) {
+  const ctx = niche ? ` for someone in ${niche}` : '';
+  let example = '';
+  try {
+    const examples = JSON.parse(userProfile.input_examples || '[]');
+    if (Array.isArray(examples) && examples.length) {
+      example = `\n\nFor example: "${examples[0]}"`;
+    }
+  } catch { /* ignore */ }
+  return `This input is too general to produce a strong post. Add what specifically happened${ctx} — the situation, the decision, the result — plus what made it surprising.${example}`;
+}
+
+function buildSubstancePrompt(quality, userProfile = {}) {
+  const { hasSpecific, hasTension, hasRelevance, hasNovelty } = quality;
+  const passCount = [hasSpecific, hasTension, hasRelevance, hasNovelty].filter(Boolean).length;
+
+  if (passCount >= 3) return null; // 3+ dimensions pass — generate immediately
+
+  const niche = userProfile.content_niche || '';
+
+  if (passCount === 2) {
+    return { tier: 'warn', message: buildSubstanceWarnMessage(quality, niche) };
+  }
+
+  return { tier: 'block', message: buildSubstanceBlockMessage(quality, niche, userProfile) };
 }
 
 async function restructureToPost(sourceText, userProfile, documentContext = null, options = {}) {
@@ -957,14 +1008,15 @@ async function restructureToPost(sourceText, userProfile, documentContext = null
   // Classify archetype + quality check in parallel before generation (both Haiku, fast)
   const [hookResult, inputQuality] = await Promise.all([
     archetypeOverride ? Promise.resolve({ archetype: archetypeOverride, hookInjection: buildHookInjection(overrideRecord), confidence: 1 }) : selectHook(sourceText, userProfile, postType),
-    assessInputQuality(sourceText, client),
+    assessInputQuality(sourceText, client, userProfile),
   ]);
 
   if (!options.skipSubstanceCheck) {
-    const substancePrompt = buildSubstancePrompt(inputQuality);
-    if (substancePrompt) {
+    const substanceResult = buildSubstancePrompt(inputQuality, userProfile);
+    if (substanceResult) {
       const err = new Error('missing_substance');
-      err.substancePrompt = substancePrompt;
+      err.substancePrompt = substanceResult.message;
+      err.substanceTier   = substanceResult.tier;
       throw err;
     }
   }

@@ -44,6 +44,36 @@
       </div>
     </div>
 
+    <!-- Content pillars panel — editable topic focus areas -->
+    <div id="vw-pillars-panel" class="vw-hook-panel" hidden>
+      <div class="vw-hook-panel-header">
+        <p class="vw-hook-panel-title">Content pillars</p>
+        <p class="vw-hook-panel-subtitle">The 2-3 specific topics you write about most consistently. LinkedIn's algorithm rewards focus — these help ScoutHook keep your posts on-theme.</p>
+      </div>
+      <div class="vw-chips-area" id="vw-pillars-chips" aria-label="Content pillars" role="group"></div>
+      <div class="vw-add-row" style="margin-top:10px">
+        <input id="vw-pillars-input" class="vw-add-input" type="text"
+               placeholder="e.g. founder-led sales" autocomplete="off" />
+        <button id="vw-pillars-add" class="vw-add-btn" type="button">Add</button>
+      </div>
+      <div class="vw-stage-actions" style="margin-top:12px">
+        <button id="vw-pillars-save" class="vw-save-btn" type="button">Save pillars →</button>
+        <span class="vw-save-status" id="vw-pillars-status" hidden></span>
+      </div>
+      <p class="vw-stage-hint" style="margin-top:10px">
+        <button id="vw-pillars-suggest" class="vw-suggest-link" type="button">✦ Suggest pillars from my profile</button>
+      </p>
+    </div>
+
+    <!-- Archetype coaching panel — shown when user has published posts -->
+    <div id="vw-archetype-panel" class="vw-hook-panel" hidden>
+      <div class="vw-hook-panel-header">
+        <p class="vw-hook-panel-title">Your signature style</p>
+        <p class="vw-hook-panel-subtitle">Based on the posts you've published. ScoutHook uses this to pick hooks that match your author voice.</p>
+      </div>
+      <div id="vw-archetype-coaching" class="vw-archetype-coaching"></div>
+    </div>
+
     <!-- Voice summary panel — shown when extraction has run -->
     <div id="vw-voice-summary" class="vw-voice-summary" hidden>
       <div class="vw-voice-summary-header">

@@ -529,6 +529,107 @@
     btn.querySelector('svg')?.classList.remove('spin');
   });
 
+  /* ── Content pillars panel ─────────────────────────────── */
+  let pillars = safeParseJSON(profile.content_pillars, []);
+
+  const pillarsPanel = qs('vw-pillars-panel');
+  const renderPillars = makeChipList('vw-pillars-chips', pillars, () => {});
+  wireAddChip('vw-pillars-input', 'vw-pillars-add', pillars, renderPillars);
+
+  qs('vw-pillars-save')?.addEventListener('click', async () => {
+    const btn = qs('vw-pillars-save');
+    btn.disabled = true;
+    btn.textContent = 'Saving…';
+    try {
+      const d = await saveProfile({ content_pillars: JSON.stringify(pillars) });
+      if (d.ok) {
+        showStatus(qs('vw-pillars-status'), 'Saved ✓');
+      } else {
+        showStatus(qs('vw-pillars-status'), 'Save failed', true);
+      }
+    } catch {
+      showStatus(qs('vw-pillars-status'), 'Save failed', true);
+    }
+    btn.textContent = 'Save pillars →';
+    btn.disabled = false;
+  });
+
+  // Suggest pillars button
+  const pillarsBtn = qs('vw-pillars-suggest');
+  if (pillarsBtn) {
+    pillarsBtn.addEventListener('click', async () => {
+      pillarsBtn.textContent = 'Thinking…';
+      pillarsBtn.disabled = true;
+      try {
+        const r = await fetch('/api/profile/generate-content-pillars', {
+          method: 'POST', headers: apiHeaders(), body: '{}',
+        });
+        const d = await r.json();
+        if (d.ok && d.content_pillars) {
+          let incoming = [];
+          try { incoming = JSON.parse(d.content_pillars); } catch { /* ignore */ }
+          incoming.forEach(p => { if (!pillars.includes(p)) pillars.push(p); });
+          renderPillars(pillars);
+          pillarsBtn.textContent = 'Suggestions added ✓';
+        } else {
+          pillarsBtn.textContent = '✦ Suggest pillars from my profile';
+        }
+      } catch {
+        pillarsBtn.textContent = '✦ Suggest pillars from my profile';
+      }
+      pillarsBtn.disabled = false;
+    });
+  }
+
+  // Always show pillars panel (even if empty — nudge to fill in)
+  if (pillarsPanel) pillarsPanel.hidden = false;
+
+  /* ── Archetype coaching panel ───────────────────────────── */
+  const archetypePanel    = qs('vw-archetype-panel');
+  const archetypeCoaching = qs('vw-archetype-coaching');
+
+  const archetypeLabels = {
+    NUMBER:          'Number hook',
+    CONTRARIAN:      'Contrarian',
+    CONFESSION:      'Confession',
+    PATTERN_INTERRUPT: 'Pattern interrupt',
+    DIRECT_ADDRESS:  'Direct address',
+    STAKES:          'Stakes',
+    BEFORE_AFTER:    'Before & after',
+    INSIGHT:         'Insight',
+  };
+
+  const archetypeDescriptions = {
+    NUMBER:          'Opens with a specific number or result',
+    CONTRARIAN:      'Challenges a widely-held belief',
+    CONFESSION:      'Leads with a mistake or past belief',
+    PATTERN_INTERRUPT: 'Contradicts what the reader expects',
+    DIRECT_ADDRESS:  'Speaks directly to a specific person',
+    STAKES:          'Opens with a consequence before the cause',
+    BEFORE_AFTER:    'Contrasts two states side by side',
+    INSIGHT:         'States a non-obvious truth as plain fact',
+  };
+
+  const archetypePrefs = safeParseJSON(profile.user_archetype_preference, {});
+  const topArchetypes = Object.entries(archetypePrefs)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3);
+
+  if (archetypePanel && archetypeCoaching) {
+    if (topArchetypes.length > 0) {
+      archetypeCoaching.innerHTML = topArchetypes.map(([key, count], i) => {
+        const isTop = i === 0;
+        const rankLabels = ['#1 signature', '#2 frequent', '#3 occasional'];
+        return `<div class="vw-archetype-card${isTop ? ' vw-archetype-card--top' : ''}">
+          <span class="vw-archetype-rank">${rankLabels[i] || '#' + (i + 1)}</span>
+          <span class="vw-archetype-name">${escapeHtml(archetypeLabels[key] || key)}</span>
+          <span class="vw-archetype-count">${escapeHtml(archetypeDescriptions[key] || '')} · ${count} post${count !== 1 ? 's' : ''}</span>
+        </div>`;
+      }).join('');
+      archetypePanel.hidden = false;
+    }
+  }
+
   /* ── Stage 7: Writing Samples ───────────────────────────── */
   const samplesEl = qs('profile-samples');
   if (samplesEl && profile.writing_samples) samplesEl.value = profile.writing_samples;

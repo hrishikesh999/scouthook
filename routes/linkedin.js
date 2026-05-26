@@ -15,6 +15,27 @@ function sha256Hex(s) {
   return crypto.createHash('sha256').update(String(s || ''), 'utf8').digest('hex');
 }
 
+// Fire-and-forget: increment archetype publish count in user_archetype_preference.
+// Called after a post is stamped status='published'. Errors are swallowed.
+async function incrementArchetypePreference(userId, tenantId, archetype) {
+  if (!archetype || !userId) return;
+  try {
+    const row = await db.prepare(
+      'SELECT user_archetype_preference FROM user_profiles WHERE user_id = ? AND tenant_id = ?'
+    ).get(userId, tenantId);
+    const prefs = (() => {
+      try { return row?.user_archetype_preference ? JSON.parse(row.user_archetype_preference) : {}; }
+      catch { return {}; }
+    })();
+    prefs[archetype] = (prefs[archetype] || 0) + 1;
+    await db.prepare(
+      'UPDATE user_profiles SET user_archetype_preference = ? WHERE user_id = ? AND tenant_id = ?'
+    ).run(JSON.stringify(prefs), userId, tenantId);
+  } catch (e) {
+    console.warn('[linkedin] incrementArchetypePreference failed (non-fatal):', e.message);
+  }
+}
+
 function logScheduledEvent({ scheduledPostId, userId, tenantId, eventType, message = null }) {
   void db.prepare(`
       INSERT INTO scheduled_post_events (scheduled_post_id, user_id, tenant_id, event_type, message)
@@ -396,6 +417,13 @@ router.post('/publish', async (req, res) => {
       if (result.linkedin_post_id) {
         await db.prepare(`UPDATE generated_posts SET linkedin_post_id = ? WHERE id = ? AND user_id = ? AND tenant_id = ?`)
           .run(result.linkedin_post_id, postId, userId, tenantId);
+      }
+
+      // Update archetype preference so hook selection bias improves over time
+      const postRow = await db.prepare('SELECT archetype_used FROM generated_posts WHERE id = ? AND user_id = ? AND tenant_id = ?')
+        .get(postId, userId, tenantId);
+      if (postRow?.archetype_used) {
+        incrementArchetypePreference(userId, tenantId, postRow.archetype_used).catch(() => {});
       }
     }
 

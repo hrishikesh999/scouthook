@@ -26,7 +26,8 @@ router.get('/:user_id?', async (req, res) => {
                      website_summary, onboarding_q1, onboarding_q2, onboarding_q3,
                      authority_statements, cta_library, content_principles, content_themes,
                      voice_extraction_quality, voice_profile_completion_pct,
-                     input_examples, voice_refinements
+                     input_examples, voice_refinements,
+                     content_pillars, user_archetype_preference
               FROM user_profiles WHERE user_id = ? AND tenant_id = ?`)
     .get(user_id, tenantId);
 
@@ -66,6 +67,8 @@ router.get('/:user_id?', async (req, res) => {
       voice_profile_completion_pct: profile.voice_profile_completion_pct || 0,
       input_examples:               profile.input_examples               || null,
       voice_refinements:            profile.voice_refinements            || null,
+      content_pillars:              profile.content_pillars              || null,
+      user_archetype_preference:    profile.user_archetype_preference    || null,
     },
   });
 });
@@ -90,7 +93,9 @@ router.post('/', async (req, res) => {
           website_summary, website_extracted_at,
           onboarding_q1, onboarding_q2, onboarding_q3, onboarding_q_completed_at,
           onboarding_completed_at,
-          authority_statements, cta_library, content_principles, content_themes } = req.body;
+          authority_statements, cta_library, content_principles, content_themes,
+          // Phase 7: personalized hook strategy
+          content_pillars } = req.body;
 
   const hasVoiceDNAField = website_summary || onboarding_q1 || onboarding_q2 || onboarding_q3
     || authority_statements || cta_library || content_principles || content_themes;
@@ -98,13 +103,13 @@ router.post('/', async (req, res) => {
   if (!audience_role && !audience_pain && !content_niche && !writing_samples && !contrarian_view
       && !brand_bg && !brand_accent && !brand_text && !brand_name && brand_logo === undefined
       && user_role === undefined && onboarding_complete === undefined && !business_positioning
-      && !website_url && !goal && !hasVoiceDNAField) {
+      && !website_url && !goal && !hasVoiceDNAField && !content_pillars) {
     return res.status(400).json({ ok: false, error: 'no_fields_provided' });
   }
 
   // Check what's changing (to decide whether to re-extract fingerprint / rebuild prompt)
   const existing = await db
-    .prepare('SELECT id, writing_samples, business_positioning, website_url FROM user_profiles WHERE user_id = ? AND tenant_id = ?')
+    .prepare('SELECT id, writing_samples, business_positioning, website_url, onboarding_complete FROM user_profiles WHERE user_id = ? AND tenant_id = ?')
     .get(userId, tenantId);
 
   const samplesChanged      = writing_samples && writing_samples !== existing?.writing_samples;
@@ -125,9 +130,10 @@ router.post('/', async (req, res) => {
       onboarding_q1, onboarding_q2, onboarding_q3, onboarding_q_completed_at,
       onboarding_completed_at,
       authority_statements, cta_library, content_principles, content_themes,
+      content_pillars,
       updated_at
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     ON CONFLICT(user_id, tenant_id) DO UPDATE SET
       writing_samples         = COALESCE(excluded.writing_samples, user_profiles.writing_samples),
       contrarian_view         = COALESCE(excluded.contrarian_view, user_profiles.contrarian_view),
@@ -155,6 +161,7 @@ router.post('/', async (req, res) => {
       cta_library             = COALESCE(excluded.cta_library, user_profiles.cta_library),
       content_principles      = COALESCE(excluded.content_principles, user_profiles.content_principles),
       content_themes          = COALESCE(excluded.content_themes, user_profiles.content_themes),
+      content_pillars         = COALESCE(excluded.content_pillars, user_profiles.content_pillars),
       updated_at              = CURRENT_TIMESTAMP
   RETURNING id
   `).run(
@@ -167,7 +174,7 @@ router.post('/', async (req, res) => {
     onboarding_q1 || null, onboarding_q2 || null, onboarding_q3 || null,
     onboarding_q_completed_at || null, onboarding_completed_at || null,
     authority_statements || null, cta_library || null, content_principles || null,
-    content_themes || null
+    content_themes || null, content_pillars || null
   );
 
   const profileId = result.lastInsertRowid || existing?.id;
@@ -221,11 +228,14 @@ router.post('/', async (req, res) => {
     }).catch(() => {});
   }
 
-  // When onboarding completes, generate niche-specific input examples (fire-and-forget)
+  // When onboarding completes, generate niche-specific input examples + content pillars (fire-and-forget)
   if (obComplete === 1 && !existing?.onboarding_complete) {
-    const { generateInputExamples } = require('../services/inputCoach');
+    const { generateInputExamples, generateContentPillars } = require('../services/inputCoach');
     generateInputExamples(userId, tenantId).catch(err => {
       console.error('[profile] generateInputExamples failed (non-fatal):', err.message);
+    });
+    generateContentPillars(userId, tenantId).catch(err => {
+      console.error('[profile] generateContentPillars failed (non-fatal):', err.message);
     });
   }
 
@@ -455,6 +465,27 @@ router.post('/generate-input-examples', async (req, res) => {
     return res.json({ ok: true, input_examples: row?.input_examples || null });
   } catch (err) {
     console.error('[profile] generate-input-examples error:', err.message);
+    return res.status(500).json({ ok: false, error: 'generation_failed' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/profile/generate-content-pillars
+// Generates content pillars from niche + onboarding Q&A and stores them.
+// Called at onboarding completion or manually from settings.
+// ---------------------------------------------------------------------------
+router.post('/generate-content-pillars', async (req, res) => {
+  if (!req.userId) return res.status(401).json({ ok: false, error: 'unauthenticated' });
+
+  try {
+    const { generateContentPillars } = require('../services/inputCoach');
+    await generateContentPillars(req.userId, req.tenantId);
+    const row = await db
+      .prepare('SELECT content_pillars FROM user_profiles WHERE user_id = ? AND tenant_id = ?')
+      .get(req.userId, req.tenantId);
+    return res.json({ ok: true, content_pillars: row?.content_pillars || null });
+  } catch (err) {
+    console.error('[profile] generate-content-pillars error:', err.message);
     return res.status(500).json({ ok: false, error: 'generation_failed' });
   }
 });

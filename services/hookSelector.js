@@ -42,6 +42,30 @@ function insightFallback(reason) {
 }
 
 /**
+ * Returns the user's top N archetypes by publish count, sorted descending.
+ * @param {object|null} voiceProfile
+ * @param {number} n
+ * @returns {string[]}
+ */
+function getTopArchetypes(voiceProfile, n = 3) {
+  if (!voiceProfile?.user_archetype_preference) return [];
+  let prefs;
+  try {
+    prefs = typeof voiceProfile.user_archetype_preference === 'string'
+      ? JSON.parse(voiceProfile.user_archetype_preference)
+      : voiceProfile.user_archetype_preference;
+  } catch {
+    return [];
+  }
+  if (!prefs || typeof prefs !== 'object') return [];
+  return Object.entries(prefs)
+    .filter(([k]) => ARCHETYPE_KEYS.includes(k))
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, n)
+    .map(([k]) => k);
+}
+
+/**
  * Classify raw thought into a hook archetype (Haiku). Never throws.
  * @param {string} rawThought
  * @param {object} voiceProfile — full user_profiles row
@@ -49,8 +73,6 @@ function insightFallback(reason) {
  * @returns {Promise<{ archetype: string, confidence: number, structureInstruction: string, exampleHook: string, hookInjection: string }>}
  */
 async function selectHook(rawThought, voiceProfile, postType = null) {
-  void voiceProfile;
-
   const thought = (rawThought || '').trim();
   const words = thought.split(/\s+/).filter(Boolean);
   if (words.length < 5) {
@@ -69,8 +91,15 @@ async function selectHook(rawThought, voiceProfile, postType = null) {
     const postTypeBlock = postType && ARCHETYPE_PREFERENCES[postType]
       ? `\nPOST GOAL: ${postType.toUpperCase()}\nPreferred archetypes for this goal: ${ARCHETYPE_PREFERENCES[postType].join(', ')}\nWeight your selection toward these when the input could work with multiple archetypes.\n`
       : '';
+
+    // User preference bias — nudge toward archetypes the user publishes most
+    const topArchetypes = getTopArchetypes(voiceProfile);
+    const preferenceBlock = topArchetypes.length > 0
+      ? `\nUSER SIGNATURE STYLE: This author most often publishes ${topArchetypes.join(', ')} posts. When the input is ambiguous and could fit multiple archetypes, favour their signature style to build recognisable author voice.\n`
+      : '';
+
     const userPrompt = `${archetypeLines}
-${postTypeBlock}
+${postTypeBlock}${preferenceBlock}
 RAW THOUGHT:
 ${rawThought || ''}
 

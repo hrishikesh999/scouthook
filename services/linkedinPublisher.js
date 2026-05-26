@@ -543,6 +543,24 @@ async function publishScheduledPost(scheduledPostId, { attemptsMade = 0, maxAtte
         SET status = 'published', published_at = CURRENT_TIMESTAMP, linkedin_post_id = ?
         WHERE id = ? AND user_id = ? AND tenant_id = ?
       `).run(linkedin_post_id, row.post_id, row.user_id, row.tenant_id);
+
+      // Track archetype preference for hook bias (fire-and-forget)
+      try {
+        const postRow = await db.prepare('SELECT archetype_used FROM generated_posts WHERE id = ? AND user_id = ? AND tenant_id = ?')
+          .get(row.post_id, row.user_id, row.tenant_id);
+        if (postRow?.archetype_used) {
+          const prefRow = await db.prepare(
+            'SELECT user_archetype_preference FROM user_profiles WHERE user_id = ? AND tenant_id = ?'
+          ).get(row.user_id, row.tenant_id);
+          const prefs = (() => {
+            try { return prefRow?.user_archetype_preference ? JSON.parse(prefRow.user_archetype_preference) : {}; }
+            catch { return {}; }
+          })();
+          prefs[postRow.archetype_used] = (prefs[postRow.archetype_used] || 0) + 1;
+          await db.prepare('UPDATE user_profiles SET user_archetype_preference = ? WHERE user_id = ? AND tenant_id = ?')
+            .run(JSON.stringify(prefs), row.user_id, row.tenant_id);
+        }
+      } catch { /* non-fatal */ }
     }
 
     // Notify the user that their scheduled post was published.

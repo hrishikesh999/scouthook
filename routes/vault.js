@@ -165,31 +165,6 @@ async function processUrl(docId, url, filename, userId, tenantId) {
   }
 }
 
-// ── Background: generate a one-line hook preview for a vault idea ─────────────
-async function generateHookPreview(ideaId, seedText) {
-  try {
-    const { getSetting } = require('../db');
-    const Anthropic = require('@anthropic-ai/sdk');
-    const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
-    if (!apiKey) return;
-
-    const client = new Anthropic({ apiKey });
-    const message = await client.messages.create({
-      model:      HAIKU_MODEL,
-      max_tokens: 60,
-      messages: [{
-        role:    'user',
-        content: `Write a single compelling LinkedIn hook line (max 12 words) that could open a post based on this idea. Return only the hook line, no quotes, no explanation.\n\nIdea: ${seedText}`,
-      }],
-    });
-    const hookPreview = message.content[0]?.text?.trim();
-    if (hookPreview) {
-      await db.prepare('UPDATE vault_ideas SET hook_preview = ? WHERE id = ?').run(hookPreview, ideaId);
-    }
-  } catch (err) {
-    console.error(`[vault/hook_preview] idea=${ideaId} failed (non-fatal):`, err.message);
-  }
-}
 
 // ── Save chunks to DB and mark document ready ─────────────────────────────────
 async function saveChunks(docId, chunks, userId, tenantId) {
@@ -535,6 +510,7 @@ router.get('/expand-idea', async (req, res) => {
     const Anthropic = require('@anthropic-ai/sdk');
     const { getSetting } = require('../db');
     const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
+    if (!apiKey) return res.json({ ok: true, expanded_input: idea.seed_text });
 
     const client  = new Anthropic({ apiKey });
     const message = await client.messages.create({

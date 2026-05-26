@@ -181,7 +181,7 @@ Do NOT extract:
 For EACH idea return exactly three fields:
 - "seed_text": 1–2 sentences, first person, with a clear position. Specific enough to anchor real follow-up answers. This is what the author uses as their starting point — make it feel like something they'd say, not something an analyst would write about them.
 - "hook_line": The single most arresting LinkedIn opening line this idea could become. Max 14 words. Must stop a scrolling ${audience} mid-scroll. Written in the author's voice. No filler openers like "Here's the thing:" or "Unpopular opinion:".
-- "source_ref": Location in the document (e.g. "p. 4" or "words 200–500").
+- "source_ref": Copy the exact label from the [brackets] before the passage this idea came from (e.g. "chunk_0", "chunk_3").
 
 Return ONLY a JSON array. No other text.`;
 }
@@ -194,7 +194,7 @@ async function mineChunkBatch(chunks, documentFilename, userProfile, apiKey) {
   const client = new Anthropic({ apiKey });
 
   const chunkContent = chunks
-    .map(c => `[${c.sourceRef}]\n${c.content}`)
+    .map(c => `[${c.sourceRef}${c.displayRef ? ` — ${c.displayRef}` : ''}]\n${c.content}`)
     .join('\n\n---\n\n');
 
   const userPrompt = `Document: "${documentFilename}"
@@ -280,15 +280,17 @@ async function mineChunks(chunks, documentFilename, userProfile = {}) {
   for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
     const batch = chunks.slice(i, i + BATCH_SIZE);
 
-    const batchInput = batch.map(c => ({
-      sourceRef: c.sourceRef || c.source_ref || `chunk ${c.chunkIndex ?? i}`,
-      content:   c.content,
+    // Label each chunk numerically so the model can echo it back reliably.
+    // PDFs can have multiple chunks sharing the same page ref ("p. 3"), which
+    // would cause key collisions if we used source_ref as the map key.
+    const batchInput = batch.map((c, j) => ({
+      sourceRef: `chunk_${j}`,
+      displayRef: c.sourceRef || c.source_ref || `chunk ${c.chunk_index ?? j}`,
+      content:    c.content,
     }));
 
-    // sourceRef → chunkId lookup for accurate per-seed attribution
-    const sourceRefToId = new Map(
-      batch.map(c => [c.sourceRef || c.source_ref || `chunk ${c.chunkIndex ?? i}`, c.id])
-    );
+    // numeric label → chunkId; guaranteed unique within a batch
+    const sourceRefToId = new Map(batch.map((c, j) => [`chunk_${j}`, c.id]));
 
     let seeds;
     try {
@@ -299,13 +301,17 @@ async function mineChunks(chunks, documentFilename, userProfile = {}) {
     }
 
     for (const seed of seeds) {
-      // Match seed back to its source chunk; fall back to batch[0] if ref doesn't match
       const chunkId = sourceRefToId.get(seed.source_ref) || batch[0].id;
+      // Resolve the human-readable display ref from the matched chunk
+      const matchedJ = seed.source_ref?.match(/^chunk_(\d+)$/)?.[1];
+      const displayRef = matchedJ !== undefined
+        ? (batchInput[Number(matchedJ)]?.displayRef || seed.source_ref)
+        : (batchInput[0]?.displayRef || seed.source_ref);
       allSeeds.push({
         chunkId,
-        seed_text:  seed.seed_text,
-        hook_line:  seed.hook_line || null,
-        source_ref: seed.source_ref,
+        seed_text:   seed.seed_text,
+        hook_line:   seed.hook_line || null,
+        source_ref:  displayRef,
       });
     }
   }

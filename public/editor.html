@@ -56,13 +56,70 @@
     /* ── Tabs bottom border ── */
     #tabs { border-bottom: 1px solid var(--border); padding: 0 64px; }
 
-    /* ── Score area ── */
+    /* ── Score area (legacy hidden elements — kept for regen hook compat) ── */
     #score-bar     { height: 6px; border-radius: 3px; background: var(--bg-pill); margin: 8px 0 4px; }
     #score-fill    { background: var(--teal, #1D9E75); border-radius: 3px; }
     #score-display { display: flex; align-items: center; gap: 8px; margin: 6px 0 4px; }
     #score-number  { font-size: 26px; font-weight: 700; color: var(--text-heading); line-height: 1; }
     #score-number.pass { color: var(--text-teal, #1D9E75); }
     #score-number.fail { color: var(--score-fail, #e84e4e); }
+
+    /* ── Quality score ring ── */
+    .quality-score-block { text-align: center; padding-bottom: 4px; }
+    .quality-ring-wrap { display: flex; flex-direction: column; align-items: center; gap: 6px; margin-bottom: 10px; }
+    .quality-ring {
+      --ring-pct: 0%; --ring-color: #E4E4E7;
+      width: 96px; height: 96px; border-radius: 50%;
+      background: conic-gradient(var(--ring-color) var(--ring-pct), #F4F4F5 0);
+      display: flex; align-items: center; justify-content: center;
+      position: relative; transition: background 0.6s ease;
+    }
+    .quality-ring::after {
+      content: ''; position: absolute;
+      width: 74px; height: 74px;
+      background: var(--bg-surface, #fff); border-radius: 50%;
+    }
+    .quality-ring-num {
+      position: relative; z-index: 1;
+      font-size: 32px; font-weight: 800;
+      letter-spacing: -0.04em; color: var(--text-heading); line-height: 1;
+    }
+    .quality-ring--perfect { --ring-color: #059669; }
+    .quality-ring--green   { --ring-color: #10B981; }
+    .quality-ring--amber   { --ring-color: #D97706; }
+    .quality-ring--red     { --ring-color: #DC2626; }
+    .quality-ring-label {
+      font-size: 11px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted);
+    }
+    .quality-ring-label.lbl--perfect { color: #059669; }
+    .quality-ring-label.lbl--strong  { color: #10B981; }
+    .quality-ring-label.lbl--good    { color: #16A34A; }
+    .quality-ring-label.lbl--fair    { color: #D97706; }
+    .quality-ring-label.lbl--weak    { color: #DC2626; }
+    .quality-perfect-badge {
+      display: inline-flex; align-items: center; gap: 3px;
+      padding: 3px 10px;
+      background: linear-gradient(135deg, #ECFDF5, #D1FAE5);
+      border: 1px solid #6EE7B7; border-radius: 100px;
+      font-size: 11px; font-weight: 700; color: #059669; letter-spacing: 0.03em;
+    }
+    /* Dimension bars */
+    .quality-dims { display: flex; flex-direction: column; gap: 5px; padding-top: 10px; border-top: 1px solid var(--border-divider, #F4F4F5); margin-top: 6px; }
+    .qdim { display: grid; grid-template-columns: 64px 1fr; align-items: center; gap: 6px; }
+    .qdim-name { font-size: 10px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+    .qdim-track { height: 4px; background: var(--border, #E4E4E7); border-radius: 99px; overflow: hidden; }
+    .qdim-fill  { height: 100%; border-radius: 99px; width: 0; transition: width 0.55s ease 0.15s; }
+    .qdim[data-tier="high"] .qdim-fill { background: #10B981; }
+    .qdim[data-tier="mid"]  .qdim-fill { background: #D97706; }
+    .qdim[data-tier="low"]  .qdim-fill { background: #DC2626; }
+    /* Perfect ring celebration */
+    @keyframes ring-celebrate {
+      0%   { transform: scale(1); }
+      35%  { transform: scale(1.1); }
+      65%  { transform: scale(0.97); }
+      100% { transform: scale(1); }
+    }
 
     /* ── Right-panel section spacing ── */
     #panel-score section { padding: 14px 24px; }
@@ -322,9 +379,42 @@
 
         <div id="panel-score">
           <section>
-            <p class="panel-label score-label">Quality</p>
-            <div id="quality-verdict"></div>
-            <!-- hidden — kept for regen hooks that read score -->
+            <div class="quality-score-block">
+              <!-- Score ring -->
+              <div class="quality-ring-wrap">
+                <div class="quality-ring" id="quality-ring">
+                  <span class="quality-ring-num" id="quality-ring-num">—</span>
+                </div>
+                <div class="quality-ring-label" id="quality-ring-label"></div>
+                <div class="quality-perfect-badge" id="quality-perfect-badge" hidden>✦ Perfect Score</div>
+              </div>
+              <!-- Verdict text -->
+              <div id="quality-verdict"></div>
+              <!-- Dimension bars -->
+              <div class="quality-dims" id="quality-dims" hidden>
+                <div class="qdim" data-dim="hook" data-tier="high">
+                  <span class="qdim-name">Hook</span>
+                  <div class="qdim-track"><div class="qdim-fill" id="qdim-hook-fill"></div></div>
+                </div>
+                <div class="qdim" data-dim="voice" data-tier="high">
+                  <span class="qdim-name">Voice</span>
+                  <div class="qdim-track"><div class="qdim-fill" id="qdim-voice-fill"></div></div>
+                </div>
+                <div class="qdim" data-dim="substance" data-tier="high">
+                  <span class="qdim-name">Substance</span>
+                  <div class="qdim-track"><div class="qdim-fill" id="qdim-substance-fill"></div></div>
+                </div>
+                <div class="qdim" data-dim="structure" data-tier="high">
+                  <span class="qdim-name">Structure</span>
+                  <div class="qdim-track"><div class="qdim-fill" id="qdim-structure-fill"></div></div>
+                </div>
+                <div class="qdim" data-dim="engagement" data-tier="high">
+                  <span class="qdim-name">Engagement</span>
+                  <div class="qdim-track"><div class="qdim-fill" id="qdim-engagement-fill"></div></div>
+                </div>
+              </div>
+            </div>
+            <!-- Hidden — kept for regen hooks that read score -->
             <div id="score-display" style="display:none">
               <span id="score-number"></span>
               <span id="score-badge" class="passfail-pill" data-passed="true"></span>
@@ -600,6 +690,109 @@ function clearPreviewAssetDOM() {
 }
 
 /* ════════════════════════════════════════════════════════════════════════
+   QUALITY SCORE RING + DIMENSIONS
+════════════════════════════════════════════════════════════════════════ */
+function computeDimensionsFromFlags(flags) {
+  return {
+    hook: Math.max(0, 100
+      - (flags.includes('HOOK_TOO_LONG')     ? 35 : 0)
+      - (flags.includes('WEAK_HOOK_OPENER')  ? 45 : 0)
+      - (flags.includes('GENERIC_HOOK')      ? 25 : 0)),
+    voice: Math.max(0, 100
+      - (flags.includes('AI_LANGUAGE_DETECTED') ? 60 : 0)
+      - (flags.includes('AI_TONE')              ? 25 : 0)
+      - (flags.includes('VOICE_DRIFT')          ? 20 : 0)),
+    substance: Math.max(0, 100
+      - (flags.includes('CLICHE_DETECTED')    ? 30 : 0)
+      - (flags.includes('LACKS_SPECIFICITY')  ? 20 : 0)
+      - (flags.includes('UNATTRIBUTED_CLAIM') ? 55 : 0)),
+    structure: Math.max(0, 100
+      - (flags.includes('TOO_SHORT')        ? 25 : 0)
+      - (flags.includes('TOO_LONG')         ? 15 : 0)
+      - (flags.includes('DENSE_FORMATTING') ? 20 : 0)
+      - (flags.includes('HASHTAG_SPAM')     ? 25 : 0)),
+    engagement: Math.max(0, 100
+      - (flags.includes('NO_CTA')               ? 40 : 0)
+      - (flags.includes('WEAK_CTA')             ? 20 : 0)
+      - (flags.includes('ENGAGEMENT_BAIT')      ? 60 : 0)
+      - (flags.includes('LESSON_SUMMARY_CLOSE') ? 20 : 0)),
+  };
+}
+
+function triggerPerfectCelebration() {
+  const key = 'celebrated_perfect_' + currentPostId;
+  if (sessionStorage.getItem(key)) return;
+  sessionStorage.setItem(key, '1');
+  const ring = document.getElementById('quality-ring');
+  if (ring) {
+    ring.style.animation = 'ring-celebrate 0.65s ease';
+    setTimeout(() => { ring.style.animation = ''; }, 800);
+  }
+  if (typeof confetti === 'function') {
+    confetti({ particleCount: 80, spread: 65, origin: { y: 0.35 } });
+  }
+}
+
+function renderQualityScore(quality) {
+  const score  = quality?.score ?? 0;
+  const flags  = quality?.flags || quality?.errors || [];
+  const passed = quality?.passed ?? (score >= 60);
+  const dims   = quality?.dimensions ?? computeDimensionsFromFlags(flags);
+
+  // Ring colour tier
+  const isPerf = score === 100;
+  const ringCls = isPerf ? 'quality-ring--perfect'
+                : score >= 80 ? 'quality-ring--green'
+                : score >= 60 ? 'quality-ring--amber' : 'quality-ring--red';
+  const labelText = isPerf ? 'Perfect'
+                  : score >= 90 ? 'Excellent'
+                  : score >= 80 ? 'Strong'
+                  : score >= 65 ? 'Good'
+                  : score >= 50 ? 'Fair' : 'Needs Work';
+  const labelCls = isPerf || score >= 90 ? 'lbl--perfect'
+                 : score >= 80 ? 'lbl--strong'
+                 : score >= 65 ? 'lbl--good'
+                 : score >= 50 ? 'lbl--fair' : 'lbl--weak';
+
+  const ring      = document.getElementById('quality-ring');
+  const numEl     = document.getElementById('quality-ring-num');
+  const labelEl   = document.getElementById('quality-ring-label');
+  const perfectBd = document.getElementById('quality-perfect-badge');
+  const dimsEl    = document.getElementById('quality-dims');
+
+  if (numEl)   numEl.textContent = score;
+  if (ring)    { ring.className = 'quality-ring ' + ringCls; ring.style.setProperty('--ring-pct', score + '%'); }
+  if (labelEl) { labelEl.textContent = labelText; labelEl.className = 'quality-ring-label ' + labelCls; }
+
+  if (isPerf && perfectBd) {
+    perfectBd.hidden = false;
+    triggerPerfectCelebration();
+  } else if (perfectBd) {
+    perfectBd.hidden = true;
+  }
+
+  if (dimsEl) {
+    dimsEl.hidden = false;
+    const dimKeys = ['hook', 'voice', 'substance', 'structure', 'engagement'];
+    for (const key of dimKeys) {
+      const val  = dims[key] ?? 100;
+      const fill = document.getElementById('qdim-' + key + '-fill');
+      const row  = dimsEl.querySelector('[data-dim="' + key + '"]');
+      if (fill) fill.style.width = val + '%';
+      if (row)  row.dataset.tier = val >= 80 ? 'high' : val >= 55 ? 'mid' : 'low';
+    }
+  }
+
+  // Verdict text (secondary, below ring)
+  const verdict   = quality?.verdict || flagToVerdict(flags, passed);
+  const verdictEl = document.getElementById('quality-verdict');
+  if (verdictEl) {
+    verdictEl.textContent = (passed ? '🟢 ' : '🟡 ') + verdict;
+    verdictEl.className   = 'quality-verdict ' + (passed ? 'pass' : 'fail');
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════════
    FLAG-AWARE QUALITY VERDICT
 ════════════════════════════════════════════════════════════════════════ */
 const FLAG_VERDICT_MAP = [
@@ -608,6 +801,7 @@ const FLAG_VERDICT_MAP = [
   ['WEAK_HOOK_OPENER',     'Opening line doesn\'t create tension. Lead with an outcome, number, or unexpected claim.'],
   ['HOOK_TOO_LONG',        'First line is too long — trim to under 12 words so it lands before the fold.'],
   ['CLICHE_DETECTED',      'Remove the cliché phrases — they signal low-effort content to readers and the algorithm.'],
+  ['ENGAGEMENT_BAIT',      'Engagement bait detected — LinkedIn\'s 2026 algorithm actively penalises comment/tag prompts.'],
   ['NO_CTA',               'Add a question at the end — comments carry 15x the algorithmic weight of a like.'],
   ['WEAK_CTA',             'The ending question is too vague — ask something your specific reader would actually answer.'],
   ['TOO_SHORT',            'Too short. Aim for 150+ words — length signals depth and improves dwell time.'],
@@ -640,22 +834,20 @@ async function loadPost(id) {
     const p      = data.post;
     const score   = p.quality?.score ?? 0;
     const passed  = p.quality?.passed ?? (score >= 60);
-    const verdict = p.qualityVerdict || p.quality?.verdict || flagToVerdict(flags, passed);
 
-    // Hidden score elements (used by regen hooks)
+    // New: score ring + dimension bars
+    const qualityPayload = p.quality
+      ? { ...p.quality, verdict: p.qualityVerdict || p.quality?.verdict }
+      : { score: 0, passed: false, flags: [], errors: [] };
+    renderQualityScore(qualityPayload);
+
+    // Hidden score elements (kept for regen hook compat)
     const scoreEl = document.getElementById('score-number');
     if (scoreEl) { scoreEl.textContent = score; scoreEl.className = score >= 80 ? 'pass' : score >= 60 ? 'borderline' : 'fail'; }
     const badge = document.getElementById('score-badge');
     if (badge)  { badge.textContent = passed ? 'Passed' : 'Needs work'; badge.dataset.passed = String(passed); badge.className = `passfail-pill ${passed ? 'pass' : 'fail'}`; }
     const fill = document.getElementById('score-fill');
     if (fill)  { fill.style.setProperty('width', score + '%', 'important'); fill.style.background = score >= 80 ? 'var(--accent)' : score >= 60 ? 'var(--score-borderline)' : 'var(--score-fail)'; }
-
-    // Quality verdict (replaces numeric score display)
-    const verdictEl = document.getElementById('quality-verdict');
-    if (verdictEl) {
-      verdictEl.textContent = (passed ? '🟢 ' : '🟡 ') + verdict;
-      verdictEl.className = 'quality-verdict ' + (passed ? 'pass' : 'fail');
-    }
 
     document.getElementById('funnel-type').textContent = p.funnelType || '';
     renderHookSection(p);
@@ -1973,6 +2165,7 @@ function init() {
 document.addEventListener('DOMContentLoaded', init);
 </script>
 
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
   <script src="/js/session.js"></script>
   <script src="/js/ui-toast.js"></script>
   <script src="/js/account-bar.js"></script>

@@ -81,6 +81,7 @@ function buildQualityPayload(gate, synthesisAttempt, isPrimary) {
     warnings: gate.warnings,
     flags: gate.flags,
     recommendation: gate.recommendation,
+    dimensions: gate.dimensions ?? null,
   };
   if (isPrimary && !gate.passed && synthesisAttempt === 2) {
     quality.forcedReturn = true;

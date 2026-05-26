@@ -170,7 +170,7 @@ function runQualityGate(postText, options = {}) {
     if (lowerFull.includes(p)) {
       errors.push(`Blocked phrase: '${phrase}'`);
       if (!flags.includes('CLICHE_DETECTED')) flags.push('CLICHE_DETECTED');
-      score -= 15;
+      score -= 12;
     }
   }
 
@@ -220,7 +220,7 @@ function runQualityGate(postText, options = {}) {
   // Check 4b — Engagement bait (LinkedIn 2026 Authenticity Update penalises these)
   if (ENGAGEMENT_BAIT_PATTERNS.some(p => p.test(text))) {
     errors.push("Engagement bait detected — LinkedIn's 2026 algorithm actively penalises these patterns");
-    if (!flags.includes('CLICHE_DETECTED')) flags.push('CLICHE_DETECTED');
+    if (!flags.includes('ENGAGEMENT_BAIT')) flags.push('ENGAGEMENT_BAIT');
     score -= 30;
   }
 
@@ -277,11 +277,10 @@ function runQualityGate(postText, options = {}) {
   if (!hasClosingQuestion && !hasConversionCta) {
     warnings.push('No closing CTA detected — end with a specific question or a soft invite to drive engagement');
     flags.push('NO_CTA');
-    score -= 8;
+    score -= 4;
   } else if (isGenericCta) {
     warnings.push('Closing question is generic ("What do you think?" / "Thoughts?") — make it specific to the post\'s content for higher engagement');
     flags.push('WEAK_CTA');
-    score -= 4;
   }
 
   // Check 8 — Archetype alignment (warning only)
@@ -358,13 +357,13 @@ function runQualityGate(postText, options = {}) {
     }
   }
 
-  // Check 11 — Lesson summary close (warning, -12)
+  // Check 11 — Lesson summary close (warning, -10)
   const LESSON_SUMMARY_CLOSE = /\b(the (real |key |main )?(takeaway|lesson|point|moral) (here |from this )?is|what this means (for you )?is|here'?s what (i learned|this taught me)|here'?s the lesson|the bottom line[: ])/i;
   const last200 = text.slice(-200);
   if (LESSON_SUMMARY_CLOSE.test(last200)) {
     warnings.push('Lesson summary closing detected — the post should land without explaining itself. Cut or rewrite the last line.');
     flags.push('LESSON_SUMMARY_CLOSE');
-    score -= 12;
+    score -= 4;
   }
 
   // Legacy — generic hook (niche exclusions)
@@ -378,7 +377,7 @@ function runQualityGate(postText, options = {}) {
   if (genericHookHit) {
     warnings.push('Opening resembles a generic LinkedIn hook pattern');
     flags.push('GENERIC_HOOK');
-    score -= 30;
+    score -= 15;
   }
 
   // Legacy — unattributed claims (research path only)
@@ -393,15 +392,16 @@ function runQualityGate(postText, options = {}) {
   }
 
   // Legacy — AI tone (non-overlapping with check 4)
+  // Require 2+ pattern matches before flagging — a single word like "robust" is not a score killer
   const formatExclusions = AI_TONE_FORMAT_EXCLUSIONS[formatSlug] || [];
-  const legacyAiHit = LEGACY_AI_TONE_PATTERNS.some(pattern => {
+  const aiToneMatchCount = LEGACY_AI_TONE_PATTERNS.filter(pattern => {
     if (formatExclusions.some(ex => ex.source === pattern.source)) return false;
     return pattern.test(text);
-  });
-  if (legacyAiHit && !flags.includes('AI_LANGUAGE_DETECTED') && !flags.includes('CLICHE_DETECTED')) {
+  }).length;
+  if (aiToneMatchCount >= 2 && !flags.includes('AI_LANGUAGE_DETECTED') && !flags.includes('CLICHE_DETECTED')) {
     warnings.push('Tone patterns that may read as generic AI');
     flags.push('AI_TONE');
-    score -= 30;
+    score -= 12;
   }
 
   // Lead magnet keyword confirmation — hard error if keyword not in post
@@ -417,6 +417,32 @@ function runQualityGate(postText, options = {}) {
   score = Math.max(0, Math.min(100, score));
 
   const passed = errors.length === 0;
+
+  // Dimension breakdown scores (display-only — do not affect overall score)
+  const dimensions = {
+    hook: Math.max(0, 100
+      - (flags.includes('HOOK_TOO_LONG')     ? 35 : 0)
+      - (flags.includes('WEAK_HOOK_OPENER')  ? 45 : 0)
+      - (flags.includes('GENERIC_HOOK')      ? 25 : 0)),
+    voice: Math.max(0, 100
+      - (flags.includes('AI_LANGUAGE_DETECTED') ? 60 : 0)
+      - (flags.includes('AI_TONE')              ? 25 : 0)
+      - (flags.includes('VOICE_DRIFT')          ? 20 : 0)),
+    substance: Math.max(0, 100
+      - (flags.includes('CLICHE_DETECTED')     ? 30 : 0)
+      - (flags.includes('LACKS_SPECIFICITY')   ? 20 : 0)
+      - (flags.includes('UNATTRIBUTED_CLAIM')  ? 55 : 0)),
+    structure: Math.max(0, 100
+      - (flags.includes('TOO_SHORT')       ? 25 : 0)
+      - (flags.includes('TOO_LONG')        ? 15 : 0)
+      - (flags.includes('DENSE_FORMATTING')? 20 : 0)
+      - (flags.includes('HASHTAG_SPAM')    ? 25 : 0)),
+    engagement: Math.max(0, 100
+      - (flags.includes('NO_CTA')              ? 40 : 0)
+      - (flags.includes('WEAK_CTA')            ? 10 : 0)
+      - (flags.includes('ENGAGEMENT_BAIT')     ? 60 : 0)
+      - (flags.includes('LESSON_SUMMARY_CLOSE')? 10 : 0)),
+  };
 
   const recommendation = buildRecommendation(errors, flags, warnings);
 
@@ -444,6 +470,7 @@ function runQualityGate(postText, options = {}) {
     flags,
     recommendation,
     verdict,
+    dimensions,
     // Back-compat for DB columns (aligned with hard-error gate only)
     passed_gate: passed,
   };

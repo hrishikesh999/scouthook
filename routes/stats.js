@@ -29,6 +29,45 @@ function levenshteinDistance(a, b) {
   return row[a.length];
 }
 
+// Multi-dimensional change detection — returns array of change type strings.
+// Each type triggers a focused rule extraction in captureVoiceRefinement.
+function detectChangeTypes(oldText, newText) {
+  const types = [];
+
+  // 1. Structural: opening sentence changed
+  const oldFirst = (oldText.split(/[.!?](?:\s|$)/)[0] || '').trim();
+  const newFirst = (newText.split(/[.!?](?:\s|$)/)[0] || '').trim();
+  if (oldFirst.length > 10 && oldFirst !== newFirst) {
+    types.push('hook');
+  }
+
+  // 2. Vocabulary: 3+ unique meaningful words substituted
+  const tokenise = t => new Set(t.toLowerCase().split(/\s+/).filter(w => w.length > 3));
+  const oldWords = tokenise(oldText);
+  const newWords = tokenise(newText);
+  const removed = [...oldWords].filter(w => !newWords.has(w)).length;
+  const added   = [...newWords].filter(w => !oldWords.has(w)).length;
+  if (removed >= 3 && added >= 3) {
+    types.push('vocabulary');
+  }
+
+  // 3. Length: ≥20% shorter or longer
+  const lenDelta = Math.abs(newText.length - oldText.length) / Math.max(oldText.length, 1);
+  if (lenDelta >= 0.20) {
+    types.push('length');
+  }
+
+  // 4. General catch-all via Levenshtein (only when no specific type detected)
+  if (types.length === 0) {
+    const maxLen = Math.max(oldText.length, newText.length);
+    if (maxLen > 0 && levenshteinDistance(oldText, newText) / maxLen > 0.30) {
+      types.push('general');
+    }
+  }
+
+  return types;
+}
+
 // ---------------------------------------------------------------------------
 // GET /api/stats
 // Returns post count this month, avg quality score, scheduled count
@@ -262,17 +301,14 @@ router.patch('/posts/:id', async (req, res) => {
       return res.status(409).json({ ok: false, error: 'post_not_editable' });
     }
 
-    // Voice refinement capture — fire-and-forget when edit ratio > 30%
+    // Voice refinement capture — fire-and-forget, multi-dimensional change detection
     let voiceRefined = false;
     const oldContent = existing.old_content || '';
     if (oldContent && content) {
-      const maxLen = Math.max(oldContent.length, content.length);
-      if (maxLen > 0) {
-        const editRatio = levenshteinDistance(oldContent, content) / maxLen;
-        if (editRatio > 0.30) {
-          captureVoiceRefinement(userId, tenantId, oldContent, content).catch(() => {});
-          voiceRefined = true;
-        }
+      const changeTypes = detectChangeTypes(oldContent, content);
+      if (changeTypes.length > 0) {
+        captureVoiceRefinement(userId, tenantId, oldContent, content, changeTypes).catch(() => {});
+        voiceRefined = true;
       }
     }
 

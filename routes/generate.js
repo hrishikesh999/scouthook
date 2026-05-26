@@ -275,14 +275,14 @@ router.post('/', async (req, res) => {
 
       const primaryInsert = await db.prepare(`
         INSERT INTO generated_posts
-          (run_id, user_id, tenant_id, format_slug, content, quality_score, quality_flags, passed_gate,
+          (run_id, user_id, tenant_id, format_slug, content, ai_content, quality_score, quality_flags, passed_gate,
            funnel_type, vault_source_ref, hook_b, cta_alternatives, idea_input, archetype_used, source,
            post_type, quality_verdict, lead_magnet_template, lead_magnet_inputs)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         RETURNING id
       `).run(
         runId, userId, tenantId, IDEA_SLUG,
-        post, lmGate.score, JSON.stringify(lmGate.flags), lmGate.passed_gate ? 1 : 0,
+        post, post, lmGate.score, JSON.stringify(lmGate.flags), lmGate.passed_gate ? 1 : 0,
         'convert', null, null, null, null, null, source || null,
         'lead_magnet', lmGate.verdict || null, template || null, JSON.stringify(inputs)
       );
@@ -405,16 +405,17 @@ router.post('/', async (req, res) => {
 
       const primaryInsert = await db.prepare(`
         INSERT INTO generated_posts
-          (run_id, user_id, tenant_id, format_slug, content, quality_score, quality_flags, passed_gate,
+          (run_id, user_id, tenant_id, format_slug, content, ai_content, quality_score, quality_flags, passed_gate,
            funnel_type, vault_source_ref, hook_b, cta_alternatives, idea_input, archetype_used, source,
            post_type, quality_verdict)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         RETURNING id
       `).run(
         runId,
         userId,
         tenantId,
         IDEA_SLUG,
+        post,
         post,
         primaryGate.score,
         JSON.stringify(primaryGate.flags),
@@ -895,12 +896,12 @@ router.post('/from-doc', async (req, res) => {
 
     const primaryInsert = await db.prepare(`
       INSERT INTO generated_posts
-        (run_id, user_id, tenant_id, format_slug, content, quality_score, quality_flags, passed_gate, funnel_type, hook_b, cta_alternatives, idea_input, archetype_used)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (run_id, user_id, tenant_id, format_slug, content, ai_content, quality_score, quality_flags, passed_gate, funnel_type, hook_b, cta_alternatives, idea_input, archetype_used)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       RETURNING id
     `).run(
       runId, userId, tenantId, IDEA_SLUG,
-      post, primaryGate.score, JSON.stringify(primaryGate.flags), primaryGate.passed_gate ? 1 : 0,
+      post, post, primaryGate.score, JSON.stringify(primaryGate.flags), primaryGate.passed_gate ? 1 : 0,
       funnelType, hookB || null,
       ctaAlternatives?.length ? JSON.stringify(ctaAlternatives) : null,
       truncated,

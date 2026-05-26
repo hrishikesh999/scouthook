@@ -146,6 +146,14 @@
     #topbar-scheduled { display: none; align-items: center; justify-content: space-between; width: 100%; gap: 16px; }
     #topbar { transition: background 0.2s; }
     #topbar.is-scheduled { background: #fefce8 !important; border-bottom-color: #fde68a !important; }
+
+    /* ── Voice learning indicator ── */
+    #voice-learning-section[hidden] { display: none !important; }
+    #voice-refinements-list { list-style: none; padding: 0; margin: 6px 0 0; }
+    #voice-refinements-list li { font-size: 11.5px; color: var(--text-secondary); line-height: 1.45; padding: 4px 0; border-bottom: 1px solid var(--border); }
+    #voice-refinements-list li:last-child { border-bottom: none; }
+    .voice-learning-label { font-size: 11px; color: var(--text-muted); margin-top: 6px; display: block; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+    .voice-learning-label:hover { color: var(--accent, #1D9E75); }
   </style>
 </head>
 <body>
@@ -339,6 +347,14 @@
             <span id="funnel-type" class="archetype-badge" style="margin-bottom:6px;display:inline-block"></span>
             <div id="hook-explanation"></div>
           </section>
+          <div id="voice-learning-section" hidden>
+            <hr class="profile-divider">
+            <section>
+              <p class="panel-label score-label">Voice learning</p>
+              <ul id="voice-refinements-list"></ul>
+              <a href="/settings.html" class="voice-learning-label">View full voice profile →</a>
+            </section>
+          </div>
         </div>
         <!-- /panel-score -->
 
@@ -490,6 +506,9 @@ let currentSlideCount  = 0;
 let slideOverState     = 'loading';
 
 const visualCache = new Map();
+
+let _autoSaveTimer        = null;
+let _lastAutoSavedContent = null;
 
 const state = {
   activeTab: 'edit', rightPanel: 'score', generatorType: null,
@@ -648,6 +667,8 @@ async function loadPost(id) {
     document.getElementById('post-body').innerHTML = paras.map(t =>
       `<p class="text-post" data-style="normal">${escHtml(t).replace(/\n/g, '<br>')}</p>`
     ).join('');
+    // Initialise auto-save baseline so we don't trigger on the loaded content
+    _lastAutoSavedContent = getPostContent();
     // li-body-text is synced from post-body when switching to preview tab
     document.getElementById('word-count').textContent =
       rawText.split(/\s+/).filter(Boolean).length + ' words';
@@ -1873,6 +1894,58 @@ function wireFirstComment() {
 
 
 /* ════════════════════════════════════════════════════════════════════════
+   AUTO-SAVE
+════════════════════════════════════════════════════════════════════════ */
+function scheduleAutoSave() {
+  if (scheduleEditLocked) return;
+  clearTimeout(_autoSaveTimer);
+  _autoSaveTimer = setTimeout(doAutoSave, 2000);
+}
+
+async function doAutoSave() {
+  if (!currentPostId || scheduleEditLocked) return;
+  const content = getPostContent();
+  if (!content || content === _lastAutoSavedContent) return;
+  try {
+    const res = await fetch(`/api/posts/${encodeURIComponent(String(currentPostId))}`, {
+      method: 'PATCH',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      _lastAutoSavedContent = content;
+      if (data.voiceRefined) loadVoiceRefinements();
+    }
+  } catch { /* non-fatal */ }
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   VOICE LEARNING INDICATOR
+════════════════════════════════════════════════════════════════════════ */
+async function loadVoiceRefinements() {
+  try {
+    const res  = await fetch('/api/profile', { credentials: 'include' });
+    const data = await res.json();
+    if (!data.ok || !data.profile) return;
+
+    let refinements = [];
+    try { refinements = JSON.parse(data.profile.voice_refinements || '[]'); } catch { return; }
+
+    const section = document.getElementById('voice-learning-section');
+    const list    = document.getElementById('voice-refinements-list');
+    if (!section || !list) return;
+
+    if (!refinements.length) { section.hidden = true; return; }
+
+    const recent = refinements.slice(-3);
+    list.innerHTML = recent.map(r => `<li>${escHtml(r)}</li>`).join('');
+    section.hidden = false;
+  } catch { /* non-fatal */ }
+}
+
+/* ════════════════════════════════════════════════════════════════════════
    INIT
 ════════════════════════════════════════════════════════════════════════ */
 function init() {
@@ -1885,6 +1958,8 @@ function init() {
   wireSchedulePause();
   wireFirstComment();
 
+  document.getElementById('post-body').addEventListener('input', scheduleAutoSave);
+
   fetch('/api/billing/subscription', { credentials: 'include' })
     .then(r => r.ok ? r.json() : { plan: 'free' })
     .then(d => { userPlan = d.plan || 'free'; })
@@ -1892,6 +1967,7 @@ function init() {
 
   checkLinkedInStatus();
   loadPost(postId);
+  loadVoiceRefinements();
 }
 
 document.addEventListener('DOMContentLoaded', init);

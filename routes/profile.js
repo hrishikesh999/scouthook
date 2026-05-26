@@ -26,7 +26,7 @@ router.get('/:user_id?', async (req, res) => {
                      website_summary, onboarding_q1, onboarding_q2, onboarding_q3,
                      authority_statements, cta_library, content_principles, content_themes,
                      voice_extraction_quality, voice_profile_completion_pct,
-                     input_examples
+                     input_examples, voice_refinements
               FROM user_profiles WHERE user_id = ? AND tenant_id = ?`)
     .get(user_id, tenantId);
 
@@ -65,6 +65,7 @@ router.get('/:user_id?', async (req, res) => {
       voice_extraction_quality:     profile.voice_extraction_quality     || null,
       voice_profile_completion_pct: profile.voice_profile_completion_pct || 0,
       input_examples:               profile.input_examples               || null,
+      voice_refinements:            profile.voice_refinements            || null,
     },
   });
 });

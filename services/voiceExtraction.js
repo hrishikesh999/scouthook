@@ -444,42 +444,59 @@ function calculateCompletionPct(userProfile, hasLinkedIn = false) {
    Extracts one short rule from the diff, appends to voice_refinements (cap 20).
    ──────────────────────────────────────────────────────────────────────── */
 
-async function captureVoiceRefinement(userId, tenantId, oldContent, newContent) {
+async function captureVoiceRefinement(userId, tenantId, oldContent, newContent, changeTypes = ['general']) {
   try {
     const client = await getAnthropicClient();
 
+    const typeDescriptions = {
+      hook:       'the opening line/hook changed',
+      vocabulary: 'specific words and phrases were substituted',
+      length:     'the post length changed significantly',
+      general:    'various edits were made throughout',
+    };
+    const changeDesc = changeTypes.map(t => typeDescriptions[t] || t).join('; ');
+    const ruleCount  = changeTypes.length === 1 ? 'one short rule' : `${changeTypes.length} short rules (one per detected change)`;
+
     const message = await client.messages.create({
       model: 'claude-haiku-4-5',
-      max_tokens: 128,
+      max_tokens: 200,
       messages: [{
         role: 'user',
-        content: `A writer edited an AI-generated LinkedIn post. Extract one short rule (under 20 words) describing what they changed and why — as a writing preference.
+        content: `A writer edited an AI-generated LinkedIn post. Detected changes: ${changeDesc}.
+
+Extract ${ruleCount} describing their writing preferences. Each rule must be under 20 words.
 
 BEFORE:
-${oldContent.slice(0, 800)}
+${oldContent.slice(0, 600)}
 
 AFTER:
-${newContent.slice(0, 800)}
+${newContent.slice(0, 600)}
 
-Return only the rule, no commentary. Example: "Prefers shorter sentences — never more than 15 words in a row."`,
+Return each rule on its own line, no bullets, no commentary.
+Example: "Prefers shorter sentences — never more than 15 words in a row."`,
       }],
     });
 
-    const rule = getAnthropicMessageText(message).trim();
-    if (!rule) return;
+    const responseText = getAnthropicMessageText(message).trim();
+    const rules = responseText
+      .split('\n')
+      .map(line => line.replace(/^[-•*\d.]\s*/, '').trim())
+      .filter(line => line.length > 5 && line.length < 150);
+
+    if (rules.length === 0) return;
 
     // Read current refinements
     const row = await db.prepare(
-      'SELECT voice_refinements, voice_profile_completion_pct FROM user_profiles WHERE user_id = ? AND tenant_id = ?'
+      'SELECT voice_refinements FROM user_profiles WHERE user_id = ? AND tenant_id = ?'
     ).get(userId, tenantId);
 
     if (!row) return;
 
     const refinements = safeParseJSON(row.voice_refinements, []);
-    refinements.push(rule);
+    refinements.push(...rules);
 
-    // Cap at 20 — shift oldest off
-    if (refinements.length > 20) refinements.shift();
+    // Cap at 20 — remove oldest when over
+    if (refinements.length > 20) refinements.splice(0, refinements.length - 20);
 
     // Recalculate completion pct
     const profile = await db.prepare(
@@ -501,7 +518,7 @@ Return only the rule, no commentary. Example: "Prefers shorter sentences — nev
        WHERE user_id = ? AND tenant_id = ?`
     ).run(JSON.stringify(refinements), completionPct, userId, tenantId);
 
-    console.log('[voiceExtraction] captureVoiceRefinement: captured rule', { userId, rule });
+    console.log('[voiceExtraction] captureVoiceRefinement: captured rules', { userId, rules });
   } catch (err) {
     console.error('[voiceExtraction] captureVoiceRefinement: error (non-fatal):', err.message);
   }

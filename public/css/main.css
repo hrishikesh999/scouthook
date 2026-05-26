@@ -3090,19 +3090,20 @@ body {
 .checklist-item {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
-  padding: 10px 0;
   border-bottom: 1px solid var(--border-divider);
 }
 
 .checklist-item:last-child {
   border-bottom: none;
-  padding-bottom: 0;
 }
 
-.checklist-item:first-child {
-  padding-top: 0;
+/* Done items have no link wrapper — apply padding directly */
+.checklist-item.done {
+  gap: var(--space-3);
+  padding: 10px 0;
 }
+.checklist-item.done:last-child { padding-bottom: 0; }
+.checklist-item.done:first-child { padding-top: 0; }
 
 .checklist-tick {
   width: 20px;
@@ -3134,27 +3135,32 @@ body {
   text-decoration: line-through;
 }
 
-.checklist-link {
-  display: inline-flex;
+.checklist-row {
+  display: flex;
   align-items: center;
-  height: 28px;
-  padding: 0 12px;
-  margin-left: var(--space-3);
-  background: var(--brand);
-  color: #fff;
-  font-size: 12px;
-  font-weight: 600;
-  font-family: var(--font-sans);
-  border-radius: var(--radius-pill);
+  gap: var(--space-3);
+  flex: 1;
+  padding: 10px 8px;
+  margin: 0 -8px;
+  border-radius: 6px;
   text-decoration: none;
-  white-space: nowrap;
-  transition: background 150ms ease, transform 120ms ease;
+  color: inherit;
+  transition: background 150ms ease;
 }
 
-.checklist-link:hover {
-  background: var(--brand-hover);
-  transform: translateY(-1px);
+.checklist-row:hover {
+  background: var(--bg-pill);
   text-decoration: none;
+}
+
+.checklist-item:first-child .checklist-row { padding-top: 4px; }
+.checklist-item:last-child .checklist-row { padding-bottom: 4px; }
+
+.checklist-arrow {
+  margin-left: auto;
+  color: var(--text-secondary);
+  font-size: 14px;
+  flex-shrink: 0;
 }
 
 /* ── Vault Hero Section ─────────────────────────────────────── */

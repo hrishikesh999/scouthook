@@ -10,7 +10,6 @@ const recentList = document.getElementById('recent-posts-list');
   loadChecklist();
   loadPerformance();
   loadLinkedInExpiryBanner();
-  loadVoiceProfileCard();
 })();
 
 /* ── Recent posts ────────────────────────────────────────────── */
@@ -87,15 +86,21 @@ async function loadChecklist() {
       const li = document.createElement('li');
       li.className = 'checklist-item' + (step.done ? ' done' : '');
 
-      const tickSvg = step.done
-        ? `<svg width="11" height="9" viewBox="0 0 11 9" fill="none" aria-hidden="true"><path d="M1 4.5L4 7.5L10 1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`
-        : '';
-
-      li.innerHTML = `
-        <span class="checklist-tick" aria-hidden="true">${tickSvg}</span>
-        <span class="checklist-label">${escHtml(step.label)}</span>
-        ${!step.done ? `<a class="checklist-link" href="${escHtml(step.href)}">Go →</a>` : ''}
-      `;
+      if (step.done) {
+        const tickSvg = `<svg width="11" height="9" viewBox="0 0 11 9" fill="none" aria-hidden="true"><path d="M1 4.5L4 7.5L10 1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+        li.innerHTML = `
+          <span class="checklist-tick" aria-hidden="true">${tickSvg}</span>
+          <span class="checklist-label">${escHtml(step.label)}</span>
+        `;
+      } else {
+        li.innerHTML = `
+          <a class="checklist-row" href="${escHtml(step.href)}">
+            <span class="checklist-tick" aria-hidden="true"></span>
+            <span class="checklist-label">${escHtml(step.label)}</span>
+            <span class="checklist-arrow" aria-hidden="true">→</span>
+          </a>
+        `;
+      }
       itemsEl.appendChild(li);
     });
 
@@ -455,77 +460,4 @@ function _perfModalShellHTML() {
       </div>`;
 }
 
-/* ── Voice Profile Card ──────────────────────────────────────── */
-// Shown until voice_profile_completion_pct >= 80.
-// Shows the next highest-value action with a link to the wizard.
-async function loadVoiceProfileCard() {
-  const card = document.getElementById('voice-profile-card');
-  if (!card) return;
-
-  try {
-    const uid = getUserId();
-    const res = await fetch('/api/profile/' + encodeURIComponent(uid), { headers: apiHeaders() });
-    if (!res.ok) return;
-    const data = await res.json();
-    const profile = data.profile;
-    if (!profile) return;
-
-    const pct = profile.voice_profile_completion_pct || 0;
-
-    // Hide once >= 80%
-    if (pct >= 80) return;
-
-    // Update bar + percentage
-    const fill  = document.getElementById('vp-bar-fill');
-    const pctEl = document.getElementById('vp-bar-pct');
-    if (fill)  fill.style.width  = pct + '%';
-    if (pctEl) pctEl.textContent = pct + '%';
-
-    // Determine next highest-value action and link
-    const nextEl = document.getElementById('vp-card-next');
-    const ctaEl  = document.getElementById('vp-card-cta');
-
-    function safeParseJSON(val, fallback) {
-      try { return val ? JSON.parse(val) : fallback; } catch { return fallback; }
-    }
-
-    let nextText = 'Complete your voice profile.';
-    let ctaHref  = '/settings.html';
-
-    const samples     = profile.writing_samples?.trim() || '';
-    const statements  = safeParseJSON(profile.authority_statements, []);
-    const ctas        = safeParseJSON(profile.cta_library, []);
-    const themes      = safeParseJSON(profile.content_themes, []);
-
-    if (!profile.business_positioning && !profile.content_niche) {
-      nextText = 'Fill in your profile basics to personalise every post. +15%';
-      ctaHref  = '/settings.html#voice-stage-1';
-    } else if (!profile.onboarding_q1 || !profile.onboarding_q2 || !profile.onboarding_q3) {
-      nextText = 'Complete onboarding to capture your baseline voice. +15%';
-      ctaHref  = '/onboarding.html';
-    } else if (themes.length === 0) {
-      nextText = 'Confirm your content themes — AI will suggest them. +5%';
-      ctaHref  = '/settings.html#voice-stage-2';
-    } else if (statements.length < 3) {
-      nextText = 'Add credibility statements so posts include real proof points. +10%';
-      ctaHref  = '/settings.html#voice-stage-3';
-    } else if (ctas.length < 2) {
-      nextText = 'Add 2+ CTAs so posts close with your actual words. +10%';
-      ctaHref  = '/settings.html#voice-stage-4';
-    } else if (!samples) {
-      nextText = 'Add writing samples for the sharpest voice match. +20%';
-      ctaHref  = '/settings.html#voice-stage-7';
-    } else {
-      nextText = 'Connect LinkedIn to unlock the deepest voice match. +20%';
-      ctaHref  = '/settings.html#voice-stage-6';
-    }
-
-    if (nextEl) nextEl.textContent = nextText;
-    if (ctaEl)  ctaEl.href = ctaHref;
-
-    card.hidden = false;
-  } catch {
-    // Non-fatal — voice profile card is progressive enhancement
-  }
-}
 

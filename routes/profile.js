@@ -8,7 +8,7 @@ const { db } = require('../db');
 // GET /api/profile/:user_id
 // Returns profile fields including voice_fingerprint and voice DNA fields.
 // ---------------------------------------------------------------------------
-router.get('/:user_id', async (req, res) => {
+router.get('/:user_id?', async (req, res) => {
   // Identity comes exclusively from the authenticated session — never from the URL
   // segment, which the client sends as a convenience but must not be trusted for access control.
   const user_id = req.userId;
@@ -25,7 +25,8 @@ router.get('/:user_id', async (req, res) => {
                      user_role, onboarding_complete, business_positioning, website_url,
                      website_summary, onboarding_q1, onboarding_q2, onboarding_q3,
                      authority_statements, cta_library, content_principles, content_themes,
-                     voice_extraction_quality, voice_profile_completion_pct
+                     voice_extraction_quality, voice_profile_completion_pct,
+                     input_examples
               FROM user_profiles WHERE user_id = ? AND tenant_id = ?`)
     .get(user_id, tenantId);
 
@@ -63,6 +64,7 @@ router.get('/:user_id', async (req, res) => {
       content_themes:               profile.content_themes        || null,
       voice_extraction_quality:     profile.voice_extraction_quality     || null,
       voice_profile_completion_pct: profile.voice_profile_completion_pct || 0,
+      input_examples:               profile.input_examples               || null,
     },
   });
 });

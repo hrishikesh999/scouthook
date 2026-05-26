@@ -261,7 +261,7 @@ router.patch('/posts/:id', async (req, res) => {
   try {
     const existing = await db.prepare(`
       SELECT status, content AS old_content,
-             format_slug, funnel_type, archetype_used, post_type, keyword
+             format_slug, funnel_type, archetype_used, post_type, lead_magnet_inputs
       FROM generated_posts
       WHERE id = ? AND user_id = ? AND tenant_id = ?
     `).get(postId, userId, tenantId);
@@ -322,12 +322,14 @@ router.patch('/posts/:id', async (req, res) => {
         `SELECT voice_fingerprint, content_niche FROM user_profiles WHERE user_id = ? AND tenant_id = ?`
       ).get(userId, tenantId);
       const voiceProfile = profileRow || {};
+      let lmKeyword = null;
+      try { lmKeyword = JSON.parse(existing.lead_magnet_inputs || 'null')?.keyword || null; } catch {}
       const gate = runQualityGate(content, {
         voiceProfile,
-        formatSlug:  existing.format_slug  || '',
-        funnelType:  existing.funnel_type  || null,
-        postType:    existing.post_type    || null,
-        keyword:     existing.keyword      || null,
+        formatSlug:  existing.format_slug || '',
+        funnelType:  existing.funnel_type || null,
+        postType:    existing.post_type   || null,
+        keyword:     lmKeyword,
       });
       await db.prepare(`
         UPDATE generated_posts

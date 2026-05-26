@@ -20,9 +20,8 @@ const {
   extractJsonFromResponse,
 } = require('./voiceFingerprint');
 
-// buildFingerprintBlock is defined locally in ideaPath.js and reachBrainstormer.js (not exported).
+// buildFingerprintBlock is defined locally in ideaPath.js (not exported).
 // We inline the same logic here to avoid circular dependencies.
-// When those files are updated to call buildVoiceDNABlock(), this block is what they inherit.
 function buildFingerprintBlock(userProfile) {
   const fingerprint = userProfile.voice_fingerprint
     ? safeParseJSON(userProfile.voice_fingerprint, null)

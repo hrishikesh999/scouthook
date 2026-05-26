@@ -17,7 +17,6 @@ const { db }      = require('../db');
 const storage     = require('../services/storage');
 const { extractAndChunk, extractAndChunkUrl, mineChunks } = require('../services/vaultMiner');
 const { classifyContent } = require('../services/funnelClassifier');
-const { brainstorm }     = require('../services/reachBrainstormer');
 const { canUploadVaultDoc } = require('../services/subscription');
 
 const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
@@ -351,7 +350,8 @@ router.get('/ideas', async (req, res) => {
   let sql    = `SELECT id, document_id, seed_text, source_ref, funnel_type, hook_archetype,
                        status, generated_post_id, hook_preview, created_at
                 FROM   vault_ideas
-                WHERE  user_id = ? AND tenant_id = ?`;
+                WHERE  user_id = ? AND tenant_id = ?
+                  AND  chunk_id IS NOT NULL`;
   const args = [userId, tenantId];
 
   if (status) {
@@ -522,12 +522,19 @@ router.get('/expand-idea', async (req, res) => {
     ].filter(Boolean).join('\n');
 
     const chunkContent = (idea.chunk_content || '').slice(0, 1400);
+
+    // Brainstormed ideas have no source chunk — return seed_text directly.
+    // There is no document material to pull specifics from, and the seed is
+    // already first-person, so an expansion call adds nothing here.
+    if (!chunkContent) {
+      return res.json({ ok: true, expanded_input: idea.seed_text });
+    }
+
     const sourceLabel  = idea.chunk_source_ref || idea.source_ref || 'their document';
 
     const Anthropic = require('@anthropic-ai/sdk');
     const { getSetting } = require('../db');
     const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
-    if (!apiKey) return res.json({ ok: true, expanded_input: idea.seed_text });
 
     const client  = new Anthropic({ apiKey });
     const message = await client.messages.create({
@@ -560,61 +567,6 @@ Reply with ONLY the expanded input text. No intro, no formatting.`,
     return res.json({ ok: false, error: 'expansion_failed' });
   }
 });
-
-// ---------------------------------------------------------------------------
-// POST /api/vault/brainstorm — generate reach ideas from a topic
-// Body: { topic: string }
-// ---------------------------------------------------------------------------
-router.post('/brainstorm', async (req, res) => {
-  const { userId, tenantId } = req;
-  if (!requireUser(req, res)) return;
-
-  const { topic } = req.body || {};
-  if (!topic || typeof topic !== 'string' || !topic.trim()) {
-    return res.status(400).json({ ok: false, error: 'missing_topic' });
-  }
-  if (topic.trim().length > 300) {
-    return res.status(400).json({ ok: false, error: 'topic_too_long', message: 'Topic must be 300 characters or fewer.' });
-  }
-
-  // Require a complete enough profile to produce niche-specific ideas
-  const profile = await db.prepare(
-    'SELECT * FROM user_profiles WHERE user_id = ? AND tenant_id = ?'
-  ).get(userId, tenantId);
-
-  if (!profile?.content_niche) {
-    return res.status(400).json({
-      ok:      false,
-      error:   'profile_incomplete',
-      message: 'Add your content niche in Account Settings so ideas are specific to your field.',
-    });
-  }
-
-  try {
-    const ideas = await brainstorm(topic.trim(), profile);
-
-    const topicLabel = topic.trim().length > 60
-      ? topic.trim().slice(0, 57) + '…'
-      : topic.trim();
-
-    const insert = db.prepare(`
-      INSERT INTO vault_ideas
-        (user_id, tenant_id, document_id, chunk_id, seed_text, source_ref, funnel_type, hook_archetype)
-      VALUES (?, ?, NULL, NULL, ?, ?, 'reach', ?)
-    `);
-
-    for (const idea of ideas) {
-      const insertResult = insert.run(userId, tenantId, idea.seed_text, `Brainstormed: "${topicLabel}"`, idea.hook_archetype);
-      setImmediate(() => generateHookPreview(insertResult.lastInsertRowid, idea.seed_text));
-    }
-
-    return res.json({ ok: true, count: ideas.length });
-  } catch (err) {
-    console.error('[vault/brainstorm] failed:', err.message);
-    return res.status(500).json({ ok: false, error: 'brainstorm_failed', message: err.message });
-  }
-});
-
 
 // ---------------------------------------------------------------------------
 // PATCH /api/vault/ideas/:id — update idea status

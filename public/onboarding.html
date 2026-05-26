@@ -77,9 +77,12 @@
         <div id="ob-website-step">
           <p class="ob-q-text">What's your website?</p>
           <p class="ob-website-hint">We read it in a few seconds to understand your background, so your post sounds like you.</p>
-          <input id="ob-website-url" class="ob-field" type="url"
-                 placeholder="https://yoursite.com" autocomplete="url" />
-          <p id="ob-website-error" class="ob-field-error" hidden>Please enter a valid URL starting with https://</p>
+          <div class="ob-url-prefix-wrap">
+            <span class="ob-url-prefix">https://</span>
+            <input id="ob-website-url" class="ob-field" type="text"
+                   placeholder="yoursite.com" autocomplete="url" />
+          </div>
+          <p id="ob-website-error" class="ob-field-error" hidden>Please enter a valid website address.</p>
           <div class="ob-interview-actions" style="margin-top:16px">
             <button id="ob-website-next" class="ob-btn-primary" type="button">Continue →</button>
             <button id="ob-website-skip" class="ob-skip-link" type="button">Skip, I don't have one</button>
@@ -210,12 +213,6 @@
       </div>
 
       <textarea id="ob-post-output" class="ob-textarea" aria-label="Generated post" rows="12"></textarea>
-
-      <!-- Alternative hook chips -->
-      <div id="ob-hook-chips" class="ob-hook-chips" style="display:none; margin-top:12px">
-        <p class="ob-hook-chips-label">Try a different hook:</p>
-        <div id="ob-hook-chips-row" class="ob-hook-chips-row"></div>
-      </div>
 
       <div style="margin-top:20px; display:flex; flex-direction:column; gap:10px">
         <button id="ob-open-editor" class="ob-btn-primary" type="button" style="width:100%">

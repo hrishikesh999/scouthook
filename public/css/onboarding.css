@@ -835,6 +835,40 @@ body.ob-shell {
 
 .ob-file-clear:hover { color: var(--text-danger); }
 
+/* ── Website URL prefix wrap ─────────────────────────────── */
+.ob-url-prefix-wrap {
+  display: flex;
+  align-items: center;
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-surface);
+  overflow: hidden;
+  transition: border-color 150ms ease;
+}
+.ob-url-prefix-wrap:focus-within {
+  border-color: var(--brand);
+}
+.ob-url-prefix {
+  padding: 0 10px 0 14px;
+  font-size: 14px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  user-select: none;
+  flex-shrink: 0;
+}
+.ob-url-prefix-wrap .ob-field {
+  border: none !important;
+  border-radius: 0 !important;
+  padding-left: 2px !important;
+  flex: 1;
+  min-width: 0;
+  box-shadow: none !important;
+}
+.ob-url-prefix-wrap .ob-field:focus {
+  outline: none;
+  box-shadow: none !important;
+}
+
 /* ── URL alternative row ─────────────────────────────────── */
 .ob-url-alt-row {
   display: flex;

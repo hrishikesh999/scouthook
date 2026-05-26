@@ -338,13 +338,6 @@
             <p class="panel-label score-label">Hook</p>
             <span id="funnel-type" class="archetype-badge" style="margin-bottom:6px;display:inline-block"></span>
             <div id="hook-explanation"></div>
-            <div id="hook-chips-row" style="display:none;flex-wrap:wrap;gap:6px;margin-top:4px"></div>
-            <p id="hook-chips-label" style="display:none;font-size:11px;color:var(--text-secondary);margin:8px 0 6px 0;font-weight:600;text-transform:uppercase;letter-spacing:.04em">Try a different hook:</p>
-          </section>
-          <hr class="profile-divider">
-          <section>
-            <p class="panel-label score-label">Checks</p>
-            <ul id="checks-list"></ul>
           </section>
         </div>
         <!-- /panel-score -->
@@ -488,7 +481,6 @@ let attachedPreviewUrl = null;
 let attachedAssetType  = null;
 let attachedSlideCount = 0;
 let _currentLmInputs   = null;
-let _apiChecks         = null;
 let currentAssetType   = null;
 let extractedContent   = null;
 let _soSkel            = null;  // Persists across innerHTML='' detachment
@@ -589,6 +581,32 @@ function clearPreviewAssetDOM() {
 }
 
 /* ════════════════════════════════════════════════════════════════════════
+   FLAG-AWARE QUALITY VERDICT
+════════════════════════════════════════════════════════════════════════ */
+const FLAG_VERDICT_MAP = [
+  ['AI_LANGUAGE_DETECTED', 'Reads like AI wrote it — remove the generic phrases and rewrite in your own words.'],
+  ['GENERIC_HOOK',         'The opening feels familiar. Make the first line specific to your own situation or result.'],
+  ['WEAK_HOOK_OPENER',     'Opening line doesn\'t create tension. Lead with an outcome, number, or unexpected claim.'],
+  ['HOOK_TOO_LONG',        'First line is too long — trim to under 12 words so it lands before the fold.'],
+  ['CLICHE_DETECTED',      'Remove the cliché phrases — they signal low-effort content to readers and the algorithm.'],
+  ['NO_CTA',               'Add a question at the end — comments carry 15x the algorithmic weight of a like.'],
+  ['WEAK_CTA',             'The ending question is too vague — ask something your specific reader would actually answer.'],
+  ['TOO_SHORT',            'Too short. Aim for 150+ words — length signals depth and improves dwell time.'],
+  ['LACKS_SPECIFICITY',    'Add a specific number, result, or named scenario — vague posts underperform.'],
+  ['VOICE_DRIFT',          'The voice shifts mid-post — write it as if you\'re saying it all in one breath.'],
+  ['DENSE_FORMATTING',     'Heavy bullets reduce dwell time — blend some into flowing prose.'],
+];
+const PASS_VERDICT = 'Strong post — specific hook, clear voice, good length. Ready to publish.';
+
+function flagToVerdict(flags, passed) {
+  if (!flags || flags.length === 0) return PASS_VERDICT;
+  for (const [flag, msg] of FLAG_VERDICT_MAP) {
+    if (flags.includes(flag)) return msg;
+  }
+  return passed ? PASS_VERDICT : 'Review the post for clarity and specificity before publishing.';
+}
+
+/* ════════════════════════════════════════════════════════════════════════
    LOAD POST
 ════════════════════════════════════════════════════════════════════════ */
 async function loadPost(id) {
@@ -603,9 +621,7 @@ async function loadPost(id) {
     const p      = data.post;
     const score   = p.quality?.score ?? 0;
     const passed  = p.quality?.passed ?? (score >= 60);
-    const verdict = p.qualityVerdict || p.quality?.verdict || (passed
-      ? 'Your hook is doing exactly what it should. This one will stop people mid-scroll.'
-      : 'The first line doesn\'t create tension yet. Try opening with what changed or what you got wrong.');
+    const verdict = p.qualityVerdict || p.quality?.verdict || flagToVerdict(flags, passed);
 
     // Hidden score elements (used by regen hooks)
     const scoreEl = document.getElementById('score-number');
@@ -637,23 +653,6 @@ async function loadPost(id) {
       rawText.split(/\s+/).filter(Boolean).length + ' words';
 
     const flags = p.quality?.flags || p.quality?.errors || [];
-    _apiChecks = flags.length
-      ? flags.map(f => ({ text: f, passed: false }))
-      : [
-          { text: 'No AI-sounding language',    passed: true },
-          { text: 'Hook stops the scroll',       passed: passed },
-          { text: 'Clear call-to-action',        passed: passed },
-          { text: 'Readable line length',        passed: true },
-          { text: 'Appropriate post length',     passed: passed },
-          { text: 'No keyword stuffing',         passed: true },
-          { text: 'Emotional resonance',         passed: passed },
-          { text: 'First-person voice',          passed: true },
-          { text: 'Strong opening line',         passed: passed },
-          { text: 'No jargon overload',          passed: true },
-          { text: 'Consistent tone',             passed: passed },
-          { text: 'Value for target audience',   passed: passed },
-        ];
-    renderChecks();
 
     const fcSection = document.getElementById('first-comment-section');
     if (fcSection) fcSection.hidden = false;
@@ -706,7 +705,6 @@ const ARCHETYPE_LABELS_ED = {
   INSIGHT:         'Insight',
   MYTH_BUST:       'Myth bust',
 };
-const ALT_ARCHETYPES_ED = ['NUMBER','BEFORE_AFTER','CONTRARIAN','INSIGHT','DIRECT_ADDRESS','MYTH_BUST','CONFESSION','STAKES'];
 
 let _currentIdeaInput   = null;
 let _currentArchetype   = null;
@@ -726,86 +724,8 @@ function renderHookSection(p) {
     explainEl.style.display = explanation ? '' : 'none';
   }
 
-  const chipsRow   = document.getElementById('hook-chips-row');
-  const chipsLabel = document.getElementById('hook-chips-label');
-  if (!chipsRow) return;
-  chipsRow.innerHTML = '';
-
-  // Only show chips if we have an idea_input to regenerate from
-  if (!_currentIdeaInput) return;
-
-  const alts = ALT_ARCHETYPES_ED.filter(a => a !== _currentArchetype).slice(0, 4);
-  alts.forEach(arch => {
-    const btn = document.createElement('button');
-    btn.type      = 'button';
-    btn.className = 'hook-chip-btn';
-    btn.textContent = ARCHETYPE_LABELS_ED[arch] || arch;
-    btn.dataset.archetype = arch;
-    btn.addEventListener('click', () => regenWithHook(arch, btn));
-    chipsRow.appendChild(btn);
-  });
-
-  if (alts.length > 0) {
-    chipsRow.style.display  = 'flex';
-    chipsLabel.style.display = 'block';
-  }
 }
 
-async function regenWithHook(archetype, chipBtn) {
-  if (!_currentIdeaInput) return;
-  chipBtn.disabled    = true;
-  chipBtn.textContent = '…';
-
-  try {
-    const res  = await fetch('/api/generate', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({
-        path:               'idea',
-        raw_idea:           _currentIdeaInput,
-        archetype_override: archetype,
-        skip_substance_check: true,
-      }),
-    });
-    const data = await res.json();
-    if (data.ok && data.post) {
-      const rawText = data.post;
-      const paras   = rawText.split(/\n\n+/).filter(Boolean);
-      document.getElementById('post-body').innerHTML = paras.map(t =>
-        `<p class="text-post" data-style="normal">${escHtml(t).replace(/\n/g, '<br>')}</p>`
-      ).join('');
-      document.getElementById('word-count').textContent =
-        rawText.split(/\s+/).filter(Boolean).length + ' words';
-      // Update the displayed hook badge
-      _currentArchetype = archetype;
-      const funnelEl = document.getElementById('funnel-type');
-      if (funnelEl) funnelEl.textContent = ARCHETYPE_LABELS_ED[archetype] || archetype;
-      // Re-render chips to exclude the new archetype
-      const chipsRow = document.getElementById('hook-chips-row');
-      if (chipsRow) {
-        chipsRow.innerHTML = '';
-        ALT_ARCHETYPES_ED.filter(a => a !== archetype).slice(0, 4).forEach(arch => {
-          const btn = document.createElement('button');
-          btn.type = 'button';
-          btn.className = 'hook-chip-btn';
-          btn.textContent = ARCHETYPE_LABELS_ED[arch] || arch;
-          btn.dataset.archetype = arch;
-          btn.addEventListener('click', () => regenWithHook(arch, btn));
-          chipsRow.appendChild(btn);
-        });
-      }
-      // Update post ID if new post was created
-      if (data.id && data.id !== currentPostId) {
-        currentPostId = data.id;
-        history.replaceState(null, '', `/editor/${data.id}`);
-      }
-    }
-  } catch { /* non-fatal */ }
-
-  chipBtn.disabled    = false;
-  chipBtn.textContent = ARCHETYPE_LABELS_ED[archetype] || archetype;
-}
 
 /* ════════════════════════════════════════════════════════════════════════
    HOOK EXPLANATION
@@ -839,41 +759,8 @@ function renderPostTypeBadge(p) {
   const lmPickerEl  = document.getElementById('lm-template-picker');
   if (!badgeEl) return;
 
-  const pt = p.postType || null;
-
-  if (!pt) {
-    // Retroactive type tagger — null post_type from free-write path
-    badgeEl.textContent = '—';
-    if (retroSec) {
-      retroSec.style.display = '';
-      const chipsEl = document.getElementById('retro-type-chips');
-      if (chipsEl) {
-        chipsEl.innerHTML = [
-          ['reach', '📣 Reach'],
-          ['trust', '🎯 Trust'],
-          ['convert', '📞 Convert'],
-        ].map(([type, label]) =>
-          `<button class="retro-chip" data-type="${type}">${label}</button>`
-        ).join('');
-        chipsEl.querySelectorAll('.retro-chip').forEach(btn => {
-          btn.addEventListener('click', async () => {
-            try {
-              await fetch(`/api/posts/${currentPostId}/type`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({ post_type: btn.dataset.type }),
-              });
-              badgeEl.textContent = POST_TYPE_LABELS[btn.dataset.type] || btn.dataset.type;
-              retroSec.style.display = 'none';
-            } catch { /* non-fatal */ }
-          });
-        });
-      }
-    }
-    return;
-  }
-
+  // Default to 'reach' if post has no type — never show the manual type selector
+  const pt = p.postType || p.funnelType || 'reach';
   if (retroSec) retroSec.style.display = 'none';
 
   if (pt === 'lead_magnet') {
@@ -1050,19 +937,6 @@ async function checkLinkedInStatus() {
   }
 }
 
-/* ════════════════════════════════════════════════════════════════════════
-   QUALITY CHECKS
-════════════════════════════════════════════════════════════════════════ */
-function renderChecks() {
-  const checks = _apiChecks || [];
-  const listEl = document.getElementById('checks-list');
-  if (!listEl) return;
-  listEl.innerHTML = checks.map(c => {
-    const passed = typeof c === 'object' ? !!c.passed : true;
-    const text   = typeof c === 'object' ? c.text     : c;
-    return `<li data-passed="${passed}" class="${passed ? '' : 'suggestion-item'}">${passed ? '✓ ' : '✗ '}${escHtml(text)}</li>`;
-  }).join('');
-}
 
 /* ════════════════════════════════════════════════════════════════════════
    TABS
@@ -2002,7 +1876,6 @@ function wireFirstComment() {
    INIT
 ════════════════════════════════════════════════════════════════════════ */
 function init() {
-  renderChecks();
   updateQuotePreview();
   updateCharCount();
   bindEvents();

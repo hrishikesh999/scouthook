@@ -65,9 +65,6 @@ const Onboarding = (() => {
     INSIGHT:          'Insight',
   };
 
-  /* ── Alternative archetypes for hook chips ───────────── */
-  const ALT_ARCHETYPES = ['NUMBER', 'BEFORE_AFTER', 'CONTRARIAN', 'INSIGHT', 'DIRECT_ADDRESS'];
-
   /* ── Role label map for processing screen ────────────── */
   const ROLE_LABELS = {
     consultant: 'consultant',
@@ -320,9 +317,17 @@ const Onboarding = (() => {
     const errEl   = qs('ob-website-error');
     const loadEl  = qs('ob-website-loading');
     const nextBtn = qs('ob-website-next');
-    const url     = (input?.value || '').trim();
+    const raw     = (input?.value || '').trim();
 
-    const valid = /^https?:\/\/.+\..+/.test(url);
+    // Empty domain — treat same as skip
+    if (!raw) {
+      showProfileStep();
+      return;
+    }
+
+    // Prepend protocol; the user only types the domain
+    const url   = `https://${raw}`;
+    const valid = /^https:\/\/.+\..+/.test(url);
     errEl.hidden = valid;
     if (!valid) { input?.focus(); return; }
 
@@ -601,8 +606,8 @@ const Onboarding = (() => {
     await new Promise(r => setTimeout(r, 600));
 
     showScreen('s6');
-    await renderPost(data);
-    fireConfetti();
+    fireConfetti();            // fire immediately as screen appears
+    await renderPost(data);   // profile fetch runs in parallel
     markOnboardingComplete().catch(() => {});
   }
 
@@ -661,71 +666,8 @@ const Onboarding = (() => {
     const badgesEl = qs('ob-badges');
     if (badgesEl) badgesEl.style.display = 'flex';
 
-    // Alternative hook chips (exclude archetype already used)
-    if (data.archetypeUsed) {
-      const chips = ALT_ARCHETYPES
-        .filter(a => a !== data.archetypeUsed)
-        .slice(0, 3);
-
-      if (chips.length > 0) {
-        const chipsRow = qs('ob-hook-chips-row');
-        if (chipsRow) {
-          chipsRow.innerHTML = '';
-          chips.forEach(archetype => {
-            const btn = document.createElement('button');
-            btn.type      = 'button';
-            btn.className = 'ob-hook-chip';
-            btn.textContent = ARCHETYPE_LABELS[archetype] || archetype;
-            btn.dataset.archetype = archetype;
-            btn.addEventListener('click', () => regenerateWithHook(archetype, btn));
-            chipsRow.appendChild(btn);
-          });
-        }
-        const chipsContainer = qs('ob-hook-chips');
-        if (chipsContainer) chipsContainer.style.display = 'block';
-      }
-    }
   }
 
-  async function regenerateWithHook(archetype, chipBtn) {
-    chipBtn.disabled    = true;
-    chipBtn.textContent = '…';
-
-    const interviewAnswers = state.answers
-      .filter(a => a.answer)
-      .map(a => ({ question: a.question, answer: a.answer }));
-
-    try {
-      const res  = await fetch('/api/generate', {
-        method:  'POST',
-        headers: apiHeaders(),
-        body:    JSON.stringify({
-          path:               'idea',
-          interview_answers:  interviewAnswers,
-          archetype_override: archetype,
-          source:             'onboarding',
-          skip_substance_check: true,
-        }),
-      });
-      const data = await res.json();
-      if (data.ok && data.post) {
-        const postOut = qs('ob-post-output');
-        if (postOut) {
-          postOut.value = data.post;
-          requestAnimationFrame(() => autoGrow(postOut));
-        }
-        state.postId = data.id;
-        state.post   = data.post;
-        const hookBadgeEl = qs('ob-badge-hook');
-        if (hookBadgeEl) {
-          hookBadgeEl.textContent = `Hook: ${ARCHETYPE_LABELS[archetype] || archetype}`;
-        }
-      }
-    } catch { /* non-fatal */ }
-
-    chipBtn.disabled    = false;
-    chipBtn.textContent = ARCHETYPE_LABELS[archetype] || archetype;
-  }
 
   /* ── Screen 6: CTAs ──────────────────────────────────── */
   function initS6() {
@@ -744,21 +686,21 @@ const Onboarding = (() => {
 
   function fireConfetti() {
     if (typeof confetti !== 'function') return;
-    // Opening salvo — center blast
-    confetti({ particleCount: 160, startVelocity: 45, spread: 80, origin: { x: 0.5, y: 0.6 }, ticks: 120, zIndex: 999 });
+    // Opening salvo — large center blast
+    confetti({ particleCount: 400, startVelocity: 55, spread: 100, origin: { x: 0.5, y: 0.6 }, ticks: 180, zIndex: 9999 });
     // Left and right cannons
     setTimeout(() => {
-      confetti({ particleCount: 100, startVelocity: 55, spread: 55, angle: 60, origin: { x: 0, y: 0.65 }, ticks: 120, zIndex: 999 });
-      confetti({ particleCount: 100, startVelocity: 55, spread: 55, angle: 120, origin: { x: 1, y: 0.65 }, ticks: 120, zIndex: 999 });
+      confetti({ particleCount: 250, startVelocity: 65, spread: 60, angle: 60,  origin: { x: 0,   y: 0.65 }, ticks: 160, zIndex: 9999 });
+      confetti({ particleCount: 250, startVelocity: 65, spread: 60, angle: 120, origin: { x: 1,   y: 0.65 }, ticks: 160, zIndex: 9999 });
     }, 150);
     // Follow-through shower
     setTimeout(() => {
-      confetti({ particleCount: 80, startVelocity: 35, spread: 100, origin: { x: 0.3, y: 0.5 }, ticks: 100, zIndex: 999 });
-      confetti({ particleCount: 80, startVelocity: 35, spread: 100, origin: { x: 0.7, y: 0.5 }, ticks: 100, zIndex: 999 });
+      confetti({ particleCount: 200, startVelocity: 40, spread: 120, origin: { x: 0.3, y: 0.5 }, ticks: 140, zIndex: 9999 });
+      confetti({ particleCount: 200, startVelocity: 40, spread: 120, origin: { x: 0.7, y: 0.5 }, ticks: 140, zIndex: 9999 });
     }, 400);
-    // Final drift
+    // Final gentle drift
     setTimeout(() => {
-      confetti({ particleCount: 60, startVelocity: 20, spread: 120, origin: { x: 0.5, y: 0.4 }, gravity: 0.6, ticks: 150, zIndex: 999 });
+      confetti({ particleCount: 150, startVelocity: 20, spread: 140, origin: { x: 0.5, y: 0.4 }, gravity: 0.5, ticks: 200, zIndex: 9999 });
     }, 700);
   }
 

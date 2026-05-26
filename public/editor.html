@@ -599,6 +599,7 @@ const visualCache = new Map();
 
 let _autoSaveTimer        = null;
 let _lastAutoSavedContent = null;
+let _lastRenderedScore    = null;   // tracks previous score for transition detection
 
 const state = {
   activeTab: 'edit', rightPanel: 'score', generatorType: null,
@@ -720,17 +721,19 @@ function computeDimensionsFromFlags(flags) {
 }
 
 function triggerPerfectCelebration() {
-  const key = 'celebrated_perfect_' + currentPostId;
-  if (sessionStorage.getItem(key)) return;
-  sessionStorage.setItem(key, '1');
   const ring = document.getElementById('quality-ring');
   if (ring) {
     ring.style.animation = 'ring-celebrate 0.65s ease';
     setTimeout(() => { ring.style.animation = ''; }, 800);
   }
-  if (typeof confetti === 'function') {
-    confetti({ particleCount: 80, spread: 65, origin: { y: 0.35 } });
-  }
+  if (typeof confetti !== 'function') return;
+  // Two-cannon burst from the sides
+  confetti({ particleCount: 60, angle: 60,  spread: 55, origin: { x: 0,    y: 0.65 } });
+  confetti({ particleCount: 60, angle: 120, spread: 55, origin: { x: 1,    y: 0.65 } });
+  setTimeout(() => {
+    confetti({ particleCount: 40, angle: 75,  spread: 45, origin: { x: 0.2,  y: 0.5  } });
+    confetti({ particleCount: 40, angle: 105, spread: 45, origin: { x: 0.8,  y: 0.5  } });
+  }, 220);
 }
 
 function renderQualityScore(quality) {
@@ -766,10 +769,14 @@ function renderQualityScore(quality) {
 
   if (isPerf && perfectBd) {
     perfectBd.hidden = false;
-    triggerPerfectCelebration();
+    // Celebrate only on the transition from a non-perfect score → 100
+    if (_lastRenderedScore !== null && _lastRenderedScore < 100) {
+      triggerPerfectCelebration();
+    }
   } else if (perfectBd) {
     perfectBd.hidden = true;
   }
+  _lastRenderedScore = score;
 
   if (dimsEl) {
     dimsEl.hidden = false;
@@ -836,6 +843,8 @@ async function loadPost(id) {
     const passed  = p.quality?.passed ?? (score >= 60);
 
     // New: score ring + dimension bars
+    // Reset score tracker so page-load never triggers celebration (only live edits should)
+    _lastRenderedScore = null;
     const qualityPayload = p.quality
       ? { ...p.quality, verdict: p.qualityVerdict || p.quality?.verdict }
       : { score: 0, passed: false, flags: [], errors: [] };

@@ -29,7 +29,7 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc:     ["'self'"],
-      scriptSrc:      ["'self'", "'unsafe-inline'", "https://cdn.paddle.com", "https://public.profitwell.com", "https://assets.calendly.com"],
+      scriptSrc:      ["'self'", "'unsafe-inline'", "https://cdn.paddle.com", "https://public.profitwell.com", "https://assets.calendly.com", "https://cdn.jsdelivr.net"],
       styleSrc:       ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdn.paddle.com", "https://assets.calendly.com"],
       imgSrc:         ["'self'", "data:", "*.licdn.com", "media.licdn.com", "*.googleusercontent.com"],
       connectSrc:     ["'self'", "https://sandbox-api.paddle.com", "https://api.paddle.com", "https://cdn.paddle.com", "https://buy.paddle.com", "https://sandbox-buy.paddle.com", "https://calendly.com"],

@@ -688,7 +688,7 @@ router.post('/improve/:postId', async (req, res) => {
     await db.prepare(`
       UPDATE generated_posts
       SET content = ?, quality_score = ?, quality_flags = ?, passed_gate = ?,
-          quality_verdict = ?, updated_at = CURRENT_TIMESTAMP
+          quality_verdict = ?
       WHERE id = ? AND user_id = ? AND tenant_id = ?
     `).run(
       result.post,
@@ -708,7 +708,20 @@ router.post('/improve/:postId', async (req, res) => {
 
   } catch (err) {
     console.error('[generate/improve] Error:', err.message);
-    return res.status(500).json({ ok: false, error: err.message });
+
+    let userError = 'Something went wrong — try again in a moment.';
+    const msg = err.message || '';
+    if (msg.includes('anthropic_api_key') || msg.includes('not configured')) {
+      userError = 'AI service is not configured. Contact support.';
+    } else if (msg.includes('429') || msg.toLowerCase().includes('rate limit') || msg.toLowerCase().includes('overloaded')) {
+      userError = 'AI service is busy right now — wait a few seconds and try again.';
+    } else if (msg.includes('401') || msg.toLowerCase().includes('authentication')) {
+      userError = 'AI service authentication failed. Contact support.';
+    } else if (msg.toLowerCase().includes('network') || msg.toLowerCase().includes('fetch')) {
+      userError = 'Network error — check your connection and try again.';
+    }
+
+    return res.status(500).json({ ok: false, error: userError, detail: msg });
   }
 });
 

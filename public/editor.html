@@ -392,8 +392,8 @@
               <!-- Verdict text -->
               <div id="quality-verdict"></div>
               <!-- Improve button: visible when score < 90 -->
-              <button id="btn-improve" class="btn-teal-filled" style="margin-top:12px;width:100%;display:none" aria-label="Improve post automatically">✦ Improve post</button>
-              <p id="improve-status" style="font-size:11px;color:var(--text-muted);margin-top:6px;text-align:center;display:none"></p>
+              <button id="btn-improve" class="btn-outlined" style="margin-top:10px;width:100%;font-size:12px;color:var(--text-muted);display:none" aria-label="Improve post automatically">✦ Auto-fix issues</button>
+              <p id="improve-status" style="font-size:11px;color:var(--text-muted);margin-top:5px;text-align:center;display:none"></p>
               <!-- Dimension bars -->
               <div class="quality-dims" id="quality-dims" hidden>
                 <div class="qdim" data-dim="hook" data-tier="high">
@@ -826,7 +826,7 @@ async function handleImprovePost() {
 
   btn.disabled    = true;
   btn.textContent = 'Improving…';
-  if (status) { status.textContent = 'Applying targeted fixes…'; status.style.display = ''; }
+  if (status) { status.style.color = 'var(--text-muted)'; status.textContent = 'Applying targeted fixes…'; status.style.display = ''; }
 
   try {
     const res  = await fetch(`/api/generate/improve/${encodeURIComponent(String(currentPostId))}`, {
@@ -858,11 +858,16 @@ async function handleImprovePost() {
     if (status) { status.textContent = `Score: ${data.quality?.score ?? '—'} — edits applied.`; }
 
   } catch (err) {
-    if (status) { status.textContent = 'Could not improve post right now.'; }
+    if (status) {
+      status.style.color = 'var(--score-fail, #e84e4e)';
+      status.textContent = err.message && err.message !== 'improve_failed'
+        ? err.message
+        : 'Something went wrong — try again in a moment.';
+    }
     console.error('[improve]', err);
   } finally {
     btn.disabled    = false;
-    btn.textContent = '✦ Improve post';
+    btn.textContent = '✦ Auto-fix issues';
   }
 }
 

@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Posts — Scouthook</title>
+  <link rel="stylesheet" href="/css/main.css">
+</head>
+<body>
+
+  <script src="/js/sidebar.js"></script>
+
+  <div id="main-content">
+
+    <!-- Publish success banner — used by drafts.js after publishing -->
+    <div id="publish-banner" class="publish-banner hidden" role="status" aria-live="polite">
+      Post successfully published to LinkedIn. Draft archived.
+    </div>
+
+    <div class="posts-page">
+
+      <header class="posts-page-header">
+        <h1 class="posts-page-title">Posts</h1>
+      </header>
+
+      <div class="page-tab-bar" role="tablist" aria-label="Post status">
+        <button class="page-tab active" data-tab="drafts" role="tab" aria-controls="posts-panel-drafts">Drafts</button>
+        <button class="page-tab" data-tab="scheduled" role="tab" aria-controls="posts-panel-scheduled">Scheduled</button>
+        <button class="page-tab" data-tab="published" role="tab" aria-controls="posts-panel-published">Published</button>
+      </div>
+
+      <div id="posts-panel-drafts" class="posts-panel" role="tabpanel">
+        <div id="drafts-container" aria-live="polite"></div>
+      </div>
+
+      <div id="posts-panel-scheduled" class="posts-panel" role="tabpanel" hidden>
+        <div id="schedule-stream" aria-live="polite"></div>
+      </div>
+
+      <div id="posts-panel-published" class="posts-panel" role="tabpanel" hidden>
+        <div id="published-list" aria-live="polite"></div>
+      </div>
+
+    </div>
+
+    <footer class="app-footer" role="contentinfo">
+      <div class="app-footer-inner">
+        <a href="https://www.scouthook.com/privacy" target="_blank" rel="noopener">Privacy Policy</a>
+        <span class="app-footer-sep">|</span>
+        <a href="https://www.scouthook.com/terms" target="_blank" rel="noopener">Terms of Service</a>
+        <span class="app-footer-sep">|</span>
+        <a href="/help.html">Help</a>
+        <p class="app-footer-legal">© 2026 CopyPower Digital LLP. ScoutHook is an AI-powered authority engine.</p>
+      </div>
+    </footer>
+
+  </div><!-- /main-content -->
+
+  <script src="/js/session.js"></script>
+  <script src="/js/ui-toast.js"></script>
+  <script src="/js/account-bar.js"></script>
+  <script src="/js/drafts.js"></script>
+  <script src="/js/schedule.js"></script>
+  <script src="/js/published.js"></script>
+  <script>
+  (function () {
+    'use strict';
+    var TABS = ['drafts', 'scheduled', 'published'];
+
+    function activateTab(name) {
+      if (!TABS.includes(name)) name = 'drafts';
+      TABS.forEach(function (t) {
+        var btn   = document.querySelector('.page-tab[data-tab="' + t + '"]');
+        var panel = document.getElementById('posts-panel-' + t);
+        if (btn)   btn.classList.toggle('active', t === name);
+        if (panel) panel.hidden = (t !== name);
+      });
+      history.replaceState(null, '', location.pathname + '#' + name);
+    }
+
+    document.querySelectorAll('.page-tab[data-tab]').forEach(function (btn) {
+      btn.addEventListener('click', function () { activateTab(btn.dataset.tab); });
+    });
+
+    var hash = location.hash.slice(1);
+    activateTab(hash);
+  })();
+  </script>
+</body>
+</html>

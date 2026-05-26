@@ -23,6 +23,7 @@ const Onboarding = (() => {
     postId:        null,
     post:          null,
     vaultDocId:    null,   // set if user uploads a doc in the vault step
+    writingSample: '',     // pasted writing sample from s2
   };
 
   /* ── Interview questions ─────────────────────────────────
@@ -99,10 +100,9 @@ const Onboarding = (() => {
   }
 
   /* ── Screen navigation ──────────────────────────────── */
-  // Maps screen id → progress dot number (1–4)
-  // s4 covers both website and questions (dot 2)
-  // s5 is generating (dot 3), s6 is reveal (dot 4)
-  const DOT_MAP = { s1: '1', s4: '2', s3: '3', s5: '4', s6: '5' };
+  // Maps screen id → progress dot number
+  // s1=role, s4=interview, s2=writing sample, s3=vault, s5=generating, s6=reveal
+  const DOT_MAP = { s1: '1', s4: '2', s2: '3', s3: '4', s5: '5', s6: '6' };
 
   function showScreen(id) {
     qsa('.ob-screen').forEach(s => s.classList.remove('active'));
@@ -395,8 +395,60 @@ const Onboarding = (() => {
       state.questionIndex++;
       renderQuestion();
     } else {
+      showScreen('s2');
+      initS2Focus();
+    }
+  }
+
+  /* ── Screen 2: Writing sample paste ─────────────────── */
+  function initS2Focus() {
+    qs('ob-writing-sample')?.focus();
+  }
+
+  function initS2() {
+    const textarea   = qs('ob-writing-sample');
+    const charCount  = qs('ob-writing-char-count');
+    const nextBtn    = qs('ob-writing-next');
+    const skipBtn    = qs('ob-writing-skip');
+    const backBtn    = qs('ob-s2-back');
+
+    if (textarea && charCount) {
+      textarea.addEventListener('input', () => {
+        const len = textarea.value.length;
+        charCount.textContent = len > 0 ? `${len} / 3000 characters` : '';
+      });
+    }
+
+    if (backBtn) {
+      backBtn.addEventListener('click', () => {
+        // Back goes to last question
+        state.questionIndex = QUESTIONS.length - 1;
+        renderQuestion();
+      });
+    }
+
+    function advanceFromWriting() {
+      const sample = (textarea?.value || '').trim();
+      state.writingSample = sample;
+      // Save writing sample to profile (fire-and-forget)
+      if (sample) {
+        fetch('/api/profile', {
+          method:  'POST',
+          headers: apiHeaders(),
+          body:    JSON.stringify({ writing_samples: sample }),
+        }).catch(() => {});
+      }
       showScreen('s3');
     }
+
+    nextBtn?.addEventListener('click', advanceFromWriting);
+    skipBtn?.addEventListener('click', () => {
+      state.writingSample = '';
+      showScreen('s3');
+    });
+    textarea?.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) advanceFromWriting();
+    });
   }
 
   /* ── Screen 3: Vault upload ─────────────────────────── */
@@ -770,6 +822,7 @@ const Onboarding = (() => {
     if (checkLinkedInReturn()) return;
 
     initS1();
+    initS2();
     initS3();
     initS4();
     initS6();

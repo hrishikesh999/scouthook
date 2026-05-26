@@ -135,6 +135,63 @@
   }
   updateCompletionBar(profile.voice_profile_completion_pct || 0);
 
+  /* ── Voice summary panel ────────────────────────────────── */
+  function renderVoiceSummary(fp) {
+    const panel     = qs('vw-voice-summary');
+    const container = qs('vw-voice-traits');
+    if (!panel || !container) return;
+
+    // Build trait cards from extracted fingerprint dimensions
+    const traits = [];
+    if (fp.sentence_rhythm || fp.sentence_tendency) {
+      traits.push({
+        label: 'Sentence rhythm',
+        value: fp.sentence_rhythm || (fp.sentence_tendency === 'short/punchy'
+          ? 'Short, punchy sentences'
+          : fp.sentence_tendency === 'long-form' ? 'Long-form sentences' : 'Mixed rhythm'),
+      });
+    }
+    if (fp.argument_structure) {
+      const labels = {
+        'conclusion-first':    'Leads with the conclusion, then explains',
+        'build-to-conclusion': 'Builds context before landing the point',
+        'problem-then-solution':'Opens with the problem, then the fix',
+        'story-then-lesson':   'Tells the story, then draws the lesson',
+      };
+      traits.push({ label: 'How you argue', value: labels[fp.argument_structure] || fp.argument_structure });
+    }
+    if (fp.vocabulary_tier) {
+      const labels = {
+        'technical/jargon':      'Technical — you use industry language',
+        'everyday/plain':        'Plain English — no jargon',
+        'formal/academic':       'Formal — measured and precise',
+        'casual/conversational': 'Conversational — like talking to a colleague',
+      };
+      traits.push({ label: 'Vocabulary', value: labels[fp.vocabulary_tier] || fp.vocabulary_tier });
+    }
+    if (fp.opening_move) {
+      traits.push({ label: 'How you open', value: fp.opening_move });
+    }
+    if (fp.tone) {
+      traits.push({ label: 'Tone', value: fp.tone });
+    }
+
+    if (traits.length === 0) return;
+
+    container.innerHTML = traits.map(t => `
+      <div class="vw-voice-trait">
+        <span class="vw-voice-trait-label">${escapeHtml(t.label)}</span>
+        <span class="vw-voice-trait-value">${escapeHtml(t.value)}</span>
+      </div>`).join('');
+
+    panel.hidden = false;
+  }
+
+  const fp = safeParseJSON(profile.voice_fingerprint, {});
+  if (fp && (fp.sentence_rhythm || fp.argument_structure || fp.vocabulary_tier || fp.opening_move || fp.tone)) {
+    renderVoiceSummary(fp);
+  }
+
   // Check which stages have content and mark them
   function updateStageChecks(basics, themes, statements, ctas, principles, hasLinkedIn, samples) {
     if (basics)           { const el = qs('vw-check-1'); if (el) el.hidden = false; }

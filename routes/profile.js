@@ -292,6 +292,20 @@ Return null for any field you cannot confidently infer. Return only the JSON obj
       ).run(website_summary, req.userId, req.tenantId).catch(() => {});
     }
 
+    // Fire-and-forget: crawl blog articles for richer voice signal
+    if (req.userId && req.tenantId) {
+      const { extractBlogPosts } = require('../services/vaultMiner');
+      extractBlogPosts(url)
+        .then(articlesText => {
+          if (articlesText && articlesText.trim().length > 200) {
+            return db.prepare(
+              'UPDATE user_profiles SET website_articles_text = ? WHERE user_id = ? AND tenant_id = ?'
+            ).run(articlesText.trim(), req.userId, req.tenantId);
+          }
+        })
+        .catch(err => console.warn('[profile] extractBlogPosts failed (non-fatal):', err.message));
+    }
+
     return res.json({ ok: true, ...extracted, website_summary });
   } catch (err) {
     console.error('[profile] extract-website error (non-fatal):', err.message);

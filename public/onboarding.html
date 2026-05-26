@@ -13,13 +13,14 @@
 
   <header class="ob-header">
     <img src="/images/sh-logo-dark.png" alt="Scouthook" class="ob-logo-img">
-    <!-- 5 dots: role · interview · vault · generating · done -->
+    <!-- 6 dots: role · interview · writing · vault · generating · done -->
     <div id="ob-step-dots" class="ob-step-dots" hidden aria-hidden="true">
       <span class="ob-dot" data-step="1"></span>
       <span class="ob-dot" data-step="2"></span>
       <span class="ob-dot" data-step="3"></span>
       <span class="ob-dot" data-step="4"></span>
       <span class="ob-dot" data-step="5"></span>
+      <span class="ob-dot" data-step="6"></span>
     </div>
   </header>
 
@@ -127,6 +128,40 @@
             <button id="ob-answer-next" class="ob-btn-primary" type="button">Next →</button>
             <button id="ob-answer-skip" class="ob-skip-link" type="button">Skip this question</button>
           </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ── Screen 2: Writing sample paste ────────────────────────── -->
+  <section id="ob-s2" class="ob-screen" aria-label="Step 2: Writing sample">
+    <div class="ob-interview-wrap">
+
+      <div class="ob-interview-left" aria-hidden="true">
+        <p class="ob-guide-title">Match your voice exactly</p>
+        <p class="ob-guide-body">A paragraph of your own writing tells us more about your voice than 20 questions ever could.</p>
+        <ul class="ob-guide-tips">
+          <li>A newsletter, article, or LinkedIn post all work.</li>
+          <li>The more you write like yourself, the better.</li>
+          <li>Even one paragraph makes a difference.</li>
+        </ul>
+      </div>
+
+      <div class="ob-interview-right">
+        <button class="ob-back-btn" id="ob-s2-back" type="button">← Back</button>
+
+        <p class="ob-q-text">Got a newsletter, article, or post you've written? Paste it here.</p>
+        <p class="ob-website-hint">We use it to match your sentence rhythm, vocabulary, and opening style — so posts sound like <em>you</em>, not a template.</p>
+
+        <textarea id="ob-writing-sample" class="ob-textarea ob-textarea--interview" rows="8"
+                  maxlength="3000"
+                  placeholder="Paste something you've written. A LinkedIn post, a newsletter intro, a case study summary — anything in your own words."></textarea>
+        <p class="ob-char-count" id="ob-writing-char-count" aria-live="polite"></p>
+
+        <div class="ob-interview-actions" style="margin-top:16px">
+          <button id="ob-writing-next" class="ob-btn-primary" type="button">Continue →</button>
+          <button id="ob-writing-skip" class="ob-skip-link" type="button">Skip, I'll do this later →</button>
         </div>
       </div>
 

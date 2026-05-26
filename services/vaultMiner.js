@@ -313,6 +313,111 @@ async function mineChunks(chunks, documentFilename, userProfile = {}) {
   return allSeeds;
 }
 
+/**
+ * Crawl a website homepage, find blog/article links, fetch up to 3 articles,
+ * and return their combined plain text (capped at 8000 chars total).
+ *
+ * Non-blocking — if the site has no blog, returns ''.
+ * Used to give voice extraction real writing samples from the user's own content.
+ *
+ * @param {string} url  — full URL of the user's website homepage
+ * @returns {Promise<string>} combined article text or ''
+ */
+async function extractBlogPosts(url) {
+  try {
+    const { text: homepageText, html: homepageHtml } = await extractUrlWithHtml(url);
+    const baseUrl = new URL(url);
+
+    // Find candidate article links: internal links that look like blog posts
+    const articleLinks = findArticleLinks(homepageHtml || '', baseUrl, url);
+    if (!articleLinks.length) return '';
+
+    const MAX_ARTICLES = 3;
+    const MAX_CHARS    = 8000;
+    const candidates   = articleLinks.slice(0, MAX_ARTICLES);
+
+    const texts = [];
+    for (const link of candidates) {
+      try {
+        const { text } = await extractUrl(link);
+        if (text && text.trim().length > 200) {
+          texts.push(text.trim().slice(0, 3000));
+        }
+      } catch {
+        // Individual article fetch failure is non-fatal
+      }
+    }
+
+    return texts.join('\n\n---\n\n').slice(0, MAX_CHARS);
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Like extractUrl but also returns raw HTML for link discovery.
+ */
+async function extractUrlWithHtml(url) {
+  const https  = require('https');
+  const http   = require('http');
+  const parsed = new URL(url);
+  const lib    = parsed.protocol === 'https:' ? https : http;
+
+  const html = await new Promise((resolve, reject) => {
+    const req = lib.get(url, { headers: { 'User-Agent': 'ScoutHook/1.0' } }, (res) => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        extractUrlWithHtml(res.headers.location).then(resolve).catch(reject);
+        return;
+      }
+      const chunks = [];
+      res.on('data', c => chunks.push(c));
+      res.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+      res.on('error', reject);
+    });
+    req.on('error', reject);
+    req.setTimeout(15000, () => { req.destroy(); reject(new Error('URL fetch timeout')); });
+  });
+
+  return { html, text: stripHtml(html) };
+}
+
+/**
+ * Parse HTML and extract internal links that look like blog/article posts.
+ * Heuristic: href contains /blog/, /post/, /article/, /writing/, /thoughts/, /essays/,
+ * or looks like a dated slug (/2024/..., /2025/...).
+ */
+function findArticleLinks(html, baseUrl, sourceUrl) {
+  const seen   = new Set([sourceUrl]);
+  const links  = [];
+  const hrefRe = /href=["']([^"'#?]+)["']/gi;
+  const BLOG_PATH_RE = /\/(blog|post|posts|article|articles|writing|thoughts|essays|insights?|news|stories?)\/\S/i;
+  const DATE_PATH_RE = /\/20\d\d\//;
+
+  let match;
+  while ((match = hrefRe.exec(html)) !== null) {
+    let href = match[1];
+    if (!href || href === '/' || href.startsWith('mailto:') || href.startsWith('tel:')) continue;
+
+    // Resolve relative URLs
+    let absolute;
+    try {
+      absolute = new URL(href, baseUrl).href;
+    } catch { continue; }
+
+    // Same-origin only
+    if (new URL(absolute).hostname !== baseUrl.hostname) continue;
+    if (seen.has(absolute)) continue;
+    seen.add(absolute);
+
+    const path = new URL(absolute).pathname;
+    if (BLOG_PATH_RE.test(path) || DATE_PATH_RE.test(path)) {
+      links.push(absolute);
+    }
+  }
+
+  return links;
+}
+
 module.exports = {
   extractAndChunk,
   extractAndChunkUrl,
@@ -320,4 +425,5 @@ module.exports = {
   extractUrl,
   extractText,
   chunkText,
+  extractBlogPosts,
 };

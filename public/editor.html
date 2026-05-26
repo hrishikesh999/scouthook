@@ -2109,6 +2109,7 @@ async function doAutoSave() {
     if (data.ok) {
       _lastAutoSavedContent = content;
       if (data.voiceRefined) loadVoiceRefinements();
+      if (data.quality) renderQualityScore(data.quality);
     }
   } catch { /* non-fatal */ }
 }

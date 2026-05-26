@@ -5,6 +5,7 @@ const router = express.Router();
 const { db } = require('../db');
 const { removeScheduledJob } = require('../services/scheduler');
 const { captureVoiceRefinement } = require('../services/voiceExtraction');
+const { runQualityGate }        = require('../services/qualityGate');
 
 // Lightweight Levenshtein distance — used only for edit-ratio comparison.
 // Uses single-array DP for O(min(m,n)) space. Safe for post-length strings (~500 chars).
@@ -259,7 +260,9 @@ router.patch('/posts/:id', async (req, res) => {
 
   try {
     const existing = await db.prepare(`
-      SELECT status, content AS old_content FROM generated_posts
+      SELECT status, content AS old_content,
+             format_slug, funnel_type, archetype_used, post_type, keyword
+      FROM generated_posts
       WHERE id = ? AND user_id = ? AND tenant_id = ?
     `).get(postId, userId, tenantId);
 
@@ -312,7 +315,37 @@ router.patch('/posts/:id', async (req, res) => {
       }
     }
 
-    return res.json({ ok: true, voiceRefined });
+    // Re-run quality gate on updated content and persist
+    let qualityPayload = null;
+    try {
+      const profileRow  = await db.prepare(
+        `SELECT voice_fingerprint, content_niche FROM user_profiles WHERE user_id = ? AND tenant_id = ?`
+      ).get(userId, tenantId);
+      const voiceProfile = profileRow || {};
+      const gate = runQualityGate(content, {
+        voiceProfile,
+        formatSlug:  existing.format_slug  || '',
+        funnelType:  existing.funnel_type  || null,
+        postType:    existing.post_type    || null,
+        keyword:     existing.keyword      || null,
+      });
+      await db.prepare(`
+        UPDATE generated_posts
+        SET quality_score = ?, quality_flags = ?, passed_gate = ?
+        WHERE id = ? AND user_id = ? AND tenant_id = ?
+      `).run(gate.score, JSON.stringify(gate.flags), gate.passed ? 1 : 0, postId, userId, tenantId);
+      qualityPayload = {
+        score:      gate.score,
+        passed:     gate.passed,
+        flags:      gate.flags,
+        errors:     gate.errors,
+        warnings:   gate.warnings,
+        verdict:    gate.verdict,
+        dimensions: gate.dimensions,
+      };
+    } catch { /* non-fatal — score update is best-effort */ }
+
+    return res.json({ ok: true, voiceRefined, quality: qualityPayload });
   } catch (err) {
     console.error('[stats] PATCH /api/posts/:id error:', err);
     return res.status(500).json({ ok: false, error: err.message });

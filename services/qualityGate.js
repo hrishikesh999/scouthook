@@ -237,17 +237,22 @@ function runQualityGate(postText, options = {}) {
   const totalWords = countWords(text);
 
   // Check 6 — Post length (warnings, funnel-aware)
-  // Reach posts are intentionally short (100–200 words); penalising them for brevity contradicts their design.
-  // Use per-funnel targets from postLengthTargets when funnelType is known; fall back to global thresholds.
+  // Near-empty content gets a hard penalty that scales with how far below minimum it is.
   const funnelTarget = LINKEDIN_RULES.postLengthTargets[funnelType] || null;
-  const effectiveMin = funnelType === 'reach' ? 0 : (funnelTarget?.min ?? LINKEDIN_RULES.post.minWords);
+  const effectiveMin = funnelType === 'reach' ? 80 : (funnelTarget?.min ?? LINKEDIN_RULES.post.minWords);
   const effectiveMax = funnelTarget?.max ?? LINKEDIN_RULES.post.maxWords;
 
-  if (effectiveMin > 0 && totalWords < effectiveMin) {
+  if (totalWords < 20) {
+    errors.push(`Post is too short to evaluate (${totalWords} words) — a LinkedIn post needs at least 80 words`);
+    flags.push('TOO_SHORT');
+    score -= 70;
+  } else if (totalWords < effectiveMin) {
     const label = funnelTarget ? `${funnelTarget.min}–${funnelTarget.max}` : `${LINKEDIN_RULES.post.minWords}–${LINKEDIN_RULES.post.maxWords}`;
+    const pct = totalWords / effectiveMin;
+    const deduction = pct < 0.4 ? 45 : pct < 0.65 ? 28 : 12;
     warnings.push(`Post is short at ${totalWords} words — aim for ${label}`);
     flags.push('TOO_SHORT');
-    score -= 10;
+    score -= deduction;
   }
   if (totalWords > effectiveMax) {
     warnings.push(`Post is long at ${totalWords} words — keep it under ${effectiveMax} for a ${funnelType || 'standard'} post`);
@@ -416,14 +421,22 @@ function runQualityGate(postText, options = {}) {
 
   score = Math.max(0, Math.min(100, score));
 
-  const passed = errors.length === 0;
+  // A post must have sufficient content and no hard errors to pass
+  const passed = errors.length === 0 && !flags.includes('TOO_SHORT');
 
   // Dimension breakdown scores (display-only — do not affect overall score)
+  // When content is too short, substance and hook can't be meaningfully evaluated —
+  // penalise them proportionally so dimensions don't show 100 on near-empty posts.
+  const lengthPenalty = totalWords < 20 ? 80
+                      : totalWords < 50 ? Math.round(60 * (1 - totalWords / 50))
+                      : totalWords < effectiveMin ? Math.round(30 * (1 - totalWords / effectiveMin))
+                      : 0;
   const dimensions = {
     hook: Math.max(0, 100
       - (flags.includes('HOOK_TOO_LONG')     ? 35 : 0)
       - (flags.includes('WEAK_HOOK_OPENER')  ? 45 : 0)
-      - (flags.includes('GENERIC_HOOK')      ? 25 : 0)),
+      - (flags.includes('GENERIC_HOOK')      ? 25 : 0)
+      - lengthPenalty),
     voice: Math.max(0, 100
       - (flags.includes('AI_LANGUAGE_DETECTED') ? 60 : 0)
       - (flags.includes('AI_TONE')              ? 25 : 0)
@@ -431,9 +444,10 @@ function runQualityGate(postText, options = {}) {
     substance: Math.max(0, 100
       - (flags.includes('CLICHE_DETECTED')     ? 30 : 0)
       - (flags.includes('LACKS_SPECIFICITY')   ? 20 : 0)
-      - (flags.includes('UNATTRIBUTED_CLAIM')  ? 55 : 0)),
+      - (flags.includes('UNATTRIBUTED_CLAIM')  ? 55 : 0)
+      - lengthPenalty),
     structure: Math.max(0, 100
-      - (flags.includes('TOO_SHORT')       ? 25 : 0)
+      - (flags.includes('TOO_SHORT')       ? 55 : 0)
       - (flags.includes('TOO_LONG')        ? 15 : 0)
       - (flags.includes('DENSE_FORMATTING')? 20 : 0)
       - (flags.includes('HASHTAG_SPAM')    ? 25 : 0)),
@@ -448,7 +462,11 @@ function runQualityGate(postText, options = {}) {
 
   // Derive a single actionable verdict string
   let verdict;
-  if (passed) {
+  if (flags.includes('TOO_SHORT') && totalWords < 20) {
+    verdict = 'Post is too short — write at least 80 words before scoring is meaningful.';
+  } else if (flags.includes('TOO_SHORT')) {
+    verdict = `Post is only ${totalWords} words — flesh it out before publishing. Aim for at least ${effectiveMin} words.`;
+  } else if (passed) {
     verdict = 'Your hook is doing exactly what it should. This one will stop people mid-scroll.';
   } else if (flags.includes('KEYWORD_MISSING')) {
     verdict = `The keyword didn't make it into the CTA. Check the post manually — it must say "Comment ${keyword || '[KEYWORD]'}" for the lead magnet to work.`;

@@ -659,9 +659,9 @@ function showProcessingScreen(rawIdea, postType) {
   processingScreen.classList.add('visible');
 
   const steps = [
-    'Analysing your idea…',
-    `Found the angle: ${extractAngleLabel(rawIdea || '')}`,
-    'Selecting the hook type…',
+    'Finding the tension…',
+    `Angle: ${extractAngleLabel(rawIdea || '')}`,
+    'Writing in your voice…',
     'Final quality check…',
   ];
 
@@ -693,9 +693,16 @@ function showProcessingScreen(rawIdea, postType) {
 
 function finaliseProcessingSteps(data) {
   const archetype = data.archetypeUsed || data.archetype_used;
+  const arc       = data.stage1Blueprint?.arc || null;
   const step2 = document.getElementById('proc-step-2');
   if (step2) {
-    step2.querySelector('.proc-step-text').textContent = archetype ? `Hook type: ${archetype}` : 'Selecting template structure…';
+    let label;
+    if (arc) {
+      label = arc.length > 68 ? `${arc.slice(0, 65)}…` : arc;
+    } else {
+      label = archetype ? `Hook type: ${archetype}` : 'Writing in your voice…';
+    }
+    step2.querySelector('.proc-step-text').textContent = label;
     step2.querySelector('.proc-step-icon').innerHTML = '✅';
     step2.classList.add('done');
   }

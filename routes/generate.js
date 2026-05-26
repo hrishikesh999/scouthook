@@ -865,7 +865,7 @@ router.post('/from-doc', async (req, res) => {
   if (!apiKey) return res.status(500).json({ ok: false, error: 'no_api_key' });
 
   try {
-    const { synthesis, post, hookB, ctaAlternatives, archetypeUsed, hookConfidence } =
+    const { synthesis, post, hookB, ctaAlternatives, archetypeUsed, hookConfidence, stage1Blueprint } =
       await ideaToPost(truncated, userProfile, { skipSubstanceCheck: skipSubstanceCheckDoc });
 
     const primaryGate = runQualityGate(
@@ -931,6 +931,7 @@ router.post('/from-doc', async (req, res) => {
       vault_source_ref: null,
       content_feedback: null,
       from_doc:        true,
+      stage1Blueprint: stage1Blueprint || null,
     });
 
   } catch (err) {

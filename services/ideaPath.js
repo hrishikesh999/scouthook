@@ -5,11 +5,28 @@ const { getSetting } = require('../db');
 const { extractJsonFromResponse } = require('./voiceFingerprint');
 const { buildVoiceDNABlock } = require('./voiceExtraction');
 const { selectHook, buildHookInjection } = require('./hookSelector');
-const { HOOK_ARCHETYPES } = require('./hookArchetypes');
+const { HOOK_ARCHETYPES, ARCHETYPE_KEYS } = require('./hookArchetypes');
 const { AI_TELLS_PROHIBITION, sanitiseAiTells } = require('./postSanitiser');
 const { LINKEDIN_RULES } = require('../modules/formatIntelligence/rules');
 
 const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
+
+const ARCHETYPE_POST_TYPE_PREFERENCES = {
+  reach:   ['BEFORE_AFTER', 'CONFESSION', 'PATTERN_INTERRUPT'],
+  trust:   ['INSIGHT', 'CONTRARIAN', 'DIRECT_ADDRESS'],
+  convert: ['NUMBER', 'STAKES', 'BEFORE_AFTER'],
+};
+
+const BLUEPRINT_SYSTEM_PROMPT = `You are a LinkedIn content strategist. Analyze the raw idea and return a structural blueprint for a single LinkedIn post.
+
+Return only valid JSON — no explanation, no markdown:
+{
+  "archetype": "<one of: INSIGHT|CONTRARIAN|BEFORE_AFTER|CONFESSION|NUMBER|STAKES|PATTERN_INTERRUPT|DIRECT_ADDRESS>",
+  "confidence": <number 0-1>,
+  "tension": "<one sentence: the core contradiction — expectation vs reality, before vs after, belief vs evidence>",
+  "arc": "<one sentence: the sequence of moves — what the reader learns and in what order>",
+  "hook_draft": "<the first line, under 12 words, applying the archetype to this specific idea>"
+}`;
 
 function getLengthGuidance(funnelType) {
   const targets = LINKEDIN_RULES.postLengthTargets;
@@ -79,29 +96,38 @@ async function generateAlternativeHook(post, usedArchetype, client) {
 }
 
 /**
- * Idea path: one LinkedIn post driven by the hook archetype from selectHook.
- * Uses claude-sonnet-4-6.
+ * Idea path: two-stage generation (Haiku blueprint → Sonnet voice writing).
+ *
+ * Stage 1 (Haiku): derives tension, arc, archetype, and hook draft in one pass.
+ * Stage 2 (Sonnet): writes the post with structure fixed — only voice, rhythm, specificity.
  *
  * @param {string} rawIdea
  * @param {object} userProfile
  * @param {object} [options]
  * @param {string} [options.qualityRetryHint]
  * @param {string} [options._regenerateHint]
- * @returns {Promise<{ synthesis: object, post: string, archetypeUsed: string, hookConfidence: number }>}
+ * @returns {Promise<{ synthesis: object, post: string, archetypeUsed: string, hookConfidence: number, stage1Blueprint: object }>}
  */
 async function ideaToPost(rawIdea, userProfile, options = {}) {
   const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
   if (!apiKey) throw new Error('anthropic_api_key not configured');
   const client = new Anthropic({ apiKey });
 
-  // If caller supplies archetype_override, skip selectHook and use it directly
   const archetypeOverride = options.archetypeOverride || null;
-  const overrideRecord    = archetypeOverride ? (HOOK_ARCHETYPES[archetypeOverride] || HOOK_ARCHETYPES.INSIGHT) : null;
   const postType          = options.postType || null;
   const convertCtaIntent  = options.convertCtaIntent || null;
 
-  const [hookResult, inputQuality] = await Promise.all([
-    archetypeOverride ? Promise.resolve({ archetype: archetypeOverride, hookInjection: buildHookInjection(overrideRecord), confidence: 1 }) : selectHook(rawIdea, userProfile, postType),
+  // Stage 1 (Haiku) and substance check run in parallel
+  const [blueprint, inputQuality] = await Promise.all([
+    archetypeOverride
+      ? Promise.resolve({
+          archetype:  archetypeOverride,
+          confidence: 1,
+          tension:    options.tensionStatement || '',
+          arc:        '',
+          hook_draft: '',
+        })
+      : buildStructureBlueprint(rawIdea, postType, client),
     assessInputQuality(rawIdea, client),
   ]);
 
@@ -114,17 +140,24 @@ async function ideaToPost(rawIdea, userProfile, options = {}) {
     }
   }
 
-  return runSinglePostGeneration({
+  // Caller-supplied tensionStatement takes precedence over Stage 1's derived tension
+  if (options.tensionStatement) blueprint.tension = options.tensionStatement;
+
+  const archetypeRecord = HOOK_ARCHETYPES[blueprint.archetype] || HOOK_ARCHETYPES.INSIGHT;
+  const hookInjection   = buildHookInjection(archetypeRecord);
+  const ctaHint         = archetypeRecord.ctaHint || null;
+  const ctaInstruction  = buildCtaInstruction(postType, ctaHint, convertCtaIntent);
+
+  return runTwoStageGeneration({
     rawIdea,
     userProfile,
     options,
-    hookInjection: hookResult.hookInjection,
-    archetypeUsed: hookResult.archetype,
-    hookConfidence: hookResult.confidence,
-    contentFeedback: buildContentFeedback(inputQuality),
+    blueprint,
+    hookInjection,
+    archetypeUsed:  blueprint.archetype,
+    hookConfidence: blueprint.confidence,
     postType,
-    convertCtaIntent,
-    tensionStatement: options.tensionStatement || null,
+    ctaInstruction,
   });
 }
 
@@ -215,6 +248,181 @@ function buildCtaInstruction(funnelType, ctaHint, convertCtaIntent = null) {
   const hintLine = ctaHint ? `\nARCHETYPE CTA DIRECTION: ${ctaHint}` : '';
   return `\nCLOSING:
 ${funnelInstruction}${hintLine}`;
+}
+
+/**
+ * Stage 1 — Structural blueprint (Haiku).
+ * Identifies tension, arc, archetype, and hook draft in one coherent pass.
+ * Replaces the separate selectHook() + tensionExtractor calls for the idea path.
+ */
+async function buildStructureBlueprint(rawIdea, postType, client) {
+  const archetypeLines = ARCHETYPE_KEYS.map(key => `- ${key}: ${HOOK_ARCHETYPES[key].trigger}`).join('\n');
+  const postTypeBlock  = postType && ARCHETYPE_POST_TYPE_PREFERENCES[postType]
+    ? `\nPOST GOAL: ${postType.toUpperCase()}\nPreferred archetypes: ${ARCHETYPE_POST_TYPE_PREFERENCES[postType].join(', ')}\nWeight toward these when the input fits multiple.\n`
+    : '';
+
+  try {
+    const response = await client.messages.create({
+      model:       HAIKU_MODEL,
+      max_tokens:  400,
+      temperature: 0,
+      system:      BLUEPRINT_SYSTEM_PROMPT,
+      messages: [{
+        role:    'user',
+        content: `ARCHETYPES:\n${archetypeLines}\n${postTypeBlock}\nRAW IDEA:\n${rawIdea}\n\nReturn the blueprint JSON. hook_draft must reflect the actual content of this specific idea.`,
+      }],
+    });
+
+    const text   = response.content[0]?.text?.trim() || '';
+    const parsed = extractJsonFromResponse(text);
+    const arch   = typeof parsed.archetype === 'string' && ARCHETYPE_KEYS.includes(parsed.archetype.toUpperCase())
+      ? parsed.archetype.toUpperCase()
+      : 'INSIGHT';
+
+    return {
+      archetype:  arch,
+      confidence: typeof parsed.confidence  === 'number' ? parsed.confidence  : 0.5,
+      tension:    typeof parsed.tension     === 'string' ? parsed.tension     : '',
+      arc:        typeof parsed.arc         === 'string' ? parsed.arc         : '',
+      hook_draft: typeof parsed.hook_draft  === 'string' ? parsed.hook_draft  : '',
+    };
+  } catch {
+    return { archetype: 'INSIGHT', confidence: 0.5, tension: '', arc: '', hook_draft: '' };
+  }
+}
+
+/**
+ * Stage 2 system prompt — voice writing only.
+ * Structure is fixed by the blueprint; model's only job is voice, rhythm, specificity.
+ */
+function buildVoiceWritingSystemPrompt(blueprint, userProfile, hookInjectionBlock, ctaInstruction = '', postType = null) {
+  const { tension, arc, hook_draft } = blueprint;
+  const phraseLibraryBlock = buildPhraseLibraryBlock(userProfile);
+  const voiceDNABlock      = buildVoiceDNABlock(userProfile);
+  const postTypeBlock      = buildPostTypeBlock(postType);
+
+  const blueprintBlock = `
+STRUCTURAL BLUEPRINT (non-negotiable — structure is decided; your job is execution):
+- Core tension: ${tension || 'Identify the strongest contradiction or surprise in the raw idea'}
+- Narrative arc: ${arc || 'Open on the tension, build through the evidence, land the resolution'}
+- Hook opening angle: ${hook_draft || 'Lead with the most specific and surprising element'}
+
+Write the post according to this structure. Every sentence must serve this arc.
+`;
+
+  return `You are writing a LinkedIn post for a professional. The structure is already decided. Your job is voice, rhythm, and specificity — nothing else.
+${voiceDNABlock}${phraseLibraryBlock}${postTypeBlock}
+${blueprintBlock}
+${hookInjectionBlock}
+
+CONTENT NICHE: ${userProfile.content_niche || 'not specified'}
+
+AUDIENCE:
+- Who they are: ${userProfile.audience_role || 'professionals in the author\'s field'}
+- What keeps them up at night: ${userProfile.audience_pain || 'professional challenges in their field'}
+
+LINKEDIN FORMATTING (non-negotiable):
+- One sentence per line. Never write paragraph blocks. Every sentence gets its own line.
+- Put a blank line between every 2–3 lines to create visual breathing room.
+- The post must be visually scannable — a wall of text kills engagement before anyone reads it.
+
+ABOVE THE FOLD (critical for reach):
+- LinkedIn shows only the first 2–3 lines before the "see more" truncation.
+- Line 1 is the hook — handled by the archetype instruction above.
+- Lines 2–3 must deepen the tension, not explain or contextualise it.
+- Avoid "not X, not Y" patterns — they are safe but flat. Instead, add a second sharp fact, a stark contrast, or a consequence that makes the hook land harder.
+- Lines 2–3 should make the reader feel they will miss something if they do not click "see more".
+- Never use lines 2–3 for background, setup, or "let me tell you about X" framing.
+
+POINT OF VIEW (non-negotiable):
+Take the strongest defensible position the raw idea supports — not the safest one.
+Never present both sides without choosing one. A hedged first draft cannot be sharpened; a strong one can be dialled back.
+If the idea contains a provocative angle, lead with it — do not bury it in the body.
+${AI_TELLS_PROHIBITION}${SPECIFICITY_MANDATE}${ctaInstruction}
+${SELF_CHECK}`;
+}
+
+/**
+ * Runs Stage 2 Sonnet generation with a blueprint-grounded system prompt.
+ * Used exclusively by ideaToPost() — vault and editorial paths use runSinglePostGeneration().
+ */
+async function runTwoStageGeneration({
+  rawIdea,
+  userProfile,
+  options,
+  blueprint,
+  hookInjection,
+  archetypeUsed,
+  hookConfidence,
+  postType = null,
+  ctaInstruction = '',
+}) {
+  const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
+  if (!apiKey) throw new Error('anthropic_api_key not configured');
+  const client = new Anthropic({ apiKey });
+
+  const systemPrompt    = buildVoiceWritingSystemPrompt(blueprint, userProfile, hookInjection, ctaInstruction, postType);
+  const userPrompt      = buildUserPrompt(rawIdea);
+  const extraHints      = [options._funnelHint, options.qualityRetryHint, options._regenerateHint].filter(Boolean).join('\n\n');
+  const userPromptFinal = extraHints ? `${userPrompt}\n\n${extraHints}` : userPrompt;
+
+  let responseText = '';
+
+  try {
+    const message = await client.messages.create({
+      model:       'claude-sonnet-4-6',
+      max_tokens:  3000,
+      temperature: 0.7,
+      system:      systemPrompt,
+      messages:    [{ role: 'user', content: userPromptFinal }],
+    });
+
+    responseText = message.content[0]?.text?.trim() || '';
+    const validated = validateSinglePostResponse(extractJsonFromResponse(responseText));
+    const cleanPost  = sanitiseAiTells(validated.post);
+    const hookB      = await generateAlternativeHook(cleanPost, archetypeUsed, client);
+    return {
+      synthesis:       validated.synthesis,
+      post:            cleanPost,
+      hookB,
+      ctaAlternatives: validated.ctaAlternatives,
+      archetypeUsed,
+      hookConfidence,
+      stage1Blueprint: blueprint,
+    };
+  } catch (firstErr) {
+    if (firstErr instanceof SyntaxError && responseText) {
+      try {
+        const retry = await client.messages.create({
+          model:       'claude-sonnet-4-6',
+          max_tokens:  3000,
+          temperature: 0.7,
+          system:      systemPrompt,
+          messages: [
+            { role: 'user',      content: userPromptFinal },
+            { role: 'assistant', content: responseText },
+            { role: 'user',      content: 'Return only valid JSON, no other text.' },
+          ],
+        });
+        responseText = retry.content[0]?.text?.trim() || '';
+        const validated = validateSinglePostResponse(extractJsonFromResponse(responseText));
+        const cleanPost  = sanitiseAiTells(validated.post);
+        const hookB      = await generateAlternativeHook(cleanPost, archetypeUsed, client);
+        return {
+          synthesis:       validated.synthesis,
+          post:            cleanPost,
+          hookB,
+          ctaAlternatives: validated.ctaAlternatives,
+          archetypeUsed,
+          hookConfidence,
+          stage1Blueprint: blueprint,
+        };
+      } catch (retryErr) {
+        throw new Error(`Generation failed after retry: ${retryErr.message}`);
+      }
+    }
+    throw firstErr;
+  }
 }
 
 function buildSystemPrompt(userProfile, hookInjectionBlock, ctaInstruction = '', postType = null, tensionStatement = null) {

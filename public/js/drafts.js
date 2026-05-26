@@ -55,7 +55,7 @@ function renderList(posts) {
       ? `<span class="funnel-badge ${post.funnel_type}">${post.funnel_type}</span>` : '';
 
     return `
-      <div class="draft-row" data-post-id="${pid}">
+      <div class="draft-row" data-post-id="${pid}" data-url="${url}">
         <div class="draft-row-meta">
           <span class="draft-row-date">${dateStr}</span>
           <span class="pub-archetype-badge">${archetype}</span>
@@ -64,7 +64,6 @@ function renderList(posts) {
         </div>
         <p class="draft-row-hook">${hook}</p>
         <div class="draft-row-actions">
-          <a href="${url}" class="pub-view-btn">Refine →</a>
           <button type="button" class="draft-row-delete" data-post-id="${pid}" aria-label="Delete draft">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
           </button>
@@ -74,6 +73,7 @@ function renderList(posts) {
 
   container.innerHTML = `<div id="drafts-list">${rows}</div>`;
   bindDeleteButtons(container);
+  bindRowClicks(container);
 }
 
 function renderEmpty() {
@@ -119,6 +119,15 @@ function bindDeleteButtons(container) {
         btn.disabled = false;
         btn.dataset.deleting = '';
       }
+    });
+  });
+}
+
+function bindRowClicks(container) {
+  container.querySelectorAll('.draft-row').forEach(row => {
+    row.addEventListener('click', () => {
+      const url = row.getAttribute('data-url');
+      if (url) window.location.href = url;
     });
   });
 }

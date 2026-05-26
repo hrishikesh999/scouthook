@@ -3685,6 +3685,7 @@ body {
   box-shadow: var(--shadow-sm);
   border-left: 3px solid var(--border);
   transition: box-shadow 0.15s ease, border-color 0.15s ease;
+  cursor: pointer;
 }
 .draft-row:hover {
   box-shadow: var(--shadow-md);

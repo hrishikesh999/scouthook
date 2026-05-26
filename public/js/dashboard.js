@@ -222,7 +222,6 @@ function escHtml(str) {
 
 /* ── Performance tagging ────────────────────────────────────── */
 async function loadPerformance() {
-  // Run both fetches in parallel — they are independent
   await Promise.allSettled([
     loadContentIntelligence(),
     loadPerfNudge(),
@@ -241,23 +240,9 @@ async function loadContentIntelligence() {
   }
 }
 
-async function loadPerfNudge() {
-  try {
-    const res = await fetch('/api/posts/untagged-published', { headers: apiHeaders() });
-    if (!res.ok) return;
-    const data = await res.json();
-    if (!data.ok) return;
-    if (Array.isArray(data.posts) && data.posts.length > 0) {
-      renderPerfNudge(data.posts);
-    }
-  } catch {
-    // Non-fatal
-  }
-}
-
 function renderContentIntelligence(data) {
-  const card   = document.getElementById('content-intelligence');
-  const body   = document.getElementById('ci-body');
+  const card    = document.getElementById('content-intelligence');
+  const body    = document.getElementById('ci-body');
   const countEl = document.getElementById('ci-tag-count');
   if (!card || !body) return;
 
@@ -266,7 +251,7 @@ function renderContentIntelligence(data) {
   const rows = [];
 
   if (data.archetypes?.length > 0) {
-    const top = data.archetypes[0];
+    const top  = data.archetypes[0];
     const rate = top.total > 0 ? Math.round((top.strong_count / top.total) * 100) : 0;
     rows.push(`<div class="ci-insight">
       <span class="ci-label">Best hook type</span>
@@ -287,54 +272,187 @@ function renderContentIntelligence(data) {
   card.hidden = false;
 }
 
-function renderPerfNudge(posts) {
-  const card = document.getElementById('perf-nudge');
-  const list = document.getElementById('perf-nudge-list');
-  if (!card || !list) return;
+/* ── Performance rating modal ────────────────────────────────── */
+let _perfPosts       = [];
+let _perfIndex       = 0;
+let _perfDismissKey  = '';
 
-  list.innerHTML = posts.map(post => {
-    const firstLine = (post.content || '').split('\n').find(l => l.trim()) || '';
-    const dateStr   = post.published_at
-      ? new Date(post.published_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
-      : '';
-    return `<div class="perf-nudge-row" data-post-id="${post.id}">
-      <div class="perf-nudge-text">
-        <span class="perf-nudge-hook">${escHtml(firstLine)}</span>
-        <span class="perf-nudge-date">${escHtml(dateStr)}</span>
-      </div>
-      <div class="perf-nudge-btns" aria-label="Rate this post">
-        <button class="perf-btn" data-tag="strong" title="Strong — got leads, DMs or strong engagement">🔥</button>
-        <button class="perf-btn" data-tag="decent" title="Decent — some engagement, nothing remarkable">👍</button>
-        <button class="perf-btn" data-tag="weak"   title="Weak — little engagement">👎</button>
-      </div>
-    </div>`;
-  }).join('');
+async function loadPerfNudge() {
+  try {
+    const authData = await window.scouthookAuthReady;
+    const userId   = authData?.user?.user_id || 'anon';
+    _perfDismissKey = `sh_perf_dismissed_${userId}`;
 
-  list.querySelectorAll('.perf-btn').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const row    = btn.closest('.perf-nudge-row');
-      const postId = row?.dataset.postId;
-      const tag    = btn.dataset.tag;
-      if (!postId || !tag) return;
+    const res = await fetch('/api/posts/untagged-published', { headers: apiHeaders() });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!data.ok || !Array.isArray(data.posts) || data.posts.length === 0) return;
 
-      try {
-        const r = await fetch(`/api/posts/${encodeURIComponent(postId)}/performance`, {
-          method:  'POST',
-          headers: { ...apiHeaders(), 'Content-Type': 'application/json' },
-          body:    JSON.stringify({ tag }),
-        });
-        if (r.ok) {
-          row.innerHTML = `<div class="perf-nudge-done">Rated as <strong>${tag}</strong> — thanks!</div>`;
-          const remaining = list.querySelectorAll('.perf-nudge-row').length;
-          if (remaining === 0) card.hidden = true;
-        }
-      } catch {
-        // Non-fatal
-      }
+    const now        = Date.now();
+    const dismissed  = JSON.parse(localStorage.getItem(_perfDismissKey) || '[]');
+    const qualifying = data.posts.filter(p => {
+      if (!p.published_at) return false;
+      const ageMs = now - new Date(p.published_at).getTime();
+      return ageMs >= 24 * 60 * 60 * 1000 && !dismissed.includes(String(p.id));
     });
+
+    if (qualifying.length === 0) return;
+
+    _perfPosts = qualifying;
+    _perfIndex = 0;
+
+    // Let the page settle, then auto-show
+    setTimeout(openPerfModal, 1500);
+  } catch {
+    // Non-fatal
+  }
+}
+
+function openPerfModal() {
+  const overlay = document.getElementById('perf-modal-overlay');
+  if (!overlay) return;
+  _renderPerfModalContent();
+  overlay.hidden = false;
+}
+
+function closePerfModal() {
+  const overlay = document.getElementById('perf-modal-overlay');
+  if (overlay) overlay.hidden = true;
+}
+
+function _renderPerfModalContent() {
+  const post    = _perfPosts[_perfIndex];
+  const preview = document.getElementById('perf-modal-preview');
+  const countEl = document.getElementById('perf-modal-count');
+  if (!post) { closePerfModal(); return; }
+
+  if (preview) preview.textContent = post.content || '';
+
+  if (countEl) {
+    countEl.textContent = _perfPosts.length > 1
+      ? `${_perfIndex + 1} of ${_perfPosts.length}`
+      : '';
+  }
+
+  // Bind buttons each time content changes
+  document.querySelectorAll('.perf-modal-btn').forEach(btn => {
+    const clone = btn.cloneNode(true);
+    btn.replaceWith(clone);
+  });
+  document.querySelectorAll('.perf-modal-btn').forEach(btn => {
+    btn.addEventListener('click', () => _submitPerfRating(btn.dataset.tag));
   });
 
-  card.hidden = false;
+  const skip = document.getElementById('perf-modal-skip');
+  if (skip) {
+    const freshSkip = skip.cloneNode(true);
+    skip.replaceWith(freshSkip);
+    freshSkip.addEventListener('click', () => _advancePerfModal(true));
+  }
+}
+
+async function _submitPerfRating(tag) {
+  const post = _perfPosts[_perfIndex];
+  if (!post) return;
+
+  const modal = document.getElementById('perf-modal');
+  if (!modal) return;
+
+  try {
+    const r = await fetch(`/api/posts/${encodeURIComponent(post.id)}/performance`, {
+      method:  'POST',
+      headers: { ...apiHeaders(), 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ tag }),
+    });
+    if (r.ok) _showPerfSuccess(tag, modal);
+    else _advancePerfModal(false);
+  } catch {
+    _advancePerfModal(false);
+  }
+}
+
+function _showPerfSuccess(tag, modal) {
+  const meta = {
+    strong: { emoji: '🔥', title: "That's the data we needed!", sub: 'ScoutHook is learning what makes your audience light up.' },
+    decent: { emoji: '👍', title: 'Good to know!',              sub: 'Every data point helps us sharpen your future posts.' },
+    weak:   { emoji: '👎', title: 'Thanks for being honest!',   sub: 'Knowing what didn\'t land is just as valuable as knowing what did.' },
+  };
+  const m = meta[tag] || meta.decent;
+
+  modal.innerHTML = `
+    <div class="perf-modal-success">
+      <span class="perf-modal-success-emoji">${m.emoji}</span>
+      <h2 class="perf-modal-success-title">${m.title}</h2>
+      <p class="perf-modal-success-sub">${m.sub}</p>
+    </div>`;
+
+  setTimeout(() => _advancePerfModal(false), 1800);
+}
+
+function _advancePerfModal(wasDismissed) {
+  if (wasDismissed) {
+    const post      = _perfPosts[_perfIndex];
+    const dismissed = JSON.parse(localStorage.getItem(_perfDismissKey) || '[]');
+    if (post && !dismissed.includes(String(post.id))) {
+      dismissed.push(String(post.id));
+      localStorage.setItem(_perfDismissKey, JSON.stringify(dismissed));
+    }
+  }
+
+  _perfIndex++;
+  if (_perfIndex >= _perfPosts.length) {
+    closePerfModal();
+    return;
+  }
+
+  // Restore modal shell for next post
+  const modal = document.getElementById('perf-modal');
+  if (modal) {
+    modal.innerHTML = _perfModalShellHTML();
+    _renderPerfModalContent();
+  }
+}
+
+function _perfModalShellHTML() {
+  return `
+      <div class="perf-modal-header">
+        <div class="perf-modal-clock">⏰</div>
+        <h2 class="perf-modal-title" id="perf-modal-title">24 hours later… how did it go?</h2>
+        <p class="perf-modal-subtitle">Your post has been live for a day. Rate it below — it takes 3 seconds and makes every future post smarter.</p>
+      </div>
+      <div class="perf-modal-preview-wrap">
+        <div class="perf-modal-preview-label">Your post</div>
+        <div class="perf-modal-preview" id="perf-modal-preview"></div>
+      </div>
+      <div class="perf-modal-why">
+        <span class="perf-modal-why-icon">💡</span>
+        <div class="perf-modal-why-body">
+          <span class="perf-modal-why-label">Why we ask</span>
+          <span class="perf-modal-why-text">Your rating trains ScoutHook's Content Intelligence engine. After just 3 ratings, you'll unlock insights on which hook styles and posting days drive the most engagement for <em>your</em> audience — not some generic average.</span>
+        </div>
+      </div>
+      <p class="perf-modal-rating-label">How did this post perform?</p>
+      <div class="perf-modal-btns">
+        <button class="perf-modal-btn" data-tag="strong">
+          <span class="perf-modal-btn-emoji">🔥</span>
+          <span class="perf-modal-btn-label">Strong</span>
+          <span class="perf-modal-btn-desc">Got leads, DMs, or real engagement</span>
+        </button>
+        <button class="perf-modal-btn" data-tag="decent">
+          <span class="perf-modal-btn-emoji">👍</span>
+          <span class="perf-modal-btn-label">Decent</span>
+          <span class="perf-modal-btn-desc">Some engagement, nothing remarkable</span>
+        </button>
+        <button class="perf-modal-btn" data-tag="weak">
+          <span class="perf-modal-btn-emoji">👎</span>
+          <span class="perf-modal-btn-label">Weak</span>
+          <span class="perf-modal-btn-desc">Little to no engagement</span>
+        </button>
+      </div>
+      <div class="perf-modal-footer">
+        <button class="perf-modal-skip" id="perf-modal-skip">Skip for now</button>
+        <span class="perf-modal-count" id="perf-modal-count"></span>
+      </div>`;
 }
 
 /* ── Voice Profile Card ──────────────────────────────────────── */

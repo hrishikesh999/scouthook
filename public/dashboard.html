@@ -72,15 +72,6 @@
       <div id="ci-body" class="ci-body"></div>
     </div>
 
-    <!-- Zone 1.7: Rate untagged published posts -->
-    <div id="perf-nudge" class="posts-card perf-nudge-card" hidden role="region" aria-label="Rate your recent posts">
-      <div class="card-header">
-        <span class="card-title">How did these posts perform?</span>
-        <span class="card-subtitle">Quick ratings help ScoutHook learn what works for you</span>
-      </div>
-      <div id="perf-nudge-list"></div>
-    </div>
-
     <!-- Zone 2: Recent posts -->
     <div class="posts-card" role="region" aria-label="Recent posts">
       <div class="card-header">
@@ -108,6 +99,50 @@
     </footer>
 
   </div><!-- /main-content -->
+
+  <!-- ── Performance Rating Modal ─────────────────────────────── -->
+  <div id="perf-modal-overlay" class="perf-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="perf-modal-title" hidden>
+    <div class="perf-modal" id="perf-modal">
+      <div class="perf-modal-header">
+        <div class="perf-modal-clock">⏰</div>
+        <h2 class="perf-modal-title" id="perf-modal-title">24 hours later… how did it go?</h2>
+        <p class="perf-modal-subtitle">Your post has been live for a day. Rate it below — it takes 3 seconds and makes every future post smarter.</p>
+      </div>
+      <div class="perf-modal-preview-wrap">
+        <div class="perf-modal-preview-label">Your post</div>
+        <div class="perf-modal-preview" id="perf-modal-preview"></div>
+      </div>
+      <div class="perf-modal-why">
+        <span class="perf-modal-why-icon">💡</span>
+        <div class="perf-modal-why-body">
+          <span class="perf-modal-why-label">Why we ask</span>
+          <span class="perf-modal-why-text">Your rating trains ScoutHook's Content Intelligence engine. After just 3 ratings, you'll unlock insights on which hook styles and posting days drive the most engagement for <em>your</em> audience — not some generic average.</span>
+        </div>
+      </div>
+      <p class="perf-modal-rating-label">How did this post perform?</p>
+      <div class="perf-modal-btns">
+        <button class="perf-modal-btn" data-tag="strong">
+          <span class="perf-modal-btn-emoji">🔥</span>
+          <span class="perf-modal-btn-label">Strong</span>
+          <span class="perf-modal-btn-desc">Got leads, DMs, or real engagement</span>
+        </button>
+        <button class="perf-modal-btn" data-tag="decent">
+          <span class="perf-modal-btn-emoji">👍</span>
+          <span class="perf-modal-btn-label">Decent</span>
+          <span class="perf-modal-btn-desc">Some engagement, nothing remarkable</span>
+        </button>
+        <button class="perf-modal-btn" data-tag="weak">
+          <span class="perf-modal-btn-emoji">👎</span>
+          <span class="perf-modal-btn-label">Weak</span>
+          <span class="perf-modal-btn-desc">Little to no engagement</span>
+        </button>
+      </div>
+      <div class="perf-modal-footer">
+        <button class="perf-modal-skip" id="perf-modal-skip">Skip for now</button>
+        <span class="perf-modal-count" id="perf-modal-count"></span>
+      </div>
+    </div>
+  </div>
 
   <script src="/js/session.js"></script>
   <script src="/js/ui-toast.js"></script>

@@ -198,7 +198,7 @@ router.get('/connect', async (req, res) => {
     : from === 'generate'
     ? '/generate.html?linkedin=connected'
     : from === 'preview'
-    ? '/preview.html?linkedin=connected'
+    ? '/editor.html?linkedin=connected'
     : from === 'settings'
     ? '/settings.html?linkedin_connected=true#voice-stage-6'
     : '/account.html?linkedin_connected=true';

@@ -573,6 +573,14 @@
   <!-- Overlay -->
   <div id="overlay" class="overlay" aria-hidden="true"></div>
 
+  <!-- Success sheet (shown after publish or schedule) -->
+  <div id="success-sheet" class="success-sheet" role="dialog" aria-modal="true" aria-labelledby="success-sheet-heading" aria-hidden="true" tabindex="-1">
+    <div class="success-sheet-icon" id="success-sheet-icon" aria-hidden="true"></div>
+    <h2 class="success-sheet-heading" id="success-sheet-heading"></h2>
+    <p class="success-sheet-sub" id="success-sheet-sub"></p>
+    <div class="success-sheet-actions" id="success-sheet-actions"></div>
+  </div>
+
   </div>
   <!-- /main-content -->
 
@@ -650,7 +658,8 @@ function truncMediaName(name, max = 18) {
 function overlayVisible() {
   return document.getElementById('schedule-modal').classList.contains('visible') ||
          document.getElementById('slide-over').classList.contains('open') ||
-         document.getElementById('media-drawer').classList.contains('open');
+         document.getElementById('media-drawer').classList.contains('open') ||
+         document.getElementById('success-sheet').classList.contains('visible');
 }
 
 function maybeHideOverlay() {
@@ -1416,6 +1425,67 @@ function showPublishedState(label) {
   if (labelEl) labelEl.textContent = label;
 }
 
+function openSuccessSheet({ icon, heading, sub, primaryHtml, secondaryHref, secondaryLabel }) {
+  const sheet    = document.getElementById('success-sheet');
+  const ov       = document.getElementById('overlay');
+  document.getElementById('success-sheet-icon').textContent    = icon;
+  document.getElementById('success-sheet-heading').textContent = heading;
+  document.getElementById('success-sheet-sub').textContent     = sub;
+  const actionsEl = document.getElementById('success-sheet-actions');
+  actionsEl.innerHTML = `
+    ${primaryHtml}
+    <a href="${secondaryHref}" class="success-sheet-secondary">${secondaryLabel}</a>`;
+  sheet.classList.add('visible');
+  sheet.setAttribute('aria-hidden', 'false');
+  sheet.focus();
+  ov.classList.add('visible');
+  ov.setAttribute('aria-hidden', 'false');
+}
+
+function closeSuccessSheet() {
+  const sheet = document.getElementById('success-sheet');
+  sheet.classList.remove('visible');
+  sheet.setAttribute('aria-hidden', 'true');
+  maybeHideOverlay();
+}
+
+function showPublishSuccessSheet(linkedinPostId) {
+  if (typeof confetti === 'function') {
+    confetti({ particleCount: 80, angle: 60,  spread: 60, origin: { x: 0,   y: 0.7 }, zIndex: 9999 });
+    confetti({ particleCount: 80, angle: 120, spread: 60, origin: { x: 1,   y: 0.7 }, zIndex: 9999 });
+    setTimeout(() => {
+      confetti({ particleCount: 50, spread: 80, origin: { x: 0.5, y: 0.6 }, zIndex: 9999 });
+    }, 250);
+  }
+  const viewHref = linkedinPostId
+    ? `https://www.linkedin.com/feed/update/${linkedinPostId}/`
+    : null;
+  const primaryHtml = viewHref
+    ? `<a href="${viewHref}" target="_blank" rel="noopener noreferrer" class="success-sheet-primary">View on LinkedIn →</a>`
+    : `<a href="/Published.html" class="success-sheet-primary">See published posts →</a>`;
+  openSuccessSheet({
+    icon: '🎉',
+    heading: 'Live on LinkedIn!',
+    sub: 'Your post is out there. Come back in 24 hours to rate how it performed.',
+    primaryHtml,
+    secondaryHref: '/generate.html?new=1',
+    secondaryLabel: 'Write another post',
+  });
+}
+
+function showScheduleSuccessSheet(scheduledFor) {
+  const d = new Date(scheduledFor);
+  const when = d.toLocaleString(undefined, { weekday: 'long', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  openSuccessSheet({
+    icon: '📅',
+    heading: 'Scheduled!',
+    sub: `Going live ${when}. We'll publish it automatically — no action needed.`,
+    primaryHtml: `<a href="/schedule.html" class="success-sheet-primary">View your schedule →</a>`,
+    secondaryHref: '/generate.html?new=1',
+    secondaryLabel: 'Write another post',
+  });
+}
+
 /* ════════════════════════════════════════════════════════════════════════
    SCHEDULE MODAL
 ════════════════════════════════════════════════════════════════════════ */
@@ -1949,7 +2019,8 @@ function bindEvents() {
 
   /* Overlay */
   document.getElementById('overlay').addEventListener('click', () => {
-    if (document.getElementById('schedule-modal').classList.contains('visible'))  closeModal();
+    if (document.getElementById('success-sheet').classList.contains('visible'))   closeSuccessSheet();
+    else if (document.getElementById('schedule-modal').classList.contains('visible'))  closeModal();
     else if (document.getElementById('slide-over').classList.contains('open'))    closeSlideOver();
     else if (document.getElementById('media-drawer').classList.contains('open'))  closeMediaDrawer();
   });
@@ -1957,7 +2028,8 @@ function bindEvents() {
   /* ESC */
   document.addEventListener('keydown', e => {
     if (e.key !== 'Escape') return;
-    if (document.getElementById('schedule-modal').classList.contains('visible'))  closeModal();
+    if (document.getElementById('success-sheet').classList.contains('visible'))   closeSuccessSheet();
+    else if (document.getElementById('schedule-modal').classList.contains('visible'))  closeModal();
     else if (document.getElementById('slide-over').classList.contains('open'))    closeSlideOver();
     else if (document.getElementById('media-drawer').classList.contains('open'))  closeMediaDrawer();
   });
@@ -2035,7 +2107,7 @@ function wireSchedule() {
       closeModal();
       scheduleEditLocked = true;
       applyScheduleLockUi(scheduledFor);
-      if (window.toast?.success) window.toast.success('Post scheduled successfully.');
+      showScheduleSuccessSheet(scheduledFor);
     } catch (err) {
       modalErr.textContent = err.message || 'Something went wrong. Try again.';
       modalErr.classList.add('visible');
@@ -2075,7 +2147,7 @@ function wireSchedule() {
       attachedAssetUrl = null; attachedAssetType = null; attachedPreviewUrl = null; attachedSlideCount = 0;
       document.getElementById('asset-chip').classList.add('hidden');
       document.getElementById('asset-chip-label').textContent = '';
-      if (window.toast?.success) window.toast.success('Post published successfully.');
+      showPublishSuccessSheet(data.linkedin_post_id);
     } catch (err) {
       btn.textContent = 'Publish now'; btn.disabled = false;
       modalErr.textContent = err.message || 'Publish failed. Please try again.';

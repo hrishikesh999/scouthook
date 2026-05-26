@@ -42,14 +42,14 @@ Aim for 150–250 words. Convert posts that bury the CTA in 400 words don't conv
 
 const SPECIFICITY_MANDATE = `
 SPECIFICITY RULE:
-Every claim needs a number, a name, a timeframe, or a concrete scene.
-If the raw idea is missing specifics: use [SPECIFIC NEEDED] as a marker — do NOT fabricate statistics or invent metrics.
-A placeholder is honest. A fabricated number destroys trust when the reader asks for the source.`;
+Any number, name, timeframe, or concrete detail that appears in the raw idea is sacred — preserve it verbatim, never approximate or generalise it.
+Never invent statistics, metrics, or outcomes that are not in the input.
+When the input has no numbers: do NOT use [SPECIFIC NEEDED] markers and do NOT invent figures. Instead, ground the post in what IS concrete — the specific scenario, the named decision, the role of the person, the direction of change, the exact moment. "I stopped sending follow-up emails entirely" is specific. "I changed my outreach approach" is not. The situation itself is the specificity — use it.`;
 
 const SELF_CHECK = `
 SELF-CHECK BEFORE OUTPUTTING:
 1. Does line 1 stop the scroll without needing context? If not, rewrite it.
-2. Is there a concrete number, scene, or named moment? If vague, use [SPECIFIC NEEDED].
+2. Is the post grounded in the concrete details from the input — a specific scenario, decision, moment, or role? If it reads as generic advice that could apply to anyone, rewrite it using the specific situation in the raw idea. Do NOT add [SPECIFIC NEEDED] markers.
 3. Are any banned words or em dashes present? If yes, replace them.
 4. Does the closing match the post goal? (reach=open question, trust=reframe, convert=direct ask)
 5. Would someone who knows this author think "that sounds like them"? If not, rewrite.
@@ -276,7 +276,7 @@ function buildUserPrompt(rawIdea) {
   return `RAW IDEA:
 ${rawIdea}
 
-EXTRACTION INSTRUCTION: Before structuring the post, identify the most specific experience, result, or data point in the raw idea. If the input is too vague (no concrete outcome, no opinion, no specific moment), mark missing specifics with [SPECIFIC NEEDED]. Never invent numbers, names, timeframes, or outcomes.
+EXTRACTION INSTRUCTION: Before structuring the post, identify the most concrete element in the raw idea — a specific scenario, decision, moment, named role, direction of change, or result. Build from that. If the input has no numbers, do not add or invent any — the scenario itself is the specificity. Never use [SPECIFIC NEEDED] markers. If the input is genuinely abstract with no concrete anchor, produce the strongest possible post from the material given, grounded in the author's niche and voice.
 
 Return ONLY valid JSON in this exact structure:
 {
@@ -706,8 +706,8 @@ async function assessInputQuality(text, client) {
       messages: [{
         role:    'user',
         content: `Does this text contain:
-1. A CONCRETE SPECIFIC — a real number, result, timeframe, named scenario, or measurable outcome?
-2. GENUINE TENSION — a surprising outcome, unpopular opinion, personal failure, or unexpected result?
+1. A CONCRETE SPECIFIC — any of: a real number or metric, a named scenario or situation, a specific decision that was made, a before/after state (even without numbers), a named role or type of person, a specific moment in time, or a particular action taken? Note: specificity does NOT require numbers. "I stopped sending follow-up emails" is specific. "I changed my approach" is not.
+2. GENUINE TENSION — a surprising outcome, unpopular opinion, personal failure, counterintuitive result, or a belief that contradicts conventional wisdom?
 
 TEXT: ${text.slice(0, 1200)}
 
@@ -724,14 +724,14 @@ Return only: {"has_specific": true/false, "has_tension": true/false}`,
 function buildContentFeedback({ hasSpecific, hasTension }) {
   if (hasSpecific && hasTension) return null;
   const missing = [];
-  if (!hasSpecific) missing.push('a concrete result, number, or specific moment');
+  if (!hasSpecific) missing.push('a concrete scenario, specific decision, or named situation');
   if (!hasTension)  missing.push('a surprising outcome, an unpopular view, or a personal failure');
   return `To push this post further: add ${missing.join(' and ')}.`;
 }
 
 function buildSubstancePrompt({ hasSpecific, hasTension }) {
   if (hasSpecific || hasTension) return null;
-  return 'This input has no specific outcome and no surprising angle — two things that drive LinkedIn reach. Add one sentence with a real number, result, or contrarian view and the post will perform significantly better.';
+  return 'This input is quite general — add the specific situation, decision, or moment behind it and the post will be significantly stronger. What exactly happened? Who was involved? What specifically changed?';
 }
 
 async function restructureToPost(sourceText, userProfile, documentContext = null, options = {}) {

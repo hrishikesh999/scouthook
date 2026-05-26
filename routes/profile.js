@@ -220,6 +220,14 @@ router.post('/', async (req, res) => {
     }).catch(() => {});
   }
 
+  // When onboarding completes, generate niche-specific input examples (fire-and-forget)
+  if (obComplete === 1 && !existing?.onboarding_complete) {
+    const { generateInputExamples } = require('../services/inputCoach');
+    generateInputExamples(userId, tenantId).catch(err => {
+      console.error('[profile] generateInputExamples failed (non-fatal):', err.message);
+    });
+  }
+
   return res.json({ ok: true, profile_id: profileId, fingerprint_updated: samplesChanged });
 });
 
@@ -425,6 +433,27 @@ Be concrete — use the exact audience and niche provided. No preamble, no quote
     return res.json({ ok: true, business_positioning: positioning });
   } catch (err) {
     console.error('[profile] generate-positioning error:', err.message);
+    return res.status(500).json({ ok: false, error: 'generation_failed' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/profile/generate-input-examples
+// Generates niche-specific textarea placeholder examples and stores them.
+// Called manually (e.g. from settings) or auto-triggered at onboarding completion.
+// ---------------------------------------------------------------------------
+router.post('/generate-input-examples', async (req, res) => {
+  if (!req.userId) return res.status(401).json({ ok: false, error: 'unauthenticated' });
+
+  try {
+    const { generateInputExamples } = require('../services/inputCoach');
+    await generateInputExamples(req.userId, req.tenantId);
+    const row = await db
+      .prepare('SELECT input_examples FROM user_profiles WHERE user_id = ? AND tenant_id = ?')
+      .get(req.userId, req.tenantId);
+    return res.json({ ok: true, input_examples: row?.input_examples || null });
+  } catch (err) {
+    console.error('[profile] generate-input-examples error:', err.message);
     return res.status(500).json({ ok: false, error: 'generation_failed' });
   }
 });

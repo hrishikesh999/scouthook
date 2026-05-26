@@ -406,6 +406,70 @@
     }
     .vqb-cta:hover { text-decoration: underline; }
 
+    /* ── Micro-interview panel ───────────────────────────────── */
+    #micro-interview-toggle {
+      display: none;
+      margin-top: 6px;
+      font-size: 0.8125rem;
+      color: var(--text-muted);
+      background: none;
+      border: none;
+      padding: 0;
+      cursor: pointer;
+      font-family: var(--font-sans);
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+    #micro-interview-toggle.visible { display: inline-block; }
+    #micro-interview {
+      display: none;
+      margin-top: 10px;
+      background: color-mix(in srgb, var(--brand) 5%, var(--bg-surface));
+      border: 1px solid color-mix(in srgb, var(--brand) 20%, transparent);
+      border-radius: 10px;
+      padding: 16px;
+      gap: 14px;
+      flex-direction: column;
+    }
+    #micro-interview.visible { display: flex; }
+    .mi-label {
+      font-size: 0.6875rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 4px;
+    }
+    .mi-question { font-size: 0.875rem; color: var(--text-body); margin: 0 0 6px; line-height: 1.45; }
+    .mi-field {
+      width: 100%;
+      box-sizing: border-box;
+      background: var(--bg-page, var(--bg));
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 9px 12px;
+      font-size: 0.875rem;
+      font-family: var(--font-sans);
+      color: var(--text-body);
+      resize: none;
+      line-height: 1.45;
+    }
+    .mi-field:focus { outline: none; border-color: var(--brand); }
+    #mi-submit {
+      align-self: flex-end;
+      padding: 8px 18px;
+      background: var(--brand);
+      color: #fff;
+      border: none;
+      border-radius: 999px;
+      font-size: 0.8125rem;
+      font-weight: 600;
+      font-family: var(--font-sans);
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    #mi-submit:hover { opacity: 0.88; }
+
     /* ── Processing screen ───────────────────────────────────── */
     #processing-screen {
       display: none;
@@ -474,6 +538,23 @@
           </div>
           <textarea id="chat-input" rows="4" aria-label="Your idea"></textarea>
           <div id="specificity-nudge" role="status" aria-live="polite"></div>
+          <button id="micro-interview-toggle" type="button">Help me find my story →</button>
+          <div id="micro-interview" role="region" aria-label="Story finder">
+            <div class="mi-label">3 quick questions</div>
+            <div>
+              <p class="mi-question">What happened that you didn't expect?</p>
+              <textarea class="mi-field" id="mi-q1" rows="2" placeholder="e.g. The client said yes before I finished the pitch."></textarea>
+            </div>
+            <div>
+              <p class="mi-question">What changed — even if you can't put a number on it?</p>
+              <textarea class="mi-field" id="mi-q2" rows="2" placeholder="e.g. Signed the same day. Or: the tone of the relationship completely shifted."></textarea>
+            </div>
+            <div>
+              <p class="mi-question">What would most people in your field have done differently?</p>
+              <textarea class="mi-field" id="mi-q3" rows="2" placeholder="e.g. They would have followed up with a 20-slide deck. I just sent one number."></textarea>
+            </div>
+            <button id="mi-submit" type="button">Use this as my input →</button>
+          </div>
           <div id="intent-row">
             <span class="intent-label">This post should →</span>
             <button class="intent-btn" data-type="reach" type="button">Grow my audience</button>

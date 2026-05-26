@@ -16,6 +16,8 @@ let mixRecommended      = null;
 let selectedVaultIdeaId = null; // set when user picks a vault idea
 let _tensionResult      = null; // { tension, missing } from silent extraction
 let _tensionDebounce    = null; // debounce timer for extraction on input
+let _nichePlaceholders  = [];   // niche-specific placeholder examples loaded from profile
+let _nicheProfile       = null; // cached profile for niche-aware nudge (content_niche)
 
 /* ── DOM refs ────────────────────────────────────────────────── */
 const guidedChat          = document.getElementById('guided-chat');
@@ -197,6 +199,11 @@ function selectType(type) {
   hideSpecificityNudge();
 
   chat.init(type);
+  applyNichePlaceholder();
+
+  const miToggle = document.getElementById('micro-interview-toggle');
+  if (miToggle) miToggle.classList.toggle('visible', type !== 'lead_magnet');
+  closeMicroInterview();
 }
 
 /* ── Mix recommendation ──────────────────────────────────────── */
@@ -708,14 +715,49 @@ function hideProcessingScreen() {
 }
 
 /* ── Specificity nudge ───────────────────────────────────────── */
+const NICHE_SIGNALS = {
+  finance:    /revenue|profit|arr|mrr|valuation|\$|%|quarter|fiscal|roi|irr|cagr|ebitda/i,
+  sales:      /pipeline|quota|close rate|deal|prospect|revenue|%|conversion|outreach|signed/i,
+  marketing:  /ctr|conversion|roas|cpa|impressions|leads|funnel|campaign|traffic|%/i,
+  coaching:   /session|client|transformation|weeks|results|breakthrough|shift|outcome/i,
+  recruiting: /hire|candidate|offer|interview|retention|headcount|role|weeks/i,
+  product:    /user|retention|churn|feature|release|sprint|roadmap|nps|activation|%/i,
+  legal:      /case|settlement|ruling|compliance|contract|risk|statute|judgment/i,
+  consulting: /engagement|deliverable|stakeholder|framework|revenue|client|weeks/i,
+  leadership: /team|culture|retention|performance|quarters|decision|morale|report/i,
+};
+
+function getNicheSignalRegex(niche) {
+  if (!niche) return null;
+  const lower = niche.toLowerCase();
+  for (const [key, rx] of Object.entries(NICHE_SIGNALS)) {
+    if (lower.includes(key)) return rx;
+  }
+  return null;
+}
+
+const VAGUE_PHRASES = /\b(things|stuff|approach|better|improved|more|less|different|changed|helped|worked|good|great|best|impact|results|success|growth|strategy|solution|method|process|system|way|manner)\b/gi;
+
+function isLikelyVague(val) {
+  const words = val.trim().split(/\s+/).length;
+  if (words < 8) return false;
+  const vagueMatches = (val.match(VAGUE_PHRASES) || []).length;
+  // Vague if more than 30% of words are generic filler with no concrete anchor
+  const hasConcreteAnchor = /\b(stopped|fired|hired|quit|sent|called|refused|decided|pivoted|cut|doubled|tripled|lost|won|walked|said|told|asked|built|launched|closed|signed|left|joined)\b/i.test(val)
+    || /\d/.test(val)
+    || /"[^"]+"/.test(val); // quoted speech is specific
+  return vagueMatches >= 3 && !hasConcreteAnchor;
+}
+
 function checkSpecificityNudge(val) {
   if (!val || !selectedType || selectedType === 'lead_magnet') { hideSpecificityNudge(); return; }
-  const hasNumbers = /\d/.test(val);
-  if (val.length < 30) { hideSpecificityNudge(); return; }
-  if (val.length < 80 && !hasNumbers) {
-    showSpecificityNudge('Add a specific result, number, or decision — generic inputs produce generic posts.');
-  } else if (val.length >= 80 && !hasNumbers) {
-    showSpecificityNudge('No numbers yet — a percentage, revenue figure, or timeframe makes this far more memorable.');
+  if (val.length < 40) { hideSpecificityNudge(); return; }
+
+  const niche = _nicheProfile?.content_niche || '';
+
+  if (isLikelyVague(val)) {
+    const nicheLabel = niche ? `in ${niche}` : 'in your work';
+    showSpecificityNudge(`What specifically happened ${nicheLabel}? Name the decision, the moment, or who was involved — that's what makes posts memorable.`);
   } else {
     hideSpecificityNudge();
   }
@@ -728,6 +770,47 @@ function hideSpecificityNudge() {
   specificityNudge.classList.remove('visible');
   clearTimeout(_nudgeDebounce);
 }
+
+/* ── Micro-interview ─────────────────────────────────────────── */
+function closeMicroInterview() {
+  const panel = document.getElementById('micro-interview');
+  if (panel) panel.classList.remove('visible');
+}
+
+document.getElementById('micro-interview-toggle')?.addEventListener('click', () => {
+  const panel = document.getElementById('micro-interview');
+  if (!panel) return;
+  const opening = !panel.classList.contains('visible');
+  panel.classList.toggle('visible', opening);
+  if (opening) document.getElementById('mi-q1')?.focus();
+});
+
+document.getElementById('mi-submit')?.addEventListener('click', () => {
+  const q1 = document.getElementById('mi-q1')?.value.trim();
+  const q2 = document.getElementById('mi-q2')?.value.trim();
+  const q3 = document.getElementById('mi-q3')?.value.trim();
+  if (!q1) { document.getElementById('mi-q1')?.focus(); return; }
+
+  const parts = [q1];
+  if (q2) parts.push(q2);
+  if (q3) parts.push(`What most people would have done: ${q3}`);
+  const assembled = parts.join(' ');
+
+  chatInput.value        = assembled;
+  chatInput.style.height = 'auto';
+  chatInput.style.height = chatInput.scrollHeight + 'px';
+  chatInput.focus();
+  closeMicroInterview();
+  hideSpecificityNudge();
+  checkSpecificityNudge(assembled);
+  if (assembled.length >= 40) chat.fireTensionExtraction(assembled);
+
+  // Clear fields for next use
+  ['mi-q1', 'mi-q2', 'mi-q3'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+});
 
 /* ── Error helpers ───────────────────────────────────────────── */
 function showChatError(html) {
@@ -754,14 +837,19 @@ function hideSubstanceWarning() {
   chatSubstanceWarn.classList.remove('visible');
 }
 
-/* ── Profile gate ────────────────────────────────────────────── */
+/* ── Profile gate + niche placeholder ───────────────────────── */
 async function checkProfileGate() {
   try {
     const res  = await fetch('/api/profile', { headers: apiHeaders() });
     const data = await res.json();
     if (!data.ok) return;
     const profile = data.profile || {};
-    if (!profile.content_niche?.trim()) showProfileNudge();
+    _nicheProfile = profile;
+    if (!profile.content_niche?.trim()) {
+      showProfileNudge();
+    } else {
+      loadNichePlaceholder(profile);
+    }
   } catch { /* gate fails open */ }
 }
 
@@ -772,6 +860,23 @@ function showProfileNudge() {
   nudge.className = 'profile-gate-nudge';
   nudge.innerHTML = '<strong>Your voice profile is empty.</strong> Posts will be generic until you tell ScoutHook your niche and audience. <a href="/settings.html#voice">Set it up now →</a>';
   guidedChat.insertAdjacentElement('beforebegin', nudge);
+}
+
+function loadNichePlaceholder(profile) {
+  if (!profile?.input_examples) return;
+  try {
+    const examples = JSON.parse(profile.input_examples);
+    if (!Array.isArray(examples) || examples.length === 0) return;
+    _nichePlaceholders = examples.filter(e => typeof e === 'string' && e.trim());
+    applyNichePlaceholder();
+  } catch { /* malformed JSON — ignore */ }
+}
+
+function applyNichePlaceholder() {
+  if (!_nichePlaceholders.length) return;
+  if (!selectedType || selectedType === 'lead_magnet') return;
+  const example = _nichePlaceholders[Math.floor(Math.random() * _nichePlaceholders.length)];
+  if (!chatInput.value.trim()) chatInput.placeholder = example;
 }
 
 /* ── Vault empty-state quality banner ───────────────────────── */

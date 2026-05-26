@@ -8,6 +8,7 @@ const { ideaToPost, restructureToPost, vaultSeedToPost } = require('../services/
 const { generateLeadMagnetPost } = require('../services/leadMagnetPath');
 const { classifyContent } = require('../services/funnelClassifier');
 const { canGeneratePost } = require('../services/subscription');
+const { improvePost } = require('../services/improvePost');
 const { sendEmailToUser } = require('../emails');
 
 // ---------------------------------------------------------------------------
@@ -637,6 +638,76 @@ router.post('/regenerate/:postId', async (req, res) => {
 
   } catch (err) {
     console.error('[generate/regenerate] Error:', err.message);
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/generate/improve/:postId
+// Token-efficient post improvement using targeted flag-driven fixes.
+// Uses Haiku + prompt caching — roughly 10–20x cheaper than a full regenerate.
+// ---------------------------------------------------------------------------
+router.post('/improve/:postId', async (req, res) => {
+  const userId   = req.userId;
+  const tenantId = req.tenantId;
+  const { postId } = req.params;
+
+  if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
+
+  try {
+    const row = await db.prepare(`
+      SELECT content, quality_flags, quality_score, format_slug, funnel_type
+      FROM generated_posts
+      WHERE id = ? AND user_id = ? AND tenant_id = ?
+    `).get(postId, userId, tenantId);
+
+    if (!row) return res.status(404).json({ ok: false, error: 'post_not_found' });
+
+    // No-op gate: if already at 90+ there is nothing to improve
+    if ((row.quality_score || 0) >= 90) {
+      return res.json({ ok: true, improved: false, reason: 'score_already_high' });
+    }
+
+    let flags = [];
+    try { flags = JSON.parse(row.quality_flags || '[]'); } catch {}
+
+    const userProfile = await db
+      .prepare('SELECT * FROM user_profiles WHERE user_id = ? AND tenant_id = ?')
+      .get(userId, tenantId);
+
+    if (!userProfile) {
+      return res.status(400).json({ ok: false, error: 'complete_profile_first' });
+    }
+
+    const result = await improvePost(row.content, flags, userProfile, {
+      formatSlug: row.format_slug || null,
+      funnelType: row.funnel_type || null,
+    });
+
+    // Persist improved content + updated quality score
+    await db.prepare(`
+      UPDATE generated_posts
+      SET content = ?, quality_score = ?, quality_flags = ?, passed_gate = ?,
+          quality_verdict = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND user_id = ? AND tenant_id = ?
+    `).run(
+      result.post,
+      result.quality.score,
+      JSON.stringify(result.quality.flags),
+      result.quality.passed ? 1 : 0,
+      result.quality.verdict || null,
+      postId, userId, tenantId,
+    );
+
+    return res.json({
+      ok:      true,
+      improved: result.changed,
+      post:    result.post,
+      quality: result.quality,
+    });
+
+  } catch (err) {
+    console.error('[generate/improve] Error:', err.message);
     return res.status(500).json({ ok: false, error: err.message });
   }
 });

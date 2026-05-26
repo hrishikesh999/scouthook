@@ -727,13 +727,19 @@ function triggerPerfectCelebration() {
     setTimeout(() => { ring.style.animation = ''; }, 800);
   }
   if (typeof confetti !== 'function') return;
-  // Two-cannon burst from the sides
-  confetti({ particleCount: 60, angle: 60,  spread: 55, origin: { x: 0,    y: 0.65 } });
-  confetti({ particleCount: 60, angle: 120, spread: 55, origin: { x: 1,    y: 0.65 } });
+  confetti({ particleCount: 60, angle: 60,  spread: 55, origin: { x: 0,   y: 0.65 } });
+  confetti({ particleCount: 60, angle: 120, spread: 55, origin: { x: 1,   y: 0.65 } });
   setTimeout(() => {
-    confetti({ particleCount: 40, angle: 75,  spread: 45, origin: { x: 0.2,  y: 0.5  } });
-    confetti({ particleCount: 40, angle: 105, spread: 45, origin: { x: 0.8,  y: 0.5  } });
+    confetti({ particleCount: 40, angle: 75,  spread: 45, origin: { x: 0.2, y: 0.5 } });
+    confetti({ particleCount: 40, angle: 105, spread: 45, origin: { x: 0.8, y: 0.5 } });
   }, 220);
+}
+
+function triggerPerfectCelebrationOnce() {
+  const key = 'celebrated_perfect_' + currentPostId;
+  if (sessionStorage.getItem(key)) return;
+  sessionStorage.setItem(key, '1');
+  triggerPerfectCelebration();
 }
 
 function renderQualityScore(quality) {
@@ -769,8 +775,11 @@ function renderQualityScore(quality) {
 
   if (isPerf && perfectBd) {
     perfectBd.hidden = false;
-    // Celebrate only on the transition from a non-perfect score → 100
-    if (_lastRenderedScore !== null && _lastRenderedScore < 100) {
+    if (_lastRenderedScore === null) {
+      // Page load: celebrate once per session (prevents re-fire on refresh)
+      triggerPerfectCelebrationOnce();
+    } else if (_lastRenderedScore < 100) {
+      // Live edit: score just crossed into 100 — always celebrate the achievement
       triggerPerfectCelebration();
     }
   } else if (perfectBd) {

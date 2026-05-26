@@ -58,7 +58,7 @@
     '  </div>',
     '  <nav class="sidebar-nav">',
     '    ' + link('/dashboard.html', svgDashboard, 'Dashboard'),
-    '    ' + link('/vault.html',     svgVault,     'Content Vault'),
+    '    ' + link('/vault.html',     svgVault,     'Idea Vault'),
     '    ' + link('/drafts.html',    svgDrafts,    'Drafts'),
     '    ' + link('/schedule.html',  svgSchedule,  'Schedule'),
     '    ' + link('/Published.html', svgPublished, 'Published'),

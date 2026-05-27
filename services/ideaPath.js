@@ -33,26 +33,42 @@ function getLengthGuidance(funnelType) {
   return (targets[funnelType] || targets.default).guidance;
 }
 
-function buildPostTypeBlock(postType) {
+// Archetype-specific length guidance — used when the archetype is known at build time
+const ARCHETYPE_LENGTH_NOTES = {
+  BEFORE_AFTER:      'TARGET LENGTH: 400–600 words. This archetype requires a real before scene, a clear turning point, and a developed after. Compress either end and the transformation loses impact. Do not truncate.',
+  CONFESSION:        'TARGET LENGTH: 380–560 words. This archetype lives on narrative texture — the emotional arc needs room to breathe. A compressed confession feels hollow.',
+  NUMBER:            'TARGET LENGTH: 320–480 words. Each item must be a developed point with a sentence of context, not a bare one-liner. Earn the list.',
+  STAKES:            'TARGET LENGTH: 350–500 words. The consequence chain must be traced clearly — what was at risk, what happened, what it cost or delivered.',
+  CONTRARIAN:        'TARGET LENGTH: 300–450 words. The argument needs both the claim and the evidence or counter-evidence. One line of proof is not enough.',
+  INSIGHT:           'TARGET LENGTH: 280–420 words. Develop the idea fully — state it, show the reasoning, land the implication. Do not state and immediately close.',
+  PATTERN_INTERRUPT: 'TARGET LENGTH: 250–400 words. The hook does the heavy lifting; the body earns it. Develop each move without padding.',
+  DIRECT_ADDRESS:    'TARGET LENGTH: 280–420 words. Focused and reader-centric. Each sentence must serve the reader, not the author.',
+};
+
+function buildPostTypeBlock(postType, archetype = null) {
+  const lengthLine = archetype && ARCHETYPE_LENGTH_NOTES[archetype]
+    ? ARCHETYPE_LENGTH_NOTES[archetype]
+    : null;
+
   const blocks = {
     reach: `POST GOAL: REACH
 This post must attract new readers outside the author's existing audience.
 Body structure: Hook → tension or contradiction → resolution → open question
 Hook preference (in order): BEFORE_AFTER, CONFESSION, PATTERN_INTERRUPT
 Closing: An open question or binary choice. No selling. No DM asks.
-Aim for 200–300 words. Reach posts that exceed this rarely outperform shorter ones.`,
+${lengthLine || 'TARGET LENGTH: 250–500 words depending on the archetype. Story arcs (BEFORE_AFTER, CONFESSION) need 400+ words to land the transformation. Insight and pattern-interrupt hooks can be tighter. Do not truncate the arc to stay short.'}`,
     trust: `POST GOAL: TRUST
 This post must deepen credibility with readers who already follow the author.
 Body structure: State a belief → provide evidence or reasoning → land the implication
 Hook preference (in order): INSIGHT, CONTRARIAN, DIRECT_ADDRESS
 Closing: A reframe or reflection question that cements authority. No direct selling.
-Aim for 250–400 words. Trust posts need enough depth to earn authority.`,
+${lengthLine || 'TARGET LENGTH: 350–600 words. Trust posts earn authority by showing the reasoning, not just stating the conclusion. Every structural move — setup, evidence, implication — must be complete. Do not wrap up before the argument lands.'}`,
     convert: `POST GOAL: CONVERT
 This post must move warm readers toward a DM, call, or next step.
 Body structure: Name a specific problem → describe the solution → state the specific result → invite action
 Hook preference (in order): NUMBER, STAKES, BEFORE_AFTER
 Closing: One direct ask. DM, comment a word, or follow. One ask only. No "link in bio."
-Aim for 150–250 words. Convert posts that bury the CTA in 400 words don't convert.`,
+${lengthLine || 'TARGET LENGTH: 200–380 words. Long enough to be credible, tight enough to stay focused on the single ask. Do not bury the CTA in unnecessary setup.'}`,
   };
   return postType && blocks[postType] ? `\n${blocks[postType]}\n` : '';
 }
@@ -63,6 +79,16 @@ Any number, name, timeframe, or concrete detail that appears in the raw idea is 
 Never invent statistics, metrics, or outcomes that are not in the input.
 When the input has no numbers: do NOT use [SPECIFIC NEEDED] markers and do NOT invent figures. Instead, ground the post in what IS concrete — the specific scenario, the named decision, the role of the person, the direction of change, the exact moment. "I stopped sending follow-up emails entirely" is specific. "I changed my outreach approach" is not. The situation itself is the specificity — use it.
 NEVER output placeholder text in square brackets (e.g. [specific result], [add detail here], [your niche], [metric]). Square brackets break the post and are never acceptable. If a concrete detail is missing, write around it naturally using the author's niche and audience context — or make a plausible inference from what is given.`;
+
+const NARRATIVE_DEPTH_MANDATE = `
+NARRATIVE DEPTH (non-negotiable):
+Develop each structural move fully — not as a summary, but as a complete scene, argument, or beat.
+- BEFORE state: enough specificity that the reader recognises the situation. One sentence is not enough.
+- TURNING POINT: the moment must feel real and earned — name the decision, the realisation, or the result.
+- AFTER state / implication: developed enough that the reader understands the change, not just that change happened.
+- EVIDENCE or REASONING: one line of proof is not enough. Show the logic. Trace the consequence.
+Length emerges from development — write until each structural move is complete, then stop.
+Never truncate a narrative arc just to keep the post short. A post that earns its length outperforms a compressed one every time.`;
 
 const SELF_CHECK = `
 SELF-CHECK BEFORE OUTPUTTING:
@@ -293,10 +319,10 @@ async function buildStructureBlueprint(rawIdea, postType, client, userProfile = 
  * Structure is fixed by the blueprint; model's only job is voice, rhythm, specificity.
  */
 function buildVoiceWritingSystemPrompt(blueprint, userProfile, hookInjectionBlock, ctaInstruction = '', postType = null) {
-  const { tension, arc, hook_draft } = blueprint;
+  const { tension, arc, hook_draft, archetype } = blueprint;
   const phraseLibraryBlock = buildPhraseLibraryBlock(userProfile);
   const voiceDNABlock      = buildVoiceDNABlock(userProfile);
-  const postTypeBlock      = buildPostTypeBlock(postType);
+  const postTypeBlock      = buildPostTypeBlock(postType, archetype);
 
   const blueprintBlock = `
 STRUCTURAL BLUEPRINT (non-negotiable — structure is decided; your job is execution):
@@ -305,6 +331,7 @@ STRUCTURAL BLUEPRINT (non-negotiable — structure is decided; your job is execu
 - Hook opening angle: ${hook_draft || 'Lead with the most specific and surprising element'}
 
 Write the post according to this structure. Every sentence must serve this arc.
+Develop each structural move fully — do not summarise or compress. The before needs enough specificity to feel real. The turn needs to land. The after needs enough detail to show what changed. Earn the length.
 `;
 
   return `You are writing a LinkedIn post for a professional. The structure is already decided. Your job is voice, rhythm, and specificity — nothing else.
@@ -335,7 +362,7 @@ POINT OF VIEW (non-negotiable):
 Take the strongest defensible position the raw idea supports — not the safest one.
 Never present both sides without choosing one. A hedged first draft cannot be sharpened; a strong one can be dialled back.
 If the idea contains a provocative angle, lead with it — do not bury it in the body.
-${AI_TELLS_PROHIBITION}${SPECIFICITY_MANDATE}${ctaInstruction}
+${AI_TELLS_PROHIBITION}${SPECIFICITY_MANDATE}${NARRATIVE_DEPTH_MANDATE}${ctaInstruction}
 ${SELF_CHECK}`;
 }
 
@@ -422,11 +449,11 @@ async function runTwoStageGeneration({
   }
 }
 
-function buildSystemPrompt(userProfile, hookInjectionBlock, ctaInstruction = '', postType = null, tensionStatement = null) {
+function buildSystemPrompt(userProfile, hookInjectionBlock, ctaInstruction = '', postType = null, tensionStatement = null, archetype = null) {
   const tensionBlock = buildTensionBlock(tensionStatement);
   const phraseLibraryBlock = buildPhraseLibraryBlock(userProfile);
   const fingerprintBlock = buildVoiceDNABlock(userProfile);
-  const postTypeBlock = buildPostTypeBlock(postType);
+  const postTypeBlock = buildPostTypeBlock(postType, archetype);
   return `You are an editorial thinking partner for a professional who creates LinkedIn content. Your job is to take a raw idea and transform it into one polished, high-quality LinkedIn post that sounds exactly like the author — not like AI.
 ${tensionBlock}${phraseLibraryBlock}
 ${fingerprintBlock}${postTypeBlock}
@@ -473,7 +500,7 @@ POINT OF VIEW (non-negotiable):
 Take the strongest defensible position the raw idea supports — not the safest one.
 Never present both sides without choosing one. A hedged first draft cannot be sharpened; a strong one can be dialled back.
 If the idea contains a provocative angle, lead with it — do not bury it in the body.
-${AI_TELLS_PROHIBITION}${SPECIFICITY_MANDATE}${ctaInstruction}
+${AI_TELLS_PROHIBITION}${SPECIFICITY_MANDATE}${NARRATIVE_DEPTH_MANDATE}${ctaInstruction}
 ${SELF_CHECK}`;
 }
 
@@ -625,7 +652,7 @@ async function runSinglePostGeneration({
   const ctaHint = HOOK_ARCHETYPES[archetypeUsed]?.ctaHint || null;
   const effectiveFunnelType = funnelType || postType;
   const ctaInstruction = buildCtaInstruction(effectiveFunnelType, ctaHint, convertCtaIntent);
-  const systemPrompt = systemOverride || buildSystemPrompt(userProfile, hookInjection, ctaInstruction, postType, tensionStatement);
+  const systemPrompt = systemOverride || buildSystemPrompt(userProfile, hookInjection, ctaInstruction, postType, tensionStatement, archetypeUsed);
   let userPrompt = userPromptOverride || buildUserPrompt(rawIdea);
 
   const extraHints = [
@@ -832,7 +859,7 @@ Take the strongest defensible position the raw idea supports — not the safest 
 Never present both sides without choosing one. A hedged first draft cannot be sharpened; a strong one can be dialled back.
 If the idea contains a provocative angle, lead with it — do not bury it in the body.
 
-${AI_TELLS_PROHIBITION}${SPECIFICITY_MANDATE}
+${AI_TELLS_PROHIBITION}${SPECIFICITY_MANDATE}${NARRATIVE_DEPTH_MANDATE}
 ${SELF_CHECK}`;
 }
 

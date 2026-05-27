@@ -43,10 +43,10 @@ const LINKEDIN_RULES = {
 
   /** Target word counts by funnel type — injected into generation prompts */
   postLengthTargets: {
-    reach:   { min: 100, max: 200, guidance: 'Keep it punchy and conversational — 100 to 200 words. Reach posts lose tension when they run long.' },
-    trust:   { min: 280, max: 420, guidance: 'Develop the idea fully — 280 to 420 words. Trust posts earn authority by showing the reasoning, not just stating the conclusion. Do not wrap up before the argument is complete.' },
-    convert: { min: 180, max: 320, guidance: 'Be specific enough to paint the transformation clearly — 180 to 320 words. Long enough to be credible, tight enough to stay focused.' },
-    default: { min: 150, max: 350, guidance: 'Develop the idea fully — 150 to 350 words. Do not truncate before the idea is complete.' },
+    reach:   { min: 200, max: 500, guidance: 'Develop the narrative fully — 200 to 500 words depending on the archetype. Story archetypes (BEFORE_AFTER, CONFESSION) need 400+ words; insight or pattern-interrupt hooks can be 200–350. Do not truncate before the arc is complete.' },
+    trust:   { min: 350, max: 600, guidance: 'Develop the idea fully — 350 to 600 words. Trust posts earn authority by showing the reasoning, not just stating the conclusion. Every structural move — setup, evidence, implication — must be complete. Do not wrap up before the argument lands.' },
+    convert: { min: 200, max: 380, guidance: 'Be specific enough to paint the transformation clearly — 200 to 380 words. Long enough to be credible, tight enough to stay focused on the single ask.' },
+    default: { min: 200, max: 500, guidance: 'Develop the idea fully — 200 to 500 words. Develop each structural move until the arc is complete. Do not truncate.' },
   },
 };
 

@@ -18,6 +18,8 @@ let _tensionResult      = null; // { tension, missing } from silent extraction
 let _tensionDebounce    = null; // debounce timer for extraction on input
 let _nichePlaceholders  = [];   // niche-specific placeholder examples loaded from profile
 let _nicheProfile       = null; // cached profile for niche-aware nudge (content_niche)
+let _shownVaultIds      = new Set(); // vault idea IDs shown this session — rotates on each click
+let _shownAITopics      = [];        // AI topic titles shown this session — passed as exclusion list
 
 /* ── DOM refs ────────────────────────────────────────────────── */
 const guidedChat          = document.getElementById('guided-chat');
@@ -268,7 +270,11 @@ async function loadVaultPanel(type, onItemSelected) {
         ...allIdeas.filter(i => i.funnel_type !== mixHint),
       ];
     }
-    const ideas = allIdeas.slice(0, 3);
+
+    // Prefer unseen ideas; fall back to all if fewer than 3 unseen remain
+    const unseen = allIdeas.filter(i => !_shownVaultIds.has(i.id));
+    const ideas  = (unseen.length >= 3 ? unseen : allIdeas).slice(0, 3);
+    ideas.forEach(i => _shownVaultIds.add(i.id));
 
     if (ideas.length) {
       renderVaultPanel(panel,
@@ -277,14 +283,18 @@ async function loadVaultPanel(type, onItemSelected) {
       return;
     }
 
-    // For suggest-topics: use mixRecommended as post_type hint if available,
-    // otherwise return a balanced mix without type bias.
+    // For suggest-topics: use mixRecommended as post_type hint if available.
+    // Pass previously shown topic titles so the model avoids repeating them.
     const sugType = mixHint || (type || null);
-    const sugUrl  = `/api/vault/suggest-topics` + (sugType ? `?post_type=${encodeURIComponent(sugType)}` : '');
+    const excludeParam = _shownAITopics.length
+      ? `&exclude_topics=${encodeURIComponent(JSON.stringify(_shownAITopics.slice(-6)))}`
+      : '';
+    const sugUrl  = `/api/vault/suggest-topics?` + (sugType ? `post_type=${encodeURIComponent(sugType)}` : '') + excludeParam;
     const sugRes  = await fetch(sugUrl, { headers: apiHeaders() });
     const sugData = await sugRes.json();
     const topics  = (sugData.topics || []).slice(0, 3);
     if (topics.length) {
+      _shownAITopics.push(...topics.map(t => t.title));
       renderVaultPanel(panel,
         topics.map(t => ({ text: t.textarea_input || t.description || t.title, label: t.title, desc: t.description || '', id: null })),
         'Need a starting point?', onItemSelected);

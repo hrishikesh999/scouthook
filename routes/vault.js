@@ -361,7 +361,9 @@ router.get('/suggest-topics', async (req, res) => {
   const { userId, tenantId } = req;
   if (!requireUser(req, res)) return;
 
-  const { post_type } = req.query;
+  const { post_type, exclude_topics } = req.query;
+  let excluded = [];
+  try { excluded = JSON.parse(exclude_topics || '[]'); if (!Array.isArray(excluded)) excluded = []; } catch { excluded = []; }
 
   try {
     const profile = await db.prepare(
@@ -453,7 +455,7 @@ router.get('/suggest-topics', async (req, res) => {
 
 ${context}
 ${typeGuidanceBlock}
-Each topic must:
+${excluded.length ? `Do NOT suggest any of these previously shown topics:\n${excluded.map(t => `- ${t}`).join('\n')}\n` : ''}Each topic must:
 - Be a concrete, opinionated premise — not a generic category
 - Reflect a real tension, lesson, or contrarian view specific to their niche
 - Feel like something only this person could write

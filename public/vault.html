@@ -55,6 +55,7 @@
             <p class="vault-empty-sub">Upload a PDF, DOCX, or paste a URL to get started.</p>
           </div>
 
+          <div id="vault-mine-banner-slot"></div>
           <div id="vault-doc-list" class="vault-doc-list" style="display:none"></div>
         </section>
 
@@ -95,6 +96,7 @@
   'use strict';
 
   let documents = [];
+  const newlyMinedIds = new Set();
 
   const dropzone     = document.getElementById('vault-dropzone');
   const fileInput    = document.getElementById('vault-file-input');
@@ -272,19 +274,24 @@
       ? `<p style="font-size:0.75rem;color:var(--text-danger);margin:4px 0 0 0">${escHtml(doc.error_message)}</p>` : '';
 
     // Card body is a button only when ideas exist (something to show)
+    const isNewlyMined = newlyMinedIds.has(doc.id) && !!doc.ideas_mined;
     const bodyAttrs = `data-id="${doc.id}" data-name="${escHtml(doc.filename)}" data-count="${doc.ideas_mined || 0}"`;
     const bodyStart = doc.ideas_mined
       ? `<button class="vault-doc-card-body-btn" type="button" title="View ${doc.ideas_mined} mined idea${doc.ideas_mined !== 1 ? 's' : ''}" ${bodyAttrs}>`
       : `<div class="vault-doc-body">`;
     const bodyEnd   = doc.ideas_mined ? `</button>` : `</div>`;
+    const ctaLine   = isNewlyMined
+      ? `<p class="vault-doc-card-cta">✨ ${doc.ideas_mined} idea${doc.ideas_mined !== 1 ? 's' : ''} ready — tap to explore <span class="vault-doc-card-cta-arrow">→</span></p>`
+      : '';
 
     return `
-      <div class="vault-doc-card" data-id="${doc.id}">
+      <div class="vault-doc-card" data-id="${doc.id}"${isNewlyMined ? ' data-newly-mined' : ''}>
         <div class="vault-doc-icon">${icon}</div>
         ${bodyStart}
           <p class="vault-doc-name" title="${escHtml(doc.filename)}">${escHtml(doc.filename)}</p>
           <p class="vault-doc-meta">${escHtml(meta)}</p>
           ${badge}
+          ${ctaLine}
           ${errMsg}
         ${bodyEnd}
         <button class="vault-doc-delete" data-id="${doc.id}" aria-label="Delete ${escHtml(doc.filename)}">
@@ -353,9 +360,17 @@
 
         if (updated.status === 'ready' && updated.ideas_mined) {
           clearUploadStatus();
-          const n    = updated.ideas_mined;
-          const name = updated.filename.length > 40 ? updated.filename.slice(0, 37) + '…' : updated.filename;
-          window.toast?.success(`${n} idea${n !== 1 ? 's' : ''} mined from "${name}" — click to explore`);
+          newlyMinedIds.add(docId);
+          showMineBanner(docId, updated.filename, updated.ideas_mined);
+          renderDocuments();
+          setTimeout(() => {
+            newlyMinedIds.delete(docId);
+            const card = docList.querySelector(`.vault-doc-card[data-id="${docId}"]`);
+            if (card) {
+              card.removeAttribute('data-newly-mined');
+              card.querySelector('.vault-doc-card-cta')?.remove();
+            }
+          }, 45000);
         }
       } catch { /* non-fatal */ }
     }, 3000);
@@ -391,7 +406,39 @@
     ideasOverlay.dataset.docId = '';
   }
 
+  function showMineBanner(docId, filename, count) {
+    const slot  = document.getElementById('vault-mine-banner-slot');
+    const short = filename.length > 45 ? filename.slice(0, 42) + '…' : filename;
+    slot.innerHTML = `
+      <div class="vault-mine-banner" id="vault-mine-banner">
+        <span class="vault-mine-banner-icon">✨</span>
+        <div class="vault-mine-banner-body">
+          <p class="vault-mine-banner-title">${count} idea${count !== 1 ? 's' : ''} mined from &ldquo;${escHtml(short)}&rdquo;</p>
+          <p class="vault-mine-banner-sub">Click the file card below to explore them</p>
+        </div>
+        <button class="vault-mine-banner-btn" id="vault-mine-view-btn">View ideas</button>
+        <button class="vault-mine-banner-dismiss" aria-label="Dismiss">✕</button>
+      </div>`;
+    document.getElementById('vault-mine-view-btn').addEventListener('click', () => {
+      dismissMineBanner();
+      const doc = documents.find(d => d.id === docId);
+      if (doc) openIdeasPanel(docId, doc.filename, doc.ideas_mined);
+    });
+    slot.querySelector('.vault-mine-banner-dismiss').addEventListener('click', dismissMineBanner);
+    setTimeout(dismissMineBanner, 30000);
+  }
+
+  function dismissMineBanner() {
+    const el = document.getElementById('vault-mine-banner');
+    if (el) el.remove();
+  }
+
   async function openIdeasPanel(docId, docFilename, ideaCount) {
+    newlyMinedIds.delete(docId);
+    dismissMineBanner();
+    const card = docList.querySelector(`.vault-doc-card[data-id="${docId}"]`);
+    if (card) card.removeAttribute('data-newly-mined');
+
     ideasOverlay.dataset.docId = String(docId);
     ideasTitle.textContent     = `${ideaCount} idea${ideaCount !== 1 ? 's' : ''} mined`;
     ideasSub.textContent       = docFilename;

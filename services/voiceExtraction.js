@@ -82,7 +82,7 @@ async function getAnthropicClient() {
    Reads fresh from DB, merges into voice_fingerprint, writes new Voice DNA fields.
    ──────────────────────────────────────────────────────────────────────── */
 
-async function extractVoiceDNAFromQA(userId, tenantId) {
+async function extractVoiceDNAFromQA(userId, tenantId, options = {}) {
   try {
     // Read fresh profile from DB — include writing samples and blog articles for richer signal
     const profile = await db.prepare(
@@ -112,10 +112,13 @@ async function extractVoiceDNAFromQA(userId, tenantId) {
 
     const prompt = buildQAExtractionPrompt(profile);
 
-    // Upgrade to Sonnet for this one-time extraction — richer signal is worth the cost.
+    // fast=true uses Haiku for the inline onboarding extraction (~2s).
+    // Default (false) uses Sonnet for richer quality on background re-extractions.
+    const model     = options.fast ? 'claude-haiku-4-5-20251001' : 'claude-sonnet-4-6';
+    const maxTokens = options.fast ? 1000 : 1500;
     const message = await client.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 1500,
+      model,
+      max_tokens: maxTokens,
       messages: [{ role: 'user', content: prompt }],
     });
 

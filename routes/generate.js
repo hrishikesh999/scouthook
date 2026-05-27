@@ -161,12 +161,33 @@ router.post('/', async (req, res) => {
 
   if (!genPath) return res.status(400).json({ ok: false, error: 'missing_path' });
 
-  const userProfile = await db
+  let userProfile = await db
     .prepare('SELECT * FROM user_profiles WHERE user_id = ? AND tenant_id = ?')
     .get(userId, tenantId);
 
   if (!userProfile) {
     return res.status(400).json({ ok: false, error: 'complete_profile_first' });
+  }
+
+  // First onboarding post: Voice DNA extraction fires as fire-and-forget from
+  // the profile save, but the Sonnet call takes 5-15s and generation reads the
+  // profile almost immediately after — so the first post always had an empty
+  // voice fingerprint. Fix: run a fast Haiku extraction inline here (~2s) so
+  // generation always has tone, voice anchors, and authority statements.
+  // The background Sonnet extraction (already running) will overwrite this with
+  // higher-quality results ~10s later, improving all subsequent posts.
+  if (source === 'onboarding' &&
+      !userProfile.voice_fingerprint &&
+      (userProfile.onboarding_q2 || userProfile.onboarding_q3)) {
+    try {
+      const { extractVoiceDNAFromQA } = require('../services/voiceExtraction');
+      await extractVoiceDNAFromQA(userId, tenantId, { fast: true });
+      userProfile = await db
+        .prepare('SELECT * FROM user_profiles WHERE user_id = ? AND tenant_id = ?')
+        .get(userId, tenantId) || userProfile;
+    } catch (err) {
+      console.warn('[generate] Inline voice DNA extraction failed (non-fatal):', err.message);
+    }
   }
 
   // Lazy seed: populate phrase library on first generation if writing samples exist but phrases haven't been extracted yet

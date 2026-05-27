@@ -364,7 +364,7 @@ router.get('/suggest-topics', async (req, res) => {
 
   try {
     const profile = await db.prepare(
-      `SELECT content_niche, audience_role, business_positioning, onboarding_q1
+      `SELECT content_niche, audience_role, business_positioning, contrarian_view
        FROM user_profiles WHERE user_id = ? AND tenant_id = ?`
     ).get(userId, tenantId);
 
@@ -376,7 +376,7 @@ router.get('/suggest-topics', async (req, res) => {
     const audience    = profile?.audience_role         || '';
     const positioning = profile?.business_positioning  || '';
     const headline    = liRow?.linkedin_headline        || '';
-    const contrarian  = profile?.onboarding_q1         || '';
+    const contrarian  = profile?.contrarian_view       || '';
 
     if (!niche && !audience && !positioning && !headline) {
       return res.json({ ok: true, topics: [] });

@@ -19,7 +19,8 @@ const { extractAndChunk, extractAndChunkUrl, mineChunks } = require('../services
 const { classifyContent } = require('../services/funnelClassifier');
 const { canUploadVaultDoc } = require('../services/subscription');
 
-const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
+const HAIKU_MODEL  = 'claude-haiku-4-5-20251001';
+const SONNET_MODEL = 'claude-sonnet-4-6';
 
 const ALLOWED_MIME = new Set(['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/vnd.openxmlformats-officedocument.presentationml.presentation', 'text/plain']);
 const MIME_TO_TYPE = {
@@ -429,7 +430,7 @@ router.get('/suggest-topics', async (req, res) => {
       : '';
 
     const message = await client.messages.create({
-      model:      HAIKU_MODEL,
+      model:      SONNET_MODEL,
       max_tokens: 700,
       messages: [{
         role: 'user',

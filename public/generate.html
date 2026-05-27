@@ -286,115 +286,109 @@
       font-family: var(--font-sans);
     }
 
-    /* ── Micro-interview ────────────────────────────────────── */
-    #micro-interview-toggle {
-      display: none;
-      font-size: 0.8125rem;
-      color: var(--text-muted);
-      background: none;
-      border: none;
-      padding: 0;
-      cursor: pointer;
-      font-family: var(--font-sans);
-      text-decoration: underline;
-      text-underline-offset: 2px;
-      text-align: left;
-    }
-    #micro-interview-toggle.visible { display: inline-block; }
-    #micro-interview {
-      display: none;
-      background: color-mix(in srgb, var(--brand) 5%, var(--bg-surface));
-      border: 1px solid color-mix(in srgb, var(--brand) 20%, transparent);
-      border-radius: 10px;
-      padding: 16px;
-      gap: 14px;
-      flex-direction: column;
-    }
-    #micro-interview.visible { display: flex; }
-    .mi-label {
-      font-size: 0.6875rem;
-      font-weight: 700;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      margin-bottom: 4px;
-    }
-    .mi-question { font-size: 0.875rem; color: var(--text-body); margin: 0 0 6px; line-height: 1.45; }
-    .mi-field {
-      width: 100%;
-      box-sizing: border-box;
-      background: var(--bg-page, var(--bg));
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 9px 12px;
-      font-size: 0.875rem;
-      font-family: var(--font-sans);
-      color: var(--text-body);
-      resize: none;
-      line-height: 1.45;
-    }
-    .mi-field:focus { outline: none; border-color: var(--brand); }
-    #mi-submit {
-      align-self: flex-end;
-      padding: 8px 18px;
-      background: var(--brand);
-      color: #fff;
-      border: none;
-      border-radius: 999px;
-      font-size: 0.8125rem;
-      font-weight: 600;
-      font-family: var(--font-sans);
-      cursor: pointer;
-      transition: opacity 0.15s;
-    }
-    #mi-submit:hover { opacity: 0.88; }
-
-    /* ── Intent chips row (post type selector) ───────────────── */
+    /* ── Intent cards (3-card grid) ──────────────────────────── */
     #intent-row {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      flex-wrap: wrap;
-      padding-top: 2px;
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
       border-top: 1px solid var(--border);
       margin-top: 4px;
       padding-top: 14px;
     }
-    .intent-btn {
-      font-size: 0.8125rem;
-      font-family: var(--font-sans);
-      padding: 6px 13px;
-      border: 1px solid var(--border);
-      border-radius: 999px;
+    .intent-card {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 5px;
+      padding: 12px 14px;
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
       background: var(--bg-surface);
-      color: var(--text-muted);
       cursor: pointer;
-      transition: border-color 0.12s, color 0.12s, background 0.12s;
-      white-space: nowrap;
+      text-align: left;
+      font-family: var(--font-sans);
+      transition: border-color 0.12s, background 0.12s, box-shadow 0.12s;
+      min-height: 80px;
     }
-    .intent-btn:hover {
+    .intent-card:hover {
       border-color: var(--brand);
-      color: var(--text-body);
+      background: color-mix(in srgb, var(--brand) 4%, var(--bg-surface));
+      box-shadow: 0 2px 8px rgba(15,118,110,0.08);
     }
-    .intent-btn.active {
+    .intent-card.active {
       border-color: var(--brand);
-      background: color-mix(in srgb, var(--brand) 10%, var(--bg-surface));
-      color: var(--brand);
-      font-weight: 600;
+      background: color-mix(in srgb, var(--brand) 6%, var(--bg-surface));
     }
-    .intent-btn.recommended::after {
+    .intent-card.recommended::after {
       content: ' ✦';
       font-size: 0.6rem;
       vertical-align: super;
       color: var(--brand);
       opacity: 0.7;
     }
-    .intent-row-label {
+    .intent-card-icon {
+      font-size: 1.25rem;
+      line-height: 1;
+      margin-bottom: 2px;
+    }
+    .intent-card-body {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      flex: 1;
+    }
+    .intent-card-title {
+      font-size: 0.875rem;
+      font-weight: 700;
+      color: var(--text-heading);
+      line-height: 1.2;
+    }
+    .intent-card.active .intent-card-title { color: var(--brand); }
+    .intent-card-desc {
       font-size: 0.75rem;
       color: var(--text-muted);
+      line-height: 1.4;
+    }
+
+    /* Sub-type pills (story / opinion / result) — inside write card */
+    .intent-subtype-row {
+      display: none;
+      gap: 4px;
+      flex-wrap: wrap;
+      padding-top: 8px;
+      border-top: 1px solid var(--border);
+      width: 100%;
+      margin-top: 2px;
+    }
+    .intent-card.active .intent-subtype-row { display: flex; }
+    .intent-subtype-btn {
+      font-size: 0.6875rem;
+      font-family: var(--font-sans);
+      padding: 3px 9px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: var(--bg-surface);
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: border-color 0.1s, color 0.1s, background 0.1s;
       white-space: nowrap;
-      margin-right: 2px;
-      letter-spacing: 0.01em;
+    }
+    .intent-subtype-btn:hover {
+      border-color: var(--brand);
+      color: var(--text-body);
+    }
+    .intent-subtype-btn.active {
+      border-color: var(--brand);
+      background: color-mix(in srgb, var(--brand) 12%, var(--bg-surface));
+      color: var(--brand);
+      font-weight: 600;
+    }
+    .intent-subtype-btn.recommended::after {
+      content: ' ✦';
+      font-size: 0.55rem;
+      vertical-align: super;
+      color: var(--brand);
+      opacity: 0.7;
     }
 
     /* ── Profile gate nudge ─────────────────────────────────── */
@@ -570,7 +564,7 @@
           <!-- Vault quality banner (if no docs) -->
           <div id="vault-quality-banner" style="display:none"></div>
 
-          <!-- Vault / suggested ideas -->
+          <!-- Vault / suggested ideas (loaded on demand by "Get ideas") -->
           <div id="vault-panel" class="vault-panel" style="display:none"></div>
 
           <!-- Chat thread (lead magnet multi-step only) -->
@@ -580,7 +574,7 @@
           <div id="chat-error" role="alert"></div>
           <div id="chat-substance-warning" role="alert">
             <span id="chat-substance-text"></span>
-            <button id="chat-improve-input" type="button">Improve my input →</button>
+            <button id="chat-improve-input" type="button">Try again with more detail →</button>
           </div>
 
           <!-- Textarea with embedded send button -->
@@ -597,33 +591,42 @@
           <!-- Specificity nudge -->
           <div id="specificity-nudge" role="status" aria-live="polite"></div>
 
-          <!-- Story finder -->
-          <button id="micro-interview-toggle" type="button">Not sure what to write? Help me find a story →</button>
-          <div id="micro-interview" role="region" aria-label="Story finder">
-            <div class="mi-label">3 quick questions</div>
-            <div>
-              <p class="mi-question">What happened that you didn't expect?</p>
-              <textarea class="mi-field" id="mi-q1" rows="2" placeholder="e.g. The client said yes before I finished the pitch."></textarea>
-            </div>
-            <div>
-              <p class="mi-question">What changed — even if you can't put a number on it?</p>
-              <textarea class="mi-field" id="mi-q2" rows="2" placeholder="e.g. Signed the same day. Or: the tone of the relationship completely shifted."></textarea>
-            </div>
-            <div>
-              <p class="mi-question">What would most people in your field have done differently?</p>
-              <textarea class="mi-field" id="mi-q3" rows="2" placeholder="e.g. They would have followed up with a 20-slide deck. I just sent one number."></textarea>
-            </div>
-            <button id="mi-submit" type="button">Use this as my input →</button>
-          </div>
-
-          <!-- Post-type chips -->
+          <!-- ── 3-card intent row ─────────────────────────────── -->
           <div id="intent-row">
-            <span class="intent-row-label">Goal:</span>
-            <button class="intent-btn" data-type="reach" type="button">Grow my audience</button>
-            <button class="intent-btn" data-type="trust" type="button">Build my credibility</button>
-            <button class="intent-btn" data-type="convert" type="button">Get client enquiries</button>
-            <button class="intent-btn" data-type="lead_magnet" type="button">Give something away</button>
-          </div>
+
+            <!-- Card 1: Write my post (covers reach / trust / convert) -->
+            <button class="intent-card" id="intent-write" type="button">
+              <span class="intent-card-icon">✍️</span>
+              <div class="intent-card-body">
+                <span class="intent-card-title">Write my post</span>
+                <span class="intent-card-desc">A story, opinion or result</span>
+              </div>
+              <div class="intent-subtype-row" id="intent-subtype-row">
+                <button class="intent-subtype-btn active" data-type="reach" type="button">📖 Story</button>
+                <button class="intent-subtype-btn" data-type="trust" type="button">💡 Opinion</button>
+                <button class="intent-subtype-btn" data-type="convert" type="button">📈 Result</button>
+              </div>
+            </button>
+
+            <!-- Card 2: Get ideas -->
+            <button class="intent-card" id="intent-ideas" type="button">
+              <span class="intent-card-icon">✨</span>
+              <div class="intent-card-body">
+                <span class="intent-card-title">Get ideas</span>
+                <span class="intent-card-desc">From your vault and Voice DNA</span>
+              </div>
+            </button>
+
+            <!-- Card 3: Give something away (lead magnet) -->
+            <button class="intent-card" id="intent-lead-magnet" data-type="lead_magnet" type="button">
+              <span class="intent-card-icon">🎁</span>
+              <div class="intent-card-body">
+                <span class="intent-card-title">Give something away</span>
+                <span class="intent-card-desc">A free resource for your audience</span>
+              </div>
+            </button>
+
+          </div><!-- /#intent-row -->
 
         </div><!-- /#guided-chat -->
 

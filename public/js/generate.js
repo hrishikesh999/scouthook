@@ -21,7 +21,7 @@ let _nicheProfile       = null; // cached profile for niche-aware nudge (content
 
 /* ── DOM refs ────────────────────────────────────────────────── */
 const guidedChat          = document.getElementById('guided-chat');
-const intentBtns          = document.querySelectorAll('.intent-btn');
+const intentBtns          = document.querySelectorAll('.intent-card[data-type]');
 const chatThread          = document.getElementById('chat-thread');
 const chatInput           = document.getElementById('chat-input');
 const chatSendBtn         = document.getElementById('chat-send-btn');
@@ -183,7 +183,36 @@ const EXTRACTION_QUESTIONS = {
 
 
 /* ── Type selection ──────────────────────────────────────────── */
-intentBtns.forEach(btn => btn.addEventListener('click', () => selectType(btn.dataset.type)));
+
+// Sub-type buttons (📖 Story / 💡 Opinion / 📈 Result) inside write card
+document.querySelectorAll('.intent-subtype-btn').forEach(btn => {
+  btn.addEventListener('click', e => {
+    e.stopPropagation();
+    document.querySelectorAll('.intent-subtype-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    selectType(btn.dataset.type);
+  });
+});
+
+// Write card — clicking the card body uses the currently active sub-type
+document.getElementById('intent-write')?.addEventListener('click', () => {
+  const activeSubtype = document.querySelector('.intent-subtype-btn.active')?.dataset.type || 'reach';
+  selectType(activeSubtype);
+});
+
+// Lead magnet card
+document.getElementById('intent-lead-magnet')?.addEventListener('click', () => selectType('lead_magnet'));
+
+// Get ideas card
+document.getElementById('intent-ideas')?.addEventListener('click', () => {
+  document.getElementById('intent-ideas').classList.add('active');
+  document.getElementById('intent-write')?.classList.remove('active');
+  document.getElementById('intent-lead-magnet')?.classList.remove('active');
+  loadVaultPanel(selectedType || 'reach', () => {
+    document.getElementById('intent-ideas')?.classList.remove('active');
+    document.getElementById('intent-write')?.classList.add('active');
+  });
+});
 
 function selectType(type) {
   selectedType        = type;
@@ -193,17 +222,29 @@ function selectType(type) {
   _tensionResult      = null;
   clearTimeout(_tensionDebounce);
 
-  intentBtns.forEach(b => b.classList.toggle('active', b.dataset.type === type));
+  // Update card active states
+  const writeCard = document.getElementById('intent-write');
+  const ideasCard = document.getElementById('intent-ideas');
+  const lmCard    = document.getElementById('intent-lead-magnet');
+  writeCard?.classList.remove('active');
+  ideasCard?.classList.remove('active');
+  lmCard?.classList.remove('active');
+  if (['reach', 'trust', 'convert'].includes(type)) {
+    writeCard?.classList.add('active');
+    // Sync sub-type pill to match
+    document.querySelectorAll('.intent-subtype-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.type === type);
+    });
+  } else if (type === 'lead_magnet') {
+    lmCard?.classList.add('active');
+  }
+
   hideChatError();
   hideSubstanceWarning();
   hideSpecificityNudge();
 
   chat.init(type);
   applyNichePlaceholder();
-
-  const miToggle = document.getElementById('micro-interview-toggle');
-  if (miToggle) miToggle.classList.toggle('visible', type !== 'lead_magnet');
-  closeMicroInterview();
 }
 
 /* ── Mix recommendation ──────────────────────────────────────── */
@@ -226,17 +267,34 @@ async function loadMixRecommendation() {
     if (mixRecommended && mixRecommended !== selectedType && !chatInput.value.trim()) {
       selectType(mixRecommended);
     }
+    // Sync sub-type pill highlight regardless of whether we auto-switched
+    if (['reach', 'trust', 'convert'].includes(mixRecommended)) {
+      document.querySelectorAll('.intent-subtype-btn').forEach(b => {
+        if (b.dataset.type === mixRecommended) b.classList.add('recommended');
+      });
+    }
   } catch { /* non-fatal */ }
 }
 
 function markRecommendedBtn() {
-  intentBtns.forEach(btn => {
-    btn.classList.toggle('recommended', btn.dataset.type === mixRecommended);
-  });
+  const writeCard = document.getElementById('intent-write');
+  const lmCard    = document.getElementById('intent-lead-magnet');
+  writeCard?.classList.remove('recommended');
+  lmCard?.classList.remove('recommended');
+  document.querySelectorAll('.intent-subtype-btn').forEach(b => b.classList.remove('recommended'));
+
+  if (['reach', 'trust', 'convert'].includes(mixRecommended)) {
+    writeCard?.classList.add('recommended');
+    document.querySelectorAll('.intent-subtype-btn').forEach(b => {
+      b.classList.toggle('recommended', b.dataset.type === mixRecommended);
+    });
+  } else if (mixRecommended === 'lead_magnet') {
+    lmCard?.classList.add('recommended');
+  }
 }
 
 /* ── Vault panel ─────────────────────────────────────────────── */
-async function loadVaultPanel(type) {
+async function loadVaultPanel(type, onItemSelected) {
   const panel = document.getElementById('vault-panel');
   if (!panel) return;
   panel.style.display = 'none';
@@ -248,7 +306,7 @@ async function loadVaultPanel(type) {
     if (ideas.length) {
       renderVaultPanel(panel,
         ideas.map(i => ({ text: i.seed_text, label: i.hook_preview || i.seed_text.slice(0, 80), id: i.id })),
-        'From your vault:');
+        'From your vault:', onItemSelected);
       return;
     }
     const sugRes  = await fetch(`/api/vault/suggest-topics?post_type=${type}`, { headers: apiHeaders() });
@@ -257,12 +315,12 @@ async function loadVaultPanel(type) {
     if (topics.length) {
       renderVaultPanel(panel,
         topics.map(t => ({ text: t.textarea_input || t.description || t.title, label: t.title, id: null })),
-        'Need a starting point?');
+        'Need a starting point?', onItemSelected);
     }
   } catch { /* non-fatal */ }
 }
 
-function renderVaultPanel(panel, items, title) {
+function renderVaultPanel(panel, items, title, onItemSelected) {
   panel.innerHTML =
     `<div class="vault-panel-header"><span class="vault-panel-title">${escapeHtml(title)}</span></div>` +
     `<div class="vault-panel-items">${items.map((item, i) =>
@@ -271,6 +329,7 @@ function renderVaultPanel(panel, items, title) {
   panel.querySelectorAll('.vault-panel-item').forEach((btn, i) => {
     btn.addEventListener('click', async () => {
       selectedVaultIdeaId = items[i].id;
+      onItemSelected?.();
 
       // Fill immediately with seed_text for instant feedback
       chatInput.value        = items[i].text;
@@ -421,8 +480,6 @@ const chat = (() => {
         chatInput.style.height = 'auto';
         chatInput.style.height = chatInput.scrollHeight + 'px';
       }
-
-      loadVaultPanel(type);
     }
     updateSendBtn();
     chatInput.focus();
@@ -540,9 +597,9 @@ chatInput.addEventListener('keydown', e => {
 /* ── Generate ────────────────────────────────────────────────── */
 chatImproveInput.addEventListener('click', () => {
   hideSubstanceWarning();
-  const panel = document.getElementById('micro-interview');
-  if (panel) panel.classList.add('visible');
-  document.getElementById('mi-q1')?.focus();
+  chatInput.value = '';
+  chatInput.style.height = '';
+  chatInput.focus();
 });
 
 async function triggerGenerate(opts = {}) {
@@ -786,47 +843,6 @@ function hideSpecificityNudge() {
   specificityNudge.classList.remove('visible');
   clearTimeout(_nudgeDebounce);
 }
-
-/* ── Micro-interview ─────────────────────────────────────────── */
-function closeMicroInterview() {
-  const panel = document.getElementById('micro-interview');
-  if (panel) panel.classList.remove('visible');
-}
-
-document.getElementById('micro-interview-toggle')?.addEventListener('click', () => {
-  const panel = document.getElementById('micro-interview');
-  if (!panel) return;
-  const opening = !panel.classList.contains('visible');
-  panel.classList.toggle('visible', opening);
-  if (opening) document.getElementById('mi-q1')?.focus();
-});
-
-document.getElementById('mi-submit')?.addEventListener('click', () => {
-  const q1 = document.getElementById('mi-q1')?.value.trim();
-  const q2 = document.getElementById('mi-q2')?.value.trim();
-  const q3 = document.getElementById('mi-q3')?.value.trim();
-  if (!q1) { document.getElementById('mi-q1')?.focus(); return; }
-
-  const parts = [q1];
-  if (q2) parts.push(q2);
-  if (q3) parts.push(`What most people would have done: ${q3}`);
-  const assembled = parts.join(' ');
-
-  chatInput.value        = assembled;
-  chatInput.style.height = 'auto';
-  chatInput.style.height = chatInput.scrollHeight + 'px';
-  chatInput.focus();
-  closeMicroInterview();
-  hideSpecificityNudge();
-  checkSpecificityNudge(assembled);
-  if (assembled.length >= 40) chat.fireTensionExtraction(assembled);
-
-  // Clear fields for next use
-  ['mi-q1', 'mi-q2', 'mi-q3'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.value = '';
-  });
-});
 
 /* ── Error helpers ───────────────────────────────────────────── */
 function showChatError(html) {

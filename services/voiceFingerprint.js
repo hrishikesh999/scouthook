@@ -3,16 +3,27 @@
 const Anthropic = require('@anthropic-ai/sdk');
 const { getSetting } = require('../db');
 
+// Handles both legacy plain-string and new JSON-array format for writing_samples.
+function parseSamplesText(raw) {
+  if (!raw) return '';
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return parsed.filter(Boolean).join('\n\n---\n\n');
+  } catch { /* ignore */ }
+  return raw;
+}
+
 /**
  * Extract a 4-key voice fingerprint from writing samples.
  * Uses claude-haiku-4-5 — cheap, fast, no complex reasoning needed.
  * Called once on profile save when writing_samples is provided or updated.
  *
- * @param {string} writingSamples — 2-3 example posts from the user
+ * @param {string} writingSamples — raw writing_samples field (plain string or JSON array)
  * @returns {Promise<{opening_style, sentence_structure, credibility_mechanism, signature_moves}|null>}
  *          Returns null if extraction fails — never throws (profile save must not be blocked)
  */
 async function extractFingerprint(writingSamples) {
+  writingSamples = parseSamplesText(writingSamples);
   const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
   if (!apiKey) {
     console.error('[voiceFingerprint] anthropic_api_key not set in platform_settings');

@@ -5,6 +5,16 @@ const { getSetting } = require('../db');
 
 const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
 
+// Handles both legacy plain-string and new JSON-array format for writing_samples.
+function parseSamplesText(raw) {
+  if (!raw) return '';
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return parsed.filter(Boolean).join('\n\n---\n\n');
+  } catch { /* ignore */ }
+  return raw;
+}
+
 const PHRASE_EXTRACTION_PROMPT = `Extract distinctive phrases from this writing sample that reveal the author's voice.
 
 Focus on:
@@ -22,6 +32,7 @@ Return a JSON array:
 Return only valid JSON. No explanation.`;
 
 async function seedPhrasesFromWritingSamples(userId, tenantId, writingSamples) {
+  writingSamples = parseSamplesText(writingSamples);
   if (!writingSamples || writingSamples.length < 100) return [];
 
   try {

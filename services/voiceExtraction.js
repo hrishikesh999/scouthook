@@ -20,6 +20,17 @@ const {
   extractJsonFromResponse,
 } = require('./voiceFingerprint');
 
+// Normalize writing_samples: handles both legacy plain-string and new JSON array format.
+// Returns a single plain-text string of all samples joined with a separator.
+function parseSamplesText(raw) {
+  if (!raw) return '';
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return parsed.filter(Boolean).join('\n\n---\n\n');
+  } catch { /* ignore — treat as plain string */ }
+  return raw;
+}
+
 // buildFingerprintBlock is defined locally in ideaPath.js (not exported).
 // We inline the same logic here to avoid circular dependencies.
 function buildFingerprintBlock(userProfile) {
@@ -146,7 +157,7 @@ async function extractVoiceDNAFromQA(userId, tenantId) {
     Object.keys(newFields).forEach(k => newFields[k] === undefined && delete newFields[k]);
 
     // Determine extraction source based on available signal
-    const hasWritingSamples = (profile.writing_samples || '').trim().length > 100;
+    const hasWritingSamples = parseSamplesText(profile.writing_samples).trim().length > 100;
     const hasBlogArticles   = (profile.website_articles_text || '').trim().length > 200;
     const extractionSource  = hasWritingSamples && hasBlogArticles ? 'combined'
       : hasWritingSamples ? 'writing_samples'
@@ -233,8 +244,9 @@ function buildQAExtractionPrompt(profile) {
 
   // Build writing signal section — use real writing if available, fall back to Q&A
   const writingSignal = [];
-  if (writing_samples && writing_samples.trim().length > 100) {
-    writingSignal.push(`WRITING SAMPLE (pasted by user — highest fidelity voice signal):\n${writing_samples.trim().slice(0, 2500)}`);
+  const samplesText = parseSamplesText(writing_samples);
+  if (samplesText.trim().length > 100) {
+    writingSignal.push(`WRITING SAMPLE (pasted by user — highest fidelity voice signal):\n${samplesText.trim().slice(0, 2500)}`);
   }
   if (website_articles_text && website_articles_text.trim().length > 200) {
     writingSignal.push(`WEBSITE ARTICLES (crawled from their site — real authored content):\n${website_articles_text.trim().slice(0, 3000)}`);
@@ -418,9 +430,8 @@ function calculateCompletionPct(userProfile, hasLinkedIn = false) {
   if (userProfile.business_positioning) score += 3;
   if (userProfile.content_niche)        score += 2;
 
-  // writing_samples is a plain string (textarea), not a JSON array.
   // Credit based on character length: 200+ chars = baseline, 600+ chars = richer sample.
-  const samplesStr = (userProfile.writing_samples || '').trim();
+  const samplesStr = parseSamplesText(userProfile.writing_samples).trim();
   if (samplesStr.length >= 200)         score += 15;
   if (samplesStr.length >= 600)         score += 5;
 

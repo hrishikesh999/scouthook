@@ -543,8 +543,8 @@ router.get('/posts', async (req, res) => {
     let posts;
     if (status === 'published') {
       posts = await db.prepare(`
-        SELECT id, content, format_slug, likes, comments, reactions,
-               published_at, last_synced_at, linkedin_post_id, asset_type, funnel_type
+        SELECT id, content, format_slug, published_at, linkedin_post_id,
+               asset_type, funnel_type, performance_tag, archetype_used
         FROM   generated_posts
         WHERE  user_id = ? AND tenant_id = ? AND status = 'published'
         ORDER  BY published_at DESC

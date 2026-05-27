@@ -16,11 +16,45 @@ function formatDate(isoString) {
 }
 
 function escHtml(str) {
-  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  return String(str)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 // ---------------------------------------------------------------------------
-// Render
+// State
+// ---------------------------------------------------------------------------
+
+let allPosts  = [];
+let liProfile = null;
+
+const RATING_META = {
+  strong: { emoji: '🔥', label: 'Strong' },
+  decent: { emoji: '👍', label: 'Decent' },
+  weak:   { emoji: '👎', label: 'Weak'   },
+};
+
+// ---------------------------------------------------------------------------
+// LinkedIn profile (cached, fetched in parallel with posts)
+// ---------------------------------------------------------------------------
+
+async function loadLinkedInProfile() {
+  try {
+    const res  = await fetch('/api/linkedin/status', { credentials: 'include' });
+    const data = await res.json();
+    if (data.connected) {
+      liProfile = {
+        name:     data.name     || '',
+        headline: data.headline || '',
+        photoUrl: data.photo_url || null,
+        initials: data.name ? data.name.charAt(0).toUpperCase() : '',
+      };
+    }
+  } catch { /* modal degrades gracefully — shows empty card fields */ }
+}
+
+// ---------------------------------------------------------------------------
+// Render list
 // ---------------------------------------------------------------------------
 
 function renderEmpty() {
@@ -39,32 +73,36 @@ function renderEmpty() {
 function renderList(posts) {
   const list = document.getElementById('published-list');
 
+  const LI_SVG = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>`;
+
   const cards = posts.map(post => {
-    const dateStr   = formatDate(post.published_at);
-    const archetype = toTitleCase(post.format_slug);
-    const hook      = escHtml(((post.content || '').trim().split('\n')[0] || '').trim());
+    const dateStr    = formatDate(post.published_at);
+    const archetype  = toTitleCase(post.format_slug);
+    const hook       = escHtml(((post.content || '').trim().split('\n')[0] || '').trim());
     const assetLabel = post.asset_type === 'carousel' ? 'Carousel'
                      : post.asset_type === 'image'    ? 'Image'
                      : null;
-    const viewHref  = post.linkedin_post_id
+    const viewHref   = post.linkedin_post_id
       ? `https://www.linkedin.com/feed/update/${post.linkedin_post_id}/`
       : null;
+    const perfMeta   = post.performance_tag ? RATING_META[post.performance_tag] : null;
 
     return `
-      <div class="pub-card">
+      <div class="pub-card" data-post-id="${post.id}" role="button" tabindex="0" aria-label="Open post details">
         <div class="pub-card-main">
           <div class="pub-card-info">
             <div class="pub-card-top">
               <span class="pub-card-date">${dateStr}</span>
-              ${archetype    ? `<span class="pub-archetype-badge">${archetype}</span>` : ''}
+              ${archetype        ? `<span class="pub-archetype-badge">${archetype}</span>` : ''}
               ${post.funnel_type ? `<span class="funnel-badge ${post.funnel_type}">${post.funnel_type}</span>` : ''}
-              ${assetLabel   ? `<span class="pub-asset-badge">${assetLabel}</span>` : ''}
+              ${assetLabel       ? `<span class="pub-asset-badge">${assetLabel}</span>` : ''}
+              ${perfMeta         ? `<span class="pub-perf-badge pub-perf-badge--${post.performance_tag}">${perfMeta.emoji} ${perfMeta.label}</span>` : ''}
             </div>
             ${hook ? `<p class="pub-card-hook">${hook}</p>` : ''}
           </div>
           <div class="pub-card-right">
             ${viewHref
-              ? `<a href="${viewHref}" target="_blank" rel="noopener noreferrer" class="pub-view-btn">View on LinkedIn <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a>`
+              ? `<a href="${viewHref}" target="_blank" rel="noopener noreferrer" class="pub-view-btn" data-li-link>View on LinkedIn ${LI_SVG}</a>`
               : `<span class="pub-no-link">Not linked</span>`
             }
           </div>
@@ -73,6 +111,170 @@ function renderList(posts) {
   }).join('');
 
   list.innerHTML = cards;
+
+  list.querySelectorAll('.pub-card').forEach(card => {
+    const postId = Number(card.dataset.postId);
+
+    // LinkedIn link must not bubble up to the card click handler
+    card.querySelector('[data-li-link]')?.addEventListener('click', e => e.stopPropagation());
+
+    card.addEventListener('click', () => {
+      const post = allPosts.find(p => p.id === postId);
+      if (post) openDetail(post);
+    });
+
+    card.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        const post = allPosts.find(p => p.id === postId);
+        if (post) openDetail(post);
+      }
+    });
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Modal — open / close
+// ---------------------------------------------------------------------------
+
+function openDetail(post) {
+  const overlay = document.getElementById('pub-detail-overlay');
+
+  const liLink = document.getElementById('pub-detail-li-link');
+  if (post.linkedin_post_id) {
+    liLink.href   = `https://www.linkedin.com/feed/update/${post.linkedin_post_id}/`;
+    liLink.hidden = false;
+  } else {
+    liLink.hidden = true;
+  }
+
+  populateLiCard(post);
+  renderModalRating(post);
+
+  overlay.dataset.postId       = post.id;
+  overlay.hidden               = false;
+  document.body.style.overflow = 'hidden';
+  document.getElementById('pub-detail-close').focus();
+}
+
+function closeDetail() {
+  document.getElementById('pub-detail-overlay').hidden = true;
+  document.body.style.overflow = '';
+}
+
+// ---------------------------------------------------------------------------
+// LinkedIn card population
+// ---------------------------------------------------------------------------
+
+const SEE_MORE_THRESHOLD = 220;
+
+function populateLiCard(post) {
+  const avatarEl = document.getElementById('pub-li-avatar');
+  const nameEl   = document.getElementById('pub-li-name');
+  const metaEl   = document.getElementById('pub-li-meta');
+  const bodyEl   = document.getElementById('pub-li-body');
+
+  if (liProfile) {
+    nameEl.textContent = liProfile.name;
+    metaEl.textContent = liProfile.headline;
+    if (liProfile.photoUrl) {
+      avatarEl.innerHTML = '';
+      const img = document.createElement('img');
+      img.src           = liProfile.photoUrl;
+      img.alt           = liProfile.name;
+      img.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:50%';
+      avatarEl.appendChild(img);
+    } else {
+      avatarEl.textContent = liProfile.initials;
+    }
+  }
+
+  const content = (post.content || '').trim();
+  bodyEl.innerHTML = '';
+
+  if (content.length <= SEE_MORE_THRESHOLD) {
+    bodyEl.innerHTML = bodyToHtml(content);
+  } else {
+    const truncated = content.slice(0, SEE_MORE_THRESHOLD);
+    const rest      = content.slice(SEE_MORE_THRESHOLD);
+
+    const truncEl = document.createElement('span');
+    truncEl.innerHTML = bodyToHtml(truncated);
+
+    const restEl = document.createElement('span');
+    restEl.innerHTML = bodyToHtml(rest);
+    restEl.hidden    = true;
+
+    const seeMoreBtn = document.createElement('span');
+    seeMoreBtn.className   = 'pub-see-more-btn';
+    seeMoreBtn.textContent = '…see more';
+    seeMoreBtn.addEventListener('click', () => {
+      restEl.hidden = false;
+      seeMoreBtn.remove();
+    });
+
+    bodyEl.appendChild(truncEl);
+    bodyEl.appendChild(restEl);
+    bodyEl.appendChild(seeMoreBtn);
+  }
+}
+
+const LI_LINE_STYLE = `margin:0 0 6px;font-size:14px;line-height:1.55;color:#000;font-family:-apple-system,system-ui,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif`;
+
+function bodyToHtml(text) {
+  return text
+    .split('\n')
+    .map(line => `<p style="${LI_LINE_STYLE}">${escHtml(line) || '&nbsp;'}</p>`)
+    .join('');
+}
+
+// ---------------------------------------------------------------------------
+// Performance rating
+// ---------------------------------------------------------------------------
+
+function renderModalRating(post) {
+  const btnsWrap  = document.getElementById('pub-detail-rating-btns');
+  const badgeWrap = document.getElementById('pub-detail-rated-badge');
+
+  if (post.performance_tag) {
+    const meta = RATING_META[post.performance_tag] || { emoji: '', label: post.performance_tag };
+    badgeWrap.textContent = `${meta.emoji} ${meta.label}`;
+    badgeWrap.className   = `pub-detail-rated-badge pub-detail-rated-badge--${post.performance_tag}`;
+    badgeWrap.hidden      = false;
+    btnsWrap.hidden       = true;
+  } else {
+    btnsWrap.hidden       = false;
+    badgeWrap.hidden      = true;
+  }
+}
+
+async function submitRating(postId, tag) {
+  try {
+    const res  = await fetch(`/api/posts/${postId}/performance`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', ...apiHeaders() },
+      body:    JSON.stringify({ tag }),
+    });
+    const data = await res.json();
+    if (!data.ok) return;
+
+    const post = allPosts.find(p => p.id === postId);
+    if (!post) return;
+    post.performance_tag = tag;
+    renderModalRating(post);
+    refreshCardBadge(postId, tag);
+  } catch { /* silent */ }
+}
+
+function refreshCardBadge(postId, tag) {
+  const top = document.querySelector(`.pub-card[data-post-id="${postId}"] .pub-card-top`);
+  if (!top) return;
+  top.querySelector('.pub-perf-badge')?.remove();
+  const meta  = RATING_META[tag] || { emoji: '', label: tag };
+  const badge = document.createElement('span');
+  badge.className   = `pub-perf-badge pub-perf-badge--${tag}`;
+  badge.textContent = `${meta.emoji} ${meta.label}`;
+  top.appendChild(badge);
 }
 
 // ---------------------------------------------------------------------------
@@ -80,6 +282,30 @@ function renderList(posts) {
 // ---------------------------------------------------------------------------
 
 document.addEventListener('DOMContentLoaded', async () => {
+  // Wire modal controls
+  document.getElementById('pub-detail-close').addEventListener('click', closeDetail);
+
+  document.getElementById('pub-detail-overlay').addEventListener('click', e => {
+    if (e.target === e.currentTarget) closeDetail();
+  });
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && !document.getElementById('pub-detail-overlay').hidden) closeDetail();
+  });
+
+  document.getElementById('pub-detail-rating-btns').addEventListener('click', async e => {
+    const btn = e.target.closest('[data-tag]');
+    if (!btn) return;
+    const tag    = btn.dataset.tag;
+    const postId = Number(document.getElementById('pub-detail-overlay').dataset.postId);
+    if (!postId || !tag) return;
+    btn.disabled = true;
+    await submitRating(postId, tag);
+  });
+
+  // Fetch LinkedIn profile in the background — will be ready well before user clicks
+  loadLinkedInProfile();
+
   try {
     const res  = await fetch('/api/posts?status=published', { headers: apiHeaders() });
     const data = await res.json();
@@ -87,7 +313,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!data.ok || !Array.isArray(data.posts) || data.posts.length === 0) {
       renderEmpty();
     } else {
-      renderList(data.posts);
+      allPosts = data.posts;
+      renderList(allPosts);
     }
   } catch {
     renderEmpty();

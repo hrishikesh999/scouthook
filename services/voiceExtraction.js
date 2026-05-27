@@ -336,16 +336,17 @@ function buildVoiceDNABlock(userProfile) {
     parts.push(`NEVER SAYS (these specific words/phrases would break their voice — avoid absolutely):\n${fp.never_says}`);
   }
 
-  // 3. Positioning (from Q1)
+  // 3. Positioning — extracted ideological stance + functional identity fallback
+  // Guard relaxed: render any available positioning fields, not just when pushes_back_against exists.
+  // Falls back to business_positioning for audience/outcome when fp.positioning is absent or thin.
   const pos = fp.positioning;
-  if (pos?.pushes_back_against) {
-    const posLines = [];
-    if (pos.stands_for)           posLines.push(`Stands for: ${pos.stands_for}`);
-    if (pos.pushes_back_against)  posLines.push(`Pushes back against: ${pos.pushes_back_against}`);
-    if (pos.audience)             posLines.push(`Audience: ${pos.audience}`);
-    if (pos.outcome)              posLines.push(`Outcome they deliver: ${pos.outcome}`);
-    if (posLines.length) parts.push(`POSITIONING:\n${posLines.join('\n')}`);
-  }
+  const posLines = [];
+  if (pos?.stands_for)          posLines.push(`Stands for: ${pos.stands_for}`);
+  if (pos?.pushes_back_against) posLines.push(`Pushes back against: ${pos.pushes_back_against}`);
+  if (pos?.audience)            posLines.push(`Audience: ${pos.audience}`);
+  else if (userProfile.business_positioning) posLines.push(`What they do: ${userProfile.business_positioning}`);
+  if (pos?.outcome)             posLines.push(`Outcome they deliver: ${pos.outcome}`);
+  if (posLines.length)          parts.push(`POSITIONING:\n${posLines.join('\n')}`);
 
   // 4. Authority statements (verbatim from Q3 — weave naturally, never list)
   const statements = safeParseJSON(userProfile.authority_statements, []);

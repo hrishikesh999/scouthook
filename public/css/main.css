@@ -6299,7 +6299,6 @@ a.pub-card {
 
 .post-page {
   padding: var(--space-8);
-  max-width: 680px;
 }
 
 .post-page-header {
@@ -6327,25 +6326,39 @@ a.pub-card {
   align-items: center;
   gap: var(--space-3);
   flex-wrap: wrap;
-  margin-bottom: var(--space-5);
+  margin-bottom: var(--space-6);
+}
+
+/* Two-column: card left, rating right */
+.post-page-content {
+  display: flex;
+  gap: var(--space-10);
+  align-items: flex-start;
 }
 
 .post-page-card {
-  margin-bottom: var(--space-8);
+  flex: 0 0 554px;  /* LinkedIn card natural width */
+  min-width: 0;
 }
 
 .post-page-rating {
-  border-top: 1px solid var(--border-light);
-  padding-top: var(--space-6);
+  flex: 1;
+  min-width: 260px;
+  padding-top: var(--space-2);
 }
 
 .post-page-rating-label {
   font-size: 15px;
   font-weight: 700;
   color: var(--text-heading);
-  margin: 0 0 var(--space-4);
+  margin: 0 0 var(--space-5);
   font-family: var(--font-sans);
-  text-align: center;
+}
+
+/* Rating buttons stack vertically in the right column */
+.post-page-rating .perf-modal-btns {
+  flex-direction: column;
+  margin-bottom: 0;
 }
 
 .post-rated-badge {

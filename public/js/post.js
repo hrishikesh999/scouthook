@@ -30,13 +30,10 @@ function escHtml(str) {
     .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-const LI_LINE_STYLE = `margin:0 0 6px;font-size:14px;line-height:1.55;color:#000;font-family:-apple-system,system-ui,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif`;
-
 function bodyToHtml(text) {
-  return text
-    .split('\n')
-    .map(line => `<p style="${LI_LINE_STYLE}">${escHtml(line) || '&nbsp;'}</p>`)
-    .join('');
+  // white-space: pre-line preserves intentional line breaks without turning
+  // each blank line into a full-height paragraph (LinkedIn's own rendering)
+  return `<div style="font-size:14px;line-height:1.55;color:#000;white-space:pre-line;font-family:-apple-system,system-ui,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif">${escHtml(text)}</div>`;
 }
 
 // ---------------------------------------------------------------------------

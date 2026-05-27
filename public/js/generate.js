@@ -361,12 +361,18 @@ const chat = (() => {
     chatInput.classList.remove('error');
   }
 
+  const ARROW_SVG = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>`;
+
   function updateSendBtn() {
     if (_type === 'lead_magnet') {
       const isLast = chatStep >= CHAT_CONFIGS.lead_magnet.steps.length - 1;
-      chatSendBtn.textContent = isLast ? 'Write my lead magnet →' : 'Next →';
+      chatSendBtn.innerHTML = isLast ? 'Write my lead magnet →' : 'Next →';
+      chatSendBtn.classList.add('text-mode');
+      chatSendBtn.setAttribute('aria-label', isLast ? 'Write lead magnet' : 'Next step');
     } else {
-      chatSendBtn.textContent = 'Generate →';
+      chatSendBtn.innerHTML = ARROW_SVG;
+      chatSendBtn.classList.remove('text-mode');
+      chatSendBtn.setAttribute('aria-label', 'Generate post');
     }
   }
 

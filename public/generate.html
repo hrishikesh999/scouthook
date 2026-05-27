@@ -13,7 +13,7 @@
       flex-direction: column;
       align-items: center;
       justify-content: flex-start;
-      padding: 64px 24px 56px;
+      padding: 56px 24px 56px;
       min-height: 100%;
     }
     .idea-form {
@@ -21,53 +21,344 @@
       max-width: 680px;
       display: flex;
       flex-direction: column;
-      gap: var(--space-4);
+      gap: 0;
     }
 
-    /* ── Question + nudge ────────────────────────────────────── */
+    /* ── Header ──────────────────────────────────────────────── */
+    .gen-header {
+      text-align: center;
+      margin-bottom: 28px;
+    }
     .gen-question {
       font-size: 2rem;
       font-weight: 800;
       color: var(--text-heading);
       line-height: 1.2;
-      margin: 0 0 28px;
-      text-align: center;
+      margin: 0 0 10px;
       letter-spacing: -0.03em;
+    }
+    .gen-subtitle {
+      font-size: 1rem;
+      color: var(--text-muted);
+      margin: 0;
+      line-height: 1.5;
     }
     #mix-nudge {
       font-size: 0.8125rem;
       color: var(--text-muted);
       text-align: center;
-      margin: -20px 0 8px;
+      margin: 8px 0 0;
       display: none;
     }
 
-    /* ── Generate form (always visible) ─────────────────────── */
+    /* ── Main card ───────────────────────────────────────────── */
     #guided-chat {
       display: flex;
       flex-direction: column;
       gap: 12px;
       background: var(--bg-surface);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 24px 24px 20px;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+      border: 1.5px solid var(--border);
+      border-radius: 18px;
+      padding: 18px 18px 16px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.06);
     }
     #guided-chat.hidden { display: none; }
 
-    /* ── Intent row ──────────────────────────────────────────── */
+    /* ── Chat thread (lead magnet flow) ─────────────────────── */
+    #chat-thread {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .chat-bubble-bot {
+      max-width: 90%;
+      padding: 12px 16px;
+      border-radius: 12px;
+      border-top-left-radius: 4px;
+      font-size: 0.9375rem;
+      line-height: 1.5;
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      color: var(--text-body);
+      align-self: flex-start;
+      white-space: pre-wrap;
+    }
+    .chat-bubble-user {
+      max-width: 90%;
+      padding: 12px 16px;
+      border-radius: 12px;
+      border-top-right-radius: 4px;
+      font-size: 0.9375rem;
+      line-height: 1.5;
+      background: var(--brand);
+      color: #fff;
+      align-self: flex-end;
+      white-space: pre-wrap;
+    }
+
+    /* ── Vault panel ─────────────────────────────────────────── */
+    .vault-panel {
+      margin-bottom: 2px;
+      border: 1px solid var(--border-subtle, var(--border));
+      border-radius: 10px;
+      overflow: hidden;
+      background: var(--bg-surface);
+    }
+    .vault-panel-header {
+      padding: 7px 14px;
+      background: color-mix(in srgb, var(--brand) 5%, var(--bg-surface));
+      border-bottom: 1px solid var(--border-subtle, var(--border));
+    }
+    .vault-panel-title {
+      font-size: 0.6875rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .vault-panel-items { display: flex; flex-direction: column; }
+    .vault-panel-item {
+      padding: 9px 14px;
+      text-align: left;
+      font-size: 0.8125rem;
+      color: var(--text-body);
+      background: none;
+      border: none;
+      border-bottom: 1px solid var(--border-subtle, var(--border));
+      cursor: pointer;
+      font-family: var(--font-sans);
+      transition: background 0.12s;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      line-height: 1.45;
+    }
+    .vault-panel-item:last-child { border-bottom: none; }
+    .vault-panel-item:hover { background: color-mix(in srgb, var(--brand) 6%, var(--bg-surface)); }
+
+    /* ── Vault quality-lift banner ───────────────────────────── */
+    #vault-quality-banner {
+      margin-bottom: 2px;
+      padding: 12px 14px;
+      border-radius: 10px;
+      background: color-mix(in srgb, var(--brand) 7%, var(--bg-surface));
+      border: 1px solid color-mix(in srgb, var(--brand) 20%, transparent);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .vqb-text {
+      flex: 1;
+      font-size: 13px;
+      color: var(--text-body);
+      margin: 0;
+      line-height: 1.5;
+    }
+    .vqb-cta {
+      flex-shrink: 0;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--brand);
+      text-decoration: none;
+      white-space: nowrap;
+    }
+    .vqb-cta:hover { text-decoration: underline; }
+
+    /* ── Input wrapper (textarea + embedded send btn) ────────── */
+    .gen-input-wrapper {
+      position: relative;
+    }
+    #chat-input {
+      width: 100%;
+      font-family: var(--font-sans);
+      font-size: 1rem;
+      line-height: 1.55;
+      padding: 14px 16px 62px;
+      border: 1.5px solid #D1D5DB;
+      border-radius: 12px;
+      background: var(--bg-surface);
+      color: var(--text-body);
+      outline: none;
+      resize: none;
+      min-height: 120px;
+      max-height: 300px;
+      transition: border-color 0.15s, box-shadow 0.15s;
+      box-shadow: inset 0 1px 3px rgba(0,0,0,0.04);
+      box-sizing: border-box;
+    }
+    #chat-input:focus {
+      border-color: var(--brand);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 12%, transparent);
+    }
+    #chat-input.error { border-color: var(--red, #ef4444); }
+    #chat-input::placeholder { color: #A1A1AA; }
+
+    /* The embedded send button */
+    #chat-send-btn {
+      position: absolute;
+      right: 10px;
+      bottom: 10px;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #0D9488 0%, #0F766E 100%);
+      color: #fff;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 8px rgba(15,118,110,0.35);
+      transition: opacity 0.15s, transform 0.1s, width 0.15s, border-radius 0.15s, padding 0.15s;
+      flex-shrink: 0;
+    }
+    #chat-send-btn:hover:not(:disabled) {
+      opacity: 0.9;
+      transform: scale(1.04);
+    }
+    #chat-send-btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+      transform: none;
+    }
+    /* Text mode for lead-magnet multi-step */
+    #chat-send-btn.text-mode {
+      width: auto;
+      border-radius: 999px;
+      padding: 0 16px;
+      height: 38px;
+      font-family: var(--font-sans);
+      font-size: 0.8125rem;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+      bottom: 12px;
+      right: 12px;
+    }
+
+    /* ── Specificity nudge ──────────────────────────────────── */
+    #specificity-nudge {
+      display: none;
+      font-size: 0.8125rem;
+      color: var(--text-muted);
+      line-height: 1.45;
+      padding: 0 2px;
+    }
+    #specificity-nudge.visible {
+      display: block;
+      animation: nudge-in 0.18s ease;
+    }
+    @keyframes nudge-in {
+      from { opacity: 0; transform: translateY(-3px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── Error + substance warning ──────────────────────────── */
+    #chat-error {
+      font-size: 0.875rem;
+      color: var(--red, #ef4444);
+      display: none;
+      line-height: 1.5;
+    }
+    #chat-error.visible { display: block; }
+    #chat-error a { color: var(--brand); font-weight: 600; }
+
+    #chat-substance-warning {
+      display: none;
+      background: color-mix(in srgb, #D97706 8%, transparent);
+      border: 1px solid color-mix(in srgb, #D97706 30%, transparent);
+      border-radius: 10px;
+      padding: 14px 16px;
+      font-size: 0.875rem;
+      color: #92400E;
+      line-height: 1.5;
+    }
+    #chat-substance-warning.visible { display: block; }
+    #chat-improve-input {
+      display: block;
+      font-size: 0.8125rem;
+      font-weight: 600;
+      color: var(--brand);
+      background: none;
+      border: none;
+      padding: 8px 0 0;
+      cursor: pointer;
+      text-decoration: underline;
+      font-family: var(--font-sans);
+    }
+
+    /* ── Micro-interview ────────────────────────────────────── */
+    #micro-interview-toggle {
+      display: none;
+      font-size: 0.8125rem;
+      color: var(--text-muted);
+      background: none;
+      border: none;
+      padding: 0;
+      cursor: pointer;
+      font-family: var(--font-sans);
+      text-decoration: underline;
+      text-underline-offset: 2px;
+      text-align: left;
+    }
+    #micro-interview-toggle.visible { display: inline-block; }
+    #micro-interview {
+      display: none;
+      background: color-mix(in srgb, var(--brand) 5%, var(--bg-surface));
+      border: 1px solid color-mix(in srgb, var(--brand) 20%, transparent);
+      border-radius: 10px;
+      padding: 16px;
+      gap: 14px;
+      flex-direction: column;
+    }
+    #micro-interview.visible { display: flex; }
+    .mi-label {
+      font-size: 0.6875rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 4px;
+    }
+    .mi-question { font-size: 0.875rem; color: var(--text-body); margin: 0 0 6px; line-height: 1.45; }
+    .mi-field {
+      width: 100%;
+      box-sizing: border-box;
+      background: var(--bg-page, var(--bg));
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 9px 12px;
+      font-size: 0.875rem;
+      font-family: var(--font-sans);
+      color: var(--text-body);
+      resize: none;
+      line-height: 1.45;
+    }
+    .mi-field:focus { outline: none; border-color: var(--brand); }
+    #mi-submit {
+      align-self: flex-end;
+      padding: 8px 18px;
+      background: var(--brand);
+      color: #fff;
+      border: none;
+      border-radius: 999px;
+      font-size: 0.8125rem;
+      font-weight: 600;
+      font-family: var(--font-sans);
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    #mi-submit:hover { opacity: 0.88; }
+
+    /* ── Intent chips row (post type selector) ───────────────── */
     #intent-row {
       display: flex;
       align-items: center;
       gap: 6px;
       flex-wrap: wrap;
-      padding-top: 4px;
-    }
-    .intent-label {
-      font-size: 0.8125rem;
-      color: var(--text-muted);
-      white-space: nowrap;
-      margin-right: 2px;
+      padding-top: 2px;
+      border-top: 1px solid var(--border);
+      margin-top: 4px;
+      padding-top: 14px;
     }
     .intent-btn {
       font-size: 0.8125rem;
@@ -98,41 +389,73 @@
       color: var(--brand);
       opacity: 0.7;
     }
-    #intent-spacer { flex: 1; }
-
-    #chat-thread {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
+    .intent-row-label {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      white-space: nowrap;
+      margin-right: 2px;
+      letter-spacing: 0.01em;
     }
 
-    .chat-bubble-bot {
-      max-width: 90%;
+    /* ── Profile gate nudge ─────────────────────────────────── */
+    .profile-gate-nudge {
+      background: color-mix(in srgb, var(--brand) 8%, var(--bg-surface));
+      border: 1px solid color-mix(in srgb, var(--brand) 30%, transparent);
+      border-radius: 10px;
       padding: 12px 16px;
-      border-radius: 12px;
-      border-top-left-radius: 4px;
-      font-size: 0.9375rem;
-      line-height: 1.5;
-      background: var(--bg-subtle);
-      border: 1px solid var(--border);
+      font-size: 0.875rem;
       color: var(--text-body);
-      align-self: flex-start;
-      white-space: pre-wrap;
-    }
-    .chat-bubble-user {
-      max-width: 90%;
-      padding: 12px 16px;
-      border-radius: 12px;
-      border-top-right-radius: 4px;
-      font-size: 0.9375rem;
       line-height: 1.5;
-      background: var(--brand);
-      color: #fff;
-      align-self: flex-end;
-      white-space: pre-wrap;
+      margin-bottom: 12px;
     }
+    .profile-gate-nudge a { color: var(--brand); font-weight: 600; }
 
-    /* ── Example toggle (Q1 thought-provoker) ───────────────── */
+    /* ── Processing screen ───────────────────────────────────── */
+    #processing-screen {
+      display: none;
+      flex-direction: column;
+      gap: var(--space-5);
+      padding: 40px 28px;
+      background: var(--bg-surface);
+      border: 1.5px solid var(--border);
+      border-radius: 18px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+    }
+    #processing-screen.visible { display: flex; }
+    .proc-title {
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--text-heading);
+      margin: 0;
+    }
+    #proc-steps { display: flex; flex-direction: column; gap: 14px; }
+    .proc-step {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      font-size: 0.9375rem;
+      color: var(--text-muted);
+      opacity: 0;
+      transform: translateY(6px);
+      transition: opacity 0.3s ease, transform 0.3s ease;
+    }
+    .proc-step.visible { opacity: 1; transform: translateY(0); color: var(--text-body); }
+    .proc-step.done    { color: var(--text-heading); }
+    .proc-step-icon { flex-shrink: 0; width: 20px; text-align: center; line-height: 1.4; }
+    .proc-step-text { flex: 1; line-height: 1.4; }
+    .proc-spinner {
+      display: inline-block;
+      width: 15px;
+      height: 15px;
+      border: 2px solid var(--border);
+      border-top-color: var(--brand);
+      border-radius: 50%;
+      animation: proc-spin 0.7s linear infinite;
+      vertical-align: text-bottom;
+    }
+    @keyframes proc-spin { to { transform: rotate(360deg); } }
+
+    /* ── Bubble extras (lead magnet escape hatch, example) ───── */
     .chat-bubble-example-toggle {
       display: inline-block;
       margin-top: 10px;
@@ -160,8 +483,6 @@
       white-space: pre-wrap;
     }
     .chat-bubble-example-body.visible { display: block; }
-
-    /* ── Vault idea toggle (Q1) ─────────────────────────────── */
     .chat-bubble-vault-toggle {
       display: inline-block;
       margin-top: 8px;
@@ -211,103 +532,6 @@
       font-size: 0.75rem;
       color: var(--text-muted);
     }
-
-    /* ── Textarea (standalone, full-width) ──────────────────────── */
-    #chat-input {
-      width: 100%;
-      font-family: var(--font-sans);
-      font-size: 0.9375rem;
-      line-height: 1.5;
-      padding: 12px 14px;
-      border: 1.5px solid #D1D5DB;
-      border-radius: var(--radius-lg);
-      background: var(--bg-surface);
-      color: var(--text-body);
-      outline: none;
-      resize: none;
-      min-height: 96px;
-      max-height: 280px;
-      transition: border-color 0.15s, box-shadow 0.15s;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-      box-sizing: border-box;
-    }
-    #chat-input:focus {
-      border-color: var(--brand);
-      box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 12%, transparent);
-    }
-    #chat-input.error { border-color: var(--red, #ef4444); }
-
-    #chat-send-btn {
-      flex-shrink: 0;
-      padding: 0 16px;
-      height: 34px;
-      font-family: var(--font-sans);
-      font-size: 0.8125rem;
-      font-weight: 700;
-      background: linear-gradient(135deg, #0D9488 0%, #0F766E 100%);
-      color: #fff;
-      border: 1px solid #115E59;
-      border-radius: 999px;
-      cursor: pointer;
-      white-space: nowrap;
-      box-shadow: inset 0 1px 0 rgba(94,234,212,0.2), 0 2px 6px rgba(20,184,166,0.15);
-      transition: opacity 0.15s;
-    }
-    #chat-send-btn:hover:not(:disabled) { opacity: 0.92; }
-    #chat-send-btn:disabled { opacity: 0.55; cursor: not-allowed; }
-
-    /* ── Specificity nudge ──────────────────────────────────── */
-    #specificity-nudge {
-      display: none;
-      font-size: 0.8125rem;
-      color: var(--text-muted);
-      line-height: 1.45;
-      padding: 0 2px;
-    }
-    #specificity-nudge.visible {
-      display: block;
-      animation: nudge-in 0.18s ease;
-    }
-    @keyframes nudge-in {
-      from { opacity: 0; transform: translateY(-3px); }
-      to   { opacity: 1; transform: translateY(0); }
-    }
-
-    /* ── Chat error + substance warning ─────────────────────── */
-    #chat-error {
-      font-size: 0.875rem;
-      color: var(--red, #ef4444);
-      display: none;
-      line-height: 1.5;
-    }
-    #chat-error.visible { display: block; }
-    #chat-error a { color: var(--brand); font-weight: 600; }
-
-    #chat-substance-warning {
-      display: none;
-      background: color-mix(in srgb, #D97706 8%, transparent);
-      border: 1px solid color-mix(in srgb, #D97706 30%, transparent);
-      border-radius: 10px;
-      padding: 14px 16px;
-      font-size: 0.875rem;
-      color: #92400E;
-      line-height: 1.5;
-    }
-    #chat-substance-warning.visible { display: block; }
-    #chat-improve-input {
-      display: block;
-      font-size: 0.8125rem;
-      font-weight: 600;
-      color: var(--brand);
-      background: none;
-      border: none;
-      padding: 8px 0 0;
-      cursor: pointer;
-      text-decoration: underline;
-      font-family: var(--font-sans);
-    }
-
-    /* ── Chat bubble label + nudge ──────────────────────────── */
     .chat-bubble-label {
       font-size: 0.6875rem;
       font-weight: 700;
@@ -324,196 +548,6 @@
       padding-top: 10px;
       border-top: 1px solid var(--border);
     }
-
-    /* ── Profile gate nudge ─────────────────────────────────── */
-    .profile-gate-nudge {
-      background: color-mix(in srgb, var(--brand) 8%, var(--bg-surface));
-      border: 1px solid color-mix(in srgb, var(--brand) 30%, transparent);
-      border-radius: 10px;
-      padding: 12px 16px;
-      font-size: 0.875rem;
-      color: var(--text-body);
-      line-height: 1.5;
-      margin-bottom: 4px;
-    }
-    .profile-gate-nudge a { color: var(--brand); font-weight: 600; }
-
-    /* ── Vault panel ─────────────────────────────────────────── */
-    .vault-panel {
-      margin-bottom: 4px;
-      border: 1px solid var(--border-subtle, var(--border));
-      border-radius: 10px;
-      overflow: hidden;
-      background: var(--bg-surface);
-    }
-    .vault-panel-header {
-      padding: 7px 14px;
-      background: color-mix(in srgb, var(--brand) 5%, var(--bg-surface));
-      border-bottom: 1px solid var(--border-subtle, var(--border));
-    }
-    .vault-panel-title {
-      font-size: 0.6875rem;
-      font-weight: 700;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-    .vault-panel-items { display: flex; flex-direction: column; }
-    .vault-panel-item {
-      padding: 9px 14px;
-      text-align: left;
-      font-size: 0.8125rem;
-      color: var(--text-body);
-      background: none;
-      border: none;
-      border-bottom: 1px solid var(--border-subtle, var(--border));
-      cursor: pointer;
-      font-family: var(--font-sans);
-      transition: background 0.12s;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      line-height: 1.45;
-    }
-    .vault-panel-item:last-child { border-bottom: none; }
-    .vault-panel-item:hover { background: color-mix(in srgb, var(--brand) 6%, var(--bg-surface)); }
-
-    /* ── Vault quality-lift banner (zero-doc empty state) ────── */
-    #vault-quality-banner {
-      margin-bottom: 12px;
-      padding: 14px 16px;
-      border-radius: 10px;
-      background: color-mix(in srgb, var(--brand) 7%, var(--bg-surface));
-      border: 1px solid color-mix(in srgb, var(--brand) 20%, transparent);
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-    .vqb-text {
-      flex: 1;
-      font-size: 13px;
-      color: var(--text-body);
-      margin: 0;
-      line-height: 1.5;
-    }
-    .vqb-cta {
-      flex-shrink: 0;
-      font-size: 13px;
-      font-weight: 600;
-      color: var(--brand);
-      text-decoration: none;
-      white-space: nowrap;
-    }
-    .vqb-cta:hover { text-decoration: underline; }
-
-    /* ── Micro-interview panel ───────────────────────────────── */
-    #micro-interview-toggle {
-      display: none;
-      margin-top: 6px;
-      font-size: 0.8125rem;
-      color: var(--text-muted);
-      background: none;
-      border: none;
-      padding: 0;
-      cursor: pointer;
-      font-family: var(--font-sans);
-      text-decoration: underline;
-      text-underline-offset: 2px;
-    }
-    #micro-interview-toggle.visible { display: inline-block; }
-    #micro-interview {
-      display: none;
-      margin-top: 10px;
-      background: color-mix(in srgb, var(--brand) 5%, var(--bg-surface));
-      border: 1px solid color-mix(in srgb, var(--brand) 20%, transparent);
-      border-radius: 10px;
-      padding: 16px;
-      gap: 14px;
-      flex-direction: column;
-    }
-    #micro-interview.visible { display: flex; }
-    .mi-label {
-      font-size: 0.6875rem;
-      font-weight: 700;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      margin-bottom: 4px;
-    }
-    .mi-question { font-size: 0.875rem; color: var(--text-body); margin: 0 0 6px; line-height: 1.45; }
-    .mi-field {
-      width: 100%;
-      box-sizing: border-box;
-      background: var(--bg-page, var(--bg));
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 9px 12px;
-      font-size: 0.875rem;
-      font-family: var(--font-sans);
-      color: var(--text-body);
-      resize: none;
-      line-height: 1.45;
-    }
-    .mi-field:focus { outline: none; border-color: var(--brand); }
-    #mi-submit {
-      align-self: flex-end;
-      padding: 8px 18px;
-      background: var(--brand);
-      color: #fff;
-      border: none;
-      border-radius: 999px;
-      font-size: 0.8125rem;
-      font-weight: 600;
-      font-family: var(--font-sans);
-      cursor: pointer;
-      transition: opacity 0.15s;
-    }
-    #mi-submit:hover { opacity: 0.88; }
-
-    /* ── Processing screen ───────────────────────────────────── */
-    #processing-screen {
-      display: none;
-      flex-direction: column;
-      gap: var(--space-5);
-      padding: 40px 28px;
-      background: var(--bg-surface);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.05);
-    }
-    #processing-screen.visible { display: flex; }
-    .proc-title {
-      font-size: 1rem;
-      font-weight: 700;
-      color: var(--text-heading);
-      margin: 0;
-    }
-    #proc-steps { display: flex; flex-direction: column; gap: 14px; }
-    .proc-step {
-      display: flex;
-      align-items: flex-start;
-      gap: 10px;
-      font-size: 0.9375rem;
-      color: var(--text-muted);
-      opacity: 0;
-      transform: translateY(6px);
-      transition: opacity 0.3s ease, transform 0.3s ease;
-    }
-    .proc-step.visible { opacity: 1; transform: translateY(0); color: var(--text-body); }
-    .proc-step.done    { color: var(--text-heading); }
-    .proc-step-icon { flex-shrink: 0; width: 20px; text-align: center; line-height: 1.4; }
-    .proc-step-text { flex: 1; line-height: 1.4; }
-    .proc-spinner {
-      display: inline-block;
-      width: 15px;
-      height: 15px;
-      border: 2px solid var(--border);
-      border-top-color: var(--brand);
-      border-radius: 50%;
-      animation: proc-spin 0.7s linear infinite;
-      vertical-align: text-bottom;
-    }
-    @keyframes proc-spin { to { transform: rotate(360deg); } }
   </style>
 </head>
 <body>
@@ -523,22 +557,48 @@
     <div id="idea-page">
       <div class="idea-form">
 
-        <p class="gen-question" id="gen-question">What do you want to post about?</p>
-        <p id="mix-nudge"></p>
+        <!-- ── Header ───────────────────────────────────────────── -->
+        <div class="gen-header">
+          <p class="gen-question" id="gen-question">What do you want to post about?</p>
+          <p class="gen-subtitle">Type your idea — ScoutHook writes it in your voice.</p>
+          <p id="mix-nudge"></p>
+        </div>
 
-        <!-- ── Generate form (always visible) ─────────────────── -->
+        <!-- ── Main input card ──────────────────────────────────── -->
         <div id="guided-chat">
+
+          <!-- Vault quality banner (if no docs) -->
           <div id="vault-quality-banner" style="display:none"></div>
+
+          <!-- Vault / suggested ideas -->
           <div id="vault-panel" class="vault-panel" style="display:none"></div>
+
+          <!-- Chat thread (lead magnet multi-step only) -->
           <div id="chat-thread" style="display:none"></div>
+
+          <!-- Errors -->
           <div id="chat-error" role="alert"></div>
           <div id="chat-substance-warning" role="alert">
             <span id="chat-substance-text"></span>
             <button id="chat-improve-input" type="button">Improve my input →</button>
           </div>
-          <textarea id="chat-input" rows="4" aria-label="Your idea"></textarea>
+
+          <!-- Textarea with embedded send button -->
+          <div class="gen-input-wrapper">
+            <textarea id="chat-input" rows="4" aria-label="Your idea"></textarea>
+            <button id="chat-send-btn" type="button" aria-label="Generate post">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="12" y1="19" x2="12" y2="5"/>
+                <polyline points="5 12 12 5 19 12"/>
+              </svg>
+            </button>
+          </div>
+
+          <!-- Specificity nudge -->
           <div id="specificity-nudge" role="status" aria-live="polite"></div>
-          <button id="micro-interview-toggle" type="button">Help me find my story →</button>
+
+          <!-- Story finder -->
+          <button id="micro-interview-toggle" type="button">Not sure what to write? Help me find a story →</button>
           <div id="micro-interview" role="region" aria-label="Story finder">
             <div class="mi-label">3 quick questions</div>
             <div>
@@ -555,18 +615,19 @@
             </div>
             <button id="mi-submit" type="button">Use this as my input →</button>
           </div>
+
+          <!-- Post-type chips -->
           <div id="intent-row">
-            <span class="intent-label">This post should →</span>
+            <span class="intent-row-label">Goal:</span>
             <button class="intent-btn" data-type="reach" type="button">Grow my audience</button>
             <button class="intent-btn" data-type="trust" type="button">Build my credibility</button>
             <button class="intent-btn" data-type="convert" type="button">Get client enquiries</button>
             <button class="intent-btn" data-type="lead_magnet" type="button">Give something away</button>
-            <span id="intent-spacer"></span>
-            <button id="chat-send-btn" type="button">Generate →</button>
           </div>
-        </div>
 
-        <!-- ── Processing screen ───────────────────────────────── -->
+        </div><!-- /#guided-chat -->
+
+        <!-- ── Processing screen ─────────────────────────────── -->
         <div id="processing-screen">
           <p class="proc-title">Writing your post…</p>
           <div id="proc-steps">

@@ -191,7 +191,7 @@ document.getElementById('intent-lead-magnet')?.addEventListener('click', () => s
 document.getElementById('intent-ideas')?.addEventListener('click', () => {
   document.getElementById('intent-ideas').classList.add('active');
   document.getElementById('intent-lead-magnet')?.classList.remove('active');
-  loadVaultPanel(selectedType || 'reach', () => {
+  loadVaultPanel(null, () => {
     document.getElementById('intent-ideas')?.classList.remove('active');
   });
 });
@@ -253,7 +253,10 @@ async function loadVaultPanel(type, onItemSelected) {
   panel.style.display = 'none';
   panel.innerHTML = '';
   try {
-    const res  = await fetch(`/api/vault/ideas?status=fresh&funnel_type=${type}`, { headers: apiHeaders() });
+    // No funnel_type filter — surface all fresh ideas across types.
+    // The route orders by convert > trust > reach, so the best ideas surface first.
+    const ideasUrl = `/api/vault/ideas?status=fresh` + (type ? `&funnel_type=${encodeURIComponent(type)}` : '');
+    const res  = await fetch(ideasUrl, { headers: apiHeaders() });
     const data = await res.json();
     const ideas = (data.ideas || []).slice(0, 3);
     if (ideas.length) {
@@ -262,7 +265,9 @@ async function loadVaultPanel(type, onItemSelected) {
         'From your vault:', onItemSelected);
       return;
     }
-    const sugRes  = await fetch(`/api/vault/suggest-topics?post_type=${type}`, { headers: apiHeaders() });
+    // No post_type — suggest-topics returns a balanced mix without type bias.
+    const sugUrl = `/api/vault/suggest-topics` + (type ? `?post_type=${encodeURIComponent(type)}` : '');
+    const sugRes  = await fetch(sugUrl, { headers: apiHeaders() });
     const sugData = await sugRes.json();
     const topics  = (sugData.topics || []).slice(0, 3);
     if (topics.length) {

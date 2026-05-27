@@ -364,7 +364,7 @@ router.get('/suggest-topics', async (req, res) => {
 
   try {
     const profile = await db.prepare(
-      `SELECT content_niche, audience_role, business_positioning, contrarian_view, input_examples
+      `SELECT content_niche, audience_role, audience_pain, business_positioning, contrarian_view, input_examples
        FROM user_profiles WHERE user_id = ? AND tenant_id = ?`
     ).get(userId, tenantId);
 
@@ -374,6 +374,7 @@ router.get('/suggest-topics', async (req, res) => {
 
     const niche       = profile?.content_niche        || '';
     const audience    = profile?.audience_role         || '';
+    const pain        = profile?.audience_pain         || '';
     const positioning = profile?.business_positioning  || '';
     const headline    = liRow?.linkedin_headline        || '';
     const contrarian  = profile?.contrarian_view       || '';
@@ -410,6 +411,7 @@ router.get('/suggest-topics', async (req, res) => {
     const context = [
       niche       && `Niche: ${niche}`,
       audience    && `Audience: ${audience}`,
+      pain        && `Their main challenge: ${pain}`,
       positioning && `Positioning: ${positioning}`,
       headline    && `LinkedIn headline: ${headline}`,
       contrarian  && `Their contrarian POV: ${contrarian}`,

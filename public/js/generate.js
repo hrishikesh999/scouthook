@@ -254,19 +254,33 @@ async function loadVaultPanel(type, onItemSelected) {
   panel.innerHTML = '';
   try {
     // No funnel_type filter — surface all fresh ideas across types.
-    // The route orders by convert > trust > reach, so the best ideas surface first.
+    // Then re-sort client-side so mixRecommended type floats to the top.
     const ideasUrl = `/api/vault/ideas?status=fresh` + (type ? `&funnel_type=${encodeURIComponent(type)}` : '');
     const res  = await fetch(ideasUrl, { headers: apiHeaders() });
     const data = await res.json();
-    const ideas = (data.ideas || []).slice(0, 3);
+    let allIdeas = data.ideas || [];
+
+    // If mix recommendation is active, bump matching ideas to front before slicing
+    const mixHint = (mixRecommended && mixRecommended !== 'lead_magnet') ? mixRecommended : null;
+    if (mixHint) {
+      allIdeas = [
+        ...allIdeas.filter(i => i.funnel_type === mixHint),
+        ...allIdeas.filter(i => i.funnel_type !== mixHint),
+      ];
+    }
+    const ideas = allIdeas.slice(0, 3);
+
     if (ideas.length) {
       renderVaultPanel(panel,
         ideas.map(i => ({ text: i.seed_text, label: i.hook_preview || i.seed_text.slice(0, 80), id: i.id })),
         'From your vault:', onItemSelected);
       return;
     }
-    // No post_type — suggest-topics returns a balanced mix without type bias.
-    const sugUrl = `/api/vault/suggest-topics` + (type ? `?post_type=${encodeURIComponent(type)}` : '');
+
+    // For suggest-topics: use mixRecommended as post_type hint if available,
+    // otherwise return a balanced mix without type bias.
+    const sugType = mixHint || (type || null);
+    const sugUrl  = `/api/vault/suggest-topics` + (sugType ? `?post_type=${encodeURIComponent(sugType)}` : '');
     const sugRes  = await fetch(sugUrl, { headers: apiHeaders() });
     const sugData = await sugRes.json();
     const topics  = (sugData.topics || []).slice(0, 3);

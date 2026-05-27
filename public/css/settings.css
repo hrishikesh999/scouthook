@@ -153,18 +153,65 @@
 
 /* ── Stage panels ────────────────────────────────────────── */
 .vw-content {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+  display: block;
 }
 
 .vw-stage-panel {
+  display: none;
   padding: 32px;
   background: var(--bg-surface, #fff);
   border: 1px solid var(--border, #E4E4E7);
   border-radius: 12px;
-  scroll-margin-top: 24px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.vw-stage-panel--active {
+  display: block;
+}
+
+/* ── Step navigation (Prev / Next) ───────────────────────── */
+.vw-step-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 28px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border, #E4E4E7);
+}
+
+.vw-step-next-btn {
+  height: 40px;
+  padding: 0 22px;
+  border-radius: 8px;
+  background: var(--brand, #0d7a5f);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.vw-step-next-btn:hover {
+  background: #0b6b52;
+}
+
+.vw-step-back-btn {
+  height: 40px;
+  padding: 0 18px;
+  border-radius: 8px;
+  border: 1px solid var(--border, #E4E4E7);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.vw-step-back-btn:hover {
+  background: var(--bg-subtle);
+  color: var(--text-body);
 }
 
 .vw-stage-header {
@@ -649,9 +696,84 @@ details[open] .vw-advanced-label::before { transform: rotate(90deg); }
   cursor: default;
 }
 
-/* ── Writing samples — larger textarea ───────────────────── */
-.profile-textarea-xl {
-  min-height: 260px;
+/* ── Writing sample cards ────────────────────────────────── */
+.vw-sample-card {
+  position: relative;
+  border: 1px solid var(--border, #E4E4E7);
+  border-radius: 10px;
+  padding: 14px 16px 16px;
+  margin-bottom: 12px;
+}
+
+.vw-sample-card-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin: 0 0 8px;
+}
+
+.vw-sample-card-remove {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 20px;
+  line-height: 1;
+  padding: 0;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: color 0.1s, background 0.1s;
+}
+
+.vw-sample-card-remove:hover {
+  color: var(--text-heading);
+  background: var(--bg-subtle);
+}
+
+.vw-sample-textarea {
+  width: 100%;
+  min-height: 130px;
+  box-sizing: border-box;
+  font-size: 14px;
+  padding: 9px 13px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.vw-samples-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 38px;
+  padding: 0 16px;
+  border: 1px dashed var(--border, #E4E4E7);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+  margin-top: 4px;
+}
+
+.vw-samples-add-btn:hover:not(:disabled) {
+  color: var(--text-body);
+  border-color: var(--text-muted);
+}
+
+.vw-samples-add-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 /* ── Stage panel field overrides ─────────────────────────────

@@ -386,12 +386,12 @@ function buildVoiceDNABlock(userProfile) {
     );
   }
 
-  // 10. Content themes (confirmed in Voice Profile Wizard Stage 1)
-  const themes = safeParseJSON(userProfile.content_themes, []);
-  if (themes.length > 0) {
+  // 10. Content pillars (the user's 2-4 strategic content domains)
+  const pillars = safeParseJSON(userProfile.content_pillars, []);
+  if (pillars.length > 0) {
     parts.push(
-      `CONTENT THEMES (stay within these topic areas):\n` +
-      themes.map(t => `- ${t}`).join('\n')
+      `CONTENT PILLARS (your core strategic domains — keep posts within these areas):\n` +
+      pillars.map(t => `- ${t}`).join('\n')
     );
   }
 
@@ -545,7 +545,7 @@ async function extractVoiceDNAFromLinkedIn(userId, tenantId) {
 
     // Read current profile
     const profile = await db.prepare(
-      `SELECT content_niche, audience_role, business_positioning, content_themes,
+      `SELECT content_niche, audience_role, business_positioning, content_pillars,
               voice_fingerprint, authority_statements, banned_patterns, writing_samples,
               cta_library, content_principles, user_role, website_url,
               onboarding_q1, onboarding_q2, onboarding_q3, voice_refinements
@@ -599,7 +599,7 @@ Return valid JSON only, no commentary:
     // banned_patterns) are NEVER touched here — those come from the user's own
     // spoken-word interview answers and are a stronger signal.
     //
-    // content_themes is always additive: merge, never remove.
+    // content_pillars is always additive: merge, never remove.
     // ────────────────────────────────────────────────────────────────────────
     const updates = {};
 
@@ -608,15 +608,15 @@ Return valid JSON only, no commentary:
     if (extracted.audience_role)        updates.audience_role        = extracted.audience_role;
     if (extracted.business_positioning) updates.business_positioning = extracted.business_positioning;
 
-    // Themes — always additive (merge new ones in, never remove existing)
-    const existingThemes = safeParseJSON(profile.content_themes, []);
+    // Content pillars — always additive (merge new ones in, never remove existing)
+    const existingPillars = safeParseJSON(profile.content_pillars, []);
     const suggestedThemes = Array.isArray(extracted.suggested_themes)
       ? extracted.suggested_themes.filter(t => typeof t === 'string' && t.trim())
       : [];
-    const mergedThemes = [...existingThemes];
-    suggestedThemes.forEach(t => { if (!mergedThemes.includes(t)) mergedThemes.push(t); });
-    if (mergedThemes.length > existingThemes.length) {
-      updates.content_themes = JSON.stringify(mergedThemes);
+    const mergedPillars = [...existingPillars];
+    suggestedThemes.forEach(t => { if (!mergedPillars.includes(t)) mergedPillars.push(t); });
+    if (mergedPillars.length > existingPillars.length) {
+      updates.content_pillars = JSON.stringify(mergedPillars);
     }
 
     if (Object.keys(updates).length === 0) {

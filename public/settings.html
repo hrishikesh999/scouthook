@@ -44,27 +44,6 @@
       </div>
     </div>
 
-    <!-- Content pillars panel — editable topic focus areas -->
-    <div id="vw-pillars-panel" class="vw-hook-panel" hidden>
-      <div class="vw-hook-panel-header">
-        <p class="vw-hook-panel-title">Content pillars</p>
-        <p class="vw-hook-panel-subtitle">The 2-3 specific topics you write about most consistently. LinkedIn's algorithm rewards focus — these help ScoutHook keep your posts on-theme.</p>
-      </div>
-      <div class="vw-chips-area" id="vw-pillars-chips" aria-label="Content pillars" role="group"></div>
-      <div class="vw-add-row" style="margin-top:10px">
-        <input id="vw-pillars-input" class="vw-add-input" type="text"
-               placeholder="e.g. founder-led sales" autocomplete="off" />
-        <button id="vw-pillars-add" class="vw-add-btn" type="button">Add</button>
-      </div>
-      <div class="vw-stage-actions" style="margin-top:12px">
-        <button id="vw-pillars-save" class="vw-save-btn" type="button">Save pillars →</button>
-        <span class="vw-save-status" id="vw-pillars-status" hidden></span>
-      </div>
-      <p class="vw-stage-hint" style="margin-top:10px">
-        <button id="vw-pillars-suggest" class="vw-suggest-link" type="button">✦ Suggest pillars from my profile</button>
-      </p>
-    </div>
-
     <!-- Archetype coaching panel — shown when user has published posts -->
     <div id="vw-archetype-panel" class="vw-hook-panel" hidden>
       <div class="vw-hook-panel-header">
@@ -82,7 +61,7 @@
       </div>
       <div id="vw-voice-traits" class="vw-voice-traits"></div>
       <p class="vw-voice-summary-edit">
-        Wrong? <a href="#voice-stage-7" class="vw-voice-edit-link">Update your writing sample →</a>
+        Wrong? <a href="#" class="vw-voice-edit-link" id="vw-voice-edit-link">Update your writing sample →</a>
       </p>
     </div>
 
@@ -91,7 +70,7 @@
 
       <!-- Stage navigation sidebar -->
       <nav class="vw-stages" aria-label="Wizard stages">
-        <a href="#voice-stage-1" class="vw-stage-link" data-stage="1">
+        <a href="#" class="vw-stage-link" data-stage="1">
           <span class="vw-stage-num">1</span>
           <span class="vw-stage-info">
             <span class="vw-stage-name">Profile basics</span>
@@ -99,15 +78,15 @@
           </span>
           <span class="vw-stage-check" id="vw-check-1" hidden>✓</span>
         </a>
-        <a href="#voice-stage-2" class="vw-stage-link" data-stage="2">
+        <a href="#" class="vw-stage-link" data-stage="2">
           <span class="vw-stage-num">2</span>
           <span class="vw-stage-info">
-            <span class="vw-stage-name">Core themes</span>
-            <span class="vw-stage-desc">Specific angles within your niche</span>
+            <span class="vw-stage-name">Content pillars</span>
+            <span class="vw-stage-desc">Your 2–4 strategic content domains</span>
           </span>
           <span class="vw-stage-check" id="vw-check-2" hidden>✓</span>
         </a>
-        <a href="#voice-stage-3" class="vw-stage-link" data-stage="3">
+        <a href="#" class="vw-stage-link" data-stage="3">
           <span class="vw-stage-num">3</span>
           <span class="vw-stage-info">
             <span class="vw-stage-name">Credibility</span>
@@ -115,7 +94,7 @@
           </span>
           <span class="vw-stage-check" id="vw-check-3" hidden>✓</span>
         </a>
-        <a href="#voice-stage-4" class="vw-stage-link" data-stage="4">
+        <a href="#" class="vw-stage-link" data-stage="4">
           <span class="vw-stage-num">4</span>
           <span class="vw-stage-info">
             <span class="vw-stage-name">Calls to action</span>
@@ -123,7 +102,7 @@
           </span>
           <span class="vw-stage-check" id="vw-check-4" hidden>✓</span>
         </a>
-        <a href="#voice-stage-5" class="vw-stage-link" data-stage="5">
+        <a href="#" class="vw-stage-link" data-stage="5">
           <span class="vw-stage-num">5</span>
           <span class="vw-stage-info">
             <span class="vw-stage-name">Rules</span>
@@ -131,7 +110,7 @@
           </span>
           <span class="vw-stage-check" id="vw-check-5" hidden>✓</span>
         </a>
-        <a href="#voice-stage-6" class="vw-stage-link" data-stage="6">
+        <a href="#" class="vw-stage-link" data-stage="6">
           <span class="vw-stage-num">6</span>
           <span class="vw-stage-info">
             <span class="vw-stage-name">LinkedIn</span>
@@ -139,7 +118,7 @@
           </span>
           <span class="vw-stage-check" id="vw-check-6" hidden>✓</span>
         </a>
-        <a href="#voice-stage-7" class="vw-stage-link" data-stage="7">
+        <a href="#" class="vw-stage-link" data-stage="7">
           <span class="vw-stage-num">7</span>
           <span class="vw-stage-info">
             <span class="vw-stage-name">Writing samples</span>
@@ -153,7 +132,7 @@
       <div class="vw-content">
 
         <!-- ── Stage 1: Profile Basics ───────────────────── -->
-        <section id="voice-stage-1" class="vw-stage-panel">
+        <section id="voice-stage-1" class="vw-stage-panel" data-step="1">
           <div class="vw-stage-header">
             <h2 class="vw-stage-title">Profile basics</h2>
             <p class="vw-stage-subtitle">Start with your niche and audience — then generate a one-sentence positioning statement. Used in every post Scouthook generates.</p>
@@ -208,35 +187,45 @@
             <button id="vw-basics-save" class="vw-save-btn" type="button">Save basics →</button>
             <span class="vw-save-status" id="vw-basics-status" hidden></span>
           </div>
+
+          <div class="vw-step-nav">
+            <span></span>
+            <button type="button" class="vw-step-next-btn">Next →</button>
+          </div>
         </section>
 
-        <!-- ── Stage 2: Core Themes ──────────────────────── -->
-        <section id="voice-stage-2" class="vw-stage-panel">
+        <!-- ── Stage 2: Content Pillars ──────────────────── -->
+        <section id="voice-stage-2" class="vw-stage-panel" data-step="2">
           <div class="vw-stage-header">
-            <h2 class="vw-stage-title">Core themes</h2>
-            <p class="vw-stage-subtitle">The specific angles, stances, and lenses you bring to your niche. More granular than a category — these are the ideas you return to. AI will suggest a starting set based on your profile.</p>
+            <h2 class="vw-stage-title">Content pillars</h2>
+            <p class="vw-stage-subtitle">The 2–4 strategic domains you consistently write about. These are fed to the AI on every post to keep your content on-brand and on-topic.</p>
             <p class="vw-stage-note">Think "founder-led sales" or "pricing psychology", not "B2B SaaS" — that's your niche in Stage 1.</p>
           </div>
 
-          <div class="vw-chips-area" id="vw-themes-chips" aria-label="Content themes" role="group"></div>
+          <div class="vw-chips-area" id="vw-pillars-chips" aria-label="Content pillars" role="group"></div>
 
           <div class="vw-add-row">
-            <input id="vw-themes-input" class="vw-add-input" type="text"
-                   placeholder="Add a theme…" autocomplete="off" />
-            <button id="vw-themes-add" class="vw-add-btn" type="button">Add</button>
+            <input id="vw-pillars-input" class="vw-add-input" type="text"
+                   placeholder="e.g. founder-led sales…" autocomplete="off" />
+            <button id="vw-pillars-add" class="vw-add-btn" type="button">Add</button>
           </div>
 
           <div class="vw-stage-actions">
-            <button id="vw-themes-save" class="vw-save-btn" type="button">Save themes →</button>
-            <span class="vw-save-status" id="vw-themes-status" hidden></span>
+            <button id="vw-pillars-save" class="vw-save-btn" type="button">Save pillars →</button>
+            <span class="vw-save-status" id="vw-pillars-status" hidden></span>
           </div>
-          <p class="vw-stage-hint" id="vw-themes-suggest-hint">
-            <button id="vw-themes-suggest" class="vw-suggest-link" type="button">✦ Suggest themes from my profile</button>
+          <p class="vw-stage-hint">
+            <button id="vw-pillars-suggest" class="vw-suggest-link" type="button">✦ Suggest pillars from my profile</button>
           </p>
+
+          <div class="vw-step-nav">
+            <button type="button" class="vw-step-back-btn">← Back</button>
+            <button type="button" class="vw-step-next-btn">Next →</button>
+          </div>
         </section>
 
         <!-- ── Stage 3: Credibility ──────────────────────── -->
-        <section id="voice-stage-3" class="vw-stage-panel">
+        <section id="voice-stage-3" class="vw-stage-panel" data-step="3">
           <div class="vw-stage-header">
             <h2 class="vw-stage-title">Credibility statements</h2>
             <p class="vw-stage-subtitle">Specific results your work has produced. Pulled from your onboarding answer — confirm what's accurate, remove what isn't, add more if you have them.</p>
@@ -255,10 +244,15 @@
             <button id="vw-authority-save" class="vw-save-btn" type="button">Save statements →</button>
             <span class="vw-save-status" id="vw-authority-status" hidden></span>
           </div>
+
+          <div class="vw-step-nav">
+            <button type="button" class="vw-step-back-btn">← Back</button>
+            <button type="button" class="vw-step-next-btn">Next →</button>
+          </div>
         </section>
 
         <!-- ── Stage 4: Calls to action ─────────────────── -->
-        <section id="voice-stage-4" class="vw-stage-panel">
+        <section id="voice-stage-4" class="vw-stage-panel" data-step="4">
           <div class="vw-stage-header">
             <h2 class="vw-stage-title">Calls to action</h2>
             <p class="vw-stage-subtitle">How you close posts. Scouthook will rotate between these rather than inventing generic CTAs. Add at least 2.</p>
@@ -289,10 +283,15 @@
             <button id="vw-cta-save" class="vw-save-btn" type="button">Save CTAs →</button>
             <span class="vw-save-status" id="vw-cta-status" hidden></span>
           </div>
+
+          <div class="vw-step-nav">
+            <button type="button" class="vw-step-back-btn">← Back</button>
+            <button type="button" class="vw-step-next-btn">Next →</button>
+          </div>
         </section>
 
         <!-- ── Stage 5: Rules ────────────────────────────── -->
-        <section id="voice-stage-5" class="vw-stage-panel">
+        <section id="voice-stage-5" class="vw-stage-panel" data-step="5">
           <div class="vw-stage-header">
             <h2 class="vw-stage-title">Content rules</h2>
             <p class="vw-stage-subtitle">Instructions that apply to every post. Most users skip this. Only add a rule if you've seen Scouthook consistently do something you don't like.</p>
@@ -317,10 +316,15 @@
               </div>
             </div>
           </details>
+
+          <div class="vw-step-nav">
+            <button type="button" class="vw-step-back-btn">← Back</button>
+            <button type="button" class="vw-step-next-btn">Next →</button>
+          </div>
         </section>
 
         <!-- ── Stage 6: LinkedIn ─────────────────────────── -->
-        <section id="voice-stage-6" class="vw-stage-panel">
+        <section id="voice-stage-6" class="vw-stage-panel" data-step="6">
           <div class="vw-stage-header">
             <h2 class="vw-stage-title">Connect LinkedIn</h2>
             <p class="vw-stage-subtitle">The single highest-value action for voice quality. Connecting lets Scouthook read your profile data to learn how you present yourself professionally.</p>
@@ -374,25 +378,32 @@
               </div>
             </div>
           </div>
+
+          <div class="vw-step-nav">
+            <button type="button" class="vw-step-back-btn">← Back</button>
+            <button type="button" class="vw-step-next-btn">Next →</button>
+          </div>
         </section>
 
         <!-- ── Stage 7: Writing Samples ──────────────────── -->
-        <section id="voice-stage-7" class="vw-stage-panel">
+        <section id="voice-stage-7" class="vw-stage-panel" data-step="7">
           <div class="vw-stage-header">
             <h2 class="vw-stage-title">Writing samples</h2>
-            <p class="vw-stage-subtitle">Paste 2–3 of your best LinkedIn posts. Scouthook uses these to learn your real sentence rhythm, opening patterns, and signature phrasing.</p>
+            <p class="vw-stage-subtitle">Add 2–3 of your best LinkedIn posts. Scouthook uses these to learn your real sentence rhythm, opening patterns, and signature phrasing.</p>
             <p class="vw-stage-note">Minimum 2 posts for best results. The more authentic your samples, the better your generated posts sound like you.</p>
           </div>
 
-          <div class="profile-field">
-            <label class="field-label" for="profile-samples">Your best LinkedIn posts</label>
-            <textarea id="profile-samples" class="field-textarea profile-textarea-xl"
-                      placeholder="Paste 2–3 of your best LinkedIn posts here. Separate each post with a blank line.&#10;&#10;Post 1:&#10;&#10;Post 2:&#10;&#10;Post 3:"></textarea>
-          </div>
+          <div id="vw-samples-list"></div>
+          <button type="button" id="vw-samples-add" class="vw-samples-add-btn">+ Add writing sample</button>
 
-          <div class="vw-stage-actions">
+          <div class="vw-stage-actions" style="margin-top: 20px">
             <button id="vw-samples-save" class="vw-save-btn" type="button">Save samples →</button>
             <span class="vw-save-status" id="vw-samples-status" hidden></span>
+          </div>
+
+          <div class="vw-step-nav">
+            <button type="button" class="vw-step-back-btn">← Back</button>
+            <span></span>
           </div>
         </section>
 

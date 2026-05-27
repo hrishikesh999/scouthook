@@ -2,7 +2,7 @@
 
 /* ============================================================
    settings.js — Voice Profile Wizard
-   7 stages: Basics · Core Themes · Credibility · CTAs · Rules · LinkedIn · Samples
+   7 stages: Basics · Content Pillars · Credibility · CTAs · Rules · LinkedIn · Samples
    ============================================================ */
 
 (async () => {
@@ -193,14 +193,14 @@
   }
 
   // Check which stages have content and mark them
-  function updateStageChecks(basics, themes, statements, ctas, principles, hasLinkedIn, samples) {
-    if (basics)           { const el = qs('vw-check-1'); if (el) el.hidden = false; }
-    if (themes.length > 0)      { const el = qs('vw-check-2'); if (el) el.hidden = false; }
-    if (statements.length > 0)  { const el = qs('vw-check-3'); if (el) el.hidden = false; }
-    if (ctas.length > 0)        { const el = qs('vw-check-4'); if (el) el.hidden = false; }
-    if (principles.length > 0)  { const el = qs('vw-check-5'); if (el) el.hidden = false; }
-    if (hasLinkedIn)             { const el = qs('vw-check-6'); if (el) el.hidden = false; }
-    if (samples)                 { const el = qs('vw-check-7'); if (el) el.hidden = false; }
+  function updateStageChecks(basics, pillars, statements, ctas, principles, hasLinkedIn, samples) {
+    if (basics)                  { const el = qs('vw-check-1'); if (el) el.hidden = false; }
+    if (pillars.length > 0)      { const el = qs('vw-check-2'); if (el) el.hidden = false; }
+    if (statements.length > 0)   { const el = qs('vw-check-3'); if (el) el.hidden = false; }
+    if (ctas.length > 0)         { const el = qs('vw-check-4'); if (el) el.hidden = false; }
+    if (principles.length > 0)   { const el = qs('vw-check-5'); if (el) el.hidden = false; }
+    if (hasLinkedIn)              { const el = qs('vw-check-6'); if (el) el.hidden = false; }
+    if (samples)                  { const el = qs('vw-check-7'); if (el) el.hidden = false; }
   }
 
   /* ── Stage 1: Profile Basics ────────────────────────────── */
@@ -287,55 +287,62 @@
     btn.textContent = '✦ Generate';
   });
 
-  /* ── Stage 2: Core Themes ───────────────────────────────── */
-  let themes = safeParseJSON(profile.content_themes, []);
+  /* ── Stage 2: Content Pillars ───────────────────────────── */
+  // Migration shim: if content_pillars is empty but content_themes has data, seed from themes
+  let rawPillars = profile.content_pillars;
+  if (!rawPillars || rawPillars === '[]') {
+    const legacyThemes = safeParseJSON(profile.content_themes, []);
+    if (legacyThemes.length > 0) rawPillars = profile.content_themes;
+  }
+  let pillars = safeParseJSON(rawPillars, []);
 
-  const renderThemes = makeChipList('vw-themes-chips', themes, () => {});
-  wireAddChip('vw-themes-input', 'vw-themes-add', themes, renderThemes);
+  const renderPillars = makeChipList('vw-pillars-chips', pillars, () => {});
+  wireAddChip('vw-pillars-input', 'vw-pillars-add', pillars, renderPillars);
 
-  // Suggest themes button
-  const suggestBtn = qs('vw-themes-suggest');
-  if (suggestBtn) {
-    suggestBtn.addEventListener('click', async () => {
-      suggestBtn.textContent = 'Thinking…';
-      suggestBtn.disabled = true;
+  // Suggest pillars button
+  const pillarsBtn = qs('vw-pillars-suggest');
+  if (pillarsBtn) {
+    pillarsBtn.addEventListener('click', async () => {
+      pillarsBtn.textContent = 'Thinking…';
+      pillarsBtn.disabled = true;
       try {
-        const r = await fetch('/api/profile/suggest-themes', {
+        const r = await fetch('/api/profile/generate-content-pillars', {
           method: 'POST', headers: apiHeaders(), body: '{}',
         });
         const d = await r.json();
-        if (d.ok && Array.isArray(d.themes) && d.themes.length > 0) {
-          // Add any suggestions not already in the list
-          d.themes.forEach(t => { if (!themes.includes(t)) themes.push(t); });
-          renderThemes(themes);
-          suggestBtn.textContent = 'Suggestions added ✓';
+        if (d.ok && d.content_pillars) {
+          let incoming = [];
+          try { incoming = JSON.parse(d.content_pillars); } catch { /* ignore */ }
+          incoming.forEach(p => { if (!pillars.includes(p)) pillars.push(p); });
+          renderPillars(pillars);
+          pillarsBtn.textContent = 'Suggestions added ✓';
         } else {
-          suggestBtn.textContent = '✦ Suggest themes from my profile';
+          pillarsBtn.textContent = '✦ Suggest pillars from my profile';
         }
       } catch {
-        suggestBtn.textContent = '✦ Suggest themes from my profile';
+        pillarsBtn.textContent = '✦ Suggest pillars from my profile';
       }
-      suggestBtn.disabled = false;
+      pillarsBtn.disabled = false;
     });
   }
 
-  // Save themes
-  qs('vw-themes-save')?.addEventListener('click', async () => {
-    const btn = qs('vw-themes-save');
+  // Save pillars
+  qs('vw-pillars-save')?.addEventListener('click', async () => {
+    const btn = qs('vw-pillars-save');
     btn.disabled = true;
     btn.textContent = 'Saving…';
     try {
-      const d = await saveProfile({ content_themes: JSON.stringify(themes) });
+      const d = await saveProfile({ content_pillars: JSON.stringify(pillars) });
       if (d.ok) {
-        showStatus(qs('vw-themes-status'), 'Saved ✓');
-        if (themes.length > 0) { const el = qs('vw-check-2'); if (el) el.hidden = false; }
+        showStatus(qs('vw-pillars-status'), 'Saved ✓');
+        if (pillars.length > 0) { const el = qs('vw-check-2'); if (el) el.hidden = false; }
       } else {
-        showStatus(qs('vw-themes-status'), 'Save failed', true);
+        showStatus(qs('vw-pillars-status'), 'Save failed', true);
       }
     } catch {
-      showStatus(qs('vw-themes-status'), 'Save failed', true);
+      showStatus(qs('vw-pillars-status'), 'Save failed', true);
     }
-    btn.textContent = 'Save themes →';
+    btn.textContent = 'Save pillars →';
     btn.disabled = false;
   });
 
@@ -504,12 +511,12 @@
             }
           });
 
-          // Merge new themes into the chip list (additive — never remove existing)
-          if (d.profile.content_themes) {
+          // Merge new pillars into the chip list (additive — never remove existing)
+          if (d.profile.content_pillars) {
             let incoming = [];
-            try { incoming = JSON.parse(d.profile.content_themes); } catch { /* ignore */ }
-            incoming.forEach(t => { if (!themes.includes(t)) themes.push(t); });
-            renderThemes(themes);
+            try { incoming = JSON.parse(d.profile.content_pillars); } catch { /* ignore */ }
+            incoming.forEach(p => { if (!pillars.includes(p)) pillars.push(p); });
+            renderPillars(pillars);
           }
 
           const msg = d.updated?.length > 0
@@ -528,61 +535,6 @@
     btn.disabled = false;
     btn.querySelector('svg')?.classList.remove('spin');
   });
-
-  /* ── Content pillars panel ─────────────────────────────── */
-  let pillars = safeParseJSON(profile.content_pillars, []);
-
-  const pillarsPanel = qs('vw-pillars-panel');
-  const renderPillars = makeChipList('vw-pillars-chips', pillars, () => {});
-  wireAddChip('vw-pillars-input', 'vw-pillars-add', pillars, renderPillars);
-
-  qs('vw-pillars-save')?.addEventListener('click', async () => {
-    const btn = qs('vw-pillars-save');
-    btn.disabled = true;
-    btn.textContent = 'Saving…';
-    try {
-      const d = await saveProfile({ content_pillars: JSON.stringify(pillars) });
-      if (d.ok) {
-        showStatus(qs('vw-pillars-status'), 'Saved ✓');
-      } else {
-        showStatus(qs('vw-pillars-status'), 'Save failed', true);
-      }
-    } catch {
-      showStatus(qs('vw-pillars-status'), 'Save failed', true);
-    }
-    btn.textContent = 'Save pillars →';
-    btn.disabled = false;
-  });
-
-  // Suggest pillars button
-  const pillarsBtn = qs('vw-pillars-suggest');
-  if (pillarsBtn) {
-    pillarsBtn.addEventListener('click', async () => {
-      pillarsBtn.textContent = 'Thinking…';
-      pillarsBtn.disabled = true;
-      try {
-        const r = await fetch('/api/profile/generate-content-pillars', {
-          method: 'POST', headers: apiHeaders(), body: '{}',
-        });
-        const d = await r.json();
-        if (d.ok && d.content_pillars) {
-          let incoming = [];
-          try { incoming = JSON.parse(d.content_pillars); } catch { /* ignore */ }
-          incoming.forEach(p => { if (!pillars.includes(p)) pillars.push(p); });
-          renderPillars(pillars);
-          pillarsBtn.textContent = 'Suggestions added ✓';
-        } else {
-          pillarsBtn.textContent = '✦ Suggest pillars from my profile';
-        }
-      } catch {
-        pillarsBtn.textContent = '✦ Suggest pillars from my profile';
-      }
-      pillarsBtn.disabled = false;
-    });
-  }
-
-  // Always show pillars panel (even if empty — nudge to fill in)
-  if (pillarsPanel) pillarsPanel.hidden = false;
 
   /* ── Archetype coaching panel ───────────────────────────── */
   const archetypePanel    = qs('vw-archetype-panel');
@@ -630,15 +582,78 @@
     }
   }
 
-  /* ── Stage 7: Writing Samples ───────────────────────────── */
-  const samplesEl = qs('profile-samples');
-  if (samplesEl && profile.writing_samples) samplesEl.value = profile.writing_samples;
+  /* ── Stage 7: Writing Samples (individual cards) ─────────── */
+  let samplesData = [];
 
+  function renderSampleCards() {
+    const list   = qs('vw-samples-list');
+    const addBtn = qs('vw-samples-add');
+    if (!list) return;
+
+    list.innerHTML = '';
+    samplesData.forEach((text, i) => {
+      const card = document.createElement('div');
+      card.className = 'vw-sample-card';
+      card.innerHTML = `
+        <p class="vw-sample-card-label">Sample ${i + 1}</p>
+        <button class="vw-sample-card-remove" aria-label="Remove sample" data-index="${i}" type="button">×</button>
+        <textarea class="field-textarea vw-sample-textarea" placeholder="Paste a LinkedIn post here…"></textarea>
+      `;
+      card.querySelector('.vw-sample-textarea').value = text;
+      list.appendChild(card);
+    });
+
+    if (addBtn) addBtn.disabled = samplesData.length >= 5;
+  }
+
+  function addSampleCard(text = '') {
+    if (samplesData.length >= 5) return;
+    samplesData.push(text);
+    renderSampleCards();
+  }
+
+  // Remove card listener (event delegation)
+  qs('vw-samples-list')?.addEventListener('click', e => {
+    const btn = e.target.closest('.vw-sample-card-remove');
+    if (!btn) return;
+    const idx = Number(btn.dataset.index);
+    samplesData.splice(idx, 1);
+    renderSampleCards();
+    if (samplesData.every(s => !s.trim())) {
+      const checkEl = qs('vw-check-7');
+      if (checkEl) checkEl.hidden = true;
+    }
+  });
+
+  qs('vw-samples-add')?.addEventListener('click', () => addSampleCard());
+
+  // Load existing samples data
+  {
+    const raw = profile.writing_samples || '';
+    let loaded = [];
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) loaded = parsed;
+      else if (raw) loaded = [raw];
+    } catch {
+      if (raw) loaded = [raw];
+    }
+    if (loaded.length === 0) loaded = [''];
+    loaded.forEach(t => addSampleCard(t));
+  }
+
+  // Save handler
   qs('vw-samples-save')?.addEventListener('click', async () => {
     const btn = qs('vw-samples-save');
     btn.disabled = true;
     btn.textContent = 'Saving…';
-    const val = samplesEl?.value.trim() || null;
+
+    // Collect current textarea values
+    const values = Array.from(document.querySelectorAll('.vw-sample-textarea'))
+      .map(t => t.value.trim())
+      .filter(Boolean);
+    const val = values.length > 0 ? JSON.stringify(values) : null;
+
     try {
       const d = await saveProfile({ writing_samples: val });
       if (d.ok) {
@@ -660,40 +675,68 @@
     return el && el.value.trim().length > 0;
   });
   const hasLinkedIn = !qs('vw-linkedin-connect') || qs('vw-linkedin-connect').hasAttribute('hidden');
-  const hasSamples  = !!(samplesEl?.value.trim());
-  updateStageChecks(basicsPopulated, themes, statements, ctas, principles, hasLinkedIn, hasSamples);
+  const hasSamples  = samplesData.some(s => s.trim());
+  updateStageChecks(basicsPopulated, pillars, statements, ctas, principles, hasLinkedIn, hasSamples);
 
-  /* ── Hash-based scroll ──────────────────────────────────── */
-  function scrollToStage(hash) {
-    const target = document.querySelector(hash);
-    if (target) {
-      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      // Highlight active stage link
-      document.querySelectorAll('.vw-stage-link').forEach(a => {
-        a.classList.toggle('vw-stage-link--active', a.getAttribute('href') === hash);
-      });
-    }
-  }
+  /* ── Step navigation ────────────────────────────────────── */
+  let currentStep = 1;
 
-  // Scroll to hash on load (or to stage 6 if just connected LinkedIn)
-  if (window.location.search.includes('linkedin_connected=true') && !window.location.hash) {
-    setTimeout(() => scrollToStage('#voice-stage-6'), 100);
-  } else if (window.location.hash) {
-    setTimeout(() => scrollToStage(window.location.hash), 100);
-  }
+  function switchToStep(n) {
+    if (n < 1 || n > 7) return;
 
-  // Update active link on scroll (IntersectionObserver)
-  const panels = document.querySelectorAll('.vw-stage-panel');
-  const observer = new IntersectionObserver(entries => {
-    entries.forEach(entry => {
-      if (entry.isIntersecting) {
-        const hash = '#' + entry.target.id;
-        document.querySelectorAll('.vw-stage-link').forEach(a => {
-          a.classList.toggle('vw-stage-link--active', a.getAttribute('href') === hash);
-        });
-      }
+    document.querySelectorAll('.vw-stage-panel').forEach(p => {
+      p.classList.remove('vw-stage-panel--active');
     });
-  }, { threshold: 0.4 });
-  panels.forEach(p => observer.observe(p));
+
+    const target = qs('voice-stage-' + n);
+    if (target) target.classList.add('vw-stage-panel--active');
+
+    document.querySelectorAll('.vw-stage-link').forEach(a => {
+      a.classList.toggle('vw-stage-link--active', a.dataset.stage === String(n));
+    });
+
+    currentStep = n;
+    // Scroll wizard body into view
+    document.querySelector('.vw-body')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function firstIncompleteStep() {
+    for (let i = 1; i <= 7; i++) {
+      const check = qs('vw-check-' + i);
+      if (!check || check.hidden) return i;
+    }
+    return 1;
+  }
+
+  // Wire sidebar link clicks
+  document.querySelectorAll('.vw-stage-link').forEach(a => {
+    a.addEventListener('click', e => {
+      e.preventDefault();
+      switchToStep(Number(a.dataset.stage));
+    });
+  });
+
+  // Wire Next buttons
+  document.querySelectorAll('.vw-step-next-btn').forEach(btn => {
+    btn.addEventListener('click', () => switchToStep(currentStep + 1));
+  });
+
+  // Wire Back buttons
+  document.querySelectorAll('.vw-step-back-btn').forEach(btn => {
+    btn.addEventListener('click', () => switchToStep(currentStep - 1));
+  });
+
+  // Wire "Update writing sample" link in voice summary panel
+  qs('vw-voice-edit-link')?.addEventListener('click', e => {
+    e.preventDefault();
+    switchToStep(7);
+  });
+
+  // Initial step: go to LinkedIn step if just connected, otherwise first incomplete
+  if (window.location.search.includes('linkedin_connected=true')) {
+    switchToStep(6);
+  } else {
+    switchToStep(firstIncompleteStep());
+  }
 
 })();

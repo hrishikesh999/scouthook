@@ -159,7 +159,7 @@ router.post('/extract-profile', async (req, res) => {
     const result = await extractVoiceDNAFromLinkedIn(userId, tenantId);
     // Return fresh profile basics so the UI can update Stage 1 fields in-place
     const profile = await db.prepare(
-      `SELECT content_niche, audience_role, business_positioning, content_themes,
+      `SELECT content_niche, audience_role, business_positioning, content_pillars,
               voice_profile_completion_pct
        FROM user_profiles WHERE user_id = ? AND tenant_id = ?`
     ).get(userId, tenantId);

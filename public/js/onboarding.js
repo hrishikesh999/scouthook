@@ -32,13 +32,6 @@ const Onboarding = (() => {
   ──────────────────────────────────────────────────────── */
   const QUESTIONS = [
     {
-      context:     'Your POV — This shapes the perspective behind every post we write for you.',
-      text:        'What do most people in your field get wrong — and what do you believe instead?',
-      hint:        'Your honest take. The more specific, the better.',
-      placeholder: 'e.g. Most consultants lead with methodology. I think that\'s backwards — clients need to see a specific outcome first.',
-      field:       'onboarding_q1',
-    },
-    {
       context:     'Your voice — This is how we make posts sound like you, not a template.',
       text:        'If a close friend asked what you actually do all day, what would you tell them?',
       hint:        'Be as casual as you\'d actually be. Don\'t pitch — just describe.',
@@ -102,7 +95,7 @@ const Onboarding = (() => {
   /* ── Screen navigation ──────────────────────────────── */
   // Maps screen id → progress dot number
   // s1=role, s4=interview, s2=writing sample, s3=vault, s5=generating, s6=reveal
-  const DOT_MAP = { s1: '1', s4: '2', s2: '3', s3: '4', s5: '5', s6: '6' };
+  const DOT_MAP = { s1: '1', s4: '2', s2: '3', s5: '4', s6: '5' };
 
   function showScreen(id) {
     qsa('.ob-screen').forEach(s => s.classList.remove('active'));
@@ -148,7 +141,6 @@ const Onboarding = (() => {
   /* ── Screen 4: Interview ────────────────────────────── */
   function showWebsiteStep() {
     qs('ob-website-step').hidden    = false;
-    qs('ob-website-summary').hidden = true;
     qs('ob-profile-step').hidden    = true;
     qs('ob-question-step').hidden   = true;
     const backBtn = qs('ob-s4-back');
@@ -158,7 +150,6 @@ const Onboarding = (() => {
 
   function showProfileStep() {
     qs('ob-website-step').hidden    = true;
-    qs('ob-website-summary').hidden = true;
     qs('ob-profile-step').hidden    = false;
     qs('ob-question-step').hidden   = true;
     const backBtn = qs('ob-s4-back');
@@ -179,71 +170,8 @@ const Onboarding = (() => {
     renderQuestion();
   }
 
-  function buildNarrative(e) {
-    const parts = [];
-    if (e.content_niche) {
-      const niche = e.content_niche.replace(/^helping\s+/i, 'You help ');
-      parts.push(niche.match(/[.!?]$/) ? niche : niche + '.');
-    } else if (e.audience_role) {
-      parts.push(`You work with ${e.audience_role}.`);
-    }
-    if (e.audience_pain) {
-      const pain = e.audience_pain.replace(/[.!?]$/, '');
-      parts.push(`The challenge they face: ${pain.charAt(0).toLowerCase() + pain.slice(1)}.`);
-    }
-    if (e.contrarian_view) {
-      const take = e.contrarian_view.replace(/[.!?]$/, '');
-      parts.push(`Your edge: ${take.charAt(0).toLowerCase() + take.slice(1)}.`);
-    }
-    return parts.join(' ');
-  }
-
-  function showSummaryStep(extracted) {
-    const LABELS = {
-      content_niche:        'What you do',
-      audience_role:        'Who you help',
-      audience_pain:        'Their main challenge',
-      contrarian_view:      'Your take',
-      business_positioning: 'How you help them',
-    };
-
-    const card = qs('ob-narrative-card');
-    if (card) card.textContent = buildNarrative(extracted);
-
-    const fields = qs('ob-summary-fields');
-    fields.innerHTML = '';
-    Object.entries(LABELS).forEach(([key, label]) => {
-      if (!extracted[key]) return;
-      const wrap = document.createElement('div');
-      wrap.className = 'ob-summary-field';
-      wrap.innerHTML = `<label class="ob-summary-label">${label}</label>
-        <textarea class="ob-textarea ob-textarea--summary" data-key="${key}" rows="2">${escHtml(extracted[key])}</textarea>`;
-      fields.appendChild(wrap);
-    });
-
-    qs('ob-website-step').hidden    = true;
-    qs('ob-profile-step').hidden    = true;
-    qs('ob-website-summary').hidden = false;
-    qs('ob-question-step').hidden   = true;
-
-    const fieldsEl = qs('ob-summary-fields');
-    if (fieldsEl) fieldsEl.hidden = true;
-    const toggle = qs('ob-summary-edit-toggle');
-    if (toggle) {
-      toggle.onclick = () => {
-        if (!fieldsEl) return;
-        fieldsEl.hidden = !fieldsEl.hidden;
-        toggle.textContent = fieldsEl.hidden ? 'Edit details ↓' : 'Hide details ↑';
-      };
-    }
-
-    const backBtn = qs('ob-s4-back');
-    if (backBtn) backBtn.onclick = () => showWebsiteStep();
-  }
-
   function showQuestionStep() {
     qs('ob-website-step').hidden    = true;
-    qs('ob-website-summary').hidden = true;
     qs('ob-profile-step').hidden    = true;
     qs('ob-question-step').hidden   = false;
   }
@@ -287,9 +215,6 @@ const Onboarding = (() => {
     qs('ob-website-url')?.addEventListener('keydown', e => {
       if (e.key === 'Enter') submitWebsite();
     });
-
-    // Summary confirm
-    qs('ob-summary-confirm')?.addEventListener('click', confirmSummary);
 
     // No-website profile question
     qs('ob-profile-next')?.addEventListener('click', submitProfileQuestion);
@@ -355,25 +280,16 @@ const Onboarding = (() => {
 
     const hasAny = Object.values(extracted).some(v => v);
     if (hasAny) {
-      showSummaryStep(extracted);
-    } else {
-      state.questionIndex = 0;
-      renderQuestion();
-    }
-  }
-
-  function confirmSummary() {
-    const profile = {};
-    qs('ob-summary-fields').querySelectorAll('textarea[data-key]').forEach(el => {
-      const val = el.value.trim();
-      if (val) profile[el.dataset.key] = val;
-    });
-    if (Object.keys(profile).length) {
-      fetch('/api/profile', {
-        method:  'POST',
-        headers: apiHeaders(),
-        body:    JSON.stringify(profile),
-      }).catch(() => {});
+      // Save extracted fields silently — user can correct in settings
+      const profile = {};
+      Object.entries(extracted).forEach(([k, v]) => { if (v) profile[k] = v; });
+      if (Object.keys(profile).length) {
+        fetch('/api/profile', {
+          method:  'POST',
+          headers: apiHeaders(),
+          body:    JSON.stringify(profile),
+        }).catch(() => {});
+      }
     }
     state.questionIndex = 0;
     renderQuestion();
@@ -438,120 +354,16 @@ const Onboarding = (() => {
           body:    JSON.stringify({ writing_samples: sample }),
         }).catch(() => {});
       }
-      showScreen('s3');
+      saveProfileAndGenerate();
     }
 
     nextBtn?.addEventListener('click', advanceFromWriting);
     skipBtn?.addEventListener('click', () => {
       state.writingSample = '';
-      showScreen('s3');
+      saveProfileAndGenerate();
     });
     textarea?.addEventListener('keydown', e => {
       if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) advanceFromWriting();
-    });
-  }
-
-  /* ── Screen 3: Vault upload ─────────────────────────── */
-  function initS3() {
-    const dropzone  = qs('ob-vault-dropzone');
-    const fileInput = qs('ob-vault-file');
-    const fileBadge = qs('ob-vault-file-badge');
-    const fileName  = qs('ob-vault-file-name');
-    const fileClear = qs('ob-vault-file-clear');
-    const urlInput  = qs('ob-vault-url');
-    const uploadBtn = qs('ob-vault-upload-btn');
-    const skipBtn   = qs('ob-vault-skip-btn');
-    const statusEl  = qs('ob-vault-status');
-
-    let pendingFile = null;
-
-    function setStatus(msg, type) {
-      if (!statusEl) return;
-      statusEl.textContent   = msg;
-      statusEl.style.display = msg ? '' : 'none';
-      statusEl.className     = type === 'error' ? 'ob-field-error' : '';
-    }
-
-    function selectFile(f) {
-      const ok = /\.(pdf|docx|txt)$/i.test(f.name);
-      if (!ok) { setStatus('Only PDF, DOCX, or TXT files are supported.', 'error'); return; }
-      pendingFile = f;
-      if (fileName)   fileName.textContent    = f.name;
-      if (fileBadge)  fileBadge.style.display = '';
-      if (dropzone)   dropzone.style.display  = 'none';
-      if (urlInput)   urlInput.value          = '';
-      setStatus('', '');
-    }
-
-    dropzone?.addEventListener('dragover',  e => { e.preventDefault(); dropzone.classList.add('dragging'); });
-    dropzone?.addEventListener('dragleave', ()  => dropzone.classList.remove('dragging'));
-    dropzone?.addEventListener('drop', e => {
-      e.preventDefault(); dropzone.classList.remove('dragging');
-      const f = e.dataTransfer.files[0]; if (f) selectFile(f);
-    });
-    // Keyboard access: label handles click natively; keydown fires explicit click for Enter/Space
-    dropzone?.addEventListener('keydown', e => {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput?.click(); }
-    });
-    fileInput?.addEventListener('change', () => { if (fileInput.files[0]) selectFile(fileInput.files[0]); });
-
-    fileClear?.addEventListener('click', e => {
-      e.stopPropagation();
-      pendingFile = null;
-      if (fileBadge) fileBadge.style.display = 'none';
-      if (dropzone)  dropzone.style.display  = '';
-      if (fileInput) fileInput.value         = '';
-      if (urlInput)  urlInput.value          = '';
-      setStatus('', '');
-    });
-
-    skipBtn?.addEventListener('click', () => saveProfileAndGenerate());
-
-    uploadBtn?.addEventListener('click', async () => {
-      const url = (urlInput?.value || '').trim();
-      if (!pendingFile && !url) { saveProfileAndGenerate(); return; }
-
-      uploadBtn.disabled = true;
-      setStatus('Uploading…', '');
-
-      try {
-        let res, data;
-        if (pendingFile) {
-          res  = await fetch('/api/vault/upload', {
-            method:  'POST',
-            headers: { ...apiHeaders(), 'Content-Type': pendingFile.type || 'application/octet-stream', 'X-Filename': encodeURIComponent(pendingFile.name) },
-            body:    pendingFile,
-          });
-          data = await res.json();
-        } else {
-          res  = await fetch('/api/vault/upload', {
-            method:  'POST',
-            headers: { ...apiHeaders(), 'Content-Type': 'application/json' },
-            body:    JSON.stringify({ url }),
-          });
-          data = await res.json();
-        }
-
-        if (data.ok) {
-          state.vaultDocId = data.document?.id || null;
-          // Trigger mining in background so vault ideas are ready for next session
-          fetch('/api/vault/mine', { method: 'POST', headers: apiHeaders() }).catch(() => {});
-          setStatus('', '');
-        } else {
-          if (data.error === 'plan_limit_exceeded') {
-            setStatus('Vault limit reached on your current plan. Continuing without upload.', 'error');
-          } else {
-            setStatus('Upload failed — continuing without it.', 'error');
-          }
-          await new Promise(r => setTimeout(r, 1500));
-        }
-      } catch {
-        setStatus('Upload failed — continuing without it.', 'error');
-        await new Promise(r => setTimeout(r, 1500));
-      }
-
-      uploadBtn.disabled = false;
-      saveProfileAndGenerate();
     });
   }
 
@@ -823,7 +635,6 @@ const Onboarding = (() => {
 
     initS1();
     initS2();
-    initS3();
     initS4();
     initS6();
 

@@ -320,10 +320,31 @@ async function mineChunks(chunks, documentFilename, userProfile = {}) {
 }
 
 /**
- * Crawl a website homepage, find blog/article links, fetch up to 3 articles,
+ * Try common About page paths and return the first one with meaningful content.
+ * Returns plain text or null if none found. Zero AI cost — pure HTTP.
+ */
+const ABOUT_PATHS = ['/about', '/about-us', '/about-me', '/our-story', '/story', '/bio'];
+
+async function extractAboutPage(baseUrl) {
+  const base = new URL(baseUrl);
+  for (const path of ABOUT_PATHS) {
+    try {
+      const url = `${base.protocol}//${base.hostname}${path}`;
+      const { text } = await extractUrl(url);
+      if (text && text.trim().length > 300) return text.trim();
+    } catch {
+      // Try next path
+    }
+  }
+  return null;
+}
+
+/**
+ * Crawl a website homepage, fetch the About page and blog/article links,
  * and return their combined plain text (capped at 8000 chars total).
+ * About page is prioritised — richest personal voice signal for most consultant/coach sites.
  *
- * Non-blocking — if the site has no blog, returns ''.
+ * Non-blocking — if the site has neither, returns ''.
  * Used to give voice extraction real writing samples from the user's own content.
  *
  * @param {string} url  — full URL of the user's website homepage
@@ -331,18 +352,25 @@ async function mineChunks(chunks, documentFilename, userProfile = {}) {
  */
 async function extractBlogPosts(url) {
   try {
-    const { text: homepageText, html: homepageHtml } = await extractUrlWithHtml(url);
+    const { html: homepageHtml } = await extractUrlWithHtml(url);
     const baseUrl = new URL(url);
+
+    // About page first — richest personal voice signal for consultants/coaches
+    const aboutText = await extractAboutPage(url).catch(() => null);
 
     // Find candidate article links: internal links that look like blog posts
     const articleLinks = findArticleLinks(homepageHtml || '', baseUrl, url);
-    if (!articleLinks.length) return '';
 
     const MAX_ARTICLES = 3;
     const MAX_CHARS    = 8000;
     const candidates   = articleLinks.slice(0, MAX_ARTICLES);
 
     const texts = [];
+
+    if (aboutText && aboutText.length > 200) {
+      texts.push(aboutText.slice(0, 3000));
+    }
+
     for (const link of candidates) {
       try {
         const { text } = await extractUrl(link);
@@ -354,6 +382,7 @@ async function extractBlogPosts(url) {
       }
     }
 
+    if (!texts.length) return '';
     return texts.join('\n\n---\n\n').slice(0, MAX_CHARS);
   } catch {
     return '';
@@ -396,7 +425,7 @@ function findArticleLinks(html, baseUrl, sourceUrl) {
   const seen   = new Set([sourceUrl]);
   const links  = [];
   const hrefRe = /href=["']([^"'#?]+)["']/gi;
-  const BLOG_PATH_RE = /\/(blog|post|posts|article|articles|writing|thoughts|essays|insights?|news|stories?)\/\S/i;
+  const BLOG_PATH_RE = /\/(blog|post|posts|article|articles|writing|thoughts|essays|insights?|news|stories?|resources?|case-stud|podcast|newsletter|updates?)\/\S/i;
   const DATE_PATH_RE = /\/20\d\d\//;
 
   let match;
@@ -432,4 +461,5 @@ module.exports = {
   extractText,
   chunkText,
   extractBlogPosts,
+  extractAboutPage,
 };

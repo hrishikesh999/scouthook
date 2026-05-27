@@ -255,13 +255,18 @@ router.post('/extract-website', async (req, res) => {
     return res.status(400).json({ ok: false, error: 'invalid_url' });
   }
 
-  const { extractUrl } = require('../services/vaultMiner');
+  const { extractUrl, extractAboutPage } = require('../services/vaultMiner');
   const Anthropic = require('@anthropic-ai/sdk');
   const { getSetting } = require('../db');
 
   try {
-    const { text } = await extractUrl(url);
-    const truncated = text.slice(0, 4000);
+    // About page first — richer positioning signal than homepage for most consultant/coach sites
+    const [aboutText, { text: homepageText }] = await Promise.all([
+      extractAboutPage(url).catch(() => null),
+      extractUrl(url),
+    ]);
+    const primaryText = (aboutText && aboutText.length > 300) ? aboutText : homepageText;
+    const truncated = primaryText.slice(0, 4000);
 
     const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
     if (!apiKey) return res.status(500).json({ ok: false, error: 'no_api_key' });

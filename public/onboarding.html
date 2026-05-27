@@ -13,14 +13,13 @@
 
   <header class="ob-header">
     <img src="/images/sh-logo-dark.png" alt="Scouthook" class="ob-logo-img">
-    <!-- 6 dots: role · interview · writing · vault · generating · done -->
+    <!-- 5 dots: role · interview · writing · generating · done -->
     <div id="ob-step-dots" class="ob-step-dots" hidden aria-hidden="true">
       <span class="ob-dot" data-step="1"></span>
       <span class="ob-dot" data-step="2"></span>
       <span class="ob-dot" data-step="3"></span>
       <span class="ob-dot" data-step="4"></span>
       <span class="ob-dot" data-step="5"></span>
-      <span class="ob-dot" data-step="6"></span>
     </div>
   </header>
 
@@ -91,17 +90,6 @@
           <div id="ob-website-loading" class="ob-loading-state" hidden aria-live="polite">Reading your site…</div>
         </div>
 
-        <!-- Website summary — shown after extraction, hidden otherwise -->
-        <div id="ob-website-summary" hidden>
-          <p class="ob-q-label">Here's how we see you</p>
-          <div id="ob-narrative-card" class="ob-narrative-card"></div>
-          <div class="ob-interview-actions" style="margin-top:20px">
-            <button id="ob-summary-confirm" class="ob-btn-primary" type="button">Looks right, proceed →</button>
-            <button id="ob-summary-edit-toggle" class="ob-skip-link" type="button">Edit details ↓</button>
-          </div>
-          <div id="ob-summary-fields" hidden></div>
-        </div>
-
         <!-- No-website profile question (shown when website is skipped) -->
         <div id="ob-profile-step" hidden>
           <p class="ob-q-text">What do you do, and who do you help?</p>
@@ -139,65 +127,32 @@
     <div class="ob-interview-wrap">
 
       <div class="ob-interview-left" aria-hidden="true">
-        <p class="ob-guide-title">Match your voice exactly</p>
-        <p class="ob-guide-body">A paragraph of your own writing tells us more about your voice than 20 questions ever could.</p>
+        <p class="ob-guide-title">This is what makes posts sound like you</p>
+        <p class="ob-guide-body">Paste 2–3 of your best LinkedIn posts. We extract your exact vocabulary, hook style, and sentence rhythm — so your first post doesn't read like a template.</p>
         <ul class="ob-guide-tips">
-          <li>A newsletter, article, or LinkedIn post all work.</li>
-          <li>The more you write like yourself, the better.</li>
-          <li>Even one paragraph makes a difference.</li>
+          <li>Any posts you've written work — older ones are fine.</li>
+          <li>The more you paste, the sharper the match.</li>
+          <li>No LinkedIn posts yet? Skip — you can add them later.</li>
         </ul>
       </div>
 
       <div class="ob-interview-right">
         <button class="ob-back-btn" id="ob-s2-back" type="button">← Back</button>
 
-        <p class="ob-q-text">Got a newsletter, article, or post you've written? Paste it here.</p>
-        <p class="ob-website-hint">We use it to match your sentence rhythm, vocabulary, and opening style — so posts sound like <em>you</em>, not a template.</p>
+        <p class="ob-q-text">Paste 2–3 of your best LinkedIn posts here.</p>
+        <p class="ob-website-hint">We use them to mirror your sentence rhythm, vocabulary, and opening style — not copy them verbatim.</p>
 
         <textarea id="ob-writing-sample" class="ob-textarea ob-textarea--interview" rows="8"
                   maxlength="3000"
-                  placeholder="Paste something you've written. A LinkedIn post, a newsletter intro, a case study summary — anything in your own words."></textarea>
+                  placeholder="Paste your LinkedIn posts here. Separate each post with a blank line."></textarea>
         <p class="ob-char-count" id="ob-writing-char-count" aria-live="polite"></p>
 
         <div class="ob-interview-actions" style="margin-top:16px">
           <button id="ob-writing-next" class="ob-btn-primary" type="button">Continue →</button>
-          <button id="ob-writing-skip" class="ob-skip-link" type="button">Skip, I'll do this later →</button>
+          <button id="ob-writing-skip" class="ob-skip-link" type="button">I don't have LinkedIn posts yet →</button>
         </div>
       </div>
 
-    </div>
-  </section>
-
-  <!-- ── Screen 3: Vault upload ──────────────────────────────── -->
-  <section id="ob-s3" class="ob-screen ob-screen--center" aria-label="Step 3: Upload your best work">
-    <div class="ob-content ob-content--narrow">
-      <h1 class="ob-headline" style="font-size:1.5rem">This is what makes ScoutHook different.</h1>
-      <p class="ob-subheadline">Most AI tools write from thin air. ScoutHook writes from your actual work — your case studies, proposals, and frameworks. Upload one document and the difference is immediate.</p>
-
-      <label class="ob-dropzone" id="ob-vault-dropzone" tabindex="0" aria-label="Drop a file here or click to browse">
-        <input type="file" id="ob-vault-file" accept=".pdf,.docx,.txt" style="display:none" aria-hidden="true">
-        <svg class="ob-dropzone-icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-        <p class="ob-dropzone-label"><span class="ob-dropzone-browse">Click to browse</span> or drop a file here</p>
-        <p class="ob-dropzone-types">PDF, DOCX, or TXT · up to 25 MB</p>
-      </label>
-
-      <div id="ob-vault-file-badge" class="ob-file-badge" style="display:none">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-        <span class="ob-file-badge-name" id="ob-vault-file-name"></span>
-        <button class="ob-file-clear" id="ob-vault-file-clear" type="button" aria-label="Remove file">×</button>
-      </div>
-
-      <div class="ob-url-alt-row">
-        <span class="ob-url-alt-or">or</span>
-        <input id="ob-vault-url" class="ob-field" type="url" placeholder="Paste a URL (blog post, case study…)" />
-      </div>
-
-      <p id="ob-vault-status" class="ob-field-error" style="display:none" role="status" aria-live="polite"></p>
-
-      <div class="ob-interview-actions" style="margin-top:20px">
-        <button id="ob-vault-upload-btn" class="ob-btn-primary" type="button">Upload and continue →</button>
-        <button id="ob-vault-skip-btn" class="ob-skip-link" type="button">I'll add this later →</button>
-      </div>
     </div>
   </section>
 

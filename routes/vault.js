@@ -364,7 +364,7 @@ router.get('/suggest-topics', async (req, res) => {
 
   try {
     const profile = await db.prepare(
-      `SELECT content_niche, audience_role, business_positioning, contrarian_view
+      `SELECT content_niche, audience_role, business_positioning, contrarian_view, input_examples
        FROM user_profiles WHERE user_id = ? AND tenant_id = ?`
     ).get(userId, tenantId);
 
@@ -378,7 +378,21 @@ router.get('/suggest-topics', async (req, res) => {
     const headline    = liRow?.linkedin_headline        || '';
     const contrarian  = profile?.contrarian_view       || '';
 
-    if (!niche && !audience && !positioning && !headline) {
+    // Parse writing samples — take up to 2, cap each at 350 chars to keep prompt tight
+    let writingSamples = [];
+    if (profile?.input_examples) {
+      try {
+        const parsed = JSON.parse(profile.input_examples);
+        if (Array.isArray(parsed)) {
+          writingSamples = parsed
+            .filter(s => typeof s === 'string' && s.trim().length > 40)
+            .slice(0, 2)
+            .map(s => s.trim().slice(0, 350));
+        }
+      } catch { /* malformed — ignore */ }
+    }
+
+    if (!niche && !audience && !positioning && !headline && !writingSamples.length) {
       return res.json({ ok: true, topics: [] });
     }
 
@@ -389,13 +403,17 @@ router.get('/suggest-topics', async (req, res) => {
 
     const client = new Anthropic({ apiKey });
 
+    const samplesBlock = writingSamples.length
+      ? `\nWriting samples (their actual posts — use these to understand their natural topics, tone, and vocabulary):\n${writingSamples.map((s, i) => `[${i + 1}] "${s}"`).join('\n')}`
+      : '';
+
     const context = [
       niche       && `Niche: ${niche}`,
       audience    && `Audience: ${audience}`,
       positioning && `Positioning: ${positioning}`,
       headline    && `LinkedIn headline: ${headline}`,
       contrarian  && `Their contrarian POV: ${contrarian}`,
-    ].filter(Boolean).join('\n');
+    ].filter(Boolean).join('\n') + samplesBlock;
 
     const TYPE_GUIDANCE = {
       reach: `Goal: REACH (grow audience)\nFocus: relatable stories, personal contradictions, lessons learned the hard way, before/after moments. Topics that make strangers feel seen and want to share.`,
@@ -421,6 +439,7 @@ Each topic must:
 - Be a concrete, opinionated premise — not a generic category
 - Reflect a real tension, lesson, or contrarian view specific to their niche
 - Feel like something only this person could write
+${writingSamples.length ? '- Mirror the vocabulary, topic territory, and level of specificity shown in their writing samples — not copying them, but extending naturally from them' : ''}
 
 For each topic also write a "textarea_input": 2–3 sentences in FIRST PERSON that this author would type as their raw starting material. It should sound like they're briefing a ghostwriter — personal, specific, with at least one concrete detail (number, timeframe, named situation). NOT a drafted post.
 

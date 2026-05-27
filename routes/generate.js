@@ -1117,4 +1117,53 @@ router.post('/extract-tension', async (req, res) => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// POST /api/generate/clarify
+// Returns one smart clarifying question for thin inputs. Never blocking —
+// falls back to a generic question on any error. Haiku-powered, fast.
+// Body: { raw_idea }
+// ---------------------------------------------------------------------------
+router.post('/clarify', async (req, res) => {
+  const { userId, tenantId } = req;
+  if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
+
+  const { raw_idea } = req.body;
+  if (!raw_idea?.trim()) return res.json({ ok: true, question: null });
+
+  try {
+    const profile = db.prepare(
+      `SELECT content_niche, audience_role, audience_pain, contrarian_view, content_pillars
+       FROM user_profiles WHERE user_id = ? AND tenant_id = ?`
+    ).get(userId, tenantId);
+
+    const niche    = profile?.content_niche || '';
+    const audience = profile?.audience_role || '';
+    const pain     = profile?.audience_pain || '';
+
+    const Anthropic = require('@anthropic-ai/sdk');
+    const apiKey    = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
+    if (!apiKey) return res.json({ ok: true, question: null });
+
+    const client  = new Anthropic({ apiKey });
+    const message = await client.messages.create({
+      model:      'claude-haiku-4-5-20251001',
+      max_tokens: 120,
+      messages: [{
+        role: 'user',
+        content: `A LinkedIn content creator typed this post idea: "${raw_idea.slice(0, 400)}"
+${niche    ? `Their niche: ${niche}` : ''}
+${audience ? `Their audience: ${audience}` : ''}
+${pain     ? `Audience challenge: ${pain}` : ''}
+
+This input needs one concrete detail to make a strong post. Write ONE conversational clarifying question that asks for a specific moment, number, outcome, or example. One sentence only. No preamble, no label — just the question.`,
+      }],
+    });
+
+    const question = message.content[0]?.text?.trim() || null;
+    return res.json({ ok: true, question });
+  } catch {
+    return res.json({ ok: true, question: null });
+  }
+});
+
 module.exports = router;

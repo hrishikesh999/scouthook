@@ -61,7 +61,8 @@ const SPECIFICITY_MANDATE = `
 SPECIFICITY RULE:
 Any number, name, timeframe, or concrete detail that appears in the raw idea is sacred — preserve it verbatim, never approximate or generalise it.
 Never invent statistics, metrics, or outcomes that are not in the input.
-When the input has no numbers: do NOT use [SPECIFIC NEEDED] markers and do NOT invent figures. Instead, ground the post in what IS concrete — the specific scenario, the named decision, the role of the person, the direction of change, the exact moment. "I stopped sending follow-up emails entirely" is specific. "I changed my outreach approach" is not. The situation itself is the specificity — use it.`;
+When the input has no numbers: do NOT use [SPECIFIC NEEDED] markers and do NOT invent figures. Instead, ground the post in what IS concrete — the specific scenario, the named decision, the role of the person, the direction of change, the exact moment. "I stopped sending follow-up emails entirely" is specific. "I changed my outreach approach" is not. The situation itself is the specificity — use it.
+NEVER output placeholder text in square brackets (e.g. [specific result], [add detail here], [your niche], [metric]). Square brackets break the post and are never acceptable. If a concrete detail is missing, write around it naturally using the author's niche and audience context — or make a plausible inference from what is given.`;
 
 const SELF_CHECK = `
 SELF-CHECK BEFORE OUTPUTTING:
@@ -117,29 +118,16 @@ async function ideaToPost(rawIdea, userProfile, options = {}) {
   const postType          = options.postType || null;
   const convertCtaIntent  = options.convertCtaIntent || null;
 
-  // Stage 1 (Haiku) and substance check run in parallel
-  const [blueprint, inputQuality] = await Promise.all([
-    archetypeOverride
-      ? Promise.resolve({
-          archetype:  archetypeOverride,
-          confidence: 1,
-          tension:    options.tensionStatement || '',
-          arc:        '',
-          hook_draft: '',
-        })
-      : buildStructureBlueprint(rawIdea, postType, client),
-    assessInputQuality(rawIdea, client, userProfile),
-  ]);
-
-  if (!options.skipSubstanceCheck) {
-    const substanceResult = buildSubstancePrompt(inputQuality, userProfile);
-    if (substanceResult) {
-      const err = new Error('missing_substance');
-      err.substancePrompt = substanceResult.message;
-      err.substanceTier   = substanceResult.tier;
-      throw err;
-    }
-  }
+  // Stage 1 (Haiku): derive structure blueprint
+  const blueprint = await (archetypeOverride
+    ? Promise.resolve({
+        archetype:  archetypeOverride,
+        confidence: 1,
+        tension:    options.tensionStatement || '',
+        arc:        '',
+        hook_draft: '',
+      })
+    : buildStructureBlueprint(rawIdea, postType, client, userProfile));
 
   // Caller-supplied tensionStatement takes precedence over Stage 1's derived tension
   if (options.tensionStatement) blueprint.tension = options.tensionStatement;
@@ -256,10 +244,18 @@ ${funnelInstruction}${hintLine}`;
  * Identifies tension, arc, archetype, and hook draft in one coherent pass.
  * Replaces the separate selectHook() + tensionExtractor calls for the idea path.
  */
-async function buildStructureBlueprint(rawIdea, postType, client) {
+async function buildStructureBlueprint(rawIdea, postType, client, userProfile = null) {
   const archetypeLines = ARCHETYPE_KEYS.map(key => `- ${key}: ${HOOK_ARCHETYPES[key].trigger}`).join('\n');
   const postTypeBlock  = postType && ARCHETYPE_POST_TYPE_PREFERENCES[postType]
     ? `\nPOST GOAL: ${postType.toUpperCase()}\nPreferred archetypes: ${ARCHETYPE_POST_TYPE_PREFERENCES[postType].join(', ')}\nWeight toward these when the input fits multiple.\n`
+    : '';
+
+  // For short inputs, inject Voice DNA so Haiku can develop the idea into the author's angle
+  const voiceContextBlock = (rawIdea.length < 120 && userProfile)
+    ? `\nAUTHOR CONTEXT (use to develop the idea's angle and connect it to the author's niche):\n` +
+      (userProfile.content_niche   ? `Niche: ${userProfile.content_niche}\n` : '') +
+      (userProfile.audience_pain   ? `Audience challenge: ${userProfile.audience_pain}\n` : '') +
+      (userProfile.contrarian_view ? `Author's POV: ${userProfile.contrarian_view}\n` : '')
     : '';
 
   try {
@@ -270,7 +266,7 @@ async function buildStructureBlueprint(rawIdea, postType, client) {
       system:      BLUEPRINT_SYSTEM_PROMPT,
       messages: [{
         role:    'user',
-        content: `ARCHETYPES:\n${archetypeLines}\n${postTypeBlock}\nRAW IDEA:\n${rawIdea}\n\nReturn the blueprint JSON. hook_draft must reflect the actual content of this specific idea.`,
+        content: `ARCHETYPES:\n${archetypeLines}\n${postTypeBlock}${voiceContextBlock}\nRAW IDEA:\n${rawIdea}\n\nReturn the blueprint JSON. hook_draft must reflect the actual content of this specific idea.`,
       }],
     });
 
@@ -1005,21 +1001,10 @@ async function restructureToPost(sourceText, userProfile, documentContext = null
   const convertCtaIntent  = options.convertCtaIntent || null;
   const tensionStatement  = options.tensionStatement || null;
 
-  // Classify archetype + quality check in parallel before generation (both Haiku, fast)
-  const [hookResult, inputQuality] = await Promise.all([
-    archetypeOverride ? Promise.resolve({ archetype: archetypeOverride, hookInjection: buildHookInjection(overrideRecord), confidence: 1 }) : selectHook(sourceText, userProfile, postType),
-    assessInputQuality(sourceText, client, userProfile),
-  ]);
-
-  if (!options.skipSubstanceCheck) {
-    const substanceResult = buildSubstancePrompt(inputQuality, userProfile);
-    if (substanceResult) {
-      const err = new Error('missing_substance');
-      err.substancePrompt = substanceResult.message;
-      err.substanceTier   = substanceResult.tier;
-      throw err;
-    }
-  }
+  // Classify archetype before generation (Haiku, fast)
+  const hookResult = await (archetypeOverride
+    ? Promise.resolve({ archetype: archetypeOverride, hookInjection: buildHookInjection(overrideRecord), confidence: 1 })
+    : selectHook(sourceText, userProfile, postType));
 
   const systemPrompt = buildRefineSystemPrompt(userProfile, hookResult.hookInjection, postType, convertCtaIntent, tensionStatement);
   const userPrompt   = buildRefineUserPrompt(sourceText, documentContext);

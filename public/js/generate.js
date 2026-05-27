@@ -20,6 +20,8 @@ let _nichePlaceholders  = [];   // niche-specific placeholder examples loaded fr
 let _nicheProfile       = null; // cached profile for niche-aware nudge (content_niche)
 let _shownVaultIds      = new Set(); // vault idea IDs shown this session — rotates on each click
 let _shownAITopics      = [];        // AI topic titles shown this session — passed as exclusion list
+let _clarificationMode  = false;     // true while waiting for clarification answer from user
+let _originalIdea       = '';        // the user's original thin input, preserved during clarification
 
 /* ── DOM refs ────────────────────────────────────────────────── */
 const guidedChat          = document.getElementById('guided-chat');
@@ -382,6 +384,18 @@ const chat = (() => {
       div.appendChild(btn);
     }
 
+    if (opts.hasSkip) {
+      const skip = document.createElement('button');
+      skip.style.cssText = 'display:block;margin-top:10px;font-size:0.8125rem;color:var(--text-muted);' +
+        'background:none;border:none;padding:0;cursor:pointer;font-family:var(--font-sans);text-align:left;';
+      skip.textContent = 'Skip — just generate →';
+      skip.addEventListener('click', () => {
+        _clarificationMode = false;
+        triggerGenerate({ enrichedIdea: _originalIdea });
+      });
+      div.appendChild(skip);
+    }
+
     chatThread.appendChild(div);
     chatThread.scrollTop = chatThread.scrollHeight;
     return div;
@@ -413,6 +427,10 @@ const chat = (() => {
       chatSendBtn.innerHTML = isLast ? 'Write my lead magnet →' : 'Next →';
       chatSendBtn.classList.add('text-mode');
       chatSendBtn.setAttribute('aria-label', isLast ? 'Write lead magnet' : 'Next step');
+    } else if (_clarificationMode) {
+      chatSendBtn.innerHTML = 'Write my post →';
+      chatSendBtn.classList.add('text-mode');
+      chatSendBtn.setAttribute('aria-label', 'Generate post');
     } else {
       chatSendBtn.innerHTML = ARROW_SVG;
       chatSendBtn.classList.remove('text-mode');
@@ -438,6 +456,8 @@ const chat = (() => {
     _lmProofMode     = 'metric';
     _tensionResult   = null;
     selectedVaultIdeaId = null;
+    _clarificationMode  = false;
+    _originalIdea       = '';
 
     chatThread.innerHTML = '';
     const vaultPanel = document.getElementById('vault-panel');
@@ -520,19 +540,43 @@ const chat = (() => {
       return;
     }
 
-    // ── Extraction path: single input → generate directly ───────
-    if (!val) {
-      showChatInputError('Add something before generating.');
-      chatInput.focus();
+    // ── Extraction path ──────────────────────────────────────────
+    if (!val) { showChatInputError('Add something before generating.'); chatInput.focus(); return; }
+    if (val.length < 15) { showChatInputError('Add a bit more to work with.'); chatInput.focus(); return; }
+
+    // Waiting for clarification answer
+    if (_clarificationMode) {
+      _clarificationMode = false;
+      addUser(val);
+      chatInput.value = '';
+      chatInput.style.height = '';
+      const enrichedIdea = `${_originalIdea}\n\nMore context: ${val}`;
+      triggerGenerate({ enrichedIdea });
       return;
     }
-    if (val.length < 30) {
-      showChatInputError('Add a bit more — the more specific, the better the post.');
-      chatInput.focus();
+
+    // Rich enough — generate directly
+    if (!needsClarification(val)) {
+      if (!_tensionResult && val.length >= 30) fireTensionExtraction(val);
+      triggerGenerate({});
       return;
     }
-    if (!_tensionResult && val.length >= 30) fireTensionExtraction(val);
-    triggerGenerate({});
+
+    // Thin input — ask one clarifying question
+    _clarificationMode = true;
+    _originalIdea      = val;
+    addUser(val);
+    chatThread.style.display = '';
+    chatInput.value       = '';
+    chatInput.style.height = '';
+    chatInput.rows        = 2;
+    chatInput.style.minHeight = '60px';
+    updateSendBtn();
+
+    fetchClarifyingQuestion(val).then(question => {
+      addBot(question, { hasSkip: true });
+      chatInput.focus();
+    });
   }
 
   return { init, advance, fireTensionExtraction };
@@ -567,6 +611,11 @@ chatInput.addEventListener('input', () => {
 
 chatInput.addEventListener('keydown', e => {
   if (e.key !== 'Enter') return;
+  if (_clarificationMode) {
+    // Clarification answer: Enter submits (like lead magnet single-line steps)
+    if (!e.shiftKey) { e.preventDefault(); chat.advance(); }
+    return;
+  }
   if (selectedType && selectedType !== 'lead_magnet') {
     // Extraction path: always multiline — only Cmd/Ctrl+Enter submits
     if (e.metaKey || e.ctrlKey) { e.preventDefault(); chat.advance(); }
@@ -578,6 +627,34 @@ chatInput.addEventListener('keydown', e => {
     chat.advance();
   }
 });
+
+/* ── Clarification helpers ───────────────────────────────────── */
+/**
+ * Pure JS check: does this input need a clarifying question before generation?
+ * Returns true if the input is short AND lacks both a personal pronoun and a concrete anchor.
+ */
+function needsClarification(val) {
+  if (val.length > 200) return false;           // long enough — generate directly
+  const hasPersonal = /\b(i|we|my|our)\b/i.test(val);
+  const hasAnchor   = /\d/.test(val)
+    || /\b(stopped|quit|hired|fired|launched|built|closed|signed|refused|decided|doubled|tripled|lost|won|sent|called|walked|left|joined|pivoted|cut)\b/i.test(val);
+  return !(hasPersonal && hasAnchor);           // needs BOTH personal + concrete anchor to skip
+}
+
+/** Haiku call: ask the backend for one smart clarifying question contextualised to the user's profile. */
+async function fetchClarifyingQuestion(val) {
+  try {
+    const res  = await fetch('/api/generate/clarify', {
+      method:  'POST',
+      headers: apiHeaders(),
+      body:    JSON.stringify({ raw_idea: val }),
+    });
+    const data = await res.json();
+    return data.question || "Can you give me one specific moment, number, or example that connects to this?";
+  } catch {
+    return "Can you give me one specific moment, number, or example that connects to this?";
+  }
+}
 
 /* ── Generate ────────────────────────────────────────────────── */
 chatImproveInput.addEventListener('click', () => {
@@ -592,7 +669,8 @@ async function triggerGenerate(opts = {}) {
   hideSubstanceWarning();
 
   const isExtraction = selectedType && selectedType !== 'lead_magnet';
-  const idea         = isExtraction ? chatInput.value.trim() : (chatAnswers.step0 || '');
+  const idea         = opts.enrichedIdea
+    || (isExtraction ? chatInput.value.trim() : (chatAnswers.step0 || ''));
   const tensionStmt  = opts.tensionStatement !== undefined
     ? opts.tensionStatement
     : (_tensionResult?.tension || null);
@@ -605,9 +683,8 @@ async function triggerGenerate(opts = {}) {
 
   try {
     const body = { path: 'idea', raw_idea: idea, post_type: selectedType || null };
-    if (tensionStmt)             body.tension_statement    = tensionStmt;
-    if (opts.skipSubstanceCheck) body.skip_substance_check = true;
-    if (selectedVaultIdeaId)     body.vault_idea_id         = selectedVaultIdeaId;
+    if (tensionStmt)         body.tension_statement = tensionStmt;
+    if (selectedVaultIdeaId) body.vault_idea_id      = selectedVaultIdeaId;
 
     const res  = await fetch('/api/generate', {
       method: 'POST', headers: apiHeaders(), body: JSON.stringify(body), signal: controller.signal,
@@ -618,7 +695,6 @@ async function triggerGenerate(opts = {}) {
     if (!res.ok || !data.ok) {
       const err = new Error(data.error || 'generation_failed');
       if (data.error === 'plan_limit_exceeded') { err.planCurrent = data.current; err.planLimit = data.limit; }
-      if (data.error === 'missing_substance') { err.substancePrompt = data.prompt; err.substanceTier = data.substance_tier; }
       throw err;
     }
 
@@ -632,8 +708,6 @@ async function triggerGenerate(opts = {}) {
 
     if (err.name === 'AbortError') {
       showChatError('This is taking longer than expected. <a href="#">Try again →</a>');
-    } else if (err.message === 'missing_substance') {
-      showSubstanceWarning(err.substancePrompt || 'Add a specific outcome or contrarian view to improve this post.');
     } else if (err.message === 'complete_profile_first') {
       showChatError('Your voice profile is incomplete — posts need it to generate. <a href="/settings.html">Complete it →</a>');
     } else if (err.message === 'plan_limit_exceeded') {

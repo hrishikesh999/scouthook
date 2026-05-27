@@ -226,7 +226,7 @@
     <!-- Top bar -->
     <div id="topbar" class="page-header">
       <div id="topbar-left">
-        <a href="/posts.html" id="back-link" class="back-to-new-post">← All posts</a>
+        <a href="/drafts.html" id="back-link" class="back-to-new-post">← All drafts</a>
       </div>
       <div id="topbar-right" class="page-header-actions">
         <div id="post-publish-state" class="post-publish-state" aria-live="polite" hidden>
@@ -990,7 +990,7 @@ async function loadPost(id) {
 
   } catch {
     document.getElementById('post-body').innerHTML =
-      `<p class="field-helper">Failed to load post. <a href="/posts.html">Back to Posts</a></p>`;
+      `<p class="field-helper">Failed to load post. <a href="/drafts.html">Back to Drafts</a></p>`;
   }
 }
 
@@ -1462,7 +1462,7 @@ function showPublishSuccessSheet(linkedinPostId) {
     : null;
   const primaryHtml = viewHref
     ? `<a href="${viewHref}" target="_blank" rel="noopener noreferrer" class="success-sheet-primary">View on LinkedIn →</a>`
-    : `<a href="/posts.html#published" class="success-sheet-primary">See published posts →</a>`;
+    : `<a href="/Published.html" class="success-sheet-primary">See published posts →</a>`;
   openSuccessSheet({
     icon: '🎉',
     heading: 'Live on LinkedIn!',
@@ -1480,7 +1480,7 @@ function showScheduleSuccessSheet(scheduledFor) {
     icon: '📅',
     heading: 'Scheduled!',
     sub: `Going live ${when}. We'll publish it automatically — no action needed.`,
-    primaryHtml: `<a href="/posts.html#scheduled" class="success-sheet-primary">View your schedule →</a>`,
+    primaryHtml: `<a href="/schedule.html" class="success-sheet-primary">View your schedule →</a>`,
     secondaryHref: '/generate.html?new=1',
     secondaryLabel: 'Write another post',
   });

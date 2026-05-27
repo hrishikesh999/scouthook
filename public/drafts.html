@@ -2,9 +2,52 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="refresh" content="0; url=/posts.html#drafts">
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Drafts — Scouthook</title>
+  <link rel="stylesheet" href="/css/main.css">
 </head>
 <body>
-  <script>location.replace('/posts.html#drafts');</script>
+
+  <script src="/js/sidebar.js"></script>
+
+  <!-- ── Main content ──────────────────────────────────────── -->
+  <div id="main-content">
+
+    <!-- ── Publish banner ──────────────────────────────────── -->
+    <div id="publish-banner" class="publish-banner hidden" role="status" aria-live="polite">
+      Post successfully published to LinkedIn. Draft archived.
+    </div>
+
+    <!-- ── Drafts ───────────────────────────────────────────── -->
+    <div class="drafts-page">
+      <div class="drafts-header page-header">
+        <div>
+          <h1 class="drafts-title" id="drafts-title">Drafts</h1>
+          <p class="drafts-sub">Your saved posts, newest first. Click any row to refine.</p>
+        </div>
+      </div>
+      <div id="drafts-container" aria-live="polite">
+        <!-- Rendered by drafts.js -->
+      </div>
+    </div>
+
+    <footer class="app-footer" role="contentinfo">
+      <div class="app-footer-inner">
+        <a href="https://www.scouthook.com/privacy" target="_blank" rel="noopener">Privacy Policy</a>
+        <span class="app-footer-sep">|</span>
+        <a href="https://www.scouthook.com/terms" target="_blank" rel="noopener">Terms of Service</a>
+        <span class="app-footer-sep">|</span>
+        <a href="/help.html">Help</a>
+        <p class="app-footer-legal">© 2026 CopyPower Digital LLP. ScoutHook is an AI-powered authority engine.</p>
+      </div>
+    </footer>
+
+  </div><!-- /main-content -->
+
+  <script src="/js/session.js"></script>
+  <script src="/js/ui-toast.js"></script>
+  <script src="/js/account-bar.js"></script>
+  <script src="/js/drafts.js"></script>
 </body>
 </html>

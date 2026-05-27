@@ -4997,44 +4997,6 @@ body {
   border-color: rgba(99, 102, 241, 0.38);
 }
 
-.sidebar-help-link {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
-  margin-top: 4px;
-  color: var(--text-tertiary, #9ca3af);
-  font-size: 12px;
-  font-weight: 500;
-  font-family: var(--font-sans);
-  text-decoration: none;
-  border-radius: 6px;
-  transition: color 0.15s, background 0.15s;
-}
-.sidebar-help-link:hover {
-  color: var(--text-secondary);
-  background: rgba(255, 255, 255, 0.06);
-  text-decoration: none;
-}
-
-/* ── Unified Posts page ─────────────────────────────────────── */
-.posts-page-header {
-  padding: var(--space-8) var(--space-8) var(--space-5);
-}
-
-.posts-page-title {
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: var(--text-heading);
-  font-family: var(--font-sans);
-  letter-spacing: -0.02em;
-  margin: 0;
-}
-
-.posts-panel {
-  padding: var(--space-8);
-}
-
 @media (max-width: 768px) {
   .app-user-bar {
     right: var(--space-4);

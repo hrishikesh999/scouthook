@@ -286,21 +286,21 @@
       font-family: var(--font-sans);
     }
 
-    /* ── Intent cards (3-card grid) ──────────────────────────── */
+    /* ── Intent chips (2-chip flex row) ─────────────────────── */
     #intent-row {
-      display: grid;
-      grid-template-columns: 1fr 1fr 1fr;
+      display: flex;
       gap: 8px;
       border-top: 1px solid var(--border);
       margin-top: 4px;
       padding-top: 14px;
     }
     .intent-card {
+      flex: 1;
       display: flex;
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 5px;
-      padding: 12px 14px;
+      flex-direction: row;
+      align-items: center;
+      gap: 10px;
+      padding: 11px 14px;
       border: 1.5px solid var(--border);
       border-radius: 12px;
       background: var(--bg-surface);
@@ -308,7 +308,6 @@
       text-align: left;
       font-family: var(--font-sans);
       transition: border-color 0.12s, background 0.12s, box-shadow 0.12s;
-      min-height: 80px;
     }
     .intent-card:hover {
       border-color: var(--brand);
@@ -326,69 +325,23 @@
       color: var(--brand);
       opacity: 0.7;
     }
-    .intent-card-icon {
-      font-size: 1.25rem;
-      line-height: 1;
-      margin-bottom: 2px;
-    }
+    .intent-card-icon { font-size: 1.125rem; line-height: 1; flex-shrink: 0; }
     .intent-card-body {
       display: flex;
       flex-direction: column;
-      gap: 2px;
-      flex: 1;
+      gap: 1px;
     }
     .intent-card-title {
-      font-size: 0.875rem;
-      font-weight: 700;
+      font-size: 0.8125rem;
+      font-weight: 600;
       color: var(--text-heading);
       line-height: 1.2;
     }
     .intent-card.active .intent-card-title { color: var(--brand); }
     .intent-card-desc {
-      font-size: 0.75rem;
-      color: var(--text-muted);
-      line-height: 1.4;
-    }
-
-    /* Sub-type pills (story / opinion / result) — inside write card */
-    .intent-subtype-row {
-      display: none;
-      gap: 4px;
-      flex-wrap: wrap;
-      padding-top: 8px;
-      border-top: 1px solid var(--border);
-      width: 100%;
-      margin-top: 2px;
-    }
-    .intent-card.active .intent-subtype-row { display: flex; }
-    .intent-subtype-btn {
       font-size: 0.6875rem;
-      font-family: var(--font-sans);
-      padding: 3px 9px;
-      border: 1px solid var(--border);
-      border-radius: 999px;
-      background: var(--bg-surface);
       color: var(--text-muted);
-      cursor: pointer;
-      transition: border-color 0.1s, color 0.1s, background 0.1s;
-      white-space: nowrap;
-    }
-    .intent-subtype-btn:hover {
-      border-color: var(--brand);
-      color: var(--text-body);
-    }
-    .intent-subtype-btn.active {
-      border-color: var(--brand);
-      background: color-mix(in srgb, var(--brand) 12%, var(--bg-surface));
-      color: var(--brand);
-      font-weight: 600;
-    }
-    .intent-subtype-btn.recommended::after {
-      content: ' ✦';
-      font-size: 0.55rem;
-      vertical-align: super;
-      color: var(--brand);
-      opacity: 0.7;
+      line-height: 1.35;
     }
 
     /* ── Profile gate nudge ─────────────────────────────────── */
@@ -591,24 +544,10 @@
           <!-- Specificity nudge -->
           <div id="specificity-nudge" role="status" aria-live="polite"></div>
 
-          <!-- ── 3-card intent row ─────────────────────────────── -->
+          <!-- ── 2-chip intent row ─────────────────────────────── -->
           <div id="intent-row">
 
-            <!-- Card 1: Write my post (covers reach / trust / convert) -->
-            <button class="intent-card" id="intent-write" type="button">
-              <span class="intent-card-icon">✍️</span>
-              <div class="intent-card-body">
-                <span class="intent-card-title">Write my post</span>
-                <span class="intent-card-desc">A story, opinion or result</span>
-              </div>
-              <div class="intent-subtype-row" id="intent-subtype-row">
-                <button class="intent-subtype-btn active" data-type="reach" type="button">📖 Story</button>
-                <button class="intent-subtype-btn" data-type="trust" type="button">💡 Opinion</button>
-                <button class="intent-subtype-btn" data-type="convert" type="button">📈 Result</button>
-              </div>
-            </button>
-
-            <!-- Card 2: Get ideas -->
+            <!-- Chip 1: Get ideas -->
             <button class="intent-card" id="intent-ideas" type="button">
               <span class="intent-card-icon">✨</span>
               <div class="intent-card-body">
@@ -617,7 +556,7 @@
               </div>
             </button>
 
-            <!-- Card 3: Give something away (lead magnet) -->
+            <!-- Chip 2: Give something away (lead magnet) -->
             <button class="intent-card" id="intent-lead-magnet" data-type="lead_magnet" type="button">
               <span class="intent-card-icon">🎁</span>
               <div class="intent-card-body">

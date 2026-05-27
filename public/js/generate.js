@@ -184,33 +184,15 @@ const EXTRACTION_QUESTIONS = {
 
 /* ── Type selection ──────────────────────────────────────────── */
 
-// Sub-type buttons (📖 Story / 💡 Opinion / 📈 Result) inside write card
-document.querySelectorAll('.intent-subtype-btn').forEach(btn => {
-  btn.addEventListener('click', e => {
-    e.stopPropagation();
-    document.querySelectorAll('.intent-subtype-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    selectType(btn.dataset.type);
-  });
-});
-
-// Write card — clicking the card body uses the currently active sub-type
-document.getElementById('intent-write')?.addEventListener('click', () => {
-  const activeSubtype = document.querySelector('.intent-subtype-btn.active')?.dataset.type || 'reach';
-  selectType(activeSubtype);
-});
-
-// Lead magnet card
+// Lead magnet chip
 document.getElementById('intent-lead-magnet')?.addEventListener('click', () => selectType('lead_magnet'));
 
-// Get ideas card
+// Get ideas chip
 document.getElementById('intent-ideas')?.addEventListener('click', () => {
   document.getElementById('intent-ideas').classList.add('active');
-  document.getElementById('intent-write')?.classList.remove('active');
   document.getElementById('intent-lead-magnet')?.classList.remove('active');
   loadVaultPanel(selectedType || 'reach', () => {
     document.getElementById('intent-ideas')?.classList.remove('active');
-    document.getElementById('intent-write')?.classList.add('active');
   });
 });
 
@@ -222,22 +204,11 @@ function selectType(type) {
   _tensionResult      = null;
   clearTimeout(_tensionDebounce);
 
-  // Update card active states
-  const writeCard = document.getElementById('intent-write');
+  // Update chip active states (lead_magnet chip only — reach/trust/convert are silent)
   const ideasCard = document.getElementById('intent-ideas');
   const lmCard    = document.getElementById('intent-lead-magnet');
-  writeCard?.classList.remove('active');
   ideasCard?.classList.remove('active');
-  lmCard?.classList.remove('active');
-  if (['reach', 'trust', 'convert'].includes(type)) {
-    writeCard?.classList.add('active');
-    // Sync sub-type pill to match
-    document.querySelectorAll('.intent-subtype-btn').forEach(b => {
-      b.classList.toggle('active', b.dataset.type === type);
-    });
-  } else if (type === 'lead_magnet') {
-    lmCard?.classList.add('active');
-  }
+  lmCard?.classList.toggle('active', type === 'lead_magnet');
 
   hideChatError();
   hideSubstanceWarning();
@@ -267,30 +238,12 @@ async function loadMixRecommendation() {
     if (mixRecommended && mixRecommended !== selectedType && !chatInput.value.trim()) {
       selectType(mixRecommended);
     }
-    // Sync sub-type pill highlight regardless of whether we auto-switched
-    if (['reach', 'trust', 'convert'].includes(mixRecommended)) {
-      document.querySelectorAll('.intent-subtype-btn').forEach(b => {
-        if (b.dataset.type === mixRecommended) b.classList.add('recommended');
-      });
-    }
   } catch { /* non-fatal */ }
 }
 
 function markRecommendedBtn() {
-  const writeCard = document.getElementById('intent-write');
-  const lmCard    = document.getElementById('intent-lead-magnet');
-  writeCard?.classList.remove('recommended');
-  lmCard?.classList.remove('recommended');
-  document.querySelectorAll('.intent-subtype-btn').forEach(b => b.classList.remove('recommended'));
-
-  if (['reach', 'trust', 'convert'].includes(mixRecommended)) {
-    writeCard?.classList.add('recommended');
-    document.querySelectorAll('.intent-subtype-btn').forEach(b => {
-      b.classList.toggle('recommended', b.dataset.type === mixRecommended);
-    });
-  } else if (mixRecommended === 'lead_magnet') {
-    lmCard?.classList.add('recommended');
-  }
+  document.getElementById('intent-lead-magnet')
+    ?.classList.toggle('recommended', mixRecommended === 'lead_magnet');
 }
 
 /* ── Vault panel ─────────────────────────────────────────────── */
@@ -935,7 +888,6 @@ async function checkVaultEmptyState() {
 
   loadMixRecommendation();    // fire-and-forget — updates active btn if mix recommends a type
   checkProfileGate();         // fire-and-forget — nudge appears if profile is empty
-  checkVaultEmptyState();     // fire-and-forget — banner appears if user has no vault docs
 
   const urlParams = new URLSearchParams(location.search);
   const urlType   = urlParams.get('type');

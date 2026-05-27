@@ -74,6 +74,20 @@
 
   </div><!-- /main-content -->
 
+  <!-- Ideas slide-over panel (hidden until a card is clicked) -->
+  <div id="vault-ideas-overlay" class="vault-ideas-overlay" style="display:none" role="dialog" aria-modal="true" aria-label="Ideas panel">
+    <div class="vault-ideas-panel">
+      <div class="vault-ideas-panel-header">
+        <div style="min-width:0">
+          <h2 class="vault-ideas-panel-title" id="vault-ideas-panel-title">Ideas mined</h2>
+          <p class="vault-ideas-panel-sub" id="vault-ideas-panel-sub"></p>
+        </div>
+        <button id="vault-ideas-close" class="vault-ideas-close" aria-label="Close ideas panel">✕</button>
+      </div>
+      <div id="vault-ideas-body" class="vault-ideas-body" aria-live="polite"></div>
+    </div>
+  </div>
+
   <script src="/js/session.js"></script>
   <script src="/js/ui-toast.js"></script>
   <script src="/js/account-bar.js"></script>
@@ -89,6 +103,11 @@
   const uploadStatus = document.getElementById('vault-upload-status');
   const docList      = document.getElementById('vault-doc-list');
   const docEmpty     = document.getElementById('vault-empty');
+  const ideasOverlay = document.getElementById('vault-ideas-overlay');
+  const ideasBody    = document.getElementById('vault-ideas-body');
+  const ideasClose   = document.getElementById('vault-ideas-close');
+  const ideasTitle   = document.getElementById('vault-ideas-panel-title');
+  const ideasSub     = document.getElementById('vault-ideas-panel-sub');
 
   // ── Upload: file drag/drop/select ────────────────────────────────
   dropzone.addEventListener('dragover',  e => { e.preventDefault(); dropzone.classList.add('dragging'); });
@@ -200,12 +219,22 @@
       documents = data.documents || [];
       renderDocuments();
       for (const doc of documents) {
-        if (doc.status === 'indexing' || doc.status === 'pending') pollDocumentStatus(doc.id);
+        if (doc.status === 'indexing' || doc.status === 'pending') {
+          pollDocumentStatus(doc.id);
+        } else if (doc.status === 'ready' && !doc.ideas_mined) {
+          // Indexing already done but mining didn't finish (e.g. server restart)
+          triggerMining();
+          pollDocumentStatus(doc.id);
+        }
       }
-      // Auto-mine any ready documents whose chunks haven't been mined yet
-      const hasUnmined = documents.some(d => d.status === 'ready' && !d.ideas_mined);
-      if (hasUnmined) triggerMining();
     } catch { /* non-fatal */ }
+  }
+
+  // Returns 'mining' when doc is ready but ideas haven't been extracted yet.
+  // All other states pass through unchanged.
+  function effectiveStatus(doc) {
+    if (doc.status === 'ready' && !doc.ideas_mined) return 'mining';
+    return doc.status;
   }
 
   function renderDocuments() {
@@ -217,27 +246,47 @@
     docEmpty.style.display = 'none';
     docList.style.display  = '';
     docList.innerHTML      = documents.map(renderDocCard).join('');
+
+    docList.querySelectorAll('.vault-doc-card-body-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const docId   = Number(btn.dataset.id);
+        const docName = btn.dataset.name;
+        const count   = Number(btn.dataset.count) || 0;
+        openIdeasPanel(docId, docName, count);
+      });
+    });
+
     docList.querySelectorAll('.vault-doc-delete').forEach(btn => {
       btn.addEventListener('click', () => deleteDocument(Number(btn.dataset.id)));
     });
   }
 
   function renderDocCard(doc) {
-    const icon   = docIcon(doc.source_type);
-    const badge  = statusBadge(doc.status);
-    const date   = new Date(doc.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-    const meta   = `${doc.source_type.toUpperCase()} · ${date}${doc.chunk_count ? ` · ${doc.chunk_count} sections` : ''}${doc.ideas_mined ? ` · ${doc.ideas_mined} idea${doc.ideas_mined !== 1 ? 's' : ''} found` : ''}`;
-    const errMsg = doc.status === 'error' && doc.error_message
+    const icon    = docIcon(doc.source_type);
+    const effSt   = effectiveStatus(doc);
+    const badge   = statusBadge(effSt);
+    const date    = new Date(doc.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    const ideaStr = doc.ideas_mined ? ` · ${doc.ideas_mined} idea${doc.ideas_mined !== 1 ? 's' : ''} found` : '';
+    const meta    = `${doc.source_type.toUpperCase()} · ${date}${doc.chunk_count ? ` · ${doc.chunk_count} sections` : ''}${ideaStr}`;
+    const errMsg  = doc.status === 'error' && doc.error_message
       ? `<p style="font-size:0.75rem;color:var(--text-danger);margin:4px 0 0 0">${escHtml(doc.error_message)}</p>` : '';
+
+    // Card body is a button only when ideas exist (something to show)
+    const bodyAttrs = `data-id="${doc.id}" data-name="${escHtml(doc.filename)}" data-count="${doc.ideas_mined || 0}"`;
+    const bodyStart = doc.ideas_mined
+      ? `<button class="vault-doc-card-body-btn" type="button" title="View ${doc.ideas_mined} mined idea${doc.ideas_mined !== 1 ? 's' : ''}" ${bodyAttrs}>`
+      : `<div class="vault-doc-body">`;
+    const bodyEnd   = doc.ideas_mined ? `</button>` : `</div>`;
+
     return `
       <div class="vault-doc-card" data-id="${doc.id}">
         <div class="vault-doc-icon">${icon}</div>
-        <div class="vault-doc-body">
+        ${bodyStart}
           <p class="vault-doc-name" title="${escHtml(doc.filename)}">${escHtml(doc.filename)}</p>
           <p class="vault-doc-meta">${escHtml(meta)}</p>
           ${badge}
           ${errMsg}
-        </div>
+        ${bodyEnd}
         <button class="vault-doc-delete" data-id="${doc.id}" aria-label="Delete ${escHtml(doc.filename)}">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
         </button>
@@ -245,7 +294,7 @@
   }
 
   function statusBadge(status) {
-    const labels = { pending: 'Pending', indexing: 'Indexing…', ready: 'Ready', error: 'Error' };
+    const labels = { pending: 'Pending', indexing: 'Indexing…', mining: 'Mining ideas…', ready: 'Ready', error: 'Error' };
     return `<span class="vault-status-badge ${status}"><span class="vault-status-dot"></span>${labels[status] || status}</span>`;
   }
 
@@ -267,22 +316,46 @@
     } catch { /* non-fatal — mining is fire-and-forget */ }
   }
 
+  // Polls a document until it reaches a terminal state:
+  //   indexing/pending → keep polling (indexing in progress)
+  //   ready + no ideas → trigger mining once, keep polling (mining in progress)
+  //   ready + ideas    → stop, toast success
+  //   error            → stop
   function pollDocumentStatus(docId) {
+    let miningTriggered = false;
+
     const interval = setInterval(async () => {
       try {
         const res  = await fetch('/api/vault/documents');
         const data = await res.json();
         if (!data.ok) return;
+
         const updated = data.documents.find(d => d.id === docId);
         if (!updated) { clearInterval(interval); return; }
+
         const idx = documents.findIndex(d => d.id === docId);
         if (idx !== -1) { documents[idx] = updated; renderDocuments(); }
-        if (updated.status !== 'indexing' && updated.status !== 'pending') {
-          clearInterval(interval);
-          if (updated.status === 'ready') {
-            clearUploadStatus();
+
+        // Still indexing — keep waiting
+        if (updated.status === 'indexing' || updated.status === 'pending') return;
+
+        // Indexing done, mining not yet complete — trigger once and keep polling
+        if (updated.status === 'ready' && !updated.ideas_mined) {
+          if (!miningTriggered) {
+            miningTriggered = true;
             triggerMining();
           }
+          return;
+        }
+
+        // Terminal state
+        clearInterval(interval);
+
+        if (updated.status === 'ready' && updated.ideas_mined) {
+          clearUploadStatus();
+          const n    = updated.ideas_mined;
+          const name = updated.filename.length > 40 ? updated.filename.slice(0, 37) + '…' : updated.filename;
+          window.toast?.success(`${n} idea${n !== 1 ? 's' : ''} mined from "${name}" — click to explore`);
         }
       } catch { /* non-fatal */ }
     }, 3000);
@@ -290,6 +363,8 @@
 
   async function deleteDocument(docId) {
     if (!confirm('Remove this document from your vault?')) return;
+    // Close panel if it's showing this doc
+    if (ideasOverlay.dataset.docId === String(docId)) closeIdeasPanel();
     try {
       const res  = await fetch(`/api/vault/documents/${docId}`, { method: 'DELETE' });
       const data = await res.json();
@@ -299,6 +374,68 @@
     } catch (err) {
       alert(`Could not delete: ${err.message}`);
     }
+  }
+
+  // ── Ideas slide-over panel ────────────────────────────────────────
+  ideasClose.addEventListener('click', closeIdeasPanel);
+  ideasOverlay.addEventListener('click', e => {
+    // Close when clicking the dark backdrop (not the panel itself)
+    if (e.target === ideasOverlay) closeIdeasPanel();
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && ideasOverlay.style.display !== 'none') closeIdeasPanel();
+  });
+
+  function closeIdeasPanel() {
+    ideasOverlay.style.display = 'none';
+    ideasOverlay.dataset.docId = '';
+  }
+
+  async function openIdeasPanel(docId, docFilename, ideaCount) {
+    ideasOverlay.dataset.docId = String(docId);
+    ideasTitle.textContent     = `${ideaCount} idea${ideaCount !== 1 ? 's' : ''} mined`;
+    ideasSub.textContent       = docFilename;
+    ideasBody.innerHTML        = '<p class="vault-ideas-loading">Loading ideas…</p>';
+    ideasOverlay.style.display = 'flex';
+
+    try {
+      const res  = await fetch(`/api/vault/ideas?document_id=${docId}`);
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || 'Failed to load ideas');
+
+      const ideas = data.ideas || [];
+      if (!ideas.length) {
+        ideasBody.innerHTML = '<p class="vault-ideas-empty">No ideas found for this document yet.</p>';
+        return;
+      }
+
+      ideasBody.innerHTML = ideas.map(idea => renderIdeaItem(idea)).join('');
+    } catch (err) {
+      ideasBody.innerHTML = `<p class="vault-ideas-empty" style="color:var(--text-danger)">Could not load ideas: ${escHtml(err.message)}</p>`;
+    }
+  }
+
+  function renderIdeaItem(idea) {
+    const funnel   = (idea.funnel_type || 'reach').toLowerCase();
+    const label    = { reach: 'Reach', trust: 'Trust', convert: 'Convert' }[funnel] || funnel;
+    const hook     = idea.hook_preview || '';
+    const seed     = idea.seed_text    || '';
+    const display  = hook || seed;
+    const detail   = hook ? seed : '';  // show seed as detail only when hook is the headline
+
+    // Build generate URL — pass seed_text as the idea input, funnel_type as the post type
+    const ideaParam = encodeURIComponent((seed || hook).slice(0, 800));
+    const generateUrl = `/generate.html?type=${encodeURIComponent(funnel)}&idea=${ideaParam}`;
+
+    return `
+      <div class="vault-idea-item">
+        <span class="vault-idea-funnel ${funnel}">${escHtml(label)}</span>
+        <p class="vault-idea-hook">${escHtml(display)}</p>
+        ${detail ? `<p class="vault-idea-seed">${escHtml(detail)}</p>` : ''}
+        <div class="vault-idea-actions">
+          <a class="vault-idea-generate" href="${generateUrl}">Generate post →</a>
+        </div>
+      </div>`;
   }
 
   loadDocuments();

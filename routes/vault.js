@@ -320,7 +320,7 @@ router.get('/ideas', async (req, res) => {
   const { userId, tenantId } = req;
   if (!requireUser(req, res)) return;
 
-  const { status, funnel_type } = req.query;
+  const { status, funnel_type, document_id } = req.query;
 
   let sql    = `SELECT id, document_id, seed_text, source_ref, funnel_type, hook_archetype,
                        status, generated_post_id, hook_preview, created_at
@@ -336,6 +336,10 @@ router.get('/ideas', async (req, res) => {
   if (funnel_type) {
     sql += ` AND funnel_type = ?`;
     args.push(funnel_type);
+  }
+  if (document_id) {
+    sql += ` AND document_id = ?`;
+    args.push(Number(document_id));
   }
 
   sql += ` ORDER BY

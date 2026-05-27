@@ -20,10 +20,12 @@
 
   // Pages that activate a nav link other than their own href
   var activeOverrides = {
-    '/account.html':  '/settings.html',
-    '/billing.html':  '/settings.html',
-    '/brand.html':    '/settings.html',
-    '/editor.html':   '/drafts.html',
+    '/account.html':    '/settings.html',
+    '/billing.html':    '/settings.html',
+    '/brand.html':      '/settings.html',
+    '/editor.html':     '/drafts.html',
+    '/schedule.html':   '/drafts.html',
+    '/Published.html':  '/drafts.html',
   };
 
   var pathname = window.location.pathname;
@@ -60,8 +62,6 @@
     '    ' + link('/dashboard.html', svgDashboard, 'Dashboard'),
     '    ' + link('/vault.html',     svgVault,     'Idea Vault'),
     '    ' + link('/drafts.html',    svgDrafts,    'Drafts'),
-    '    ' + link('/schedule.html',  svgSchedule,  'Schedule'),
-    '    ' + link('/Published.html', svgPublished, 'Published'),
     '    ' + link('/Media.html',     svgMedia,     'Media'),
     '  </nav>',
     '  <div class="sidebar-bottom">',

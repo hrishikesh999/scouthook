@@ -1,0 +1,169 @@
+/* post.js — Published post detail page */
+
+const POST_ID = new URLSearchParams(window.location.search).get('id');
+if (!POST_ID) window.location.replace('/Published.html');
+
+const RATING_META = {
+  strong: { emoji: '🔥', label: 'Strong' },
+  decent: { emoji: '👍', label: 'Decent' },
+  weak:   { emoji: '👎', label: 'Weak'   },
+};
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function toTitleCase(str) {
+  if (!str) return '';
+  return str.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function formatDate(isoString) {
+  if (!isoString) return '—';
+  const d = new Date(isoString);
+  return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+}
+
+function escHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+const LI_LINE_STYLE = `margin:0 0 6px;font-size:14px;line-height:1.55;color:#000;font-family:-apple-system,system-ui,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif`;
+
+function bodyToHtml(text) {
+  return text
+    .split('\n')
+    .map(line => `<p style="${LI_LINE_STYLE}">${escHtml(line) || '&nbsp;'}</p>`)
+    .join('');
+}
+
+// ---------------------------------------------------------------------------
+// Populate page
+// ---------------------------------------------------------------------------
+
+function populateMeta(post) {
+  const archetype  = toTitleCase(post.format_slug);
+  const assetLabel = post.asset_type === 'carousel' ? 'Carousel'
+                   : post.asset_type === 'image'    ? 'Image'
+                   : null;
+
+  document.getElementById('post-page-meta').innerHTML = `
+    <span class="pub-card-date">${formatDate(post.published_at)}</span>
+    ${archetype        ? `<span class="pub-archetype-badge">${archetype}</span>` : ''}
+    ${post.funnel_type ? `<span class="funnel-badge ${post.funnel_type}">${post.funnel_type}</span>` : ''}
+    ${assetLabel       ? `<span class="pub-asset-badge">${assetLabel}</span>` : ''}
+  `;
+
+  document.title = `Post — Scouthook`;
+}
+
+function populateLiCard(post, profile) {
+  const avatarEl = document.getElementById('post-li-avatar');
+  const nameEl   = document.getElementById('post-li-name');
+  const metaEl   = document.getElementById('post-li-meta');
+  const bodyEl   = document.getElementById('post-li-body');
+
+  if (profile) {
+    nameEl.textContent = profile.name;
+    metaEl.textContent = profile.headline;
+    if (profile.photoUrl) {
+      avatarEl.innerHTML = '';
+      const img = document.createElement('img');
+      img.src           = profile.photoUrl;
+      img.alt           = profile.name;
+      img.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:50%';
+      avatarEl.appendChild(img);
+    } else {
+      avatarEl.textContent = profile.initials;
+    }
+  }
+
+  bodyEl.innerHTML = bodyToHtml((post.content || '').trim());
+}
+
+function populateLinkedInLink(post) {
+  if (!post.linkedin_post_id) return;
+  const link = document.getElementById('post-li-link');
+  link.href   = `https://www.linkedin.com/feed/update/${post.linkedin_post_id}/`;
+  link.hidden = false;
+}
+
+// ---------------------------------------------------------------------------
+// Performance rating
+// ---------------------------------------------------------------------------
+
+let currentTag = null;
+
+function renderRating(tag) {
+  currentTag = tag;
+  const btnsWrap  = document.getElementById('post-rating-btns');
+  const badgeWrap = document.getElementById('post-rated-badge');
+
+  if (tag) {
+    const meta = RATING_META[tag] || { emoji: '', label: tag };
+    badgeWrap.textContent = `${meta.emoji} ${meta.label}`;
+    badgeWrap.className   = `post-rated-badge post-rated-badge--${tag}`;
+    badgeWrap.hidden      = false;
+    btnsWrap.hidden       = true;
+  } else {
+    btnsWrap.hidden       = false;
+    badgeWrap.hidden      = true;
+  }
+}
+
+async function submitRating(tag) {
+  const res  = await fetch(`/api/posts/${POST_ID}/performance`, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json', ...apiHeaders() },
+    body:    JSON.stringify({ tag }),
+  });
+  const data = await res.json();
+  if (data.ok) renderRating(tag);
+}
+
+// ---------------------------------------------------------------------------
+// Boot
+// ---------------------------------------------------------------------------
+
+document.addEventListener('DOMContentLoaded', async () => {
+  document.getElementById('post-rating-btns').addEventListener('click', async e => {
+    const btn = e.target.closest('[data-tag]');
+    if (!btn) return;
+    btn.disabled = true;
+    await submitRating(btn.dataset.tag);
+  });
+
+  // Fetch post and LinkedIn profile in parallel
+  const [postResult, profileResult] = await Promise.allSettled([
+    fetch(`/api/posts/${POST_ID}`, { headers: apiHeaders() }).then(r => r.json()),
+    fetch('/api/linkedin/status', { credentials: 'include' }).then(r => r.json()),
+  ]);
+
+  // Redirect on error
+  const postData = postResult.status === 'fulfilled' ? postResult.value : null;
+  if (!postData?.ok || !postData.post) {
+    window.location.replace('/Published.html');
+    return;
+  }
+
+  const post = postData.post;
+
+  // Build LinkedIn profile object
+  let profile = null;
+  if (profileResult.status === 'fulfilled' && profileResult.value?.connected) {
+    const p = profileResult.value;
+    profile = {
+      name:     p.name     || '',
+      headline: p.headline || '',
+      photoUrl: p.photo_url || null,
+      initials: p.name ? p.name.charAt(0).toUpperCase() : '',
+    };
+  }
+
+  populateMeta(post);
+  populateLiCard(post, profile);
+  populateLinkedInLink(post);
+  renderRating(post.performance_tag || null);
+});

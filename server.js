@@ -436,6 +436,7 @@ app.get([
   '/drafts.html',
   '/schedule.html',
   '/Published.html',
+  '/post.html',
   '/Media.html',
   '/profile.html',
   '/brand.html',

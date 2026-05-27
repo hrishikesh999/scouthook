@@ -6273,9 +6273,108 @@ body {
 .pub-perf-badge--decent { background: rgba(37, 99, 235, 0.07);  color: #2563eb; }
 .pub-perf-badge--weak   { background: rgba(239, 68, 68, 0.07);  color: #dc2626; }
 
-/* Make pub-card rows clickable */
-.pub-card { cursor: pointer; }
+/* pub-card as a link */
+a.pub-card {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+}
 .pub-card:hover { border-left-color: var(--brand); }
+
+/* "View post" affordance button inside pub-card */
+.pub-view-post-btn {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--brand);
+  font-family: var(--font-sans);
+  white-space: nowrap;
+  transition: opacity 0.15s;
+}
+.pub-card:hover .pub-view-post-btn { opacity: 0.75; }
+
+/* ===========================================================================
+   Post detail page (/post.html)
+   =========================================================================== */
+
+.post-page {
+  padding: var(--space-8);
+  max-width: 680px;
+}
+
+.post-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-6);
+}
+
+.post-page-back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-family: var(--font-sans);
+  transition: color 0.15s;
+}
+.post-page-back:hover { color: var(--text-heading); }
+
+.post-page-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-5);
+}
+
+.post-page-card {
+  margin-bottom: var(--space-8);
+}
+
+.post-page-rating {
+  border-top: 1px solid var(--border-light);
+  padding-top: var(--space-6);
+}
+
+.post-page-rating-label {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-heading);
+  margin: 0 0 var(--space-4);
+  font-family: var(--font-sans);
+  text-align: center;
+}
+
+.post-rated-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-5);
+  border-radius: 100px;
+  font-size: 15px;
+  font-weight: 700;
+  font-family: var(--font-sans);
+}
+
+.post-rated-badge--strong {
+  background: rgba(15, 118, 110, 0.08);
+  color: var(--brand);
+  border: 1px solid rgba(15, 118, 110, 0.2);
+}
+.post-rated-badge--decent {
+  background: rgba(37, 99, 235, 0.07);
+  color: #2563eb;
+  border: 1px solid rgba(37, 99, 235, 0.2);
+}
+.post-rated-badge--weak {
+  background: rgba(239, 68, 68, 0.07);
+  color: #dc2626;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
 
 /* "See more" in post body */
 .pub-see-more-btn {

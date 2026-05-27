@@ -267,7 +267,7 @@ async function loadVaultPanel(type, onItemSelected) {
     const topics  = (sugData.topics || []).slice(0, 3);
     if (topics.length) {
       renderVaultPanel(panel,
-        topics.map(t => ({ text: t.textarea_input || t.description || t.title, label: t.title, id: null })),
+        topics.map(t => ({ text: t.textarea_input || t.description || t.title, label: t.title, desc: t.description || '', id: null })),
         'Need a starting point?', onItemSelected);
     }
   } catch { /* non-fatal */ }
@@ -277,7 +277,10 @@ function renderVaultPanel(panel, items, title, onItemSelected) {
   panel.innerHTML =
     `<div class="vault-panel-header"><span class="vault-panel-title">${escapeHtml(title)}</span></div>` +
     `<div class="vault-panel-items">${items.map((item, i) =>
-      `<button class="vault-panel-item" type="button" data-idx="${i}">${escapeHtml(item.label)}</button>`
+      `<button class="vault-panel-item" type="button" data-idx="${i}">
+        <span class="vault-item-title">${escapeHtml(item.label)}</span>${item.desc ? `
+        <span class="vault-item-desc">${escapeHtml(item.desc)}</span>` : ''}
+      </button>`
     ).join('')}</div>`;
   panel.querySelectorAll('.vault-panel-item').forEach((btn, i) => {
     btn.addEventListener('click', async () => {

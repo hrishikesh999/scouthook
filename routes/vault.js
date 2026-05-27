@@ -365,7 +365,7 @@ router.get('/suggest-topics', async (req, res) => {
 
   try {
     const profile = await db.prepare(
-      `SELECT content_niche, audience_role, audience_pain, business_positioning, contrarian_view, input_examples
+      `SELECT content_niche, audience_role, audience_pain, business_positioning, contrarian_view, input_examples, content_pillars
        FROM user_profiles WHERE user_id = ? AND tenant_id = ?`
     ).get(userId, tenantId);
 
@@ -394,6 +394,17 @@ router.get('/suggest-topics', async (req, res) => {
       } catch { /* malformed — ignore */ }
     }
 
+    // Parse content pillars — the topic areas the user has explicitly chosen to own
+    let pillars = [];
+    if (profile?.content_pillars) {
+      try {
+        const parsed = JSON.parse(profile.content_pillars);
+        if (Array.isArray(parsed)) {
+          pillars = parsed.filter(p => typeof p === 'string' && p.trim()).map(p => p.trim());
+        }
+      } catch { /* malformed — ignore */ }
+    }
+
     if (!niche && !audience && !positioning && !headline && !writingSamples.length) {
       return res.json({ ok: true, topics: [] });
     }
@@ -409,6 +420,10 @@ router.get('/suggest-topics', async (req, res) => {
       ? `\nWriting samples (their actual posts — use these to understand their natural topics, tone, and vocabulary):\n${writingSamples.map((s, i) => `[${i + 1}] "${s}"`).join('\n')}`
       : '';
 
+    const pillarsBlock = pillars.length
+      ? `\nContent pillars (the strategic topic areas they have chosen to own — ideas MUST stay within these):\n${pillars.map(p => `- ${p}`).join('\n')}`
+      : '';
+
     const context = [
       niche       && `Niche: ${niche}`,
       audience    && `Audience: ${audience}`,
@@ -416,7 +431,7 @@ router.get('/suggest-topics', async (req, res) => {
       positioning && `Positioning: ${positioning}`,
       headline    && `LinkedIn headline: ${headline}`,
       contrarian  && `Their contrarian POV: ${contrarian}`,
-    ].filter(Boolean).join('\n') + samplesBlock;
+    ].filter(Boolean).join('\n') + pillarsBlock + samplesBlock;
 
     const TYPE_GUIDANCE = {
       reach: `Goal: REACH (grow audience)\nFocus: relatable stories, personal contradictions, lessons learned the hard way, before/after moments. Topics that make strangers feel seen and want to share.`,
@@ -442,7 +457,7 @@ Each topic must:
 - Be a concrete, opinionated premise — not a generic category
 - Reflect a real tension, lesson, or contrarian view specific to their niche
 - Feel like something only this person could write
-${writingSamples.length ? '- Mirror the vocabulary, topic territory, and level of specificity shown in their writing samples — not copying them, but extending naturally from them' : ''}
+${pillars.length ? '- Stay anchored within their content pillars — do not suggest topics outside these strategic areas' : ''}${writingSamples.length ? '\n- Mirror the vocabulary, topic territory, and level of specificity shown in their writing samples — not copying them, but extending naturally from them' : ''}
 
 For each topic also write a "textarea_input": 2–3 sentences in FIRST PERSON that this author would type as their raw starting material. It should sound like they're briefing a ghostwriter — personal, specific, with at least one concrete detail (number, timeframe, named situation). NOT a drafted post.
 

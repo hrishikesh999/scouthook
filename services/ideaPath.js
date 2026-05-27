@@ -749,7 +749,7 @@ function validateSinglePostResponse(parsed) {
 /**
  * Vault path: generate a LinkedIn post from a pre-classified vault seed.
  *
- * Differences from ideaToPost / restructureToPost:
+ * Differences from ideaToPost:
  * - Skips Haiku hook reclassification — uses stored hook_archetype directly.
  * - Uses buildVaultUserPrompt so Claude knows the input is expert source material.
  * - Passes full primary chunk text + optional neighbor context — no truncation.
@@ -1016,84 +1016,4 @@ function buildSubstancePrompt(quality, userProfile = {}) {
   return { tier: 'block', message: buildSubstanceBlockMessage(quality, niche, userProfile) };
 }
 
-async function restructureToPost(sourceText, userProfile, documentContext = null, options = {}) {
-  const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
-  if (!apiKey) throw new Error('anthropic_api_key not configured');
-  const client = new Anthropic({ apiKey });
-
-  // If caller supplies archetypeOverride, skip selectHook and force that archetype
-  const archetypeOverride = options.archetypeOverride || null;
-  const overrideRecord    = archetypeOverride ? (HOOK_ARCHETYPES[archetypeOverride] || HOOK_ARCHETYPES.INSIGHT) : null;
-  const postType          = options.postType || null;
-  const convertCtaIntent  = options.convertCtaIntent || null;
-  const tensionStatement  = options.tensionStatement || null;
-
-  // Classify archetype before generation (Haiku, fast)
-  const hookResult = await (archetypeOverride
-    ? Promise.resolve({ archetype: archetypeOverride, hookInjection: buildHookInjection(overrideRecord), confidence: 1 })
-    : selectHook(sourceText, userProfile, postType));
-
-  const systemPrompt = buildRefineSystemPrompt(userProfile, hookResult.hookInjection, postType, convertCtaIntent, tensionStatement);
-  const userPrompt   = buildRefineUserPrompt(sourceText, documentContext);
-  let responseText   = '';
-
-  let message;
-  try {
-    message = await client.messages.create({
-      model:       'claude-sonnet-4-6',
-      max_tokens:  2000,
-      temperature: 0.3,
-      system:      systemPrompt,
-      messages:    [{ role: 'user', content: userPrompt }],
-    });
-  } catch (err) {
-    throw err;
-  }
-
-  try {
-    responseText = message.content[0]?.text?.trim() || '';
-    const validated = validateSinglePostResponse(extractJsonFromResponse(responseText));
-    const cleanPost  = sanitiseAiTells(validated.post);
-    return {
-      synthesis:       validated.synthesis,
-      post:            cleanPost,
-      ctaAlternatives: validated.ctaAlternatives,
-      archetypeUsed:   hookResult.archetype,
-      hookConfidence:  hookResult.confidence,
-      contentFeedback: buildContentFeedback(inputQuality),
-    };
-  } catch (firstErr) {
-    if (firstErr instanceof SyntaxError && responseText) {
-      try {
-        const retry = await client.messages.create({
-          model:       'claude-sonnet-4-6',
-          max_tokens:  2000,
-          temperature: 0.3,
-          system:      systemPrompt,
-          messages: [
-            { role: 'user',      content: userPrompt },
-            { role: 'assistant', content: responseText },
-            { role: 'user',      content: 'Return only valid JSON, no other text.' },
-          ],
-        });
-        responseText = retry.content[0]?.text?.trim() || '';
-        const validated = validateSinglePostResponse(extractJsonFromResponse(responseText));
-        const cleanPost  = sanitiseAiTells(validated.post);
-        return {
-          synthesis:       validated.synthesis,
-          post:            cleanPost,
-          ctaAlternatives: validated.ctaAlternatives,
-          archetypeUsed:   hookResult.archetype,
-          hookConfidence:  hookResult.confidence,
-          contentFeedback: buildContentFeedback(inputQuality),
-        };
-      } catch (retryErr) {
-        throw new Error(`Restructure failed after retry: ${retryErr.message}`);
-      }
-    }
-    throw firstErr;
-  }
-}
-
-
-module.exports = { ideaToPost, generateInsightAlternativePost, vaultSeedToPost, restructureToPost };
+module.exports = { ideaToPost, generateInsightAlternativePost, vaultSeedToPost };

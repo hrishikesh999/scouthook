@@ -27,8 +27,8 @@ const Onboarding = (() => {
   };
 
   /* ── Interview questions ─────────────────────────────────
-     Three fixed questions in order. context is the badge shown above each.
-     field is the DB column the answer writes to (plus special handling for q1 → contrarian_view).
+     Two questions. context is the badge shown above each.
+     field maps to the DB column the answer is saved to.
   ──────────────────────────────────────────────────────── */
   const QUESTIONS = [
     {
@@ -160,10 +160,19 @@ const Onboarding = (() => {
   function submitProfileQuestion() {
     const val = (qs('ob-profile-answer')?.value || '').trim();
     if (val) {
+      // Save to all three audience fields — the user's one sentence ("I help
+      // early-stage founders close enterprise deals") contains niche, role, and
+      // pain implicitly. Saving to all three ensures buildVoiceWritingSystemPrompt()
+      // has non-null values for every audience block. Voice extraction will refine
+      // these into distinct fields once Q&A answers are saved.
       fetch('/api/profile', {
         method:  'POST',
         headers: apiHeaders(),
-        body:    JSON.stringify({ content_niche: val }),
+        body:    JSON.stringify({
+          content_niche: val,
+          audience_role: val,
+          audience_pain: val,
+        }),
       }).catch(() => {});
     }
     state.questionIndex = 0;
@@ -278,19 +287,17 @@ const Onboarding = (() => {
       loadEl.hidden    = true;
     }
 
-    const hasAny = Object.values(extracted).some(v => v);
-    if (hasAny) {
-      // Save extracted fields silently — user can correct in settings
-      const profile = {};
-      Object.entries(extracted).forEach(([k, v]) => { if (v) profile[k] = v; });
-      if (Object.keys(profile).length) {
-        fetch('/api/profile', {
-          method:  'POST',
-          headers: apiHeaders(),
-          body:    JSON.stringify(profile),
-        }).catch(() => {});
-      }
-    }
+    // Always save website_url — regardless of whether extraction succeeded.
+    // website_url was never being persisted before; this fixes the 5-point
+    // completion gap and lets settings show the URL the user entered.
+    const profile = { website_url: url };
+    Object.entries(extracted).forEach(([k, v]) => { if (v) profile[k] = v; });
+    fetch('/api/profile', {
+      method:  'POST',
+      headers: apiHeaders(),
+      body:    JSON.stringify(profile),
+    }).catch(() => {});
+
     state.questionIndex = 0;
     renderQuestion();
   }
@@ -346,14 +353,9 @@ const Onboarding = (() => {
     function advanceFromWriting() {
       const sample = (textarea?.value || '').trim();
       state.writingSample = sample;
-      // Save writing sample to profile (fire-and-forget)
-      if (sample) {
-        fetch('/api/profile', {
-          method:  'POST',
-          headers: apiHeaders(),
-          body:    JSON.stringify({ writing_samples: sample }),
-        }).catch(() => {});
-      }
+      // Writing sample is now merged into the Q&A payload in saveProfileAndGenerate()
+      // so both arrive in a single DB write — eliminating the race condition where
+      // extractVoiceDNAFromQA would run before writing_samples was committed.
       saveProfileAndGenerate();
     }
 
@@ -412,7 +414,9 @@ const Onboarding = (() => {
     showScreen('s5');
     injectProcessingCopy();
 
-    // Build Q&A payload for DB — map each answer to its field
+    // Build Q&A payload for DB — map each answer to its field.
+    // writing_samples is included here (not sent earlier) so it arrives in the
+    // same DB write as Q&A, ensuring extractVoiceDNAFromQA always sees both.
     const qPayload = {
       user_role:                 state.role,
       onboarding_q_completed_at: new Date().toISOString(),
@@ -420,17 +424,31 @@ const Onboarding = (() => {
     state.answers.forEach(a => {
       if (a.field && a.answer) qPayload[a.field] = a.answer;
     });
-    // Q1 also writes to contrarian_view for backward compat with prompt builders
-    if (qPayload.onboarding_q1) {
-      qPayload.contrarian_view = qPayload.onboarding_q1;
+    if (state.writingSample) {
+      qPayload.writing_samples = state.writingSample;
     }
+    // Seed starter CTAs so the generation engine never has to invent them.
+    // buildVoiceDNABlock() has a hard rule: "never invent a CTA" — this satisfies it
+    // for the first post. User refines these in Settings → Stage 4.
+    qPayload.cta_library = JSON.stringify([
+      'What\'s your take?',
+      'Drop a comment below',
+      'DM me if this resonates',
+    ]);
 
-    // Save role + Q&A answers to profile (fire-and-forget)
-    fetch('/api/profile', {
-      method:  'POST',
-      headers: apiHeaders(),
-      body:    JSON.stringify(qPayload),
-    }).catch(() => {});
+    // Await the profile save so extractVoiceDNAFromQA (triggered server-side on
+    // this save) gets a head start before generation reads the profile.
+    // Previously this was fire-and-forget, meaning generation always ran with an
+    // empty voice fingerprint. The progress animation starts first so UX is unchanged.
+    try {
+      await fetch('/api/profile', {
+        method:  'POST',
+        headers: apiHeaders(),
+        body:    JSON.stringify(qPayload),
+      });
+    } catch {
+      // Non-fatal — generation can still proceed
+    }
 
     // Build interview_answers in the legacy format the generate endpoint expects
     const interviewAnswers = state.answers

@@ -4,11 +4,10 @@ const express = require('express');
 const router = express.Router();
 const { db, getSetting } = require('../db');
 const { runQualityGate } = require('../services/qualityGate');
-const { ideaToPost, restructureToPost, vaultSeedToPost } = require('../services/ideaPath');
+const { ideaToPost, vaultSeedToPost } = require('../services/ideaPath');
 const { generateLeadMagnetPost } = require('../services/leadMagnetPath');
 const { classifyContent } = require('../services/funnelClassifier');
 const { canGeneratePost } = require('../services/subscription');
-const { improvePost } = require('../services/improvePost');
 const { sendEmailToUser } = require('../emails');
 
 // ---------------------------------------------------------------------------
@@ -110,28 +109,6 @@ function assembleExtractionInputs(postType, answers, tensionStatement) {
     if (answers.target)    parts.push(`WHO SHOULD ACT: ${answers.target}`);
   }
   return parts.join('\n\n');
-}
-
-async function restructureWithQualityGate(userProfile, sourceText, funnelType, options = {}) {
-  const { synthesis, post, ctaAlternatives, archetypeUsed, hookConfidence, contentFeedback } =
-    await restructureToPost(sourceText, userProfile, options.documentContext || null, options);
-
-  const primaryGate = runQualityGate(
-    post,
-    {
-      ...gateOptions(
-        { format_slug: IDEA_SLUG, content: post },
-        userProfile,
-        'idea',
-        archetypeUsed,
-        hookConfidence,
-        funnelType || options.postType || null
-      ),
-      postType: options.postType || null,
-    }
-  );
-
-  return { synthesis, post, ctaAlternatives, archetypeUsed, hookConfidence, primaryGate, contentFeedback };
 }
 
 // ---------------------------------------------------------------------------
@@ -356,20 +333,50 @@ router.post('/', async (req, res) => {
         contentFeedback: null,
       };
     } else {
-      // ── Standard path for free-typed ideas ───────────────────────────────
-      ideaResult = await restructureWithQualityGate(userProfile, raw_idea, funnelTypeForGate, {
+      // ── Standard path: full two-stage pipeline (Haiku blueprint → Sonnet) ───
+      // ideaToPost() runs buildStructureBlueprint() first —
+      // Haiku derives archetype + tension + narrative arc + hook_draft — then
+      // Sonnet writes with that precise structural scaffold. Same pipeline as
+      // the from-doc/vault path. No extra token cost vs the old approach (same
+      // two model calls: Haiku then Sonnet).
+      const ideaRaw = await ideaToPost(raw_idea, userProfile, {
         skipSubstanceCheck:  !!skip_substance_check,
         archetypeOverride:   archetype_override || null,
         postType:            post_type || null,
         convertCtaIntent:    convert_cta_intent || null,
         tensionStatement:    tension_statement || null,
       });
+      const primaryGate = runQualityGate(
+        ideaRaw.post,
+        {
+          ...gateOptions(
+            { format_slug: IDEA_SLUG, content: ideaRaw.post },
+            userProfile,
+            'idea',
+            ideaRaw.archetypeUsed,
+            ideaRaw.hookConfidence,
+            funnelTypeForGate
+          ),
+          postType: post_type || null,
+        }
+      );
+      ideaResult = {
+        synthesis:       ideaRaw.synthesis,
+        post:            ideaRaw.post,
+        hookB:           ideaRaw.hookB || null,
+        ctaAlternatives: ideaRaw.ctaAlternatives || [],
+        archetypeUsed:   ideaRaw.archetypeUsed,
+        hookConfidence:  ideaRaw.hookConfidence,
+        primaryGate,
+        contentFeedback: null,
+      };
     }
 
     {
       const {
         synthesis,
         post,
+        hookB,
         ctaAlternatives,
         archetypeUsed,
         hookConfidence,
@@ -424,7 +431,7 @@ router.post('/', async (req, res) => {
         primaryGate.passed_gate ? 1 : 0,
         funnelType,
         vaultSourceRef,
-        null,
+        hookB || null,
         ctaAlternatives?.length ? JSON.stringify(ctaAlternatives) : null,
         inputData.raw_idea || null,
         archetypeUsed || null,
@@ -448,7 +455,7 @@ router.post('/', async (req, res) => {
         run_id: runId,
         synthesis,
         post,
-        hookB: null,
+        hookB: hookB || null,
         ctaAlternatives: ctaAlternatives || [],
         id: primaryId,
         archetypeUsed,
@@ -473,255 +480,6 @@ router.post('/', async (req, res) => {
     }
     console.error('[generate] Error:', err.message);
     return res.status(500).json({ ok: false, error: err.message });
-  }
-});
-
-// ---------------------------------------------------------------------------
-// POST /api/generate/regenerate/:postId
-// ---------------------------------------------------------------------------
-router.post('/regenerate/:postId', async (req, res) => {
-  const userId = req.userId;
-  const tenantId = req.tenantId;
-  const { postId } = req.params;
-
-  if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
-
-  const rl = await checkRateLimit(userId);
-  if (rl.limited) {
-    return res.status(429).json({ ok: false, error: 'rate_limit_exceeded', retry_after_sec: rl.retryAfterSec });
-  }
-
-  const planCheck = await canGeneratePost(userId);
-  if (!planCheck.allowed) {
-    // Send limit-reached email once per calendar month.
-    const monthKey = `limit-reached:${new Date().toISOString().slice(0, 7)}`;
-    const now = new Date();
-    const firstOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-    const resetsOn = firstOfNextMonth.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
-    sendEmailToUser(userId, tenantId, 'limit-reached', {
-      resets_on: resetsOn,
-      app_url: process.env.APP_URL || '',
-    }, { dedupKey: monthKey, withinHours: 30 * 24 });
-    return res.status(403).json({
-      ok: false,
-      error: 'plan_limit_exceeded',
-      plan: planCheck.plan,
-      current: planCheck.current,
-      limit: planCheck.limit,
-      upgrade_url: '/billing.html',
-    });
-  }
-
-  const post = await db.prepare(`
-    SELECT gp.*, gr.path, gr.input_data
-    FROM generated_posts gp
-    JOIN generation_runs gr ON gp.run_id = gr.id
-    WHERE gp.id = ? AND gp.user_id = ? AND gp.tenant_id = ?
-  `).get(postId, userId, tenantId);
-
-  if (!post) return res.status(404).json({ ok: false, error: 'post_not_found' });
-  if (post.status !== 'draft') {
-    return res.status(409).json({ ok: false, error: 'post_not_editable', status: post.status });
-  }
-
-  const userProfile = await db
-    .prepare('SELECT * FROM user_profiles WHERE user_id = ? AND tenant_id = ?')
-    .get(userId, tenantId);
-
-  if (!userProfile) return res.status(400).json({ ok: false, error: 'complete_profile_first' });
-
-  try {
-    const inputData = JSON.parse(post.input_data || '{}');
-    const failedFlags = JSON.parse(post.quality_flags || '[]');
-    const regenHint = failedFlags.length
-      ? `Previous version was flagged for: ${failedFlags.join(', ')}. Avoid these patterns.`
-      : undefined;
-
-    let ideaResult;
-
-    if (inputData.vault_idea_id) {
-      // Re-grow from the original vault seed — same vault path as first generation
-      const regenVaultIdea = await db.prepare(`
-        SELECT id, seed_text, source_ref, funnel_type, hook_archetype, chunk_id
-        FROM   vault_ideas
-        WHERE  id = ? AND user_id = ? AND tenant_id = ?
-      `).get(inputData.vault_idea_id, userId, tenantId);
-
-      if (regenVaultIdea) {
-        let regenChunkText       = null;
-        let regenNeighborContext = null;
-        if (regenVaultIdea.chunk_id) {
-          const chunk = await db.prepare(
-            'SELECT content, chunk_index, document_id FROM vault_chunks WHERE id = ? AND user_id = ? AND tenant_id = ?'
-          ).get(regenVaultIdea.chunk_id, userId, tenantId);
-          if (chunk) {
-            regenChunkText = chunk.content || null;
-            const neighbors = await db.prepare(`
-              SELECT content FROM vault_chunks
-              WHERE  document_id = ? AND user_id = ? AND tenant_id = ?
-                AND  chunk_index IN (?, ?)
-              ORDER  BY chunk_index
-            `).all(chunk.document_id, userId, tenantId,
-                   chunk.chunk_index - 1, chunk.chunk_index + 1);
-            if (neighbors.length) {
-              regenNeighborContext = neighbors.map(n => n.content).join('\n\n---\n\n');
-            }
-          }
-        }
-        const regenSource = inputData.raw_idea || regenVaultIdea.seed_text;
-        ideaResult = await vaultSeedToPost(regenVaultIdea, regenChunkText, userProfile, {
-          rawIdea:         regenSource,
-          neighborContext: regenNeighborContext,
-          postType:        regenVaultIdea.funnel_type || null,
-          skipSubstanceCheck: true,
-          _regenerateHint: regenHint,
-        });
-        // Wrap with quality gate (vaultSeedToPost returns raw result, not wrapped)
-        const regenGate = runQualityGate(ideaResult.post, {
-          ...gateOptions(
-            { format_slug: IDEA_SLUG, content: ideaResult.post },
-            userProfile, 'idea',
-            ideaResult.archetypeUsed, ideaResult.hookConfidence,
-            regenVaultIdea.funnel_type || null
-          ),
-          postType: regenVaultIdea.funnel_type || null,
-        });
-        ideaResult = {
-          ...ideaResult,
-          primaryGate:     regenGate,
-          contentFeedback: null,
-        };
-      }
-    }
-
-    if (!ideaResult) {
-      // Standard idea path (free-typed ideas, or vault idea no longer exists)
-      // Skip substance check on regenerate — user already committed to this input
-      ideaResult = await restructureWithQualityGate(userProfile, inputData.raw_idea, null, { skipSubstanceCheck: true });
-    }
-
-    const isInsightRow = post.format_slug === IDEA_INSIGHT_SLUG;
-    const content = isInsightRow
-      ? (ideaResult.alternative?.post ?? ideaResult.post)
-      : ideaResult.post;
-    const gate = isInsightRow
-      ? (ideaResult.alternative?.gate ?? ideaResult.primaryGate)
-      : ideaResult.primaryGate;
-
-    const regenCtaAlternatives = isInsightRow ? [] : (ideaResult.ctaAlternatives || []);
-
-    const regenArchetype = isInsightRow ? 'INSIGHT' : (ideaResult.archetypeUsed || null);
-    await db.prepare(`
-      UPDATE generated_posts
-      SET content = ?, quality_score = ?, quality_flags = ?, passed_gate = ?, cta_alternatives = ?, archetype_used = ?
-      WHERE id = ?
-    `).run(content, gate.score, JSON.stringify(gate.flags), gate.passed_gate ? 1 : 0,
-      regenCtaAlternatives.length ? JSON.stringify(regenCtaAlternatives) : null, regenArchetype, postId);
-
-    const quality = buildQualityPayload(gate, 1, true);
-
-    return res.json({
-      ok: true,
-      post: {
-        id: Number(postId),
-        format_slug: post.format_slug,
-        content,
-        quality_score: gate.score,
-        quality_flags: gate.flags,
-        passed_gate: gate.passed_gate,
-        archetypeUsed: isInsightRow ? 'INSIGHT' : ideaResult.archetypeUsed,
-        hookConfidence: isInsightRow ? null : ideaResult.hookConfidence,
-        ctaAlternatives: regenCtaAlternatives,
-        quality,
-      },
-    });
-
-  } catch (err) {
-    console.error('[generate/regenerate] Error:', err.message);
-    return res.status(500).json({ ok: false, error: err.message });
-  }
-});
-
-// ---------------------------------------------------------------------------
-// POST /api/generate/improve/:postId
-// Token-efficient post improvement using targeted flag-driven fixes.
-// Uses Haiku + prompt caching — roughly 10–20x cheaper than a full regenerate.
-// ---------------------------------------------------------------------------
-router.post('/improve/:postId', async (req, res) => {
-  const userId   = req.userId;
-  const tenantId = req.tenantId;
-  const { postId } = req.params;
-
-  if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
-
-  try {
-    const row = await db.prepare(`
-      SELECT content, quality_flags, quality_score, format_slug, funnel_type
-      FROM generated_posts
-      WHERE id = ? AND user_id = ? AND tenant_id = ?
-    `).get(postId, userId, tenantId);
-
-    if (!row) return res.status(404).json({ ok: false, error: 'post_not_found' });
-
-    // No-op gate: if already at 90+ there is nothing to improve
-    if ((row.quality_score || 0) >= 90) {
-      return res.json({ ok: true, improved: false, reason: 'score_already_high' });
-    }
-
-    let flags = [];
-    try { flags = JSON.parse(row.quality_flags || '[]'); } catch {}
-
-    const userProfile = await db
-      .prepare('SELECT * FROM user_profiles WHERE user_id = ? AND tenant_id = ?')
-      .get(userId, tenantId);
-
-    if (!userProfile) {
-      return res.status(400).json({ ok: false, error: 'complete_profile_first' });
-    }
-
-    const result = await improvePost(row.content, flags, userProfile, {
-      formatSlug: row.format_slug || null,
-      funnelType: row.funnel_type || null,
-    });
-
-    // Persist improved content + updated quality score
-    await db.prepare(`
-      UPDATE generated_posts
-      SET content = ?, quality_score = ?, quality_flags = ?, passed_gate = ?,
-          quality_verdict = ?
-      WHERE id = ? AND user_id = ? AND tenant_id = ?
-    `).run(
-      result.post,
-      result.quality.score,
-      JSON.stringify(result.quality.flags),
-      result.quality.passed ? 1 : 0,
-      result.quality.verdict || null,
-      postId, userId, tenantId,
-    );
-
-    return res.json({
-      ok:      true,
-      improved: result.changed,
-      post:    result.post,
-      quality: result.quality,
-    });
-
-  } catch (err) {
-    console.error('[generate/improve] Error:', err.message);
-
-    let userError = 'Something went wrong — try again in a moment.';
-    const msg = err.message || '';
-    if (msg.includes('anthropic_api_key') || msg.includes('not configured')) {
-      userError = 'AI service is not configured. Contact support.';
-    } else if (msg.includes('429') || msg.toLowerCase().includes('rate limit') || msg.toLowerCase().includes('overloaded')) {
-      userError = 'AI service is busy right now — wait a few seconds and try again.';
-    } else if (msg.includes('401') || msg.toLowerCase().includes('authentication')) {
-      userError = 'AI service authentication failed. Contact support.';
-    } else if (msg.toLowerCase().includes('network') || msg.toLowerCase().includes('fetch')) {
-      userError = 'Network error — check your connection and try again.';
-    }
-
-    return res.status(500).json({ ok: false, error: userError, detail: msg });
   }
 });
 

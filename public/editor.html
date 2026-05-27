@@ -391,9 +391,6 @@
               </div>
               <!-- Verdict text -->
               <div id="quality-verdict"></div>
-              <!-- Improve button: visible when score < 90 -->
-              <button id="btn-improve" class="btn-outlined" style="margin-top:10px;width:100%;font-size:12px;color:var(--text-muted);display:none" aria-label="Improve post automatically">✦ Auto-fix issues</button>
-              <p id="improve-status" style="font-size:11px;color:var(--text-muted);margin-top:5px;text-align:center;display:none"></p>
               <!-- Dimension bars -->
               <div class="quality-dims" id="quality-dims" hidden>
                 <div class="qdim" data-dim="hook" data-tier="high">
@@ -820,64 +817,6 @@ function renderQualityScore(quality) {
     verdictEl.className   = 'quality-verdict ' + (passed ? 'pass' : 'fail');
   }
 
-  // Show Improve button when there is meaningful room to grow
-  const improveBtn = document.getElementById('btn-improve');
-  if (improveBtn) improveBtn.style.display = score < 90 ? '' : 'none';
-}
-
-/* ════════════════════════════════════════════════════════════════════════
-   IMPROVE POST
-════════════════════════════════════════════════════════════════════════ */
-async function handleImprovePost() {
-  const btn    = document.getElementById('btn-improve');
-  const status = document.getElementById('improve-status');
-  if (!btn || !currentPostId) return;
-
-  btn.disabled    = true;
-  btn.textContent = 'Improving…';
-  if (status) { status.style.color = 'var(--text-muted)'; status.textContent = 'Applying targeted fixes…'; status.style.display = ''; }
-
-  try {
-    const res  = await fetch(`/api/generate/improve/${encodeURIComponent(String(currentPostId))}`, {
-      method: 'POST', credentials: 'include',
-    });
-    const data = await res.json();
-
-    if (!res.ok || !data.ok) throw new Error(data.error || 'improve_failed');
-
-    if (!data.improved) {
-      if (status) { status.textContent = 'Already looking strong — no changes needed.'; }
-      return;
-    }
-
-    // Replace post body content
-    const paras = data.post.split(/\n\n+/).filter(Boolean);
-    document.getElementById('post-body').innerHTML = paras.map(t =>
-      `<p class="text-post" data-style="normal">${escHtml(t).replace(/\n/g, '<br>')}</p>`
-    ).join('');
-    _lastAutoSavedContent = data.post;
-
-    // Update word count
-    document.getElementById('word-count').textContent =
-      data.post.split(/\s+/).filter(Boolean).length + ' words';
-
-    // Re-render score ring with updated quality
-    if (data.quality) renderQualityScore(data.quality);
-
-    if (status) { status.textContent = `Score: ${data.quality?.score ?? '—'} — edits applied.`; }
-
-  } catch (err) {
-    if (status) {
-      status.style.color = 'var(--score-fail, #e84e4e)';
-      status.textContent = err.message && err.message !== 'improve_failed'
-        ? err.message
-        : 'Something went wrong — try again in a moment.';
-    }
-    console.error('[improve]', err);
-  } finally {
-    btn.disabled    = false;
-    btn.textContent = '✦ Auto-fix issues';
-  }
 }
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -1952,8 +1891,6 @@ function bindEvents() {
   document.getElementById('btn-panel-back').addEventListener('click',  showScorePanel);
   document.getElementById('btn-panel-close').addEventListener('click', showScorePanel);
   document.getElementById('btn-gen-discard').addEventListener('click', showScorePanel);
-  document.getElementById('btn-improve')?.addEventListener('click', handleImprovePost);
-
   const quoteInput = document.getElementById('quote-input');
   if (quoteInput) quoteInput.addEventListener('input', function () {
     state.quoteText = this.value;

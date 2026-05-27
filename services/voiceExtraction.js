@@ -424,7 +424,7 @@ function calculateCompletionPct(userProfile, hasLinkedIn = false) {
 
   if (userProfile.user_role)            score += 5;
   if (userProfile.website_url)          score += 5;
-  if (userProfile.onboarding_q1)        score += 5;
+  if (userProfile.contrarian_view)      score += 5;  // replaces onboarding_q1 (removed from wizard; website extraction populates this)
   if (userProfile.onboarding_q2)        score += 5;
   if (userProfile.onboarding_q3)        score += 5;
   if (userProfile.voice_fingerprint)    score += 5;

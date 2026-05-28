@@ -10,27 +10,29 @@
   style.textContent = `
   #fb-btn {
     position: fixed;
-    bottom: 24px;
-    right: 24px;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
     z-index: 800;
     display: flex;
     align-items: center;
     gap: 6px;
-    background: var(--bg-surface, #fff);
-    border: 1px solid var(--border, #E4E4E7);
-    border-radius: 20px;
-    padding: 8px 14px 8px 10px;
+    background: #6366F1;
+    border: none;
+    border-radius: 8px 0 0 8px;
+    padding: 10px 14px 10px 12px;
     font-size: 13px;
-    font-weight: 500;
-    color: var(--text-muted, #71717A);
+    font-weight: 600;
+    color: #fff;
     cursor: pointer;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.10);
-    transition: box-shadow 0.15s, color 0.15s;
+    box-shadow: -2px 0 12px rgba(99,102,241,0.30);
+    transition: box-shadow 0.15s, background 0.15s;
     font-family: inherit;
+    white-space: nowrap;
   }
   #fb-btn:hover {
-    box-shadow: 0 4px 16px rgba(0,0,0,0.14);
-    color: var(--text-heading, #09090B);
+    background: #4F46E5;
+    box-shadow: -4px 0 18px rgba(99,102,241,0.40);
   }
 
   #fb-overlay {
@@ -50,10 +52,10 @@
     border: 1px solid var(--border, #E4E4E7);
     border-radius: 16px;
     width: 100%;
-    max-width: 440px;
+    max-width: 480px;
     box-shadow: 0 8px 40px rgba(0,0,0,0.18);
     position: relative;
-    padding: 32px 32px 28px;
+    padding: 28px 28px 24px;
   }
 
   #fb-close {
@@ -71,55 +73,114 @@
   }
   #fb-close:hover { background: var(--bg-pill, #F4F4F5); }
 
+  .fb-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 18px;
+    padding-right: 28px;
+  }
+  .fb-header-icon {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #6366F1;
+    flex-shrink: 0;
+  }
   #fb-modal h2 {
     font-size: 17px;
     font-weight: 700;
     color: var(--text-heading, #09090B);
-    margin: 0 0 4px;
-  }
-  #fb-modal .fb-sub {
-    font-size: 13px;
-    color: var(--text-muted, #71717A);
-    margin: 0 0 20px;
+    margin: 0;
   }
 
-  .fb-stars {
+  .fb-cats {
     display: flex;
-    gap: 4px;
-    margin-bottom: 16px;
+    gap: 8px;
+    margin-bottom: 18px;
+    flex-wrap: wrap;
   }
-  .fb-star {
+  .fb-cat {
     background: none;
-    border: none;
+    border: 1px solid var(--border, #E4E4E7);
+    border-radius: 20px;
+    padding: 6px 14px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-muted, #71717A);
     cursor: pointer;
-    font-size: 24px;
-    padding: 2px;
-    line-height: 1;
-    color: #D4D4D8;
-    transition: color 0.1s, transform 0.1s;
+    font-family: inherit;
+    transition: background 0.12s, color 0.12s, border-color 0.12s;
   }
-  .fb-star:hover,
-  .fb-star.active { color: #F59E0B; }
-  .fb-star:hover { transform: scale(1.15); }
+  .fb-cat:hover {
+    background: #EEF2FF;
+    color: #4F46E5;
+    border-color: #A5B4FC;
+  }
+  .fb-cat.active {
+    background: #EEF2FF;
+    color: #4F46E5;
+    border-color: #4F46E5;
+    font-weight: 600;
+  }
 
-  #fb-message {
+  .fb-label {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-heading, #09090B);
+    margin-bottom: 6px;
+  }
+
+  #fb-title {
     width: 100%;
     box-sizing: border-box;
-    min-height: 100px;
-    resize: vertical;
     border: 1px solid var(--border, #E4E4E7);
     border-radius: 8px;
-    padding: 10px 12px;
+    padding: 9px 12px;
     font-size: 14px;
     color: var(--text-heading, #09090B);
     font-family: inherit;
     background: var(--bg-surface, #fff);
     outline: none;
     transition: border-color 0.15s;
+    margin-bottom: 14px;
+  }
+  #fb-title:focus { border-color: #6366F1; }
+  #fb-title::placeholder { color: var(--text-muted, #71717A); }
+
+  .fb-textarea-wrap {
+    position: relative;
     margin-bottom: 16px;
   }
-  #fb-message:focus { border-color: var(--brand, #0F766E); }
+  #fb-message {
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 96px;
+    resize: vertical;
+    border: 1px solid var(--border, #E4E4E7);
+    border-radius: 8px;
+    padding: 10px 12px 28px 12px;
+    font-size: 14px;
+    color: var(--text-heading, #09090B);
+    font-family: inherit;
+    background: var(--bg-surface, #fff);
+    outline: none;
+    transition: border-color 0.15s;
+    display: block;
+  }
+  #fb-message:focus { border-color: #6366F1; }
   #fb-message::placeholder { color: var(--text-muted, #71717A); }
+  .fb-mic-icon {
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+    color: #A1A1AA;
+    pointer-events: none;
+    line-height: 1;
+  }
 
   .fb-actions {
     display: flex;
@@ -139,7 +200,7 @@
   }
   #fb-cancel:hover { background: var(--bg-pill, #F4F4F5); }
   #fb-submit {
-    background: var(--brand, #0F766E);
+    background: #6366F1;
     border: none;
     border-radius: 8px;
     padding: 8px 18px;
@@ -148,9 +209,9 @@
     color: #fff;
     cursor: pointer;
     font-family: inherit;
-    transition: opacity 0.15s;
+    transition: opacity 0.15s, background 0.15s;
   }
-  #fb-submit:hover { opacity: 0.88; }
+  #fb-submit:hover { background: #4F46E5; }
   #fb-submit:disabled { opacity: 0.5; cursor: default; }
   `;
   document.head.appendChild(style);
@@ -168,25 +229,35 @@
   overlay.id = 'fb-overlay';
   overlay.setAttribute('role', 'dialog');
   overlay.setAttribute('aria-modal', 'true');
-  overlay.setAttribute('aria-label', 'Share feedback');
+  overlay.setAttribute('aria-label', 'Submit feedback');
   overlay.innerHTML = `
     <div id="fb-modal">
       <button id="fb-close" aria-label="Close">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
-      <h2>Share feedback</h2>
-      <p class="fb-sub">What's working well, or what would you improve?</p>
-      <div class="fb-stars" role="group" aria-label="Rating (optional)">
-        <button class="fb-star" data-value="1" aria-label="1 star">★</button>
-        <button class="fb-star" data-value="2" aria-label="2 stars">★</button>
-        <button class="fb-star" data-value="3" aria-label="3 stars">★</button>
-        <button class="fb-star" data-value="4" aria-label="4 stars">★</button>
-        <button class="fb-star" data-value="5" aria-label="5 stars">★</button>
+      <div class="fb-header">
+        <span class="fb-header-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        </span>
+        <h2>Submit Feedback</h2>
       </div>
-      <textarea id="fb-message" placeholder="Your feedback…" maxlength="2000"></textarea>
+      <div class="fb-cats" role="group" aria-label="Category">
+        <button class="fb-cat active" data-cat="feature_request">Feature Request</button>
+        <button class="fb-cat" data-cat="bug_report">Bug Report</button>
+        <button class="fb-cat" data-cat="improvement">Improvement</button>
+      </div>
+      <label class="fb-label" for="fb-title">Title</label>
+      <input id="fb-title" type="text" placeholder="Short summary of your feedback" maxlength="120" />
+      <label class="fb-label" for="fb-message">Description</label>
+      <div class="fb-textarea-wrap">
+        <textarea id="fb-message" placeholder="Tell us more about your idea or issue…" maxlength="2000"></textarea>
+        <span class="fb-mic-icon">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+        </span>
+      </div>
       <div class="fb-actions">
         <button id="fb-cancel">Cancel</button>
-        <button id="fb-submit">Send feedback</button>
+        <button id="fb-submit">Submit Feedback</button>
       </div>
     </div>
   `;
@@ -195,36 +266,31 @@
   document.body.appendChild(overlay);
 
   // ── State ───────────────────────────────────────────────────────────────────
-  let selectedRating = null;
+  let selectedCategory = 'feature_request';
 
-  // ── Star rating ─────────────────────────────────────────────────────────────
-  const stars = overlay.querySelectorAll('.fb-star');
-  stars.forEach((btn) => {
+  // ── Category tabs ────────────────────────────────────────────────────────────
+  const catBtns = overlay.querySelectorAll('.fb-cat');
+  catBtns.forEach((btn) => {
     btn.addEventListener('click', () => {
-      const val = parseInt(btn.dataset.value, 10);
-      selectedRating = (selectedRating === val) ? null : val;
-      updateStars();
+      selectedCategory = btn.dataset.cat;
+      catBtns.forEach((b) => b.classList.toggle('active', b === btn));
     });
   });
-
-  function updateStars() {
-    stars.forEach((btn) => {
-      btn.classList.toggle('active', selectedRating !== null && parseInt(btn.dataset.value, 10) <= selectedRating);
-    });
-  }
 
   // ── Open / Close ─────────────────────────────────────────────────────────────
   function open() {
     overlay.classList.add('visible');
-    overlay.querySelector('#fb-message').focus();
+    overlay.querySelector('#fb-title').focus();
   }
 
   function close() {
     overlay.classList.remove('visible');
+    overlay.querySelector('#fb-title').value = '';
     overlay.querySelector('#fb-message').value = '';
-    selectedRating = null;
-    updateStars();
+    selectedCategory = 'feature_request';
+    catBtns.forEach((b) => b.classList.toggle('active', b.dataset.cat === 'feature_request'));
     overlay.querySelector('#fb-submit').disabled = false;
+    overlay.querySelector('#fb-submit').textContent = 'Submit Feedback';
   }
 
   floatBtn.addEventListener('click', open);
@@ -241,6 +307,7 @@
 
   // ── Submit ───────────────────────────────────────────────────────────────────
   overlay.querySelector('#fb-submit').addEventListener('click', async () => {
+    const title = overlay.querySelector('#fb-title').value.trim();
     const message = overlay.querySelector('#fb-message').value.trim();
     if (!message) {
       overlay.querySelector('#fb-message').focus();
@@ -256,7 +323,7 @@
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message, rating: selectedRating, page_url: location.href }),
+        body: JSON.stringify({ title, message, category: selectedCategory, page_url: location.href }),
       });
 
       if (!res.ok) {
@@ -268,7 +335,7 @@
       window.toast?.success('Thanks for your feedback!');
     } catch (err) {
       btn.disabled = false;
-      btn.textContent = 'Send feedback';
+      btn.textContent = 'Submit Feedback';
       window.toast?.error('Could not send feedback — please try again.');
     }
   });

@@ -23,7 +23,7 @@ async function extractCarouselContent(post) {
 
   const client = new Anthropic({ apiKey });
 
-  const carouselUserPrompt = `Break this LinkedIn post into exactly 6 to 8 slides for a carousel. Return ONLY valid JSON:
+  const carouselUserPrompt = `Break this LinkedIn post into slides for a carousel. Return ONLY valid JSON:
 {
   "slides": [
     { "type": "title", "headline": "short punchy title (max 8 words)", "body": "" },
@@ -37,7 +37,7 @@ Rules:
 - First slide: type "title", compelling headline, no body
 - Last slide: type "closing", brief takeaway or CTA
 - Middle slides: type "content", each covers one clear idea from the post
-- Total slides: minimum 6, maximum 8
+- Total slides: minimum 3, maximum 15 — use as many slides as the content warrants; do not compress multiple ideas into one slide
 - Each body: 2-3 short sentences max. Never paste a full paragraph.
 - Headlines: punchy, specific — not generic labels
 
@@ -46,7 +46,7 @@ ${post.content}`;
 
   const slideMsg = await client.messages.create({
     model: 'claude-haiku-4-5',
-    max_tokens: 1500,
+    max_tokens: 3000,
     messages: [{ role: 'user', content: carouselUserPrompt }],
   });
 
@@ -57,7 +57,7 @@ ${post.content}`;
   } catch (e) {
     const retry = await client.messages.create({
       model: 'claude-haiku-4-5',
-      max_tokens: 1500,
+      max_tokens: 3000,
       messages: [
         { role: 'user', content: carouselUserPrompt },
         { role: 'assistant', content: slideMsg.content },
@@ -68,8 +68,8 @@ ${post.content}`;
   }
 
   const slides = slidesData.slides;
-  if (!slides || slides.length < 6 || slides.length > 8) {
-    throw new Error(`Expected 6-8 slides, got ${slides?.length}`);
+  if (!slides || slides.length < 3 || slides.length > 15) {
+    throw new Error(`Expected 3-15 slides, got ${slides?.length}`);
   }
 
   return { slides };

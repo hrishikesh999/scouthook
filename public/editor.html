@@ -512,6 +512,7 @@
     </div>
     <div class="slide-over-footer">
       <button class="btn-teal-filled" id="slide-over-generate" aria-label="Generate image" hidden>Generate</button>
+      <button class="btn-outlined" id="slide-over-edit" aria-label="Edit slides" hidden>Edit slides</button>
       <button class="btn-outlined" id="slide-over-save" aria-label="Save asset" hidden>Save asset</button>
       <button class="btn-outlined-teal" id="slide-over-add" aria-label="Add asset to post" hidden>Add to post</button>
       <button class="slide-over-discard" id="slide-over-discard">Discard</button>
@@ -601,13 +602,14 @@ let attachedPreviewUrl = null;
 let attachedAssetType  = null;
 let attachedSlideCount = 0;
 let _currentLmInputs   = null;
-let currentAssetType   = null;
-let extractedContent   = null;
-let _soSkel            = null;  // Persists across innerHTML='' detachment
-let currentAssetUrl    = null;
-let currentPreviewUrl  = null;
-let currentSlideCount  = 0;
-let slideOverState     = 'loading';
+let currentAssetType      = null;
+let extractedContent      = null;
+let currentRenderedContent = null;  // Last slide content submitted to render (for edit-after-generate)
+let _soSkel               = null;  // Persists across innerHTML='' detachment
+let currentAssetUrl       = null;
+let currentPreviewUrl     = null;
+let currentSlideCount     = 0;
+let slideOverState        = 'loading';
 
 const visualCache = new Map();
 
@@ -832,6 +834,7 @@ const FLAG_VERDICT_MAP = [
   ['GENERIC_HOOK',         'The opening feels familiar. Make the first line specific to your own situation or result.'],
   ['WEAK_HOOK_OPENER',     'Opening line doesn\'t create tension. Lead with an outcome, number, or unexpected claim.'],
   ['HOOK_TOO_LONG',        'First line is too long — trim to under 12 words so it lands before the fold.'],
+  ['HOOK_TOO_SHORT',       'Opening line is too brief — write a complete opening thought of at least 4 words.'],
   ['CLICHE_DETECTED',      'Remove the cliché phrases — they signal low-effort content to readers and the algorithm.'],
   ['ENGAGEMENT_BAIT',      'Engagement bait detected — LinkedIn\'s 2026 algorithm actively penalises comment/tag prompts.'],
   ['NO_CTA',               'Add a question at the end — comments carry 15x the algorithmic weight of a like.'],
@@ -1511,6 +1514,7 @@ function calcPreset(key) {
 function setSlideOverState(s) {
   slideOverState = s;
   document.getElementById('slide-over-generate').hidden = (s !== 'editing');
+  document.getElementById('slide-over-edit').hidden     = (s !== 'preview') || currentAssetType !== 'carousel';
   document.getElementById('slide-over-save').hidden     = (s !== 'preview');
   document.getElementById('slide-over-add').hidden      = (s !== 'preview');
 }
@@ -1520,9 +1524,10 @@ function openSlideOver(type, label) {
   if (!currentPostId) return;
   if (userPlan === 'free') { window.PricingModal?.open(); return; }
 
-  currentAssetType = type;
-  currentAssetUrl  = null;
-  extractedContent = null;
+  currentAssetType       = type;
+  currentAssetUrl        = null;
+  extractedContent       = null;
+  currentRenderedContent = null;
 
   const so      = document.getElementById('slide-over');
   const content = document.getElementById('slide-over-content');
@@ -1538,10 +1543,11 @@ function openSlideOver(type, label) {
 
   const cached = visualCache.get(`${currentPostId}:${type}`);
   if (cached?.assetUrl) {
-    currentAssetUrl   = cached.assetUrl;
-    currentPreviewUrl = cached.previewUrl || null;
-    currentSlideCount = cached.slideCount || 0;
-    extractedContent  = cached.extractedContent || null;
+    currentAssetUrl        = cached.assetUrl;
+    currentPreviewUrl      = cached.previewUrl || null;
+    currentSlideCount      = cached.slideCount || 0;
+    extractedContent       = cached.extractedContent || null;
+    currentRenderedContent = cached.renderedContent || null;
     restoreCachedPreview(type, cached);
     setSlideOverState('preview');
   } else if (cached?.extractedContent) {
@@ -1677,45 +1683,67 @@ function renderEditorForm(type, content) {
       const isClosing = slide.type === 'closing';
       const badge     = isTitle ? 'Title' : isClosing ? 'Closing' : 'Content';
       const wc        = (slide.headline || '').trim().split(/\s+/).filter(Boolean).length;
+      const removeBtn = (!isTitle && !isClosing) ? `<button type="button" class="so-slide-remove" aria-label="Remove slide">✕</button>` : '';
       const bodyHtml  = !isTitle ? `
         <div class="so-field-group">
-          <label class="field-label" for="so-body-${i}">Body</label>
-          <textarea id="so-body-${i}" class="field-textarea so-body-textarea" maxlength="200" data-idx="${i}">${escHtml(slide.body || '')}</textarea>
-          <div class="so-char-counter"><span id="so-body-len-${i}">${(slide.body || '').length}</span> / 150</div>
+          <label class="field-label">Body</label>
+          <textarea class="field-textarea so-body-textarea" maxlength="200">${escHtml(slide.body || '')}</textarea>
+          <div class="so-char-counter"><span class="so-body-len">${(slide.body || '').length}</span> / 150</div>
         </div>` : '';
       return `
-        <div class="so-slide-card" data-idx="${i}" data-type="${escHtml(slide.type)}">
+        <div class="so-slide-card" data-type="${escHtml(slide.type)}">
           <div class="so-slide-card-header">
             <span class="so-slide-badge so-slide-badge--${escHtml(slide.type)}">${badge}</span>
             <span class="so-slide-num">Slide ${i + 1}</span>
+            ${removeBtn}
           </div>
           <div class="so-field-group">
-            <label class="field-label" for="so-hl-${i}">Headline</label>
-            <input type="text" id="so-hl-${i}" class="field-input so-hl-input" value="${escHtml(slide.headline || '')}" maxlength="80" data-idx="${i}"/>
-            <div class="so-word-counter" id="so-hl-wc-${i}">
-              <span id="so-wc-${i}">${wc}</span> / 8 words${wc > 8 ? '<span class="so-wc-warn"> Too long</span>' : ''}
+            <label class="field-label">Headline</label>
+            <input type="text" class="field-input so-hl-input" value="${escHtml(slide.headline || '')}" maxlength="80"/>
+            <div class="so-word-counter">
+              <span class="so-wc-val">${wc}</span> / 8 words${wc > 8 ? '<span class="so-wc-warn"> Too long</span>' : ''}
             </div>
           </div>
           ${bodyHtml}
         </div>`;
     }).join('');
-    wrap.innerHTML = `<div class="so-editor-form so-carousel-editor">${cardsHtml}</div>`;
-    slides.forEach((_, i) => {
-      const hlInput = document.getElementById(`so-hl-${i}`);
-      const wcEl    = document.getElementById(`so-wc-${i}`);
-      const wcWrap  = document.getElementById(`so-hl-wc-${i}`);
-      if (hlInput && wcEl) {
-        hlInput.addEventListener('input', () => {
-          const wc = hlInput.value.trim().split(/\s+/).filter(Boolean).length;
-          wcEl.textContent = wc;
-          let warn = wcWrap.querySelector('.so-wc-warn');
-          if (wc > 8 && !warn) { warn = document.createElement('span'); warn.className = 'so-wc-warn'; warn.textContent = ' Too long'; wcWrap.appendChild(warn); }
-          else if (wc <= 8 && warn) warn.remove();
-        });
-      }
-      const bodyInput = document.getElementById(`so-body-${i}`);
-      const bodyLen   = document.getElementById(`so-body-len-${i}`);
-      if (bodyInput && bodyLen) bodyInput.addEventListener('input', () => { bodyLen.textContent = bodyInput.value.length; });
+    const addBtnHtml = slides.length < 15 ? `<button type="button" class="so-add-slide-btn">+ Add slide</button>` : '';
+    wrap.innerHTML = `<div class="so-editor-form so-carousel-editor">${cardsHtml}${addBtnHtml}</div>`;
+
+    wrap.querySelectorAll('.so-slide-remove').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const current = readEditorContent('carousel');
+        const allCards = Array.from(wrap.querySelectorAll('.so-slide-card'));
+        const idx = allCards.indexOf(btn.closest('.so-slide-card'));
+        if (idx !== -1) { current.slides.splice(idx, 1); renderEditorForm('carousel', current); }
+      });
+    });
+
+    const addBtn = wrap.querySelector('.so-add-slide-btn');
+    if (addBtn) {
+      addBtn.addEventListener('click', () => {
+        const current = readEditorContent('carousel');
+        const closingIdx = current.slides.reduce((acc, s, i) => s.type === 'closing' ? i : acc, -1);
+        const newSlide = { type: 'content', headline: '', body: '' };
+        if (closingIdx !== -1) current.slides.splice(closingIdx, 0, newSlide);
+        else current.slides.push(newSlide);
+        renderEditorForm('carousel', current);
+      });
+    }
+
+    wrap.querySelectorAll('.so-hl-input').forEach(input => {
+      const wcWrap = input.closest('.so-field-group').querySelector('.so-word-counter');
+      input.addEventListener('input', () => {
+        const wc = input.value.trim().split(/\s+/).filter(Boolean).length;
+        wcWrap.querySelector('.so-wc-val').textContent = wc;
+        let warn = wcWrap.querySelector('.so-wc-warn');
+        if (wc > 8 && !warn) { warn = document.createElement('span'); warn.className = 'so-wc-warn'; warn.textContent = ' Too long'; wcWrap.appendChild(warn); }
+        else if (wc <= 8 && warn) warn.remove();
+      });
+    });
+    wrap.querySelectorAll('.so-body-textarea').forEach(ta => {
+      const lenEl = ta.closest('.so-field-group').querySelector('.so-body-len');
+      if (lenEl) ta.addEventListener('input', () => { lenEl.textContent = ta.value.length; });
     });
   }
 }
@@ -1727,10 +1755,10 @@ function readEditorContent(type) {
   if (type === 'carousel') {
     const wrap  = document.getElementById('slide-over-content');
     const cards = wrap.querySelectorAll('.so-slide-card');
-    return { slides: Array.from(cards).map((card, i) => ({
+    return { slides: Array.from(cards).map(card => ({
       type:     card.dataset.type || 'content',
-      headline: (document.getElementById(`so-hl-${i}`)?.value || '').trim(),
-      body:     (document.getElementById(`so-body-${i}`)?.value || '').trim(),
+      headline: (card.querySelector('.so-hl-input')?.value || '').trim(),
+      body:     (card.querySelector('.so-body-textarea')?.value || '').trim(),
     })) };
   }
   return {};
@@ -1742,6 +1770,7 @@ async function generateFromEditor(type) {
   const genBtn  = document.getElementById('slide-over-generate');
   genBtn.disabled = true; genBtn.textContent = 'Generating…';
   const content = readEditorContent(type);
+  if (type === 'carousel') currentRenderedContent = content;
   wrap.innerHTML = '';
   skel.style.display = '';
   wrap.appendChild(skel);
@@ -1761,7 +1790,7 @@ async function generateFromEditor(type) {
       currentAssetUrl   = data.pdf_url || data.zip_url;
       currentPreviewUrl = data.slides?.[0]?.png_url || null;
       currentSlideCount = data.slides?.length || 0;
-      visualCache.set(`${currentPostId}:${type}`, { extractedContent, assetUrl: currentAssetUrl, previewUrl: currentPreviewUrl, slideCount: currentSlideCount, slides: data.slides.map(s => s.png_url) });
+      visualCache.set(`${currentPostId}:${type}`, { extractedContent, renderedContent: currentRenderedContent, assetUrl: currentAssetUrl, previewUrl: currentPreviewUrl, slideCount: currentSlideCount, slides: data.slides.map(s => s.png_url) });
     } else {
       currentAssetUrl = data.png_url; currentPreviewUrl = data.png_url; currentSlideCount = 0;
       visualCache.set(`${currentPostId}:${type}`, { extractedContent, assetUrl: data.png_url, previewUrl: data.png_url, slideCount: 0 });
@@ -1939,6 +1968,12 @@ function bindEvents() {
   document.getElementById('slide-over-generate').addEventListener('click', () => {
     if (currentAssetType) generateFromEditor(currentAssetType);
   });
+  document.getElementById('slide-over-edit').addEventListener('click', () => {
+    if (currentAssetType === 'carousel') {
+      const editContent = currentRenderedContent || extractedContent;
+      if (editContent) { renderEditorForm('carousel', editContent); setSlideOverState('editing'); }
+    }
+  });
   document.getElementById('slide-over-save').addEventListener('click', () => {
     if (!currentAssetUrl) return;
     const a = document.createElement('a');
@@ -2046,8 +2081,13 @@ function wireSchedule() {
         ...(firstComment   ? { first_comment: firstComment } : {}),
       };
       if (attachedAssetUrl) {
-        if (attachedAssetType === 'carousel' || attachedAssetType === 'media_pdf') payload.carousel_pdf_url = attachedAssetUrl;
-        else payload.image_url = attachedAssetUrl;
+        if (attachedAssetType === 'carousel' || attachedAssetType === 'media_pdf') {
+          payload.carousel_pdf_url    = attachedAssetUrl;
+          payload.asset_preview_url   = attachedPreviewUrl || null;
+          payload.asset_slide_count   = attachedSlideCount || 0;
+        } else {
+          payload.image_url = attachedAssetUrl;
+        }
       }
       const res  = await fetch('/api/linkedin/schedule', {
         method: 'POST', credentials: 'include',
@@ -2216,6 +2256,8 @@ async function doAutoSave() {
   if (!currentPostId || scheduleEditLocked) return;
   const content = getPostContent();
   if (!content || content === _lastAutoSavedContent) return;
+  const numEl = document.getElementById('quality-ring-num');
+  if (numEl) numEl.textContent = '…';
   try {
     const res = await fetch(`/api/posts/${encodeURIComponent(String(currentPostId))}`, {
       method: 'PATCH',
@@ -2228,8 +2270,13 @@ async function doAutoSave() {
       _lastAutoSavedContent = content;
       if (data.voiceRefined) loadVoiceRefinements();
       if (data.quality) renderQualityScore(data.quality);
+      else if (numEl) numEl.textContent = _lastRenderedScore ?? '—';
+    } else if (numEl) {
+      numEl.textContent = _lastRenderedScore ?? '—';
     }
-  } catch { /* non-fatal */ }
+  } catch {
+    if (numEl) numEl.textContent = _lastRenderedScore ?? '—';
+  }
 }
 
 /* ════════════════════════════════════════════════════════════════════════

@@ -2399,6 +2399,36 @@ body {
   font-size: 14px;
 }
 
+.so-slide-remove {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 13px;
+  padding: 2px 4px;
+  border-radius: var(--radius-sm);
+  line-height: 1;
+  margin-left: auto;
+}
+.so-slide-remove:hover { color: var(--text-danger, #DC2626); background: #FEF2F2; }
+
+.so-add-slide-btn {
+  display: block;
+  width: 100%;
+  padding: var(--space-3) 0;
+  background: none;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  margin-top: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+.so-add-slide-btn:hover { border-color: var(--brand); color: var(--brand); background: var(--bg-subtle, #FAFAFA); }
+
 /* ── Brand Settings Page ────────────────────────────────────── */
 .brand-page {
   padding: var(--space-8);

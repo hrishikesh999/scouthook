@@ -452,7 +452,7 @@ router.post('/publish', async (req, res) => {
 router.post('/schedule', async (req, res) => {
   const userId   = req.userId;
   const tenantId = req.tenantId;
-  const { content, scheduled_for, post_id, image_url, carousel_pdf_url, first_comment } = req.body;
+  const { content, scheduled_for, post_id, image_url, carousel_pdf_url, first_comment, asset_preview_url, asset_slide_count } = req.body;
 
   if (!userId)         return res.status(400).json({ ok: false, error: 'missing_user_id' });
 
@@ -586,11 +586,17 @@ router.post('/schedule', async (req, res) => {
       scheduledPostId = Number(result.lastInsertRowid);
 
       if (post_id) {
+        const assetType = carousel_pdf_url ? 'carousel' : image_url ? 'image' : null;
+        const assetUrl  = (carousel_pdf_url || image_url)?.trim() || null;
         await tx.prepare(`
           UPDATE generated_posts
-          SET status = 'scheduled'
+          SET status = 'scheduled',
+              asset_type = COALESCE(?, asset_type),
+              asset_url = COALESCE(?, asset_url),
+              asset_preview_url = COALESCE(?, asset_preview_url),
+              asset_slide_count = COALESCE(?, asset_slide_count)
           WHERE id = ? AND user_id = ? AND tenant_id = ? AND status = 'draft'
-        `).run(post_id, userId, tenantId);
+        `).run(assetType, assetUrl, asset_preview_url?.trim() || null, asset_slide_count || null, post_id, userId, tenantId);
       }
     });
 

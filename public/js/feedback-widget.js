@@ -12,27 +12,28 @@
     position: fixed;
     right: 0;
     top: 50%;
-    transform: translateY(-50%);
+    transform-origin: right top;
+    transform: rotate(90deg) translateX(50%);
     z-index: 800;
     display: flex;
     align-items: center;
     gap: 6px;
     background: #6366F1;
     border: none;
-    border-radius: 8px 0 0 8px;
+    border-radius: 0 0 8px 8px;
     padding: 10px 14px 10px 12px;
     font-size: 13px;
     font-weight: 600;
     color: #fff;
     cursor: pointer;
-    box-shadow: -2px 0 12px rgba(99,102,241,0.30);
+    box-shadow: -4px 0 16px rgba(99,102,241,0.30);
     transition: box-shadow 0.15s, background 0.15s;
     font-family: inherit;
     white-space: nowrap;
   }
   #fb-btn:hover {
     background: #4F46E5;
-    box-shadow: -4px 0 18px rgba(99,102,241,0.40);
+    box-shadow: -6px 0 20px rgba(99,102,241,0.45);
   }
 
   #fb-overlay {

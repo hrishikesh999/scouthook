@@ -20,6 +20,7 @@ const LINKEDIN_RULES = {
   ],
   hook: {
     maxWords: 15,
+    minWords: 4,
     /** First-line prefixes (case-insensitive) that read as weak LinkedIn openers */
     forbiddenStarters: [
       'i am excited to',

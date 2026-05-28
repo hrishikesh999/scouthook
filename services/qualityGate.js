@@ -116,7 +116,7 @@ function buildRecommendation(errors, flags, warnings) {
   if (errors.some(e => /AI language|as an ai|language model/i.test(e)) || flags.includes('AI_LANGUAGE_DETECTED')) {
     return 'This post contains phrases that signal AI authorship — regenerate or edit before posting.';
   }
-  if (flags.includes('WEAK_HOOK_OPENER') || flags.includes('HOOK_TOO_LONG')) {
+  if (flags.includes('HOOK_TOO_SHORT') || flags.includes('WEAK_HOOK_OPENER') || flags.includes('HOOK_TOO_LONG')) {
     return 'The opening line is too weak for your audience — try a more direct or provocative hook.';
   }
   if (flags.includes('CLICHE_DETECTED')) {
@@ -181,6 +181,13 @@ function runQualityGate(postText, options = {}) {
   if (firstLine && firstLineWords > LINKEDIN_RULES.hook.maxWords) {
     errors.push(`Hook is ${firstLineWords} words — max is ${LINKEDIN_RULES.hook.maxWords}`);
     flags.push('HOOK_TOO_LONG');
+    score -= 20;
+  }
+
+  // Check 2b — Hook too short (truncated fragment)
+  if (firstLine && firstLineWords > 0 && firstLineWords < LINKEDIN_RULES.hook.minWords) {
+    errors.push(`Hook is too brief (${firstLineWords} ${firstLineWords === 1 ? 'word' : 'words'}) — write a complete opening thought of at least ${LINKEDIN_RULES.hook.minWords} words`);
+    flags.push('HOOK_TOO_SHORT');
     score -= 20;
   }
 
@@ -433,9 +440,10 @@ function runQualityGate(postText, options = {}) {
                       : 0;
   const dimensions = {
     hook: Math.max(0, 100
-      - (flags.includes('HOOK_TOO_LONG')     ? 35 : 0)
-      - (flags.includes('WEAK_HOOK_OPENER')  ? 45 : 0)
-      - (flags.includes('GENERIC_HOOK')      ? 25 : 0)
+      - (flags.includes('HOOK_TOO_LONG')    ? 35 : 0)
+      - (flags.includes('HOOK_TOO_SHORT')   ? 35 : 0)
+      - (flags.includes('WEAK_HOOK_OPENER') ? 45 : 0)
+      - (flags.includes('GENERIC_HOOK')     ? 25 : 0)
       - lengthPenalty),
     voice: Math.max(0, 100
       - (flags.includes('AI_LANGUAGE_DETECTED') ? 60 : 0)

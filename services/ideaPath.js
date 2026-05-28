@@ -99,24 +99,64 @@ SELF-CHECK BEFORE OUTPUTTING:
 5. Would someone who knows this author think "that sounds like them"? If not, rewrite.
 Only output the JSON after all five pass.`;
 
+const STREAMING_SELF_CHECK = `
+SELF-CHECK BEFORE OUTPUTTING:
+1. Does line 1 stop the scroll without needing context? If not, rewrite it.
+2. Is the post grounded in the concrete details from the input — a specific scenario, decision, moment, or role? If it reads as generic advice, rewrite it.
+3. Are any banned words or em dashes present? If yes, replace them.
+4. Does the closing match the post goal? (reach=open question, trust=reframe, convert=direct ask)
+5. Would someone who knows this author think "that sounds like them"? If not, rewrite.
+Output only the post as plain text after all five pass. No JSON. No labels. No explanation.`;
+
+// Maps each archetype to structurally different contrast options.
+// Goal: Hook B always uses a different emotional mechanism from Hook A.
+const ARCHETYPE_CONTRAST = {
+  CONFESSION:        ['NUMBER', 'CONTRARIAN', 'PATTERN_INTERRUPT'],
+  BEFORE_AFTER:      ['CONTRARIAN', 'INSIGHT', 'DIRECT_ADDRESS'],
+  CONTRARIAN:        ['CONFESSION', 'NUMBER', 'BEFORE_AFTER'],
+  MYTH_BUST:         ['CONFESSION', 'NUMBER', 'DIRECT_ADDRESS'],
+  STAKES:            ['INSIGHT', 'CONFESSION', 'PATTERN_INTERRUPT'],
+  NUMBER:            ['CONFESSION', 'CONTRARIAN', 'STAKES'],
+  PATTERN_INTERRUPT: ['CONFESSION', 'BEFORE_AFTER', 'INSIGHT'],
+  DIRECT_ADDRESS:    ['CONTRARIAN', 'NUMBER', 'BEFORE_AFTER'],
+  INSIGHT:           ['CONFESSION', 'CONTRARIAN', 'BEFORE_AFTER'],
+};
+
+const ARCHETYPE_INSTRUCTIONS = {
+  NUMBER:            "Start with a specific number (e.g. '3 founders…', '87% of…')",
+  CONTRARIAN:        "Open by challenging a common belief or assumption directly",
+  CONFESSION:        "Lead with a personal admission, mistake, or past belief",
+  PATTERN_INTERRUPT: "Start with something unexpected or counterintuitive that breaks autopilot",
+  DIRECT_ADDRESS:    "Speak directly to a specific type of person ('If you're a…')",
+  STAKES:            "Open with a consequence or risk — what's at stake — before explaining why",
+  BEFORE_AFTER:      "Contrast a past state with a present state in a single line",
+  INSIGHT:           "State a non-obvious truth as a confident plain-spoken fact",
+  MYTH_BUST:         "Name a common belief in the first words, then immediately flip it",
+};
+
 /**
  * Generate a single alternative first line (hook B) using Haiku.
- * Gives the user a second hook option without regenerating the whole post.
- * Returns null on any failure — hook B is always non-blocking.
+ * Picks a structurally contrasting archetype from Hook A's category.
+ * Returns { text, archetype } or null on any failure — always non-blocking.
  */
 async function generateAlternativeHook(post, usedArchetype, client) {
   try {
+    const candidates     = ARCHETYPE_CONTRAST[usedArchetype] || ['CONTRARIAN', 'NUMBER', 'INSIGHT'];
+    const targetArchetype = candidates[Math.floor(Math.random() * candidates.length)];
+    const instruction    = ARCHETYPE_INSTRUCTIONS[targetArchetype] || 'Write a punchy, specific opening line';
+
     const response = await client.messages.create({
       model:      HAIKU_MODEL,
       max_tokens: 80,
-      system:     'You are a LinkedIn hook writer. Write one alternative opening line for a post. Under 12 words. No explanation. Plain text only.',
+      system:     'You are a LinkedIn hook writer. Write one alternative opening line for a LinkedIn post. Under 12 words. No explanation. Plain text only.',
       messages:   [{
         role:    'user',
-        content: `This post opens with a ${usedArchetype} hook:\n\n${post.split('\n').slice(0, 3).join('\n')}\n\nWrite one alternative first line using a completely different angle. Make it punchy, specific, and scroll-stopping. Plain text only — no quotes, no labels.`,
+        content: `This post opens with a ${usedArchetype} hook:\n\n${post.split('\n').slice(0, 3).join('\n')}\n\nWrite one alternative first line as a ${targetArchetype} hook. ${instruction}. Make it specific to this post's content. Plain text only — no quotes, no labels.`,
       }],
     });
     const line = response.content?.[0]?.text?.trim() || null;
-    return line && line.length > 0 ? line : null;
+    if (!line || line.length === 0) return null;
+    return { text: line, archetype: targetArchetype };
   } catch {
     return null; // non-blocking
   }
@@ -144,6 +184,18 @@ async function ideaToPost(rawIdea, userProfile, options = {}) {
   const postType          = options.postType || null;
   const convertCtaIntent  = options.convertCtaIntent || null;
 
+  // Substance check — post-type-aware; skipped for vault/lead-magnet/doc paths
+  if (!options.skipSubstanceCheck && rawIdea.trim().length >= 15) {
+    const quality = await assessInputQuality(rawIdea, client, userProfile);
+    const substanceCheck = buildSubstancePromptForPostType(quality, userProfile, postType);
+    if (substanceCheck) {
+      const err = new Error('missing_substance');
+      err.substancePrompt = substanceCheck.message;
+      err.substanceTier   = substanceCheck.tier;
+      throw err;
+    }
+  }
+
   // Stage 1 (Haiku): derive structure blueprint
   const blueprint = await (archetypeOverride
     ? Promise.resolve({
@@ -157,6 +209,9 @@ async function ideaToPost(rawIdea, userProfile, options = {}) {
 
   // Caller-supplied tensionStatement takes precedence over Stage 1's derived tension
   if (options.tensionStatement) blueprint.tension = options.tensionStatement;
+
+  // Notify streaming callers that Stage 1 is complete
+  options.onStep?.({ step: 'blueprint_done', archetype: blueprint.archetype, label: `Hook: ${blueprint.archetype}` });
 
   const archetypeRecord = HOOK_ARCHETYPES[blueprint.archetype] || HOOK_ARCHETYPES.INSIGHT;
   const hookInjection   = buildHookInjection(archetypeRecord);
@@ -367,6 +422,24 @@ ${SELF_CHECK}`;
 }
 
 /**
+ * Streaming variant of buildVoiceWritingSystemPrompt — same prompt, plain-text output instead of JSON.
+ */
+function buildStreamingVoiceWritingSystemPrompt(blueprint, userProfile, hookInjectionBlock, ctaInstruction = '', postType = null) {
+  const base = buildVoiceWritingSystemPrompt(blueprint, userProfile, hookInjectionBlock, ctaInstruction, postType);
+  return base.replace(SELF_CHECK, STREAMING_SELF_CHECK);
+}
+
+/** User prompt for the streaming path — asks for plain text instead of JSON wrapper. */
+function buildStreamingUserPrompt(rawIdea) {
+  return `RAW IDEA:
+${rawIdea}
+
+EXTRACTION INSTRUCTION: Before structuring the post, identify the most concrete element in the raw idea — a specific scenario, decision, moment, named role, direction of change, or result. Build from that. If the input has no numbers, do not add or invent any — the scenario itself is the specificity. Never use [SPECIFIC NEEDED] markers.
+
+Output only the post as plain text. No JSON, no labels, no explanation.`;
+}
+
+/**
  * Runs Stage 2 Sonnet generation with a blueprint-grounded system prompt.
  * Used exclusively by ideaToPost() — vault and editorial paths use runSinglePostGeneration().
  */
@@ -385,9 +458,46 @@ async function runTwoStageGeneration({
   if (!apiKey) throw new Error('anthropic_api_key not configured');
   const client = new Anthropic({ apiKey });
 
+  const extraHints = [options._funnelHint, options.qualityRetryHint, options._regenerateHint].filter(Boolean).join('\n\n');
+
+  const TEMP_BY_POST_TYPE = { reach: 0.8, trust: 0.65, convert: 0.48 };
+  const temperature = TEMP_BY_POST_TYPE[postType] ?? 0.7;
+
+  // ── Streaming path: plain-text output, token-by-token via onToken callback ──
+  if (options.onToken) {
+    const streamSysPrompt  = buildStreamingVoiceWritingSystemPrompt(blueprint, userProfile, hookInjection, ctaInstruction, postType);
+    const streamUserPrompt = buildStreamingUserPrompt(rawIdea);
+    const streamUserFinal  = extraHints ? `${streamUserPrompt}\n\n${extraHints}` : streamUserPrompt;
+
+    options.onStep?.({ step: 'writing', label: 'Writing in your voice...' });
+
+    let fullText = '';
+    const stream = client.messages.stream({
+      model:       'claude-sonnet-4-6',
+      max_tokens:  3000,
+      temperature,
+      system:      streamSysPrompt,
+      messages:    [{ role: 'user', content: streamUserFinal }],
+    });
+    stream.on('text', (textDelta) => {
+      fullText += textDelta;
+      options.onToken(textDelta);
+    });
+    await stream.done();
+
+    const cleanPost   = sanitiseAiTells(fullText.trim());
+    const hookBResult = await generateAlternativeHook(cleanPost, archetypeUsed, client);
+    const synthesis = {
+      suggested_angle:       blueprint.arc    || 'Based on the structural blueprint',
+      recommended_structure: `${archetypeUsed} — ${blueprint.tension || 'tension-first narrative'}`,
+      supporting_insight:    blueprint.tension || 'Grounded in your specific context',
+    };
+    return { synthesis, post: cleanPost, hookB: hookBResult?.text || null, hookBArchetype: hookBResult?.archetype || null, ctaAlternatives: [], archetypeUsed, hookConfidence, stage1Blueprint: blueprint };
+  }
+
+  // ── Non-streaming path: JSON response ───────────────────────────────────────
   const systemPrompt    = buildVoiceWritingSystemPrompt(blueprint, userProfile, hookInjection, ctaInstruction, postType);
   const userPrompt      = buildUserPrompt(rawIdea);
-  const extraHints      = [options._funnelHint, options.qualityRetryHint, options._regenerateHint].filter(Boolean).join('\n\n');
   const userPromptFinal = extraHints ? `${userPrompt}\n\n${extraHints}` : userPrompt;
 
   let responseText = '';
@@ -396,19 +506,20 @@ async function runTwoStageGeneration({
     const message = await client.messages.create({
       model:       'claude-sonnet-4-6',
       max_tokens:  3000,
-      temperature: 0.7,
+      temperature,
       system:      systemPrompt,
       messages:    [{ role: 'user', content: userPromptFinal }],
     });
 
     responseText = message.content[0]?.text?.trim() || '';
-    const validated = validateSinglePostResponse(extractJsonFromResponse(responseText));
-    const cleanPost  = sanitiseAiTells(validated.post);
-    const hookB      = await generateAlternativeHook(cleanPost, archetypeUsed, client);
+    const validated   = validateSinglePostResponse(extractJsonFromResponse(responseText));
+    const cleanPost   = sanitiseAiTells(validated.post);
+    const hookBResult = await generateAlternativeHook(cleanPost, archetypeUsed, client);
     return {
       synthesis:       validated.synthesis,
       post:            cleanPost,
-      hookB,
+      hookB:           hookBResult?.text || null,
+      hookBArchetype:  hookBResult?.archetype || null,
       ctaAlternatives: validated.ctaAlternatives,
       archetypeUsed,
       hookConfidence,
@@ -420,7 +531,7 @@ async function runTwoStageGeneration({
         const retry = await client.messages.create({
           model:       'claude-sonnet-4-6',
           max_tokens:  3000,
-          temperature: 0.7,
+          temperature,
           system:      systemPrompt,
           messages: [
             { role: 'user',      content: userPromptFinal },
@@ -429,13 +540,14 @@ async function runTwoStageGeneration({
           ],
         });
         responseText = retry.content[0]?.text?.trim() || '';
-        const validated = validateSinglePostResponse(extractJsonFromResponse(responseText));
-        const cleanPost  = sanitiseAiTells(validated.post);
-        const hookB      = await generateAlternativeHook(cleanPost, archetypeUsed, client);
+        const validated   = validateSinglePostResponse(extractJsonFromResponse(responseText));
+        const cleanPost   = sanitiseAiTells(validated.post);
+        const hookBResult = await generateAlternativeHook(cleanPost, archetypeUsed, client);
         return {
           synthesis:       validated.synthesis,
           post:            cleanPost,
-          hookB,
+          hookB:           hookBResult?.text || null,
+          hookBArchetype:  hookBResult?.archetype || null,
           ctaAlternatives: validated.ctaAlternatives,
           archetypeUsed,
           hookConfidence,
@@ -674,13 +786,14 @@ async function runSinglePostGeneration({
     });
 
     responseText = message.content[0]?.text?.trim() || '';
-    const validated = validateSinglePostResponse(extractJsonFromResponse(responseText));
-    const cleanPost = sanitiseAiTells(validated.post);
-    const hookB = await generateAlternativeHook(cleanPost, archetypeUsed, client);
+    const validated   = validateSinglePostResponse(extractJsonFromResponse(responseText));
+    const cleanPost   = sanitiseAiTells(validated.post);
+    const hookBResult = await generateAlternativeHook(cleanPost, archetypeUsed, client);
     return {
       synthesis:       validated.synthesis,
       post:            cleanPost,
-      hookB,
+      hookB:           hookBResult?.text || null,
+      hookBArchetype:  hookBResult?.archetype || null,
       ctaAlternatives: validated.ctaAlternatives,
       archetypeUsed,
       hookConfidence,
@@ -700,13 +813,14 @@ async function runSinglePostGeneration({
           ],
         });
         responseText = retry.content[0]?.text?.trim() || '';
-        const validated = validateSinglePostResponse(extractJsonFromResponse(responseText));
-        const cleanPost = sanitiseAiTells(validated.post);
-        const hookB = await generateAlternativeHook(cleanPost, archetypeUsed, client);
+        const validated   = validateSinglePostResponse(extractJsonFromResponse(responseText));
+        const cleanPost   = sanitiseAiTells(validated.post);
+        const hookBResult = await generateAlternativeHook(cleanPost, archetypeUsed, client);
         return {
           synthesis:       validated.synthesis,
           post:            cleanPost,
-          hookB,
+          hookB:           hookBResult?.text || null,
+          hookBArchetype:  hookBResult?.archetype || null,
           ctaAlternatives: validated.ctaAlternatives,
           archetypeUsed,
           hookConfidence,
@@ -1016,4 +1130,47 @@ function buildSubstancePrompt(quality, userProfile = {}) {
   return { tier: 'block', message: buildSubstanceBlockMessage(quality, niche, userProfile) };
 }
 
-module.exports = { ideaToPost, generateInsightAlternativePost, vaultSeedToPost };
+function buildSubstancePromptForPostType(quality, userProfile, postType) {
+  const { hasSpecific, hasTension, hasNovelty } = quality;
+  const niche = userProfile.content_niche || '';
+
+  if (postType === 'reach') {
+    // Quotes, observations, contrarian opinions are all valid reach seeds.
+    // Any one signal is enough — block only when the input is completely empty of substance.
+    if (hasTension || hasNovelty || hasSpecific) return null;
+    return { tier: 'block', message: buildSubstanceBlockMessage(quality, niche, userProfile) };
+  }
+
+  if (postType === 'trust') {
+    // Authority posts need evidence. Block if both specific and tension are absent.
+    // Warn (but allow) if one is present without the other.
+    if (hasSpecific && (hasTension || hasNovelty)) return null;
+    if (!hasSpecific && !hasTension) {
+      return { tier: 'block', message: buildSubstanceBlockMessage(quality, niche, userProfile) };
+    }
+    return { tier: 'warn', message: buildSubstanceWarnMessage(quality, niche) };
+  }
+
+  if (postType === 'convert') {
+    // No real result = no credible CTA. Warn (never hard-block) so the user can still generate.
+    if (hasSpecific) return null;
+    return { tier: 'warn', message: 'Convert posts anchor in a real result. Add what specifically happened — before, after, and what changed.' };
+  }
+
+  // No postType / free-write: original balanced behaviour
+  return buildSubstancePrompt(quality, userProfile);
+}
+
+/**
+ * Pre-flight substance check for use before SSE headers are set.
+ * Returns null if the idea passes, or { tier, message } if it fails.
+ */
+async function checkSubstance(rawIdea, userProfile, postType) {
+  const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
+  if (!apiKey) throw new Error('anthropic_api_key not configured');
+  const client = new Anthropic({ apiKey });
+  const quality = await assessInputQuality(rawIdea, client, userProfile);
+  return buildSubstancePromptForPostType(quality, userProfile, postType);
+}
+
+module.exports = { ideaToPost, generateInsightAlternativePost, vaultSeedToPost, checkSubstance };

@@ -415,6 +415,31 @@
     }
     @keyframes proc-spin { to { transform: rotate(360deg); } }
 
+    /* ── Live post preview (streaming) ──────────────────────── */
+    #proc-preview {
+      display: none;
+      border-top: 1px solid var(--border);
+      padding-top: 16px;
+      margin-top: 4px;
+    }
+    #proc-preview-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      margin: 0 0 10px;
+    }
+    #proc-preview-text {
+      margin: 0;
+      font-size: 0.875rem;
+      line-height: 1.75;
+      color: var(--text-body);
+      white-space: pre-line;
+      max-height: 320px;
+      overflow-y: auto;
+    }
+
     /* ── Bubble extras (lead magnet escape hatch, example) ───── */
     .chat-bubble-example-toggle {
       display: inline-block;
@@ -602,6 +627,10 @@
               <span class="proc-step-icon">⏳</span>
               <span class="proc-step-text">Final quality check…</span>
             </div>
+          </div>
+          <div id="proc-preview">
+            <p id="proc-preview-label">Writing your post…</p>
+            <p id="proc-preview-text"></p>
           </div>
         </div>
 

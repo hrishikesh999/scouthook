@@ -437,6 +437,11 @@
             <p class="panel-label score-label">Hook</p>
             <span id="funnel-type" class="archetype-badge" style="margin-bottom:6px;display:inline-block"></span>
             <div id="hook-explanation"></div>
+            <div id="hook-b-strip">
+              <span class="hook-b-label">Alt hook:</span>
+              <span id="hook-b-text"></span>
+              <a id="hook-b-use" role="button">Use this →</a>
+            </div>
           </section>
           <div id="voice-learning-section" hidden>
             <hr class="profile-divider">
@@ -966,6 +971,28 @@ function renderHookSection(p) {
     explainEl.style.display = explanation ? '' : 'none';
   }
 
+  const hookBStrip = document.getElementById('hook-b-strip');
+  const hookBText  = document.getElementById('hook-b-text');
+  const hookBUse   = document.getElementById('hook-b-use');
+  if (hookBStrip && hookBText && p.hookB) {
+    const bLabel = p.hookBArchetype ? (ARCHETYPE_LABELS_ED[p.hookBArchetype] || p.hookBArchetype) : null;
+    hookBStrip.querySelector('.hook-b-label').textContent = bLabel ? `Alt hook · ${bLabel}:` : 'Alt hook:';
+    hookBText.textContent = p.hookB;
+    hookBStrip.classList.add('visible');
+    hookBUse?.addEventListener('click', () => swapHookB(p.hookB), { once: true });
+  } else if (hookBStrip) {
+    hookBStrip.classList.remove('visible');
+  }
+}
+
+function swapHookB(hookBLine) {
+  const bodyEl = document.getElementById('post-body');
+  if (!bodyEl || !hookBLine) return;
+  const paras = [...bodyEl.querySelectorAll('p.text-post')];
+  if (!paras.length) return;
+  paras[0].textContent = hookBLine;
+  document.getElementById('hook-b-strip')?.classList.remove('visible');
+  scheduleAutoSave?.();
 }
 
 

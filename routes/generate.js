@@ -4,7 +4,7 @@ const express = require('express');
 const router = express.Router();
 const { db, getSetting } = require('../db');
 const { runQualityGate } = require('../services/qualityGate');
-const { ideaToPost, vaultSeedToPost } = require('../services/ideaPath');
+const { ideaToPost, vaultSeedToPost, checkSubstance } = require('../services/ideaPath');
 const { generateLeadMagnetPost } = require('../services/leadMagnetPath');
 const { classifyContent } = require('../services/funnelClassifier');
 const { canGeneratePost } = require('../services/subscription');
@@ -319,6 +319,112 @@ router.post('/', async (req, res) => {
 
     const funnelTypeForGate = vaultIdea?.funnel_type || post_type || bodyFunnelType || null;
 
+    // ── SSE streaming path ────────────────────────────────────────────────────
+    // Only for the standard idea path (not vault, not lead magnet).
+    if (req.body.streaming && !vaultIdea) {
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+      res.flushHeaders();
+
+      const sseWrite = (event, data) => {
+        res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+      };
+
+      try {
+        sseWrite('step', { step: 'analyzing', label: 'Analyzing your idea...' });
+
+        // Substance check before starting the expensive generation
+        if (!skip_substance_check && raw_idea.trim().length >= 15) {
+          const substanceCheck = await checkSubstance(raw_idea, userProfile, post_type || null);
+          if (substanceCheck) {
+            sseWrite('error', { error: 'missing_substance', prompt: substanceCheck.message, substance_tier: substanceCheck.tier });
+            return res.end();
+          }
+        }
+
+        const ideaRaw = await ideaToPost(raw_idea, userProfile, {
+          skipSubstanceCheck:  true, // already checked above
+          postType:            post_type || null,
+          convertCtaIntent:    convert_cta_intent || null,
+          tensionStatement:    tension_statement || null,
+          onStep:  (stepData) => sseWrite('step', stepData),
+          onToken: (text)     => sseWrite('token', { text }),
+        });
+
+        sseWrite('step', { step: 'saving', label: 'Final quality check...' });
+
+        const primaryGate = runQualityGate(ideaRaw.post, {
+          ...gateOptions(
+            { format_slug: IDEA_SLUG, content: ideaRaw.post },
+            userProfile, 'idea', ideaRaw.archetypeUsed, ideaRaw.hookConfidence, funnelTypeForGate
+          ),
+          postType: post_type || null,
+        });
+
+        const runResult = await db.prepare(`
+          INSERT INTO generation_runs (user_id, tenant_id, path, input_data, synthesis)
+          VALUES (?, ?, ?, ?, ?)
+          RETURNING id
+        `).run(userId, tenantId, genPath, JSON.stringify({ raw_idea }), JSON.stringify(ideaRaw.synthesis));
+        const runId = runResult.lastInsertRowid;
+
+        const funnelType = post_type || (await classifyContent(ideaRaw.post)).funnelType;
+
+        const primaryInsert = await db.prepare(`
+          INSERT INTO generated_posts
+            (run_id, user_id, tenant_id, format_slug, content, ai_content, quality_score, quality_flags, passed_gate,
+             funnel_type, vault_source_ref, hook_b, hook_b_archetype, cta_alternatives, idea_input, archetype_used, source,
+             post_type, quality_verdict)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          RETURNING id
+        `).run(
+          runId, userId, tenantId, IDEA_SLUG,
+          ideaRaw.post, ideaRaw.post,
+          primaryGate.score, JSON.stringify(primaryGate.flags), primaryGate.passed_gate ? 1 : 0,
+          funnelType, null,
+          ideaRaw.hookB || null,
+          ideaRaw.hookBArchetype || null,
+          ideaRaw.ctaAlternatives?.length ? JSON.stringify(ideaRaw.ctaAlternatives) : null,
+          raw_idea || null,
+          ideaRaw.archetypeUsed || null,
+          source || null,
+          post_type || null,
+          primaryGate.verdict || null
+        );
+        const primaryId = primaryInsert.lastInsertRowid;
+
+        const primaryQuality = buildQualityPayload(primaryGate, 1, true);
+
+        sseWrite('done', {
+          post_id:         primaryId,
+          run_id:          runId,
+          post:            ideaRaw.post,
+          hookB:           ideaRaw.hookB || null,
+          hookBArchetype:  ideaRaw.hookBArchetype || null,
+          ctaAlternatives: ideaRaw.ctaAlternatives || [],
+          quality:         { ...primaryQuality, verdict: primaryGate.verdict },
+          synthesis:       ideaRaw.synthesis,
+          archetypeUsed:   ideaRaw.archetypeUsed,
+          hookConfidence:  ideaRaw.hookConfidence,
+          funnel_type:     funnelType,
+          post_type:       post_type || null,
+          stage1Blueprint: ideaRaw.stage1Blueprint,
+        });
+        return res.end();
+
+      } catch (sseErr) {
+        if (sseErr.message === 'missing_substance') {
+          sseWrite('error', { error: 'missing_substance', prompt: sseErr.substancePrompt, substance_tier: sseErr.substanceTier || 'warn' });
+        } else if (sseErr.status === 429 || sseErr.status === 529) {
+          sseWrite('error', { error: 'high_demand', retry_after_sec: 30 });
+        } else {
+          sseWrite('error', { error: sseErr.message || 'generation_failed' });
+        }
+        return res.end();
+      }
+    }
+
     if (vaultIdea) {
       // ── Vault path ────────────────────────────────────────────────────────
       // Purpose-built generation: expert source framing, full chunk + neighbor
@@ -385,6 +491,7 @@ router.post('/', async (req, res) => {
         synthesis:       ideaRaw.synthesis,
         post:            ideaRaw.post,
         hookB:           ideaRaw.hookB || null,
+        hookBArchetype:  ideaRaw.hookBArchetype || null,
         ctaAlternatives: ideaRaw.ctaAlternatives || [],
         archetypeUsed:   ideaRaw.archetypeUsed,
         hookConfidence:  ideaRaw.hookConfidence,
@@ -398,6 +505,7 @@ router.post('/', async (req, res) => {
         synthesis,
         post,
         hookB,
+        hookBArchetype,
         ctaAlternatives,
         archetypeUsed,
         hookConfidence,
@@ -436,9 +544,9 @@ router.post('/', async (req, res) => {
       const primaryInsert = await db.prepare(`
         INSERT INTO generated_posts
           (run_id, user_id, tenant_id, format_slug, content, ai_content, quality_score, quality_flags, passed_gate,
-           funnel_type, vault_source_ref, hook_b, cta_alternatives, idea_input, archetype_used, source,
+           funnel_type, vault_source_ref, hook_b, hook_b_archetype, cta_alternatives, idea_input, archetype_used, source,
            post_type, quality_verdict)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         RETURNING id
       `).run(
         runId,
@@ -453,6 +561,7 @@ router.post('/', async (req, res) => {
         funnelType,
         vaultSourceRef,
         hookB || null,
+        hookBArchetype || null,
         ctaAlternatives?.length ? JSON.stringify(ctaAlternatives) : null,
         inputData.raw_idea || null,
         archetypeUsed || null,
@@ -476,7 +585,8 @@ router.post('/', async (req, res) => {
         run_id: runId,
         synthesis,
         post,
-        hookB: hookB || null,
+        hookB:           hookB || null,
+        hookBArchetype:  hookBArchetype || null,
         ctaAlternatives: ctaAlternatives || [],
         id: primaryId,
         archetypeUsed,
@@ -519,7 +629,7 @@ router.get('/post/:postId', async (req, res) => {
   try {
     row = await db.prepare(`
       SELECT id, content, quality_score, quality_flags, passed_gate,
-             hook_b, cta_alternatives, format_slug, funnel_type,
+             hook_b, hook_b_archetype, cta_alternatives, format_slug, funnel_type,
              asset_url, asset_preview_url, asset_type, asset_slide_count, first_comment,
              archetype_used, idea_input, post_type, quality_verdict,
              lead_magnet_template, lead_magnet_inputs
@@ -529,7 +639,7 @@ router.get('/post/:postId', async (req, res) => {
   } catch {
     row = await db.prepare(`
       SELECT id, content, quality_score, quality_flags, passed_gate,
-             hook_b, cta_alternatives, format_slug, funnel_type
+             hook_b, hook_b_archetype, cta_alternatives, format_slug, funnel_type
       FROM generated_posts
       WHERE id = ? AND user_id = ? AND tenant_id = ?
     `).get(postId, userId, tenantId);
@@ -551,6 +661,7 @@ router.get('/post/:postId', async (req, res) => {
       content:             row.content,
       quality:             { score: row.quality_score || 0, passed: row.passed_gate === 1, flags, errors: flags, warnings: [], verdict: row.quality_verdict || null },
       hookB:               row.hook_b || null,
+      hookBArchetype:      row.hook_b_archetype || null,
       ctaAlternatives,
       archetypeUsed:       row.archetype_used || null,
       ideaInput:           row.idea_input     || null,
@@ -731,7 +842,7 @@ router.post('/from-doc', async (req, res) => {
   if (!apiKey) return res.status(500).json({ ok: false, error: 'no_api_key' });
 
   try {
-    const { synthesis, post, hookB, ctaAlternatives, archetypeUsed, hookConfidence, stage1Blueprint } =
+    const { synthesis, post, hookB, hookBArchetype, ctaAlternatives, archetypeUsed, hookConfidence, stage1Blueprint } =
       await ideaToPost(truncated, userProfile, { skipSubstanceCheck: skipSubstanceCheckDoc });
 
     const primaryGate = runQualityGate(
@@ -761,13 +872,13 @@ router.post('/from-doc', async (req, res) => {
 
     const primaryInsert = await db.prepare(`
       INSERT INTO generated_posts
-        (run_id, user_id, tenant_id, format_slug, content, ai_content, quality_score, quality_flags, passed_gate, funnel_type, hook_b, cta_alternatives, idea_input, archetype_used)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (run_id, user_id, tenant_id, format_slug, content, ai_content, quality_score, quality_flags, passed_gate, funnel_type, hook_b, hook_b_archetype, cta_alternatives, idea_input, archetype_used)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       RETURNING id
     `).run(
       runId, userId, tenantId, IDEA_SLUG,
       post, post, primaryGate.score, JSON.stringify(primaryGate.flags), primaryGate.passed_gate ? 1 : 0,
-      funnelType, hookB || null,
+      funnelType, hookB || null, hookBArchetype || null,
       ctaAlternatives?.length ? JSON.stringify(ctaAlternatives) : null,
       truncated,
       archetypeUsed || null
@@ -787,6 +898,7 @@ router.post('/from-doc', async (req, res) => {
       synthesis,
       post,
       hookB:           hookB || null,
+      hookBArchetype:  hookBArchetype || null,
       ctaAlternatives: ctaAlternatives || [],
       id:              primaryId,
       archetypeUsed,

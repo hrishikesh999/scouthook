@@ -8,6 +8,42 @@ function escapeHtml(str) {
 }
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
+/** Read a text/event-stream response, dispatching events to named handlers. */
+async function readSSEStream(response, { onStep, onToken, onDone, onError } = {}) {
+  const reader  = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer   = '';
+  let curEvent = null;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let nlIdx;
+      while ((nlIdx = buffer.indexOf('\n')) !== -1) {
+        const line = buffer.slice(0, nlIdx);
+        buffer = buffer.slice(nlIdx + 1);
+        if (line.startsWith('event: ')) {
+          curEvent = line.slice(7).trim();
+        } else if (line.startsWith('data: ') && curEvent) {
+          try {
+            const data = JSON.parse(line.slice(6));
+            if (curEvent === 'step')  onStep?.(data);
+            if (curEvent === 'token') onToken?.(data);
+            if (curEvent === 'done')  onDone?.(data);
+            if (curEvent === 'error') onError?.(data);
+          } catch { /* malformed data — skip */ }
+          curEvent = null;
+        } else if (line === '') {
+          curEvent = null;
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
+
 /* ── State ───────────────────────────────────────────────────── */
 let selectedType        = null; // 'reach'|'trust'|'convert'|'lead_magnet'
 let chatStep            = 0;
@@ -34,6 +70,8 @@ const chatSubstanceWarn   = document.getElementById('chat-substance-warning');
 const chatSubstanceText   = document.getElementById('chat-substance-text');
 const chatImproveInput    = document.getElementById('chat-improve-input');
 const processingScreen    = document.getElementById('processing-screen');
+const procPreview         = document.getElementById('proc-preview');
+const procPreviewText     = document.getElementById('proc-preview-text');
 const specificityNudge    = document.getElementById('specificity-nudge');
 let _nudgeDebounce        = null;
 
@@ -668,33 +706,100 @@ async function triggerGenerate(opts = {}) {
   hideChatError();
   hideSubstanceWarning();
 
-  const isExtraction = selectedType && selectedType !== 'lead_magnet';
-  const idea         = opts.enrichedIdea
+  const isExtraction  = selectedType && selectedType !== 'lead_magnet';
+  const idea          = opts.enrichedIdea
     || (isExtraction ? chatInput.value.trim() : (chatAnswers.step0 || ''));
-  const tensionStmt  = opts.tensionStatement !== undefined
+  const tensionStmt   = opts.tensionStatement !== undefined
     ? opts.tensionStatement
     : (_tensionResult?.tension || null);
+  const shouldStream  = !selectedVaultIdeaId && selectedType !== 'lead_magnet';
 
   hideSpecificityNudge();
-  showProcessingScreen(idea, selectedType);
+  showProcessingScreen(idea, selectedType, shouldStream);
 
   const controller = new AbortController();
   const timeoutId  = setTimeout(() => controller.abort(), 90_000);
 
   try {
     const body = { path: 'idea', raw_idea: idea, post_type: selectedType || null };
-    if (tensionStmt)         body.tension_statement = tensionStmt;
-    if (selectedVaultIdeaId) body.vault_idea_id      = selectedVaultIdeaId;
+    if (tensionStmt)                                    body.tension_statement    = tensionStmt;
+    if (selectedVaultIdeaId)                            body.vault_idea_id        = selectedVaultIdeaId;
+    if (opts.enrichedIdea || opts.skipSubstanceCheck)   body.skip_substance_check = true;
+    if (shouldStream)                                   body.streaming            = true;
 
-    const res  = await fetch('/api/generate', {
+    const res = await fetch('/api/generate', {
       method: 'POST', headers: apiHeaders(), body: JSON.stringify(body), signal: controller.signal,
     });
     clearTimeout(timeoutId);
-    const data = await res.json();
 
+    // ── SSE streaming path ──────────────────────────────────────────────────
+    if (shouldStream && res.headers.get('content-type')?.startsWith('text/event-stream')) {
+      let sseResult = null;
+      let sseError  = null;
+
+      await readSSEStream(res, {
+        onStep(data) {
+          const idx = { analyzing: 0, blueprint_done: 1, writing: 2, saving: 3 }[data.step];
+          if (idx === undefined) return;
+          // Finalize the previous step when a new one begins
+          if (idx > 0) {
+            const prev = document.getElementById(`proc-step-${idx - 1}`);
+            if (prev && !prev.classList.contains('done')) {
+              prev.classList.add('visible', 'done');
+              prev.querySelector('.proc-step-icon').innerHTML = '✅';
+            }
+          }
+          const el = document.getElementById(`proc-step-${idx}`);
+          if (!el) return;
+          el.classList.add('visible');
+          if (data.label) el.querySelector('.proc-step-text').textContent = data.label;
+          if (data.step === 'writing' || data.step === 'saving') {
+            el.querySelector('.proc-step-icon').innerHTML = '<span class="proc-spinner"></span>';
+          } else {
+            el.classList.add('done');
+            el.querySelector('.proc-step-icon').innerHTML = '✅';
+          }
+        },
+        onToken(data) {
+          if (!procPreview || !procPreviewText) return;
+          procPreviewText.textContent += data.text;
+          if (procPreview.style.display === 'none' || !procPreview.style.display) {
+            procPreview.style.display = 'block';
+          }
+          procPreview.scrollTop = procPreview.scrollHeight;
+        },
+        onDone(data) {
+          sseResult = data;
+          finaliseProcessingSteps({ archetypeUsed: data.archetypeUsed, stage1Blueprint: data.stage1Blueprint });
+        },
+        onError(data) { sseError = data; },
+      });
+
+      if (sseError) {
+        if (sseError.error === 'missing_substance') {
+          const err = new Error('missing_substance');
+          err.substancePrompt = sseError.prompt;
+          err.substanceTier   = sseError.substance_tier;
+          throw err;
+        }
+        const err = new Error(sseError.error || 'generation_failed');
+        if (sseError.error === 'plan_limit_exceeded') { err.planCurrent = sseError.current; err.planLimit = sseError.limit; }
+        throw err;
+      }
+
+      if (!sseResult?.post_id) throw new Error('stream_incomplete');
+
+      await sleep(600);
+      window.location.href = `/editor/${encodeURIComponent(sseResult.post_id)}`;
+      return;
+    }
+
+    // ── Non-streaming fallback (vault, or SSE unavailable) ─────────────────
+    const data = await res.json();
     if (!res.ok || !data.ok) {
       const err = new Error(data.error || 'generation_failed');
       if (data.error === 'plan_limit_exceeded') { err.planCurrent = data.current; err.planLimit = data.limit; }
+      if (data.error === 'missing_substance')   { err.substancePrompt = data.prompt; err.substanceTier = data.substance_tier; }
       throw err;
     }
 
@@ -718,6 +823,20 @@ async function triggerGenerate(opts = {}) {
       showChatError("You've hit the hourly generation limit. Wait a few minutes and try again.");
     } else if (err.message === 'high_demand') {
       showChatError('ScoutHook is under high demand right now. Wait 30 seconds and try again.');
+    } else if (err.message === 'missing_substance') {
+      showSubstanceWarning(err.substancePrompt || 'Add more detail to generate a stronger post.');
+      if (err.substanceTier === 'warn') {
+        const bypassBtn = document.createElement('button');
+        bypassBtn.id = 'chat-generate-anyway';
+        bypassBtn.style.cssText = 'display:block;font-size:0.8125rem;font-weight:600;color:var(--text-muted);' +
+          'background:none;border:none;padding:6px 0 0;cursor:pointer;font-family:var(--font-sans);text-align:left;';
+        bypassBtn.textContent = 'Generate anyway →';
+        bypassBtn.addEventListener('click', () => {
+          hideSubstanceWarning();
+          triggerGenerate({ skipSubstanceCheck: true });
+        });
+        chatSubstanceWarn.appendChild(bypassBtn);
+      }
     } else {
       showChatError('Something went wrong. <a href="#">Try again →</a>');
     }
@@ -779,13 +898,15 @@ function extractAngleLabel(rawIdea) {
   return snippet || 'your idea';
 }
 
-function showProcessingScreen(rawIdea, postType) {
+function showProcessingScreen(rawIdea, postType, streaming = false) {
   guidedChat.classList.add('hidden');
   processingScreen.classList.add('visible');
+  if (procPreview) procPreview.style.display = 'none';
+  if (procPreviewText) procPreviewText.textContent = '';
 
   const steps = [
-    'Finding the tension…',
-    `Angle: ${extractAngleLabel(rawIdea || '')}`,
+    'Analyzing your idea…',
+    'Locking in structure…',
     'Writing in your voice…',
     'Final quality check…',
   ];
@@ -796,6 +917,28 @@ function showProcessingScreen(rawIdea, postType) {
     el.className = 'proc-step';
     el.querySelector('.proc-step-icon').innerHTML = '⏳';
     el.querySelector('.proc-step-text').textContent = steps[i];
+  }
+
+  if (streaming) {
+    // Real SSE events drive step updates — just show step 0 immediately
+    const el0 = document.getElementById('proc-step-0');
+    if (el0) {
+      el0.classList.add('visible');
+      el0.querySelector('.proc-step-icon').innerHTML = '<span class="proc-spinner"></span>';
+    }
+    return;
+  }
+
+  // Fake animation for non-streaming paths (vault, lead magnet)
+  const fakeSteps = [
+    'Finding the tension…',
+    `Angle: ${extractAngleLabel(rawIdea || '')}`,
+    'Writing in your voice…',
+    'Final quality check…',
+  ];
+  for (let i = 0; i < 4; i++) {
+    const el = document.getElementById(`proc-step-${i}`);
+    if (el) el.querySelector('.proc-step-text').textContent = fakeSteps[i];
   }
 
   let delay = 0;
@@ -842,7 +985,8 @@ function finaliseProcessingSteps(data) {
 function hideProcessingScreen() {
   processingScreen.classList.remove('visible');
   guidedChat.classList.remove('hidden');
-  // Re-evaluate nudge state when user returns to edit after an error
+  if (procPreview) procPreview.style.display = 'none';
+  if (procPreviewText) procPreviewText.textContent = '';
   checkSpecificityNudge(chatInput.value.trim());
 }
 
@@ -926,6 +1070,7 @@ function showSubstanceWarning(msg) {
 }
 function hideSubstanceWarning() {
   chatSubstanceWarn.classList.remove('visible');
+  document.getElementById('chat-generate-anyway')?.remove();
 }
 
 /* ── Profile gate + niche placeholder ───────────────────────── */
@@ -936,20 +1081,30 @@ async function checkProfileGate() {
     if (!data.ok) return;
     const profile = data.profile || {};
     _nicheProfile = profile;
-    if (!profile.content_niche?.trim()) {
-      showProfileNudge();
+
+    const hasNiche = !!profile.content_niche?.trim();
+    const hasVoice = !!profile.voice_fingerprint || !!profile.onboarding_q2?.trim();
+
+    if (!hasNiche) {
+      showProfileNudge('empty');
+    } else if (!hasVoice) {
+      showProfileNudge('voice');
     } else {
       loadNichePlaceholder(profile);
     }
   } catch { /* gate fails open */ }
 }
 
-function showProfileNudge() {
+function showProfileNudge(tier = 'empty') {
   if (document.getElementById('profile-gate-nudge')) return;
   const nudge = document.createElement('div');
   nudge.id        = 'profile-gate-nudge';
   nudge.className = 'profile-gate-nudge';
-  nudge.innerHTML = '<strong>Your voice profile is empty.</strong> Posts will be generic until you tell ScoutHook your niche and audience. <a href="/settings.html#voice">Set it up now →</a>';
+  if (tier === 'voice') {
+    nudge.innerHTML = '<strong>Your voice hasn\'t been set up yet.</strong> Answer 3 quick questions and every post will sound like you — not generic AI. <a href="/settings.html#voice">Complete voice setup →</a>';
+  } else {
+    nudge.innerHTML = '<strong>Your voice profile is empty.</strong> Posts will be generic until you tell ScoutHook your niche and audience. <a href="/settings.html#voice">Set it up now →</a>';
+  }
   guidedChat.insertAdjacentElement('beforebegin', nudge);
 }
 

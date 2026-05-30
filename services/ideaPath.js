@@ -4,7 +4,7 @@ const Anthropic = require('@anthropic-ai/sdk');
 const { getSetting } = require('../db');
 const { extractJsonFromResponse } = require('./voiceFingerprint');
 const { buildVoiceDNABlock } = require('./voiceExtraction');
-const { selectHook, buildHookInjection } = require('./hookSelector');
+const { selectHook, buildHookInjection, getTopArchetypes } = require('./hookSelector');
 const { HOOK_ARCHETYPES, ARCHETYPE_KEYS } = require('./hookArchetypes');
 const { AI_TELLS_PROHIBITION, sanitiseAiTells } = require('./postSanitiser');
 const { LINKEDIN_RULES } = require('../modules/formatIntelligence/rules');
@@ -285,11 +285,11 @@ function buildPhraseLibraryBlock(userProfile) {
   const lines = top.map(p => `• ${p.phrase}`).join('\n');
   // Type labels omitted intentionally — showing them changes how the model
   // uses phrases (weights by classification rather than natural fit).
-  return `\nPHRASE LIBRARY — exact language from the author's own writing:
+  return `\nPHRASE LIBRARY — exact language from the author's own writing (study these first):
 ${lines}
 
-Use these verbatim where they fit the shape naturally.
-Do not force inclusion — if a phrase requires restructuring the argument, leave it out.\n`;
+Study these samples before writing. Match the rhythm, directness, and vocabulary — not the content.
+Use verbatim phrases where they fit naturally; never force inclusion or restructure the argument to accommodate one.\n`;
 }
 
 function buildFingerprintBlock(userProfile) {
@@ -331,12 +331,23 @@ async function buildStructureBlueprint(rawIdea, postType, client, userProfile = 
     ? `\nPOST GOAL: ${postType.toUpperCase()}\nPreferred archetypes: ${ARCHETYPE_POST_TYPE_PREFERENCES[postType].join(', ')}\nWeight toward these when the input fits multiple.\n`
     : '';
 
-  // For short inputs, inject Voice DNA so Haiku can develop the idea into the author's angle
-  const voiceContextBlock = (rawIdea.length < 120 && userProfile)
-    ? `\nAUTHOR CONTEXT (use to develop the idea's angle and connect it to the author's niche):\n` +
-      (userProfile.content_niche   ? `Niche: ${userProfile.content_niche}\n` : '') +
-      (userProfile.audience_pain   ? `Audience challenge: ${userProfile.audience_pain}\n` : '') +
-      (userProfile.contrarian_view ? `Author's POV: ${userProfile.contrarian_view}\n` : '')
+  // Inject voice context so Haiku picks an archetype that fits the author's signature style
+  const topArchetypes = userProfile ? getTopArchetypes(userProfile) : [];
+  let samplePhrase = '';
+  try {
+    const phrases = JSON.parse(userProfile?.writing_sample_phrases || '[]');
+    const sorted  = phrases.filter(p => p.phrase && typeof p.specificity_score === 'number')
+                           .sort((a, b) => b.specificity_score - a.specificity_score);
+    samplePhrase = sorted[0]?.phrase || '';
+  } catch { /* ignore */ }
+
+  const voiceContextBlock = userProfile
+    ? `\nAUTHOR CONTEXT (use to pick an archetype that fits this author's style and niche):\n` +
+      (userProfile.content_niche    ? `Niche: ${userProfile.content_niche}\n` : '') +
+      (userProfile.audience_pain    ? `Audience challenge: ${userProfile.audience_pain}\n` : '') +
+      (userProfile.contrarian_view  ? `Author's POV: ${userProfile.contrarian_view}\n` : '') +
+      (topArchetypes.length         ? `Signature archetypes (favour these when the input fits): ${topArchetypes.join(', ')}\n` : '') +
+      (samplePhrase                 ? `Voice sample (match this register): "${samplePhrase}"\n` : '')
     : '';
 
   try {
@@ -370,8 +381,7 @@ async function buildStructureBlueprint(rawIdea, postType, client, userProfile = 
 }
 
 /**
- * Stage 2 system prompt — voice writing only.
- * Structure is fixed by the blueprint; model's only job is voice, rhythm, specificity.
+ * Stage 2 system prompt — full creative authority with voice context + structural suggestion.
  */
 function buildVoiceWritingSystemPrompt(blueprint, userProfile, hookInjectionBlock, ctaInstruction = '', postType = null) {
   const { tension, arc, hook_draft, archetype } = blueprint;
@@ -380,17 +390,17 @@ function buildVoiceWritingSystemPrompt(blueprint, userProfile, hookInjectionBloc
   const postTypeBlock      = buildPostTypeBlock(postType, archetype);
 
   const blueprintBlock = `
-STRUCTURAL DIRECTION (use as your starting point — improve on it if you see a stronger angle):
+STRUCTURAL SUGGESTION (starting point only — override freely if you see a stronger angle):
 - Core tension: ${tension || 'Identify the strongest contradiction or surprise in the raw idea'}
 - Narrative arc: ${arc || 'Open on the tension, build through the evidence, land the resolution'}
-- Hook seed (sharpen and strengthen this): ${hook_draft || 'Lead with the most specific and surprising element'}
+- Hook seed (sharpen, strengthen, or replace entirely): ${hook_draft || 'Lead with the most specific and surprising element'}
 
-Write the post using this structure as a foundation. Every sentence must serve the arc.
+Use this as a foundation or ignore it — whatever produces the strongest post. Every sentence must serve the arc.
 Develop each structural move fully — do not summarise or compress. The before needs enough specificity to feel real. The turn needs to land. The after needs enough detail to show what changed. Earn the length.
 `;
 
-  return `You are writing a LinkedIn post for a professional. The structure is already decided. Your job is voice, rhythm, and specificity — nothing else.
-${voiceDNABlock}${phraseLibraryBlock}${postTypeBlock}
+  return `You are writing a LinkedIn post for a professional. You have full creative authority — structure, hook, tone, arc. A structural suggestion is provided below as a starting point; improve on it, override it, or take a completely different angle if you see something stronger.
+${phraseLibraryBlock}${voiceDNABlock}${postTypeBlock}
 ${blueprintBlock}
 ${hookInjectionBlock}
 
@@ -439,6 +449,61 @@ Output only the post as plain text. No JSON, no labels, no explanation.`;
 }
 
 /**
+ * Post-processing step: extract synthesis + cta_alternatives from the finished post via Haiku.
+ * Keeps creative generation (Sonnet) separate from structured metadata extraction.
+ */
+async function extractPostMetadata(post, rawIdea, blueprint, archetypeUsed, client) {
+  try {
+    const response = await client.messages.create({
+      model:      HAIKU_MODEL,
+      max_tokens: 400,
+      temperature: 0,
+      system:     'You are a content analyst. Return only valid JSON — no explanation, no markdown.',
+      messages:   [{
+        role:    'user',
+        content: `Analyze this LinkedIn post and the raw idea that generated it.
+
+RAW IDEA: ${rawIdea.slice(0, 300)}
+
+POST:
+${post.slice(0, 1500)}
+
+Return JSON:
+{
+  "synthesis": {
+    "suggested_angle": "one sentence on the strongest angle used in this post",
+    "recommended_structure": "one sentence on the structure chosen and why it fits",
+    "supporting_insight": "one sentence of editorial context that makes this idea work"
+  },
+  "cta_alternatives": [
+    "one alternative closing line — different question angle or engagement prompt",
+    "one alternative closing line — soft conversion invite (DM, follow, or resource in comments)"
+  ]
+}`,
+      }],
+    });
+    const parsed = extractJsonFromResponse(response.content[0]?.text?.trim() || '');
+    return {
+      synthesis: parsed.synthesis || {
+        suggested_angle:       blueprint.arc    || 'Structured from the raw idea',
+        recommended_structure: `${archetypeUsed} — ${blueprint.tension || 'tension-first narrative'}`,
+        supporting_insight:    blueprint.tension || 'Grounded in the specific context',
+      },
+      cta_alternatives: Array.isArray(parsed.cta_alternatives) ? parsed.cta_alternatives.slice(0, 2) : [],
+    };
+  } catch {
+    return {
+      synthesis: {
+        suggested_angle:       blueprint.arc    || 'Structured from the raw idea',
+        recommended_structure: `${archetypeUsed} — ${blueprint.tension || 'tension-first narrative'}`,
+        supporting_insight:    blueprint.tension || 'Grounded in the specific context',
+      },
+      cta_alternatives: [],
+    };
+  }
+}
+
+/**
  * Runs Stage 2 Sonnet generation with a blueprint-grounded system prompt.
  * Used exclusively by ideaToPost() — vault and editorial paths use runSinglePostGeneration().
  */
@@ -459,8 +524,8 @@ async function runTwoStageGeneration({
 
   const extraHints = [options._funnelHint, options.qualityRetryHint, options._regenerateHint].filter(Boolean).join('\n\n');
 
-  const TEMP_BY_POST_TYPE = { reach: 0.8, trust: 0.65, convert: 0.48 };
-  const temperature = TEMP_BY_POST_TYPE[postType] ?? 0.7;
+  // Extended thinking requires temperature: 1 (API constraint)
+  const THINKING_BUDGET = 8000;
 
   // ── Streaming path: plain-text output, token-by-token via onToken callback ──
   if (options.onToken) {
@@ -473,11 +538,13 @@ async function runTwoStageGeneration({
     let fullText = '';
     const stream = client.messages.stream({
       model:       'claude-sonnet-4-6',
-      max_tokens:  3000,
-      temperature,
+      max_tokens:  12000,
+      temperature: 1,
+      thinking:    { type: 'enabled', budget_tokens: THINKING_BUDGET },
       system:      streamSysPrompt,
       messages:    [{ role: 'user', content: streamUserFinal }],
     });
+    // stream.on('text', ...) already skips thinking blocks — no change needed
     stream.on('text', (textDelta) => {
       fullText += textDelta;
       options.onToken(textDelta);
@@ -485,78 +552,49 @@ async function runTwoStageGeneration({
     await stream.done();
 
     const cleanPost   = sanitiseAiTells(fullText.trim());
-    const hookBResult = await generateAlternativeHook(cleanPost, archetypeUsed, client);
-    const synthesis = {
-      suggested_angle:       blueprint.arc    || 'Based on the structural blueprint',
-      recommended_structure: `${archetypeUsed} — ${blueprint.tension || 'tension-first narrative'}`,
-      supporting_insight:    blueprint.tension || 'Grounded in your specific context',
-    };
-    return { synthesis, post: cleanPost, hookB: hookBResult?.text || null, hookBArchetype: hookBResult?.archetype || null, ctaAlternatives: [], archetypeUsed, hookConfidence, stage1Blueprint: blueprint };
+    const [hookBResult, metadata] = await Promise.all([
+      generateAlternativeHook(cleanPost, archetypeUsed, client),
+      extractPostMetadata(cleanPost, rawIdea, blueprint, archetypeUsed, client),
+    ]);
+    return { synthesis: metadata.synthesis, post: cleanPost, hookB: hookBResult?.text || null, hookBArchetype: hookBResult?.archetype || null, ctaAlternatives: metadata.cta_alternatives, archetypeUsed, hookConfidence, stage1Blueprint: blueprint };
   }
 
-  // ── Non-streaming path: JSON response ───────────────────────────────────────
-  const systemPrompt    = buildVoiceWritingSystemPrompt(blueprint, userProfile, hookInjection, ctaInstruction, postType);
+  // ── Non-streaming path: plain-text post, metadata extracted separately ───────
+  // Uses streaming variant of system prompt since both paths now output plain text
+  const systemPrompt    = buildStreamingVoiceWritingSystemPrompt(blueprint, userProfile, hookInjection, ctaInstruction, postType);
   const userPrompt      = buildUserPrompt(rawIdea);
   const userPromptFinal = extraHints ? `${userPrompt}\n\n${extraHints}` : userPrompt;
-
-  let responseText = '';
 
   try {
     const message = await client.messages.create({
       model:       'claude-sonnet-4-6',
-      max_tokens:  3000,
-      temperature,
+      max_tokens:  12000,
+      temperature: 1,
+      thinking:    { type: 'enabled', budget_tokens: THINKING_BUDGET },
       system:      systemPrompt,
       messages:    [{ role: 'user', content: userPromptFinal }],
     });
 
-    responseText = message.content[0]?.text?.trim() || '';
-    const validated   = validateSinglePostResponse(extractJsonFromResponse(responseText));
-    const cleanPost   = sanitiseAiTells(validated.post);
-    const hookBResult = await generateAlternativeHook(cleanPost, archetypeUsed, client);
+    // Thinking blocks appear first; find the text block
+    const responseText = message.content.find(b => b.type === 'text')?.text?.trim() || '';
+    const cleanPost    = sanitiseAiTells(responseText);
+
+    const [hookBResult, metadata] = await Promise.all([
+      generateAlternativeHook(cleanPost, archetypeUsed, client),
+      extractPostMetadata(cleanPost, rawIdea, blueprint, archetypeUsed, client),
+    ]);
     return {
-      synthesis:       validated.synthesis,
+      synthesis:       metadata.synthesis,
       post:            cleanPost,
       hookB:           hookBResult?.text || null,
       hookBArchetype:  hookBResult?.archetype || null,
-      ctaAlternatives: validated.ctaAlternatives,
+      ctaAlternatives: metadata.cta_alternatives,
       archetypeUsed,
       hookConfidence,
       stage1Blueprint: blueprint,
     };
-  } catch (firstErr) {
-    if (firstErr instanceof SyntaxError && responseText) {
-      try {
-        const retry = await client.messages.create({
-          model:       'claude-sonnet-4-6',
-          max_tokens:  3000,
-          temperature,
-          system:      systemPrompt,
-          messages: [
-            { role: 'user',      content: userPromptFinal },
-            { role: 'assistant', content: responseText },
-            { role: 'user',      content: 'Return only valid JSON, no other text.' },
-          ],
-        });
-        responseText = retry.content[0]?.text?.trim() || '';
-        const validated   = validateSinglePostResponse(extractJsonFromResponse(responseText));
-        const cleanPost   = sanitiseAiTells(validated.post);
-        const hookBResult = await generateAlternativeHook(cleanPost, archetypeUsed, client);
-        return {
-          synthesis:       validated.synthesis,
-          post:            cleanPost,
-          hookB:           hookBResult?.text || null,
-          hookBArchetype:  hookBResult?.archetype || null,
-          ctaAlternatives: validated.ctaAlternatives,
-          archetypeUsed,
-          hookConfidence,
-          stage1Blueprint: blueprint,
-        };
-      } catch (retryErr) {
-        throw new Error(`Generation failed after retry: ${retryErr.message}`);
-      }
-    }
-    throw firstErr;
+  } catch (err) {
+    throw new Error(`Generation failed: ${err.message}`);
   }
 }
 
@@ -620,21 +658,7 @@ ${rawIdea}
 
 EXTRACTION INSTRUCTION: Before structuring the post, identify the most concrete element in the raw idea — a specific scenario, decision, moment, named role, direction of change, or result. Build from that. If the input has no numbers, do not add or invent any — the scenario itself is the specificity. Never use [SPECIFIC NEEDED] markers. If the input is genuinely abstract with no concrete anchor, produce the strongest possible post from the material given, grounded in the author's niche and voice.
 
-Return ONLY valid JSON in this exact structure:
-{
-  "synthesis": {
-    "suggested_angle": "one sentence on the strongest angle for this idea",
-    "recommended_structure": "one sentence on the best structure given the audience",
-    "supporting_insight": "one sentence of editorial context that makes this idea stronger"
-  },
-  "post": "full text of the single LinkedIn post",
-  "cta_alternatives": [
-    "one alternative closing line — different question angle or engagement prompt",
-    "one alternative closing line — soft conversion invite (DM, follow, or resource in comments)"
-  ]
-}
-
-No markdown fences. No explanation. Only the JSON object.`;
+Output only the post as plain text. No JSON, no labels, no explanation.`;
 }
 
 /**

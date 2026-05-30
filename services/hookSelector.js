@@ -147,4 +147,4 @@ Classify this thought into exactly one archetype. Return only JSON.`;
   }
 }
 
-module.exports = { selectHook, buildHookInjection };
+module.exports = { selectHook, buildHookInjection, getTopArchetypes };

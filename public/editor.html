@@ -28,10 +28,11 @@
     /* ── Post-publish state (overrides main.css .post-publish-state { display:none }) ── */
     #post-publish-state:not([hidden]) { display: flex !important; align-items: center !important; gap: 8px !important; }
 
-    /* ── Edit view layout — CSS Grid: centred post, meta to the right ── */
-    #edit-view:not([hidden]) { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,680px) minmax(0,1fr); padding: 28px 64px 48px; width: 100%; box-sizing: border-box; align-items: start; }
-    #edit-main { grid-column: 2; display: flex; flex-direction: column; gap: 20px; min-width: 0; }
-    #edit-meta { grid-column: 3; display: flex; flex-direction: column; gap: 14px; padding: 0 0 0 32px; min-width: 0; }
+    /* ── Edit view layout — [post + meta] centred as one unit ── */
+    #edit-view:not([hidden]) { display: flex; justify-content: center; align-items: flex-start; padding: 28px 40px 48px; width: 100%; box-sizing: border-box; }
+    #edit-content-wrap { display: flex; align-items: flex-start; gap: 32px; max-width: 900px; width: 100%; }
+    #edit-main { flex: 0 1 680px; min-width: 0; display: flex; flex-direction: column; gap: 20px; }
+    #edit-meta { flex: 0 0 168px; display: flex; flex-direction: column; gap: 14px; }
     #linkedin-preview:not([hidden]) { display: block; padding: 28px 64px 48px; }
     #post-body { outline: none; cursor: text; min-height: 80px; }
     #post-body[contenteditable="false"] { cursor: default; opacity: 0.75; }
@@ -180,10 +181,11 @@
           <span id="autosave-indicator"></span>
         </div>
 
-        <!-- Edit view — CSS Grid: [1fr] [post 680px] [meta 1fr] -->
+        <!-- Edit view — flex centred: [post + meta] as one unit (equal margins) -->
         <div id="edit-view">
+          <div id="edit-content-wrap">
 
-          <!-- Grid col 2: post + visuals + first comment -->
+          <!-- post + visuals + first comment -->
           <div id="edit-main">
 
           <div class="post-edit-card">
@@ -270,6 +272,8 @@
           </div>
           <!-- /edit-meta -->
 
+          </div>
+          <!-- /edit-content-wrap -->
         </div>
         <!-- /edit-view -->
 

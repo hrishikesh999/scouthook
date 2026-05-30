@@ -16,7 +16,6 @@
     #content-area { display: flex !important; flex: 1 !important; overflow: hidden !important; position: relative !important; min-height: 0 !important; width: 100% !important; }
     #editor { flex: 1 !important; min-width: 0 !important; overflow-y: auto !important; overflow-x: hidden !important; height: 100% !important; }
     #tabs { display: flex !important; align-items: flex-end !important; justify-content: center !important; width: 100% !important; position: relative !important; }
-    #word-count { position: absolute !important; right: 16px !important; bottom: 8px !important; margin: 0 !important; }
     #visual-btns { display: flex !important; flex-wrap: wrap !important; gap: 8px !important; }
     @media (max-width: 767px) {
       #content-area { flex-direction: column !important; }
@@ -29,8 +28,10 @@
     /* ── Post-publish state (overrides main.css .post-publish-state { display:none }) ── */
     #post-publish-state:not([hidden]) { display: flex !important; align-items: center !important; gap: 8px !important; }
 
-    /* ── Edit view layout ── */
-    #edit-view:not([hidden]) { display: flex; flex-direction: column; gap: 20px; padding: 28px 64px 48px; max-width: 680px; margin: 0 auto; width: 100%; box-sizing: border-box; }
+    /* ── Edit view layout — two-column: main post + right meta panel ── */
+    #edit-view:not([hidden]) { display: flex; flex-direction: row; align-items: flex-start; padding: 28px 64px 48px; width: 100%; box-sizing: border-box; }
+    #edit-main { flex: 0 1 680px; min-width: 0; display: flex; flex-direction: column; gap: 20px; }
+    #edit-meta { flex: 1; max-width: 220px; min-width: 0; display: flex; flex-direction: column; gap: 10px; padding: 2px 0 0 40px; }
     #linkedin-preview:not([hidden]) { display: block; padding: 28px 64px 48px; }
     #post-body { outline: none; cursor: text; min-height: 80px; }
     #post-body[contenteditable="false"] { cursor: default; opacity: 0.75; }
@@ -68,24 +69,24 @@
     /* ── Visuals toolbar strip ── */
     #visuals-section { background: var(--bg-subtle, #f3f4f6) !important; border-radius: var(--radius-md, 8px) !important; padding: 12px 16px !important; gap: 10px !important; }
 
-    /* ── Autosave bar ── */
-    #autosave-bar { padding: 6px 64px 2px; min-height: 20px; }
-    #autosave-indicator { font-size: 11px; color: var(--text-muted); }
+    /* ── Autosave indicator (lives in #edit-meta) ── */
+    #autosave-indicator { font-size: 11px; color: var(--text-muted); display: block; }
 
-    /* ── Quality feedback ── */
-    #quality-feedback { font-size: 12px; text-align: center; padding: 4px 0 6px; }
+    /* ── Quality feedback (lives in #edit-meta, left-aligned) ── */
+    #quality-feedback { font-size: 12px; text-align: left; padding: 0; }
     #quality-feedback.qf-clean { color: var(--text-muted); }
     #quality-feedback.qf-issues { color: #b45309; }
-    #quality-feedback.qf-issues ul { list-style: none; padding: 0; margin: 2px 0 0; }
+    #quality-feedback.qf-issues ul { list-style: none; padding: 0; margin: 0; }
+    #quality-feedback.qf-issues li { margin-bottom: 4px; }
     #quality-feedback.qf-issues li::before { content: '⚠ '; }
     mark.qf-mark { background: rgba(180,83,9,0.10); border-radius: 2px; text-decoration: underline; text-decoration-style: wavy; text-decoration-color: #b45309; }
 
-    /* ── Status line ── */
-    #post-status-line { font-size: 12px; color: var(--text-muted); text-align: center; padding: 6px 0 10px; letter-spacing: 0.01em; }
-    #post-status-line .status-sep { margin: 0 6px; opacity: 0.5; }
+    /* ── Status line (lives in #edit-meta, left-aligned) ── */
+    #post-status-line { font-size: 12px; color: var(--text-muted); text-align: left; padding: 0; letter-spacing: 0.01em; }
+    #post-status-line .status-sep { margin: 0 4px; opacity: 0.5; }
 
-    /* ── Spark row ── */
-    #spark-row { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 6px 0 2px; }
+    /* ── Spark row — above the post card ── */
+    #spark-row { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 0 0 4px; }
     #spark-hint-text { font-size: 11px; color: var(--text-muted); }
     .spark-persistent-btn { background: var(--bg-subtle, #f3f4f6); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px; font-size: 12px; font-weight: 600; padding: 4px 10px; cursor: pointer; font-family: var(--font-sans); }
     .spark-persistent-btn:hover { background: var(--bg-hover, #e5e7eb); }
@@ -178,22 +179,21 @@
       <!-- Editor -->
       <div id="editor">
 
-        <div id="autosave-bar"><span id="autosave-indicator"></span></div>
-
         <div id="tabs" class="input-tab-bar">
           <button class="tab input-tab active" data-tab="edit">Edit</button>
           <button class="tab input-tab" data-tab="preview">LinkedIn Preview</button>
-          <span id="word-count" class="word-count"></span>
-        </div>
-
-        <div id="quality-feedback" hidden></div>
-
-        <div id="post-status-line">
-          <span id="status-word-count"></span><span class="status-sep" id="status-sep-1" hidden>·</span><span id="status-hook-type"></span><span class="status-sep" id="status-sep-2" hidden>·</span><span id="status-post-type"></span>
         </div>
 
         <!-- Edit view -->
         <div id="edit-view">
+
+          <!-- Left: main post editing area -->
+          <div id="edit-main">
+
+          <div id="spark-row">
+            <span id="spark-hint-text">Select any sentence to sharpen with AI</span>
+            <button id="spark-btn" class="spark-persistent-btn">✦ Spark</button>
+          </div>
 
           <div class="post-edit-card">
             <div id="post-body" contenteditable="true" spellcheck="true" role="textbox" aria-multiline="true" aria-label="Post content"></div>
@@ -204,11 +204,6 @@
               <span id="asset-chip-label"></span>
               <button id="asset-chip-remove" class="asset-chip-remove" aria-label="Remove attached asset">×</button>
             </div>
-          </div>
-
-          <div id="spark-row">
-            <span id="spark-hint-text">Select any sentence to sharpen with AI</span>
-            <button id="spark-btn" class="spark-persistent-btn">✦ Spark</button>
           </div>
 
           <div id="visuals-section">
@@ -246,6 +241,19 @@
               </div>
             </div>
           </div>
+
+          </div>
+          <!-- /edit-main -->
+
+          <!-- Right: meta panel — quality, status, autosave -->
+          <div id="edit-meta">
+            <span id="autosave-indicator"></span>
+            <div id="quality-feedback" hidden></div>
+            <div id="post-status-line">
+              <span id="status-word-count"></span><span class="status-sep" id="status-sep-1" hidden>·</span><span id="status-hook-type"></span><span class="status-sep" id="status-sep-2" hidden>·</span><span id="status-post-type"></span>
+            </div>
+          </div>
+          <!-- /edit-meta -->
 
         </div>
         <!-- /edit-view -->
@@ -542,7 +550,6 @@ async function loadPost(id) {
     renderStatusLine(wc, p.archetypeUsed || null, p.postType || null);
 
     // li-body-text is synced from post-body when switching to preview tab
-    document.getElementById('word-count').textContent = wc + ' words';
 
     const fcSection = document.getElementById('first-comment-section');
     if (fcSection) fcSection.hidden = false;
@@ -692,8 +699,10 @@ function applyQualityHighlights(matches) {
 function updateAutosaveIndicator() {
   const el = document.getElementById('autosave-indicator');
   if (!el) return;
-  const t = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  el.textContent = 'Saved ' + t;
+  const now  = new Date();
+  const time = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const tz   = now.toLocaleTimeString('en', { timeZoneName: 'short' }).split(' ').pop();
+  el.textContent = `Saved ${time} ${tz}`;
 }
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -1737,7 +1746,6 @@ async function doAutoSave() {
   const wc = content.split(/\s+/).filter(Boolean).length;
   const wcEl = document.getElementById('status-word-count');
   if (wcEl) wcEl.textContent = wc + ' words';
-  document.getElementById('word-count').textContent = wc + ' words';
 
   try {
     const res = await fetch(`/api/posts/${encodeURIComponent(String(currentPostId))}`, {

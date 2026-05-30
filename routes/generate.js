@@ -1057,4 +1057,45 @@ This input needs one concrete detail to make a strong post. Write ONE conversati
   }
 });
 
+// ---------------------------------------------------------------------------
+// POST /api/generate/sharpen-line
+// Inline sentence sharpener for the floating selection toolbar.
+// ---------------------------------------------------------------------------
+router.post('/sharpen-line', async (req, res) => {
+  const { userId } = req;
+  if (!userId) return res.status(401).json({ ok: false, error: 'unauthenticated' });
+
+  const { selectedText, postContext } = req.body;
+  if (!selectedText || typeof selectedText !== 'string' || selectedText.length > 300) {
+    return res.status(400).json({ ok: false, error: 'invalid_input' });
+  }
+
+  try {
+    const Anthropic = require('@anthropic-ai/sdk');
+    const apiKey    = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
+    if (!apiKey) return res.status(500).json({ ok: false, error: 'no_api_key' });
+
+    const client  = new Anthropic({ apiKey });
+    const message = await client.messages.create({
+      model:      'claude-haiku-4-5-20251001',
+      max_tokens: 120,
+      messages: [{
+        role: 'user',
+        content: `Make this LinkedIn sentence punchier and more specific. Keep the same voice and tense.
+Return ONLY the rewritten sentence — no quotes, no explanation.
+
+Context: ${(postContext || '').slice(0, 500)}
+
+Sentence: ${selectedText}`,
+      }],
+    });
+
+    const sharpened = message.content[0]?.text?.trim() || null;
+    if (!sharpened) return res.status(500).json({ ok: false, error: 'empty_response' });
+    return res.json({ ok: true, sharpened });
+  } catch {
+    return res.status(500).json({ ok: false, error: 'generation_failed' });
+  }
+});
+
 module.exports = router;

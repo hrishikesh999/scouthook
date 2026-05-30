@@ -18,25 +18,8 @@
     #tabs { display: flex !important; align-items: flex-end !important; justify-content: center !important; width: 100% !important; position: relative !important; }
     #word-count { position: absolute !important; right: 16px !important; bottom: 8px !important; margin: 0 !important; }
     #visual-btns { display: flex !important; flex-wrap: wrap !important; gap: 8px !important; }
-    #right-panel { width: 280px !important; min-width: 280px !important; max-width: 280px !important; flex-shrink: 0 !important; flex-grow: 0 !important; overflow-y: auto !important; overflow-x: hidden !important; height: calc(100% - 24px) !important; max-height: none !important; display: flex !important; flex-direction: column !important; position: relative !important; align-self: flex-start !important; margin: 12px 16px 12px 0 !important; border-radius: var(--radius-lg) !important; }
-    #panel-score { display: flex !important; flex-direction: column !important; width: 100% !important; }
-    #panel-score[hidden] { display: none !important; }
-    #score-bar  { overflow: hidden !important; width: 100% !important; }
-    #score-fill { height: 100% !important; width: 0 !important; transition: width 0.5s ease !important; display: block !important; }
-    #panel-generator { display: none !important; flex-direction: column !important; flex: 1 !important; overflow: hidden !important; width: 100% !important; }
-    #panel-generator:not([hidden]) { display: flex !important; }
-    #panel-gen-header { display: flex !important; align-items: center !important; justify-content: space-between !important; flex-shrink: 0 !important; width: 100% !important; }
-    #panel-gen-body   { flex: 1 !important; overflow-y: auto !important; width: 100% !important; }
-    #panel-gen-footer { display: flex !important; gap: 8px !important; flex-shrink: 0 !important; width: 100% !important; }
-    #btn-gen-go { flex: 1 !important; }
-    #style-opts { display: flex !important; gap: 6px !important; width: 100% !important; }
-    .style-opt  { flex: 1 !important; }
-    [data-style="dark"]  { background: #111815 !important; color: #ffffff !important; }
-    [data-style="light"] { background: #f5f4f0 !important; color: #1a1f1c !important; }
-    [data-style="brand"] { background: linear-gradient(135deg, #1D9E75, #085041) !important; color: #ffffff !important; }
     @media (max-width: 767px) {
       #content-area { flex-direction: column !important; }
-      #right-panel  { width: 100% !important; max-width: 100% !important; min-width: 0 !important; height: auto !important; margin: 0 !important; }
     }
 
     /* ── Viewport containment ── */
@@ -47,7 +30,7 @@
     #post-publish-state:not([hidden]) { display: flex !important; align-items: center !important; gap: 8px !important; }
 
     /* ── Edit view layout ── */
-    #edit-view:not([hidden]) { display: flex; flex-direction: column; gap: 20px; padding: 28px 64px 48px; }
+    #edit-view:not([hidden]) { display: flex; flex-direction: column; gap: 20px; padding: 28px 64px 48px; max-width: 680px; margin: 0 auto; width: 100%; box-sizing: border-box; }
     #linkedin-preview:not([hidden]) { display: block; padding: 28px 64px 48px; }
     #post-body { outline: none; cursor: text; min-height: 80px; }
     #post-body[contenteditable="false"] { cursor: default; opacity: 0.75; }
@@ -57,79 +40,6 @@
     /* ── Tabs bottom border ── */
     #tabs { border-bottom: 1px solid var(--border); padding: 0 64px; }
 
-    /* ── Score area (legacy hidden elements — kept for regen hook compat) ── */
-    #score-bar     { height: 6px; border-radius: 3px; background: var(--bg-pill); margin: 8px 0 4px; }
-    #score-fill    { background: var(--teal, #1D9E75); border-radius: 3px; }
-    #score-display { display: flex; align-items: center; gap: 8px; margin: 6px 0 4px; }
-    #score-number  { font-size: 26px; font-weight: 700; color: var(--text-heading); line-height: 1; }
-    #score-number.pass { color: var(--text-teal, #1D9E75); }
-    #score-number.fail { color: var(--score-fail, #e84e4e); }
-
-    /* ── Quality score ring ── */
-    .quality-score-block { text-align: center; padding-bottom: 4px; }
-    .quality-ring-wrap { display: flex; flex-direction: column; align-items: center; gap: 6px; margin-bottom: 10px; }
-    .quality-ring {
-      --ring-pct: 0%; --ring-color: #E4E4E7;
-      width: 96px; height: 96px; border-radius: 50%;
-      background: conic-gradient(var(--ring-color) var(--ring-pct), #F4F4F5 0);
-      display: flex; align-items: center; justify-content: center;
-      position: relative; transition: background 0.6s ease;
-    }
-    .quality-ring::after {
-      content: ''; position: absolute;
-      width: 74px; height: 74px;
-      background: var(--bg-surface, #fff); border-radius: 50%;
-    }
-    .quality-ring-num {
-      position: relative; z-index: 1;
-      font-size: 32px; font-weight: 800;
-      letter-spacing: -0.04em; color: var(--text-heading); line-height: 1;
-    }
-    .quality-ring--perfect { --ring-color: #059669; }
-    .quality-ring--green   { --ring-color: #10B981; }
-    .quality-ring--amber   { --ring-color: #D97706; }
-    .quality-ring--red     { --ring-color: #DC2626; }
-    .quality-ring-label {
-      font-size: 11px; font-weight: 700;
-      text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted);
-    }
-    .quality-ring-label.lbl--perfect { color: #059669; }
-    .quality-ring-label.lbl--strong  { color: #10B981; }
-    .quality-ring-label.lbl--good    { color: #16A34A; }
-    .quality-ring-label.lbl--fair    { color: #D97706; }
-    .quality-ring-label.lbl--weak    { color: #DC2626; }
-    .quality-perfect-badge {
-      display: inline-flex; align-items: center; gap: 3px;
-      padding: 3px 10px;
-      background: linear-gradient(135deg, #ECFDF5, #D1FAE5);
-      border: 1px solid #6EE7B7; border-radius: 100px;
-      font-size: 11px; font-weight: 700; color: #059669; letter-spacing: 0.03em;
-    }
-    /* Dimension bars */
-    .quality-dims { display: flex; flex-direction: column; gap: 5px; padding-top: 10px; border-top: 1px solid var(--border-divider, #F4F4F5); margin-top: 6px; }
-    .qdim { display: grid; grid-template-columns: 64px 1fr; align-items: center; gap: 6px; }
-    .qdim-name { font-size: 10px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
-    .qdim-track { height: 4px; background: var(--border, #E4E4E7); border-radius: 99px; overflow: hidden; }
-    .qdim-fill  { height: 100%; border-radius: 99px; width: 0; transition: width 0.55s ease 0.15s; }
-    .qdim[data-tier="high"] .qdim-fill { background: #10B981; }
-    .qdim[data-tier="mid"]  .qdim-fill { background: #D97706; }
-    .qdim[data-tier="low"]  .qdim-fill { background: #DC2626; }
-    /* Perfect ring celebration */
-    @keyframes ring-celebrate {
-      0%   { transform: scale(1); }
-      35%  { transform: scale(1.1); }
-      65%  { transform: scale(0.97); }
-      100% { transform: scale(1); }
-    }
-
-    /* ── Right-panel section spacing ── */
-    #panel-score section { padding: 14px 24px; }
-    #panel-score section:first-child { padding-top: 20px; }
-    #panel-score section:last-child  { padding-bottom: 20px; }
-    #panel-score .profile-divider { margin: 0; }
-    #panel-gen-header { padding: 12px 24px; border-bottom: 1px solid var(--border); }
-    #panel-gen-body   { padding: 12px 24px; }
-    #panel-gen-footer { padding: 12px 24px; border-top: 1px solid var(--border); }
 
     /* ── LinkedIn connect banner ── */
     #no-linkedin-actions:not([hidden]) { display: flex; align-items: center; justify-content: space-between; padding: 14px 24px; background: #EFF6FF; border-bottom: 2px solid #0A66C2; gap: 16px; flex-shrink: 0; }
@@ -162,28 +72,9 @@
     #checks-list { list-style: none; padding: 0; margin: 0; }
     #checks-list li { font-size: 12px; line-height: 1.5; color: var(--text-secondary); list-style: none; }
 
-    /* ── Hook swap chips ── */
-    .hook-chip-btn { font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 100px; border: 1.5px solid var(--border); background: var(--bg-subtle, #f3f4f6); color: var(--text-secondary); cursor: pointer; transition: border-color 0.12s, color 0.12s, background 0.12s; white-space: nowrap; }
-    .hook-chip-btn:hover { border-color: var(--accent, #1D9E75); color: var(--accent, #1D9E75); background: rgba(29,158,117,.06); }
-    .hook-chip-btn:disabled { opacity: 0.5; cursor: default; }
-
-    /* ── Sprint 3 additions ── */
-    #reveal-intro { font-size: 0.875rem; color: var(--text-muted); font-style: italic; line-height: 1.5; margin: 0 0 20px; display: none; }
-    #reveal-intro.visible { display: block; }
-    #quality-verdict { font-size: 0.875rem; line-height: 1.5; margin: 6px 0 0; }
-    #quality-verdict.pass { color: #065F46; }
-    #quality-verdict.fail { color: #92400E; }
-    #hook-explanation { font-size: 0.8125rem; color: var(--text-muted); line-height: 1.5; margin-bottom: 8px; }
-    #post-type-badge { font-size: 0.8125rem; font-weight: 500; color: var(--text-body); margin-top: 4px; }
-    #lm-template-change { font-size: 0.8125rem; color: var(--brand); font-weight: 500; background: none; border: none; cursor: pointer; padding: 0; font-family: var(--font-sans); text-decoration: underline; margin-left: 6px; }
-    #lm-template-picker { display: none; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-    #lm-template-picker.visible { display: flex; }
-    .lm-template-btn { font-size: 0.75rem; font-weight: 600; padding: 4px 10px; border-radius: 100px; border: 1.5px solid var(--border); background: var(--bg-subtle); color: var(--text-secondary); cursor: pointer; transition: border-color 0.12s, color 0.12s; white-space: nowrap; }
-    .lm-template-btn:hover { border-color: var(--accent, #1D9E75); color: var(--accent, #1D9E75); }
-    #retro-type-label { font-size: 0.75rem; color: var(--text-muted); margin: 0 0 6px; }
-    #retro-type-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-    .retro-chip { font-size: 0.8125rem; font-weight: 500; padding: 6px 14px; border-radius: 999px; border: 1.5px solid var(--border); background: var(--bg-surface); color: var(--text-body); cursor: pointer; font-family: var(--font-sans); transition: border-color 0.15s, background 0.15s; }
-    .retro-chip:hover { border-color: var(--brand); background: color-mix(in srgb, var(--brand) 5%, transparent); }
+    /* ── Status line ── */
+    #post-status-line { font-size: 12px; color: var(--text-muted); text-align: center; padding: 6px 0 10px; letter-spacing: 0.01em; }
+    #post-status-line .status-sep { margin: 0 6px; opacity: 0.5; }
 
 
     /* ── LinkedIn preview body — matches real LinkedIn feed rendering ── */
@@ -205,13 +96,16 @@
     #topbar { transition: background 0.2s; }
     #topbar.is-scheduled { background: #fefce8 !important; border-bottom-color: #fde68a !important; }
 
-    /* ── Voice learning indicator ── */
-    #voice-learning-section[hidden] { display: none !important; }
-    #voice-refinements-list { list-style: none; padding: 0; margin: 6px 0 0; }
-    #voice-refinements-list li { font-size: 11.5px; color: var(--text-secondary); line-height: 1.45; padding: 4px 0; border-bottom: 1px solid var(--border); }
-    #voice-refinements-list li:last-child { border-bottom: none; }
-    .voice-learning-label { font-size: 11px; color: var(--text-muted); margin-top: 6px; display: block; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
-    .voice-learning-label:hover { color: var(--accent, #1D9E75); }
+    /* ── Floating toolbar ── */
+    #floating-toolbar { position: fixed; z-index: 1000; transform: translateX(-50%); background: #1e293b; border-radius: 8px; padding: 5px 8px; display: flex; align-items: center; gap: 4px; box-shadow: 0 4px 16px rgba(0,0,0,0.25); pointer-events: auto; }
+    #floating-toolbar[hidden] { display: none; }
+    #floating-toolbar::after { content: ''; position: absolute; bottom: -5px; left: 50%; transform: translateX(-50%); border: 5px solid transparent; border-top-color: #1e293b; border-bottom: none; }
+    .ft-btn { background: none; border: none; color: #fff; font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 4px; cursor: pointer; font-family: var(--font-sans); white-space: nowrap; }
+    .ft-btn:hover { background: rgba(255,255,255,0.12); }
+    .ft-btn:disabled { opacity: 0.5; cursor: default; }
+    .ft-sep { width: 1px; height: 16px; background: rgba(255,255,255,0.2); margin: 0 2px; }
+    .ft-emoji { background: none; border: none; color: #fff; font-size: 13px; padding: 3px 4px; border-radius: 4px; cursor: pointer; line-height: 1; }
+    .ft-emoji:hover { background: rgba(255,255,255,0.12); }
   </style>
 </head>
 <body>
@@ -275,10 +169,12 @@
           <span id="word-count" class="word-count"></span>
         </div>
 
+        <div id="post-status-line">
+          <span id="status-word-count"></span><span class="status-sep" id="status-sep-1" hidden>·</span><span id="status-hook-type"></span><span class="status-sep" id="status-sep-2" hidden>·</span><span id="status-post-type"></span>
+        </div>
+
         <!-- Edit view -->
         <div id="edit-view">
-
-          <p id="reveal-intro"></p>
 
           <div class="post-edit-card">
             <div id="post-body" contenteditable="true" spellcheck="true" role="textbox" aria-multiline="true" aria-label="Post content"></div>
@@ -375,123 +271,6 @@
       </div>
       <!-- /editor -->
 
-      <!-- Right panel -->
-      <div id="right-panel">
-
-        <div id="panel-score">
-          <section>
-            <div class="quality-score-block">
-              <!-- Score ring -->
-              <div class="quality-ring-wrap">
-                <div class="quality-ring" id="quality-ring">
-                  <span class="quality-ring-num" id="quality-ring-num">—</span>
-                </div>
-                <div class="quality-ring-label" id="quality-ring-label"></div>
-                <div class="quality-perfect-badge" id="quality-perfect-badge" hidden>✦ Perfect Score</div>
-              </div>
-              <!-- Verdict text -->
-              <div id="quality-verdict"></div>
-              <!-- Dimension bars -->
-              <div class="quality-dims" id="quality-dims" hidden>
-                <div class="qdim" data-dim="hook" data-tier="high">
-                  <span class="qdim-name">Hook</span>
-                  <div class="qdim-track"><div class="qdim-fill" id="qdim-hook-fill"></div></div>
-                </div>
-                <div class="qdim" data-dim="voice" data-tier="high">
-                  <span class="qdim-name">Voice</span>
-                  <div class="qdim-track"><div class="qdim-fill" id="qdim-voice-fill"></div></div>
-                </div>
-                <div class="qdim" data-dim="substance" data-tier="high">
-                  <span class="qdim-name">Substance</span>
-                  <div class="qdim-track"><div class="qdim-fill" id="qdim-substance-fill"></div></div>
-                </div>
-                <div class="qdim" data-dim="structure" data-tier="high">
-                  <span class="qdim-name">Structure</span>
-                  <div class="qdim-track"><div class="qdim-fill" id="qdim-structure-fill"></div></div>
-                </div>
-                <div class="qdim" data-dim="engagement" data-tier="high">
-                  <span class="qdim-name">Engagement</span>
-                  <div class="qdim-track"><div class="qdim-fill" id="qdim-engagement-fill"></div></div>
-                </div>
-              </div>
-            </div>
-            <!-- Hidden — kept for regen hooks that read score -->
-            <div id="score-display" style="display:none">
-              <span id="score-number"></span>
-              <span id="score-badge" class="passfail-pill" data-passed="true"></span>
-            </div>
-            <div id="score-bar" style="display:none"><div id="score-fill"></div></div>
-          </section>
-          <hr class="profile-divider">
-          <section>
-            <p class="panel-label score-label">Post type</p>
-            <div id="post-type-badge"></div>
-            <div id="lm-template-picker"></div>
-            <div id="retro-type-section" style="display:none;margin-top:10px">
-              <p id="retro-type-label">What was this post for?</p>
-              <div id="retro-type-chips"></div>
-            </div>
-          </section>
-          <hr class="profile-divider">
-          <section>
-            <p class="panel-label score-label">Hook</p>
-            <span id="funnel-type" class="archetype-badge" style="margin-bottom:6px;display:inline-block"></span>
-            <div id="hook-explanation"></div>
-            <div id="hook-b-strip">
-              <span class="hook-b-label">Alt hook:</span>
-              <span id="hook-b-text"></span>
-              <a id="hook-b-use" role="button">Use this →</a>
-            </div>
-          </section>
-          <div id="voice-learning-section" hidden>
-            <hr class="profile-divider">
-            <section>
-              <p class="panel-label score-label">Voice learning</p>
-              <ul id="voice-refinements-list"></ul>
-              <a href="/settings.html" class="voice-learning-label">View full voice profile →</a>
-            </section>
-          </div>
-        </div>
-        <!-- /panel-score -->
-
-        <div id="panel-generator" hidden>
-          <div id="panel-gen-header">
-            <button id="btn-panel-back" class="btn-outlined">←</button>
-            <span id="panel-gen-title" class="field-label"></span>
-            <button id="btn-panel-close" class="slide-over-close">✕</button>
-          </div>
-          <div id="panel-gen-body">
-            <p id="panel-gen-hint" class="field-helper">Best quote from your post — max 160 characters.</p>
-            <div id="quote-preview-card" class="so-slide-card" data-style="dark">
-              <p id="quote-preview-text"></p>
-              <div id="quote-author">
-                <span id="quote-avatar" class="linkedin-avatar-initials"></span>
-                <span id="quote-author-name" class="field-helper"></span>
-              </div>
-            </div>
-            <div id="quote-field">
-              <label for="quote-input" class="field-label">Quote text</label>
-              <textarea id="quote-input" class="field-textarea" placeholder="Pick the sharpest line from your post…"></textarea>
-              <span id="char-count" class="field-helper" data-over="false">0 / 160</span>
-            </div>
-            <div id="style-selector">
-              <p class="panel-label score-label">Style</p>
-              <div id="style-opts">
-                <button class="style-opt btn-outlined active" data-style="dark">Dark</button>
-                <button class="style-opt btn-outlined" data-style="light">Light</button>
-                <button class="style-opt btn-outlined" data-style="brand">Brand</button>
-              </div>
-            </div>
-          </div>
-          <div id="panel-gen-footer">
-            <button id="btn-gen-go" class="btn-primary">Generate</button>
-            <button id="btn-gen-discard" class="btn-secondary">Discard</button>
-          </div>
-        </div>
-        <!-- /panel-generator -->
-
-      </div>
-      <!-- /right-panel -->
 
 
     </div>
@@ -601,7 +380,6 @@ let attachedAssetUrl   = null;
 let attachedPreviewUrl = null;
 let attachedAssetType  = null;
 let attachedSlideCount = 0;
-let _currentLmInputs   = null;
 let currentAssetType      = null;
 let extractedContent      = null;
 let currentRenderedContent = null;  // Last slide content submitted to render (for edit-after-generate)
@@ -615,11 +393,9 @@ const visualCache = new Map();
 
 let _autoSaveTimer        = null;
 let _lastAutoSavedContent = null;
-let _lastRenderedScore    = null;   // tracks previous score for transition detection
 
 const state = {
-  activeTab: 'edit', rightPanel: 'score', generatorType: null,
-  quoteText: '', quoteStyle: 'dark',
+  activeTab: 'edit',
 };
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -707,152 +483,6 @@ function clearPreviewAssetDOM() {
   });
 }
 
-/* ════════════════════════════════════════════════════════════════════════
-   QUALITY SCORE RING + DIMENSIONS
-════════════════════════════════════════════════════════════════════════ */
-function computeDimensionsFromFlags(flags) {
-  return {
-    hook: Math.max(0, 100
-      - (flags.includes('HOOK_TOO_LONG')     ? 35 : 0)
-      - (flags.includes('WEAK_HOOK_OPENER')  ? 45 : 0)
-      - (flags.includes('GENERIC_HOOK')      ? 25 : 0)),
-    voice: Math.max(0, 100
-      - (flags.includes('AI_LANGUAGE_DETECTED') ? 60 : 0)
-      - (flags.includes('AI_TONE')              ? 25 : 0)
-      - (flags.includes('VOICE_DRIFT')          ? 20 : 0)),
-    substance: Math.max(0, 100
-      - (flags.includes('CLICHE_DETECTED')    ? 30 : 0)
-      - (flags.includes('LACKS_SPECIFICITY')  ? 20 : 0)
-      - (flags.includes('UNATTRIBUTED_CLAIM') ? 55 : 0)),
-    structure: Math.max(0, 100
-      - (flags.includes('TOO_SHORT')        ? 25 : 0)
-      - (flags.includes('TOO_LONG')         ? 15 : 0)
-      - (flags.includes('DENSE_FORMATTING') ? 20 : 0)
-      - (flags.includes('HASHTAG_SPAM')     ? 25 : 0)),
-    engagement: Math.max(0, 100
-      - (flags.includes('NO_CTA')               ? 40 : 0)
-      - (flags.includes('WEAK_CTA')             ? 20 : 0)
-      - (flags.includes('ENGAGEMENT_BAIT')      ? 60 : 0)
-      - (flags.includes('LESSON_SUMMARY_CLOSE') ? 20 : 0)),
-  };
-}
-
-function triggerPerfectCelebration() {
-  const ring = document.getElementById('quality-ring');
-  if (ring) {
-    ring.style.animation = 'ring-celebrate 0.65s ease';
-    setTimeout(() => { ring.style.animation = ''; }, 800);
-  }
-  if (typeof confetti !== 'function') return;
-  confetti({ particleCount: 60, angle: 60,  spread: 55, origin: { x: 0,   y: 0.65 }, zIndex: 9999 });
-  confetti({ particleCount: 60, angle: 120, spread: 55, origin: { x: 1,   y: 0.65 }, zIndex: 9999 });
-  setTimeout(() => {
-    confetti({ particleCount: 40, angle: 75,  spread: 45, origin: { x: 0.2, y: 0.5 }, zIndex: 9999 });
-    confetti({ particleCount: 40, angle: 105, spread: 45, origin: { x: 0.8, y: 0.5 }, zIndex: 9999 });
-  }, 220);
-}
-
-function triggerPerfectCelebrationOnce() {
-  const key = 'celebrated_perfect_' + currentPostId;
-  if (sessionStorage.getItem(key)) return;
-  sessionStorage.setItem(key, '1');
-  triggerPerfectCelebration();
-}
-
-function renderQualityScore(quality) {
-  const score  = quality?.score ?? 0;
-  const flags  = quality?.flags || quality?.errors || [];
-  const passed = quality?.passed ?? (score >= 60);
-  const dims   = quality?.dimensions ?? computeDimensionsFromFlags(flags);
-
-  // Ring colour tier
-  const isPerf = score === 100;
-  const ringCls = isPerf ? 'quality-ring--perfect'
-                : score >= 80 ? 'quality-ring--green'
-                : score >= 60 ? 'quality-ring--amber' : 'quality-ring--red';
-  const labelText = isPerf ? 'Perfect'
-                  : score >= 90 ? 'Excellent'
-                  : score >= 80 ? 'Strong'
-                  : score >= 65 ? 'Good'
-                  : score >= 50 ? 'Fair' : 'Needs Work';
-  const labelCls = isPerf || score >= 90 ? 'lbl--perfect'
-                 : score >= 80 ? 'lbl--strong'
-                 : score >= 65 ? 'lbl--good'
-                 : score >= 50 ? 'lbl--fair' : 'lbl--weak';
-
-  const ring      = document.getElementById('quality-ring');
-  const numEl     = document.getElementById('quality-ring-num');
-  const labelEl   = document.getElementById('quality-ring-label');
-  const perfectBd = document.getElementById('quality-perfect-badge');
-  const dimsEl    = document.getElementById('quality-dims');
-
-  if (numEl)   numEl.textContent = score;
-  if (ring)    { ring.className = 'quality-ring ' + ringCls; ring.style.setProperty('--ring-pct', score + '%'); }
-  if (labelEl) { labelEl.textContent = labelText; labelEl.className = 'quality-ring-label ' + labelCls; }
-
-  if (isPerf && perfectBd) {
-    perfectBd.hidden = false;
-    if (_lastRenderedScore === null) {
-      // Page load: celebrate once per session (prevents re-fire on refresh)
-      triggerPerfectCelebrationOnce();
-    } else if (_lastRenderedScore < 100) {
-      // Live edit: score just crossed into 100 — always celebrate the achievement
-      triggerPerfectCelebration();
-    }
-  } else if (perfectBd) {
-    perfectBd.hidden = true;
-  }
-  _lastRenderedScore = score;
-
-  if (dimsEl) {
-    dimsEl.hidden = false;
-    const dimKeys = ['hook', 'voice', 'substance', 'structure', 'engagement'];
-    for (const key of dimKeys) {
-      const val  = dims[key] ?? 100;
-      const fill = document.getElementById('qdim-' + key + '-fill');
-      const row  = dimsEl.querySelector('[data-dim="' + key + '"]');
-      if (fill) fill.style.width = val + '%';
-      if (row)  row.dataset.tier = val >= 80 ? 'high' : val >= 55 ? 'mid' : 'low';
-    }
-  }
-
-  // Verdict text (secondary, below ring)
-  const verdict   = quality?.verdict || flagToVerdict(flags, passed);
-  const verdictEl = document.getElementById('quality-verdict');
-  if (verdictEl) {
-    verdictEl.textContent = (passed ? '🟢 ' : '🟡 ') + verdict;
-    verdictEl.className   = 'quality-verdict ' + (passed ? 'pass' : 'fail');
-  }
-
-}
-
-/* ════════════════════════════════════════════════════════════════════════
-   FLAG-AWARE QUALITY VERDICT
-════════════════════════════════════════════════════════════════════════ */
-const FLAG_VERDICT_MAP = [
-  ['AI_LANGUAGE_DETECTED', 'Reads like AI wrote it — remove the generic phrases and rewrite in your own words.'],
-  ['GENERIC_HOOK',         'The opening feels familiar. Make the first line specific to your own situation or result.'],
-  ['WEAK_HOOK_OPENER',     'Opening line doesn\'t create tension. Lead with an outcome, number, or unexpected claim.'],
-  ['HOOK_TOO_LONG',        'First line is too long — trim to under 12 words so it lands before the fold.'],
-  ['HOOK_TOO_SHORT',       'Opening line is too brief — write a complete opening thought of at least 4 words.'],
-  ['CLICHE_DETECTED',      'Remove the cliché phrases — they signal low-effort content to readers and the algorithm.'],
-  ['ENGAGEMENT_BAIT',      'Engagement bait detected — LinkedIn\'s 2026 algorithm actively penalises comment/tag prompts.'],
-  ['NO_CTA',               'Add a question at the end — comments carry 15x the algorithmic weight of a like.'],
-  ['WEAK_CTA',             'The ending question is too vague — ask something your specific reader would actually answer.'],
-  ['TOO_SHORT',            'Too short. Aim for 150+ words — length signals depth and improves dwell time.'],
-  ['LACKS_SPECIFICITY',    'Add a specific number, result, or named scenario — vague posts underperform.'],
-  ['VOICE_DRIFT',          'The voice shifts mid-post — write it as if you\'re saying it all in one breath.'],
-  ['DENSE_FORMATTING',     'Heavy bullets reduce dwell time — blend some into flowing prose.'],
-];
-const PASS_VERDICT = 'Strong post — specific hook, clear voice, good length. Ready to publish.';
-
-function flagToVerdict(flags, passed) {
-  if (!flags || flags.length === 0) return PASS_VERDICT;
-  for (const [flag, msg] of FLAG_VERDICT_MAP) {
-    if (flags.includes(flag)) return msg;
-  }
-  return passed ? PASS_VERDICT : 'Review the post for clarity and specificity before publishing.';
-}
 
 /* ════════════════════════════════════════════════════════════════════════
    LOAD POST
@@ -866,30 +496,7 @@ async function loadPost(id) {
     const data = await res.json();
     if (!res.ok || !data.ok) throw new Error(data.error || 'load_failed');
 
-    const p      = data.post;
-    const score   = p.quality?.score ?? 0;
-    const passed  = p.quality?.passed ?? (score >= 60);
-
-    // New: score ring + dimension bars
-    // Reset score tracker so page-load never triggers celebration (only live edits should)
-    _lastRenderedScore = null;
-    const qualityPayload = p.quality
-      ? { ...p.quality, verdict: p.qualityVerdict || p.quality?.verdict }
-      : { score: 0, passed: false, flags: [], errors: [] };
-    renderQualityScore(qualityPayload);
-
-    // Hidden score elements (kept for regen hook compat)
-    const scoreEl = document.getElementById('score-number');
-    if (scoreEl) { scoreEl.textContent = score; scoreEl.className = score >= 80 ? 'pass' : score >= 60 ? 'borderline' : 'fail'; }
-    const badge = document.getElementById('score-badge');
-    if (badge)  { badge.textContent = passed ? 'Passed' : 'Needs work'; badge.dataset.passed = String(passed); badge.className = `passfail-pill ${passed ? 'pass' : 'fail'}`; }
-    const fill = document.getElementById('score-fill');
-    if (fill)  { fill.style.setProperty('width', score + '%', 'important'); fill.style.background = score >= 80 ? 'var(--accent)' : score >= 60 ? 'var(--score-borderline)' : 'var(--score-fail)'; }
-
-    document.getElementById('funnel-type').textContent = p.funnelType || '';
-    renderHookSection(p);
-    renderPostTypeBadge(p);
-    renderRevealIntro(p);
+    const p = data.post;
 
     const rawText = typeof p.content === 'string' ? p.content : '';
     const paras   = rawText.split(/\n\n+/).filter(Boolean);
@@ -898,11 +505,13 @@ async function loadPost(id) {
     ).join('');
     // Initialise auto-save baseline so we don't trigger on the loaded content
     _lastAutoSavedContent = getPostContent();
-    // li-body-text is synced from post-body when switching to preview tab
-    document.getElementById('word-count').textContent =
-      rawText.split(/\s+/).filter(Boolean).length + ' words';
 
-    const flags = p.quality?.flags || p.quality?.errors || [];
+    // Status line
+    const wc = rawText.split(/\s+/).filter(Boolean).length;
+    renderStatusLine(wc, p.archetypeUsed || null, p.postType || null);
+
+    // li-body-text is synced from post-body when switching to preview tab
+    document.getElementById('word-count').textContent = wc + ' words';
 
     const fcSection = document.getElementById('first-comment-section');
     if (fcSection) fcSection.hidden = false;
@@ -942,229 +551,36 @@ async function loadPost(id) {
 }
 
 /* ════════════════════════════════════════════════════════════════════════
-   HOOK CHIPS
+   ARCHETYPE LABELS (used by status line)
 ════════════════════════════════════════════════════════════════════════ */
 const ARCHETYPE_LABELS_ED = {
-  NUMBER:          'Number hook',
-  CONTRARIAN:      'Contrarian',
-  CONFESSION:      'Confession',
+  NUMBER:           'Number hook',
+  CONTRARIAN:       'Contrarian',
+  CONFESSION:       'Confession',
   PATTERN_INTERRUPT:'Pattern interrupt',
-  DIRECT_ADDRESS:  'Direct address',
-  STAKES:          'Stakes',
-  BEFORE_AFTER:    'Before/After',
-  INSIGHT:         'Insight',
-  MYTH_BUST:       'Myth bust',
-};
-
-let _currentIdeaInput   = null;
-let _currentArchetype   = null;
-
-function renderHookSection(p) {
-  _currentIdeaInput = p.ideaInput  || null;
-  _currentArchetype = p.archetypeUsed || null;
-
-  const archetypeLabel = ARCHETYPE_LABELS_ED[_currentArchetype] || _currentArchetype || '';
-  const funnelEl = document.getElementById('funnel-type');
-  if (funnelEl && archetypeLabel) funnelEl.textContent = archetypeLabel;
-
-  const explainEl = document.getElementById('hook-explanation');
-  if (explainEl) {
-    const explanation = HOOK_EXPLANATIONS[_currentArchetype] || '';
-    explainEl.textContent = explanation;
-    explainEl.style.display = explanation ? '' : 'none';
-  }
-
-  const hookBStrip = document.getElementById('hook-b-strip');
-  const hookBText  = document.getElementById('hook-b-text');
-  const hookBUse   = document.getElementById('hook-b-use');
-  if (hookBStrip && hookBText && p.hookB) {
-    const bLabel = p.hookBArchetype ? (ARCHETYPE_LABELS_ED[p.hookBArchetype] || p.hookBArchetype) : null;
-    hookBStrip.querySelector('.hook-b-label').textContent = bLabel ? `Alt hook · ${bLabel}:` : 'Alt hook:';
-    hookBText.textContent = p.hookB;
-    hookBStrip.classList.add('visible');
-    hookBUse?.addEventListener('click', () => swapHookB(p.hookB), { once: true });
-  } else if (hookBStrip) {
-    hookBStrip.classList.remove('visible');
-  }
-}
-
-function swapHookB(hookBLine) {
-  const bodyEl = document.getElementById('post-body');
-  if (!bodyEl || !hookBLine) return;
-  const paras = [...bodyEl.querySelectorAll('p.text-post')];
-  if (!paras.length) return;
-  paras[0].textContent = hookBLine;
-  document.getElementById('hook-b-strip')?.classList.remove('visible');
-  scheduleAutoSave?.();
-}
-
-
-/* ════════════════════════════════════════════════════════════════════════
-   HOOK EXPLANATION
-════════════════════════════════════════════════════════════════════════ */
-const HOOK_EXPLANATIONS = {
-  NUMBER:           'Opens with a specific number — stops readers who scan for proof and makes them wonder what changed.',
-  CONTRARIAN:       'Challenges a widely-held belief — stops readers who already have an opinion on this topic.',
-  CONFESSION:       'Leads with a personal mistake or past belief — readers who\'ve made the same mistake feel instantly seen.',
-  PATTERN_INTERRUPT:'Says something that contradicts what readers expect — makes them stop scrolling to resolve the cognitive dissonance.',
-  DIRECT_ADDRESS:   'Speaks directly to a specific person in a specific situation — readers who recognise themselves feel individually called out.',
-  STAKES:           'Opens with a consequence before the cause — readers feel what\'s at risk before they know what to do about it.',
-  BEFORE_AFTER:     'Contrasts two states side by side — readers who are in the \'before\' state can see exactly where they\'re headed.',
-  INSIGHT:          'States a non-obvious truth as plain fact — stops readers who\'ve been thinking this but never heard it articulated.',
+  DIRECT_ADDRESS:   'Direct address',
+  STAKES:           'Stakes',
+  BEFORE_AFTER:     'Before/After',
+  INSIGHT:          'Insight',
+  MYTH_BUST:        'Myth bust',
 };
 
 /* ════════════════════════════════════════════════════════════════════════
-   POST TYPE BADGE + RETROACTIVE TAGGER
+   STATUS LINE
 ════════════════════════════════════════════════════════════════════════ */
-const POST_TYPE_LABELS = {
-  reach: '📣 Reach post', trust: '🎯 Trust post',
-  convert: '📞 Convert post', lead_magnet: '🎁 Lead magnet',
-};
-const LM_TEMPLATE_LABELS = {
-  research_drop: 'Research Drop', system_giveaway: 'System Giveaway',
-  transformation: 'Transformation', breaking_news: 'Breaking News',
-};
-
-function renderPostTypeBadge(p) {
-  const badgeEl     = document.getElementById('post-type-badge');
-  const retroSec    = document.getElementById('retro-type-section');
-  const lmPickerEl  = document.getElementById('lm-template-picker');
-  if (!badgeEl) return;
-
-  // Default to 'reach' if post has no type — never show the manual type selector
-  const pt = p.postType || p.funnelType || 'reach';
-  if (retroSec) retroSec.style.display = 'none';
-
-  if (pt === 'lead_magnet') {
-    _currentLmInputs = p.leadMagnetInputs || null;
-    const tmpl = p.leadMagnetTemplate || '';
-    const tmplLabel = LM_TEMPLATE_LABELS[tmpl] || '';
-    badgeEl.innerHTML = `🎁 Lead magnet${tmplLabel ? ' · <span style="color:var(--text-muted)">' + escHtml(tmplLabel) + '</span>' : ''}`
-      + `<button id="lm-template-change" type="button">Change →</button>`;
-    if (lmPickerEl) {
-      lmPickerEl.innerHTML = Object.entries(LM_TEMPLATE_LABELS).map(([key, label]) =>
-        `<button class="lm-template-btn" data-template="${key}">${label}</button>`
-      ).join('');
-      document.getElementById('lm-template-change')?.addEventListener('click', () => {
-        lmPickerEl.classList.toggle('visible');
-      });
-      lmPickerEl.querySelectorAll('.lm-template-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-          lmPickerEl.classList.remove('visible');
-          regenLeadMagnetTemplate(btn.dataset.template);
-        });
-      });
-    }
-  } else {
-    badgeEl.textContent = POST_TYPE_LABELS[pt] || pt;
-    if (lmPickerEl) lmPickerEl.classList.remove('visible');
-  }
-}
-
-async function regenLeadMagnetTemplate(template) {
-  const bodyEl = document.getElementById('post-body');
-  if (!bodyEl || !_currentLmInputs) return;
-  bodyEl.contentEditable = 'false';
-
-  try {
-    const res = await fetch('/api/generate', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({
-        post_type: 'lead_magnet',
-        lead_magnet_inputs: { ..._currentLmInputs, template },
-      }),
-    });
-    const data = await res.json();
-    if (data.ok && data.post) {
-      const newTemplate = data.lead_magnet_template || template;
-      const badge = document.getElementById('post-type-badge');
-      if (badge) {
-        const tmplLabel = LM_TEMPLATE_LABELS[newTemplate] || '';
-        badge.innerHTML = `🎁 Lead magnet${tmplLabel ? ' · <span style="color:var(--text-muted)">' + escHtml(tmplLabel) + '</span>' : ''}`
-          + `<button id="lm-template-change" type="button">Change →</button>`;
-        document.getElementById('lm-template-change')?.addEventListener('click', () => {
-          document.getElementById('lm-template-picker')?.classList.toggle('visible');
-        });
-      }
-      _currentLmInputs = { ..._currentLmInputs, template: newTemplate };
-      const paras = data.post.split(/\n\n+/).filter(Boolean);
-      bodyEl.innerHTML = paras.map(t =>
-        `<p class="text-post" data-style="normal">${escHtml(t).replace(/\n/g, '<br>')}</p>`
-      ).join('');
-    }
-  } catch { /* non-fatal */ }
-
-  bodyEl.contentEditable = 'true';
-}
-
-/* ════════════════════════════════════════════════════════════════════════
-   REVEAL INTRO SENTENCE
-════════════════════════════════════════════════════════════════════════ */
-const REVEAL_LINES = {
-  reach: {
-    BEFORE_AFTER:      "Here's your reach post — I opened with a before/after hook to show the transformation clearly.",
-    CONFESSION:        "Here's your reach post — I led with a confession to give it a human entry point that pulls new readers in.",
-    PATTERN_INTERRUPT: "Here's your reach post — I disrupted the expected opening so it stops the scroll before the reader decides whether to engage.",
-    CONTRARIAN:        "Here's your reach post — I opened with a challenge to the obvious take. Contrarian hooks reach the furthest.",
-    NUMBER:            "Here's your reach post — I opened with a specific number to give strangers a reason to stop.",
-    STAKES:            "Here's your reach post — I led with the stakes so new readers feel the tension before they know the context.",
-    DIRECT_ADDRESS:    "Here's your reach post — I addressed your reader directly so they feel called in, not broadcast at.",
-    INSIGHT:           "Here's your reach post — I opened with a non-obvious truth. That's the kind of line people screenshot.",
-  },
-  trust: {
-    INSIGHT:           "Here's your trust post — I led with the insight so your POV is the first thing readers absorb.",
-    CONTRARIAN:        "Here's your trust post — I opened with a challenge to conventional wisdom. That's where authority lives.",
-    DIRECT_ADDRESS:    "Here's your trust post — I addressed your reader directly upfront. They'll feel spoken to, not broadcast at.",
-    NUMBER:            "Here's your trust post — I led with a specific number because specificity is what earns authority.",
-    CONFESSION:        "Here's your trust post — I opened with a confession to make the expertise feel earned, not assumed.",
-    BEFORE_AFTER:      "Here's your trust post — I used a before/after hook to show the depth of your experience.",
-    PATTERN_INTERRUPT: "Here's your trust post — I disrupted the expected opening to make your POV land harder.",
-    STAKES:            "Here's your trust post — I opened with what's at risk because that's what makes authority feel relevant.",
-  },
-  convert: {
-    NUMBER:            "Here's your convert post — I led with a specific number. Specificity is what makes readers stop and think 'that could be me'.",
-    STAKES:            "Here's your convert post — I opened with what's at risk. Stakes posts convert because they make the cost of inaction visible.",
-    BEFORE_AFTER:      "Here's your convert post — I used a before/after hook to make the transformation feel real and reachable.",
-    CONTRARIAN:        "Here's your convert post — I challenged the obvious take to make warm readers lean in.",
-    INSIGHT:           "Here's your convert post — I opened with an insight to make the ask feel earned.",
-    DIRECT_ADDRESS:    "Here's your convert post — I addressed your reader directly so they feel individually called out.",
-    CONFESSION:        "Here's your convert post — I led with a confession to build trust before the ask.",
-    PATTERN_INTERRUPT: "Here's your convert post — I disrupted the expected opening to stop readers who'd otherwise scroll past.",
-  },
-  lead_magnet: {
-    research_drop:   "Here's your lead magnet — I used a research drop structure because your proof positions you as someone who studied the data.",
-    system_giveaway: "Here's your lead magnet — I used a system giveaway structure because your proof shows a repeatable result.",
-    transformation:  "Here's your lead magnet — I used a before/after transformation because your proof has a clear starting point and outcome.",
-    breaking_news:   "Here's your lead magnet — I used a breaking news structure to tie your resource to something timely.",
-  },
-};
-
-function renderRevealIntro(p) {
-  const el = document.getElementById('reveal-intro');
-  if (!el) return;
-
-  const pt       = p.postType || null;
-  const archetype = p.archetypeUsed || null;
-  const tmpl     = p.leadMagnetTemplate || null;
-
-  let line = '';
-  if (pt === 'lead_magnet' && tmpl && REVEAL_LINES.lead_magnet[tmpl]) {
-    line = REVEAL_LINES.lead_magnet[tmpl];
-  } else if (pt && archetype && REVEAL_LINES[pt]?.[archetype]) {
-    line = REVEAL_LINES[pt][archetype];
-  } else if (archetype) {
-    const arch = archetype.replace(/_/g, ' ').toLowerCase();
-    line = `Here's your post — I used a ${arch} hook based on the angle you gave me.`;
-  }
-
-  if (line) {
-    el.textContent = line;
-    el.classList.add('visible');
-  } else {
-    el.classList.remove('visible');
-  }
+function renderStatusLine(wordCount, archetype, postType) {
+  const wcEl   = document.getElementById('status-word-count');
+  const hookEl = document.getElementById('status-hook-type');
+  const typeEl = document.getElementById('status-post-type');
+  const sep1   = document.getElementById('status-sep-1');
+  const sep2   = document.getElementById('status-sep-2');
+  if (wcEl) wcEl.textContent = wordCount + ' words';
+  const hookLabel = archetype ? (ARCHETYPE_LABELS_ED[archetype] || archetype.toLowerCase().replace(/_/g,' ')) : '';
+  if (hookEl) hookEl.textContent = hookLabel;
+  if (sep1) sep1.hidden = !hookLabel;
+  const typeLabel = postType ? postType.replace('_', ' ') : '';
+  if (typeEl) typeEl.textContent = typeLabel;
+  if (sep2) sep2.hidden = !typeLabel || !hookLabel;
 }
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -1283,41 +699,6 @@ function renderLinkedInSeeMore() {
   body.appendChild(seeMore);
 }
 
-/* ════════════════════════════════════════════════════════════════════════
-   RIGHT PANEL
-════════════════════════════════════════════════════════════════════════ */
-function showScorePanel() {
-  state.rightPanel = 'score';
-  document.getElementById('panel-score').hidden     = false;
-  document.getElementById('panel-generator').hidden = true;
-}
-
-function showGeneratorPanel(type) {
-  state.rightPanel    = 'generator';
-  state.generatorType = type;
-  document.getElementById('panel-score').hidden     = true;
-  document.getElementById('panel-generator').hidden = false;
-  document.getElementById('panel-gen-title').textContent = type === 'quote' ? 'Quote card' : 'Branded quote';
-  document.getElementById('quote-input').value = state.quoteText;
-  updateQuotePreview();
-  updateCharCount();
-}
-
-function updateQuotePreview() {
-  const el = document.getElementById('quote-preview-text');
-  if (el) el.textContent = `"${state.quoteText || 'Your quote will appear here'}"`;
-  const card = document.getElementById('quote-preview-card');
-  if (card) card.dataset.style = state.quoteStyle;
-}
-
-function updateCharCount() {
-  const len = state.quoteText.length;
-  const el  = document.getElementById('char-count');
-  if (!el) return;
-  el.textContent  = `${len} / 160`;
-  el.dataset.over = len > 160 ? 'true' : 'false';
-  el.style.color  = len > 160 ? 'var(--text-danger)' : '';
-}
 
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -1944,24 +1325,6 @@ function bindEvents() {
     document.getElementById('schedule-pause-btn')?.click();
   });
 
-  document.getElementById('btn-panel-back').addEventListener('click',  showScorePanel);
-  document.getElementById('btn-panel-close').addEventListener('click', showScorePanel);
-  document.getElementById('btn-gen-discard').addEventListener('click', showScorePanel);
-  const quoteInput = document.getElementById('quote-input');
-  if (quoteInput) quoteInput.addEventListener('input', function () {
-    state.quoteText = this.value;
-    updateQuotePreview();
-    updateCharCount();
-  });
-
-  document.querySelectorAll('#style-opts .style-opt').forEach(o =>
-    o.addEventListener('click', function () {
-      state.quoteStyle = this.dataset.style;
-      document.querySelectorAll('#style-opts .style-opt').forEach(x => x.classList.toggle('active', x === this));
-      updateQuotePreview();
-    })
-  );
-
   /* Slide-over */
   document.getElementById('slide-over-close').addEventListener('click',   closeSlideOver);
   document.getElementById('slide-over-discard').addEventListener('click', closeSlideOver);
@@ -2256,8 +1619,13 @@ async function doAutoSave() {
   if (!currentPostId || scheduleEditLocked) return;
   const content = getPostContent();
   if (!content || content === _lastAutoSavedContent) return;
-  const numEl = document.getElementById('quality-ring-num');
-  if (numEl) numEl.textContent = '…';
+
+  // Update word count in status line
+  const wc = content.split(/\s+/).filter(Boolean).length;
+  const wcEl = document.getElementById('status-word-count');
+  if (wcEl) wcEl.textContent = wc + ' words';
+  document.getElementById('word-count').textContent = wc + ' words';
+
   try {
     const res = await fetch(`/api/posts/${encodeURIComponent(String(currentPostId))}`, {
       method: 'PATCH',
@@ -2268,53 +1636,22 @@ async function doAutoSave() {
     const data = await res.json();
     if (data.ok) {
       _lastAutoSavedContent = content;
-      if (data.voiceRefined) loadVoiceRefinements();
-      if (data.quality) renderQualityScore(data.quality);
-      else if (numEl) numEl.textContent = _lastRenderedScore ?? '—';
-    } else if (numEl) {
-      numEl.textContent = _lastRenderedScore ?? '—';
     }
-  } catch {
-    if (numEl) numEl.textContent = _lastRenderedScore ?? '—';
-  }
-}
-
-/* ════════════════════════════════════════════════════════════════════════
-   VOICE LEARNING INDICATOR
-════════════════════════════════════════════════════════════════════════ */
-async function loadVoiceRefinements() {
-  try {
-    const res  = await fetch('/api/profile', { credentials: 'include' });
-    const data = await res.json();
-    if (!data.ok || !data.profile) return;
-
-    let refinements = [];
-    try { refinements = JSON.parse(data.profile.voice_refinements || '[]'); } catch { return; }
-
-    const section = document.getElementById('voice-learning-section');
-    const list    = document.getElementById('voice-refinements-list');
-    if (!section || !list) return;
-
-    if (!refinements.length) { section.hidden = true; return; }
-
-    const recent = refinements.slice(-3);
-    list.innerHTML = recent.map(r => `<li>${escHtml(r)}</li>`).join('');
-    section.hidden = false;
   } catch { /* non-fatal */ }
 }
+
 
 /* ════════════════════════════════════════════════════════════════════════
    INIT
 ════════════════════════════════════════════════════════════════════════ */
 function init() {
-  updateQuotePreview();
-  updateCharCount();
   bindEvents();
   wireSchedule();
   wireVisualButtons();
   wireAssetChip();
   wireSchedulePause();
   wireFirstComment();
+  wireFloatingToolbar();
 
   document.getElementById('post-body').addEventListener('input', scheduleAutoSave);
 
@@ -2325,11 +1662,86 @@ function init() {
 
   checkLinkedInStatus();
   loadPost(postId);
-  loadVoiceRefinements();
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   FLOATING SELECTION TOOLBAR
+════════════════════════════════════════════════════════════════════════ */
+let _ftRange = null;
+
+function wireFloatingToolbar() {
+  const tb      = document.getElementById('floating-toolbar');
+  const postBody = document.getElementById('post-body');
+  if (!tb || !postBody) return;
+
+  document.addEventListener('selectionchange', () => {
+    if (window.innerWidth < 768) { tb.hidden = true; return; }
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || sel.toString().trim().length < 10) { tb.hidden = true; return; }
+    const range = sel.getRangeAt(0);
+    if (!postBody.contains(range.commonAncestorContainer)) { tb.hidden = true; return; }
+    _ftRange = range.cloneRange();
+    const rect = range.getBoundingClientRect();
+    tb.style.top  = (rect.top + window.scrollY - 48) + 'px';
+    tb.style.left = (rect.left + rect.width / 2) + 'px';
+    tb.hidden = false;
+  });
+
+  document.getElementById('ft-sharpen').addEventListener('mousedown', async (e) => {
+    e.preventDefault(); // prevent selection collapse before we consume the range
+    if (!_ftRange) return;
+    const selected = _ftRange.toString().trim();
+    if (!selected) return;
+    tb.hidden = true;
+    const btn = e.currentTarget;
+    const orig = btn.textContent;
+    btn.textContent = '✦ Sharpening…';
+    btn.disabled = true;
+    try {
+      const res = await fetch('/api/generate/sharpen-line', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          selectedText: selected,
+          postContext: getPostContent().slice(0, 500),
+        }),
+      });
+      const data = await res.json();
+      if (data.ok && data.sharpened && _ftRange) {
+        _ftRange.deleteContents();
+        _ftRange.insertNode(document.createTextNode(data.sharpened));
+        _ftRange = null;
+        scheduleAutoSave();
+      }
+    } catch { /* non-fatal */ }
+    finally { btn.textContent = orig; btn.disabled = false; }
+  });
+
+  document.querySelectorAll('.ft-emoji').forEach(btn => {
+    btn.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      if (!_ftRange) return;
+      _ftRange.collapse(false); // move cursor to end of selection
+      _ftRange.insertNode(document.createTextNode(' ' + btn.dataset.emoji + ' '));
+      tb.hidden = true;
+      _ftRange = null;
+      scheduleAutoSave();
+    });
+  });
 }
 
 document.addEventListener('DOMContentLoaded', init);
 </script>
+
+  <!-- Floating selection toolbar -->
+  <div id="floating-toolbar" hidden role="toolbar" aria-label="Text actions">
+    <button id="ft-sharpen" class="ft-btn">✦ Sharpen</button>
+    <div class="ft-sep"></div>
+    <button class="ft-emoji" data-emoji="→" title="Insert →">→</button>
+    <button class="ft-emoji" data-emoji="✓" title="Insert ✓">✓</button>
+    <button class="ft-emoji" data-emoji="💡" title="Insert 💡">💡</button>
+    <button class="ft-emoji" data-emoji="🎯" title="Insert 🎯">🎯</button>
+  </div>
 
   <script src="/js/session.js"></script>
   <script src="/js/ui-toast.js"></script>

@@ -280,7 +280,7 @@ function buildPhraseLibraryBlock(userProfile) {
   const top = phrases
     .filter(p => p.phrase && typeof p.specificity_score === 'number')
     .sort((a, b) => b.specificity_score - a.specificity_score)
-    .slice(0, 15);
+    .slice(0, 5);
   if (!top.length) return '';
   const lines = top.map(p => `• ${p.phrase}`).join('\n');
   // Type labels omitted intentionally — showing them changes how the model
@@ -380,12 +380,12 @@ function buildVoiceWritingSystemPrompt(blueprint, userProfile, hookInjectionBloc
   const postTypeBlock      = buildPostTypeBlock(postType, archetype);
 
   const blueprintBlock = `
-STRUCTURAL BLUEPRINT (non-negotiable — structure is decided; your job is execution):
+STRUCTURAL DIRECTION (use as your starting point — improve on it if you see a stronger angle):
 - Core tension: ${tension || 'Identify the strongest contradiction or surprise in the raw idea'}
 - Narrative arc: ${arc || 'Open on the tension, build through the evidence, land the resolution'}
-- Hook opening angle: ${hook_draft || 'Lead with the most specific and surprising element'}
+- Hook seed (sharpen and strengthen this): ${hook_draft || 'Lead with the most specific and surprising element'}
 
-Write the post according to this structure. Every sentence must serve this arc.
+Write the post using this structure as a foundation. Every sentence must serve the arc.
 Develop each structural move fully — do not summarise or compress. The before needs enough specificity to feel real. The turn needs to land. The after needs enough detail to show what changed. Earn the length.
 `;
 
@@ -417,16 +417,15 @@ POINT OF VIEW (non-negotiable):
 Take the strongest defensible position the raw idea supports — not the safest one.
 Never present both sides without choosing one. A hedged first draft cannot be sharpened; a strong one can be dialled back.
 If the idea contains a provocative angle, lead with it — do not bury it in the body.
-${AI_TELLS_PROHIBITION}${SPECIFICITY_MANDATE}${NARRATIVE_DEPTH_MANDATE}${ctaInstruction}
-${SELF_CHECK}`;
+${AI_TELLS_PROHIBITION}${SPECIFICITY_MANDATE}${NARRATIVE_DEPTH_MANDATE}${ctaInstruction}`;
 }
 
 /**
  * Streaming variant of buildVoiceWritingSystemPrompt — same prompt, plain-text output instead of JSON.
  */
 function buildStreamingVoiceWritingSystemPrompt(blueprint, userProfile, hookInjectionBlock, ctaInstruction = '', postType = null) {
-  const base = buildVoiceWritingSystemPrompt(blueprint, userProfile, hookInjectionBlock, ctaInstruction, postType);
-  return base.replace(SELF_CHECK, STREAMING_SELF_CHECK);
+  return buildVoiceWritingSystemPrompt(blueprint, userProfile, hookInjectionBlock, ctaInstruction, postType)
+    + '\n' + STREAMING_SELF_CHECK;
 }
 
 /** User prompt for the streaming path — asks for plain text instead of JSON wrapper. */
@@ -612,8 +611,7 @@ POINT OF VIEW (non-negotiable):
 Take the strongest defensible position the raw idea supports — not the safest one.
 Never present both sides without choosing one. A hedged first draft cannot be sharpened; a strong one can be dialled back.
 If the idea contains a provocative angle, lead with it — do not bury it in the body.
-${AI_TELLS_PROHIBITION}${SPECIFICITY_MANDATE}${NARRATIVE_DEPTH_MANDATE}${ctaInstruction}
-${SELF_CHECK}`;
+${AI_TELLS_PROHIBITION}${SPECIFICITY_MANDATE}${NARRATIVE_DEPTH_MANDATE}${ctaInstruction}`;
 }
 
 function buildUserPrompt(rawIdea) {
@@ -973,8 +971,7 @@ Take the strongest defensible position the raw idea supports — not the safest 
 Never present both sides without choosing one. A hedged first draft cannot be sharpened; a strong one can be dialled back.
 If the idea contains a provocative angle, lead with it — do not bury it in the body.
 
-${AI_TELLS_PROHIBITION}${SPECIFICITY_MANDATE}${NARRATIVE_DEPTH_MANDATE}
-${SELF_CHECK}`;
+${AI_TELLS_PROHIBITION}${SPECIFICITY_MANDATE}${NARRATIVE_DEPTH_MANDATE}`;
 }
 
 function buildRefineUserPrompt(sourceText, documentContext = null) {

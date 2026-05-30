@@ -116,7 +116,7 @@ function buildRecommendation(errors, flags, warnings) {
   if (errors.some(e => /AI language|as an ai|language model/i.test(e)) || flags.includes('AI_LANGUAGE_DETECTED')) {
     return 'This post contains phrases that signal AI authorship — regenerate or edit before posting.';
   }
-  if (flags.includes('HOOK_TOO_SHORT') || flags.includes('WEAK_HOOK_OPENER') || flags.includes('HOOK_TOO_LONG')) {
+  if (flags.includes('HOOK_TOO_SHORT') || flags.includes('HOOK_TOO_LONG')) {
     return 'The opening line is too weak for your audience — try a more direct or provocative hook.';
   }
   if (flags.includes('CLICHE_DETECTED')) {
@@ -189,26 +189,6 @@ function runQualityGate(postText, options = {}) {
     errors.push(`Hook is too brief (${firstLineWords} ${firstLineWords === 1 ? 'word' : 'words'}) — write a complete opening thought of at least ${LINKEDIN_RULES.hook.minWords} words`);
     flags.push('HOOK_TOO_SHORT');
     score -= 20;
-  }
-
-  // Check 3 — Forbidden hook openers
-  const flLower = firstLine.toLowerCase();
-  const forbidden = LINKEDIN_RULES.hook.forbiddenStarters || [];
-  for (const starter of forbidden) {
-    if (flLower.startsWith(starter.toLowerCase())) {
-      errors.push(`Weak hook opener: starts with forbidden pattern "${starter}"`);
-      flags.push('WEAK_HOOK_OPENER');
-      score -= 25;
-      break;
-    }
-  }
-
-  // Check 3b — Hook opens with "I" (pronoun, not "In"/"It"/"If"/"Is")
-  const firstWord = firstLine.trim().split(/[\s,!?.]+/)[0];
-  if (firstWord && firstWord.toLowerCase() === 'i') {
-    errors.push("Hook opens with 'I' — posts that start with 'I' signal the post is about you, not the reader. Open with the idea, outcome, or tension.");
-    if (!flags.includes('WEAK_HOOK_OPENER')) flags.push('WEAK_HOOK_OPENER');
-    score -= 25;
   }
 
   // Check 4 — AI giveaway phrases
@@ -293,58 +273,6 @@ function runQualityGate(postText, options = {}) {
   } else if (isGenericCta) {
     warnings.push('Closing question is generic ("What do you think?" / "Thoughts?") — make it specific to the post\'s content for higher engagement');
     flags.push('WEAK_CTA');
-  }
-
-  // Check 8 — Archetype alignment (warning only)
-  const conf = typeof hookConfidence === 'number' ? hookConfidence : 0;
-  if (archetypeUsed && conf > 0.6) {
-    const firstTwo = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean).slice(0, 2).join('\n');
-    if (archetypeUsed === 'NUMBER') {
-      if (!/\d/.test(firstLine)) {
-        warnings.push('NUMBER archetype selected but hook contains no number');
-        flags.push('ARCHETYPE_MISMATCH');
-        score -= 12;
-      }
-    } else if (archetypeUsed === 'BEFORE_AFTER') {
-      if (!/[:—–]/.test(firstTwo)) {
-        warnings.push('BEFORE_AFTER archetype — consider a colon or em dash contrasting before/after in the opening');
-        flags.push('ARCHETYPE_MISMATCH');
-        score -= 12;
-      }
-    } else if (archetypeUsed === 'DIRECT_ADDRESS') {
-      const fl = firstLine.toLowerCase();
-      if (!fl.includes('you') && !fl.includes('your')) {
-        warnings.push('DIRECT_ADDRESS archetype — opening should address the reader (you/your)');
-        flags.push('ARCHETYPE_MISMATCH');
-        score -= 12;
-      }
-    }
-  }
-
-  // Check 9 — Voice fingerprint echo
-  if (voiceProfile.voice_fingerprint) {
-    try {
-      const fp = JSON.parse(voiceProfile.voice_fingerprint);
-      const moves = Array.isArray(fp.signature_moves) ? fp.signature_moves : [];
-      const wordsInPost = new Set(lowerFull.split(/\s+/).map(w => w.replace(/[^a-z0-9']/gi, '')).filter(Boolean));
-      let anyHit = false;
-      for (const move of moves) {
-        if (!move || typeof move !== 'string') continue;
-        const parts = move.toLowerCase().split(/\s+/).filter(w => w.length > 2);
-        for (const w of parts) {
-          if (wordsInPost.has(w.replace(/[^a-z0-9']/gi, ''))) {
-            anyHit = true;
-            break;
-          }
-        }
-        if (anyHit) break;
-      }
-      if (moves.length > 0 && !anyHit) {
-        warnings.push('Post may not reflect your signature style — consider editing');
-        flags.push('VOICE_DRIFT');
-        score -= 10;
-      }
-    } catch { /* ignore parse errors */ }
   }
 
   // Check 10 — Dense formatting
@@ -442,13 +370,11 @@ function runQualityGate(postText, options = {}) {
     hook: Math.max(0, 100
       - (flags.includes('HOOK_TOO_LONG')    ? 35 : 0)
       - (flags.includes('HOOK_TOO_SHORT')   ? 35 : 0)
-      - (flags.includes('WEAK_HOOK_OPENER') ? 45 : 0)
       - (flags.includes('GENERIC_HOOK')     ? 25 : 0)
       - lengthPenalty),
     voice: Math.max(0, 100
       - (flags.includes('AI_LANGUAGE_DETECTED') ? 60 : 0)
-      - (flags.includes('AI_TONE')              ? 25 : 0)
-      - (flags.includes('VOICE_DRIFT')          ? 20 : 0)),
+      - (flags.includes('AI_TONE')              ? 25 : 0)),
     substance: Math.max(0, 100
       - (flags.includes('CLICHE_DETECTED')     ? 30 : 0)
       - (flags.includes('LACKS_SPECIFICITY')   ? 20 : 0)
@@ -478,7 +404,7 @@ function runQualityGate(postText, options = {}) {
     verdict = 'Your hook is doing exactly what it should. This one will stop people mid-scroll.';
   } else if (flags.includes('KEYWORD_MISSING')) {
     verdict = `The keyword didn't make it into the CTA. Check the post manually — it must say "Comment ${keyword || '[KEYWORD]'}" for the lead magnet to work.`;
-  } else if (flags.includes('WEAK_HOOK_OPENER') || flags.includes('HOOK_TOO_LONG')) {
+  } else if (flags.includes('HOOK_TOO_LONG')) {
     verdict = "The first line doesn't create tension yet. Try opening with what changed or what you got wrong.";
   } else if (flags.includes('AI_LANGUAGE_DETECTED')) {
     verdict = 'This reads like AI wrote it. Regenerate or rewrite the flagged sections before posting.';

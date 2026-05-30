@@ -15,7 +15,7 @@
     #btn-schedule { min-width: 140px !important; padding-left: 24px !important; padding-right: 24px !important; }
     #content-area { display: flex !important; flex: 1 !important; overflow: hidden !important; position: relative !important; min-height: 0 !important; width: 100% !important; }
     #editor { flex: 1 !important; min-width: 0 !important; overflow-y: auto !important; overflow-x: hidden !important; height: 100% !important; }
-    #tabs { display: flex !important; align-items: flex-end !important; justify-content: center !important; width: 100% !important; position: relative !important; }
+    #tabs { display: block !important; width: 100% !important; }
     #visual-btns { display: flex !important; flex-wrap: wrap !important; gap: 8px !important; }
     @media (max-width: 767px) {
       #content-area { flex-direction: column !important; }
@@ -39,8 +39,8 @@
     #post-body p { margin: 0 0 12px; }
     #post-body p:last-child { margin-bottom: 0; }
 
-    /* ── Tabs bottom border ── */
-    #tabs { border-bottom: 1px solid var(--border); padding: 0 64px; }
+    /* ── Tabs inner — 880px centred, border aligns with content below ── */
+    #tabs-inner { display: flex; align-items: flex-end; max-width: 880px; margin: 0 auto; padding: 0 40px; box-sizing: border-box; border-bottom: 1px solid var(--border); }
 
 
     /* ── LinkedIn connect banner ── */
@@ -70,8 +70,8 @@
     /* ── Visuals toolbar strip ── */
     #visuals-section { background: var(--bg-subtle, #f3f4f6) !important; border-radius: var(--radius-md, 8px) !important; padding: 12px 16px !important; gap: 10px !important; }
 
-    /* ── Autosave indicator — top-right inside the tabs row ── */
-    #autosave-indicator { position: absolute; right: 64px; bottom: 8px; font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+    /* ── Autosave indicator — right end of #tabs-inner ── */
+    #autosave-indicator { margin-left: auto; padding-bottom: 8px; font-size: 11px; color: var(--text-muted); white-space: nowrap; }
 
     /* ── Quality feedback ── */
     #quality-feedback { font-size: 12px; text-align: left; padding: 0; }
@@ -176,9 +176,11 @@
       <div id="editor">
 
         <div id="tabs" class="input-tab-bar">
-          <button class="tab input-tab active" data-tab="edit">Edit</button>
-          <button class="tab input-tab" data-tab="preview">LinkedIn Preview</button>
-          <span id="autosave-indicator"></span>
+          <div id="tabs-inner">
+            <button class="tab input-tab active" data-tab="edit">Edit</button>
+            <button class="tab input-tab" data-tab="preview">LinkedIn Preview</button>
+            <span id="autosave-indicator"></span>
+          </div>
         </div>
 
         <!-- Edit view — flex centred: [post + meta] as one unit (equal margins) -->

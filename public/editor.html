@@ -28,11 +28,14 @@
     /* ── Post-publish state (overrides main.css .post-publish-state { display:none }) ── */
     #post-publish-state:not([hidden]) { display: flex !important; align-items: center !important; gap: 8px !important; }
 
-    /* ── Edit view layout — post centred via symmetric spacer ── */
-    #edit-view:not([hidden]) { display: flex; flex-direction: row; align-items: flex-start; padding: 28px 64px 48px; width: 100%; box-sizing: border-box; }
-    #edit-spacer { flex: 1; max-width: 240px; min-width: 0; } /* mirrors #edit-meta so post stays centred */
-    #edit-main { flex: 0 1 680px; min-width: 0; display: flex; flex-direction: column; gap: 20px; }
-    #edit-meta { flex: 1; max-width: 240px; min-width: 0; display: flex; flex-direction: column; gap: 14px; padding: 0 0 0 32px; }
+    /* ── Edit view layout — CSS Grid: centred post, meta aligned to post top ── */
+    #edit-view:not([hidden]) { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,680px) minmax(0,1fr); padding: 28px 64px 48px; width: 100%; box-sizing: border-box; align-items: start; }
+    /* Row 1, col 2: spark row (only above the post) */
+    #spark-row { grid-column: 2; grid-row: 1; display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 0 0 8px; }
+    /* Row 2, col 2: post card, visuals, first comment */
+    #edit-main { grid-column: 2; grid-row: 2; display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+    /* Row 2, col 3: meta panel — starts at same height as post card */
+    #edit-meta { grid-column: 3; grid-row: 2; display: flex; flex-direction: column; gap: 14px; padding: 0 0 0 32px; min-width: 0; }
     #linkedin-preview:not([hidden]) { display: block; padding: 28px 64px 48px; }
     #post-body { outline: none; cursor: text; min-height: 80px; }
     #post-body[contenteditable="false"] { cursor: default; opacity: 0.75; }
@@ -93,8 +96,7 @@
     .meta-tip:hover::after, .meta-tip:focus::after { opacity: 1; }
     .meta-tip[data-tip=""]::after { display: none; }
 
-    /* ── Spark row — above the post card ── */
-    #spark-row { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 0 0 4px; }
+    /* ── Spark row (hint text + button) ── */
     #spark-hint-text { font-size: 11px; color: var(--text-muted); }
     .spark-persistent-btn { background: var(--bg-subtle, #f3f4f6); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px; font-size: 12px; font-weight: 600; padding: 4px 10px; cursor: pointer; font-family: var(--font-sans); }
     .spark-persistent-btn:hover { background: var(--bg-hover, #e5e7eb); }
@@ -193,18 +195,17 @@
           <span id="autosave-indicator"></span>
         </div>
 
-        <!-- Edit view -->
+        <!-- Edit view — CSS Grid: [1fr] [post 680px] [meta 1fr] × 2 rows -->
         <div id="edit-view">
 
-          <div id="edit-spacer" aria-hidden="true"></div>
-
-          <!-- Main post editing area -->
-          <div id="edit-main">
-
+          <!-- Grid row 1, col 2: spark row (positioned above post only) -->
           <div id="spark-row">
             <span id="spark-hint-text">Select any sentence to sharpen with AI</span>
             <button id="spark-btn" class="spark-persistent-btn">✦ Spark</button>
           </div>
+
+          <!-- Grid row 2, col 2: post + visuals + first comment -->
+          <div id="edit-main">
 
           <div class="post-edit-card">
             <div id="post-body" contenteditable="true" spellcheck="true" role="textbox" aria-multiline="true" aria-label="Post content"></div>
@@ -566,9 +567,8 @@ async function loadPost(id) {
     // Initialise auto-save baseline so we don't trigger on the loaded content
     _lastAutoSavedContent = getPostContent();
 
-    // Autosave indicator — post is already saved on load
-    const aiEl = document.getElementById('autosave-indicator');
-    if (aiEl) aiEl.textContent = 'All changes saved';
+    // Autosave indicator — show timestamp at load so user always sees a time
+    updateAutosaveIndicator();
 
     // Quality feedback + phrase highlights
     renderQualityFeedback(p.quality?.flags || [], p.quality?.matches || {});

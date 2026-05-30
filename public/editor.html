@@ -28,14 +28,10 @@
     /* ── Post-publish state (overrides main.css .post-publish-state { display:none }) ── */
     #post-publish-state:not([hidden]) { display: flex !important; align-items: center !important; gap: 8px !important; }
 
-    /* ── Edit view layout — CSS Grid: centred post, meta aligned to post top ── */
+    /* ── Edit view layout — CSS Grid: centred post, meta to the right ── */
     #edit-view:not([hidden]) { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,680px) minmax(0,1fr); padding: 28px 64px 48px; width: 100%; box-sizing: border-box; align-items: start; }
-    /* Row 1, col 2: spark row (only above the post) */
-    #spark-row { grid-column: 2; grid-row: 1; display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 0 0 8px; }
-    /* Row 2, col 2: post card, visuals, first comment */
-    #edit-main { grid-column: 2; grid-row: 2; display: flex; flex-direction: column; gap: 20px; min-width: 0; }
-    /* Row 2, col 3: meta panel — starts at same height as post card */
-    #edit-meta { grid-column: 3; grid-row: 2; display: flex; flex-direction: column; gap: 14px; padding: 0 0 0 32px; min-width: 0; }
+    #edit-main { grid-column: 2; display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+    #edit-meta { grid-column: 3; display: flex; flex-direction: column; gap: 14px; padding: 0 0 0 32px; min-width: 0; }
     #linkedin-preview:not([hidden]) { display: block; padding: 28px 64px 48px; }
     #post-body { outline: none; cursor: text; min-height: 80px; }
     #post-body[contenteditable="false"] { cursor: default; opacity: 0.75; }
@@ -96,11 +92,10 @@
     .meta-tip:hover::after, .meta-tip:focus::after { opacity: 1; }
     .meta-tip[data-tip=""]::after { display: none; }
 
-    /* ── Spark row (hint text + button) ── */
-    #spark-hint-text { font-size: 11px; color: var(--text-muted); }
-    .spark-persistent-btn { background: var(--bg-subtle, #f3f4f6); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px; font-size: 12px; font-weight: 600; padding: 4px 10px; cursor: pointer; font-family: var(--font-sans); }
-    .spark-persistent-btn:hover { background: var(--bg-hover, #e5e7eb); }
-    .spark-persistent-btn:disabled { opacity: 0.5; cursor: default; }
+    /* ── Post card footer — persistent emoji strip ── */
+    #post-card-footer { display: flex; align-items: center; gap: 2px; padding: 8px 0 0; margin-top: 12px; border-top: 1px solid var(--border); }
+    .emoji-insert-btn { background: none; border: none; font-size: 15px; padding: 3px 6px; border-radius: 4px; cursor: pointer; line-height: 1; opacity: 0.55; transition: opacity 0.1s; }
+    .emoji-insert-btn:hover { opacity: 1; background: var(--bg-subtle, #f3f4f6); }
 
 
     /* ── LinkedIn preview body — matches real LinkedIn feed rendering ── */
@@ -122,16 +117,6 @@
     #topbar { transition: background 0.2s; }
     #topbar.is-scheduled { background: #fefce8 !important; border-bottom-color: #fde68a !important; }
 
-    /* ── Floating toolbar ── */
-    #floating-toolbar { position: fixed; z-index: 1000; transform: translateX(-50%); background: #1e293b; border-radius: 8px; padding: 5px 8px; display: flex; align-items: center; gap: 4px; box-shadow: 0 4px 16px rgba(0,0,0,0.25); pointer-events: auto; }
-    #floating-toolbar[hidden] { display: none; }
-    #floating-toolbar::after { content: ''; position: absolute; bottom: -5px; left: 50%; transform: translateX(-50%); border: 5px solid transparent; border-top-color: #1e293b; border-bottom: none; }
-    .ft-btn { background: none; border: none; color: #fff; font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 4px; cursor: pointer; font-family: var(--font-sans); white-space: nowrap; }
-    .ft-btn:hover { background: rgba(255,255,255,0.12); }
-    .ft-btn:disabled { opacity: 0.5; cursor: default; }
-    .ft-sep { width: 1px; height: 16px; background: rgba(255,255,255,0.2); margin: 0 2px; }
-    .ft-emoji { background: none; border: none; color: #fff; font-size: 13px; padding: 3px 4px; border-radius: 4px; cursor: pointer; line-height: 1; }
-    .ft-emoji:hover { background: rgba(255,255,255,0.12); }
   </style>
 </head>
 <body>
@@ -195,16 +180,10 @@
           <span id="autosave-indicator"></span>
         </div>
 
-        <!-- Edit view — CSS Grid: [1fr] [post 680px] [meta 1fr] × 2 rows -->
+        <!-- Edit view — CSS Grid: [1fr] [post 680px] [meta 1fr] -->
         <div id="edit-view">
 
-          <!-- Grid row 1, col 2: spark row (positioned above post only) -->
-          <div id="spark-row">
-            <span id="spark-hint-text">Select any sentence to sharpen with AI</span>
-            <button id="spark-btn" class="spark-persistent-btn">✦ Spark</button>
-          </div>
-
-          <!-- Grid row 2, col 2: post + visuals + first comment -->
+          <!-- Grid col 2: post + visuals + first comment -->
           <div id="edit-main">
 
           <div class="post-edit-card">
@@ -215,6 +194,13 @@
             <div id="asset-chip" class="asset-chip hidden" role="status" aria-live="polite">
               <span id="asset-chip-label"></span>
               <button id="asset-chip-remove" class="asset-chip-remove" aria-label="Remove attached asset">×</button>
+            </div>
+
+            <div id="post-card-footer">
+              <button class="emoji-insert-btn" data-emoji="→" title="Insert →">→</button>
+              <button class="emoji-insert-btn" data-emoji="✓" title="Insert ✓">✓</button>
+              <button class="emoji-insert-btn" data-emoji="💡" title="Insert 💡">💡</button>
+              <button class="emoji-insert-btn" data-emoji="🎯" title="Insert 🎯">🎯</button>
             </div>
           </div>
 
@@ -1839,7 +1825,7 @@ function init() {
   wireAssetChip();
   wireSchedulePause();
   wireFirstComment();
-  wireFloatingToolbar();
+  wireEmojiStrip();
 
   document.getElementById('post-body').addEventListener('input', scheduleAutoSave);
 
@@ -1853,128 +1839,36 @@ function init() {
 }
 
 /* ════════════════════════════════════════════════════════════════════════
-   FLOATING SELECTION TOOLBAR
+   EMOJI STRIP
 ════════════════════════════════════════════════════════════════════════ */
-let _ftRange = null;
-
-function wireFloatingToolbar() {
-  const tb      = document.getElementById('floating-toolbar');
+function wireEmojiStrip() {
   const postBody = document.getElementById('post-body');
-  if (!tb || !postBody) return;
-
-  document.addEventListener('selectionchange', () => {
-    if (window.innerWidth < 768) { tb.hidden = true; return; }
-    const sel = window.getSelection();
-    if (!sel || sel.isCollapsed || sel.toString().trim().length < 10) { tb.hidden = true; return; }
-    const range = sel.getRangeAt(0);
-    if (!postBody.contains(range.commonAncestorContainer)) { tb.hidden = true; return; }
-    _ftRange = range.cloneRange();
-    const rect = range.getBoundingClientRect();
-    tb.style.top  = (rect.top + window.scrollY - 48) + 'px';
-    tb.style.left = (rect.left + rect.width / 2) + 'px';
-    tb.hidden = false;
-  });
-
-  document.getElementById('ft-sharpen').addEventListener('mousedown', async (e) => {
-    e.preventDefault(); // prevent selection collapse before we consume the range
-    if (!_ftRange) return;
-    const selected = _ftRange.toString().trim();
-    if (!selected) return;
-    tb.hidden = true;
-    const btn = e.currentTarget;
-    const orig = btn.textContent;
-    btn.textContent = '✦ Sharpening…';
-    btn.disabled = true;
-    try {
-      const res = await fetch('/api/generate/sharpen-line', {
-        method: 'POST', credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          selectedText: selected,
-          postContext: getPostContent().slice(0, 500),
-        }),
-      });
-      const data = await res.json();
-      if (data.ok && data.sharpened && _ftRange) {
-        _ftRange.deleteContents();
-        _ftRange.insertNode(document.createTextNode(data.sharpened));
-        _ftRange = null;
-        scheduleAutoSave();
+  if (!postBody) return;
+  document.querySelectorAll('.emoji-insert-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const sym = ' ' + btn.dataset.emoji + ' ';
+      postBody.focus();
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount > 0 && postBody.contains(sel.getRangeAt(0).commonAncestorContainer)) {
+        if (!sel.isCollapsed) sel.collapseToEnd();
+        try { document.execCommand('insertText', false, sym); }
+        catch {
+          const r = sel.getRangeAt(0);
+          r.insertNode(document.createTextNode(sym));
+          r.collapse(false);
+        }
+      } else {
+        // No cursor in post-body — append to last paragraph
+        const last = postBody.querySelector('p:last-child') || postBody;
+        last.appendChild(document.createTextNode(sym));
       }
-    } catch { /* non-fatal */ }
-    finally { btn.textContent = orig; btn.disabled = false; }
-  });
-
-  document.querySelectorAll('.ft-emoji').forEach(btn => {
-    btn.addEventListener('mousedown', (e) => {
-      e.preventDefault();
-      if (!_ftRange) return;
-      _ftRange.collapse(false); // move cursor to end of selection
-      _ftRange.insertNode(document.createTextNode(' ' + btn.dataset.emoji + ' '));
-      tb.hidden = true;
-      _ftRange = null;
       scheduleAutoSave();
     });
-  });
-
-  // Persistent ✦ Spark button — always visible below the post card
-  document.getElementById('spark-btn')?.addEventListener('click', async () => {
-    // Accept stored _ftRange or a fresh live selection
-    let range = _ftRange;
-    if (!range || range.collapsed) {
-      const sel = window.getSelection();
-      if (sel && !sel.isCollapsed) {
-        const r = sel.getRangeAt(0);
-        if (postBody.contains(r.commonAncestorContainer)) range = r.cloneRange();
-      }
-    }
-    if (!range || range.collapsed) {
-      const hint = document.getElementById('spark-hint-text');
-      if (hint) {
-        const orig = hint.textContent;
-        hint.textContent = 'Highlight a sentence in your post first';
-        hint.style.color = '#b45309';
-        setTimeout(() => { hint.textContent = orig; hint.style.color = ''; }, 2500);
-      }
-      return;
-    }
-    const selected = range.toString().trim();
-    if (!selected) return;
-    const sparkBtn   = document.getElementById('spark-btn');
-    const origLabel  = sparkBtn.textContent;
-    sparkBtn.textContent = '✦ Sharpening…';
-    sparkBtn.disabled    = true;
-    tb.hidden = true;
-    try {
-      const res = await fetch('/api/generate/sharpen-line', {
-        method: 'POST', credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ selectedText: selected, postContext: getPostContent().slice(0, 500) }),
-      });
-      const data = await res.json();
-      if (data.ok && data.sharpened) {
-        range.deleteContents();
-        range.insertNode(document.createTextNode(data.sharpened));
-        _ftRange = null;
-        scheduleAutoSave();
-      }
-    } catch { /* non-fatal */ }
-    finally { sparkBtn.textContent = origLabel; sparkBtn.disabled = false; }
   });
 }
 
 document.addEventListener('DOMContentLoaded', init);
 </script>
-
-  <!-- Floating selection toolbar -->
-  <div id="floating-toolbar" hidden role="toolbar" aria-label="Text actions">
-    <button id="ft-sharpen" class="ft-btn">✦ Sharpen</button>
-    <div class="ft-sep"></div>
-    <button class="ft-emoji" data-emoji="→" title="Insert →">→</button>
-    <button class="ft-emoji" data-emoji="✓" title="Insert ✓">✓</button>
-    <button class="ft-emoji" data-emoji="💡" title="Insert 💡">💡</button>
-    <button class="ft-emoji" data-emoji="🎯" title="Insert 🎯">🎯</button>
-  </div>
 
   <script src="/js/session.js"></script>
   <script src="/js/ui-toast.js"></script>

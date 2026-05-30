@@ -28,10 +28,11 @@
     /* ── Post-publish state (overrides main.css .post-publish-state { display:none }) ── */
     #post-publish-state:not([hidden]) { display: flex !important; align-items: center !important; gap: 8px !important; }
 
-    /* ── Edit view layout — two-column: main post + right meta panel ── */
+    /* ── Edit view layout — post centred via symmetric spacer ── */
     #edit-view:not([hidden]) { display: flex; flex-direction: row; align-items: flex-start; padding: 28px 64px 48px; width: 100%; box-sizing: border-box; }
+    #edit-spacer { flex: 1; max-width: 240px; min-width: 0; } /* mirrors #edit-meta so post stays centred */
     #edit-main { flex: 0 1 680px; min-width: 0; display: flex; flex-direction: column; gap: 20px; }
-    #edit-meta { flex: 1; max-width: 220px; min-width: 0; display: flex; flex-direction: column; gap: 10px; padding: 2px 0 0 40px; }
+    #edit-meta { flex: 1; max-width: 240px; min-width: 0; display: flex; flex-direction: column; gap: 14px; padding: 0 0 0 32px; }
     #linkedin-preview:not([hidden]) { display: block; padding: 28px 64px 48px; }
     #post-body { outline: none; cursor: text; min-height: 80px; }
     #post-body[contenteditable="false"] { cursor: default; opacity: 0.75; }
@@ -69,21 +70,28 @@
     /* ── Visuals toolbar strip ── */
     #visuals-section { background: var(--bg-subtle, #f3f4f6) !important; border-radius: var(--radius-md, 8px) !important; padding: 12px 16px !important; gap: 10px !important; }
 
-    /* ── Autosave indicator (lives in #edit-meta) ── */
-    #autosave-indicator { font-size: 11px; color: var(--text-muted); display: block; }
+    /* ── Autosave indicator — top-right inside the tabs row ── */
+    #autosave-indicator { position: absolute; right: 64px; bottom: 8px; font-size: 11px; color: var(--text-muted); white-space: nowrap; }
 
-    /* ── Quality feedback (lives in #edit-meta, left-aligned) ── */
+    /* ── Quality feedback ── */
     #quality-feedback { font-size: 12px; text-align: left; padding: 0; }
-    #quality-feedback.qf-clean { color: var(--text-muted); }
-    #quality-feedback.qf-issues { color: #b45309; }
-    #quality-feedback.qf-issues ul { list-style: none; padding: 0; margin: 0; }
-    #quality-feedback.qf-issues li { margin-bottom: 4px; }
-    #quality-feedback.qf-issues li::before { content: '⚠ '; }
+    #quality-feedback .qf-status-clean { color: #15803d; font-weight: 600; font-size: 13px; }
+    #quality-feedback .qf-status-bad   { color: #dc2626; font-weight: 600; font-size: 13px; }
+    #quality-feedback ul { list-style: none; padding: 0; margin: 6px 0 0; }
+    #quality-feedback li { font-size: 11px; color: #92400e; margin-bottom: 4px; line-height: 1.4; }
+    #quality-feedback li::before { content: '⚠ '; }
     mark.qf-mark { background: rgba(180,83,9,0.10); border-radius: 2px; text-decoration: underline; text-decoration-style: wavy; text-decoration-color: #b45309; }
 
-    /* ── Status line (lives in #edit-meta, left-aligned) ── */
-    #post-status-line { font-size: 12px; color: var(--text-muted); text-align: left; padding: 0; letter-spacing: 0.01em; }
-    #post-status-line .status-sep { margin: 0 4px; opacity: 0.5; }
+    /* ── Meta info rows (post type · hook · words) ── */
+    .meta-info-row { display: flex; align-items: baseline; gap: 4px; flex-wrap: wrap; }
+    .meta-info-label { color: var(--text-secondary); font-size: 11px; flex-shrink: 0; }
+    .meta-info-label::after { content: ':'; }
+    .meta-info-value { color: var(--text-heading); font-weight: 500; font-size: 12px; }
+    /* Help icon circle */
+    .meta-tip { display: inline-flex; align-items: center; justify-content: center; width: 13px; height: 13px; min-width: 13px; border-radius: 50%; border: 1px solid var(--border); font-size: 8px; font-weight: 700; line-height: 1; color: var(--text-muted); cursor: help; position: relative; }
+    .meta-tip::after { content: attr(data-tip); position: absolute; right: 0; top: calc(100% + 6px); width: 190px; background: #1e293b; color: #fff; font-size: 11px; line-height: 1.5; padding: 8px 10px; border-radius: 6px; pointer-events: none; opacity: 0; white-space: normal; z-index: 300; transition: opacity 0.12s; box-shadow: 0 4px 12px rgba(0,0,0,0.25); }
+    .meta-tip:hover::after, .meta-tip:focus::after { opacity: 1; }
+    .meta-tip[data-tip=""]::after { display: none; }
 
     /* ── Spark row — above the post card ── */
     #spark-row { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 0 0 4px; }
@@ -182,12 +190,15 @@
         <div id="tabs" class="input-tab-bar">
           <button class="tab input-tab active" data-tab="edit">Edit</button>
           <button class="tab input-tab" data-tab="preview">LinkedIn Preview</button>
+          <span id="autosave-indicator"></span>
         </div>
 
         <!-- Edit view -->
         <div id="edit-view">
 
-          <!-- Left: main post editing area -->
+          <div id="edit-spacer" aria-hidden="true"></div>
+
+          <!-- Main post editing area -->
           <div id="edit-main">
 
           <div id="spark-row">
@@ -245,12 +256,29 @@
           </div>
           <!-- /edit-main -->
 
-          <!-- Right: meta panel — quality, status, autosave -->
+          <!-- Right: meta panel -->
           <div id="edit-meta">
-            <span id="autosave-indicator"></span>
+            <!-- 1. Quality status -->
             <div id="quality-feedback" hidden></div>
-            <div id="post-status-line">
-              <span id="status-word-count"></span><span class="status-sep" id="status-sep-1" hidden>·</span><span id="status-hook-type"></span><span class="status-sep" id="status-sep-2" hidden>·</span><span id="status-post-type"></span>
+
+            <!-- 2. Post type -->
+            <div id="meta-post-type-row" class="meta-info-row" hidden>
+              <span class="meta-info-label">Post type</span>
+              <span class="meta-info-value" id="meta-post-type-value"></span>
+              <span class="meta-tip" id="meta-post-type-tip" data-tip="" tabindex="0" aria-label="About this post type">?</span>
+            </div>
+
+            <!-- 3. Hook -->
+            <div id="meta-hook-row" class="meta-info-row" hidden>
+              <span class="meta-info-label">Hook</span>
+              <span class="meta-info-value" id="meta-hook-value"></span>
+              <span class="meta-tip" id="meta-hook-tip" data-tip="" tabindex="0" aria-label="About this hook">?</span>
+            </div>
+
+            <!-- 4. Word count -->
+            <div id="meta-words-row" class="meta-info-row" hidden>
+              <span class="meta-info-label">Words</span>
+              <span class="meta-info-value" id="status-word-count"></span>
             </div>
           </div>
           <!-- /edit-meta -->
@@ -604,21 +632,61 @@ const ARCHETYPE_LABELS_ED = {
 };
 
 /* ════════════════════════════════════════════════════════════════════════
-   STATUS LINE
+   POST TYPE & HOOK TOOLTIP COPY
+════════════════════════════════════════════════════════════════════════ */
+const POST_TYPE_TOOLTIPS = {
+  reach:              'Reach posts maximise impressions. Broad, relatable stories designed to grow your following beyond people who already know you.',
+  thought_leadership: 'Positions you as an expert. In-depth insights, unique perspectives, or proprietary data that demonstrate deep knowledge.',
+  lead_magnet:        'Drives a specific action. Offers a resource in exchange for a comment — e.g. "Comment GUIDE to get the full checklist."',
+};
+
+const HOOK_TOOLTIPS = {
+  NUMBER:           'Opens with a specific number or statistic. Creates immediate credibility and curiosity.',
+  CONTRARIAN:       'Challenges conventional wisdom. Makes readers pause by saying something counter-intuitive.',
+  CONFESSION:       'Shares a personal mistake, failure, or vulnerability. Builds trust through honesty.',
+  PATTERN_INTERRUPT:'Disrupts the scroll with an unexpected opening that breaks the reader\'s mental pattern.',
+  DIRECT_ADDRESS:   'Speaks directly to a specific person or group — makes them feel personally seen.',
+  STAKES:           'Opens by framing what\'s at risk: the cost of inaction or the size of the problem.',
+  BEFORE_AFTER:     'Contrasts two states — where things were vs. where they are now — to show transformation.',
+  INSIGHT:          'Leads with a non-obvious observation or "aha moment" that reframes how the reader thinks.',
+  MYTH_BUST:        'Identifies and debunks a widespread misconception right in the opening line.',
+};
+
+/* ════════════════════════════════════════════════════════════════════════
+   META PANEL (post type · hook · word count)
 ════════════════════════════════════════════════════════════════════════ */
 function renderStatusLine(wordCount, archetype, postType) {
+  // Word count
   const wcEl   = document.getElementById('status-word-count');
-  const hookEl = document.getElementById('status-hook-type');
-  const typeEl = document.getElementById('status-post-type');
-  const sep1   = document.getElementById('status-sep-1');
-  const sep2   = document.getElementById('status-sep-2');
-  if (wcEl) wcEl.textContent = wordCount + ' words';
-  const hookLabel = archetype ? (ARCHETYPE_LABELS_ED[archetype] || archetype.toLowerCase().replace(/_/g,' ')) : '';
-  if (hookEl) hookEl.textContent = hookLabel;
-  if (sep1) sep1.hidden = !hookLabel;
-  const typeLabel = postType ? postType.replace('_', ' ') : '';
-  if (typeEl) typeEl.textContent = typeLabel;
-  if (sep2) sep2.hidden = !typeLabel || !hookLabel;
+  const wcRow  = document.getElementById('meta-words-row');
+  if (wcEl) wcEl.textContent = wordCount;
+  if (wcRow) wcRow.hidden = false;
+
+  // Post type
+  const ptRow = document.getElementById('meta-post-type-row');
+  const ptVal = document.getElementById('meta-post-type-value');
+  const ptTip = document.getElementById('meta-post-type-tip');
+  if (postType && ptRow) {
+    const label = postType.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    if (ptVal) ptVal.textContent = label;
+    if (ptTip) ptTip.dataset.tip = POST_TYPE_TOOLTIPS[postType] || '';
+    ptRow.hidden = false;
+  } else if (ptRow) {
+    ptRow.hidden = true;
+  }
+
+  // Hook type
+  const hookRow = document.getElementById('meta-hook-row');
+  const hookVal = document.getElementById('meta-hook-value');
+  const hookTip = document.getElementById('meta-hook-tip');
+  if (archetype && hookRow) {
+    const label = ARCHETYPE_LABELS_ED[archetype] || archetype.toLowerCase().replace(/_/g, ' ');
+    if (hookVal) hookVal.textContent = label;
+    if (hookTip) hookTip.dataset.tip = HOOK_TOOLTIPS[archetype] || '';
+    hookRow.hidden = false;
+  } else if (hookRow) {
+    hookRow.hidden = true;
+  }
 }
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -639,17 +707,15 @@ function renderQualityFeedback(flags, matches) {
   applyQualityHighlights(matches || {});
   const unique = [...new Set(flags || [])];
   if (!unique.length) {
-    el.className = 'qf-clean';
-    el.textContent = '✓ Ready to post';
+    el.innerHTML = '<span class="qf-status-clean">✓ Ready to post</span>';
     return;
   }
-  el.className = 'qf-issues';
   const items = unique.map(f => {
     const label = FLAG_LABELS[f] || f.toLowerCase().replace(/_/g, ' ');
     const hit   = (matches || {})[f];
     return `<li>${label}${hit && hit.length ? ': <em>"' + escHtml(hit[0]) + '"</em>' : ''}</li>`;
   }).join('');
-  el.innerHTML = `<ul>${items}</ul>`;
+  el.innerHTML = `<span class="qf-status-bad">✗ Not ready</span><ul>${items}</ul>`;
 }
 
 function clearQualityHighlights() {

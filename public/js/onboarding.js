@@ -49,14 +49,14 @@ const Onboarding = (() => {
 
   /* ── Archetype labels for hook badge ─────────────────── */
   const ARCHETYPE_LABELS = {
-    NUMBER:           'Number hook',
-    CONTRARIAN:       'Contrarian',
-    CONFESSION:       'Confession',
-    PATTERN_INTERRUPT:'Pattern interrupt',
-    DIRECT_ADDRESS:   'Direct address',
-    STAKES:           'Stakes',
-    BEFORE_AFTER:     'Before/After',
-    INSIGHT:          'Insight',
+    CONFESSION:    'Confession',
+    BEFORE_AFTER:  'Before/After',
+    INSIGHT:       'Insight',
+    DIRECT_ADDRESS:'Direct address',
+    NUMBER:        'Number hook',
+    MYTH_BUST:     'Myth bust',
+    CURIOSITY_GAP: 'Curiosity gap',
+    REFRAME:       'Reframe',
   };
 
   /* ── Role label map for processing screen ────────────── */

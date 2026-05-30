@@ -541,25 +541,25 @@
   const archetypeCoaching = qs('vw-archetype-coaching');
 
   const archetypeLabels = {
-    NUMBER:          'Number hook',
-    CONTRARIAN:      'Contrarian',
-    CONFESSION:      'Confession',
-    PATTERN_INTERRUPT: 'Pattern interrupt',
-    DIRECT_ADDRESS:  'Direct address',
-    STAKES:          'Stakes',
-    BEFORE_AFTER:    'Before & after',
-    INSIGHT:         'Insight',
+    CONFESSION:    'Confession',
+    BEFORE_AFTER:  'Before & after',
+    INSIGHT:       'Insight',
+    DIRECT_ADDRESS:'Direct address',
+    NUMBER:        'Number hook',
+    MYTH_BUST:     'Myth bust',
+    CURIOSITY_GAP: 'Curiosity gap',
+    REFRAME:       'Reframe',
   };
 
   const archetypeDescriptions = {
-    NUMBER:          'Opens with a specific number or result',
-    CONTRARIAN:      'Challenges a widely-held belief',
-    CONFESSION:      'Leads with a mistake or past belief',
-    PATTERN_INTERRUPT: 'Contradicts what the reader expects',
-    DIRECT_ADDRESS:  'Speaks directly to a specific person',
-    STAKES:          'Opens with a consequence before the cause',
-    BEFORE_AFTER:    'Contrasts two states side by side',
-    INSIGHT:         'States a non-obvious truth as plain fact',
+    CONFESSION:    'Leads with a personal mistake or past belief',
+    BEFORE_AFTER:  'Contrasts two states side by side',
+    INSIGHT:       'States a non-obvious truth as plain fact',
+    DIRECT_ADDRESS:'Speaks directly to one specific person',
+    NUMBER:        'Opens with a striking number or result',
+    MYTH_BUST:     'Names a wrong belief then immediately reverses it',
+    CURIOSITY_GAP: 'Withholds the key detail to create a compulsion to read',
+    REFRAME:       'Repositions something familiar from an unexpected angle',
   };
 
   const archetypePrefs = safeParseJSON(profile.user_archetype_preference, {});

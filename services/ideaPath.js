@@ -6,22 +6,23 @@ const { extractJsonFromResponse } = require('./voiceFingerprint');
 const { buildVoiceDNABlock } = require('./voiceExtraction');
 const { selectHook, buildHookInjection, getTopArchetypes } = require('./hookSelector');
 const { HOOK_ARCHETYPES, ARCHETYPE_KEYS } = require('./hookArchetypes');
+const { selectExamples, buildExamplesBlock } = require('./exampleLibrary');
 const { AI_TELLS_PROHIBITION, sanitiseAiTells } = require('./postSanitiser');
 const { LINKEDIN_RULES } = require('../modules/formatIntelligence/rules');
 
 const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
 
 const ARCHETYPE_POST_TYPE_PREFERENCES = {
-  reach:   ['BEFORE_AFTER', 'CONFESSION', 'PATTERN_INTERRUPT'],
-  trust:   ['INSIGHT', 'CONTRARIAN', 'DIRECT_ADDRESS'],
-  convert: ['NUMBER', 'STAKES', 'BEFORE_AFTER'],
+  reach:   ['BEFORE_AFTER', 'CONFESSION', 'CURIOSITY_GAP'],
+  trust:   ['INSIGHT', 'MYTH_BUST', 'DIRECT_ADDRESS'],
+  convert: ['NUMBER', 'BEFORE_AFTER', 'REFRAME'],
 };
 
 const BLUEPRINT_SYSTEM_PROMPT = `You are a LinkedIn content strategist. Analyze the raw idea and return a structural blueprint for a single LinkedIn post.
 
 Return only valid JSON — no explanation, no markdown:
 {
-  "archetype": "<one of: INSIGHT|CONTRARIAN|BEFORE_AFTER|CONFESSION|NUMBER|STAKES|PATTERN_INTERRUPT|DIRECT_ADDRESS>",
+  "archetype": "<one of: CONFESSION|BEFORE_AFTER|INSIGHT|DIRECT_ADDRESS|NUMBER|MYTH_BUST|CURIOSITY_GAP|REFRAME>",
   "confidence": <number 0-1>,
   "tension": "<one sentence: the core contradiction — expectation vs reality, before vs after, belief vs evidence>",
   "arc": "<one sentence: the sequence of moves — what the reader learns and in what order>",
@@ -35,14 +36,14 @@ function getLengthGuidance(funnelType) {
 
 // Archetype-specific length guidance — used when the archetype is known at build time
 const ARCHETYPE_LENGTH_NOTES = {
-  BEFORE_AFTER:      'TARGET LENGTH: 400–600 words. This archetype requires a real before scene, a clear turning point, and a developed after. Compress either end and the transformation loses impact. Do not truncate.',
-  CONFESSION:        'TARGET LENGTH: 380–560 words. This archetype lives on narrative texture — the emotional arc needs room to breathe. A compressed confession feels hollow.',
-  NUMBER:            'TARGET LENGTH: 320–480 words. Each item must be a developed point with a sentence of context, not a bare one-liner. Earn the list.',
-  STAKES:            'TARGET LENGTH: 350–500 words. The consequence chain must be traced clearly — what was at risk, what happened, what it cost or delivered.',
-  CONTRARIAN:        'TARGET LENGTH: 300–450 words. The argument needs both the claim and the evidence or counter-evidence. One line of proof is not enough.',
-  INSIGHT:           'TARGET LENGTH: 280–420 words. Develop the idea fully — state it, show the reasoning, land the implication. Do not state and immediately close.',
-  PATTERN_INTERRUPT: 'TARGET LENGTH: 250–400 words. The hook does the heavy lifting; the body earns it. Develop each move without padding.',
-  DIRECT_ADDRESS:    'TARGET LENGTH: 280–420 words. Focused and reader-centric. Each sentence must serve the reader, not the author.',
+  CONFESSION:    'TARGET LENGTH: 380–560 words. This archetype lives on narrative texture — the emotional arc needs room to breathe. Each structural move (wrong belief, before state, turning point, after state, implication) must be fully developed. A compressed confession feels hollow.',
+  BEFORE_AFTER:  'TARGET LENGTH: 400–600 words. This archetype requires a real before scene, a clear turning point, and a developed after. Compress either end and the transformation loses impact. Each of the five structural moves must be complete.',
+  INSIGHT:       'TARGET LENGTH: 280–420 words. Develop the idea fully — state it, show why it is non-obvious, prove it, extend it, land the implication. Do not state and immediately close.',
+  DIRECT_ADDRESS:'TARGET LENGTH: 280–420 words. Focused and reader-centric. Each sentence must serve the addressed person, not the author.',
+  NUMBER:        'TARGET LENGTH: 320–480 words. The number opens; the explanation earns it. Develop the cause, the principle, and the reader application fully — do not stop at the number.',
+  MYTH_BUST:     'TARGET LENGTH: 320–480 words. The argument needs both the claim and the evidence. Name the belief, flip it, then prove the flip with 2–3 specific points. One line of proof is not enough.',
+  CURIOSITY_GAP: 'TARGET LENGTH: 300–450 words. The gap is established quickly; the rest earns the payoff. Build context around the withheld detail before revealing it — a rushed reveal wastes the setup.',
+  REFRAME:       'TARGET LENGTH: 280–420 words. The reframe itself is brief; the post earns it. Show the new frame through a specific example, then extend it and land the implication.',
 };
 
 function buildPostTypeBlock(postType, archetype = null) {
@@ -53,20 +54,17 @@ function buildPostTypeBlock(postType, archetype = null) {
   const blocks = {
     reach: `POST GOAL: REACH
 This post must attract new readers outside the author's existing audience.
-Body structure: Hook → tension or contradiction → resolution → open question
-Hook preference (in order): BEFORE_AFTER, CONFESSION, PATTERN_INTERRUPT
+Hook preference (in order): BEFORE_AFTER, CONFESSION, CURIOSITY_GAP
 Closing: An open question or binary choice. No selling. No DM asks.
-${lengthLine || 'TARGET LENGTH: 250–500 words depending on the archetype. Story arcs (BEFORE_AFTER, CONFESSION) need 400+ words to land the transformation. Insight and pattern-interrupt hooks can be tighter. Do not truncate the arc to stay short.'}`,
+${lengthLine || 'TARGET LENGTH: 350–560 words. Story arcs (BEFORE_AFTER, CONFESSION) need 400+ words to land the transformation. Curiosity gap hooks need enough body to make the payoff worth the setup. Do not truncate the arc to stay short.'}`,
     trust: `POST GOAL: TRUST
 This post must deepen credibility with readers who already follow the author.
-Body structure: State a belief → provide evidence or reasoning → land the implication
-Hook preference (in order): INSIGHT, CONTRARIAN, DIRECT_ADDRESS
+Hook preference (in order): INSIGHT, MYTH_BUST, DIRECT_ADDRESS
 Closing: A reframe or reflection question that cements authority. No direct selling.
-${lengthLine || 'TARGET LENGTH: 350–600 words. Trust posts earn authority by showing the reasoning, not just stating the conclusion. Every structural move — setup, evidence, implication — must be complete. Do not wrap up before the argument lands.'}`,
+${lengthLine || 'TARGET LENGTH: 350–600 words. Trust posts earn authority by showing the reasoning, not just stating the conclusion. Every structural move must be complete. Do not wrap up before the argument lands.'}`,
     convert: `POST GOAL: CONVERT
 This post must move warm readers toward a DM, call, or next step.
-Body structure: Name a specific problem → describe the solution → state the specific result → invite action
-Hook preference (in order): NUMBER, STAKES, BEFORE_AFTER
+Hook preference (in order): NUMBER, BEFORE_AFTER, REFRAME
 Closing: One direct ask. DM, comment a word, or follow. One ask only. No "link in bio."
 ${lengthLine || 'TARGET LENGTH: 200–380 words. Long enough to be credible, tight enough to stay focused on the single ask. Do not bury the CTA in unnecessary setup.'}`,
   };
@@ -80,15 +78,22 @@ Never invent statistics, metrics, or outcomes that are not in the input.
 When the input has no numbers: do NOT use [SPECIFIC NEEDED] markers and do NOT invent figures. Instead, ground the post in what IS concrete — the specific scenario, the named decision, the role of the person, the direction of change, the exact moment. "I stopped sending follow-up emails entirely" is specific. "I changed my outreach approach" is not. The situation itself is the specificity — use it.
 NEVER output placeholder text in square brackets (e.g. [specific result], [add detail here], [your niche], [metric]). Square brackets break the post and are never acceptable. If a concrete detail is missing, write around it naturally using the author's niche and audience context — or make a plausible inference from what is given.`;
 
-const NARRATIVE_DEPTH_MANDATE = `
-NARRATIVE DEPTH (non-negotiable):
-Develop each structural move fully — not as a summary, but as a complete scene, argument, or beat.
-- BEFORE state: enough specificity that the reader recognises the situation. One sentence is not enough.
-- TURNING POINT: the moment must feel real and earned — name the decision, the realisation, or the result.
-- AFTER state / implication: developed enough that the reader understands the change, not just that change happened.
-- EVIDENCE or REASONING: one line of proof is not enough. Show the logic. Trace the consequence.
-Length emerges from development — write until each structural move is complete, then stop.
-Never truncate a narrative arc just to keep the post short. A post that earns its length outperforms a compressed one every time.`;
+/**
+ * Builds the body structure block from the archetype definition.
+ * These concrete numbered moves replace the abstract NARRATIVE_DEPTH_MANDATE.
+ */
+function buildBodyStructureBlock(archetypeName) {
+  const record = HOOK_ARCHETYPES[archetypeName];
+  if (!record?.bodyStructure?.length) return '';
+  const moves = record.bodyStructure.map((move, i) => `${i + 1}. ${move}`).join('\n');
+  return `
+BODY STRUCTURE — execute these moves in sequence between the hook and the close:
+${moves}
+
+Write each move completely before advancing to the next.
+Do not summarise, compress, or skip any move — the post earns its length through development, not through padding.
+`;
+}
 
 const SELF_CHECK = `
 SELF-CHECK BEFORE OUTPUTTING:
@@ -111,27 +116,25 @@ Output only the post as plain text after all five pass. No JSON. No labels. No e
 // Maps each archetype to structurally different contrast options.
 // Goal: Hook B always uses a different emotional mechanism from Hook A.
 const ARCHETYPE_CONTRAST = {
-  CONFESSION:        ['NUMBER', 'CONTRARIAN', 'PATTERN_INTERRUPT'],
-  BEFORE_AFTER:      ['CONTRARIAN', 'INSIGHT', 'DIRECT_ADDRESS'],
-  CONTRARIAN:        ['CONFESSION', 'NUMBER', 'BEFORE_AFTER'],
-  MYTH_BUST:         ['CONFESSION', 'NUMBER', 'DIRECT_ADDRESS'],
-  STAKES:            ['INSIGHT', 'CONFESSION', 'PATTERN_INTERRUPT'],
-  NUMBER:            ['CONFESSION', 'CONTRARIAN', 'STAKES'],
-  PATTERN_INTERRUPT: ['CONFESSION', 'BEFORE_AFTER', 'INSIGHT'],
-  DIRECT_ADDRESS:    ['CONTRARIAN', 'NUMBER', 'BEFORE_AFTER'],
-  INSIGHT:           ['CONFESSION', 'CONTRARIAN', 'BEFORE_AFTER'],
+  CONFESSION:    ['NUMBER', 'MYTH_BUST', 'CURIOSITY_GAP'],
+  BEFORE_AFTER:  ['MYTH_BUST', 'INSIGHT', 'DIRECT_ADDRESS'],
+  INSIGHT:       ['CONFESSION', 'MYTH_BUST', 'BEFORE_AFTER'],
+  DIRECT_ADDRESS:['MYTH_BUST', 'NUMBER', 'BEFORE_AFTER'],
+  NUMBER:        ['CONFESSION', 'MYTH_BUST', 'REFRAME'],
+  MYTH_BUST:     ['CONFESSION', 'NUMBER', 'BEFORE_AFTER'],
+  CURIOSITY_GAP: ['CONFESSION', 'BEFORE_AFTER', 'INSIGHT'],
+  REFRAME:       ['CONFESSION', 'NUMBER', 'DIRECT_ADDRESS'],
 };
 
 const ARCHETYPE_INSTRUCTIONS = {
-  NUMBER:            "Start with a specific number (e.g. '3 founders…', '87% of…')",
-  CONTRARIAN:        "Open by challenging a common belief or assumption directly",
-  CONFESSION:        "Lead with a personal admission, mistake, or past belief",
-  PATTERN_INTERRUPT: "Start with something unexpected or counterintuitive that breaks autopilot",
-  DIRECT_ADDRESS:    "Speak directly to a specific type of person ('If you're a…')",
-  STAKES:            "Open with a consequence or risk — what's at stake — before explaining why",
-  BEFORE_AFTER:      "Contrast a past state with a present state in a single line",
-  INSIGHT:           "State a non-obvious truth as a confident plain-spoken fact",
-  MYTH_BUST:         "Name a common belief in the first words, then immediately flip it",
+  CONFESSION:    "Lead with a personal admission, mistake, or past belief — past tense, specific, under 12 words",
+  BEFORE_AFTER:  "Contrast a past state with a present state in a single line — concrete specifics in both",
+  INSIGHT:       "State a non-obvious truth as a confident plain-spoken fact — no 'I think' or 'I've noticed'",
+  DIRECT_ADDRESS:"Speak directly to a specific type of person in a specific situation ('If you're billing by the hour…')",
+  NUMBER:        "Start with a specific, striking number in the first three words — under 10 words total",
+  MYTH_BUST:     "Name the common belief in the first line, then immediately flip it in the second",
+  CURIOSITY_GAP: "Withhold the key detail the reader most wants to know — create the gap without filling it",
+  REFRAME:       "Name the familiar situation, then reposition it from an unexpected angle in one line",
 };
 
 /**
@@ -141,7 +144,7 @@ const ARCHETYPE_INSTRUCTIONS = {
  */
 async function generateAlternativeHook(post, usedArchetype, client) {
   try {
-    const candidates     = ARCHETYPE_CONTRAST[usedArchetype] || ['CONTRARIAN', 'NUMBER', 'INSIGHT'];
+    const candidates     = ARCHETYPE_CONTRAST[usedArchetype] || ['MYTH_BUST', 'NUMBER', 'INSIGHT'];
     const targetArchetype = candidates[Math.floor(Math.random() * candidates.length)];
     const instruction    = ARCHETYPE_INSTRUCTIONS[targetArchetype] || 'Write a punchy, specific opening line';
 
@@ -382,12 +385,17 @@ async function buildStructureBlueprint(rawIdea, postType, client, userProfile = 
 
 /**
  * Stage 2 system prompt — full creative authority with voice context + structural suggestion.
+ * Prompt order: role → examples → phrase library → voice DNA → post type →
+ *               blueprint → body structure → hook → niche/audience → formatting →
+ *               above the fold → POV → prohibitions → specificity → CTA
  */
-function buildVoiceWritingSystemPrompt(blueprint, userProfile, hookInjectionBlock, ctaInstruction = '', postType = null) {
+function buildVoiceWritingSystemPrompt(blueprint, userProfile, hookInjectionBlock, ctaInstruction = '', postType = null, examples = []) {
   const { tension, arc, hook_draft, archetype } = blueprint;
+  const examplesBlock      = buildExamplesBlock(examples);
   const phraseLibraryBlock = buildPhraseLibraryBlock(userProfile);
   const voiceDNABlock      = buildVoiceDNABlock(userProfile);
   const postTypeBlock      = buildPostTypeBlock(postType, archetype);
+  const bodyStructureBlock = buildBodyStructureBlock(archetype);
 
   const blueprintBlock = `
 STRUCTURAL SUGGESTION (starting point only — override freely if you see a stronger angle):
@@ -395,13 +403,13 @@ STRUCTURAL SUGGESTION (starting point only — override freely if you see a stro
 - Narrative arc: ${arc || 'Open on the tension, build through the evidence, land the resolution'}
 - Hook seed (sharpen, strengthen, or replace entirely): ${hook_draft || 'Lead with the most specific and surprising element'}
 
-Use this as a foundation or ignore it — whatever produces the strongest post. Every sentence must serve the arc.
-Develop each structural move fully — do not summarise or compress. The before needs enough specificity to feel real. The turn needs to land. The after needs enough detail to show what changed. Earn the length.
+Use this as a foundation or ignore it — whatever produces the strongest post.
 `;
 
   return `You are writing a LinkedIn post for a professional. You have full creative authority — structure, hook, tone, arc. A structural suggestion is provided below as a starting point; improve on it, override it, or take a completely different angle if you see something stronger.
-${phraseLibraryBlock}${voiceDNABlock}${postTypeBlock}
+${examplesBlock}${phraseLibraryBlock}${voiceDNABlock}${postTypeBlock}
 ${blueprintBlock}
+${bodyStructureBlock}
 ${hookInjectionBlock}
 
 CONTENT NICHE: ${userProfile.content_niche || 'not specified'}
@@ -427,14 +435,14 @@ POINT OF VIEW (non-negotiable):
 Take the strongest defensible position the raw idea supports — not the safest one.
 Never present both sides without choosing one. A hedged first draft cannot be sharpened; a strong one can be dialled back.
 If the idea contains a provocative angle, lead with it — do not bury it in the body.
-${AI_TELLS_PROHIBITION}${SPECIFICITY_MANDATE}${NARRATIVE_DEPTH_MANDATE}${ctaInstruction}`;
+${AI_TELLS_PROHIBITION}${SPECIFICITY_MANDATE}${ctaInstruction}`;
 }
 
 /**
  * Streaming variant of buildVoiceWritingSystemPrompt — same prompt, plain-text output instead of JSON.
  */
-function buildStreamingVoiceWritingSystemPrompt(blueprint, userProfile, hookInjectionBlock, ctaInstruction = '', postType = null) {
-  return buildVoiceWritingSystemPrompt(blueprint, userProfile, hookInjectionBlock, ctaInstruction, postType)
+function buildStreamingVoiceWritingSystemPrompt(blueprint, userProfile, hookInjectionBlock, ctaInstruction = '', postType = null, examples = []) {
+  return buildVoiceWritingSystemPrompt(blueprint, userProfile, hookInjectionBlock, ctaInstruction, postType, examples)
     + '\n' + STREAMING_SELF_CHECK;
 }
 
@@ -527,9 +535,12 @@ async function runTwoStageGeneration({
   // Extended thinking requires temperature: 1 (API constraint)
   const THINKING_BUDGET = 8000;
 
+  // Select calibration examples — non-blocking, never throws
+  const examples = await selectExamples(postType, archetypeUsed);
+
   // ── Streaming path: plain-text output, token-by-token via onToken callback ──
   if (options.onToken) {
-    const streamSysPrompt  = buildStreamingVoiceWritingSystemPrompt(blueprint, userProfile, hookInjection, ctaInstruction, postType);
+    const streamSysPrompt  = buildStreamingVoiceWritingSystemPrompt(blueprint, userProfile, hookInjection, ctaInstruction, postType, examples);
     const streamUserPrompt = buildStreamingUserPrompt(rawIdea);
     const streamUserFinal  = extraHints ? `${streamUserPrompt}\n\n${extraHints}` : streamUserPrompt;
 
@@ -561,7 +572,7 @@ async function runTwoStageGeneration({
 
   // ── Non-streaming path: plain-text post, metadata extracted separately ───────
   // Uses streaming variant of system prompt since both paths now output plain text
-  const systemPrompt    = buildStreamingVoiceWritingSystemPrompt(blueprint, userProfile, hookInjection, ctaInstruction, postType);
+  const systemPrompt    = buildStreamingVoiceWritingSystemPrompt(blueprint, userProfile, hookInjection, ctaInstruction, postType, examples);
   const userPrompt      = buildUserPrompt(rawIdea);
   const userPromptFinal = extraHints ? `${userPrompt}\n\n${extraHints}` : userPrompt;
 
@@ -649,7 +660,7 @@ POINT OF VIEW (non-negotiable):
 Take the strongest defensible position the raw idea supports — not the safest one.
 Never present both sides without choosing one. A hedged first draft cannot be sharpened; a strong one can be dialled back.
 If the idea contains a provocative angle, lead with it — do not bury it in the body.
-${AI_TELLS_PROHIBITION}${SPECIFICITY_MANDATE}${NARRATIVE_DEPTH_MANDATE}${ctaInstruction}`;
+${AI_TELLS_PROHIBITION}${SPECIFICITY_MANDATE}${ctaInstruction}`;
 }
 
 function buildUserPrompt(rawIdea) {
@@ -995,7 +1006,7 @@ Take the strongest defensible position the raw idea supports — not the safest 
 Never present both sides without choosing one. A hedged first draft cannot be sharpened; a strong one can be dialled back.
 If the idea contains a provocative angle, lead with it — do not bury it in the body.
 
-${AI_TELLS_PROHIBITION}${SPECIFICITY_MANDATE}${NARRATIVE_DEPTH_MANDATE}`;
+${AI_TELLS_PROHIBITION}${SPECIFICITY_MANDATE}`;
 }
 
 function buildRefineUserPrompt(sourceText, documentContext = null) {

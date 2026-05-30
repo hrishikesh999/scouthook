@@ -29,15 +29,15 @@ const SYSTEM_PROMPT = `You are a LinkedIn content strategist. Classify the given
    - trust: frameworks, methodologies, expertise demonstrations, contrarian positions — builds authority
    - convert: offers, case studies, client results, "I help X do Y" — drives inbound leads
 
-2. "hook_archetype": one of NUMBER, CONTRARIAN, CONFESSION, PATTERN_INTERRUPT, DIRECT_ADDRESS, STAKES, BEFORE_AFTER, INSIGHT
-   - NUMBER: leads with a specific number or statistic
-   - CONTRARIAN: challenges a widely-held belief
-   - CONFESSION: personal failure or mistake
-   - PATTERN_INTERRUPT: unexpected or disruptive opening
-   - DIRECT_ADDRESS: speaks directly to reader ("You…")
-   - STAKES: opens with high-stakes consequence or risk
-   - BEFORE_AFTER: transformation from one state to another
-   - INSIGHT: shares a novel perspective or observation
+2. "hook_archetype": one of CONFESSION, BEFORE_AFTER, INSIGHT, DIRECT_ADDRESS, NUMBER, MYTH_BUST, CURIOSITY_GAP, REFRAME
+   - CONFESSION: personal mistake, failure, or past wrong belief
+   - BEFORE_AFTER: transformation contrasting two specific states
+   - INSIGHT: states a non-obvious truth as plain confident fact
+   - DIRECT_ADDRESS: speaks directly to one specific type of person in a specific situation
+   - NUMBER: leads with a striking specific number or statistic
+   - MYTH_BUST: names a widely-held wrong belief then immediately reverses it
+   - CURIOSITY_GAP: withholds the key detail the reader wants most to create compulsion to read
+   - REFRAME: takes something familiar and repositions it from an unexpected angle
 
 Return ONLY the JSON object. No other text.`;
 

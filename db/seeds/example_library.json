@@ -1,0 +1,9 @@
+[
+  {
+    "post_text": "Paste the full text of the LinkedIn post here.\n\nEach post is its own object in this array.\nInclude all line breaks exactly as they appear in the original post.",
+    "post_type": "reach",
+    "hook_archetype": "CONFESSION",
+    "niche": "Management consulting",
+    "source_url": "https://www.linkedin.com/posts/example-placeholder-001"
+  }
+]

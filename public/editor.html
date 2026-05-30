@@ -612,15 +612,14 @@ async function loadPost(id) {
    ARCHETYPE LABELS (used by status line)
 ════════════════════════════════════════════════════════════════════════ */
 const ARCHETYPE_LABELS_ED = {
-  NUMBER:           'Number hook',
-  CONTRARIAN:       'Contrarian',
-  CONFESSION:       'Confession',
-  PATTERN_INTERRUPT:'Pattern interrupt',
-  DIRECT_ADDRESS:   'Direct address',
-  STAKES:           'Stakes',
-  BEFORE_AFTER:     'Before/After',
-  INSIGHT:          'Insight',
-  MYTH_BUST:        'Myth bust',
+  CONFESSION:    'Confession',
+  BEFORE_AFTER:  'Before/After',
+  INSIGHT:       'Insight',
+  DIRECT_ADDRESS:'Direct address',
+  NUMBER:        'Number hook',
+  MYTH_BUST:     'Myth bust',
+  CURIOSITY_GAP: 'Curiosity gap',
+  REFRAME:       'Reframe',
 };
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -633,15 +632,14 @@ const POST_TYPE_TOOLTIPS = {
 };
 
 const HOOK_TOOLTIPS = {
-  NUMBER:           'Opens with a specific number or statistic. Creates immediate credibility and curiosity.',
-  CONTRARIAN:       'Challenges conventional wisdom. Makes readers pause by saying something counter-intuitive.',
-  CONFESSION:       'Shares a personal mistake, failure, or vulnerability. Builds trust through honesty.',
-  PATTERN_INTERRUPT:'Disrupts the scroll with an unexpected opening that breaks the reader\'s mental pattern.',
-  DIRECT_ADDRESS:   'Speaks directly to a specific person or group — makes them feel personally seen.',
-  STAKES:           'Opens by framing what\'s at risk: the cost of inaction or the size of the problem.',
-  BEFORE_AFTER:     'Contrasts two states — where things were vs. where they are now — to show transformation.',
-  INSIGHT:          'Leads with a non-obvious observation or "aha moment" that reframes how the reader thinks.',
-  MYTH_BUST:        'Identifies and debunks a widespread misconception right in the opening line.',
+  CONFESSION:    'Leads with a personal mistake or past belief — readers who\'ve made the same mistake feel instantly seen.',
+  BEFORE_AFTER:  'Contrasts two states side by side — readers in the "before" state can see exactly where they\'re headed.',
+  INSIGHT:       'States a non-obvious truth as plain fact — stops readers who\'ve been thinking this but never heard it said.',
+  DIRECT_ADDRESS:'Speaks directly to one specific person in one specific situation — makes the right reader feel individually called out.',
+  NUMBER:        'Opens with a striking number — stops readers who scan for proof and makes them wonder what changed.',
+  MYTH_BUST:     'Names a widespread wrong belief in the opening line then immediately reverses it — readers who hold the belief feel the flip personally.',
+  CURIOSITY_GAP: 'Withholds the key detail the reader most wants to know — creates a compulsion to keep reading to close the gap.',
+  REFRAME:       'Repositions something the reader already knows from an angle they\'ve never considered — creates an immediate "I never thought of it that way" response.',
 };
 
 /* ════════════════════════════════════════════════════════════════════════

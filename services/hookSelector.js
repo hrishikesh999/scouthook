@@ -10,9 +10,9 @@ const HAIKU_MODEL = 'claude-haiku-4-5';
 const SYSTEM_PROMPT = `You are a LinkedIn content strategist. Your only job is to classify a raw thought into one of eight hook archetypes. You must return only a valid JSON object with two keys: 'archetype' (one of the eight archetype names in uppercase) and 'confidence' (a number between 0 and 1). No other output.`;
 
 const ARCHETYPE_PREFERENCES = {
-  reach:   ['BEFORE_AFTER', 'CONFESSION', 'PATTERN_INTERRUPT'],
-  trust:   ['INSIGHT', 'CONTRARIAN', 'DIRECT_ADDRESS'],
-  convert: ['NUMBER', 'STAKES', 'BEFORE_AFTER'],
+  reach:   ['BEFORE_AFTER', 'CONFESSION', 'CURIOSITY_GAP'],
+  trust:   ['INSIGHT', 'MYTH_BUST', 'DIRECT_ADDRESS'],
+  convert: ['NUMBER', 'BEFORE_AFTER', 'REFRAME'],
 };
 
 function buildArchetypeListForPrompt() {

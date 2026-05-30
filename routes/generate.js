@@ -654,12 +654,21 @@ router.get('/post/:postId', async (req, res) => {
   let leadMagnetInputs = null;
   try { leadMagnetInputs = row.lead_magnet_inputs ? JSON.parse(row.lead_magnet_inputs) : null; } catch {}
 
+  // Re-run the slim gate on current content to get phrase matches for in-editor highlighting.
+  // The gate is now 5 cheap checks — no meaningful latency impact.
+  let freshMatches = {};
+  try {
+    const keyword = leadMagnetInputs?.keyword || null;
+    const freshGate = runQualityGate(row.content || '', { postType: row.post_type || null, keyword, funnelType: row.funnel_type || null });
+    freshMatches = freshGate.matches || {};
+  } catch { /* non-fatal — matches just won't highlight */ }
+
   return res.json({
     ok: true,
     post: {
       id:                  row.id,
       content:             row.content,
-      quality:             { score: row.quality_score || 0, passed: row.passed_gate === 1, flags, errors: flags, warnings: [], verdict: row.quality_verdict || null },
+      quality:             { score: row.quality_score || 0, passed: row.passed_gate === 1, flags, errors: flags, warnings: [], verdict: row.quality_verdict || null, matches: freshMatches },
       hookB:               row.hook_b || null,
       hookBArchetype:      row.hook_b_archetype || null,
       ctaAlternatives,

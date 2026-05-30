@@ -68,13 +68,28 @@
     /* ── Visuals toolbar strip ── */
     #visuals-section { background: var(--bg-subtle, #f3f4f6) !important; border-radius: var(--radius-md, 8px) !important; padding: 12px 16px !important; gap: 10px !important; }
 
-    /* ── Checks list ── */
-    #checks-list { list-style: none; padding: 0; margin: 0; }
-    #checks-list li { font-size: 12px; line-height: 1.5; color: var(--text-secondary); list-style: none; }
+    /* ── Autosave bar ── */
+    #autosave-bar { padding: 6px 64px 2px; min-height: 20px; }
+    #autosave-indicator { font-size: 11px; color: var(--text-muted); }
+
+    /* ── Quality feedback ── */
+    #quality-feedback { font-size: 12px; text-align: center; padding: 4px 0 6px; }
+    #quality-feedback.qf-clean { color: var(--text-muted); }
+    #quality-feedback.qf-issues { color: #b45309; }
+    #quality-feedback.qf-issues ul { list-style: none; padding: 0; margin: 2px 0 0; }
+    #quality-feedback.qf-issues li::before { content: '⚠ '; }
+    mark.qf-mark { background: rgba(180,83,9,0.10); border-radius: 2px; text-decoration: underline; text-decoration-style: wavy; text-decoration-color: #b45309; }
 
     /* ── Status line ── */
     #post-status-line { font-size: 12px; color: var(--text-muted); text-align: center; padding: 6px 0 10px; letter-spacing: 0.01em; }
     #post-status-line .status-sep { margin: 0 6px; opacity: 0.5; }
+
+    /* ── Spark row ── */
+    #spark-row { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 6px 0 2px; }
+    #spark-hint-text { font-size: 11px; color: var(--text-muted); }
+    .spark-persistent-btn { background: var(--bg-subtle, #f3f4f6); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px; font-size: 12px; font-weight: 600; padding: 4px 10px; cursor: pointer; font-family: var(--font-sans); }
+    .spark-persistent-btn:hover { background: var(--bg-hover, #e5e7eb); }
+    .spark-persistent-btn:disabled { opacity: 0.5; cursor: default; }
 
 
     /* ── LinkedIn preview body — matches real LinkedIn feed rendering ── */
@@ -163,11 +178,15 @@
       <!-- Editor -->
       <div id="editor">
 
+        <div id="autosave-bar"><span id="autosave-indicator"></span></div>
+
         <div id="tabs" class="input-tab-bar">
           <button class="tab input-tab active" data-tab="edit">Edit</button>
           <button class="tab input-tab" data-tab="preview">LinkedIn Preview</button>
           <span id="word-count" class="word-count"></span>
         </div>
+
+        <div id="quality-feedback" hidden></div>
 
         <div id="post-status-line">
           <span id="status-word-count"></span><span class="status-sep" id="status-sep-1" hidden>·</span><span id="status-hook-type"></span><span class="status-sep" id="status-sep-2" hidden>·</span><span id="status-post-type"></span>
@@ -185,6 +204,11 @@
               <span id="asset-chip-label"></span>
               <button id="asset-chip-remove" class="asset-chip-remove" aria-label="Remove attached asset">×</button>
             </div>
+          </div>
+
+          <div id="spark-row">
+            <span id="spark-hint-text">Select any sentence to sharpen with AI</span>
+            <button id="spark-btn" class="spark-persistent-btn">✦ Spark</button>
           </div>
 
           <div id="visuals-section">
@@ -506,6 +530,13 @@ async function loadPost(id) {
     // Initialise auto-save baseline so we don't trigger on the loaded content
     _lastAutoSavedContent = getPostContent();
 
+    // Autosave indicator — post is already saved on load
+    const aiEl = document.getElementById('autosave-indicator');
+    if (aiEl) aiEl.textContent = 'All changes saved';
+
+    // Quality feedback + phrase highlights
+    renderQualityFeedback(p.quality?.flags || [], p.quality?.matches || {});
+
     // Status line
     const wc = rawText.split(/\s+/).filter(Boolean).length;
     renderStatusLine(wc, p.archetypeUsed || null, p.postType || null);
@@ -581,6 +612,88 @@ function renderStatusLine(wordCount, archetype, postType) {
   const typeLabel = postType ? postType.replace('_', ' ') : '';
   if (typeEl) typeEl.textContent = typeLabel;
   if (sep2) sep2.hidden = !typeLabel || !hookLabel;
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   QUALITY FEEDBACK
+════════════════════════════════════════════════════════════════════════ */
+const FLAG_LABELS = {
+  AI_LANGUAGE_DETECTED: 'AI-sounding phrase',
+  ENGAGEMENT_BAIT:      'Engagement bait pattern',
+  TOO_SHORT:            'Post too short — aim for 150+ words',
+  HASHTAG_SPAM:         'Too many hashtags — trim to 3 or fewer',
+  KEYWORD_MISSING:      'Lead magnet CTA keyword missing from post body',
+};
+
+function renderQualityFeedback(flags, matches) {
+  const el = document.getElementById('quality-feedback');
+  if (!el) return;
+  el.hidden = false;
+  applyQualityHighlights(matches || {});
+  const unique = [...new Set(flags || [])];
+  if (!unique.length) {
+    el.className = 'qf-clean';
+    el.textContent = '✓ Ready to post';
+    return;
+  }
+  el.className = 'qf-issues';
+  const items = unique.map(f => {
+    const label = FLAG_LABELS[f] || f.toLowerCase().replace(/_/g, ' ');
+    const hit   = (matches || {})[f];
+    return `<li>${label}${hit && hit.length ? ': <em>"' + escHtml(hit[0]) + '"</em>' : ''}</li>`;
+  }).join('');
+  el.innerHTML = `<ul>${items}</ul>`;
+}
+
+function clearQualityHighlights() {
+  document.getElementById('post-body')?.querySelectorAll('mark.qf-mark').forEach(m => {
+    const p = m.parentNode;
+    while (m.firstChild) p.insertBefore(m.firstChild, m);
+    p.removeChild(m);
+    p.normalize();
+  });
+}
+
+function highlightPhrase(root, phrase, flag) {
+  if (!phrase) return;
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  let node;
+  while ((node = walker.nextNode())) {
+    const idx = node.textContent.toLowerCase().indexOf(phrase.toLowerCase());
+    if (idx === -1) continue;
+    try {
+      const r = document.createRange();
+      r.setStart(node, idx);
+      r.setEnd(node, idx + phrase.length);
+      const mark = document.createElement('mark');
+      mark.className = 'qf-mark';
+      mark.dataset.flag = flag;
+      r.surroundContents(mark);
+    } catch { /* skip if range crosses element boundary */ }
+    break; // first occurrence only
+  }
+}
+
+function applyQualityHighlights(matches) {
+  clearQualityHighlights();
+  const postBody = document.getElementById('post-body');
+  if (!postBody) return;
+  Object.entries(matches).forEach(([flag, phrases]) =>
+    (phrases || []).forEach(phrase => highlightPhrase(postBody, phrase, flag))
+  );
+  if (Object.keys(matches).length) {
+    postBody.addEventListener('input', clearQualityHighlights, { once: true });
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   AUTOSAVE INDICATOR
+════════════════════════════════════════════════════════════════════════ */
+function updateAutosaveIndicator() {
+  const el = document.getElementById('autosave-indicator');
+  if (!el) return;
+  const t = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  el.textContent = 'Saved ' + t;
 }
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -1636,6 +1749,7 @@ async function doAutoSave() {
     const data = await res.json();
     if (data.ok) {
       _lastAutoSavedContent = content;
+      updateAutosaveIndicator();
     }
   } catch { /* non-fatal */ }
 }
@@ -1727,6 +1841,51 @@ function wireFloatingToolbar() {
       _ftRange = null;
       scheduleAutoSave();
     });
+  });
+
+  // Persistent ✦ Spark button — always visible below the post card
+  document.getElementById('spark-btn')?.addEventListener('click', async () => {
+    // Accept stored _ftRange or a fresh live selection
+    let range = _ftRange;
+    if (!range || range.collapsed) {
+      const sel = window.getSelection();
+      if (sel && !sel.isCollapsed) {
+        const r = sel.getRangeAt(0);
+        if (postBody.contains(r.commonAncestorContainer)) range = r.cloneRange();
+      }
+    }
+    if (!range || range.collapsed) {
+      const hint = document.getElementById('spark-hint-text');
+      if (hint) {
+        const orig = hint.textContent;
+        hint.textContent = 'Highlight a sentence in your post first';
+        hint.style.color = '#b45309';
+        setTimeout(() => { hint.textContent = orig; hint.style.color = ''; }, 2500);
+      }
+      return;
+    }
+    const selected = range.toString().trim();
+    if (!selected) return;
+    const sparkBtn   = document.getElementById('spark-btn');
+    const origLabel  = sparkBtn.textContent;
+    sparkBtn.textContent = '✦ Sharpening…';
+    sparkBtn.disabled    = true;
+    tb.hidden = true;
+    try {
+      const res = await fetch('/api/generate/sharpen-line', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ selectedText: selected, postContext: getPostContent().slice(0, 500) }),
+      });
+      const data = await res.json();
+      if (data.ok && data.sharpened) {
+        range.deleteContents();
+        range.insertNode(document.createTextNode(data.sharpened));
+        _ftRange = null;
+        scheduleAutoSave();
+      }
+    } catch { /* non-fatal */ }
+    finally { sparkBtn.textContent = origLabel; sparkBtn.disabled = false; }
   });
 }
 

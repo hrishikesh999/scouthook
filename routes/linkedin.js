@@ -860,11 +860,11 @@ router.post('/suggest-first-comment', async (req, res) => {
     const client = new Anthropic({ apiKey });
     const message = await client.messages.create({
       model: 'claude-haiku-4-5',
-      max_tokens: 300,
-      system: 'You are a LinkedIn growth expert. Generate a concise, high-converting first comment for a LinkedIn post. The comment should add value — a CTA, a key takeaway, a relevant link placeholder, or hashtags. Keep it under 200 characters. No generic phrases like "Great post!" or "Love this!". No emojis unless they genuinely add meaning.',
+      max_tokens: 80,
+      system: 'Write the first comment for this LinkedIn post. Choose ONE: (a) a sharp, specific question that invites readers to share a personal experience — or (b) a direct 1-line CTA if the post references something to act on. One sentence, max 120 characters. No preamble, no label, no emojis. Output the comment text only.',
       messages: [{
         role: 'user',
-        content: `Post:\n\n${content.trim().slice(0, 2000)}\n\nGenerate the first comment.`,
+        content: content.trim().slice(0, 2000),
       }],
     });
     const suggestion = message.content[0]?.text?.trim() || '';

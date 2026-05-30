@@ -28,10 +28,10 @@
     /* ── Post-publish state (overrides main.css .post-publish-state { display:none }) ── */
     #post-publish-state:not([hidden]) { display: flex !important; align-items: center !important; gap: 8px !important; }
 
-    /* ── Edit view layout — [post + meta] centred as one unit ── */
-    #edit-view:not([hidden]) { display: flex; justify-content: center; align-items: flex-start; padding: 28px 40px 48px; width: 100%; box-sizing: border-box; }
-    #edit-content-wrap { display: flex; align-items: flex-start; gap: 32px; max-width: 900px; width: 100%; }
-    #edit-main { flex: 0 1 680px; min-width: 0; display: flex; flex-direction: column; gap: 20px; }
+    /* ── Edit view layout — [post 680px + gap 32px + meta 168px = 880px] centred as one block ── */
+    #edit-view:not([hidden]) { display: block; padding: 28px 40px 48px; width: 100%; box-sizing: border-box; }
+    #edit-content-wrap { display: flex; align-items: flex-start; gap: 32px; max-width: 880px; margin-left: auto; margin-right: auto; }
+    #edit-main { flex: 0 0 680px; min-width: 0; display: flex; flex-direction: column; gap: 20px; }
     #edit-meta { flex: 0 0 168px; display: flex; flex-direction: column; gap: 14px; }
     #linkedin-preview:not([hidden]) { display: block; padding: 28px 64px 48px; }
     #post-body { outline: none; cursor: text; min-height: 80px; }

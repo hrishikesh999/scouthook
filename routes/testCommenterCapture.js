@@ -93,8 +93,7 @@ router.post('/commenter-capture/fetch', requireAdmin, express.json(), async (req
     return res.status(500).json({ ok: false, error: `Token error: ${msg}` });
   }
 
-  // Use actor~ projection to get expanded commenter profile fields
-  const url = `https://api.linkedin.com/rest/socialActions/${encodeURIComponent(shareUrn)}/comments?projection=(elements*(actor~(firstName,lastName,localizedFirstName,localizedLastName,headline,localizedHeadline,vanityName,profilePicture),message,created,id,commentUrn))`;
+  const url = `https://api.linkedin.com/rest/socialActions/${encodeURIComponent(shareUrn)}/comments`;
 
   let linkedinRes;
   try {

@@ -315,19 +315,27 @@ router.post('/mine', async (req, res) => {
 
 // ---------------------------------------------------------------------------
 // GET /api/vault/ideas — list ideas
-// Query params: status (fresh|saved|discarded|used), funnel_type (reach|trust|convert)
+// Query params: status (fresh|saved|discarded|used), funnel_type (reach|trust|convert),
+//               source (mined|idea_engine), document_id
 // ---------------------------------------------------------------------------
 router.get('/ideas', async (req, res) => {
   const { userId, tenantId } = req;
   if (!requireUser(req, res)) return;
 
-  const { status, funnel_type, document_id } = req.query;
+  const { status, funnel_type, document_id, source } = req.query;
+
+  // chunk_id IS NOT NULL gate only applies to mined ideas; idea_engine rows have no chunk
+  const sourceFilter = source === 'idea_engine'
+    ? `AND source = 'idea_engine'`
+    : source === 'mined'
+      ? `AND (source IS NULL OR source = 'mined') AND chunk_id IS NOT NULL`
+      : `AND (chunk_id IS NOT NULL OR source = 'idea_engine')`;
 
   let sql    = `SELECT id, document_id, seed_text, source_ref, funnel_type, hook_archetype,
-                       status, generated_post_id, hook_preview, created_at
+                       status, generated_post_id, hook_preview, source, created_at
                 FROM   vault_ideas
                 WHERE  user_id = ? AND tenant_id = ?
-                  AND  chunk_id IS NOT NULL`;
+                  ${sourceFilter}`;
   const args = [userId, tenantId];
 
   if (status) {
@@ -490,6 +498,193 @@ Return ONLY a JSON array of 3 objects, no other text:
   } catch (err) {
     console.error('[vault/suggest-topics] error (non-fatal):', err.message);
     return res.json({ ok: true, topics: [] });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/vault/generate-ideas
+// Returns 6 strong, ICP-matched post ideas combining voice DNA, vault anchors,
+// and LLM world knowledge of what performs in the user's niche.
+// Non-fatal: returns empty array on any failure.
+// ---------------------------------------------------------------------------
+router.get('/generate-ideas', async (req, res) => {
+  const { userId, tenantId } = req;
+  if (!requireUser(req, res)) return;
+
+  const { post_type, exclude_hooks } = req.query;
+  let excludedHooks = [];
+  try {
+    excludedHooks = JSON.parse(exclude_hooks || '[]');
+    if (!Array.isArray(excludedHooks)) excludedHooks = [];
+  } catch { excludedHooks = []; }
+  excludedHooks = excludedHooks.slice(-12);
+
+  try {
+    const profile = await db.prepare(`
+      SELECT content_niche, audience_role, audience_pain, business_positioning,
+             contrarian_view, voice_fingerprint, content_pillars,
+             authority_statements, writing_sample_phrases
+      FROM   user_profiles
+      WHERE  user_id = ? AND tenant_id = ?
+    `).get(userId, tenantId);
+
+    const liRow = await db.prepare(
+      'SELECT linkedin_headline FROM linkedin_tokens WHERE user_id = ? AND tenant_id = ?'
+    ).get(userId, tenantId);
+
+    const niche    = profile?.content_niche        || '';
+    const audience = profile?.audience_role         || '';
+    const pain     = profile?.audience_pain         || '';
+
+    // Parse voice_fingerprint for deep ICP signals
+    let fp = {};
+    try { fp = JSON.parse(profile?.voice_fingerprint || '{}') || {}; } catch { fp = {}; }
+    const pos = fp.positioning || {};
+
+    // Parse content pillars
+    let pillars = [];
+    try {
+      const p = JSON.parse(profile?.content_pillars || '[]');
+      if (Array.isArray(p)) pillars = p.filter(x => typeof x === 'string' && x.trim()).slice(0, 4);
+    } catch { pillars = []; }
+
+    // Parse authority statements
+    let authStatements = [];
+    try {
+      const a = JSON.parse(profile?.authority_statements || '[]');
+      if (Array.isArray(a)) authStatements = a.filter(x => typeof x === 'string' && x.trim()).slice(0, 2);
+    } catch { authStatements = []; }
+
+    // Guard: require minimum viable ICP
+    if (!niche && !audience && !pos.stands_for) {
+      return res.json({ ok: true, ideas: [], icp_summary: '' });
+    }
+
+    // Fetch top 8 fresh vault seeds as grounding anchors
+    const vaultSeeds = await db.prepare(`
+      SELECT seed_text, hook_preview, funnel_type
+      FROM   vault_ideas
+      WHERE  user_id = ? AND tenant_id = ? AND status = 'fresh' AND chunk_id IS NOT NULL
+      ORDER BY CASE funnel_type WHEN 'convert' THEN 0 WHEN 'trust' THEN 1 ELSE 2 END, created_at DESC
+      LIMIT 8
+    `).all(userId, tenantId);
+
+    const Anthropic = require('@anthropic-ai/sdk');
+    const { getSetting } = require('../db');
+    const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
+    if (!apiKey) return res.json({ ok: true, ideas: [], icp_summary: '' });
+
+    const client = new Anthropic({ apiKey });
+
+    // Build ICP block
+    const icpLines = [
+      niche                             && `Creator niche: ${niche}`,
+      audience                          && `Their audience: ${audience}`,
+      pain                              && `What keeps the audience up at night: ${pain}`,
+      profile?.business_positioning     && `Positioning: ${profile.business_positioning}`,
+      pos.stands_for                    && `What the creator stands for: ${pos.stands_for}`,
+      pos.pushes_back_against           && `What they push back against: ${pos.pushes_back_against}`,
+      pos.outcome                       && `Outcome they deliver: ${pos.outcome}`,
+      profile?.contrarian_view          && `Their contrarian belief: ${profile.contrarian_view}`,
+      pillars.length                    && `Strategic pillars: ${pillars.join(' | ')}`,
+      liRow?.linkedin_headline          && `LinkedIn headline: ${liRow.linkedin_headline}`,
+    ].filter(Boolean).join('\n');
+
+    const authBlock = authStatements.length
+      ? `\nProof points:\n${authStatements.map(s => `- ${s}`).join('\n')}`
+      : '';
+
+    // Build vault anchors block (only if vault has seeds)
+    const vaultBlock = vaultSeeds.length
+      ? `\n== THEIR STORY MATERIAL (from content vault) ==\n${vaultSeeds.map((s, i) =>
+          `[${i + 1}] ${(s.hook_preview || s.seed_text).slice(0, 120)} (${s.funnel_type || 'general'})`
+        ).join('\n')}`
+      : '';
+
+    // Post type directive
+    const TYPE_DIRECTIVE = {
+      reach:   'All 6 ideas should be REACH type — relatable stories, personal contradictions, before/after moments.',
+      trust:   'All 6 ideas should be TRUST type — non-obvious insights, contrarian positions, expertise demonstrations.',
+      convert: 'All 6 ideas should be CONVERT type — outcome-first hooks, specific client results, problem-solution frames.',
+    };
+    const postTypeDirective = TYPE_DIRECTIVE[post_type]
+      || 'Vary across post types: 2 Reach (relatable story), 2 Trust (expertise/contrarian), 2 Convert (outcome-proof).';
+
+    const excludeBlock = excludedHooks.length
+      ? `\nAVOID these angles (already shown to this user):\n${excludedHooks.map(h => `- ${h}`).join('\n')}\n`
+      : '';
+
+    const prompt = `You are a world-class LinkedIn content strategist who knows what resonates in the ${niche || 'professional'} space.
+
+== ICP DEFINITION ==
+${icpLines}${authBlock}
+${vaultBlock}
+
+== YOUR TASK ==
+Step 1 — Draw on your knowledge of LinkedIn content performance in the ${niche || 'professional'} space. What are the 3–4 dominant tensions, recurring debates, or underexplored angles that resonate strongly with ${audience || 'this audience'} right now?
+
+Step 2 — Cross these tensions with the creator's ICP above. Generate 6 post ideas that:
+- Are grounded in a specific tension or contrarian point this creator is uniquely positioned to address
+- Clearly connect to the audience pain — the reader should feel "this is about me"${vaultSeeds.length ? '\n- Where possible, anchor to one of their vault story seeds above (cite which number)' : ''}
+- ${postTypeDirective}
+
+Each idea must feel like something only this creator could write — not generic advice anyone could post.
+${excludeBlock}
+Return ONLY a JSON array of 6 objects, no other text:
+[
+  {
+    "hook": "7-10 word arresting opening line (no filler, no 'I' as first word)",
+    "angle": "One sentence: the specific tension or contrarian point being addressed",
+    "icp_resonance": "One sentence: why this specifically lands for ${audience || 'their audience'}",
+    "post_type": "reach | trust | convert",
+    "vault_anchor": null,
+    "tension_type": "lesson_learned | contrarian | outcome_proof | myth_bust | behind_scenes | prediction"
+  }
+]`;
+
+    const message = await client.messages.create({
+      model:      SONNET_MODEL,
+      max_tokens: 1200,
+      messages: [{ role: 'user', content: prompt }],
+    });
+
+    const raw = message.content[0]?.text || '[]';
+    let ideas = [];
+    try {
+      const match = raw.match(/\[[\s\S]*\]/);
+      ideas = JSON.parse(match ? match[0] : raw);
+      if (!Array.isArray(ideas)) ideas = [];
+      ideas = ideas
+        .filter(i => i && typeof i.hook === 'string' && typeof i.angle === 'string')
+        .slice(0, 6);
+    } catch { /* return empty on parse failure */ }
+
+    // Persist ideas to vault_ideas so they survive the session
+    const insertStmt = db.prepare(`
+      INSERT INTO vault_ideas (user_id, tenant_id, seed_text, source_ref, funnel_type,
+                               hook_archetype, hook_preview, source, status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'idea_engine', 'fresh')
+    `);
+    const ideasWithIds = ideas.map(idea => {
+      try {
+        const row = insertStmt.run(
+          userId, tenantId,
+          `${idea.hook}\n\n${idea.angle}`,
+          idea.icp_resonance || null,
+          idea.post_type     || null,
+          idea.tension_type  || null,
+          idea.hook          || null,
+        );
+        return { ...idea, id: Number(row.lastInsertRowid) };
+      } catch { return { ...idea, id: null }; }
+    });
+
+    const icpSummary = [audience, niche ? `in ${niche}` : ''].filter(Boolean).join(' ');
+    return res.json({ ok: true, ideas: ideasWithIds, icp_summary: icpSummary });
+
+  } catch (err) {
+    console.error('[vault/generate-ideas] error (non-fatal):', err.message);
+    return res.json({ ok: true, ideas: [], icp_summary: '' });
   }
 });
 

@@ -56,6 +56,8 @@ let _nichePlaceholders  = [];   // niche-specific placeholder examples loaded fr
 let _nicheProfile       = null; // cached profile for niche-aware nudge (content_niche)
 let _shownVaultIds      = new Set(); // vault idea IDs shown this session — rotates on each click
 let _shownAITopics      = [];        // AI topic titles shown this session — passed as exclusion list
+let _shownIdeaHooks     = [];        // idea engine hook lines shown — passed as exclude_hooks
+let _currentPostTypeFilter = null;   // active filter chip in the idea engine
 let _clarificationMode  = false;     // true while waiting for clarification answer from user
 let _originalIdea       = '';        // the user's original thin input, preserved during clarification
 
@@ -235,7 +237,7 @@ document.getElementById('intent-ideas')?.addEventListener('click', () => {
   document.getElementById('intent-lead-magnet')?.classList.remove('active');
   loadVaultPanel(null, () => {
     document.getElementById('intent-ideas')?.classList.remove('active');
-  });
+  }, { reset: true });
 });
 
 function selectType(type) {
@@ -288,58 +290,215 @@ function markRecommendedBtn() {
     ?.classList.toggle('recommended', mixRecommended === 'lead_magnet');
 }
 
-/* ── Vault panel ─────────────────────────────────────────────── */
-async function loadVaultPanel(type, onItemSelected) {
+/* ── Vault panel / Idea Engine ───────────────────────────────── */
+
+// Active tab: 'fresh' | 'saved'
+let _ideaTab = 'fresh';
+
+async function loadVaultPanel(type, onItemSelected, { reset = false } = {}) {
+  if (reset) { _shownIdeaHooks = []; _currentPostTypeFilter = null; _ideaTab = 'fresh'; }
   const panel = document.getElementById('vault-panel');
   if (!panel) return;
-  panel.style.display = 'none';
-  panel.innerHTML = '';
+  panel.style.display = '';
+
+  if (_ideaTab === 'saved') {
+    await loadSavedIdeas(panel, onItemSelected);
+  } else {
+    await loadFreshIdeas(panel, type, onItemSelected);
+  }
+}
+
+async function loadFreshIdeas(panel, type, onItemSelected) {
+  renderIdeaLoadingState(panel, 'fresh', onItemSelected);
+
   try {
-    // No funnel_type filter — surface all fresh ideas across types.
-    // Then re-sort client-side so mixRecommended type floats to the top.
-    const ideasUrl = `/api/vault/ideas?status=fresh` + (type ? `&funnel_type=${encodeURIComponent(type)}` : '');
-    const res  = await fetch(ideasUrl, { headers: apiHeaders() });
+    const postType = _currentPostTypeFilter || (mixRecommended !== 'lead_magnet' ? mixRecommended : null) || type || null;
+    const params = new URLSearchParams();
+    if (postType && postType !== 'lead_magnet') params.set('post_type', postType);
+    if (_shownIdeaHooks.length) params.set('exclude_hooks', JSON.stringify(_shownIdeaHooks.slice(-12)));
+
+    const res   = await fetch(`/api/vault/generate-ideas?${params}`, { headers: apiHeaders() });
+    const data  = await res.json();
+    const ideas = data.ideas || [];
+
+    if (!ideas.length) { panel.style.display = 'none'; panel.innerHTML = ''; return; }
+
+    _shownIdeaHooks.push(...ideas.map(i => i.hook));
+    renderIdeaEngine(panel, ideas, data.icp_summary || '', 'fresh', onItemSelected);
+  } catch { panel.style.display = 'none'; panel.innerHTML = ''; }
+}
+
+async function loadSavedIdeas(panel, onItemSelected) {
+  renderIdeaLoadingState(panel, 'saved', onItemSelected);
+
+  try {
+    const res  = await fetch('/api/vault/ideas?source=idea_engine&status=saved', { headers: apiHeaders() });
     const data = await res.json();
-    let allIdeas = data.ideas || [];
+    // Map DB rows to the same shape renderIdeaEngine expects
+    const ideas = (data.ideas || []).map(row => ({
+      id:            row.id,
+      hook:          row.hook_preview  || row.seed_text.split('\n')[0] || '',
+      angle:         row.seed_text.split('\n\n')[1] || row.seed_text,
+      icp_resonance: row.source_ref    || '',
+      post_type:     row.funnel_type   || 'reach',
+      vault_anchor:  null,
+      tension_type:  row.hook_archetype || null,
+      saved:         true,
+    }));
 
-    // If mix recommendation is active, bump matching ideas to front before slicing
-    const mixHint = (mixRecommended && mixRecommended !== 'lead_magnet') ? mixRecommended : null;
-    if (mixHint) {
-      allIdeas = [
-        ...allIdeas.filter(i => i.funnel_type === mixHint),
-        ...allIdeas.filter(i => i.funnel_type !== mixHint),
-      ];
-    }
-
-    // Prefer unseen ideas; fall back to all if fewer than 3 unseen remain
-    const unseen = allIdeas.filter(i => !_shownVaultIds.has(i.id));
-    const ideas  = (unseen.length >= 3 ? unseen : allIdeas).slice(0, 3);
-    ideas.forEach(i => _shownVaultIds.add(i.id));
-
-    if (ideas.length) {
-      renderVaultPanel(panel,
-        ideas.map(i => ({ text: i.seed_text, label: i.hook_preview || i.seed_text.slice(0, 80), id: i.id })),
-        'From your vault:', onItemSelected);
+    if (!ideas.length) {
+      renderIdeaEmptySaved(panel, onItemSelected);
       return;
     }
+    renderIdeaEngine(panel, ideas, '', 'saved', onItemSelected);
+  } catch { panel.style.display = 'none'; panel.innerHTML = ''; }
+}
 
-    // For suggest-topics: use mixRecommended as post_type hint if available.
-    // Pass previously shown topic titles so the model avoids repeating them.
-    const sugType = mixHint || (type || null);
-    const excludeParam = _shownAITopics.length
-      ? `&exclude_topics=${encodeURIComponent(JSON.stringify(_shownAITopics.slice(-6)))}`
-      : '';
-    const sugUrl  = `/api/vault/suggest-topics?` + (sugType ? `post_type=${encodeURIComponent(sugType)}` : '') + excludeParam;
-    const sugRes  = await fetch(sugUrl, { headers: apiHeaders() });
-    const sugData = await sugRes.json();
-    const topics  = (sugData.topics || []).slice(0, 3);
-    if (topics.length) {
-      _shownAITopics.push(...topics.map(t => t.title));
-      renderVaultPanel(panel,
-        topics.map(t => ({ text: t.textarea_input || t.description || t.title, label: t.title, desc: t.description || '', id: null })),
-        'Need a starting point?', onItemSelected);
-    }
-  } catch { /* non-fatal */ }
+function renderIdeaTabBar(activeTab, onTabSwitch) {
+  return `<div class="idea-tab-bar">
+    <button class="idea-tab${activeTab === 'fresh' ? ' active' : ''}" type="button" data-tab="fresh">Fresh ideas</button>
+    <button class="idea-tab${activeTab === 'saved' ? ' active' : ''}" type="button" data-tab="saved">Saved</button>
+  </div>`;
+}
+
+function renderIdeaLoadingState(panel, activeTab, onItemSelected) {
+  panel.innerHTML = `
+    ${renderIdeaTabBar(activeTab)}
+    <div class="idea-engine-loading">
+      <span class="idea-spinner"></span>
+      <span>${activeTab === 'saved' ? 'Loading saved ideas…' : 'Generating ideas for your audience…'}</span>
+    </div>`;
+  panel.querySelectorAll('.idea-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      _ideaTab = tab.dataset.tab;
+      loadVaultPanel(null, onItemSelected);
+    });
+  });
+}
+
+function renderIdeaEmptySaved(panel, onItemSelected) {
+  panel.innerHTML = `
+    ${renderIdeaTabBar('saved')}
+    <p class="idea-empty-saved">No saved ideas yet. Generate fresh ideas and bookmark the ones you want to come back to.</p>`;
+  panel.querySelectorAll('.idea-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      _ideaTab = tab.dataset.tab;
+      loadVaultPanel(null, onItemSelected);
+    });
+  });
+}
+
+function renderIdeaEngine(panel, ideas, icpSummary, activeTab, onItemSelected) {
+  const PILL = {
+    reach:   { bg: '#eff6ff', color: '#1d4ed8', label: 'Reach' },
+    trust:   { bg: '#f0fdf4', color: '#166534', label: 'Trust' },
+    convert: { bg: '#fff7ed', color: '#9a3412', label: 'Convert' },
+  };
+
+  const isFreshTab = activeTab === 'fresh';
+
+  const filterRow = isFreshTab ? (() => {
+    const activeFilter = _currentPostTypeFilter;
+    return `<div class="idea-filter-chips">${['all','reach','trust','convert'].map(t =>
+      `<button class="idea-filter-chip${(!activeFilter && t === 'all') || activeFilter === t ? ' active' : ''}" type="button" data-filter="${t}">${t === 'all' ? 'All' : t.charAt(0).toUpperCase() + t.slice(1)}</button>`
+    ).join('')}</div>`;
+  })() : '';
+
+  const cards = ideas.map((idea, idx) => {
+    const pill = PILL[idea.post_type] || PILL.reach;
+    const isSaved = !!idea.saved;
+    return `<div class="idea-engine-card-wrap" data-idx="${idx}">
+      <button class="idea-engine-card" type="button" data-idx="${idx}">
+        <span class="idea-hook">${escapeHtml(idea.hook)}</span>
+        <span class="idea-angle">${escapeHtml(idea.angle)}</span>
+        ${idea.icp_resonance ? `<span class="idea-icp-resonance">${escapeHtml(idea.icp_resonance)}</span>` : ''}
+        <span class="idea-card-footer">
+          <span class="idea-type-pill" style="background:${pill.bg};color:${pill.color}">${pill.label}</span>
+          ${idea.vault_anchor ? '<span class="idea-vault-badge">From your vault</span>' : ''}
+        </span>
+      </button>
+      <button class="idea-bookmark${isSaved ? ' saved' : ''}" type="button" data-idx="${idx}" aria-label="${isSaved ? 'Unsave idea' : 'Save idea'}" title="${isSaved ? 'Remove from saved' : 'Save for later'}">
+        ${isSaved ? '★' : '☆'}
+      </button>
+    </div>`;
+  }).join('');
+
+  panel.innerHTML = `
+    ${renderIdeaTabBar(activeTab)}
+    <div class="idea-engine-header">
+      ${icpSummary ? `<span class="idea-icp-summary">IDEAS FOR: ${escapeHtml(icpSummary)}</span>` : ''}
+      ${filterRow}
+    </div>
+    <div class="idea-engine-grid">${cards}</div>
+    ${isFreshTab ? `<button class="idea-load-more" type="button" id="idea-load-more-btn">Load more ideas →</button>` : ''}`;
+
+  // Card click — fill textarea, keep panel open
+  panel.querySelectorAll('.idea-engine-card').forEach((btn, i) => {
+    btn.addEventListener('click', () => {
+      const idea = ideas[i];
+      const seedText = `${idea.hook}\n\n${idea.angle}`;
+      chatInput.value        = seedText;
+      chatInput.style.height = 'auto';
+      chatInput.style.height = chatInput.scrollHeight + 'px';
+      chatInput.classList.remove('error');
+      hideChatError();
+      chatInput.focus();
+      if (seedText.length >= 30) chat.fireTensionExtraction(seedText);
+      // Panel stays open — no onItemSelected() collapse
+    });
+  });
+
+  // Bookmark toggle
+  panel.querySelectorAll('.idea-bookmark').forEach((btn, i) => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const idea    = ideas[i];
+      if (!idea.id) return;
+      const isSaved = btn.classList.contains('saved');
+      const newStatus = isSaved ? 'fresh' : 'saved';
+      try {
+        await fetch(`/api/vault/ideas/${idea.id}`, {
+          method: 'PATCH',
+          headers: { ...apiHeaders(), 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: newStatus }),
+        });
+        btn.classList.toggle('saved', !isSaved);
+        btn.textContent   = isSaved ? '☆' : '★';
+        btn.title         = isSaved ? 'Save for later' : 'Remove from saved';
+        btn.setAttribute('aria-label', isSaved ? 'Save idea' : 'Unsave idea');
+        idea.saved = !isSaved;
+        // If we're on the saved tab and just unsaved, remove the card
+        if (activeTab === 'saved' && isSaved) {
+          btn.closest('.idea-engine-card-wrap')?.remove();
+          const remaining = panel.querySelectorAll('.idea-engine-card-wrap');
+          if (!remaining.length) renderIdeaEmptySaved(panel, onItemSelected);
+        }
+      } catch { /* non-fatal */ }
+    });
+  });
+
+  // Filter chips (fresh tab only)
+  panel.querySelectorAll('.idea-filter-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      _currentPostTypeFilter = chip.dataset.filter === 'all' ? null : chip.dataset.filter;
+      loadFreshIdeas(panel, null, onItemSelected);
+    });
+  });
+
+  // Tab switch
+  panel.querySelectorAll('.idea-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      _ideaTab = tab.dataset.tab;
+      loadVaultPanel(null, onItemSelected);
+    });
+  });
+
+  // Load more (fresh tab only)
+  panel.querySelector('#idea-load-more-btn')?.addEventListener('click', () => {
+    loadFreshIdeas(panel, null, onItemSelected);
+  });
+
+  panel.style.display = '';
 }
 
 function renderVaultPanel(panel, items, title, onItemSelected) {

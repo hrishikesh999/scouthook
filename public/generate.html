@@ -149,6 +149,193 @@
       overflow: hidden;
     }
 
+    /* ── Post Idea Engine ────────────────────────────────────── */
+    .idea-tab-bar {
+      display: flex;
+      gap: 0;
+      border-bottom: 1.5px solid var(--border);
+      margin-bottom: 14px;
+    }
+    .idea-tab {
+      padding: 8px 16px;
+      border: none;
+      background: none;
+      font-family: var(--font-sans);
+      font-size: 0.8125rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1.5px;
+      transition: color 0.14s, border-color 0.14s;
+    }
+    .idea-tab.active {
+      color: var(--brand);
+      border-bottom-color: var(--brand);
+    }
+    .idea-tab:hover:not(.active) { color: var(--text-body); }
+    .idea-empty-saved {
+      padding: 20px 4px;
+      font-size: 0.875rem;
+      color: var(--text-muted);
+      line-height: 1.55;
+      margin: 0;
+    }
+    .idea-engine-card-wrap {
+      position: relative;
+    }
+    .idea-bookmark {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: none;
+      border: none;
+      font-size: 1rem;
+      cursor: pointer;
+      color: var(--text-muted);
+      padding: 2px 4px;
+      line-height: 1;
+      transition: color 0.14s, transform 0.1s;
+      z-index: 1;
+    }
+    .idea-bookmark:hover { color: var(--brand); transform: scale(1.15); }
+    .idea-bookmark.saved { color: var(--brand); }
+    .idea-engine-loading {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 4px;
+      color: var(--text-muted);
+      font-size: 0.875rem;
+    }
+    .idea-spinner {
+      width: 16px; height: 16px;
+      border: 2px solid var(--border);
+      border-top-color: var(--brand);
+      border-radius: 50%;
+      animation: ideaSpin 0.7s linear infinite;
+      flex-shrink: 0;
+    }
+    @keyframes ideaSpin { to { transform: rotate(360deg); } }
+    .idea-engine-header {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 0 2px 10px;
+    }
+    .idea-icp-summary {
+      font-size: 0.6875rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .idea-filter-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+    .idea-filter-chip {
+      padding: 4px 12px;
+      border-radius: 999px;
+      border: 1.5px solid var(--border);
+      background: var(--bg-surface);
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-family: var(--font-sans);
+      transition: border-color 0.14s, color 0.14s, background 0.14s;
+    }
+    .idea-filter-chip.active,
+    .idea-filter-chip:hover {
+      border-color: var(--brand);
+      color: var(--brand);
+      background: color-mix(in srgb, var(--brand) 5%, var(--bg-surface));
+    }
+    .idea-engine-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .idea-engine-card {
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+      padding: 14px 16px;
+      text-align: left;
+      background: var(--bg-surface);
+      border: 1.5px solid var(--border);
+      border-radius: 14px;
+      cursor: pointer;
+      font-family: var(--font-sans);
+      transition: border-color 0.14s, box-shadow 0.14s, background 0.14s;
+    }
+    .idea-engine-card:hover {
+      border-color: var(--brand);
+      background: color-mix(in srgb, var(--brand) 4%, var(--bg-surface));
+      box-shadow: 0 2px 14px rgba(15,118,110,0.10);
+    }
+    .idea-hook {
+      font-size: 0.9375rem;
+      font-weight: 700;
+      color: var(--text-heading);
+      line-height: 1.3;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .idea-angle {
+      font-size: 0.8125rem;
+      color: var(--text-body);
+      line-height: 1.5;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .idea-icp-resonance {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      line-height: 1.45;
+      font-style: italic;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .idea-card-footer { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 2px; }
+    .idea-type-pill {
+      display: inline-block;
+      padding: 2px 9px;
+      border-radius: 999px;
+      font-size: 0.6875rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+    }
+    .idea-vault-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      font-size: 0.6875rem;
+      color: var(--brand);
+      font-weight: 600;
+    }
+    .idea-vault-badge::before { content: '⚡'; font-size: 10px; }
+    .idea-load-more {
+      display: block;
+      width: 100%;
+      padding: 10px;
+      border: 1.5px dashed var(--border);
+      border-radius: 10px;
+      background: transparent;
+      font-size: 0.8125rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-family: var(--font-sans);
+      transition: border-color 0.14s, color 0.14s;
+    }
+    .idea-load-more:hover { border-color: var(--brand); color: var(--brand); }
+
     /* ── Vault quality-lift banner ───────────────────────────── */
     #vault-quality-banner {
       margin-bottom: 2px;

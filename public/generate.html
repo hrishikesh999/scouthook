@@ -251,7 +251,7 @@
     }
     .idea-engine-grid {
       display: grid;
-      grid-template-columns: repeat(2, 1fr);
+      grid-template-columns: 1fr;
       gap: 10px;
       margin-bottom: 12px;
     }
@@ -268,7 +268,8 @@
       font-family: var(--font-sans);
       transition: border-color 0.14s, box-shadow 0.14s, background 0.14s;
     }
-    .idea-engine-card:hover {
+    .idea-engine-card:hover,
+    .idea-engine-card.selected {
       border-color: var(--brand);
       background: color-mix(in srgb, var(--brand) 4%, var(--bg-surface));
       box-shadow: 0 2px 14px rgba(15,118,110,0.10);

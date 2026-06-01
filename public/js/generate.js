@@ -334,17 +334,22 @@ async function loadSavedIdeas(panel, onItemSelected) {
   try {
     const res  = await fetch('/api/vault/ideas?source=idea_engine&status=saved', { headers: apiHeaders() });
     const data = await res.json();
-    // Map DB rows to the same shape renderIdeaEngine expects
-    const ideas = (data.ideas || []).map(row => ({
-      id:            row.id,
-      hook:          row.hook_preview  || row.seed_text.split('\n')[0] || '',
-      angle:         row.seed_text.split('\n\n')[1] || row.seed_text,
-      icp_resonance: row.source_ref    || '',
-      post_type:     row.funnel_type   || 'reach',
-      vault_anchor:  null,
-      tension_type:  row.hook_archetype || null,
-      saved:         true,
-    }));
+    // Map DB rows — seed_text is stored as JSON for idea_engine rows
+    const ideas = (data.ideas || []).map(row => {
+      let parsed = {};
+      try { parsed = JSON.parse(row.seed_text); } catch { parsed = {}; }
+      return {
+        id:            row.id,
+        hook:          row.hook_preview || parsed.hook || row.seed_text.split('\n')[0] || '',
+        angle:         parsed.angle     || row.seed_text.split('\n\n')[1] || row.seed_text,
+        story_prompt:  parsed.story_prompt || '',
+        icp_resonance: row.source_ref   || '',
+        post_type:     row.funnel_type  || 'reach',
+        vault_anchor:  null,
+        tension_type:  row.hook_archetype || null,
+        saved:         true,
+      };
+    });
 
     if (!ideas.length) {
       renderIdeaEmptySaved(panel, onItemSelected);
@@ -432,10 +437,12 @@ function renderIdeaEngine(panel, ideas, icpSummary, activeTab, onItemSelected) {
     <div class="idea-engine-grid">${cards}</div>
     ${isFreshTab ? `<button class="idea-load-more" type="button" id="idea-load-more-btn">Load more ideas →</button>` : ''}`;
 
-  // Card click — fill textarea, keep panel open
+  // Card click — expand into rich brief via Haiku, fill textarea, keep panel open
   panel.querySelectorAll('.idea-engine-card').forEach((btn, i) => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', async () => {
       const idea = ideas[i];
+
+      // Immediate fill with hook + angle so textarea isn't empty while expanding
       const seedText = `${idea.hook}\n\n${idea.angle}`;
       chatInput.value        = seedText;
       chatInput.style.height = 'auto';
@@ -443,8 +450,33 @@ function renderIdeaEngine(panel, ideas, icpSummary, activeTab, onItemSelected) {
       chatInput.classList.remove('error');
       hideChatError();
       chatInput.focus();
-      if (seedText.length >= 30) chat.fireTensionExtraction(seedText);
-      // Panel stays open — no onItemSelected() collapse
+
+      // Highlight selected card
+      panel.querySelectorAll('.idea-engine-card').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+
+      // Expand into a rich brief if we have an ID
+      if (idea.id) {
+        showSpecificityNudge('Expanding idea into a post brief…');
+        try {
+          const r = await fetch(`/api/vault/brief-idea?id=${encodeURIComponent(idea.id)}`, { headers: apiHeaders() });
+          const d = await r.json();
+          if (d.ok && d.brief && d.brief.trim().length > 40) {
+            // Only replace if the user hasn't started editing
+            if (chatInput.value === seedText) {
+              chatInput.value        = d.brief.trim();
+              chatInput.style.height = 'auto';
+              chatInput.style.height = chatInput.scrollHeight + 'px';
+              chat.fireTensionExtraction(chatInput.value);
+            }
+          }
+        } catch { /* non-fatal — keep hook+angle */ }
+        hideSpecificityNudge();
+        checkSpecificityNudge(chatInput.value.trim());
+      } else if (seedText.length >= 30) {
+        chat.fireTensionExtraction(seedText);
+      }
+      // Panel stays open
     });
   });
 

@@ -560,15 +560,6 @@ router.get('/generate-ideas', async (req, res) => {
       return res.json({ ok: true, ideas: [], icp_summary: '' });
     }
 
-    // Fetch top 8 fresh vault seeds as grounding anchors
-    const vaultSeeds = await db.prepare(`
-      SELECT seed_text, hook_preview, funnel_type
-      FROM   vault_ideas
-      WHERE  user_id = ? AND tenant_id = ? AND status = 'fresh' AND chunk_id IS NOT NULL
-      ORDER BY CASE funnel_type WHEN 'convert' THEN 0 WHEN 'trust' THEN 1 ELSE 2 END, created_at DESC
-      LIMIT 8
-    `).all(userId, tenantId);
-
     const Anthropic = require('@anthropic-ai/sdk');
     const { getSetting } = require('../db');
     const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
@@ -576,7 +567,7 @@ router.get('/generate-ideas', async (req, res) => {
 
     const client = new Anthropic({ apiKey });
 
-    // Build ICP block
+    // Build ICP block — pure voice DNA, no vault anchors
     const icpLines = [
       niche                             && `Creator niche: ${niche}`,
       audience                          && `Their audience: ${audience}`,
@@ -594,57 +585,58 @@ router.get('/generate-ideas', async (req, res) => {
       ? `\nProof points:\n${authStatements.map(s => `- ${s}`).join('\n')}`
       : '';
 
-    // Build vault anchors block (only if vault has seeds)
-    const vaultBlock = vaultSeeds.length
-      ? `\n== THEIR STORY MATERIAL (from content vault) ==\n${vaultSeeds.map((s, i) =>
-          `[${i + 1}] ${(s.hook_preview || s.seed_text).slice(0, 120)} (${s.funnel_type || 'general'})`
-        ).join('\n')}`
-      : '';
-
     // Post type directive
     const TYPE_DIRECTIVE = {
-      reach:   'All 6 ideas should be REACH type — relatable stories, personal contradictions, before/after moments.',
-      trust:   'All 6 ideas should be TRUST type — non-obvious insights, contrarian positions, expertise demonstrations.',
-      convert: 'All 6 ideas should be CONVERT type — outcome-first hooks, specific client results, problem-solution frames.',
+      reach:   'All 3 ideas should be REACH type — relatable stories, personal contradictions, before/after moments that make strangers feel seen.',
+      trust:   'All 3 ideas should be TRUST type — non-obvious insights, contrarian positions, expertise demonstrations that make readers think "I\'ve never heard it put that way."',
+      convert: 'All 3 ideas should be CONVERT type — outcome-first hooks, specific client results, problem-solution frames that make ideal buyers lean in.',
     };
     const postTypeDirective = TYPE_DIRECTIVE[post_type]
-      || 'Vary across post types: 2 Reach (relatable story), 2 Trust (expertise/contrarian), 2 Convert (outcome-proof).';
+      || 'One idea should be REACH (relatable story), one TRUST (contrarian expertise), one CONVERT (outcome-proof). Choose the strongest possible angle for each.';
 
     const excludeBlock = excludedHooks.length
-      ? `\nAVOID these angles (already shown to this user):\n${excludedHooks.map(h => `- ${h}`).join('\n')}\n`
+      ? `\nAVOID these angles (already shown):\n${excludedHooks.map(h => `- ${h}`).join('\n')}\n`
       : '';
 
-    const prompt = `You are a world-class LinkedIn content strategist who knows what resonates in the ${niche || 'professional'} space.
+    const prompt = `You are a world-class LinkedIn content strategist. Your job is to generate 3 genuinely strong post ideas — not generic topics, but specific angles only THIS creator can own.
 
-== ICP DEFINITION ==
+== WHO THEY ARE ==
 ${icpLines}${authBlock}
-${vaultBlock}
+
+== THEIR AUDIENCE ==
+These are ${audience || 'professionals'} who ${pain ? `struggle with: ${pain}` : 'want to grow'}.
+They follow this creator because ${pos.stands_for || 'they have a unique perspective'}.
 
 == YOUR TASK ==
-Step 1 — Draw on your knowledge of LinkedIn content performance in the ${niche || 'professional'} space. What are the 3–4 dominant tensions, recurring debates, or underexplored angles that resonate strongly with ${audience || 'this audience'} right now?
+Step 1 — Think about the ${niche || 'professional'} space: what are the 3–4 most painful tensions, frustrating myths, or counterintuitive truths that ${audience || 'this audience'} encounters? These are the angles that get saved and shared.
 
-Step 2 — Cross these tensions with the creator's ICP above. Generate 6 post ideas that:
-- Are grounded in a specific tension or contrarian point this creator is uniquely positioned to address
-- Clearly connect to the audience pain — the reader should feel "this is about me"${vaultSeeds.length ? '\n- Where possible, anchor to one of their vault story seeds above (cite which number)' : ''}
-- ${postTypeDirective}
+Step 2 — For each tension, ask: what is this specific creator's UNIQUE take on it, given their positioning and beliefs? Generic takes get ignored. Specific, opinionated takes get traction.
 
-Each idea must feel like something only this creator could write — not generic advice anyone could post.
+Step 3 — Generate exactly 3 ideas. ${postTypeDirective}
+
+For each idea, also write a "story_prompt" — this is NOT the post itself. It is a 4-5 sentence first-person raw brief the creator would type to brief a ghostwriter. It must:
+- Open with a specific moment, situation, or realisation (not a generic statement)
+- Name a concrete tension the creator personally observed or experienced
+- Include a prompt for a specific detail: a number, timeframe, client result, or named example they should fill in
+- End with the insight or shift — what changed, what they now believe
+
+The story_prompt is the fuel that makes the generated post specific and real. Make it rich.
 ${excludeBlock}
-Return ONLY a JSON array of 6 objects, no other text:
+Return ONLY a JSON array of 3 objects, no other text:
 [
   {
-    "hook": "7-10 word arresting opening line (no filler, no 'I' as first word)",
-    "angle": "One sentence: the specific tension or contrarian point being addressed",
-    "icp_resonance": "One sentence: why this specifically lands for ${audience || 'their audience'}",
+    "hook": "8-12 word arresting opening line — specific, opinionated, no filler, no 'I' as first word",
+    "angle": "One crisp sentence: the exact tension or contrarian point",
+    "icp_resonance": "One sentence: the specific pain point of ${audience || 'their audience'} this addresses",
     "post_type": "reach | trust | convert",
-    "vault_anchor": null,
-    "tension_type": "lesson_learned | contrarian | outcome_proof | myth_bust | behind_scenes | prediction"
+    "tension_type": "lesson_learned | contrarian | outcome_proof | myth_bust | behind_scenes | prediction",
+    "story_prompt": "4-5 sentence first-person brief with a specific moment, named tension, detail prompt, and the insight"
   }
 ]`;
 
     const message = await client.messages.create({
       model:      SONNET_MODEL,
-      max_tokens: 1200,
+      max_tokens: 1400,
       messages: [{ role: 'user', content: prompt }],
     });
 
@@ -656,10 +648,11 @@ Return ONLY a JSON array of 6 objects, no other text:
       if (!Array.isArray(ideas)) ideas = [];
       ideas = ideas
         .filter(i => i && typeof i.hook === 'string' && typeof i.angle === 'string')
-        .slice(0, 6);
+        .slice(0, 3);
     } catch { /* return empty on parse failure */ }
 
-    // Persist ideas to vault_ideas so they survive the session
+    // Persist ideas to vault_ideas so they survive the session.
+    // seed_text stores the full idea JSON so brief-idea can reconstruct story_prompt.
     const insertStmt = db.prepare(`
       INSERT INTO vault_ideas (user_id, tenant_id, seed_text, source_ref, funnel_type,
                                hook_archetype, hook_preview, source, status)
@@ -669,7 +662,7 @@ Return ONLY a JSON array of 6 objects, no other text:
       try {
         const row = insertStmt.run(
           userId, tenantId,
-          `${idea.hook}\n\n${idea.angle}`,
+          JSON.stringify({ hook: idea.hook, angle: idea.angle, story_prompt: idea.story_prompt || '' }),
           idea.icp_resonance || null,
           idea.post_type     || null,
           idea.tension_type  || null,
@@ -685,6 +678,106 @@ Return ONLY a JSON array of 6 objects, no other text:
   } catch (err) {
     console.error('[vault/generate-ideas] error (non-fatal):', err.message);
     return res.json({ ok: true, ideas: [], icp_summary: '' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/vault/brief-idea?id=<vault_idea_id>
+// Expands an idea-engine idea into a rich first-person post brief via Haiku.
+// The brief is what fills the textarea — giving the generation stage real material.
+// Non-fatal: falls back to story_prompt or hook+angle if anything fails.
+// ---------------------------------------------------------------------------
+router.get('/brief-idea', async (req, res) => {
+  const { userId, tenantId } = req;
+  if (!requireUser(req, res)) return;
+
+  const { id } = req.query;
+  if (!id) return res.status(400).json({ ok: false, error: 'missing_id' });
+
+  try {
+    const row = await db.prepare(`
+      SELECT seed_text, source_ref, funnel_type, hook_preview, hook_archetype
+      FROM   vault_ideas
+      WHERE  id = ? AND user_id = ? AND tenant_id = ?
+    `).get(id, userId, tenantId);
+
+    if (!row) return res.status(404).json({ ok: false, error: 'not_found' });
+
+    // Parse stored idea JSON
+    let ideaData = {};
+    try { ideaData = JSON.parse(row.seed_text); } catch {
+      // Legacy plain-text seed — fall back gracefully
+      ideaData = { hook: row.hook_preview || '', angle: row.seed_text, story_prompt: '' };
+    }
+
+    const { hook = '', angle = '', story_prompt = '' } = ideaData;
+
+    // If story_prompt is already rich, return it directly without a Haiku call
+    if (story_prompt && story_prompt.trim().length > 120) {
+      return res.json({ ok: true, brief: story_prompt.trim() });
+    }
+
+    // Fetch user profile for voice context
+    const profile = await db.prepare(`
+      SELECT content_niche, audience_role, onboarding_q2, contrarian_view, voice_fingerprint
+      FROM   user_profiles WHERE user_id = ? AND tenant_id = ?
+    `).get(userId, tenantId);
+
+    const niche    = profile?.content_niche  || '';
+    const audience = profile?.audience_role  || '';
+    const voiceSample = profile?.onboarding_q2 || '';
+    let fp = {};
+    try { fp = JSON.parse(profile?.voice_fingerprint || '{}'); } catch {}
+    const pos = fp.positioning || {};
+
+    const Anthropic   = require('@anthropic-ai/sdk');
+    const { getSetting } = require('../db');
+    const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
+    if (!apiKey) return res.json({ ok: true, brief: story_prompt || `${hook}\n\n${angle}` });
+
+    const client = new Anthropic({ apiKey });
+
+    const prompt = `You are ghostwriting a LinkedIn post brief for a ${niche || 'professional'} creator.
+
+CREATOR CONTEXT:
+- Niche: ${niche}
+- Audience: ${audience}
+- Stands for: ${pos.stands_for || ''}
+- Contrarian belief: ${profile?.contrarian_view || ''}
+${voiceSample ? `- Their natural voice (from an interview): "${voiceSample.slice(0, 300)}"` : ''}
+
+POST IDEA:
+Hook: ${hook}
+Angle: ${angle}
+Post type: ${row.funnel_type || 'reach'}
+${story_prompt ? `Story direction: ${story_prompt}` : ''}
+
+TASK: Write a 5-6 sentence first-person brief that this creator would use as raw material for the post. This is NOT the post — it is the brief that fuels the post.
+
+The brief must:
+1. Open with a specific scene or moment — a situation they observed, a client conversation, a realisation they had (invent a plausible specific scenario in their niche)
+2. Name the tension concretely — not abstractly
+3. Include at least one bracketed prompt for a specific detail they should fill in: [number], [timeframe], [client result], or [example name]
+4. Show the before/after or the contradiction clearly
+5. End with the core insight — what they now believe because of this
+
+Write in casual first person. Sound like a professional talking to a ghostwriter, not writing a post. No formatting, no headers — just the brief as flowing text.
+
+Reply with ONLY the brief text, nothing else.`;
+
+    const message = await client.messages.create({
+      model:      HAIKU_MODEL,
+      max_tokens: 400,
+      messages: [{ role: 'user', content: prompt }],
+    });
+
+    const brief = (message.content[0]?.text || '').trim();
+    return res.json({ ok: true, brief: brief || story_prompt || `${hook}\n\n${angle}` });
+
+  } catch (err) {
+    console.error('[vault/brief-idea] error (non-fatal):', err.message);
+    // Graceful fallback — return story_prompt or hook+angle
+    return res.json({ ok: true, brief: '' });
   }
 });
 

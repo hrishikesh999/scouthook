@@ -195,7 +195,7 @@
     <div class="row">
       <input type="password" id="gate-password" placeholder="Enter admin password…"
         style="flex:1; background:#0F1A3C; border:1px solid #1E3A6E; border-radius:6px; color:#E2E8F0; padding:10px 14px; font-size:14px;">
-      <button onclick="unlockPage()">Unlock</button>
+      <button id="unlock-btn">Unlock</button>
     </div>
     <div id="auth-error" style="font-size:13px; color:#F87171; margin-top:8px;"></div>
   </div>
@@ -207,7 +207,7 @@
       <select id="post-select">
         <option value="">Loading posts…</option>
       </select>
-      <button id="fetch-btn" onclick="fetchComments()" disabled>Fetch Comments</button>
+      <button id="fetch-btn" disabled>Fetch Comments</button>
     </div>
     <div id="post-debug" style="font-size:12px; color:#64748B; margin-top:10px;"></div>
 
@@ -216,7 +216,7 @@
       <div class="row">
         <input type="text" id="manual-urn" placeholder="urn:li:share:… or urn:li:ugcPost:…"
           style="flex:1; background:#0F1A3C; border:1px solid #1E3A6E; border-radius:6px; color:#E2E8F0; padding:10px 14px; font-size:13px; font-family:monospace;">
-        <button id="manual-btn" onclick="fetchManual()">Fetch URN</button>
+        <button id="manual-btn">Fetch URN</button>
       </div>
     </div>
   </div>
@@ -253,7 +253,7 @@
   <div id="raw-section" class="hidden">
     <div class="raw-header">
       <h2>Raw API Response</h2>
-      <button class="btn-secondary" onclick="copyJson()">Copy JSON</button>
+      <button id="copy-btn" class="btn-secondary">Copy JSON</button>
     </div>
     <pre id="raw-pre"></pre>
   </div>
@@ -269,7 +269,6 @@
     document.getElementById('auth-card').classList.remove('hidden');
   } else {
     document.getElementById('main-content').classList.remove('hidden');
-    loadPosts();
   }
 
   async function unlockPage() {
@@ -292,9 +291,16 @@
     populatePosts(data);
   }
 
+  document.getElementById('unlock-btn').addEventListener('click', unlockPage);
   document.getElementById('gate-password').addEventListener('keydown', e => {
     if (e.key === 'Enter') unlockPage();
   });
+  document.getElementById('fetch-btn').addEventListener('click', fetchComments);
+  document.getElementById('manual-btn').addEventListener('click', fetchManual);
+  document.getElementById('copy-btn').addEventListener('click', copyJson);
+
+  // Auto-load posts if already authenticated
+  if (adminPw) loadPosts();
 
   function showError(title, body) {
     document.getElementById('error-title').textContent = title;
@@ -410,16 +416,13 @@
 
   function copyJson() {
     if (!lastRaw) return;
-    const btn = event.target;
+    const btn = document.getElementById('copy-btn');
     navigator.clipboard.writeText(JSON.stringify(lastRaw, null, 2))
       .then(() => {
         btn.textContent = 'Copied!';
         setTimeout(() => btn.textContent = 'Copy JSON', 2000);
       });
   }
-
-  // Auto-load posts on page entry
-  loadPosts();
 </script>
 </body>
 </html>

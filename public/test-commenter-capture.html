@@ -189,6 +189,18 @@
   <h1>LinkedIn Commenter Capture — API Test</h1>
   <div class="admin-notice">Admin debug page — delete after test</div>
 
+  <!-- Password gate (hidden once authenticated) -->
+  <div id="auth-card" class="card hidden">
+    <label for="gate-password">Admin password</label>
+    <div class="row">
+      <input type="password" id="gate-password" placeholder="Enter admin password…"
+        style="flex:1; background:#0F1A3C; border:1px solid #1E3A6E; border-radius:6px; color:#E2E8F0; padding:10px 14px; font-size:14px;">
+      <button onclick="unlockPage()">Unlock</button>
+    </div>
+    <div id="auth-error" style="font-size:13px; color:#F87171; margin-top:8px;"></div>
+  </div>
+
+  <div id="main-content" class="hidden">
   <div class="card">
     <label for="post-select">Select a LinkedIn-published post</label>
     <div class="row">
@@ -245,17 +257,44 @@
     </div>
     <pre id="raw-pre"></pre>
   </div>
+  </div><!-- end #main-content -->
 </div>
 
 <script>
   let lastRaw = null;
+  let adminPw = sessionStorage.getItem('adminPw') || '';
 
-  // Read admin password stored when user unlocked admin.html
-  const adminPw = sessionStorage.getItem('adminPw');
+  // Show password gate if no stored password, otherwise go straight to the tool
   if (!adminPw) {
-    // Not coming from an authenticated admin session — send them to login
-    window.location.replace('/admin.html');
+    document.getElementById('auth-card').classList.remove('hidden');
+  } else {
+    document.getElementById('main-content').classList.remove('hidden');
+    loadPosts();
   }
+
+  async function unlockPage() {
+    const pw = document.getElementById('gate-password').value.trim();
+    if (!pw) return;
+    // Validate against the server
+    const res = await fetch('/api/test/commenter-capture/posts', {
+      headers: { 'x-admin-password': pw },
+    });
+    if (res.status === 401) {
+      document.getElementById('auth-error').textContent = 'Incorrect password.';
+      return;
+    }
+    adminPw = pw;
+    sessionStorage.setItem('adminPw', pw);
+    document.getElementById('auth-card').classList.add('hidden');
+    document.getElementById('main-content').classList.remove('hidden');
+    // Re-use the response we already fetched
+    const data = await res.json();
+    populatePosts(data);
+  }
+
+  document.getElementById('gate-password').addEventListener('keydown', e => {
+    if (e.key === 'Enter') unlockPage();
+  });
 
   function showError(title, body) {
     document.getElementById('error-title').textContent = title;
@@ -275,33 +314,36 @@
         headers: { 'x-admin-password': adminPw },
       });
       const data = await res.json();
-
-      const sel = document.getElementById('post-select');
-      if (!data.ok) {
-        sel.innerHTML = '<option value="">Failed to load posts</option>';
-        showError('Failed to load posts', data.error || 'Unknown error');
-        return;
-      }
-
-      const dbg = document.getElementById('post-debug');
-      dbg.textContent = `${data.debug?.withLinkedInId ?? '?'} posts with a stored LinkedIn ID (out of ${data.debug?.totalPosts ?? '?'} total posts)`;
-
-      if (!data.posts.length) {
-        sel.innerHTML = '<option value="">No posts with a stored LinkedIn ID — use the manual URN input below</option>';
-        return;
-      }
-
-      sel.innerHTML = '<option value="">— Select a post —</option>';
-      for (const p of data.posts) {
-        const opt = document.createElement('option');
-        opt.value = p.linkedin_post_id;
-        opt.textContent = p.label;
-        sel.appendChild(opt);
-      }
-      document.getElementById('fetch-btn').disabled = false;
+      populatePosts(data);
     } catch (err) {
       showError('Network error loading posts', err.message);
     }
+  }
+
+  function populatePosts(data) {
+    const sel = document.getElementById('post-select');
+    if (!data.ok) {
+      sel.innerHTML = '<option value="">Failed to load posts</option>';
+      showError('Failed to load posts', data.error || 'Unknown error');
+      return;
+    }
+
+    document.getElementById('post-debug').textContent =
+      `${data.debug?.withLinkedInId ?? '?'} posts with a stored LinkedIn ID (out of ${data.debug?.totalPosts ?? '?'} total posts)`;
+
+    if (!data.posts.length) {
+      sel.innerHTML = '<option value="">No posts with a stored LinkedIn ID — use the manual URN input below</option>';
+      return;
+    }
+
+    sel.innerHTML = '<option value="">— Select a post —</option>';
+    for (const p of data.posts) {
+      const opt = document.createElement('option');
+      opt.value = p.linkedin_post_id;
+      opt.textContent = p.label;
+      sel.appendChild(opt);
+    }
+    document.getElementById('fetch-btn').disabled = false;
   }
 
   async function fetchManual() {

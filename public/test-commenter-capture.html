@@ -204,7 +204,7 @@
       <div class="row">
         <input type="text" id="manual-urn" placeholder="urn:li:share:… or urn:li:ugcPost:…"
           style="flex:1; background:#0F1A3C; border:1px solid #1E3A6E; border-radius:6px; color:#E2E8F0; padding:10px 14px; font-size:13px; font-family:monospace;">
-        <button onclick="fetchManual()">Fetch URN</button>
+        <button id="manual-btn" onclick="fetchManual()">Fetch URN</button>
       </div>
     </div>
   </div>
@@ -307,21 +307,18 @@
   async function fetchManual() {
     const urn = document.getElementById('manual-urn').value.trim();
     if (!urn) { showError('Missing URN', 'Enter a LinkedIn post URN first.'); return; }
-    // Temporarily put the URN in the select so fetchComments() picks it up,
-    // or just call the fetch logic directly with the typed URN.
     clearError();
-    await doFetch(urn);
+    await doFetch(urn, document.getElementById('manual-btn'));
   }
 
   async function fetchComments() {
     clearError();
     const shareUrn = document.getElementById('post-select').value;
     if (!shareUrn) { showError('No post selected', 'Select a post from the dropdown first.'); return; }
-    await doFetch(shareUrn);
+    await doFetch(shareUrn, document.getElementById('fetch-btn'));
   }
 
-  async function doFetch(shareUrn) {
-    const btn = document.getElementById('fetch-btn');
+  async function doFetch(shareUrn, btn) {
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner"></span>Fetching…';
 
@@ -348,6 +345,7 @@
           `LinkedIn returned HTTP ${data.httpStatus || res.status}`,
           data.error + (data.raw ? ' — See raw response below for details.' : '')
         );
+        document.getElementById('error-box').scrollIntoView({ behavior: 'smooth', block: 'start' });
         return;
       }
 
@@ -358,11 +356,13 @@
       document.getElementById('v-icp-icon').textContent = icon(s.icpScorable);
       document.getElementById('v-count').textContent = s.totalComments !== null ? s.totalComments : '?';
       document.getElementById('verdict-box').classList.remove('hidden');
+      document.getElementById('verdict-box').scrollIntoView({ behavior: 'smooth', block: 'start' });
     } catch (err) {
       showError('Network error', err.message);
+      document.getElementById('error-box').scrollIntoView({ behavior: 'smooth', block: 'start' });
     } finally {
       btn.disabled = false;
-      btn.textContent = 'Fetch Comments';
+      btn.textContent = btn.id === 'manual-btn' ? 'Fetch URN' : 'Fetch Comments';
     }
   }
 

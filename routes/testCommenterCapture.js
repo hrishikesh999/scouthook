@@ -46,8 +46,7 @@ router.get('/commenter-capture/posts', requireAdmin, async (req, res) => {
       SELECT id, linkedin_post_id, content, published_at
       FROM generated_posts
       WHERE user_id = ? AND tenant_id = ? AND linkedin_post_id IS NOT NULL
-      ORDER BY published_at DESC
-      LIMIT 20
+      ORDER BY published_at DESC NULLS LAST
     `).all(req.userId, req.tenantId);
 
     const posts = rows.map(row => ({

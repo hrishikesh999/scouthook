@@ -64,7 +64,7 @@
     }
     #guided-chat.hidden { display: none; }
 
-    /* ── Chat thread (lead magnet flow) ─────────────────────── */
+    /* ── Chat thread ─────────────────────────────────────────── */
     #chat-thread {
       display: flex;
       flex-direction: column;
@@ -422,7 +422,7 @@
       cursor: not-allowed;
       transform: none;
     }
-    /* Text mode for lead-magnet multi-step */
+    /* Text mode for clarification step */
     #chat-send-btn.text-mode {
       width: auto;
       border-radius: 999px;
@@ -628,7 +628,7 @@
       overflow-y: auto;
     }
 
-    /* ── Bubble extras (lead magnet escape hatch, example) ───── */
+    /* ── Bubble extras (example toggle, escape hatch) ────────── */
     .chat-bubble-example-toggle {
       display: inline-block;
       margin-top: 10px;
@@ -746,7 +746,7 @@
           <!-- Vault / suggested ideas (loaded on demand by "Get ideas") -->
           <div id="vault-panel" class="vault-panel" style="display:none"></div>
 
-          <!-- Chat thread (lead magnet multi-step only) -->
+          <!-- Chat thread (clarification flow) -->
           <div id="chat-thread" style="display:none"></div>
 
           <!-- Errors -->
@@ -782,14 +782,6 @@
               </div>
             </button>
 
-            <!-- Chip 2: Give something away (lead magnet) -->
-            <button class="intent-card" id="intent-lead-magnet" data-type="lead_magnet" type="button">
-              <span class="intent-card-icon">🎁</span>
-              <div class="intent-card-body">
-                <span class="intent-card-title">Give something away</span>
-                <span class="intent-card-desc">A free resource for your audience</span>
-              </div>
-            </button>
 
           </div><!-- /#intent-row -->
 

@@ -45,7 +45,7 @@ async function readSSEStream(response, { onStep, onToken, onDone, onError } = {}
 }
 
 /* ── State ───────────────────────────────────────────────────── */
-let selectedType        = null; // 'reach'|'trust'|'convert'|'lead_magnet'
+let selectedType        = null; // 'reach'|'trust'|'convert'
 let chatStep            = 0;
 let chatAnswers         = {};
 let mixRecommended      = null;
@@ -108,34 +108,6 @@ const CHAT_CONFIGS = {
       placeholder: "A client win, a specific result, a before/after…",
       multiline:   true,
     }],
-  },
-  lead_magnet: {
-    label:     '🎁 Lead magnet',
-    chatTitle: 'You are creating a Lead Magnet post',
-    chatDesc:  'Lead magnet posts build your DM pipeline. Give away something genuinely useful, ask readers to comment a keyword, and deliver it in their inbox.',
-    steps: [
-      {
-        question:    "What are you giving away?",
-        placeholder: "e.g. LinkedIn Hook Swipe File",
-        multiline:   false,
-      },
-      {
-        question:    "What's inside?\nOne deliverable per line — specific beats vague.",
-        placeholder: "e.g.\n50 fill-in-the-blank hook templates\nOrganised by trigger: curiosity, fear, desire\nReal viral examples showing how each works",
-        multiline:   true,
-      },
-      {
-        question:    "What's your proof? Real numbers only — we won't invent these.\n\ne.g. \"Helped 3 clients go from 500 to 8K followers in 90 days\"\ne.g. \"Used by 40+ consultants to cut proposal time in half\"",
-        placeholder: "Your specific result or proof…",
-        multiline:   true,
-        hasEscape:   true,
-      },
-      {
-        question:    "Last one — what word should people comment to receive this?",
-        placeholder: "e.g. HOOKS or PLAYBOOK",
-        multiline:   false,
-      },
-    ],
   },
 };
 
@@ -229,12 +201,9 @@ const EXTRACTION_QUESTIONS = {
 /* ── Type selection ──────────────────────────────────────────── */
 
 // Lead magnet chip
-document.getElementById('intent-lead-magnet')?.addEventListener('click', () => selectType('lead_magnet'));
-
 // Get ideas chip
 document.getElementById('intent-ideas')?.addEventListener('click', () => {
   document.getElementById('intent-ideas').classList.add('active');
-  document.getElementById('intent-lead-magnet')?.classList.remove('active');
   loadVaultPanel(null, () => {
     document.getElementById('intent-ideas')?.classList.remove('active');
   }, { reset: true });
@@ -248,11 +217,7 @@ function selectType(type) {
   _tensionResult      = null;
   clearTimeout(_tensionDebounce);
 
-  // Update chip active states (lead_magnet chip only — reach/trust/convert are silent)
-  const ideasCard = document.getElementById('intent-ideas');
-  const lmCard    = document.getElementById('intent-lead-magnet');
-  ideasCard?.classList.remove('active');
-  lmCard?.classList.toggle('active', type === 'lead_magnet');
+  document.getElementById('intent-ideas')?.classList.remove('active');
 
   hideChatError();
   hideSubstanceWarning();
@@ -285,10 +250,7 @@ async function loadMixRecommendation() {
   } catch { /* non-fatal */ }
 }
 
-function markRecommendedBtn() {
-  document.getElementById('intent-lead-magnet')
-    ?.classList.toggle('recommended', mixRecommended === 'lead_magnet');
-}
+function markRecommendedBtn() { /* no-op — lead magnet chip removed */ }
 
 /* ── Vault panel / Idea Engine ───────────────────────────────── */
 
@@ -312,9 +274,9 @@ async function loadFreshIdeas(panel, type, onItemSelected) {
   renderIdeaLoadingState(panel, 'fresh', onItemSelected);
 
   try {
-    const postType = _currentPostTypeFilter || (mixRecommended !== 'lead_magnet' ? mixRecommended : null) || type || null;
+    const postType = _currentPostTypeFilter || mixRecommended || type || null;
     const params = new URLSearchParams();
-    if (postType && postType !== 'lead_magnet') params.set('post_type', postType);
+    if (postType) params.set('post_type', postType);
     if (_shownIdeaHooks.length) params.set('exclude_hooks', JSON.stringify(_shownIdeaHooks.slice(-12)));
 
     const res   = await fetch(`/api/vault/generate-ideas?${params}`, { headers: apiHeaders() });
@@ -557,7 +519,7 @@ function renderVaultPanel(panel, items, title, onItemSelected) {
       if (items[i].text.length >= 30) chat.fireTensionExtraction(items[i].text);
 
       // Vault ideas: enrich from the source chunk in the background
-      if (items[i].id && selectedType && selectedType !== 'lead_magnet') {
+      if (items[i].id && selectedType) {
         const seedVal = items[i].text;
         showSpecificityNudge('Pulling specifics from your vault…');
         try {
@@ -585,7 +547,6 @@ function renderVaultPanel(panel, items, title, onItemSelected) {
 /* ── Chat module ─────────────────────────────────────────────── */
 const chat = (() => {
   let _type        = null;
-  let _lmProofMode = 'metric'; // 'metric' | 'description' for LM step 2
 
   function addBot(text, opts = {}) {
     const div = document.createElement('div');
@@ -595,23 +556,6 @@ const chat = (() => {
     mainEl.className = 'chat-bubble-main';
     mainEl.textContent = text;
     div.appendChild(mainEl);
-
-    if (opts.hasEscape) {
-      const btn = document.createElement('button');
-      btn.style.cssText = 'display:block;margin-top:10px;font-size:0.8125rem;color:var(--brand);' +
-        'font-weight:500;background:none;border:none;padding:0;cursor:pointer;' +
-        'text-decoration:underline;font-family:var(--font-sans);text-align:left;';
-      btn.textContent = 'No metric yet? Describe who it worked for →';
-      btn.addEventListener('click', () => {
-        _lmProofMode       = 'description';
-        mainEl.textContent = 'Who has this worked for? Describe the person or situation.';
-        chatInput.placeholder = 'e.g. "SaaS founders who want to grow their LinkedIn without paid ads"';
-        chatInput.value    = '';
-        chatInput.focus();
-        hideChatError();
-      });
-      div.appendChild(btn);
-    }
 
     if (opts.hasSkip) {
       const skip = document.createElement('button');
@@ -651,12 +595,7 @@ const chat = (() => {
   const ARROW_SVG = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>`;
 
   function updateSendBtn() {
-    if (_type === 'lead_magnet') {
-      const isLast = chatStep >= CHAT_CONFIGS.lead_magnet.steps.length - 1;
-      chatSendBtn.innerHTML = isLast ? 'Write my lead magnet →' : 'Next →';
-      chatSendBtn.classList.add('text-mode');
-      chatSendBtn.setAttribute('aria-label', isLast ? 'Write lead magnet' : 'Next step');
-    } else if (_clarificationMode) {
+    if (_clarificationMode) {
       chatSendBtn.innerHTML = 'Write my post →';
       chatSendBtn.classList.add('text-mode');
       chatSendBtn.setAttribute('aria-label', 'Generate post');
@@ -682,7 +621,6 @@ const chat = (() => {
   function init(type) {
     const prevType   = _type;
     _type            = type;
-    _lmProofMode     = 'metric';
     _tensionResult   = null;
     selectedVaultIdeaId = null;
     _clarificationMode  = false;
@@ -691,29 +629,18 @@ const chat = (() => {
     chatThread.innerHTML = '';
     const vaultPanel = document.getElementById('vault-panel');
 
-    if (type === 'lead_magnet') {
-      if (vaultPanel) { vaultPanel.style.display = 'none'; vaultPanel.innerHTML = ''; }
-      chatThread.style.display = '';
-      const step0 = CHAT_CONFIGS.lead_magnet.steps[0];
-      addBot(step0.question, { hasEscape: step0.hasEscape });
-      setInputState(step0);  // clears input — structured flow needs a clean start
+    chatThread.style.display = 'none';
+    const q0 = EXTRACTION_QUESTIONS[type][0];
+    chatInput.placeholder = q0.placeholder;
+    chatInput.rows        = 4;
+    chatInput.style.minHeight = '100px';
+    chatInput.classList.remove('error');
+    if (!prevType) {
+      chatInput.value      = '';
+      chatInput.style.height = '';
     } else {
-      chatThread.style.display = 'none';
-      const q0 = EXTRACTION_QUESTIONS[type][0];
-      chatInput.placeholder = q0.placeholder;
-      chatInput.rows        = 4;
-      chatInput.style.minHeight = '100px';
-      chatInput.classList.remove('error');
-
-      // Preserve input when switching between reach/trust/convert.
-      // Clear only when coming from lead_magnet (where the value belongs to its flow).
-      if (!prevType || prevType === 'lead_magnet') {
-        chatInput.value      = '';
-        chatInput.style.height = '';
-      } else {
-        chatInput.style.height = 'auto';
-        chatInput.style.height = chatInput.scrollHeight + 'px';
-      }
+      chatInput.style.height = 'auto';
+      chatInput.style.height = chatInput.scrollHeight + 'px';
     }
     updateSendBtn();
     chatInput.focus();
@@ -724,50 +651,6 @@ const chat = (() => {
     hideSubstanceWarning();
 
     const val = chatInput.value.trim();
-
-    // ── Lead magnet path (unchanged) ────────────────────────────
-    if (_type === 'lead_magnet') {
-      const cfg = CHAT_CONFIGS.lead_magnet;
-
-      if (!val) {
-        showChatInputError('Add something before continuing.');
-        chatInput.focus();
-        return;
-      }
-      if (chatStep === 1) {
-        const lines = val.split('\n').map(l => l.trim()).filter(Boolean);
-        if (lines.length < 3) {
-          showChatInputError("Add at least 3 specific items — readers decide whether to comment based on what's inside.");
-          chatInput.focus();
-          return;
-        }
-      }
-      if (chatStep === 3 && val.includes(' ')) {
-        showChatInputError('The keyword must be a single word — no spaces.');
-        chatInput.focus();
-        return;
-      }
-
-      addUser(val);
-      if (chatStep === 0)      chatAnswers.resourceName = val;
-      else if (chatStep === 1) chatAnswers.deliverables = val.split('\n').map(l => l.trim()).filter(Boolean);
-      else if (chatStep === 2) { chatAnswers.proof = val; chatAnswers.proofMode = _lmProofMode; }
-      else if (chatStep === 3) chatAnswers.keyword = val.toUpperCase();
-      chatStep++;
-
-      if (chatStep < cfg.steps.length) {
-        const nextStep = cfg.steps[chatStep];
-        setTimeout(() => {
-          addBot(nextStep.question, { hasEscape: nextStep.hasEscape });
-          setInputState(nextStep);
-          updateSendBtn();
-          chatInput.focus();
-        }, 300);
-      } else {
-        triggerLeadMagnetGenerate();
-      }
-      return;
-    }
 
     // ── Extraction path ──────────────────────────────────────────
     if (!val) { showChatInputError('Add something before generating.'); chatInput.focus(); return; }
@@ -824,7 +707,7 @@ chatInput.addEventListener('input', () => {
   const val = chatInput.value.trim();
 
   // Debounced silent tension extraction for reach/trust/convert
-  if (selectedType && selectedType !== 'lead_magnet') {
+  if (selectedType) {
     clearTimeout(_tensionDebounce);
     _tensionResult = null;
     if (val.length >= 40) {
@@ -841,19 +724,13 @@ chatInput.addEventListener('input', () => {
 chatInput.addEventListener('keydown', e => {
   if (e.key !== 'Enter') return;
   if (_clarificationMode) {
-    // Clarification answer: Enter submits (like lead magnet single-line steps)
+    // Clarification answer: Enter submits
     if (!e.shiftKey) { e.preventDefault(); chat.advance(); }
     return;
   }
-  if (selectedType && selectedType !== 'lead_magnet') {
+  if (selectedType) {
     // Extraction path: always multiline — only Cmd/Ctrl+Enter submits
     if (e.metaKey || e.ctrlKey) { e.preventDefault(); chat.advance(); }
-    return;
-  }
-  const step = CHAT_CONFIGS.lead_magnet?.steps[chatStep];
-  if (!step?.multiline || e.metaKey || e.ctrlKey) {
-    e.preventDefault();
-    chat.advance();
   }
 });
 
@@ -897,13 +774,11 @@ async function triggerGenerate(opts = {}) {
   hideChatError();
   hideSubstanceWarning();
 
-  const isExtraction  = selectedType && selectedType !== 'lead_magnet';
-  const idea          = opts.enrichedIdea
-    || (isExtraction ? chatInput.value.trim() : (chatAnswers.step0 || ''));
+  const idea          = opts.enrichedIdea || chatInput.value.trim();
   const tensionStmt   = opts.tensionStatement !== undefined
     ? opts.tensionStatement
     : (_tensionResult?.tension || null);
-  const shouldStream  = !selectedVaultIdeaId && selectedType !== 'lead_magnet';
+  const shouldStream  = !selectedVaultIdeaId;
 
   hideSpecificityNudge();
   showProcessingScreen(idea, selectedType, shouldStream);
@@ -1035,50 +910,6 @@ async function triggerGenerate(opts = {}) {
 }
 
 /* ── Lead magnet generation ──────────────────────────────────── */
-async function triggerLeadMagnetGenerate() {
-  hideChatError();
-  hideSubstanceWarning();
-  showProcessingScreen(chatAnswers.resourceName || '', 'lead_magnet');
-
-  const controller = new AbortController();
-  const timeoutId  = setTimeout(() => controller.abort(), 90_000);
-
-  try {
-    const res = await fetch('/api/generate', {
-      method:  'POST',
-      headers: apiHeaders(),
-      body: JSON.stringify({
-        path:      'idea',
-        post_type: 'lead_magnet',
-        lead_magnet_inputs: {
-          resourceName: chatAnswers.resourceName,
-          deliverables: chatAnswers.deliverables,
-          proof:        chatAnswers.proof,
-          keyword:      chatAnswers.keyword,
-          proofMode:    chatAnswers.proofMode || 'metric',
-        },
-      }),
-      signal: controller.signal,
-    });
-    clearTimeout(timeoutId);
-    const data = await res.json();
-    if (!res.ok || !data.ok) throw new Error(data.error || 'generation_failed');
-
-    finaliseProcessingSteps(data);
-    await sleep(600);
-    window.location.href = `/editor/${encodeURIComponent(data.id)}`;
-
-  } catch (err) {
-    clearTimeout(timeoutId);
-    hideProcessingScreen();
-
-    const msg = err.name === 'AbortError'          ? 'This is taking too long. Please try again.'
-      : err.message === 'plan_limit_exceeded'      ? 'You\'ve reached the generation limit. <a href="/billing.html">Upgrade →</a>'
-      : err.message === 'missing_keyword'          ? 'Keyword missing from generated post. Try regenerating.'
-      : 'Something went wrong. Please try again.';
-    showChatError(msg);
-  }
-}
 
 /* ── Processing screen ───────────────────────────────────────── */
 function extractAngleLabel(rawIdea) {
@@ -1120,7 +951,7 @@ function showProcessingScreen(rawIdea, postType, streaming = false) {
     return;
   }
 
-  // Fake animation for non-streaming paths (vault, lead magnet)
+  // Fake animation for non-streaming paths (vault)
   const fakeSteps = [
     'Finding the tension…',
     `Angle: ${extractAngleLabel(rawIdea || '')}`,
@@ -1217,7 +1048,7 @@ function isLikelyVague(val) {
 }
 
 function checkSpecificityNudge(val) {
-  if (!val || !selectedType || selectedType === 'lead_magnet') { hideSpecificityNudge(); return; }
+  if (!val || !selectedType) { hideSpecificityNudge(); return; }
   if (val.length < 40) { hideSpecificityNudge(); return; }
 
   const niche = _nicheProfile?.content_niche || '';
@@ -1311,7 +1142,7 @@ function loadNichePlaceholder(profile) {
 
 function applyNichePlaceholder() {
   if (!_nichePlaceholders.length) return;
-  if (!selectedType || selectedType === 'lead_magnet') return;
+  if (!selectedType) return;
   const example = _nichePlaceholders[Math.floor(Math.random() * _nichePlaceholders.length)];
   if (!chatInput.value.trim()) chatInput.placeholder = example;
 }

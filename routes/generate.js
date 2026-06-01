@@ -5,7 +5,6 @@ const router = express.Router();
 const { db, getSetting } = require('../db');
 const { runQualityGate } = require('../services/qualityGate');
 const { ideaToPost, vaultSeedToPost, checkSubstance } = require('../services/ideaPath');
-const { generateLeadMagnetPost } = require('../services/leadMagnetPath');
 const { classifyContent } = require('../services/funnelClassifier');
 const { canGeneratePost } = require('../services/subscription');
 const { sendEmailToUser } = require('../emails');
@@ -147,7 +146,7 @@ router.post('/', async (req, res) => {
   }
 
   const { path: genPath, vault_idea_id, skip_substance_check, interview_answers, funnel_type: bodyFunnelType,
-          archetype_override, source, post_type, lead_magnet_inputs, convert_cta_intent,
+          archetype_override, source, post_type, convert_cta_intent,
           tension_statement } = req.body;
   let { raw_idea } = req.body;
 
@@ -205,8 +204,7 @@ router.post('/', async (req, res) => {
     }
   }
 
-  // Lead magnet posts don't require raw_idea — they use lead_magnet_inputs
-  if (post_type !== 'lead_magnet' && !raw_idea?.trim()) {
+  if (!raw_idea?.trim()) {
     return res.status(400).json({ ok: false, error: 'missing_raw_idea' });
   }
 
@@ -243,73 +241,6 @@ router.post('/', async (req, res) => {
   }
 
   try {
-    // ── Lead magnet path ────────────────────────────────────────────────────
-    if (post_type === 'lead_magnet') {
-      const inputs = lead_magnet_inputs || {};
-      const lmErrors = [];
-      if (!inputs.resourceName?.trim()) lmErrors.push('What are you giving away? Add a name first.');
-      if (!Array.isArray(inputs.deliverables) || inputs.deliverables.filter(d => d?.trim()).length < 3) {
-        lmErrors.push('Add at least 3 specific items — readers decide whether to comment based on what\'s inside.');
-      }
-      if (!inputs.proof?.trim()) lmErrors.push('What\'s your real result? This must come from you — ScoutHook won\'t invent it.');
-      if (!inputs.keyword?.trim()) lmErrors.push('What word should people comment to receive this?');
-      if (inputs.keyword && !/^\S+$/.test(inputs.keyword.trim())) lmErrors.push('Keyword must be a single word with no spaces.');
-      if (lmErrors.length) return res.status(422).json({ ok: false, error: 'invalid_lead_magnet_inputs', messages: lmErrors });
-
-      const lmResult = await generateLeadMagnetPost(inputs, userProfile);
-      const { post, template, hookUsed, keywordConfirmed } = lmResult;
-
-      const lmGate = runQualityGate(post, {
-        voiceProfile: userProfile,
-        path: 'idea',
-        postType: 'lead_magnet',
-        keyword: inputs.keyword.trim(),
-      });
-
-      const runResult = await db.prepare(`
-        INSERT INTO generation_runs (user_id, tenant_id, path, input_data, synthesis)
-        VALUES (?, ?, ?, ?, ?)
-        RETURNING id
-      `).run(userId, tenantId, 'lead_magnet', JSON.stringify({ lead_magnet_inputs: inputs }), JSON.stringify({ hook_used: hookUsed, template }));
-      const runId = runResult.lastInsertRowid;
-
-      const primaryInsert = await db.prepare(`
-        INSERT INTO generated_posts
-          (run_id, user_id, tenant_id, format_slug, content, ai_content, quality_score, quality_flags, passed_gate,
-           funnel_type, vault_source_ref, hook_b, cta_alternatives, idea_input, archetype_used, source,
-           post_type, quality_verdict, lead_magnet_template, lead_magnet_inputs)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        RETURNING id
-      `).run(
-        runId, userId, tenantId, IDEA_SLUG,
-        post, post, lmGate.score, JSON.stringify(lmGate.flags), lmGate.passed_gate ? 1 : 0,
-        'convert', null, null, null, null, null, source || null,
-        'lead_magnet', lmGate.verdict || null, template || null, JSON.stringify(inputs)
-      );
-      const primaryId = primaryInsert.lastInsertRowid;
-
-      const lmQuality = buildQualityPayload(lmGate, 1, true);
-
-      return res.json({
-        ok: true,
-        run_id:           runId,
-        synthesis:        { suggested_angle: hookUsed, recommended_structure: template, supporting_insight: keywordConfirmed },
-        post,
-        hookB:            null,
-        ctaAlternatives:  [],
-        id:               primaryId,
-        archetypeUsed:    null,
-        hookConfidence:   null,
-        quality:          { ...lmQuality, verdict: lmGate.verdict },
-        alternative:      null,
-        funnel_type:      'convert',
-        post_type:        'lead_magnet',
-        lead_magnet_template: template,
-        vault_source_ref: null,
-        content_feedback: null,
-      });
-    }
-
     // ── Standard path (Reach / Trust / Convert / free-write) ────────────────
     let ideaResult;
 
@@ -320,7 +251,7 @@ router.post('/', async (req, res) => {
     const funnelTypeForGate = vaultIdea?.funnel_type || post_type || bodyFunnelType || null;
 
     // ── SSE streaming path ────────────────────────────────────────────────────
-    // Only for the standard idea path (not vault, not lead magnet).
+    // Only for the standard idea path (not vault path).
     if (req.body.streaming && !vaultIdea) {
       res.setHeader('Content-Type', 'text/event-stream');
       res.setHeader('Cache-Control', 'no-cache');
@@ -631,8 +562,7 @@ router.get('/post/:postId', async (req, res) => {
       SELECT id, content, quality_score, quality_flags, passed_gate,
              hook_b, hook_b_archetype, cta_alternatives, format_slug, funnel_type,
              asset_url, asset_preview_url, asset_type, asset_slide_count, first_comment,
-             archetype_used, idea_input, post_type, quality_verdict,
-             lead_magnet_template, lead_magnet_inputs
+             archetype_used, idea_input, post_type, quality_verdict
       FROM generated_posts
       WHERE id = ? AND user_id = ? AND tenant_id = ?
     `).get(postId, userId, tenantId);
@@ -651,15 +581,10 @@ router.get('/post/:postId', async (req, res) => {
   try { flags = JSON.parse(row.quality_flags || '[]'); } catch {}
   let ctaAlternatives = [];
   try { ctaAlternatives = JSON.parse(row.cta_alternatives || '[]'); } catch {}
-  let leadMagnetInputs = null;
-  try { leadMagnetInputs = row.lead_magnet_inputs ? JSON.parse(row.lead_magnet_inputs) : null; } catch {}
-
   // Re-run the slim gate on current content to get phrase matches for in-editor highlighting.
-  // The gate is now 5 cheap checks — no meaningful latency impact.
   let freshMatches = {};
   try {
-    const keyword = leadMagnetInputs?.keyword || null;
-    const freshGate = runQualityGate(row.content || '', { postType: row.post_type || null, keyword, funnelType: row.funnel_type || null });
+    const freshGate = runQualityGate(row.content || '', { postType: row.post_type || null, funnelType: row.funnel_type || null });
     freshMatches = freshGate.matches || {};
   } catch { /* non-fatal — matches just won't highlight */ }
 
@@ -681,8 +606,6 @@ router.get('/post/:postId', async (req, res) => {
       assetPreviewUrl:     row.asset_preview_url || null,
       assetType:           row.asset_type        || null,
       assetSlideCount:     row.asset_slide_count || 0,
-      leadMagnetTemplate:  row.lead_magnet_template || null,
-      leadMagnetInputs,
     },
   });
 });

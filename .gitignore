@@ -9,3 +9,4 @@ generated/*.png
 generated/*.pdf
 generated/*.zip
 .cursor/
+.claude/

@@ -88,6 +88,16 @@
           <div class="text-muted" style="font-size:0.8rem; margin-top:0.25rem;">Required for BullMQ post scheduling. Leave blank to disable scheduling.</div>
         </div>
 
+        <h3 style="margin: var(--space-xl) 0 var(--space-md); color: var(--color-text-muted); font-size:0.8rem; text-transform:uppercase; letter-spacing:0.08em;">Developer Tools</h3>
+
+        <div style="display:flex; flex-direction:column; gap: var(--space-sm);">
+          <a href="/test-commenter-capture.html" class="btn btn--secondary" style="display:inline-flex; align-items:center; gap:8px; text-decoration:none; width:fit-content;">
+            LinkedIn Commenter Capture Test
+            <span style="font-size:0.75rem; opacity:0.6;">→</span>
+          </a>
+          <div class="text-muted" style="font-size:0.8rem;">Calls the LinkedIn Comments API for a published post and shows the raw response. Use this to validate what commenter data is available before building Feature E3.</div>
+        </div>
+
       </div>
     </div>
   </main>
@@ -127,6 +137,7 @@
         }
         const data = await res.json();
         adminPassword = pw;
+        sessionStorage.setItem('adminPw', pw);
         document.getElementById('auth-panel').classList.add('hidden');
         document.getElementById('settings-panel').classList.remove('hidden');
         populateSettings(data.settings);

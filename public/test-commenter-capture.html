@@ -18,6 +18,17 @@
 
     .container { max-width: 880px; margin: 0 auto; }
 
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: #64748B;
+      font-size: 13px;
+      text-decoration: none;
+      margin-bottom: 24px;
+    }
+    .back-link:hover { color: #94A3B8; }
+
     h1 { font-size: 22px; font-weight: 700; color: #F0F4FF; margin-bottom: 6px; }
 
     .admin-notice {
@@ -58,18 +69,6 @@
       padding-right: 36px;
     }
     select:focus { outline: 2px solid #0D7A5F; outline-offset: 1px; }
-
-    .password-row { display: flex; gap: 12px; margin-bottom: 16px; }
-    input[type="password"] {
-      flex: 1;
-      background: #0F1A3C;
-      border: 1px solid #1E3A6E;
-      border-radius: 6px;
-      color: #E2E8F0;
-      padding: 10px 14px;
-      font-size: 14px;
-    }
-    input[type="password"]:focus { outline: 2px solid #0D7A5F; outline-offset: 1px; }
 
     button {
       background: #0D7A5F;
@@ -185,23 +184,17 @@
 </head>
 <body>
 <div class="container">
+  <a href="/admin.html" class="back-link">← Back to Admin</a>
+
   <h1>LinkedIn Commenter Capture — API Test</h1>
   <div class="admin-notice">Admin debug page — delete after test</div>
 
   <div class="card">
-    <div class="password-row">
-      <div style="flex:1">
-        <label for="admin-pass">Admin Password</label>
-        <input type="password" id="admin-pass" placeholder="Enter admin password…">
-      </div>
-    </div>
-
     <label for="post-select">Select a LinkedIn-published post</label>
     <div class="row">
       <select id="post-select">
-        <option value="">— Enter password above then click Load Posts —</option>
+        <option value="">Loading posts…</option>
       </select>
-      <button id="load-btn" onclick="loadPosts()">Load Posts</button>
       <button id="fetch-btn" onclick="fetchComments()" disabled>Fetch Comments</button>
     </div>
   </div>
@@ -247,8 +240,11 @@
 <script>
   let lastRaw = null;
 
-  function getPassword() {
-    return document.getElementById('admin-pass').value.trim();
+  // Read admin password stored when user unlocked admin.html
+  const adminPw = sessionStorage.getItem('adminPw');
+  if (!adminPw) {
+    // Not coming from an authenticated admin session — send them to login
+    window.location.replace('/admin.html');
   }
 
   function showError(title, body) {
@@ -264,31 +260,24 @@
   function icon(bool) { return bool ? '✅' : '❌'; }
 
   async function loadPosts() {
-    clearError();
-    const pw = getPassword();
-    if (!pw) { showError('Missing password', 'Enter the admin password first.'); return; }
-
-    const btn = document.getElementById('load-btn');
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner"></span>Loading…';
-
     try {
       const res = await fetch('/api/test/commenter-capture/posts', {
-        headers: { 'x-admin-password': pw },
+        headers: { 'x-admin-password': adminPw },
       });
       const data = await res.json();
 
+      const sel = document.getElementById('post-select');
       if (!data.ok) {
+        sel.innerHTML = '<option value="">Failed to load posts</option>';
         showError('Failed to load posts', data.error || 'Unknown error');
         return;
       }
 
-      const sel = document.getElementById('post-select');
-      sel.innerHTML = '';
       if (!data.posts.length) {
         sel.innerHTML = '<option value="">No LinkedIn-published posts found</option>';
         return;
       }
+
       sel.innerHTML = '<option value="">— Select a post —</option>';
       for (const p of data.posts) {
         const opt = document.createElement('option');
@@ -298,16 +287,12 @@
       }
       document.getElementById('fetch-btn').disabled = false;
     } catch (err) {
-      showError('Network error', err.message);
-    } finally {
-      btn.disabled = false;
-      btn.textContent = 'Load Posts';
+      showError('Network error loading posts', err.message);
     }
   }
 
   async function fetchComments() {
     clearError();
-    const pw = getPassword();
     const shareUrn = document.getElementById('post-select').value;
     if (!shareUrn) { showError('No post selected', 'Select a post from the dropdown first.'); return; }
 
@@ -323,7 +308,7 @@
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-admin-password': pw,
+          'x-admin-password': adminPw,
         },
         body: JSON.stringify({ shareUrn }),
       });
@@ -358,13 +343,16 @@
 
   function copyJson() {
     if (!lastRaw) return;
+    const btn = event.target;
     navigator.clipboard.writeText(JSON.stringify(lastRaw, null, 2))
       .then(() => {
-        const btn = event.target;
         btn.textContent = 'Copied!';
         setTimeout(() => btn.textContent = 'Copy JSON', 2000);
       });
   }
+
+  // Auto-load posts on page entry
+  loadPosts();
 </script>
 </body>
 </html>

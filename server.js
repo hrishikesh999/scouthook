@@ -411,7 +411,6 @@ app.use('/api/checklist', require('./routes/checklist'));
 app.use('/api/posts', require('./routes/performance'));
 app.use('/api/feedback', require('./routes/feedback'));
 app.use('/api/support', require('./routes/support'));
-app.use('/api/test', require('./routes/testCommenterCapture'));
 app.use('/api', require('./routes/stats'));
 
 // Unmatched /api/* — avoid falling through to static/HTML 404

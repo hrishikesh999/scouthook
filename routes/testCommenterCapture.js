@@ -42,12 +42,17 @@ router.get('/commenter-capture/posts', requireAdmin, async (req, res) => {
   if (!requireUser(req, res)) return;
 
   try {
-    const rows = await db.prepare(`
-      SELECT id, linkedin_post_id, content, published_at
-      FROM generated_posts
-      WHERE user_id = ? AND tenant_id = ? AND linkedin_post_id IS NOT NULL
-      ORDER BY published_at DESC NULLS LAST
-    `).all(req.userId, req.tenantId);
+    const [rows, totalRow] = await Promise.all([
+      db.prepare(`
+        SELECT id, linkedin_post_id, content, published_at
+        FROM generated_posts
+        WHERE user_id = ? AND tenant_id = ? AND linkedin_post_id IS NOT NULL
+        ORDER BY published_at DESC NULLS LAST
+      `).all(req.userId, req.tenantId),
+      db.prepare(`
+        SELECT COUNT(*) AS n FROM generated_posts WHERE user_id = ? AND tenant_id = ?
+      `).get(req.userId, req.tenantId),
+    ]);
 
     const posts = rows.map(row => ({
       id: row.id,
@@ -55,7 +60,7 @@ router.get('/commenter-capture/posts', requireAdmin, async (req, res) => {
       label: `${row.published_at ? new Date(row.published_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'Unknown date'} — ${(row.content || '').slice(0, 60)}${row.content && row.content.length > 60 ? '…' : ''}`,
     }));
 
-    res.json({ ok: true, posts });
+    res.json({ ok: true, posts, debug: { withLinkedInId: rows.length, totalPosts: totalRow?.n ?? 0 } });
   } catch (err) {
     console.error('[test/commenter-capture] posts error:', err);
     res.status(500).json({ ok: false, error: err.message });

@@ -955,8 +955,9 @@ router.post('/chat-intake', async (req, res) => {
   const { brief, history = [], post_type, exchange_count = 0 } = req.body;
   if (!brief?.trim()) return res.json({ ok: true, ready: true });
 
-  // After max 3 exchanges always generate — don't over-interrogate
-  if (exchange_count >= 3) return res.json({ ok: true, ready: true });
+  // Hard cap: after 2+ exchanges always generate — don't over-interrogate
+  // (The LLM prompt also says >=2 → ready:true, but we enforce it server-side for reliability)
+  if (exchange_count >= 2) return res.json({ ok: true, ready: true });
 
   try {
     const profile = await db.prepare(`

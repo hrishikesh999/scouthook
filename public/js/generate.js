@@ -60,12 +60,14 @@ let _shownIdeaHooks     = [];        // idea engine hook lines shown — passed 
 let _currentPostTypeFilter = null;   // active filter chip in the idea engine
 // ── Conversational coach state ────────────────────────────────
 let _coach = {
-  active:        false,   // coach is running
-  originalBrief: '',      // user's initial textarea input
-  history:       [],      // [{role:'user'|'coach', content}]
-  exchangeCount: 0,       // completed Q&A rounds
-  awaitingSkip:  false,   // showing a skip suggestion for review
-  pendingQ:      null,    // the question the current suggestion belongs to
+  active:         false,  // coach is running
+  originalBrief:  '',     // user's initial textarea input
+  history:        [],     // [{role:'user'|'coach', content}]
+  exchangeCount:  0,      // completed Q&A rounds
+  awaitingSkip:   false,  // showing a skip suggestion for review — blocks normal send
+  pendingQ:       null,   // the question the current suggestion belongs to
+  intakeInFlight: false,  // prevents double-submit race while callIntake is pending
+  seq:            0,      // incremented on every init(); stale .then() callbacks check this
 };
 
 /* ── DOM refs ────────────────────────────────────────────────── */
@@ -502,54 +504,6 @@ function renderIdeaEngine(panel, ideas, icpSummary, activeTab, onItemSelected) {
   panel.style.display = '';
 }
 
-function renderVaultPanel(panel, items, title, onItemSelected) {
-  panel.innerHTML =
-    `<div class="vault-panel-header"><span class="vault-panel-title">${escapeHtml(title)}</span></div>` +
-    `<div class="vault-panel-items">${items.map((item, i) =>
-      `<button class="vault-panel-item" type="button" data-idx="${i}">
-        <span class="vault-item-title">${escapeHtml(item.label)}</span>${item.desc ? `
-        <span class="vault-item-desc">${escapeHtml(item.desc)}</span>` : ''}
-      </button>`
-    ).join('')}</div>`;
-  panel.querySelectorAll('.vault-panel-item').forEach((btn, i) => {
-    btn.addEventListener('click', async () => {
-      selectedVaultIdeaId = items[i].id;
-      onItemSelected?.();
-
-      // Fill immediately with seed_text for instant feedback
-      chatInput.value        = items[i].text;
-      chatInput.style.height = 'auto';
-      chatInput.style.height = chatInput.scrollHeight + 'px';
-      chatInput.classList.remove('error');
-      hideChatError();
-      chatInput.focus();
-      if (items[i].text.length >= 30) chat.fireTensionExtraction(items[i].text);
-
-      // Vault ideas: enrich from the source chunk in the background
-      if (items[i].id && selectedType) {
-        const seedVal = items[i].text;
-        showSpecificityNudge('Pulling specifics from your vault…');
-        try {
-          const r = await fetch(
-            `/api/vault/expand-idea?id=${encodeURIComponent(items[i].id)}&post_type=${encodeURIComponent(selectedType)}`,
-            { headers: apiHeaders() }
-          );
-          const d = await r.json();
-          // Only replace if user hasn't started editing
-          if (d.ok && d.expanded_input && chatInput.value === seedVal) {
-            chatInput.value        = d.expanded_input;
-            chatInput.style.height = 'auto';
-            chatInput.style.height = chatInput.scrollHeight + 'px';
-            chat.fireTensionExtraction(d.expanded_input);
-          }
-        } catch { /* non-fatal — keep seed_text */ }
-        hideSpecificityNudge();
-        checkSpecificityNudge(chatInput.value.trim());
-      }
-    });
-  });
-  panel.style.display = '';
-}
 
 /* ── Chat module ─────────────────────────────────────────────── */
 const chat = (() => {
@@ -663,7 +617,7 @@ const chat = (() => {
     _type          = type;
     _tensionResult = null;
     selectedVaultIdeaId = null;
-    _coach = { active: false, originalBrief: '', history: [], exchangeCount: 0, awaitingSkip: false, pendingQ: null };
+    _coach = { active: false, originalBrief: '', history: [], exchangeCount: 0, awaitingSkip: false, pendingQ: null, intakeInFlight: false, seq: (_coach.seq ?? 0) + 1 };
 
     chatThread.innerHTML = '';
     chatThread.style.display = 'none';
@@ -686,6 +640,12 @@ const chat = (() => {
   function advance() {
     hideChatError();
     hideSubstanceWarning();
+
+    // Block normal send while a skip suggestion is awaiting user review
+    if (_coach.awaitingSkip) return;
+
+    // Block double-submit while an intake call is already in flight
+    if (_coach.intakeInFlight) return;
 
     const val = chatInput.value.trim();
     if (!val) { showChatInputError('Add something before generating.'); chatInput.focus(); return; }
@@ -712,10 +672,20 @@ const chat = (() => {
     chatInput.rows        = 2;
     chatInput.style.minHeight = '60px';
 
+    // Snapshot sequence — if the user switches intent cards before this resolves,
+    // seq will have been bumped and we'll discard this stale result
+    const capturedSeq = _coach.seq;
+
     // Show a thinking bubble while intake runs
     const thinkingBubble = addBot('Reading your idea…');
+    _coach.intakeInFlight = true;
     callIntake(val, [], 0).then(intake => {
+      _coach.intakeInFlight = false;
       thinkingBubble.remove();
+
+      // Stale response — user switched type mid-flight; discard
+      if (_coach.seq !== capturedSeq) return;
+
       if (intake.ready) {
         // Brief is already strong — generate straight away
         triggerGenerate({ enrichedIdea: val });
@@ -736,19 +706,29 @@ const chat = (() => {
 
   // Called after each user answer to get the next question (or decide to generate)
   async function runCoach() {
+    const capturedSeq = _coach.seq;
+
     // Show typing indicator
     const thinkingBubble = addBot('…');
+    _coach.intakeInFlight = true;
     const intake = await callIntake(
       _coach.originalBrief,
       _coach.history,
       _coach.exchangeCount
     );
+    _coach.intakeInFlight = false;
     thinkingBubble.remove();
+
+    // Stale — user switched type mid-flight
+    if (_coach.seq !== capturedSeq) return;
 
     if (intake.ready || _coach.exchangeCount >= 3) {
       generateFromCoach();
       return;
     }
+
+    // Push new question to history so the server has full context next round
+    _coach.history.push({ role: 'coach', content: intake.question });
 
     updateSendBtn();
     const qNum = `${_coach.exchangeCount + 1} of up to 3 — `;
@@ -767,7 +747,9 @@ const chat = (() => {
     _coach.awaitingSkip = true;
     _coach.pendingQ     = question;
     addSuggestion(suggestion, (confirmed) => {
-      _coach.awaitingSkip = false;
+      _coach.awaitingSkip  = false;
+      _coach.pendingQ      = null;
+      _coach.intakeInFlight = false; // reset in case a previous fetch never cleared it
       _coach.history.push({ role: 'user', content: confirmed });
       _coach.exchangeCount++;
       addUser(confirmed);
@@ -776,20 +758,19 @@ const chat = (() => {
   }
 
   function generateFromCoach() {
-    // Assemble enriched brief from conversation
+    // Assemble enriched brief: original idea + each coach Q paired with the user's answer
     let enriched = _coach.originalBrief;
     const qa = [];
     for (let i = 0; i < _coach.history.length - 1; i++) {
       if (_coach.history[i].role === 'coach' && _coach.history[i + 1]?.role === 'user') {
         qa.push(`Q: ${_coach.history[i].content}\nA: ${_coach.history[i + 1].content}`);
-        i++;
+        i++; // skip the user turn we just consumed
       }
     }
-    // Also pull user answers that follow coach questions (simple pairing)
-    const userAnswers = _coach.history.filter((m, i) => m.role === 'user' && i > 0);
-    if (userAnswers.length) {
-      enriched += '\n\nAdditional context:\n' + userAnswers.map(m => m.content).join('\n\n');
+    if (qa.length) {
+      enriched += '\n\nAdditional context from our conversation:\n' + qa.join('\n\n');
     }
+    updateSendBtn(); // ensures button shows correct state before processing screen takes over
     triggerGenerate({ enrichedIdea: enriched, skipSubstanceCheck: true });
   }
 
@@ -850,11 +831,6 @@ chatInput.addEventListener('keydown', e => {
   }
 });
 
-/* ── Clarification helpers ───────────────────────────────────── */
-/**
- * Pure JS check: does this input need a clarifying question before generation?
- * Returns true if the input is short AND lacks both a personal pronoun and a concrete anchor.
- */
 
 /* ── Generate ────────────────────────────────────────────────── */
 chatImproveInput.addEventListener('click', () => {

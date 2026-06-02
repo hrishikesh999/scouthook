@@ -436,6 +436,71 @@
       right: 12px;
     }
 
+    /* ── Conversational coach ───────────────────────────────── */
+    .coach-skip-btn {
+      display: inline-block;
+      margin-top: 10px;
+      font-size: 0.8125rem;
+      color: var(--brand);
+      font-weight: 500;
+      background: none;
+      border: none;
+      padding: 0;
+      cursor: pointer;
+      text-decoration: underline;
+      font-family: var(--font-sans);
+      text-align: left;
+    }
+    .coach-skip-btn:hover { opacity: 0.75; }
+    .coach-suggestion-wrap {
+      background: var(--bg-subtle);
+      border: 1.5px solid var(--brand);
+      border-radius: 12px;
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      animation: nudge-in 0.18s ease;
+    }
+    .coach-suggestion-label {
+      margin: 0;
+      font-size: 0.8125rem;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+    .coach-suggestion-ta {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      background: var(--bg-surface);
+      font-family: var(--font-sans);
+      font-size: 0.875rem;
+      color: var(--text-body);
+      line-height: 1.55;
+      resize: none;
+      box-sizing: border-box;
+    }
+    .coach-suggestion-ta:focus {
+      outline: none;
+      border-color: var(--brand);
+    }
+    .coach-suggestion-confirm {
+      align-self: flex-start;
+      padding: 7px 16px;
+      border-radius: 999px;
+      border: none;
+      background: var(--brand);
+      color: #fff;
+      font-family: var(--font-sans);
+      font-size: 0.8125rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: opacity 0.14s;
+    }
+    .coach-suggestion-confirm:hover { opacity: 0.85; }
+    .coach-suggestion-confirm:disabled { opacity: 0.4; cursor: not-allowed; }
+
     /* ── Specificity nudge ──────────────────────────────────── */
     #specificity-nudge {
       display: none;

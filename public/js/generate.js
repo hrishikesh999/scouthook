@@ -58,8 +58,15 @@ let _shownVaultIds      = new Set(); // vault idea IDs shown this session — ro
 let _shownAITopics      = [];        // AI topic titles shown this session — passed as exclusion list
 let _shownIdeaHooks     = [];        // idea engine hook lines shown — passed as exclude_hooks
 let _currentPostTypeFilter = null;   // active filter chip in the idea engine
-let _clarificationMode  = false;     // true while waiting for clarification answer from user
-let _originalIdea       = '';        // the user's original thin input, preserved during clarification
+// ── Conversational coach state ────────────────────────────────
+let _coach = {
+  active:        false,   // coach is running
+  originalBrief: '',      // user's initial textarea input
+  history:       [],      // [{role:'user'|'coach', content}]
+  exchangeCount: 0,       // completed Q&A rounds
+  awaitingSkip:  false,   // showing a skip suggestion for review
+  pendingQ:      null,    // the question the current suggestion belongs to
+};
 
 /* ── DOM refs ────────────────────────────────────────────────── */
 const guidedChat          = document.getElementById('guided-chat');
@@ -557,15 +564,11 @@ const chat = (() => {
     mainEl.textContent = text;
     div.appendChild(mainEl);
 
-    if (opts.hasSkip) {
+    if (opts.onSkip) {
       const skip = document.createElement('button');
-      skip.style.cssText = 'display:block;margin-top:10px;font-size:0.8125rem;color:var(--text-muted);' +
-        'background:none;border:none;padding:0;cursor:pointer;font-family:var(--font-sans);text-align:left;';
-      skip.textContent = 'Skip — just generate →';
-      skip.addEventListener('click', () => {
-        _clarificationMode = false;
-        triggerGenerate({ enrichedIdea: _originalIdea });
-      });
+      skip.className = 'coach-skip-btn';
+      skip.textContent = 'Suggest an answer →';
+      skip.addEventListener('click', () => opts.onSkip());
       div.appendChild(skip);
     }
 
@@ -592,13 +595,50 @@ const chat = (() => {
     chatInput.classList.remove('error');
   }
 
+  // Renders a suggestion bubble with an editable textarea for confirm/edit
+  function addSuggestion(suggestion, onConfirm) {
+    const wrap = document.createElement('div');
+    wrap.className = 'coach-suggestion-wrap';
+
+    const label = document.createElement('p');
+    label.className = 'coach-suggestion-label';
+    label.textContent = 'Here\'s a suggestion based on your profile — edit it to match your experience, then hit confirm:';
+    wrap.appendChild(label);
+
+    const ta = document.createElement('textarea');
+    ta.className   = 'coach-suggestion-ta';
+    ta.value       = suggestion;
+    ta.rows        = 3;
+    ta.addEventListener('input', () => {
+      ta.style.height = 'auto';
+      ta.style.height = ta.scrollHeight + 'px';
+    });
+    wrap.appendChild(ta);
+
+    const btn = document.createElement('button');
+    btn.className   = 'coach-suggestion-confirm';
+    btn.textContent = 'Use this →';
+    btn.addEventListener('click', () => {
+      const val = ta.value.trim();
+      if (!val) return;
+      wrap.querySelector('.coach-suggestion-confirm').disabled = true;
+      onConfirm(val);
+    });
+    wrap.appendChild(btn);
+
+    chatThread.appendChild(wrap);
+    chatThread.scrollTop = chatThread.scrollHeight;
+    ta.focus();
+    return wrap;
+  }
+
   const ARROW_SVG = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>`;
 
   function updateSendBtn() {
-    if (_clarificationMode) {
-      chatSendBtn.innerHTML = 'Write my post →';
+    if (_coach.active) {
+      chatSendBtn.innerHTML = _coach.exchangeCount >= 2 ? 'Write my post →' : 'Next →';
       chatSendBtn.classList.add('text-mode');
-      chatSendBtn.setAttribute('aria-label', 'Generate post');
+      chatSendBtn.setAttribute('aria-label', _coach.exchangeCount >= 2 ? 'Generate post' : 'Next question');
     } else {
       chatSendBtn.innerHTML = ARROW_SVG;
       chatSendBtn.classList.remove('text-mode');
@@ -619,21 +659,18 @@ const chat = (() => {
   }
 
   function init(type) {
-    const prevType   = _type;
-    _type            = type;
-    _tensionResult   = null;
+    const prevType = _type;
+    _type          = type;
+    _tensionResult = null;
     selectedVaultIdeaId = null;
-    _clarificationMode  = false;
-    _originalIdea       = '';
+    _coach = { active: false, originalBrief: '', history: [], exchangeCount: 0, awaitingSkip: false, pendingQ: null };
 
     chatThread.innerHTML = '';
-    const vaultPanel = document.getElementById('vault-panel');
-
     chatThread.style.display = 'none';
     const q0 = EXTRACTION_QUESTIONS[type][0];
-    chatInput.placeholder = q0.placeholder;
-    chatInput.rows        = 4;
-    chatInput.style.minHeight = '100px';
+    chatInput.placeholder     = q0.placeholder;
+    chatInput.rows             = 4;
+    chatInput.style.minHeight  = '100px';
     chatInput.classList.remove('error');
     if (!prevType) {
       chatInput.value      = '';
@@ -651,44 +688,123 @@ const chat = (() => {
     hideSubstanceWarning();
 
     const val = chatInput.value.trim();
-
-    // ── Extraction path ──────────────────────────────────────────
     if (!val) { showChatInputError('Add something before generating.'); chatInput.focus(); return; }
     if (val.length < 15) { showChatInputError('Add a bit more to work with.'); chatInput.focus(); return; }
 
-    // Waiting for clarification answer
-    if (_clarificationMode) {
-      _clarificationMode = false;
+    // Coach is active — user is answering a question
+    if (_coach.active) {
       addUser(val);
-      chatInput.value = '';
+      chatInput.value       = '';
       chatInput.style.height = '';
-      const enrichedIdea = `${_originalIdea}\n\nMore context: ${val}`;
-      triggerGenerate({ enrichedIdea });
+      _coach.history.push({ role: 'user', content: val });
+      _coach.exchangeCount++;
+      runCoach();
       return;
     }
 
-    // Rich enough — generate directly
-    if (!needsClarification(val)) {
-      if (!_tensionResult && val.length >= 30) fireTensionExtraction(val);
-      triggerGenerate({});
-      return;
-    }
-
-    // Thin input — ask one clarifying question
-    _clarificationMode = true;
-    _originalIdea      = val;
+    // Not in coach yet — this is the initial brief submission
+    // Show it in the chat thread and call intake
+    _coach.originalBrief = val;
     addUser(val);
     chatThread.style.display = '';
     chatInput.value       = '';
     chatInput.style.height = '';
     chatInput.rows        = 2;
     chatInput.style.minHeight = '60px';
-    updateSendBtn();
 
-    fetchClarifyingQuestion(val).then(question => {
-      addBot(question, { hasSkip: true });
+    // Show a thinking bubble while intake runs
+    const thinkingBubble = addBot('Reading your idea…');
+    callIntake(val, [], 0).then(intake => {
+      thinkingBubble.remove();
+      if (intake.ready) {
+        // Brief is already strong — generate straight away
+        triggerGenerate({ enrichedIdea: val });
+        return;
+      }
+      // Start the coach
+      _coach.active = true;
+      _coach.history.push({ role: 'user', content: val });
+      _coach.history.push({ role: 'coach', content: intake.question });
+      updateSendBtn();
+      const qNum = `${_coach.exchangeCount + 1} of up to 3 — `;
+      addBot(qNum + intake.question, {
+        onSkip: () => showSkipSuggestion(intake.skip_suggestion, intake.question),
+      });
       chatInput.focus();
     });
+  }
+
+  // Called after each user answer to get the next question (or decide to generate)
+  async function runCoach() {
+    // Show typing indicator
+    const thinkingBubble = addBot('…');
+    const intake = await callIntake(
+      _coach.originalBrief,
+      _coach.history,
+      _coach.exchangeCount
+    );
+    thinkingBubble.remove();
+
+    if (intake.ready || _coach.exchangeCount >= 3) {
+      generateFromCoach();
+      return;
+    }
+
+    updateSendBtn();
+    const qNum = `${_coach.exchangeCount + 1} of up to 3 — `;
+    addBot(qNum + intake.question, {
+      onSkip: () => showSkipSuggestion(intake.skip_suggestion, intake.question),
+    });
+    chatInput.focus();
+  }
+
+  function showSkipSuggestion(suggestion, question) {
+    if (!suggestion) {
+      // No suggestion available — just generate with what we have
+      generateFromCoach();
+      return;
+    }
+    _coach.awaitingSkip = true;
+    _coach.pendingQ     = question;
+    addSuggestion(suggestion, (confirmed) => {
+      _coach.awaitingSkip = false;
+      _coach.history.push({ role: 'user', content: confirmed });
+      _coach.exchangeCount++;
+      addUser(confirmed);
+      runCoach();
+    });
+  }
+
+  function generateFromCoach() {
+    // Assemble enriched brief from conversation
+    let enriched = _coach.originalBrief;
+    const qa = [];
+    for (let i = 0; i < _coach.history.length - 1; i++) {
+      if (_coach.history[i].role === 'coach' && _coach.history[i + 1]?.role === 'user') {
+        qa.push(`Q: ${_coach.history[i].content}\nA: ${_coach.history[i + 1].content}`);
+        i++;
+      }
+    }
+    // Also pull user answers that follow coach questions (simple pairing)
+    const userAnswers = _coach.history.filter((m, i) => m.role === 'user' && i > 0);
+    if (userAnswers.length) {
+      enriched += '\n\nAdditional context:\n' + userAnswers.map(m => m.content).join('\n\n');
+    }
+    triggerGenerate({ enrichedIdea: enriched, skipSubstanceCheck: true });
+  }
+
+  async function callIntake(brief, history, exchangeCount) {
+    try {
+      const res  = await fetch('/api/generate/chat-intake', {
+        method:  'POST',
+        headers: { ...apiHeaders(), 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ brief, history, post_type: _type, exchange_count: exchangeCount }),
+      });
+      const data = await res.json();
+      return data.ok ? data : { ready: true };
+    } catch {
+      return { ready: true };
+    }
   }
 
   return { init, advance, fireTensionExtraction };
@@ -723,13 +839,13 @@ chatInput.addEventListener('input', () => {
 
 chatInput.addEventListener('keydown', e => {
   if (e.key !== 'Enter') return;
-  if (_clarificationMode) {
-    // Clarification answer: Enter submits
+  if (_coach.active) {
+    // Coach answer: Enter submits (single-line answers expected)
     if (!e.shiftKey) { e.preventDefault(); chat.advance(); }
     return;
   }
   if (selectedType) {
-    // Extraction path: always multiline — only Cmd/Ctrl+Enter submits
+    // Initial brief: always multiline — only Cmd/Ctrl+Enter submits
     if (e.metaKey || e.ctrlKey) { e.preventDefault(); chat.advance(); }
   }
 });
@@ -739,28 +855,6 @@ chatInput.addEventListener('keydown', e => {
  * Pure JS check: does this input need a clarifying question before generation?
  * Returns true if the input is short AND lacks both a personal pronoun and a concrete anchor.
  */
-function needsClarification(val) {
-  if (val.length > 200) return false;           // long enough — generate directly
-  const hasPersonal = /\b(i|we|my|our)\b/i.test(val);
-  const hasAnchor   = /\d/.test(val)
-    || /\b(stopped|quit|hired|fired|launched|built|closed|signed|refused|decided|doubled|tripled|lost|won|sent|called|walked|left|joined|pivoted|cut)\b/i.test(val);
-  return !(hasPersonal && hasAnchor);           // needs BOTH personal + concrete anchor to skip
-}
-
-/** Haiku call: ask the backend for one smart clarifying question contextualised to the user's profile. */
-async function fetchClarifyingQuestion(val) {
-  try {
-    const res  = await fetch('/api/generate/clarify', {
-      method:  'POST',
-      headers: apiHeaders(),
-      body:    JSON.stringify({ raw_idea: val }),
-    });
-    const data = await res.json();
-    return data.question || "Can you give me one specific moment, number, or example that connects to this?";
-  } catch {
-    return "Can you give me one specific moment, number, or example that connects to this?";
-  }
-}
 
 /* ── Generate ────────────────────────────────────────────────── */
 chatImproveInput.addEventListener('click', () => {

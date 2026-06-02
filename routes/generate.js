@@ -941,51 +941,124 @@ router.post('/extract-tension', async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
-// POST /api/generate/clarify
-// Returns one smart clarifying question for thin inputs. Never blocking —
-// falls back to a generic question on any error. Haiku-powered, fast.
-// Body: { raw_idea }
+// POST /api/generate/chat-intake
+// Adaptive conversational coach. Scores the brief on 4 substance dimensions,
+// returns a targeted question + skip suggestion if gaps remain, or ready:true
+// when the brief is strong enough to generate a top post.
+// Body: { brief, history: [{role,content}], post_type, exchange_count }
+// Never blocking — returns ready:true on any error so generation can proceed.
 // ---------------------------------------------------------------------------
-router.post('/clarify', async (req, res) => {
+router.post('/chat-intake', async (req, res) => {
   const { userId, tenantId } = req;
-  if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
+  if (!userId) return res.status(400).json({ ok: true, ready: true });
 
-  const { raw_idea } = req.body;
-  if (!raw_idea?.trim()) return res.json({ ok: true, question: null });
+  const { brief, history = [], post_type, exchange_count = 0 } = req.body;
+  if (!brief?.trim()) return res.json({ ok: true, ready: true });
+
+  // After max 3 exchanges always generate — don't over-interrogate
+  if (exchange_count >= 3) return res.json({ ok: true, ready: true });
 
   try {
-    const profile = db.prepare(
-      `SELECT content_niche, audience_role, audience_pain, contrarian_view, content_pillars
-       FROM user_profiles WHERE user_id = ? AND tenant_id = ?`
-    ).get(userId, tenantId);
+    const profile = await db.prepare(`
+      SELECT content_niche, audience_role, audience_pain, contrarian_view,
+             authority_statements, voice_fingerprint, onboarding_q2
+      FROM   user_profiles WHERE user_id = ? AND tenant_id = ?
+    `).get(userId, tenantId);
 
     const niche    = profile?.content_niche || '';
     const audience = profile?.audience_role || '';
     const pain     = profile?.audience_pain || '';
+    const q2voice  = profile?.onboarding_q2 || '';
+    let authStatements = [];
+    try { authStatements = JSON.parse(profile?.authority_statements || '[]').slice(0, 2); } catch {}
+    let fp = {};
+    try { fp = JSON.parse(profile?.voice_fingerprint || '{}'); } catch {}
+    const pos = fp.positioning || {};
 
     const Anthropic = require('@anthropic-ai/sdk');
     const apiKey    = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
-    if (!apiKey) return res.json({ ok: true, question: null });
+    if (!apiKey) return res.json({ ok: true, ready: true });
 
-    const client  = new Anthropic({ apiKey });
+    const client = new Anthropic({ apiKey });
+
+    // Build conversation history string for context
+    const historyStr = history.length
+      ? '\n\nCONVERSATION SO FAR:\n' + history.map(m =>
+          `${m.role === 'user' ? 'Creator' : 'Coach'}: ${m.content}`
+        ).join('\n')
+      : '';
+
+    const profileCtx = [
+      niche    && `Creator niche: ${niche}`,
+      audience && `Their audience: ${audience}`,
+      pain     && `Audience pain: ${pain}`,
+      pos.stands_for && `Stands for: ${pos.stands_for}`,
+      pos.outcome    && `Outcome they deliver: ${pos.outcome}`,
+      authStatements.length && `Proof points: ${authStatements.join('; ')}`,
+      q2voice  && `Their natural voice (from an interview): "${q2voice.slice(0, 200)}"`,
+    ].filter(Boolean).join('\n');
+
+    const prompt = `You are a world-class LinkedIn editor coaching a ${niche || 'professional'} creator to write a top 1% post.
+
+CREATOR PROFILE:
+${profileCtx}
+
+THEIR BRIEF:
+"${brief.slice(0, 600)}"
+${historyStr}
+
+POST TYPE: ${post_type || 'general'}
+
+YOUR JOB:
+Score this brief on 4 dimensions. A dimension scores TRUE only if the brief actually contains that element — not if it could be inferred.
+
+1. HAS_MOMENT: A specific scene, situation, or time reference ("I was on a call with X", "last March", "a client told me", a named event)
+2. HAS_PROOF: A concrete number, timeframe, or named result ("doubled in 6 weeks", "$40k", "3 clients", "in Q3")
+3. HAS_TENSION: A contradiction, before/after, common belief vs reality, or surprising outcome ("everyone thinks X but actually Y", "I used to believe X until...")
+4. HAS_AUDIENCE: Clear connection to who this helps and why they specifically need this ("${audience || 'their audience'}" feels seen)
+
+RULES:
+- If 3 or more dimensions score TRUE → set ready: true, no question needed
+- If exchange_count >= 2 → set ready: true regardless (don't over-interrogate)
+- Otherwise identify the SINGLE most important missing dimension and ask ONE targeted, conversational question
+- The question must reference something specific from their brief — NOT generic
+- Also write a skip_suggestion: a 1-2 sentence plausible answer they could use, written in first person, grounded in their profile and niche
+- The skip_suggestion should feel specific to them, not generic — use their niche, audience, and proof points
+
+Return ONLY valid JSON, nothing else:
+{
+  "scores": { "has_moment": bool, "has_proof": bool, "has_tension": bool, "has_audience": bool },
+  "ready": bool,
+  "question": "one conversational question referencing their specific brief, or null if ready",
+  "skip_suggestion": "1-2 sentence first-person suggested answer grounded in their profile, or null if ready",
+  "gap": "moment|proof|tension|audience|null"
+}`;
+
     const message = await client.messages.create({
       model:      'claude-haiku-4-5-20251001',
-      max_tokens: 120,
-      messages: [{
-        role: 'user',
-        content: `A LinkedIn content creator typed this post idea: "${raw_idea.slice(0, 400)}"
-${niche    ? `Their niche: ${niche}` : ''}
-${audience ? `Their audience: ${audience}` : ''}
-${pain     ? `Audience challenge: ${pain}` : ''}
-
-This input needs one concrete detail to make a strong post. Write ONE conversational clarifying question that asks for a specific moment, number, outcome, or example. One sentence only. No preamble, no label — just the question.`,
-      }],
+      max_tokens: 350,
+      messages: [{ role: 'user', content: prompt }],
     });
 
-    const question = message.content[0]?.text?.trim() || null;
-    return res.json({ ok: true, question });
-  } catch {
-    return res.json({ ok: true, question: null });
+    const raw = message.content[0]?.text?.trim() || '{}';
+    let result = {};
+    try {
+      const match = raw.match(/\{[\s\S]*\}/);
+      result = JSON.parse(match ? match[0] : raw);
+    } catch { return res.json({ ok: true, ready: true }); }
+
+    return res.json({
+      ok:              true,
+      ready:           !!result.ready,
+      question:        result.question        || null,
+      skip_suggestion: result.skip_suggestion || null,
+      gap:             result.gap             || null,
+      scores:          result.scores          || {},
+    });
+
+  } catch (err) {
+    console.error('[chat-intake] error (non-fatal):', err.message);
+    return res.json({ ok: true, ready: true }); // fail open — let them generate
   }
 });
 

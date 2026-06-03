@@ -363,7 +363,7 @@ async function buildStructureBlueprint(rawIdea, postType, client, userProfile = 
       model:       HAIKU_MODEL,
       max_tokens:  400,
       temperature: 0,
-      system:      BLUEPRINT_SYSTEM_PROMPT,
+      system:      [{ type: 'text', text: BLUEPRINT_SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
       messages: [{
         role:    'user',
         content: `ARCHETYPES:\n${archetypeLines}\n${postTypeBlock}${voiceContextBlock}\nRAW IDEA:\n${rawIdea}\n\nReturn the blueprint JSON. hook_draft must reflect the actual content of this specific idea.`,
@@ -427,7 +427,7 @@ LINKEDIN FORMATTING (non-negotiable):
 - One sentence per line. Never write paragraph blocks. Every sentence gets its own line.
 - Put a blank line between every 2–3 lines to create visual breathing room.
 - The post must be visually scannable — a wall of text kills engagement before anyone reads it.
-
+${postType === 'reach' || !postType ? `
 ABOVE THE FOLD (critical for reach):
 - LinkedIn shows only the first 2–3 lines before the "see more" truncation.
 - Line 1 is the hook — handled by the archetype instruction above.
@@ -435,7 +435,7 @@ ABOVE THE FOLD (critical for reach):
 - Avoid "not X, not Y" patterns — they are safe but flat. Instead, add a second sharp fact, a stark contrast, or a consequence that makes the hook land harder.
 - Lines 2–3 should make the reader feel they will miss something if they do not click "see more".
 - Never use lines 2–3 for background, setup, or "let me tell you about X" framing.
-
+` : ''}
 POINT OF VIEW (non-negotiable):
 Take the strongest defensible position the raw idea supports — not the safest one.
 Never present both sides without choosing one. A hedged first draft cannot be sharpened; a strong one can be dialled back.
@@ -444,11 +444,11 @@ ${AI_TELLS_PROHIBITION}${SPECIFICITY_MANDATE}${ctaInstruction}`;
 }
 
 /**
- * Streaming variant of buildVoiceWritingSystemPrompt — same prompt, plain-text output instead of JSON.
+ * Streaming variant — omits STREAMING_SELF_CHECK because the model can't pause
+ * mid-stream to revise; the self-check only adds tokens without being executable.
  */
 function buildStreamingVoiceWritingSystemPrompt(blueprint, userProfile, hookInjectionBlock, ctaInstruction = '', postType = null, examples = []) {
-  return buildVoiceWritingSystemPrompt(blueprint, userProfile, hookInjectionBlock, ctaInstruction, postType, examples)
-    + '\n' + STREAMING_SELF_CHECK;
+  return buildVoiceWritingSystemPrompt(blueprint, userProfile, hookInjectionBlock, ctaInstruction, postType, examples);
 }
 
 /** User prompt for the streaming path — asks for plain text instead of JSON wrapper. */
@@ -465,29 +465,22 @@ Output only the post as plain text. No JSON, no labels, no explanation.`;
  * Post-processing step: extract synthesis + cta_alternatives from the finished post via Haiku.
  * Keeps creative generation (Sonnet) separate from structured metadata extraction.
  */
-async function extractPostMetadata(post, rawIdea, blueprint, archetypeUsed, client) {
+async function extractPostMetadata(post, rawIdea, client) {
   try {
     const response = await client.messages.create({
       model:      HAIKU_MODEL,
-      max_tokens: 400,
+      max_tokens: 150,
       temperature: 0,
       system:     'You are a content analyst. Return only valid JSON — no explanation, no markdown.',
       messages:   [{
         role:    'user',
-        content: `Analyze this LinkedIn post and the raw idea that generated it.
+        content: `Write two alternative closing lines for this LinkedIn post.
 
-RAW IDEA: ${rawIdea.slice(0, 300)}
+POST (closing lines):
+${post.split('\n').slice(-6).join('\n').slice(0, 600)}
 
-POST:
-${post.slice(0, 1500)}
-
-Return JSON:
+Return JSON only:
 {
-  "synthesis": {
-    "suggested_angle": "one sentence on the strongest angle used in this post",
-    "recommended_structure": "one sentence on the structure chosen and why it fits",
-    "supporting_insight": "one sentence of editorial context that makes this idea work"
-  },
   "cta_alternatives": [
     "one alternative closing line — different question angle or engagement prompt",
     "one alternative closing line — soft conversion invite (DM, follow, or resource in comments)"
@@ -497,22 +490,10 @@ Return JSON:
     });
     const parsed = extractJsonFromResponse(response.content[0]?.text?.trim() || '');
     return {
-      synthesis: parsed.synthesis || {
-        suggested_angle:       blueprint.arc    || 'Structured from the raw idea',
-        recommended_structure: `${archetypeUsed} — ${blueprint.tension || 'tension-first narrative'}`,
-        supporting_insight:    blueprint.tension || 'Grounded in the specific context',
-      },
       cta_alternatives: Array.isArray(parsed.cta_alternatives) ? parsed.cta_alternatives.slice(0, 2) : [],
     };
   } catch {
-    return {
-      synthesis: {
-        suggested_angle:       blueprint.arc    || 'Structured from the raw idea',
-        recommended_structure: `${archetypeUsed} — ${blueprint.tension || 'tension-first narrative'}`,
-        supporting_insight:    blueprint.tension || 'Grounded in the specific context',
-      },
-      cta_alternatives: [],
-    };
+    return { cta_alternatives: [] };
   }
 }
 
@@ -564,11 +545,8 @@ async function runTwoStageGeneration({
     await stream.done();
 
     const cleanPost   = sanitiseAiTells(fullText.trim());
-    const [hookBResult, metadata] = await Promise.all([
-      generateAlternativeHook(cleanPost, archetypeUsed, client),
-      extractPostMetadata(cleanPost, rawIdea, blueprint, archetypeUsed, client),
-    ]);
-    return { synthesis: metadata.synthesis, post: cleanPost, hookB: hookBResult?.text || null, hookBArchetype: hookBResult?.archetype || null, ctaAlternatives: metadata.cta_alternatives, archetypeUsed, hookConfidence, stage1Blueprint: blueprint };
+    const hookBResult = await generateAlternativeHook(cleanPost, archetypeUsed, client);
+    return { synthesis: null, post: cleanPost, hookB: hookBResult?.text || null, hookBArchetype: hookBResult?.archetype || null, ctaAlternatives: [], archetypeUsed, hookConfidence, stage1Blueprint: blueprint };
   }
 
   // ── Non-streaming path: plain-text post, metadata extracted separately ───────
@@ -589,16 +567,13 @@ async function runTwoStageGeneration({
     const responseText = message.content.find(b => b.type === 'text')?.text?.trim() || '';
     const cleanPost    = sanitiseAiTells(responseText);
 
-    const [hookBResult, metadata] = await Promise.all([
-      generateAlternativeHook(cleanPost, archetypeUsed, client),
-      extractPostMetadata(cleanPost, rawIdea, blueprint, archetypeUsed, client),
-    ]);
+    const hookBResult = await generateAlternativeHook(cleanPost, archetypeUsed, client);
     return {
-      synthesis:       metadata.synthesis,
+      synthesis:       null,
       post:            cleanPost,
       hookB:           hookBResult?.text || null,
       hookBArchetype:  hookBResult?.archetype || null,
-      ctaAlternatives: metadata.cta_alternatives,
+      ctaAlternatives: [],
       archetypeUsed,
       hookConfidence,
       stage1Blueprint: blueprint,
@@ -1196,4 +1171,21 @@ async function checkSubstance(rawIdea, userProfile, postType) {
   return buildSubstancePromptForPostType(quality, userProfile, postType);
 }
 
-module.exports = { ideaToPost, generateInsightAlternativePost, vaultSeedToPost, checkSubstance };
+/**
+ * Fire-and-forget: extract CTA alternatives after SSE done and update generated_posts row.
+ * Called in the route after res.end() so it never delays the user-facing response.
+ */
+async function backgroundExtractCtaAlternatives(postId, post, rawIdea, db) {
+  try {
+    const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
+    if (!apiKey) return;
+    const client = new Anthropic({ apiKey });
+    const metadata = await extractPostMetadata(post, rawIdea, client);
+    if (metadata.cta_alternatives?.length) {
+      db.prepare(`UPDATE generated_posts SET cta_alternatives = ? WHERE id = ?`)
+        .run(JSON.stringify(metadata.cta_alternatives), postId);
+    }
+  } catch { /* non-fatal — editor shows empty CTA alternatives */ }
+}
+
+module.exports = { ideaToPost, generateInsightAlternativePost, vaultSeedToPost, checkSubstance, backgroundExtractCtaAlternatives };

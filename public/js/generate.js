@@ -695,6 +695,12 @@ const chat = (() => {
     // seq will have been bumped and we'll discard this stale result
     const capturedSeq = _coach.seq;
 
+    // Skip intake entirely when the brief is already detailed — saves a Haiku round trip
+    if (isBriefRich(val)) {
+      triggerGenerate({ enrichedIdea: val });
+      return;
+    }
+
     // Show a thinking bubble while intake runs
     const thinkingBubble = addBot('Reading your idea…');
     _coach.intakeInFlight = true;
@@ -791,6 +797,12 @@ const chat = (() => {
     }
     updateSendBtn(); // ensures button shows correct state before processing screen takes over
     triggerGenerate({ enrichedIdea: enriched, skipSubstanceCheck: true });
+  }
+
+  function isBriefRich(text) {
+    if (text.trim().length < 280) return false;
+    // Must also contain at least one concrete signal: a digit, or first-person + specific time/result
+    return /\d/.test(text) || /\b(last|this|past|next)\s+(week|month|year|quarter)\b/i.test(text);
   }
 
   async function callIntake(brief, history, exchangeCount) {

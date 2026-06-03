@@ -4,7 +4,7 @@ const express = require('express');
 const router = express.Router();
 const { db } = require('../db');
 const { runQualityGate } = require('../services/qualityGate');
-const { ideaToPost, vaultSeedToPost } = require('../services/ideaPath');
+const { ideaToPost, vaultSeedToPost, backgroundExtractCtaAlternatives } = require('../services/ideaPath');
 const { classifyContent } = require('../services/funnelClassifier');
 const { canGeneratePost } = require('../services/subscription');
 const { sendEmailToUser } = require('../emails');
@@ -324,16 +324,18 @@ router.post('/', async (req, res) => {
           post:            ideaRaw.post,
           hookB:           ideaRaw.hookB || null,
           hookBArchetype:  ideaRaw.hookBArchetype || null,
-          ctaAlternatives: ideaRaw.ctaAlternatives || [],
           quality:         { ...primaryQuality, verdict: primaryGate.verdict },
-          synthesis:       ideaRaw.synthesis,
           archetypeUsed:   ideaRaw.archetypeUsed,
           hookConfidence:  ideaRaw.hookConfidence,
           funnel_type:     funnelType,
           post_type:       post_type || null,
           stage1Blueprint: ideaRaw.stage1Blueprint,
         });
-        return res.end();
+        res.end();
+
+        // Background: extract CTA alternatives after response is sent — never delays the user
+        backgroundExtractCtaAlternatives(primaryId, ideaRaw.post, raw_idea, db);
+        return;
 
       } catch (sseErr) {
         if (sseErr.message === 'missing_substance') {
@@ -501,6 +503,11 @@ router.post('/', async (req, res) => {
       }
 
       const primaryQuality = buildQualityPayload(primaryGate, 1, true);
+
+      // Background: extract CTA alternatives for non-vault idea path (vault path gets them from model JSON)
+      if (!vaultIdea && !ctaAlternatives?.length) {
+        backgroundExtractCtaAlternatives(primaryId, post, raw_idea, db);
+      }
 
       return res.json({
         ok: true,

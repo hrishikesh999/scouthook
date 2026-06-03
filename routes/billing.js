@@ -248,6 +248,9 @@ router.post('/cancel', requireAuth, async (req, res) => {
   if (!sub.paddle_subscription_id) {
     return res.status(400).json({ ok: false, error: 'no_active_subscription' });
   }
+  if (sub.status === 'canceled') {
+    return res.status(400).json({ ok: false, error: 'already_canceled' });
+  }
 
   const paddle = getPaddle();
 
@@ -273,7 +276,7 @@ router.post('/cancel', requireAuth, async (req, res) => {
       currentPeriodEnd:     canceledSubscription?.currentBillingPeriod?.endsAt
                               ? new Date(canceledSubscription.currentBillingPeriod.endsAt)
                               : (sub.current_period_end ? new Date(sub.current_period_end) : null),
-      canceledAt:           new Date(),
+      canceledAt:           canceledSubscription?.canceledAt ? new Date(canceledSubscription.canceledAt) : new Date(),
       priceId:              sub.price_id ?? null,
     });
   } catch (dbErr) {

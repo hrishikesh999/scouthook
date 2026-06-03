@@ -340,11 +340,9 @@
             <span class="pm-current-chip" id="pm-pro-chip" style="display:none">Current plan</span>
           </div>
 
-          <div id="pm-founding-badge" style="display:none;margin-bottom:6px;font-size:12px;font-weight:700;color:#059669;letter-spacing:0.01em;"></div>
           <div id="pm-price-monthly">
             <div class="pm-price" style="display:flex;align-items:baseline;gap:8px;">
               <span><sup>$</sup><span id="pm-monthly-amount">—</span></span>
-              <span id="pm-strike-price" style="display:none;font-size:17px;font-weight:500;color:var(--text-muted,#A1A1AA);text-decoration:line-through;">$39</span>
             </div>
             <div class="pm-period">/ month</div>
           </div>
@@ -397,9 +395,7 @@
   // ── State ────────────────────────────────────────────────────────────────────
   let priceIdMonthly  = '';
   let priceIdYearly   = '';
-  let proMonthlyPrice = 39;
-  let foundingTier    = 'founding_2';
-  let spotsRemaining  = 0;
+  let proMonthlyPrice = 29;
   let configLoaded    = false;
 
   // ── DOM refs (resolved lazily after injection) ────────────────────────────
@@ -473,9 +469,8 @@
       const d = await r.json();
       priceIdMonthly  = d.priceIdMonthly  || '';
       priceIdYearly   = d.priceIdYearly   || '';
-      proMonthlyPrice = d.proMonthlyPrice  || 39;
-      foundingTier    = d.foundingTier     || 'founding_2';
-      spotsRemaining  = d.spotsRemaining   || 0;
+      proMonthlyPrice = d.proMonthlyPrice  || 29;
+
       paddleConfig    = d;
       configLoaded    = true;
       applyConfig();
@@ -495,23 +490,6 @@
     if (annualAmountEl) annualAmountEl.textContent = annualTotal;
     const annualPerMonthEl = $id('pm-annual-per-month');
     if (annualPerMonthEl) annualPerMonthEl.textContent = '$' + annualPerMonth;
-
-    // Show strikethrough $39 only for founding_1 ($29 savers)
-    const strikeEl = $id('pm-strike-price');
-    if (strikeEl) {
-      strikeEl.style.display = (foundingTier === 'founding_1') ? '' : 'none';
-    }
-
-    // Show founding badge only for founding_1
-    const badgeEl = $id('pm-founding-badge');
-    if (badgeEl) {
-      if (foundingTier === 'founding_1') {
-        badgeEl.textContent  = 'Founding member — ' + spotsRemaining + ' of 10 spots left';
-        badgeEl.style.display = '';
-      } else {
-        badgeEl.style.display = 'none';
-      }
-    }
 
     // Annual toggle hidden — launch pricing is monthly-only
     const toggleRow = document.querySelector('.pm-toggle');

@@ -14,13 +14,6 @@ const PRO_VISUAL_LIMIT       = null; // unlimited — Pro tier at $29-39/mo
 const PRO_VAULT_DOC_LIMIT    = null; // unlimited — Pro tier at $29-39/mo
 
 // ---------------------------------------------------------------------------
-// Founding tier configuration
-// Spots:  0–9   → Tier 1 ($29, env: PADDLE_PRICE_ID_FOUNDING_1)
-//         10+   → Tier 2 ($39, env: PADDLE_PRICE_ID_FOUNDING_2)
-// ---------------------------------------------------------------------------
-const FOUNDING_1_MAX = 10;
-
-// ---------------------------------------------------------------------------
 // Paddle SDK singleton
 // ---------------------------------------------------------------------------
 let _paddle;
@@ -92,36 +85,15 @@ async function getUserPlan(userId) {
 
 // ---------------------------------------------------------------------------
 // getFoundingTierInfo
-// Counts active pro subscribers to determine which pricing tier is currently
-// available. Gracefully skips a tier if its env var is not configured.
-// Returns { priceId, price, tier, spotsRemaining }.
+// Returns the standard Pro price ($29/month) for all new subscribers.
+// Falls back to FOUNDING_2 price ID only if FOUNDING_1 is not configured.
 // ---------------------------------------------------------------------------
 async function getFoundingTierInfo() {
-  let count = 0;
-  try {
-    const row = await db.prepare(
-      `SELECT COUNT(*) AS cnt FROM user_subscriptions WHERE plan = 'pro' AND status IN ('active', 'trialing', 'past_due', 'paused')`
-    ).get();
-    count = parseInt(row?.cnt ?? 0, 10);
-  } catch (err) {
-    console.error('[subscription] getFoundingTierInfo count error:', err.message);
-  }
-
-  const f1PriceId = process.env.PADDLE_PRICE_ID_FOUNDING_1;
-  const f2PriceId = process.env.PADDLE_PRICE_ID_FOUNDING_2;
-
-  if (count < FOUNDING_1_MAX && f1PriceId) {
-    return {
-      priceId: f1PriceId,
-      price: 29,
-      tier: 'founding_1',
-      spotsRemaining: FOUNDING_1_MAX - count,
-    };
-  }
+  const priceId = process.env.PADDLE_PRICE_ID_FOUNDING_1 || process.env.PADDLE_PRICE_ID_FOUNDING_2;
   return {
-    priceId: f2PriceId,
-    price: 39,
-    tier: 'founding_2',
+    priceId,
+    price: 29,
+    tier: 'founding_1',
     spotsRemaining: 0,
   };
 }
@@ -255,7 +227,7 @@ async function upsertSubscription({
       -- on subscription.updated. Preserve the existing value so we don't
       -- revoke Pro access early.
       current_period_end     = COALESCE(excluded.current_period_end, user_subscriptions.current_period_end),
-      canceled_at            = COALESCE(excluded.canceled_at, user_subscriptions.canceled_at),
+      canceled_at            = excluded.canceled_at,
       price_id               = COALESCE(excluded.price_id, user_subscriptions.price_id),
       updated_at             = now()
   `).run(

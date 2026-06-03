@@ -724,8 +724,8 @@
         if (!r.ok) return { map: {}, cfg: {} };
         const d = await r.json();
         const map = {};
-        if (d.priceIdFounding1) map[d.priceIdFounding1] = { label: '$29', period: '/month', tier: 'Founding Member · Tier 1' };
-        if (d.priceIdFounding2) map[d.priceIdFounding2] = { label: '$39', period: '/month', tier: 'Founding Member · Tier 2' };
+        if (d.priceIdFounding1) map[d.priceIdFounding1] = { label: '$29', period: '/month', tier: 'Pro' };
+        if (d.priceIdFounding2) map[d.priceIdFounding2] = { label: '$39', period: '/month', tier: 'Pro' };
         if (d.priceIdYearly)    map[d.priceIdYearly]    = { label: '$490', period: '/year', tier: null };
         return { map, cfg: d };
       } catch { return { map: {}, cfg: {} }; }
@@ -976,13 +976,6 @@
           fetch('/api/billing/subscription'),
         ]);
         _priceMap = map;
-
-        // Founding note for free users
-        if (cfg.spotsRemaining > 0) {
-          const note = document.getElementById('founding-note');
-          note.style.display = '';
-          note.innerHTML = `<strong>${cfg.spotsRemaining} founding spot${cfg.spotsRemaining === 1 ? '' : 's'} remaining</strong> at <strong>$${cfg.proMonthlyPrice}/month</strong> — locked in for life.`;
-        }
 
         if (!subRes.ok) throw new Error('subscription fetch failed');
         const d = await subRes.json();

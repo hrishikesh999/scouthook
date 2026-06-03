@@ -1,12 +1,6 @@
 /* drafts.js — Drafts management page */
 
 /* ── Helpers ─────────────────────────────────────────────────── */
-function qualityPillClass(score) {
-  if (score == null || score < 50) return 'low';
-  if (score >= 80) return 'good';
-  return 'mid';
-}
-
 function toTitleCase(str) {
   if (!str) return 'Post';
   return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
@@ -47,9 +41,6 @@ function renderList(posts) {
     const hook      = hookLine(post.content);
     const url       = `/editor/${encodeURIComponent(post.id)}`;
     const pid       = String(post.id);
-    const score     = post.quality_score;
-    const pillClass = qualityPillClass(score);
-    const pillLabel = score != null ? score : '—';
 
     const funnelBadge = post.funnel_type
       ? `<span class="funnel-badge ${post.funnel_type}">${post.funnel_type}</span>` : '';
@@ -60,7 +51,6 @@ function renderList(posts) {
           <span class="draft-row-date">${dateStr}</span>
           <span class="pub-archetype-badge">${archetype}</span>
           ${funnelBadge}
-          <span class="draft-quality-pill ${pillClass}">${pillLabel}</span>
         </div>
         <p class="draft-row-hook">${hook}</p>
         <div class="draft-row-actions">

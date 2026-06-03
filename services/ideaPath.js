@@ -187,9 +187,25 @@ async function ideaToPost(rawIdea, userProfile, options = {}) {
   const postType          = options.postType || null;
   const convertCtaIntent  = options.convertCtaIntent || null;
 
-  // Substance check — post-type-aware; skipped for vault/lead-magnet/doc paths
-  if (!options.skipSubstanceCheck && rawIdea.trim().length >= 15) {
-    const quality = await assessInputQuality(rawIdea, client, userProfile);
+  const shouldCheckSubstance = !options.skipSubstanceCheck && rawIdea.trim().length >= 15 && !archetypeOverride;
+
+  // Run substance check and blueprint in parallel — saves ~1.5s vs sequential
+  const [quality, blueprint] = await Promise.all([
+    shouldCheckSubstance
+      ? assessInputQuality(rawIdea, client, userProfile)
+      : Promise.resolve(null),
+    archetypeOverride
+      ? Promise.resolve({
+          archetype:  archetypeOverride,
+          confidence: 1,
+          tension:    options.tensionStatement || '',
+          arc:        '',
+          hook_draft: '',
+        })
+      : buildStructureBlueprint(rawIdea, postType, client, userProfile),
+  ]);
+
+  if (shouldCheckSubstance && quality) {
     const substanceCheck = buildSubstancePromptForPostType(quality, userProfile, postType);
     if (substanceCheck) {
       const err = new Error('missing_substance');
@@ -198,17 +214,6 @@ async function ideaToPost(rawIdea, userProfile, options = {}) {
       throw err;
     }
   }
-
-  // Stage 1 (Haiku): derive structure blueprint
-  const blueprint = await (archetypeOverride
-    ? Promise.resolve({
-        archetype:  archetypeOverride,
-        confidence: 1,
-        tension:    options.tensionStatement || '',
-        arc:        '',
-        hook_draft: '',
-      })
-    : buildStructureBlueprint(rawIdea, postType, client, userProfile));
 
   // Caller-supplied tensionStatement takes precedence over Stage 1's derived tension
   if (options.tensionStatement) blueprint.tension = options.tensionStatement;
@@ -532,9 +537,6 @@ async function runTwoStageGeneration({
 
   const extraHints = [options._funnelHint, options.qualityRetryHint, options._regenerateHint].filter(Boolean).join('\n\n');
 
-  // Extended thinking requires temperature: 1 (API constraint)
-  const THINKING_BUDGET = 8000;
-
   // Select calibration examples — non-blocking, never throws
   const examples = await selectExamples(postType, archetypeUsed);
 
@@ -549,10 +551,9 @@ async function runTwoStageGeneration({
     let fullText = '';
     const stream = client.messages.stream({
       model:       'claude-sonnet-4-6',
-      max_tokens:  12000,
-      temperature: 1,
-      thinking:    { type: 'enabled', budget_tokens: THINKING_BUDGET },
-      system:      streamSysPrompt,
+      max_tokens:  3000,
+      temperature: 0.9,
+      system:      [{ type: 'text', text: streamSysPrompt, cache_control: { type: 'ephemeral' } }],
       messages:    [{ role: 'user', content: streamUserFinal }],
     });
     // stream.on('text', ...) already skips thinking blocks — no change needed
@@ -579,14 +580,12 @@ async function runTwoStageGeneration({
   try {
     const message = await client.messages.create({
       model:       'claude-sonnet-4-6',
-      max_tokens:  12000,
-      temperature: 1,
-      thinking:    { type: 'enabled', budget_tokens: THINKING_BUDGET },
-      system:      systemPrompt,
+      max_tokens:  3000,
+      temperature: 0.9,
+      system:      [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
       messages:    [{ role: 'user', content: userPromptFinal }],
     });
 
-    // Thinking blocks appear first; find the text block
     const responseText = message.content.find(b => b.type === 'text')?.text?.trim() || '';
     const cleanPost    = sanitiseAiTells(responseText);
 

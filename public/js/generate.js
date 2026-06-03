@@ -58,6 +58,7 @@ let _shownVaultIds      = new Set(); // vault idea IDs shown this session — ro
 let _shownAITopics      = [];        // AI topic titles shown this session — passed as exclusion list
 let _shownIdeaHooks     = [];        // idea engine hook lines shown — passed as exclude_hooks
 let _currentPostTypeFilter = null;   // active filter chip in the idea engine
+let _prefetchedIdeas    = null;      // prefetched result from /api/vault/generate-ideas
 // ── Conversational coach state ────────────────────────────────
 let _coach = {
   active:         false,  // coach is running
@@ -279,17 +280,35 @@ async function loadVaultPanel(type, onItemSelected, { reset = false } = {}) {
   }
 }
 
+async function prefetchIdeas() {
+  try {
+    const postType = _currentPostTypeFilter || mixRecommended || null;
+    const params = new URLSearchParams();
+    if (postType) params.set('post_type', postType);
+    const res  = await fetch(`/api/vault/generate-ideas?${params}`, { headers: apiHeaders() });
+    const data = await res.json();
+    if (data.ideas?.length) _prefetchedIdeas = data;
+  } catch { /* non-fatal */ }
+}
+
 async function loadFreshIdeas(panel, type, onItemSelected) {
   renderIdeaLoadingState(panel, 'fresh', onItemSelected);
 
   try {
     const postType = _currentPostTypeFilter || mixRecommended || type || null;
-    const params = new URLSearchParams();
-    if (postType) params.set('post_type', postType);
-    if (_shownIdeaHooks.length) params.set('exclude_hooks', JSON.stringify(_shownIdeaHooks.slice(-12)));
 
-    const res   = await fetch(`/api/vault/generate-ideas?${params}`, { headers: apiHeaders() });
-    const data  = await res.json();
+    let data;
+    if (_prefetchedIdeas && !_shownIdeaHooks.length) {
+      data = _prefetchedIdeas;
+      _prefetchedIdeas = null;
+    } else {
+      const params = new URLSearchParams();
+      if (postType) params.set('post_type', postType);
+      if (_shownIdeaHooks.length) params.set('exclude_hooks', JSON.stringify(_shownIdeaHooks.slice(-12)));
+      const res = await fetch(`/api/vault/generate-ideas?${params}`, { headers: apiHeaders() });
+      data = await res.json();
+    }
+
     const ideas = data.ideas || [];
 
     if (!ideas.length) { panel.style.display = 'none'; panel.innerHTML = ''; return; }
@@ -1241,6 +1260,7 @@ async function checkVaultEmptyState() {
 
   loadMixRecommendation();    // fire-and-forget — updates active btn if mix recommends a type
   checkProfileGate();         // fire-and-forget — nudge appears if profile is empty
+  prefetchIdeas();            // fire-and-forget — warms idea cache for instant vault panel
 
   const urlParams = new URLSearchParams(location.search);
   const urlType   = urlParams.get('type');

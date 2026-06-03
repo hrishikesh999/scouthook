@@ -4,7 +4,7 @@ const express = require('express');
 const router = express.Router();
 const { db } = require('../db');
 const { runQualityGate } = require('../services/qualityGate');
-const { ideaToPost, vaultSeedToPost, checkSubstance } = require('../services/ideaPath');
+const { ideaToPost, vaultSeedToPost } = require('../services/ideaPath');
 const { classifyContent } = require('../services/funnelClassifier');
 const { canGeneratePost } = require('../services/subscription');
 const { sendEmailToUser } = require('../emails');
@@ -265,17 +265,8 @@ router.post('/', async (req, res) => {
       try {
         sseWrite('step', { step: 'analyzing', label: 'Analyzing your idea...' });
 
-        // Substance check before starting the expensive generation
-        if (!skip_substance_check && raw_idea.trim().length >= 15) {
-          const substanceCheck = await checkSubstance(raw_idea, userProfile, post_type || null);
-          if (substanceCheck) {
-            sseWrite('error', { error: 'missing_substance', prompt: substanceCheck.message, substance_tier: substanceCheck.tier });
-            return res.end();
-          }
-        }
-
         const ideaRaw = await ideaToPost(raw_idea, userProfile, {
-          skipSubstanceCheck:  true, // already checked above
+          skipSubstanceCheck:  !!skip_substance_check,
           postType:            post_type || null,
           convertCtaIntent:    convert_cta_intent || null,
           tensionStatement:    tension_statement || null,

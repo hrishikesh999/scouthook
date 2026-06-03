@@ -251,9 +251,12 @@
     }
     .idea-engine-grid {
       display: grid;
-      grid-template-columns: 1fr;
+      grid-template-columns: repeat(3, 1fr);
       gap: 10px;
       margin-bottom: 12px;
+    }
+    @media (max-width: 600px) {
+      .idea-engine-grid { grid-template-columns: 1fr; }
     }
     .idea-engine-card {
       display: flex;
@@ -556,9 +559,13 @@
     #intent-row {
       display: flex;
       gap: 8px;
-      border-top: 1px solid var(--border);
-      margin-top: 4px;
-      padding-top: 14px;
+      margin-top: 8px;
+    }
+    .intent-card.intent-pill {
+      flex: 0 0 auto;
+      border-radius: 999px;
+      padding: 7px 16px;
+      gap: 6px;
     }
     .intent-card {
       flex: 1;
@@ -839,12 +846,9 @@
           <div id="intent-row">
 
             <!-- Chip 1: Get ideas -->
-            <button class="intent-card" id="intent-ideas" type="button">
+            <button class="intent-card intent-pill" id="intent-ideas" type="button">
               <span class="intent-card-icon">✨</span>
-              <div class="intent-card-body">
-                <span class="intent-card-title">Get ideas</span>
-                <span class="intent-card-desc">From your vault and Voice DNA</span>
-              </div>
+              <span class="intent-card-title">Get ideas</span>
             </button>
 
 

@@ -102,7 +102,7 @@ SELF-CHECK BEFORE OUTPUTTING:
 3. Are any banned words or em dashes present? If yes, replace them.
 4. Does the closing match the post goal? (reach=open question, trust=reframe, convert=direct ask)
 5. Would someone who knows this author think "that sounds like them"? If not, rewrite.
-Only output the JSON after all five pass.`;
+Output only the post as plain text after all five pass. No JSON. No labels. No explanation.`;
 
 const STREAMING_SELF_CHECK = `
 SELF-CHECK BEFORE OUTPUTTING:
@@ -550,8 +550,10 @@ async function runTwoStageGeneration({
   }
 
   // ── Non-streaming path: plain-text post, metadata extracted separately ───────
-  // Uses streaming variant of system prompt since both paths now output plain text
-  const systemPrompt    = buildStreamingVoiceWritingSystemPrompt(blueprint, userProfile, hookInjection, ctaInstruction, postType, examples);
+  // Model completes its full response before we see it, so STREAMING_SELF_CHECK
+  // is actually executable here (unlike the streaming path where it cannot be).
+  const systemPrompt    = buildStreamingVoiceWritingSystemPrompt(blueprint, userProfile, hookInjection, ctaInstruction, postType, examples)
+    + '\n' + STREAMING_SELF_CHECK;
   const userPrompt      = buildUserPrompt(rawIdea);
   const userPromptFinal = extraHints ? `${userPrompt}\n\n${extraHints}` : userPrompt;
 

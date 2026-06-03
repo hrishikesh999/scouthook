@@ -318,6 +318,11 @@ router.post('/', async (req, res) => {
 
         const primaryQuality = buildQualityPayload(primaryGate, 1, true);
 
+        // Start background extraction before ending the response so the Haiku call
+        // is in-flight during the frontend's 600ms sleep and page-load — reduces the
+        // chance the editor arrives before cta_alternatives are written to DB.
+        backgroundExtractCtaAlternatives(primaryId, ideaRaw.post, raw_idea, db);
+
         sseWrite('done', {
           post_id:         primaryId,
           run_id:          runId,
@@ -331,11 +336,7 @@ router.post('/', async (req, res) => {
           post_type:       post_type || null,
           stage1Blueprint: ideaRaw.stage1Blueprint,
         });
-        res.end();
-
-        // Background: extract CTA alternatives after response is sent — never delays the user
-        backgroundExtractCtaAlternatives(primaryId, ideaRaw.post, raw_idea, db);
-        return;
+        return res.end();
 
       } catch (sseErr) {
         if (sseErr.message === 'missing_substance') {

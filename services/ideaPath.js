@@ -610,29 +610,21 @@ async function runTwoStageGeneration({
 }
 
 function buildSystemPrompt(userProfile, hookInjectionBlock, ctaInstruction = '', postType = null, tensionStatement = null, archetype = null) {
-  const tensionBlock = buildTensionBlock(tensionStatement);
+  const tensionBlock       = buildTensionBlock(tensionStatement);
   const phraseLibraryBlock = buildPhraseLibraryBlock(userProfile);
-  const fingerprintBlock = buildVoiceDNABlock(userProfile);
-  const postTypeBlock = buildPostTypeBlock(postType, archetype);
+  const fingerprintBlock   = buildVoiceDNABlock(userProfile);
+  const postTypeBlock      = buildPostTypeBlock(postType, archetype);
+  const bodyStructureBlock = buildBodyStructureBlock(archetype);
   return `You are an editorial thinking partner for a professional who creates LinkedIn content. Your job is to take a raw idea and transform it into one polished, high-quality LinkedIn post that sounds exactly like the author — not like AI.
 ${tensionBlock}${phraseLibraryBlock}
 ${fingerprintBlock}${postTypeBlock}
+${bodyStructureBlock}
 ${hookInjectionBlock}
 
-GENERATION TASK — two separate jobs:
-
-PART 1 — FIND THE SHAPE:
-Build the structure that best serves the central tension above.
-What sequence of moves — opening, body, close — resolves this contradiction most clearly?
-The reader should arrive at the main insight through the evidence before you name it.
-Do not announce the conclusion — earn it.
-Do this work first. The shape is determined by the tension, not the hook archetype.
-
-PART 2 — FIND THE VOICE:
+FIND THE VOICE:
 For any claim, explanation, or description, check the phrase library above.
-Use exact language where it fits the shape you built.
-If no phrase fits without restructuring the argument — use plain, specific language instead.
-The shape is non-negotiable. The phrases are available material.
+Use exact language where it fits the shape built by the body structure. Plain, specific language where it does not.
+The structure is non-negotiable. The phrases are available material.
 
 CONTENT NICHE: ${userProfile.content_niche || 'not specified'}
 

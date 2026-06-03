@@ -1,6 +1,6 @@
 'use strict';
 
-const { pool } = require('../db');
+const { pool } = require('../db/pg');
 
 // Minimum approved posts before injection activates.
 // Prevents underpopulated libraries from producing biased or repetitive examples.

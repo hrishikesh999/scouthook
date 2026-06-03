@@ -2,7 +2,7 @@
 
 const express = require('express');
 const router = express.Router();
-const { db, getSetting } = require('../db');
+const { db } = require('../db');
 const { runQualityGate } = require('../services/qualityGate');
 const { ideaToPost, vaultSeedToPost, checkSubstance } = require('../services/ideaPath');
 const { classifyContent } = require('../services/funnelClassifier');

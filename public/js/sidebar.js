@@ -60,7 +60,7 @@
     '  </div>',
     '  <nav class="sidebar-nav">',
     '    ' + link('/dashboard.html', svgDashboard, 'Dashboard'),
-    '    ' + link('/vault.html',     svgVault,     'Idea Vault'),
+    '    ' + link('/vault.html',     svgVault,     'Content Vault'),
     '    ' + link('/drafts.html',    svgDrafts,    'Posts'),
     '    ' + link('/Media.html',     svgMedia,     'Media'),
     '    ' + link('/settings.html',  svgSettings,  'Settings'),

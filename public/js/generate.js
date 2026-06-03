@@ -59,6 +59,8 @@ let _shownAITopics      = [];        // AI topic titles shown this session — p
 let _shownIdeaHooks     = [];        // idea engine hook lines shown — passed as exclude_hooks
 let _currentPostTypeFilter = null;   // active filter chip in the idea engine
 let _prefetchedIdeas    = null;      // prefetched result from /api/vault/generate-ideas
+let _allFreshIdeas      = [];        // all fetched fresh ideas — filters applied client-side
+let _lastIcpSummary     = '';        // icp_summary from last fetch
 // ── Conversational coach state ────────────────────────────────
 let _coach = {
   active:         false,  // coach is running
@@ -268,7 +270,7 @@ function markRecommendedBtn() { /* no-op — lead magnet chip removed */ }
 let _ideaTab = 'fresh';
 
 async function loadVaultPanel(type, onItemSelected, { reset = false } = {}) {
-  if (reset) { _shownIdeaHooks = []; _currentPostTypeFilter = null; _ideaTab = 'fresh'; }
+  if (reset) { _shownIdeaHooks = []; _currentPostTypeFilter = null; _ideaTab = 'fresh'; _allFreshIdeas = []; _lastIcpSummary = ''; }
   const panel = document.getElementById('vault-panel');
   if (!panel) return;
   panel.style.display = '';
@@ -282,9 +284,8 @@ async function loadVaultPanel(type, onItemSelected, { reset = false } = {}) {
 
 async function prefetchIdeas() {
   try {
-    const postType = _currentPostTypeFilter || mixRecommended || null;
+    // Always fetch mixed (no post_type) so filters work client-side on a full set
     const params = new URLSearchParams();
-    if (postType) params.set('post_type', postType);
     const res  = await fetch(`/api/vault/generate-ideas?${params}`, { headers: apiHeaders() });
     const data = await res.json();
     if (data.ideas?.length) _prefetchedIdeas = data;
@@ -295,27 +296,34 @@ async function loadFreshIdeas(panel, type, onItemSelected) {
   renderIdeaLoadingState(panel, 'fresh', onItemSelected);
 
   try {
-    const postType = _currentPostTypeFilter || mixRecommended || type || null;
-
     let data;
     if (_prefetchedIdeas && !_shownIdeaHooks.length) {
       data = _prefetchedIdeas;
       _prefetchedIdeas = null;
     } else {
+      // Always fetch without post_type — filtering is done client-side
       const params = new URLSearchParams();
-      if (postType) params.set('post_type', postType);
       if (_shownIdeaHooks.length) params.set('exclude_hooks', JSON.stringify(_shownIdeaHooks.slice(-12)));
       const res = await fetch(`/api/vault/generate-ideas?${params}`, { headers: apiHeaders() });
       data = await res.json();
     }
 
     const ideas = data.ideas || [];
-
-    if (!ideas.length) { panel.style.display = 'none'; panel.innerHTML = ''; return; }
+    if (!ideas.length && !_allFreshIdeas.length) { panel.style.display = 'none'; panel.innerHTML = ''; return; }
 
     _shownIdeaHooks.push(...ideas.map(i => i.hook));
-    renderIdeaEngine(panel, ideas, data.icp_summary || '', 'fresh', onItemSelected);
+    _allFreshIdeas.push(...ideas);
+    _lastIcpSummary = data.icp_summary || _lastIcpSummary;
+
+    renderFilteredIdeas(panel, onItemSelected);
   } catch { panel.style.display = 'none'; panel.innerHTML = ''; }
+}
+
+function renderFilteredIdeas(panel, onItemSelected) {
+  const visible = _currentPostTypeFilter
+    ? _allFreshIdeas.filter(idea => idea.post_type === _currentPostTypeFilter)
+    : _allFreshIdeas;
+  renderIdeaEngine(panel, visible, _lastIcpSummary, 'fresh', onItemSelected);
 }
 
 async function loadSavedIdeas(panel, onItemSelected) {
@@ -499,11 +507,11 @@ function renderIdeaEngine(panel, ideas, icpSummary, activeTab, onItemSelected) {
     });
   });
 
-  // Filter chips (fresh tab only)
+  // Filter chips (fresh tab only) — client-side filter, no API call
   panel.querySelectorAll('.idea-filter-chip').forEach(chip => {
     chip.addEventListener('click', () => {
       _currentPostTypeFilter = chip.dataset.filter === 'all' ? null : chip.dataset.filter;
-      loadFreshIdeas(panel, null, onItemSelected);
+      renderFilteredIdeas(panel, onItemSelected);
     });
   });
 

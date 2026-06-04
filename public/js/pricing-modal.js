@@ -457,6 +457,10 @@
       try { userId = (await window.scouthookAuthReady)?.user?.user_id ?? null; } catch { /* no-op */ }
       if (!userId) { try { userId = localStorage.getItem('scouthook_uid'); } catch { /* no-op */ } }
 
+      // Close the pricing modal before opening Paddle Checkout — otherwise
+      // the modal overlay (z-index 900) sits on top of the Paddle iframe.
+      close();
+
       window.Paddle.Checkout.open({
         items: [{ priceId: upgradeData.priceId, quantity: 1 }],
         customData: { ...(userId ? { userId } : {}), plan },
@@ -470,10 +474,13 @@
       btn.textContent = origText;
     } catch (err) {
       console.error('[pricing-modal] checkout error:', err);
-      if (errorEl) {
-        errorEl.textContent = err.message === 'price_not_configured'
-          ? 'Pricing not yet configured. Contact support.'
-          : (err.message || 'Unable to start checkout. Please try again.');
+      const msg = err.message === 'price_not_configured'
+        ? 'Pricing not yet configured. Please contact support.'
+        : (err.message || 'Unable to start checkout. Please try again.');
+      if (window.toast) {
+        window.toast.error(msg);
+      } else if (errorEl) {
+        errorEl.textContent = msg;
         errorEl.style.display = '';
       }
       btn.disabled    = false;

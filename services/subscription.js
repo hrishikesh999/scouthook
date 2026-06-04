@@ -87,14 +87,14 @@ async function getUserPlan(userId) {
 
 // ---------------------------------------------------------------------------
 // getFoundingTierInfo
-// Returns the standard Pro price ($29/month) for all new subscribers.
+// Returns the standard Pro price ($39/month) for all new subscribers.
 // Falls back to FOUNDING_2 price ID only if FOUNDING_1 is not configured.
 // ---------------------------------------------------------------------------
 async function getFoundingTierInfo() {
   const priceId = process.env.PADDLE_PRICE_ID_FOUNDING_1 || process.env.PADDLE_PRICE_ID_FOUNDING_2;
   return {
     priceId,
-    price: 29,
+    price: 39,
     tier: 'founding_1',
     spotsRemaining: 0,
   };

@@ -311,7 +311,7 @@
               ${feat(false, 'Multiple LinkedIn accounts')}
               ${feat(false, 'Team members &amp; workspaces')}
             </ul>
-            <button class="pm-cta pm-cta-solo" id="pm-solo-btn" type="button">Start free trial</button>
+            <button class="pm-cta pm-cta-solo" id="pm-solo-btn" type="button">Upgrade now</button>
             <div class="pm-error" id="pm-solo-error"></div>
           </div>
 
@@ -334,7 +334,7 @@
               ${feat(true, 'Team members')}
               ${feat(true, 'Carousel visuals')}
             </ul>
-            <button class="pm-cta pm-cta-primary" id="pm-pro-btn" type="button">Start free trial</button>
+            <button class="pm-cta pm-cta-primary" id="pm-pro-btn" type="button">Upgrade now</button>
             <div class="pm-error" id="pm-pro-error"></div>
           </div>
 
@@ -534,8 +534,8 @@
     const proBtn  = $id('pm-pro-btn');
     soloBtn.disabled    = false;
     proBtn.disabled     = false;
-    soloBtn.textContent = 'Start free trial';
-    proBtn.textContent  = 'Start free trial';
+    soloBtn.textContent = 'Upgrade now';
+    proBtn.textContent  = 'Upgrade now';
     soloBtn.className   = 'pm-cta pm-cta-solo';
     proBtn.className    = 'pm-cta pm-cta-primary';
 

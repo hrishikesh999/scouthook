@@ -8,7 +8,7 @@ const { ideaToPost, vaultSeedToPost, backgroundExtractCtaAlternatives } = requir
 const { classifyContent } = require('../services/funnelClassifier');
 const { canGeneratePost } = require('../services/subscription');
 const { sendEmailToUser } = require('../emails');
-const { resolveProfile } = require('../lib/resolveProfile');
+const { resolveProfile, mergeProfiles } = require('../lib/resolveProfile');
 const { planHasFeature } = require('../lib/planFeatures');
 
 // ---------------------------------------------------------------------------
@@ -169,6 +169,21 @@ router.post('/', async (req, res) => {
 
   if (!profile) {
     return res.status(400).json({ ok: false, error: 'complete_profile_first' });
+  }
+
+  // When a personal LinkedIn profile is selected, blend the workspace brand
+  // profile in as strategic context. The personal profile owns voice fields
+  // (fingerprint, writing samples, CTAs, banned patterns); the brand profile
+  // owns positioning, audience and niche as fallback. mergeProfiles() applies
+  // the correct field priority rules and returns a single unified object that
+  // all downstream prompt builders can use without any changes.
+  if (profile.profile_type === 'person') {
+    const brandProfile = await db.prepare(
+      'SELECT * FROM profiles WHERE workspace_id = ? AND is_default = true'
+    ).get(tenantId);
+    if (brandProfile) {
+      profile = mergeProfiles(brandProfile, profile);
+    }
   }
 
   // First onboarding post: Voice DNA extraction fires as fire-and-forget from

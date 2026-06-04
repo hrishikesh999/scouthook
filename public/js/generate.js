@@ -831,6 +831,16 @@ const chat = (() => {
   return { init, advance, fireTensionExtraction };
 })();
 
+/* ── Starting point pills ───────────────────────────────────── */
+document.querySelectorAll('.start-pill').forEach(pill => {
+  pill.addEventListener('click', () => {
+    document.querySelectorAll('.start-pill').forEach(p => p.classList.remove('active'));
+    pill.classList.add('active');
+    chatInput.placeholder = pill.dataset.prompt;
+    chatInput.focus();
+  });
+});
+
 /* ── Chat input wiring ───────────────────────────────────────── */
 chatSendBtn.addEventListener('click', () => chat.advance());
 

@@ -216,6 +216,9 @@ const EXTRACTION_QUESTIONS = {
 // Lead magnet chip
 // Get ideas chip
 document.getElementById('intent-ideas')?.addEventListener('click', () => {
+  document.querySelectorAll('.start-pill[data-prompt]').forEach(p => p.classList.remove('active'));
+  const _pq = document.getElementById('pill-question');
+  if (_pq) { _pq.textContent = ''; _pq.classList.remove('visible'); }
   document.getElementById('intent-ideas').classList.add('active');
   loadVaultPanel(null, () => {
     document.getElementById('intent-ideas')?.classList.remove('active');
@@ -832,11 +835,13 @@ const chat = (() => {
 })();
 
 /* ── Starting point pills ───────────────────────────────────── */
-document.querySelectorAll('.start-pill').forEach(pill => {
+const pillQuestion = document.getElementById('pill-question');
+document.querySelectorAll('.start-pill[data-prompt]').forEach(pill => {
   pill.addEventListener('click', () => {
     document.querySelectorAll('.start-pill').forEach(p => p.classList.remove('active'));
     pill.classList.add('active');
-    chatInput.placeholder = pill.dataset.prompt;
+    pillQuestion.textContent = pill.dataset.prompt;
+    pillQuestion.classList.add('visible');
     chatInput.focus();
   });
 });

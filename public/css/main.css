@@ -586,6 +586,89 @@ body {
   }
 }
 
+/* ── Workspace switcher (in sidebar) ───────────────────────── */
+#workspace-switcher-slot {
+  padding: 0 12px 8px;
+  position: relative;
+}
+.ws-sw {
+  position: relative;
+}
+.ws-sw-btn {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 7px 10px;
+  background: #18181B;
+  border: 1px solid #27272A;
+  border-radius: 8px;
+  color: #FFFFFF;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  text-align: left;
+  box-sizing: border-box;
+  transition: background 0.15s, border-color 0.15s;
+}
+.ws-sw-btn:hover {
+  background: #27272A;
+  border-color: #3F3F46;
+}
+.ws-sw-icon { flex-shrink: 0; opacity: 0.5; }
+.ws-sw-name {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: -0.01em;
+}
+.ws-sw-chevron {
+  flex-shrink: 0;
+  opacity: 0.4;
+  transition: transform 0.15s ease;
+}
+.ws-sw.ws-sw-open .ws-sw-chevron { transform: rotate(180deg); }
+.ws-sw-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: #1C1C1F;
+  border: 1px solid #27272A;
+  border-radius: 8px;
+  z-index: 200;
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  padding: 4px 0;
+}
+.ws-sw-menu[hidden] { display: none; }
+.ws-sw-item, .ws-sw-new {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 7px 10px;
+  background: transparent;
+  border: none;
+  font-size: 12px;
+  font-weight: 500;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  text-align: left;
+  box-sizing: border-box;
+  transition: background 0.1s, color 0.1s;
+}
+.ws-sw-item { color: #A1A1AA; }
+.ws-sw-item:hover { background: #27272A; color: #FFFFFF; }
+.ws-sw-item.ws-sw-active { color: #FFFFFF; font-weight: 600; }
+.ws-sw-check { width: 14px; flex-shrink: 0; color: #0D9488; font-size: 11px; }
+.ws-sw-divider { margin: 4px 0; border: none; border-top: 1px solid #27272A; }
+.ws-sw-new { color: #52525B; }
+.ws-sw-new:hover { background: #27272A; color: #A1A1AA; }
+
 /* ── Main content wrapper ───────────────────────────────────── */
 #main-content {
   margin-left: 240px;

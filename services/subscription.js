@@ -2,16 +2,7 @@
 
 const { db } = require('../db');
 const { Paddle, Environment } = require('@paddle/paddle-node-sdk');
-
-// ---------------------------------------------------------------------------
-// Plan limits
-// ---------------------------------------------------------------------------
-const FREE_GENERATION_LIMIT  = null; // unlimited — limits lifted for open testing
-const FREE_VISUAL_LIMIT      = null; // unlimited — limits lifted for open testing
-const FREE_VAULT_DOC_LIMIT   = null; // unlimited — limits lifted for open testing
-const PRO_GENERATION_LIMIT   = null; // unlimited — Pro tier at $29-39/mo
-const PRO_VISUAL_LIMIT       = null; // unlimited — Pro tier at $29-39/mo
-const PRO_VAULT_DOC_LIMIT    = null; // unlimited — Pro tier at $29-39/mo
+const { getMonthlyPostLimit } = require('../lib/planFeatures');
 
 // ---------------------------------------------------------------------------
 // Paddle SDK singleton
@@ -66,21 +57,32 @@ async function getUserSubscription(userId) {
 
 // ---------------------------------------------------------------------------
 // getUserPlan
-// Returns 'pro' if the user has an active/trialing Pro subscription whose
-// period has not yet ended; otherwise 'free'.
-// A canceled subscription retains Pro access until current_period_end.
+// Returns 'free' | 'solo' | 'pro'.
+// A canceled subscription retains access until current_period_end.
 // ---------------------------------------------------------------------------
 async function getUserPlan(userId) {
   const sub = await getUserSubscription(userId);
-  if (sub.plan !== 'pro') return 'free';
-  // Treat these statuses as "still Pro". Only `canceled` needs a grace check.
+  // Normalise to the three known tiers; unknown values fall back to free.
+  const tier = ['free', 'solo', 'pro'].includes(sub.plan) ? sub.plan : 'free';
+  if (tier === 'free') return 'free';
   if (!['active', 'trialing', 'canceled', 'past_due', 'paused'].includes(sub.status)) return 'free';
-  // For canceled subs, check the grace period
   if (sub.status === 'canceled') {
     if (!sub.current_period_end) return 'free';
     if (new Date(sub.current_period_end) <= new Date()) return 'free';
   }
-  return 'pro';
+
+  // Founding members bought at the $29/mo founding price → Solo features.
+  // They keep their price but are mapped to the Solo tier for feature gating.
+  // They can upgrade to Pro ($39/mo) for unlimited posts + company pages + teams.
+  if (tier === 'pro' && sub.price_id) {
+    const foundingIds = [
+      process.env.PADDLE_PRICE_ID_FOUNDING_1,
+      process.env.PADDLE_PRICE_ID_FOUNDING_2,
+    ].filter(Boolean);
+    if (foundingIds.includes(sub.price_id)) return 'solo';
+  }
+
+  return tier; // 'solo' | 'pro'
 }
 
 // ---------------------------------------------------------------------------
@@ -111,13 +113,14 @@ function calendarMonthBounds() {
 
 // ---------------------------------------------------------------------------
 // canGeneratePost
-// Pro users: allowed if quality-gate passes this month < PRO_GENERATION_LIMIT.
-// Free users: allowed if quality-gate passes this month < FREE_GENERATION_LIMIT.
+// Counts quality-gate-passing posts this calendar month, per user (across all
+// workspaces — user-governs model). Returns { allowed, current, limit, plan, resets_at }.
 // Only rows with passed_gate = 1 count toward the limit.
 // ---------------------------------------------------------------------------
 async function canGeneratePost(userId) {
   const plan = await getUserPlan(userId);
-  const limit = plan === 'pro' ? PRO_GENERATION_LIMIT : FREE_GENERATION_LIMIT;
+  const rawLimit = getMonthlyPostLimit(plan); // 5 | 20 | Infinity
+  const limit = rawLimit === Infinity ? null : rawLimit;
   const [start, end] = calendarMonthBounds();
 
   let current = 0;
@@ -134,10 +137,10 @@ async function canGeneratePost(userId) {
   } catch (err) {
     console.error('[subscription] canGeneratePost count error:', err.message);
     // On DB error, allow generation rather than silently blocking the user
-    return { allowed: true, current: 0, limit, plan };
+    return { allowed: true, current: 0, limit, plan, resets_at: end };
   }
 
-  return { allowed: limit === null || current < limit, current, limit, plan };
+  return { allowed: limit === null || current < limit, current, limit, plan, resets_at: end };
 }
 
 // ---------------------------------------------------------------------------
@@ -148,7 +151,9 @@ async function canGeneratePost(userId) {
 // ---------------------------------------------------------------------------
 async function canGenerateVisual(userId, tenantId = 'default') {
   const plan  = await getUserPlan(userId);
-  const limit = plan === 'pro' ? PRO_VISUAL_LIMIT : FREE_VISUAL_LIMIT;
+  // Visuals: same monthly quota as text generation (user-governs model).
+  const rawLimit = getMonthlyPostLimit(plan);
+  const limit = rawLimit === Infinity ? null : rawLimit;
   const [start, end] = calendarMonthBounds();
 
   let current = 0;
@@ -242,6 +247,55 @@ async function upsertSubscription({
   );
 }
 
+// ---------------------------------------------------------------------------
+// forceSyncSubscriptionForUser
+// Fetches the latest subscription state from Paddle and writes it to DB.
+// Used by the daily cron that re-syncs stale/expired subscriptions.
+// Returns { plan, status } of the synced subscription, or null if not found.
+// ---------------------------------------------------------------------------
+const FORCE_SYNC_PRO_PRICE_IDS = [
+  process.env.PADDLE_PRICE_ID_FOUNDING_1,
+  process.env.PADDLE_PRICE_ID_FOUNDING_2,
+  process.env.PADDLE_PRICE_ID_YEARLY,
+].filter(Boolean);
+
+async function forceSyncSubscriptionForUser(userId) {
+  const row = await db.prepare(
+    'SELECT paddle_subscription_id, paddle_customer_id FROM user_subscriptions WHERE user_id = ?'
+  ).get(userId);
+
+  let subscription = null;
+  const paddle = getPaddle();
+
+  if (row?.paddle_subscription_id) {
+    subscription = await paddle.subscriptions.get(row.paddle_subscription_id);
+  } else if (row?.paddle_customer_id) {
+    const result = await paddle.subscriptions.list({ customerId: [row.paddle_customer_id] });
+    const subs = result?.data ?? [];
+    subscription = subs.find(s => ['active', 'trialing'].includes(s.status)) ?? subs[0] ?? null;
+  }
+
+  if (!subscription) return null;
+
+  const priceId = subscription.items?.[0]?.price?.id ?? null;
+  const plan    = !priceId || FORCE_SYNC_PRO_PRICE_IDS.includes(priceId) ? 'pro' : 'free';
+
+  await upsertSubscription({
+    userId,
+    paddleCustomerId:     subscription.customerId,
+    paddleSubscriptionId: subscription.id,
+    plan,
+    status:               subscription.status,
+    currentPeriodEnd:     subscription.currentBillingPeriod?.endsAt
+                            ? new Date(subscription.currentBillingPeriod.endsAt)
+                            : null,
+    canceledAt:           subscription.canceledAt ? new Date(subscription.canceledAt) : null,
+    priceId,
+  });
+
+  return { plan, status: subscription.status };
+}
+
 module.exports = {
   getPaddle,
   getPaddleEnvironment,
@@ -254,6 +308,7 @@ module.exports = {
   canUploadVaultDoc,
   getPaddleCustomerId,
   upsertSubscription,
+  forceSyncSubscriptionForUser,
   FREE_GENERATION_LIMIT,
   FREE_VISUAL_LIMIT,
   FREE_VAULT_DOC_LIMIT,

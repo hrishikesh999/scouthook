@@ -16,6 +16,10 @@ const {
   canUploadVaultDoc,
   upsertSubscription,
 } = require('../services/subscription');
+const { enforceWorkspaceLimitGrace, clearWorkspaceGracePeriods } = require('../lib/workspaceUtils');
+const { rankPlan, getWorkspaceLimit } = require('../lib/planFeatures');
+const { getUserPlan } = require('../services/subscription');
+const { db: billingDb } = require('../db');
 
 /** Paddle REST / JS may use camelCase or snake_case; values can be object or JSON string. */
 function getTransactionCustomUserId(transaction) {
@@ -75,7 +79,8 @@ router.get('/config', async (req, res) => {
     priceIdYearly:   process.env.PADDLE_PRICE_ID_YEARLY || '',
     priceIdFounding1: process.env.PADDLE_PRICE_ID_FOUNDING_1 || '',
     priceIdFounding2: process.env.PADDLE_PRICE_ID_FOUNDING_2 || '',
-    proMonthlyPrice: tierInfo.price,
+    proMonthlyPrice:  tierInfo.price,
+    soloMonthlyPrice: 19,
     foundingTier:    tierInfo.tier,
     spotsRemaining:  tierInfo.spotsRemaining,
   });
@@ -135,10 +140,10 @@ router.get('/subscription', requireAuth, async (req, res) => {
 
             // Keep MailerLite groups in sync whenever the stale-refresh updates
             // subscription state (e.g. on renewal, plan change, or cancellation).
-            getUserEmailInfo(userId, 'default').then(user => {
+            getUserEmailInfo(userId).then(user => {
               if (!user) return;
-              if (plan === 'pro' && ['active', 'trialing'].includes(subscription.status)) {
-                mailerlite.upgradeSubscriberToPro(user.email, user.name).catch(() => {});
+              if (['solo', 'pro'].includes(plan) && ['active', 'trialing'].includes(subscription.status)) {
+                mailerlite.upgradeSubscriberToPaid(user.email, user.name).catch(() => {});
               } else if (['canceled', 'past_due', 'paused'].includes(subscription.status)) {
                 mailerlite.downgradeSubscriberToFree(user.email, user.name).catch(() => {});
               }
@@ -148,7 +153,7 @@ router.get('/subscription', requireAuth, async (req, res) => {
             if (subscription.status === 'past_due') {
               const dedupKey = `past_due:${subscription.currentBillingPeriod?.endsAt || 'unknown'}`;
               const portalUrl = process.env.PADDLE_CUSTOMER_PORTAL_URL || (process.env.APP_URL ? `${process.env.APP_URL}/billing.html` : '');
-              sendEmailToUser(userId, 'default', 'payment-failed', { portal_url: portalUrl },
+              sendEmailToUser(userId, 'payment-failed', { portal_url: portalUrl },
                 { dedupKey, withinHours: 7 * 24 });
             }
           }
@@ -208,12 +213,22 @@ router.get('/subscription', requireAuth, async (req, res) => {
     console.warn('[billing] subscription stale-check failed (non-fatal):', checkErr.message);
   }
 
-  const [sub, genCheck, visualCheck, vaultCheck] = await Promise.all([
+  const [sub, genCheck, visualCheck, vaultCheck, wsStats] = await Promise.all([
     getUserSubscription(userId),
     canGeneratePost(userId),
     canGenerateVisual(userId),
     canUploadVaultDoc(userId),
+    billingDb.prepare(`
+      SELECT
+        COUNT(*) AS owned_count,
+        SUM(CASE WHEN grace_expires_at IS NOT NULL THEN 1 ELSE 0 END) AS grace_count
+      FROM workspaces w
+      JOIN workspace_members wm ON wm.workspace_id = w.id
+      WHERE wm.user_id = ? AND wm.role = 'owner' AND w.deleted_at IS NULL
+    `).get(userId).catch(() => null),
   ]);
+
+  const extraWorkspaces = sub.extra_workspaces ?? 0;
 
   return res.json({
     ok: true,
@@ -222,6 +237,11 @@ router.get('/subscription', requireAuth, async (req, res) => {
     price_id: sub.price_id ?? null,
     current_period_end: sub.current_period_end ?? null,
     canceled_at: sub.canceled_at ?? null,
+    trial_ends_at: sub.trial_ends_at ?? null,
+    extra_workspaces: extraWorkspaces,
+    workspace_limit: getWorkspaceLimit(genCheck.plan, extraWorkspaces),
+    workspace_count: wsStats?.owned_count ?? 0,
+    workspaces_in_grace: wsStats?.grace_count ?? 0,
     generations: {
       current: genCheck.current,
       limit: genCheck.limit === Infinity ? null : genCheck.limit,
@@ -290,7 +310,7 @@ router.post('/cancel', requireAuth, async (req, res) => {
   const accessEnds = periodEnd
     ? new Date(periodEnd).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
     : 'the end of your current billing period';
-  sendEmailToUser(userId, 'default', 'cancelled', {
+  sendEmailToUser(userId, 'cancelled', {
     access_ends: accessEnds,
     app_url: process.env.APP_URL || '',
   }, { dedupKey: false });
@@ -427,6 +447,10 @@ router.post('/sync', requireAuth, async (req, res) => {
     plan = proPriceIds.includes(priceId) ? 'pro' : 'free';
   }
 
+  // Capture existing plan before the upsert so we can detect plan changes.
+  const prevSub = await getUserSubscription(userId).catch(() => null);
+  const prevPlan = prevSub?.plan ?? 'free';
+
   try {
     await upsertSubscription({
       userId,
@@ -447,29 +471,88 @@ router.post('/sync', requireAuth, async (req, res) => {
 
   console.log(`[billing] sync userId=${userId} plan=${plan} status=${subscription.status}`);
 
+  // Enforce workspace limits when the plan changes (fire-and-forget — never block the response).
+  if (plan !== prevPlan) {
+    if (rankPlan(plan) < rankPlan(prevPlan)) {
+      // Downgrade — put excess workspaces into grace period
+      billingDb.prepare('SELECT plan, extra_workspaces FROM user_subscriptions WHERE user_id = ?')
+        .get(userId)
+        .then(updated => enforceWorkspaceLimitGrace(userId, updated?.plan ?? plan, updated?.extra_workspaces ?? 0))
+        .catch(err => console.error('[billing] enforceWorkspaceLimitGrace error:', err.message));
+    } else {
+      // Upgrade — clear any grace periods
+      clearWorkspaceGracePeriods(userId)
+        .catch(err => console.error('[billing] clearWorkspaceGracePeriods error:', err.message));
+    }
+  }
+
   // Send pro-activated email when a new pro subscription is created.
   // Deduplicate by subscription ID so we only send once per activation.
   if (plan === 'pro' && ['active', 'trialing'].includes(subscription.status)) {
     const renewsOn = subscription.currentBillingPeriod?.endsAt
       ? new Date(subscription.currentBillingPeriod.endsAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
       : '';
-    sendEmailToUser(userId, 'default', 'pro-activated', {
+    sendEmailToUser(userId, 'pro-activated', {
       renews_on: renewsOn,
       app_url: process.env.APP_URL || '',
     }, { dedupKey: `pro-activated:${subscription.id}`, withinHours: 365 * 24 });
   }
 
   // Sync subscription state to Mailerlite (fire-and-forget, never throws).
-  getUserEmailInfo(userId, 'default').then(user => {
+  getUserEmailInfo(userId).then(user => {
     if (!user) return;
-    if (plan === 'pro' && ['active', 'trialing'].includes(subscription.status)) {
-      mailerlite.upgradeSubscriberToPro(user.email, user.name).catch(() => {});
+    if (['solo', 'pro'].includes(plan) && ['active', 'trialing'].includes(subscription.status)) {
+      mailerlite.upgradeSubscriberToPaid(user.email, user.name).catch(() => {});
     } else if (['canceled', 'past_due', 'paused'].includes(subscription.status)) {
       mailerlite.downgradeSubscriberToFree(user.email, user.name).catch(() => {});
     }
   }).catch(() => {});
 
   return res.json({ ok: true, plan, status: subscription.status });
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/billing/upgrade
+// Returns Paddle price config for upgrading to Solo or Pro.
+// Frontend opens Paddle Checkout overlay, then calls POST /api/billing/sync.
+// ---------------------------------------------------------------------------
+router.post('/upgrade', requireAuth, async (req, res) => {
+  const { plan } = req.body || {};
+  if (!['solo', 'pro'].includes(plan)) {
+    return res.status(400).json({ ok: false, error: 'invalid_plan' });
+  }
+  const priceId = plan === 'pro'
+    ? process.env.PADDLE_PRICE_ID_PRO
+    : process.env.PADDLE_PRICE_ID_SOLO;
+  if (!priceId) {
+    return res.status(500).json({ ok: false, error: 'price_not_configured' });
+  }
+  return res.json({
+    ok: true,
+    priceId,
+    trialDays: 7,
+    customData: { userId: req.userId, plan },
+  });
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/billing/add-workspace
+// Pro only: returns Paddle price config for the per-workspace add-on.
+// ---------------------------------------------------------------------------
+router.post('/add-workspace', requireAuth, async (req, res) => {
+  const plan = await getUserPlan(req.userId);
+  if (plan !== 'pro') {
+    return res.status(403).json({ ok: false, error: 'pro_required' });
+  }
+  const priceId = process.env.PADDLE_PRICE_ID_WORKSPACE_ADDON;
+  if (!priceId) {
+    return res.status(500).json({ ok: false, error: 'price_not_configured' });
+  }
+  return res.json({
+    ok: true,
+    priceId,
+    customData: { userId: req.userId, type: 'extra_workspace', quantity: 1 },
+  });
 });
 
 module.exports = router;

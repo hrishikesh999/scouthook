@@ -2,10 +2,18 @@
 
 const { db, getSetting } = require('../db');
 
-async function generateInputExamples(userId, tenantId) {
+// Guard against callers that still pass (userId, tenantId) instead of profileId.
+function assertProfileId(profileId, fnName) {
+  if (!Number.isInteger(profileId) || profileId <= 0) {
+    throw new Error(`[${fnName}] profileId must be a positive integer, got ${typeof profileId}: ${JSON.stringify(profileId)}`);
+  }
+}
+
+async function generateInputExamples(profileId) {
+  assertProfileId(profileId, 'generateInputExamples');
   const profile = await db
-    .prepare('SELECT content_niche, audience_role FROM user_profiles WHERE user_id = ? AND tenant_id = ?')
-    .get(userId, tenantId);
+    .prepare('SELECT content_niche, audience_role FROM profiles WHERE id = ?')
+    .get(profileId);
 
   if (!profile?.content_niche) return;
 
@@ -51,18 +59,19 @@ Example format: ["example 1", "example 2", "example 3", "example 4"]`,
   }
 
   await db
-    .prepare('UPDATE user_profiles SET input_examples = ? WHERE user_id = ? AND tenant_id = ?')
-    .run(JSON.stringify(examples), userId, tenantId);
+    .prepare('UPDATE profiles SET input_examples = ? WHERE id = ?')
+    .run(JSON.stringify(examples), profileId);
 }
 
 /**
- * Derives 2-3 content pillars from the user's niche and onboarding answers.
+ * Derives 2-3 content pillars from the profile's niche and onboarding answers.
  * Runs once at onboarding completion. Never throws — errors are logged and swallowed.
  */
-async function generateContentPillars(userId, tenantId) {
+async function generateContentPillars(profileId) {
+  assertProfileId(profileId, 'generateContentPillars');
   const profile = await db
-    .prepare('SELECT content_niche, audience_role, onboarding_q1, onboarding_q2 FROM user_profiles WHERE user_id = ? AND tenant_id = ?')
-    .get(userId, tenantId);
+    .prepare('SELECT content_niche, audience_role, onboarding_q1, onboarding_q2 FROM profiles WHERE id = ?')
+    .get(profileId);
 
   if (!profile?.content_niche) return;
 
@@ -111,8 +120,8 @@ Return ONLY a JSON array of 2-3 strings. Example: ["founder-led sales", "pricing
   }
 
   await db
-    .prepare('UPDATE user_profiles SET content_pillars = ? WHERE user_id = ? AND tenant_id = ?')
-    .run(JSON.stringify(pillars), userId, tenantId);
+    .prepare('UPDATE profiles SET content_pillars = ? WHERE id = ?')
+    .run(JSON.stringify(pillars), profileId);
 }
 
 module.exports = { generateInputExamples, generateContentPillars };

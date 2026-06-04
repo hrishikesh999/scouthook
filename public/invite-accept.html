@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Accept invitation — Scouthook</title>
+  <link rel="stylesheet" href="/css/main.css" />
+  <link rel="stylesheet" href="/css/login.css" />
+  <style>
+    .invite-card {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 40px;
+      max-width: 420px;
+      width: 100%;
+      text-align: center;
+    }
+    .invite-workspace-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: #f3f4f6;
+      border-radius: 999px;
+      padding: 6px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #374151;
+      margin-bottom: 20px;
+    }
+    .invite-heading {
+      font-size: 22px;
+      font-weight: 700;
+      color: #111827;
+      margin: 0 0 8px;
+    }
+    .invite-subheading {
+      font-size: 14px;
+      color: #6b7280;
+      margin: 0 0 28px;
+      line-height: 1.5;
+    }
+    .invite-role-badge {
+      display: inline-block;
+      background: #ede9fe;
+      color: #6d28d9;
+      border-radius: 4px;
+      padding: 2px 8px;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: capitalize;
+    }
+    .invite-accept-btn {
+      display: block;
+      width: 100%;
+      padding: 13px;
+      background: #6366f1;
+      color: #fff;
+      font-size: 15px;
+      font-weight: 600;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      margin-bottom: 12px;
+      transition: background 0.15s;
+    }
+    .invite-accept-btn:hover:not(:disabled) { background: #4f46e5; }
+    .invite-accept-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .invite-login-link {
+      display: block;
+      width: 100%;
+      padding: 13px;
+      background: #fff;
+      color: #374151;
+      font-size: 15px;
+      font-weight: 600;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      cursor: pointer;
+      text-decoration: none;
+      transition: background 0.15s;
+      margin-bottom: 12px;
+    }
+    .invite-login-link:hover { background: #f9fafb; }
+    .invite-email-hint {
+      font-size: 12px;
+      color: #9ca3af;
+      margin-top: 4px;
+    }
+    .invite-error {
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-size: 14px;
+      color: #b91c1c;
+      margin-bottom: 20px;
+      text-align: left;
+    }
+    .invite-spinner {
+      display: inline-block;
+      width: 24px;
+      height: 24px;
+      border: 2px solid #e5e7eb;
+      border-top-color: #6366f1;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin-bottom: 12px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .invite-page {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 32px 16px;
+      background: #f9fafb;
+    }
+  </style>
+</head>
+<body>
+  <div class="invite-page">
+    <div class="invite-card" id="invite-card">
+      <div class="invite-spinner" id="invite-spinner"></div>
+      <p style="color:#6b7280;font-size:14px">Loading invitation…</p>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const params  = new URLSearchParams(window.location.search);
+      const token   = params.get('token');
+      const card    = document.getElementById('invite-card');
+
+      function escapeHtml(s) {
+        return String(s || '')
+          .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      }
+
+      function showError(msg) {
+        card.innerHTML = `
+          <div class="invite-error">${escapeHtml(msg)}</div>
+          <a href="/login.html" class="invite-login-link">Go to Scouthook →</a>
+        `;
+      }
+
+      function renderLoggedOut(invite) {
+        const returnUrl = encodeURIComponent(window.location.href);
+        card.innerHTML = `
+          <div class="invite-workspace-badge">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+            ${escapeHtml(invite.workspace_name)}
+          </div>
+          <h1 class="invite-heading">You've been invited</h1>
+          <p class="invite-subheading">
+            ${invite.inviter_name ? escapeHtml(invite.inviter_name) + ' invited you' : 'You were invited'} to join
+            <strong>${escapeHtml(invite.workspace_name)}</strong> as a
+            <span class="invite-role-badge">${escapeHtml(invite.role)}</span>.
+          </p>
+          <p class="invite-subheading" style="margin-top:-16px">Sign in to accept.</p>
+          <a href="/auth/google?next=${returnUrl}" class="invite-login-link">
+            <svg viewBox="0 0 48 48" width="16" height="16" style="vertical-align:middle;margin-right:6px">
+              <path fill="#EA4335" d="M24 9.5c3.54 0 6.08 1.53 7.48 2.81l5.1-4.9C33.44 4.59 29.17 2.5 24 2.5 14.74 2.5 6.94 7.82 3.1 15.6l6.35 4.93C11.34 14.1 17.14 9.5 24 9.5z"/>
+              <path fill="#4285F4" d="M46.1 24.5c0-1.34-.12-2.63-.34-3.88H24v7.34h12.5c-.54 2.9-2.18 5.35-4.64 7.02v5.8h7.5c4.38-4.03 6.74-9.97 6.74-16.28z"/>
+              <path fill="#FBBC05" d="M9.45 28.53c-.47-1.4-.74-2.9-.74-4.53s.27-3.13.74-4.53l-6.35-4.93C1.77 17.23 1 20.52 1 24s.77 6.77 2.1 9.46l6.35-4.93z"/>
+              <path fill="#34A853" d="M24 45.5c5.17 0 9.5-1.7 12.66-4.62l-7.5-5.8c-2.08 1.4-4.74 2.23-5.16 2.23-6.86 0-12.66-4.6-14.55-11.03l-6.35 4.93C6.94 40.18 14.74 45.5 24 45.5z"/>
+            </svg>
+            Sign in with Google
+          </a>
+          <p class="invite-email-hint">Sent to ${escapeHtml(invite.email_hint)}</p>
+        `;
+      }
+
+      function renderLoggedIn(invite) {
+        card.innerHTML = `
+          <div class="invite-workspace-badge">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+            ${escapeHtml(invite.workspace_name)}
+          </div>
+          <h1 class="invite-heading">You've been invited</h1>
+          <p class="invite-subheading">
+            ${invite.inviter_name ? escapeHtml(invite.inviter_name) + ' invited you' : 'You were invited'} to join
+            <strong>${escapeHtml(invite.workspace_name)}</strong> as a
+            <span class="invite-role-badge">${escapeHtml(invite.role)}</span>.
+          </p>
+          <div id="invite-error-box"></div>
+          <button class="invite-accept-btn" id="invite-accept-btn" type="button">
+            Accept invitation →
+          </button>
+          <p class="invite-email-hint">Sent to ${escapeHtml(invite.email_hint)}</p>
+        `;
+
+        document.getElementById('invite-accept-btn').addEventListener('click', acceptInvite);
+      }
+
+      async function acceptInvite() {
+        const btn    = document.getElementById('invite-accept-btn');
+        const errBox = document.getElementById('invite-error-box');
+        btn.disabled = true;
+        btn.textContent = 'Accepting…';
+        if (errBox) errBox.innerHTML = '';
+
+        try {
+          const resp = await fetch(`/api/invites/${encodeURIComponent(token)}/accept`, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+          });
+          const data = await resp.json();
+
+          if (data.ok) {
+            window.location.href = data.redirect || '/dashboard.html';
+            return;
+          }
+
+          const msg =
+            data.error === 'email_mismatch'
+              ? `This invite was sent to a different email address${data.hint ? ' (' + data.hint + ')' : ''}. Please sign in with that account.`
+              : data.error === 'invite_not_found_or_expired'
+              ? 'This invite has expired or already been accepted.'
+              : 'Something went wrong. Please try again.';
+
+          if (errBox) {
+            errBox.innerHTML = `<div class="invite-error">${escapeHtml(msg)}</div>`;
+          }
+        } catch {
+          if (errBox) {
+            errBox.innerHTML = `<div class="invite-error">Network error. Please try again.</div>`;
+          }
+        } finally {
+          if (btn && !btn.disabled) {
+            btn.disabled = false;
+            btn.textContent = 'Accept invitation →';
+          } else if (btn) {
+            btn.disabled = false;
+            btn.textContent = 'Accept invitation →';
+          }
+        }
+      }
+
+      async function init() {
+        if (!token) {
+          showError('No invitation token found in this link. Check your email for the original invite.');
+          return;
+        }
+
+        // Validate the invite token
+        let invite;
+        try {
+          const r = await fetch(`/api/invites/${encodeURIComponent(token)}`, {
+            credentials: 'same-origin',
+          });
+          const d = await r.json();
+          if (!d.ok) {
+            const msg =
+              d.error === 'invite_not_found_or_expired'
+                ? 'This invitation has expired or already been accepted.'
+                : 'Unable to load invitation details.';
+            showError(msg);
+            return;
+          }
+          invite = d;
+        } catch {
+          showError('Unable to load invitation. Please check your connection and try again.');
+          return;
+        }
+
+        // Check if user is authenticated
+        let isLoggedIn = false;
+        try {
+          const ar = await fetch('/api/auth/me', { credentials: 'same-origin' });
+          const ad = await ar.json();
+          isLoggedIn = !!(ad.user && ad.user.user_id);
+        } catch { /* treat as not logged in */ }
+
+        if (isLoggedIn) {
+          renderLoggedIn(invite);
+        } else {
+          renderLoggedOut(invite);
+        }
+      }
+
+      init();
+    })();
+  </script>
+</body>
+</html>

@@ -202,9 +202,9 @@ router.get('/documents', async (req, res) => {
   const docs = await db.prepare(`
     SELECT id, filename, source_type, source_url, status, chunk_count, ideas_mined, error_message, created_at
     FROM   vault_documents
-    WHERE  user_id = ? AND tenant_id = ?
+    WHERE  tenant_id = ?
     ORDER  BY created_at DESC
-  `).all(userId, tenantId);
+  `).all(tenantId);
 
   return res.json({ ok: true, documents: docs });
 });
@@ -219,8 +219,8 @@ router.delete('/documents/:id', async (req, res) => {
   const { id } = req.params;
 
   const doc = await db.prepare(`
-    SELECT id, storage_key FROM vault_documents WHERE id = ? AND user_id = ? AND tenant_id = ?
-  `).get(id, userId, tenantId);
+    SELECT id, storage_key FROM vault_documents WHERE id = ? AND tenant_id = ?
+  `).get(id, tenantId);
 
   if (!doc) return res.status(404).json({ ok: false, error: 'document_not_found' });
 
@@ -247,11 +247,11 @@ router.post('/mine', async (req, res) => {
            vd.filename
     FROM   vault_chunks vc
     JOIN   vault_documents vd ON vd.id = vc.document_id
-    WHERE  vc.user_id = ? AND vc.tenant_id = ?
+    WHERE  vc.tenant_id = ?
       AND  vc.mined_at IS NULL
       AND  vd.status = 'ready'
     ORDER  BY vc.document_id, vc.chunk_index
-  `).all(userId, tenantId);
+  `).all(tenantId);
 
   if (unmined.length === 0) {
     return res.json({ ok: true, seeds_created: 0, message: 'No new content to mine' });
@@ -267,10 +267,10 @@ router.post('/mine', async (req, res) => {
     byDoc.get(chunk.document_id).chunks.push(chunk);
   }
 
-  // Fetch user profile once for audience-aware mining
+  // Fetch workspace default profile for audience-aware mining
   const userProfile = await db.prepare(
-    'SELECT content_niche, audience_role, audience_pain, contrarian_view FROM user_profiles WHERE user_id = ? AND tenant_id = ?'
-  ).get(userId, tenantId) || {};
+    'SELECT content_niche, audience_role, audience_pain, contrarian_view FROM profiles WHERE workspace_id = ? AND is_default = true'
+  ).get(tenantId) || {};
 
   let totalSeeds = 0;
 
@@ -334,9 +334,9 @@ router.get('/ideas', async (req, res) => {
   let sql    = `SELECT id, document_id, seed_text, source_ref, funnel_type, hook_archetype,
                        status, generated_post_id, hook_preview, source, created_at
                 FROM   vault_ideas
-                WHERE  user_id = ? AND tenant_id = ?
+                WHERE  tenant_id = ?
                   ${sourceFilter}`;
-  const args = [userId, tenantId];
+  const args = [tenantId];
 
   if (status) {
     sql += ` AND status = ?`;
@@ -376,18 +376,18 @@ router.get('/suggest-topics', async (req, res) => {
   try {
     const profile = await db.prepare(
       `SELECT content_niche, audience_role, audience_pain, business_positioning, contrarian_view, input_examples, content_pillars
-       FROM user_profiles WHERE user_id = ? AND tenant_id = ?`
-    ).get(userId, tenantId);
+       FROM profiles WHERE workspace_id = ? AND is_default = true`
+    ).get(tenantId);
 
     const liRow = await db.prepare(
-      'SELECT linkedin_headline FROM linkedin_tokens WHERE user_id = ? AND tenant_id = ?'
-    ).get(userId, tenantId);
+      'SELECT display_name FROM linkedin_connections WHERE workspace_id = ? AND is_default = true'
+    ).get(tenantId);
 
     const niche       = profile?.content_niche        || '';
     const audience    = profile?.audience_role         || '';
     const pain        = profile?.audience_pain         || '';
     const positioning = profile?.business_positioning  || '';
-    const headline    = liRow?.linkedin_headline        || '';
+    const headline    = liRow?.display_name              || '';
     const contrarian  = profile?.contrarian_view       || '';
 
     // Parse writing samples — take up to 2, cap each at 350 chars to keep prompt tight
@@ -524,13 +524,13 @@ router.get('/generate-ideas', async (req, res) => {
       SELECT content_niche, audience_role, audience_pain, business_positioning,
              contrarian_view, voice_fingerprint, content_pillars,
              authority_statements, writing_sample_phrases
-      FROM   user_profiles
-      WHERE  user_id = ? AND tenant_id = ?
-    `).get(userId, tenantId);
+      FROM   profiles
+      WHERE  workspace_id = ? AND is_default = true
+    `).get(tenantId);
 
     const liRow = await db.prepare(
-      'SELECT linkedin_headline FROM linkedin_tokens WHERE user_id = ? AND tenant_id = ?'
-    ).get(userId, tenantId);
+      'SELECT display_name FROM linkedin_connections WHERE workspace_id = ? AND is_default = true'
+    ).get(tenantId);
 
     const niche    = profile?.content_niche        || '';
     const audience = profile?.audience_role         || '';
@@ -578,7 +578,7 @@ router.get('/generate-ideas', async (req, res) => {
       pos.outcome                       && `Outcome they deliver: ${pos.outcome}`,
       profile?.contrarian_view          && `Their contrarian belief: ${profile.contrarian_view}`,
       pillars.length                    && `Strategic pillars: ${pillars.join(' | ')}`,
-      liRow?.linkedin_headline          && `LinkedIn headline: ${liRow.linkedin_headline}`,
+      liRow?.display_name               && `LinkedIn: ${liRow.display_name}`,
     ].filter(Boolean).join('\n');
 
     const authBlock = authStatements.length
@@ -698,8 +698,8 @@ router.get('/brief-idea', async (req, res) => {
     const row = await db.prepare(`
       SELECT seed_text, source_ref, funnel_type, hook_preview, hook_archetype
       FROM   vault_ideas
-      WHERE  id = ? AND user_id = ? AND tenant_id = ?
-    `).get(id, userId, tenantId);
+      WHERE  id = ? AND tenant_id = ?
+    `).get(id, tenantId);
 
     if (!row) return res.status(404).json({ ok: false, error: 'not_found' });
 
@@ -717,11 +717,11 @@ router.get('/brief-idea', async (req, res) => {
       return res.json({ ok: true, brief: story_prompt.trim() });
     }
 
-    // Fetch user profile for voice context
+    // Fetch workspace default profile for voice context
     const profile = await db.prepare(`
       SELECT content_niche, audience_role, onboarding_q2, contrarian_view, voice_fingerprint
-      FROM   user_profiles WHERE user_id = ? AND tenant_id = ?
-    `).get(userId, tenantId);
+      FROM   profiles WHERE workspace_id = ? AND is_default = true
+    `).get(tenantId);
 
     const niche    = profile?.content_niche  || '';
     const audience = profile?.audience_role  || '';
@@ -798,15 +798,15 @@ router.get('/expand-idea', async (req, res) => {
              vc.content AS chunk_content, vc.source_ref AS chunk_source_ref
       FROM   vault_ideas  vi
       LEFT JOIN vault_chunks vc ON vc.id = vi.chunk_id
-      WHERE  vi.id = ? AND vi.user_id = ? AND vi.tenant_id = ?
-    `).get(id, userId, tenantId);
+      WHERE  vi.id = ? AND vi.tenant_id = ?
+    `).get(id, tenantId);
 
     if (!idea) return res.status(404).json({ ok: false, error: 'not_found' });
 
     const profile = db.prepare(
       `SELECT content_niche, audience_role, audience_pain, contrarian_view, onboarding_q2
-       FROM   user_profiles WHERE user_id = ? AND tenant_id = ?`
-    ).get(userId, tenantId);
+       FROM   profiles WHERE workspace_id = ? AND is_default = true`
+    ).get(tenantId);
 
     const niche      = profile?.content_niche    || '';
     const audience   = profile?.audience_role    || '';
@@ -891,8 +891,8 @@ router.patch('/ideas/:id', async (req, res) => {
   }
 
   const idea = await db.prepare(`
-    SELECT id FROM vault_ideas WHERE id = ? AND user_id = ? AND tenant_id = ?
-  `).get(id, userId, tenantId);
+    SELECT id FROM vault_ideas WHERE id = ? AND tenant_id = ?
+  `).get(id, tenantId);
   if (!idea) return res.status(404).json({ ok: false, error: 'idea_not_found' });
 
   await db.prepare(`UPDATE vault_ideas SET status = ? WHERE id = ?`).run(status, id);

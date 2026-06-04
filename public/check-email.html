@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ScoutHook — Check your inbox</title>
+  <link rel="stylesheet" href="/css/main.css" />
+  <link rel="stylesheet" href="/css/login.css" />
+</head>
+<body>
+  <div class="login-split">
+    <div class="login-left">
+      <div class="login-left-inner">
+        <img src="/images/scout-hook-logo.png" alt="ScoutHook" class="login-left-logo" />
+        <h1 class="login-hero-headline">Check your inbox.</h1>
+      </div>
+    </div>
+    <div class="login-right">
+      <div class="login-right-inner">
+        <section class="login-card" role="region" aria-label="Check your inbox">
+          <div style="text-align:center;margin-bottom:20px;">
+            <span style="font-size:48px;line-height:1;">📬</span>
+          </div>
+          <h2 id="ce-title" style="font-size:18px;font-weight:700;color:var(--text-heading);margin:0 0 10px;text-align:center">
+            We sent you a link
+          </h2>
+          <p id="ce-body" style="font-size:14px;color:var(--text-muted);text-align:center;margin:0 0 24px;line-height:1.6">
+            Check your email and click the link to continue.
+          </p>
+          <div id="resend-section" style="display:none;text-align:center">
+            <p style="font-size:13px;color:var(--text-muted);margin:0 0 10px">Didn't get it?</p>
+            <button id="resendBtn" class="btn-secondary" style="width:100%">Resend verification email</button>
+            <p id="resendStatus" style="font-size:12px;color:var(--text-muted);margin:10px 0 0;display:none"></p>
+          </div>
+          <p style="font-size:13px;color:var(--text-muted);text-align:center;margin:16px 0 0">
+            <a href="/login.html" style="color:var(--brand)">Back to sign in</a>
+          </p>
+        </section>
+      </div>
+    </div>
+  </div>
+  <script>
+  (function () {
+    const params = new URLSearchParams(window.location.search);
+    const reason = params.get('reason');
+    const email  = params.get('email') || '';
+
+    const title = document.getElementById('ce-title');
+    const body  = document.getElementById('ce-body');
+    const resendSection = document.getElementById('resend-section');
+
+    if (reason === 'reset') {
+      title.textContent = 'Check your inbox';
+      body.textContent  = 'If that email has an account, we\'ve sent a password reset link. It expires in 1 hour.';
+    } else {
+      title.textContent = 'Verify your email';
+      body.innerHTML    = 'We sent a verification link to <strong>' +
+        (email ? escapeHtml(email) : 'your email address') +
+        '</strong>. Click it to activate your account.';
+      resendSection.style.display = '';
+    }
+
+    function escapeHtml(s) {
+      return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    const resendBtn    = document.getElementById('resendBtn');
+    const resendStatus = document.getElementById('resendStatus');
+    resendBtn?.addEventListener('click', async function () {
+      resendBtn.disabled    = true;
+      resendBtn.textContent = 'Sending…';
+      try {
+        await fetch('/auth/resend-verification', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email }),
+        });
+        resendStatus.textContent = 'Sent! Check your inbox (and spam folder).';
+        resendStatus.style.display = '';
+      } catch {
+        resendStatus.textContent = 'Something went wrong. Please try again.';
+        resendStatus.style.display = '';
+      } finally {
+        resendBtn.disabled    = false;
+        resendBtn.textContent = 'Resend verification email';
+      }
+    });
+  })();
+  </script>
+</body>
+</html>

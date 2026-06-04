@@ -15,7 +15,7 @@ router.get('/', async (req, res) => {
   }
 
   const uid = req.userId;
-  const tid = req.tenantId || 'default';
+  const tid = req.tenantId;
 
   try {
     const profile = await db.prepare(`
@@ -31,9 +31,9 @@ router.get('/', async (req, res) => {
     `).get(uid, tid);
 
     const linkedInRow = await db.prepare(`
-      SELECT id FROM linkedin_tokens
-      WHERE  user_id = ? AND tenant_id = ?
-    `).get(uid, tid);
+      SELECT id FROM linkedin_connections
+      WHERE  workspace_id = ? AND is_default = true
+    `).get(tid);
 
     const connectUrl = `/api/linkedin/connect?_uid=${encodeURIComponent(uid)}&_tid=${encodeURIComponent(tid)}`;
 

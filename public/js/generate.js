@@ -45,6 +45,7 @@ async function readSSEStream(response, { onStep, onToken, onDone, onError } = {}
 }
 
 /* ── State ───────────────────────────────────────────────────── */
+let _selectedProfileId  = null; // numeric profile id, null = use workspace default
 let selectedType        = null; // 'reach'|'trust'|'convert'
 let chatStep            = 0;
 let chatAnswers         = {};
@@ -897,6 +898,7 @@ async function triggerGenerate(opts = {}) {
 
   try {
     const body = { path: 'idea', raw_idea: idea, post_type: selectedType || null };
+    if (_selectedProfileId)                             body.profileId            = _selectedProfileId;
     if (tensionStmt)                                    body.tension_statement    = tensionStmt;
     if (selectedVaultIdeaId)                            body.vault_idea_id        = selectedVaultIdeaId;
     if (opts.enrichedIdea || opts.skipSubstanceCheck)   body.skip_substance_check = true;
@@ -993,7 +995,7 @@ async function triggerGenerate(opts = {}) {
     } else if (err.message === 'plan_limit_exceeded') {
       const used = (err.planCurrent != null && err.planLimit != null)
         ? ` You've used ${err.planCurrent} of ${err.planLimit} this month.` : '';
-      showChatError(`You've reached the free plan limit.${used} <a href="/billing.html" class="js-upgrade-cta">Upgrade to Pro →</a>`);
+      showChatError(`You've reached your monthly post limit.${used} <a href="#" class="js-upgrade-cta" data-feature="generate">Upgrade →</a>`);
     } else if (err.message === 'rate_limit_exceeded') {
       showChatError("You've hit the hourly generation limit. Wait a few minutes and try again.");
     } else if (err.message === 'high_demand') {
@@ -1184,7 +1186,11 @@ function showChatError(html) {
   chatError.classList.add('visible');
   chatError.querySelector('a[href="#"]')?.addEventListener('click', e => { e.preventDefault(); triggerGenerate(); });
   chatError.querySelector('a.js-upgrade-cta')?.addEventListener('click', e => {
-    if (window.PricingModal) { e.preventDefault(); window.PricingModal.open(); }
+    if (window.PricingModal) {
+      e.preventDefault();
+      const feature = e.currentTarget.dataset.feature || null;
+      window.PricingModal.open(feature ? { feature, requiredPlan: 'solo' } : {});
+    }
   });
 }
 function hideChatError() {
@@ -1271,6 +1277,42 @@ async function checkVaultEmptyState() {
   } catch { /* non-fatal */ }
 }
 
+/* ── Profile selector ───────────────────────────────────────── */
+async function loadProfileSelector() {
+  try {
+    const res  = await fetch('/api/workspaces/profiles', { headers: apiHeaders() });
+    const data = await res.json();
+    if (!data.ok || !data.profiles?.length || data.profiles.length <= 1) return;
+
+    const selector = document.getElementById('profile-selector');
+    const btnsEl   = document.getElementById('profile-sel-btns');
+    if (!selector || !btnsEl) return;
+
+    const defaultProfile = data.profiles.find(p => p.is_default) || data.profiles[0];
+    _selectedProfileId   = defaultProfile.id;
+
+    function renderBtn(p) {
+      const initial = (p.display_name || '?')[0].toUpperCase();
+      const avatar  = p.avatar_url
+        ? `<img class="profile-sel-avatar" src="${escapeHtml(p.avatar_url)}" alt="">`
+        : `<span class="profile-sel-initial">${escapeHtml(initial)}</span>`;
+      return `<button class="profile-sel-btn${p.id === _selectedProfileId ? ' active' : ''}"
+        type="button" data-profile-id="${p.id}">${avatar}<span>${escapeHtml(p.display_name)}</span></button>`;
+    }
+
+    btnsEl.innerHTML = data.profiles.map(renderBtn).join('');
+    btnsEl.querySelectorAll('.profile-sel-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        _selectedProfileId = Number(btn.dataset.profileId);
+        btnsEl.querySelectorAll('.profile-sel-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+      });
+    });
+
+    selector.style.display = '';
+  } catch { /* non-fatal — falls back to workspace default profile */ }
+}
+
 /* ── Init ────────────────────────────────────────────────────── */
 (async function init() {
   await window.scouthookAuthReady;
@@ -1281,6 +1323,7 @@ async function checkVaultEmptyState() {
   loadMixRecommendation();    // fire-and-forget — updates active btn if mix recommends a type
   checkProfileGate();         // fire-and-forget — nudge appears if profile is empty
   prefetchIdeas();            // fire-and-forget — warms idea cache for instant vault panel
+  loadProfileSelector();      // fire-and-forget — shows "Creating for" selector if >1 profile
 
   const urlParams = new URLSearchParams(location.search);
   const urlType   = urlParams.get('type');

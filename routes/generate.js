@@ -8,6 +8,8 @@ const { ideaToPost, vaultSeedToPost, backgroundExtractCtaAlternatives } = requir
 const { classifyContent } = require('../services/funnelClassifier');
 const { canGeneratePost } = require('../services/subscription');
 const { sendEmailToUser } = require('../emails');
+const { resolveProfile } = require('../lib/resolveProfile');
+const { planHasFeature } = require('../lib/planFeatures');
 
 // ---------------------------------------------------------------------------
 // Sliding window rate limiter — 10 generations per hour per user.
@@ -19,12 +21,12 @@ const RATE_LIMIT_MAX = 10;
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 1 hour
 const generationTimestamps = new Map(); // fallback: userId → number[]
 
-async function checkRateLimit(userId) {
+async function checkRateLimit(tenantId) {
   const redis = getRedis();
 
   if (redis) {
-    // Redis sliding window: store timestamps as a sorted set keyed by userId.
-    const key    = `gen_ratelimit:${userId}`;
+    // Redis sliding window: store timestamps as a sorted set keyed by workspace.
+    const key    = `gen_ratelimit:${tenantId}`;
     const now    = Date.now();
     const cutoff = now - RATE_LIMIT_WINDOW_MS;
     try {
@@ -51,19 +53,19 @@ async function checkRateLimit(userId) {
   // In-memory fallback
   const now    = Date.now();
   const cutoff = now - RATE_LIMIT_WINDOW_MS;
-  const timestamps = (generationTimestamps.get(userId) || []).filter(t => t > cutoff);
+  const timestamps = (generationTimestamps.get(tenantId) || []).filter(t => t > cutoff);
   if (timestamps.length >= RATE_LIMIT_MAX) {
     const retryAfterSec = Math.ceil((timestamps[0] - cutoff) / 1000);
     return { limited: true, retryAfterSec };
   }
   timestamps.push(now);
-  generationTimestamps.set(userId, timestamps);
+  generationTimestamps.set(tenantId, timestamps);
   return { limited: false };
 }
 
-function gateOptions(post, userProfile, genPath, archetypeUsed, hookConfidence, funnelType = null) {
+function gateOptions(post, profile, genPath, archetypeUsed, hookConfidence, funnelType = null) {
   return {
-    voiceProfile: userProfile,
+    voiceProfile: profile,
     archetypeUsed: archetypeUsed ?? null,
     hookConfidence: hookConfidence ?? null,
     formatSlug: post.format_slug,
@@ -119,7 +121,7 @@ router.post('/', async (req, res) => {
 
   if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
 
-  const rl = await checkRateLimit(userId);
+  const rl = await checkRateLimit(tenantId);
   if (rl.limited) {
     return res.status(429).json({ ok: false, error: 'rate_limit_exceeded', retry_after_sec: rl.retryAfterSec });
   }
@@ -127,22 +129,25 @@ router.post('/', async (req, res) => {
   const planCheck = await canGeneratePost(userId);
   if (!planCheck.allowed) {
     // Send limit-reached email once per calendar month.
-    const monthKey = `limit-reached:${new Date().toISOString().slice(0, 7)}`; // e.g. "2026-04"
-    const now = new Date();
-    const firstOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-    const resetsOn = firstOfNextMonth.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
-    sendEmailToUser(userId, tenantId, 'limit-reached', {
-      resets_on: resetsOn,
+    const monthKey = `limit-reached:${new Date().toISOString().slice(0, 7)}`;
+    sendEmailToUser(userId, 'limit-reached', {
+      resets_on: new Date(planCheck.resets_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric' }),
       app_url: process.env.APP_URL || '',
     }, { dedupKey: monthKey, withinHours: 30 * 24 });
-    return res.status(403).json({
+    return res.status(429).json({
       ok: false,
-      error: 'plan_limit_exceeded',
+      error: 'monthly_quota_reached',
       plan: planCheck.plan,
-      current: planCheck.current,
+      used: planCheck.current,
       limit: planCheck.limit,
+      resets_at: planCheck.resets_at,
       upgrade_url: '/billing.html',
     });
+  }
+
+  // Carousel requires Pro plan
+  if (req.body?.asset_type === 'carousel' && !planHasFeature(planCheck.plan, 'carousel')) {
+    return res.status(403).json({ ok: false, error: 'feature_not_available', feature: 'carousel', requiredPlan: 'pro' });
   }
 
   const { path: genPath, vault_idea_id, skip_substance_check, interview_answers, funnel_type: bodyFunnelType,
@@ -160,11 +165,9 @@ router.post('/', async (req, res) => {
 
   if (!genPath) return res.status(400).json({ ok: false, error: 'missing_path' });
 
-  let userProfile = await db
-    .prepare('SELECT * FROM user_profiles WHERE user_id = ? AND tenant_id = ?')
-    .get(userId, tenantId);
+  let profile = await resolveProfile(tenantId, req.body.profileId);
 
-  if (!userProfile) {
+  if (!profile) {
     return res.status(400).json({ ok: false, error: 'complete_profile_first' });
   }
 
@@ -176,28 +179,26 @@ router.post('/', async (req, res) => {
   // The background Sonnet extraction (already running) will overwrite this with
   // higher-quality results ~10s later, improving all subsequent posts.
   if (source === 'onboarding' &&
-      !userProfile.voice_fingerprint &&
-      (userProfile.onboarding_q2 || userProfile.onboarding_q3)) {
+      !profile.voice_fingerprint &&
+      (profile.onboarding_q2 || profile.onboarding_q3)) {
     try {
       const { extractVoiceDNAFromQA } = require('../services/voiceExtraction');
-      await extractVoiceDNAFromQA(userId, tenantId, { fast: true });
-      userProfile = await db
-        .prepare('SELECT * FROM user_profiles WHERE user_id = ? AND tenant_id = ?')
-        .get(userId, tenantId) || userProfile;
+      await extractVoiceDNAFromQA(profile.id, { fast: true });
+      profile = await resolveProfile(tenantId, req.body.profileId) || profile;
     } catch (err) {
       console.warn('[generate] Inline voice DNA extraction failed (non-fatal):', err.message);
     }
   }
 
   // Lazy seed: populate phrase library on first generation if writing samples exist but phrases haven't been extracted yet
-  if (!userProfile.writing_sample_phrases && userProfile.writing_samples?.length >= 100) {
+  if (!profile.writing_sample_phrases && profile.writing_samples?.length >= 100) {
     try {
       const { seedPhrasesFromWritingSamples } = require('../services/writingSampleSeeder');
-      const phrases = await seedPhrasesFromWritingSamples(userId, tenantId, userProfile.writing_samples);
+      const phrases = await seedPhrasesFromWritingSamples(userId, tenantId, profile.writing_samples);
       if (phrases.length) {
-        await db.prepare('UPDATE user_profiles SET writing_sample_phrases = ? WHERE user_id = ? AND tenant_id = ?')
-          .run(JSON.stringify(phrases), userId, tenantId);
-        userProfile.writing_sample_phrases = JSON.stringify(phrases);
+        await db.prepare('UPDATE profiles SET writing_sample_phrases = ? WHERE id = ?')
+          .run(JSON.stringify(phrases), profile.id);
+        profile.writing_sample_phrases = JSON.stringify(phrases);
       }
     } catch (err) {
       console.warn('[generate] Phrase seeding failed (non-fatal):', err.message);
@@ -216,22 +217,22 @@ router.post('/', async (req, res) => {
     vaultIdea = await db.prepare(`
       SELECT id, seed_text, source_ref, funnel_type, hook_archetype, chunk_id
       FROM   vault_ideas
-      WHERE  id = ? AND user_id = ? AND tenant_id = ?
-    `).get(vault_idea_id, userId, tenantId);
+      WHERE  id = ? AND tenant_id = ?
+    `).get(vault_idea_id, tenantId);
 
     if (vaultIdea?.chunk_id) {
       const chunk = await db.prepare(
-        'SELECT content, chunk_index, document_id FROM vault_chunks WHERE id = ? AND user_id = ? AND tenant_id = ?'
-      ).get(vaultIdea.chunk_id, userId, tenantId);
+        'SELECT content, chunk_index, document_id FROM vault_chunks WHERE id = ? AND tenant_id = ?'
+      ).get(vaultIdea.chunk_id, tenantId);
       if (chunk) {
         vaultChunkText = chunk.content || null;
         // Fetch immediately adjacent chunks for surrounding context
         const neighbors = await db.prepare(`
           SELECT content FROM vault_chunks
-          WHERE  document_id = ? AND user_id = ? AND tenant_id = ?
+          WHERE  document_id = ? AND tenant_id = ?
             AND  chunk_index IN (?, ?)
           ORDER  BY chunk_index
-        `).all(chunk.document_id, userId, tenantId,
+        `).all(chunk.document_id, tenantId,
                chunk.chunk_index - 1, chunk.chunk_index + 1);
         if (neighbors.length) {
           vaultNeighborContext = neighbors.map(n => n.content).join('\n\n---\n\n');
@@ -265,7 +266,7 @@ router.post('/', async (req, res) => {
       try {
         sseWrite('step', { step: 'analyzing', label: 'Analyzing your idea...' });
 
-        const ideaRaw = await ideaToPost(raw_idea, userProfile, {
+        const ideaRaw = await ideaToPost(raw_idea, profile, {
           skipSubstanceCheck:  !!skip_substance_check,
           postType:            post_type || null,
           convertCtaIntent:    convert_cta_intent || null,
@@ -279,7 +280,7 @@ router.post('/', async (req, res) => {
         const primaryGate = runQualityGate(ideaRaw.post, {
           ...gateOptions(
             { format_slug: IDEA_SLUG, content: ideaRaw.post },
-            userProfile, 'idea', ideaRaw.archetypeUsed, ideaRaw.hookConfidence, funnelTypeForGate
+            profile, 'idea', ideaRaw.archetypeUsed, ideaRaw.hookConfidence, funnelTypeForGate
           ),
           postType: post_type || null,
         });
@@ -295,13 +296,13 @@ router.post('/', async (req, res) => {
 
         const primaryInsert = await db.prepare(`
           INSERT INTO generated_posts
-            (run_id, user_id, tenant_id, format_slug, content, ai_content, quality_score, quality_flags, passed_gate,
+            (run_id, user_id, tenant_id, profile_id, format_slug, content, ai_content, quality_score, quality_flags, passed_gate,
              funnel_type, vault_source_ref, hook_b, hook_b_archetype, cta_alternatives, idea_input, archetype_used, source,
              post_type, quality_verdict)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           RETURNING id
         `).run(
-          runId, userId, tenantId, IDEA_SLUG,
+          runId, userId, tenantId, profile.id, IDEA_SLUG,
           ideaRaw.post, ideaRaw.post,
           primaryGate.score, JSON.stringify(primaryGate.flags), primaryGate.passed_gate ? 1 : 0,
           funnelType, null,
@@ -354,7 +355,7 @@ router.post('/', async (req, res) => {
       // ── Vault path ────────────────────────────────────────────────────────
       // Purpose-built generation: expert source framing, full chunk + neighbor
       // context, stored archetype, substance check bypassed (vault = grounded).
-      const vaultResult = await vaultSeedToPost(vaultIdea, vaultChunkText, userProfile, {
+      const vaultResult = await vaultSeedToPost(vaultIdea, vaultChunkText, profile, {
         rawIdea:         raw_idea,
         neighborContext: vaultNeighborContext || null,
         postType:        post_type || vaultIdea.funnel_type || null,
@@ -366,7 +367,7 @@ router.post('/', async (req, res) => {
         {
           ...gateOptions(
             { format_slug: IDEA_SLUG, content: vaultResult.post },
-            userProfile,
+            profile,
             'idea',
             vaultResult.archetypeUsed,
             vaultResult.hookConfidence,
@@ -391,7 +392,7 @@ router.post('/', async (req, res) => {
       // Sonnet writes with that precise structural scaffold. Same pipeline as
       // the from-doc/vault path. No extra token cost vs the old approach (same
       // two model calls: Haiku then Sonnet).
-      const ideaRaw = await ideaToPost(raw_idea, userProfile, {
+      const ideaRaw = await ideaToPost(raw_idea, profile, {
         skipSubstanceCheck:  !!skip_substance_check,
         archetypeOverride:   archetype_override || null,
         postType:            post_type || null,
@@ -403,7 +404,7 @@ router.post('/', async (req, res) => {
         {
           ...gateOptions(
             { format_slug: IDEA_SLUG, content: ideaRaw.post },
-            userProfile,
+            profile,
             'idea',
             ideaRaw.archetypeUsed,
             ideaRaw.hookConfidence,
@@ -468,15 +469,16 @@ router.post('/', async (req, res) => {
 
       const primaryInsert = await db.prepare(`
         INSERT INTO generated_posts
-          (run_id, user_id, tenant_id, format_slug, content, ai_content, quality_score, quality_flags, passed_gate,
+          (run_id, user_id, tenant_id, profile_id, format_slug, content, ai_content, quality_score, quality_flags, passed_gate,
            funnel_type, vault_source_ref, hook_b, hook_b_archetype, cta_alternatives, idea_input, archetype_used, source,
            post_type, quality_verdict)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         RETURNING id
       `).run(
         runId,
         userId,
         tenantId,
+        profile.id,
         IDEA_SLUG,
         post,
         post,
@@ -563,15 +565,15 @@ router.get('/post/:postId', async (req, res) => {
              asset_url, asset_preview_url, asset_type, asset_slide_count, first_comment,
              archetype_used, idea_input, post_type, quality_verdict
       FROM generated_posts
-      WHERE id = ? AND user_id = ? AND tenant_id = ?
-    `).get(postId, userId, tenantId);
+      WHERE id = ? AND tenant_id = ?
+    `).get(postId, tenantId);
   } catch {
     row = await db.prepare(`
       SELECT id, content, quality_score, quality_flags, passed_gate,
              hook_b, hook_b_archetype, cta_alternatives, format_slug, funnel_type
       FROM generated_posts
-      WHERE id = ? AND user_id = ? AND tenant_id = ?
-    `).get(postId, userId, tenantId);
+      WHERE id = ? AND tenant_id = ?
+    `).get(postId, tenantId);
   }
 
   if (!row) return res.status(404).json({ ok: false, error: 'post_not_found' });
@@ -624,9 +626,9 @@ router.get('/batch/:batch_id', async (req, res) => {
     SELECT id, format_slug, content, quality_score, quality_flags, passed_gate,
            cta_alternatives, hook_b, idea_input
     FROM generated_posts
-    WHERE batch_id = ? AND user_id = ? AND tenant_id = ?
+    WHERE batch_id = ? AND tenant_id = ?
     ORDER BY id ASC
-  `).all(batch_id, userId, tenantId);
+  `).all(batch_id, tenantId);
 
   if (!rows.length) return res.status(404).json({ ok: false, error: 'batch_not_found' });
 
@@ -677,10 +679,10 @@ router.post('/from-doc', async (req, res) => {
 
   const planCheck = await canGeneratePost(userId);
   if (!planCheck.allowed) {
-    return res.status(403).json({
-      ok: false, error: 'plan_limit_exceeded',
-      plan: planCheck.plan, current: planCheck.current, limit: planCheck.limit,
-      upgrade_url: '/billing.html',
+    return res.status(429).json({
+      ok: false, error: 'monthly_quota_reached',
+      plan: planCheck.plan, used: planCheck.current, limit: planCheck.limit,
+      resets_at: planCheck.resets_at, upgrade_url: '/billing.html',
     });
   }
 
@@ -702,15 +704,15 @@ router.post('/from-doc', async (req, res) => {
     if (vault_doc_id) {
       // Use an already-indexed vault document — fetch its chunks from the database
       const doc = await db
-        .prepare(`SELECT id, filename FROM vault_documents WHERE id = ? AND user_id = ? AND tenant_id = ? AND status = 'ready'`)
-        .get(vault_doc_id, userId, tenantId);
+        .prepare(`SELECT id, filename FROM vault_documents WHERE id = ? AND tenant_id = ? AND status = 'ready'`)
+        .get(vault_doc_id, tenantId);
       if (!doc) {
         return res.status(404).json({ ok: false, error: 'vault_doc_not_found' });
       }
       filename = doc.filename;
       const chunks = await db
-        .prepare(`SELECT content FROM vault_chunks WHERE document_id = ? AND user_id = ? ORDER BY chunk_index`)
-        .all(vault_doc_id, userId);
+        .prepare(`SELECT content FROM vault_chunks WHERE document_id = ? ORDER BY chunk_index`)
+        .all(vault_doc_id);
       docText = chunks.map(c => c.content).join('\n\n');
     } else {
       if (!url || !/^https?:\/\//i.test(url)) {
@@ -764,23 +766,21 @@ router.post('/from-doc', async (req, res) => {
 
   const truncated = docText.slice(0, 4000);
 
-  const userProfile = await db
-    .prepare('SELECT * FROM user_profiles WHERE user_id = ? AND tenant_id = ?')
-    .get(userId, tenantId);
-  if (!userProfile) return res.status(400).json({ ok: false, error: 'complete_profile_first' });
+  const profile = await resolveProfile(tenantId);
+  if (!profile) return res.status(400).json({ ok: false, error: 'complete_profile_first' });
 
   const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
   if (!apiKey) return res.status(500).json({ ok: false, error: 'no_api_key' });
 
   try {
     const { synthesis, post, hookB, hookBArchetype, ctaAlternatives, archetypeUsed, hookConfidence, stage1Blueprint } =
-      await ideaToPost(truncated, userProfile, { skipSubstanceCheck: skipSubstanceCheckDoc });
+      await ideaToPost(truncated, profile, { skipSubstanceCheck: skipSubstanceCheckDoc });
 
     const primaryGate = runQualityGate(
       post,
       gateOptions(
         { format_slug: IDEA_SLUG, content: post },
-        userProfile,
+        profile,
         'doc',
         archetypeUsed,
         hookConfidence,
@@ -803,11 +803,11 @@ router.post('/from-doc', async (req, res) => {
 
     const primaryInsert = await db.prepare(`
       INSERT INTO generated_posts
-        (run_id, user_id, tenant_id, format_slug, content, ai_content, quality_score, quality_flags, passed_gate, funnel_type, hook_b, hook_b_archetype, cta_alternatives, idea_input, archetype_used)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (run_id, user_id, tenant_id, profile_id, format_slug, content, ai_content, quality_score, quality_flags, passed_gate, funnel_type, hook_b, hook_b_archetype, cta_alternatives, idea_input, archetype_used)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       RETURNING id
     `).run(
-      runId, userId, tenantId, IDEA_SLUG,
+      runId, userId, tenantId, profile.id, IDEA_SLUG,
       post, post, primaryGate.score, JSON.stringify(primaryGate.flags), primaryGate.passed_gate ? 1 : 0,
       funnelType, hookB || null, hookBArchetype || null,
       ctaAlternatives?.length ? JSON.stringify(ctaAlternatives) : null,
@@ -900,14 +900,14 @@ router.post('/quality-check', async (req, res) => {
     return res.status(400).json({ ok: false, error: 'postText is required' });
   }
 
-  const userProfile = userId
-    ? await db.prepare('SELECT * FROM user_profiles WHERE user_id = ? AND tenant_id = ?').get(userId, tenantId)
+  const profile = tenantId
+    ? await db.prepare('SELECT * FROM profiles WHERE workspace_id = ? AND is_default = true').get(tenantId)
     : null;
 
   const quality = runQualityGate(postText, {
     archetypeUsed: archetypeUsed ?? null,
     hookConfidence: typeof hookConfidence === 'number' ? hookConfidence : null,
-    voiceProfile: userProfile || {},
+    voiceProfile: profile || {},
     path: 'idea',
     funnelType: funnel_type ?? null,
   });
@@ -962,8 +962,8 @@ router.post('/chat-intake', async (req, res) => {
     const profile = await db.prepare(`
       SELECT content_niche, audience_role, audience_pain, contrarian_view,
              authority_statements, voice_fingerprint, onboarding_q2
-      FROM   user_profiles WHERE user_id = ? AND tenant_id = ?
-    `).get(userId, tenantId);
+      FROM   profiles WHERE workspace_id = ? AND is_default = true
+    `).get(tenantId);
 
     const niche    = profile?.content_niche || '';
     const audience = profile?.audience_role || '';

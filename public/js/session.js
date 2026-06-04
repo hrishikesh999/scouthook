@@ -35,7 +35,7 @@ function getUserId() {
 }
 
 function getTenantId() {
-  return localStorage.getItem('scouthook_tid') || 'default';
+  return localStorage.getItem('scouthook_tid') || '';
 }
 
 function apiHeaders() {

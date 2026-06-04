@@ -4,33 +4,33 @@ const crypto  = require('crypto');
 const express = require('express');
 const router  = express.Router();
 const { db, getSetting } = require('../db');
-const { storeTokens, getValidAccessToken, revokeLinkedInToken } = require('../services/linkedinOAuth');
+const { encrypt, decrypt } = require('../services/linkedinOAuth');
 const { publishNow } = require('../services/linkedinPublisher');
 const { addScheduledJob, addCommentJob, removeScheduledJob, isSchedulerEnabled } = require('../services/scheduler');
 const { syncPostMetrics, RateLimitError } = require('../services/linkedinMetrics');
 const { getUserPlan } = require('../services/subscription');
+const { planHasFeature } = require('../lib/planFeatures');
 const { extractVoiceDNAFromLinkedIn } = require('../services/voiceExtraction');
 
 function sha256Hex(s) {
   return crypto.createHash('sha256').update(String(s || ''), 'utf8').digest('hex');
 }
 
-// Fire-and-forget: increment archetype publish count in user_archetype_preference.
-// Called after a post is stamped status='published'. Errors are swallowed.
-async function incrementArchetypePreference(userId, tenantId, archetype) {
-  if (!archetype || !userId) return;
+// Fire-and-forget: increment archetype publish count on the profile that generated the post.
+async function incrementArchetypePreference(profileId, archetype) {
+  if (!archetype || !profileId) return;
   try {
     const row = await db.prepare(
-      'SELECT user_archetype_preference FROM user_profiles WHERE user_id = ? AND tenant_id = ?'
-    ).get(userId, tenantId);
+      'SELECT user_archetype_preference FROM profiles WHERE id = ?'
+    ).get(profileId);
     const prefs = (() => {
       try { return row?.user_archetype_preference ? JSON.parse(row.user_archetype_preference) : {}; }
       catch { return {}; }
     })();
     prefs[archetype] = (prefs[archetype] || 0) + 1;
     await db.prepare(
-      'UPDATE user_profiles SET user_archetype_preference = ? WHERE user_id = ? AND tenant_id = ?'
-    ).run(JSON.stringify(prefs), userId, tenantId);
+      'UPDATE profiles SET user_archetype_preference = ? WHERE id = ?'
+    ).run(JSON.stringify(prefs), profileId);
   } catch (e) {
     console.warn('[linkedin] incrementArchetypePreference failed (non-fatal):', e.message);
   }
@@ -42,6 +42,119 @@ function logScheduledEvent({ scheduledPostId, userId, tenantId, eventType, messa
       VALUES (?, ?, ?, ?, ?)
     `).run(scheduledPostId, userId, tenantId, eventType, message)
     .catch((e) => console.warn('[scheduled_post_events] insert failed:', e.message));
+}
+
+/**
+ * Revoke a LinkedIn access token. Best-effort — never throws.
+ */
+async function revokeToken(accessTokenEnc) {
+  const clientId     = (process.env.LINKEDIN_CLIENT_ID || '').trim();
+  const clientSecret = (process.env.LINKEDIN_CLIENT_SECRET || '').trim();
+  if (!clientId || !clientSecret) return;
+  try {
+    const accessToken = decrypt(accessTokenEnc);
+    const params = new URLSearchParams({
+      client_id:     clientId,
+      client_secret: clientSecret,
+      token:         accessToken,
+    });
+    const res = await fetch('https://www.linkedin.com/oauth/v2/revoke', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body:    params.toString(),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      console.warn(`[linkedin] Token revocation returned ${res.status}: ${text}`);
+    }
+  } catch (e) {
+    console.warn('[linkedin] Token revocation failed (non-fatal):', e.message);
+  }
+}
+
+/**
+ * Discover LinkedIn organization pages where the authenticated user is an admin,
+ * and upsert them as company connections on the workspace's brand profile.
+ * Fire-and-forget — errors are swallowed.
+ */
+async function discoverOrgPages(accessToken, userId, workspaceId, brandProfileId, expiresAt) {
+  try {
+    const aclRes = await fetch(
+      'https://api.linkedin.com/v2/organizationalEntityAcls?q=roleAssignee&role=ADMINISTRATOR&state=APPROVED',
+      {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'LinkedIn-Version': '202308',
+          'X-Restli-Protocol-Version': '2.0.0',
+        },
+      }
+    );
+    if (!aclRes.ok) {
+      console.warn('[linkedin/discoverOrgPages] ACL fetch failed:', aclRes.status, await aclRes.text());
+      return;
+    }
+    const aclData = await aclRes.json();
+    const orgIds = (aclData.elements || [])
+      .map(el => {
+        const urn = el.organizationalTarget;
+        const match = typeof urn === 'string' && urn.match(/urn:li:organization:(\d+)/);
+        return match ? match[1] : null;
+      })
+      .filter(Boolean);
+
+    if (orgIds.length === 0) return;
+
+    const accessTokenEnc = encrypt(accessToken);
+
+    for (const orgId of orgIds) {
+      let orgName = `Company ${orgId}`;
+      let orgLogo = null;
+      try {
+        const orgRes = await fetch(
+          `https://api.linkedin.com/v2/organizations/${orgId}?projection=(id,localizedName,logoV2(original~:playableStreams))`,
+          {
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'LinkedIn-Version': '202308',
+            },
+          }
+        );
+        if (orgRes.ok) {
+          const org = await orgRes.json();
+          orgName = org.localizedName || orgName;
+          const streams = org?.logoV2?.['original~']?.elements || [];
+          const best = streams
+            .map(el => ({
+              url: el?.identifiers?.[0]?.identifier || null,
+              area: (el?.data?.['com.linkedin.digitalmedia.mediaartifact.StillImage']?.storageSize?.width || 0) *
+                (el?.data?.['com.linkedin.digitalmedia.mediaartifact.StillImage']?.storageSize?.height || 0),
+            }))
+            .filter(x => !!x.url)
+            .sort((a, b) => b.area - a.area)[0];
+          if (best?.url) orgLogo = best.url;
+        }
+      } catch (e) {
+        console.warn(`[linkedin/discoverOrgPages] org ${orgId} details fetch failed:`, e.message);
+      }
+
+      const accountKey = 'org_' + orgId;
+      await db.prepare(`
+        INSERT INTO linkedin_connections
+          (workspace_id, profile_id, authorized_by, account_type, account_key,
+           display_name, avatar_url, organization_id, access_token_enc, expires_at, is_default)
+        VALUES (?, ?, ?, 'company', ?, ?, ?, ?, ?, ?, false)
+        ON CONFLICT (workspace_id, account_key) DO UPDATE SET
+          display_name     = EXCLUDED.display_name,
+          avatar_url       = COALESCE(EXCLUDED.avatar_url, linkedin_connections.avatar_url),
+          access_token_enc = EXCLUDED.access_token_enc,
+          expires_at       = EXCLUDED.expires_at,
+          updated_at       = now()
+      `).run(workspaceId, brandProfileId, userId, accountKey, orgName, orgLogo, orgId, accessTokenEnc, expiresAt);
+    }
+    console.log(`[linkedin/discoverOrgPages] Upserted ${orgIds.length} org pages for workspace=${workspaceId}`);
+  } catch (e) {
+    console.warn('[linkedin/discoverOrgPages] Error (non-fatal):', e.message);
+  }
 }
 
 /**
@@ -58,9 +171,10 @@ async function cancelScheduledPostById(userId, tenantId, scheduledPostId) {
     return { ok: false, error: 'cannot_cancel', status: row.status };
   }
 
+  // Trap 16: include tenant_id guard on every bare scheduled_posts UPDATE
   await db.prepare(
-    `UPDATE scheduled_posts SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP WHERE id = ?`
-  ).run(scheduledPostId);
+    `UPDATE scheduled_posts SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ?`
+  ).run(scheduledPostId, tenantId);
 
   logScheduledEvent({
     scheduledPostId,
@@ -118,15 +232,16 @@ async function deleteOAuthState(state) {
 // Lightweight check — used by the UI on page load
 // ---------------------------------------------------------------------------
 router.get('/status', (req, res) => {
-  const userId   = req.userId;
   const tenantId = req.tenantId;
 
-  if (!userId) return res.json({ ok: true, connected: false, name: null, photo_url: null });
+  if (!tenantId) return res.json({ ok: true, connected: false, name: null, photo_url: null });
 
   (async () => {
-    const row = await db.prepare(
-      'SELECT linkedin_name, linkedin_photo, linkedin_headline, expires_at FROM linkedin_tokens WHERE user_id = ? AND tenant_id = ?'
-    ).get(userId, tenantId);
+    const row = await db.prepare(`
+      SELECT display_name, avatar_url, expires_at
+      FROM linkedin_connections
+      WHERE workspace_id = ? AND account_type = 'personal' AND is_default = true
+    `).get(tenantId);
 
     let expiresInDays = null;
     if (row?.expires_at) {
@@ -134,11 +249,11 @@ router.get('/status', (req, res) => {
     }
 
     return res.json({
-      ok:             true,
-      connected:      !!row,
-      name:           row?.linkedin_name || null,
-      photo_url:      row?.linkedin_photo?.trim() || null,
-      headline:       row?.linkedin_headline || null,
+      ok:              true,
+      connected:       !!row,
+      name:            row?.display_name || null,
+      photo_url:       row?.avatar_url?.trim() || null,
+      headline:        null,
       expires_in_days: expiresInDays,
     });
   })().catch(() => res.json({ ok: true, connected: false, name: null, photo_url: null }));
@@ -146,8 +261,7 @@ router.get('/status', (req, res) => {
 
 // ---------------------------------------------------------------------------
 // POST /api/linkedin/extract-profile
-// Re-run extractVoiceDNAFromLinkedIn on demand (called by "Refresh profile data"
-// button in Voice Profile Stage 6). Returns which profile fields were updated.
+// Re-run extractVoiceDNAFromLinkedIn on demand.
 // ---------------------------------------------------------------------------
 router.post('/extract-profile', async (req, res) => {
   const userId   = req.userId;
@@ -156,13 +270,17 @@ router.post('/extract-profile', async (req, res) => {
   if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
 
   try {
-    const result = await extractVoiceDNAFromLinkedIn(userId, tenantId);
-    // Return fresh profile basics so the UI can update Stage 1 fields in-place
+    const brandProfile = await db.prepare(
+      'SELECT id FROM profiles WHERE workspace_id = ? AND is_default = true'
+    ).get(tenantId);
+    if (!brandProfile) return res.status(404).json({ ok: false, error: 'profile_not_found' });
+
+    const result = await extractVoiceDNAFromLinkedIn(brandProfile.id);
     const profile = await db.prepare(
       `SELECT content_niche, audience_role, business_positioning, content_pillars,
               voice_profile_completion_pct
-       FROM user_profiles WHERE user_id = ? AND tenant_id = ?`
-    ).get(userId, tenantId);
+       FROM profiles WHERE id = ?`
+    ).get(brandProfile.id);
     return res.json({ ok: true, updated: result.updated || [], profile: profile || {} });
   } catch (err) {
     console.error('[linkedin/extract-profile] Error:', err.message);
@@ -187,11 +305,21 @@ router.get('/connect', async (req, res) => {
     return res.status(500).json({ ok: false, error: 'linkedin_not_configured' });
   }
 
+  // Multiple LinkedIn accounts require Pro plan.
+  // Check before starting OAuth so the user sees the error immediately.
+  const connectPlan = await getUserPlan(userId);
+  if (!planHasFeature(connectPlan, 'multiple_linkedin_accounts')) {
+    const existingPersonal = await db.prepare(
+      "SELECT id FROM linkedin_connections WHERE workspace_id = ? AND account_type = 'personal' LIMIT 1"
+    ).get(tenantId);
+    if (existingPersonal) {
+      const from2 = req.query.from;
+      const errorBase = from2 === 'settings' ? '/settings.html' : '/account.html';
+      return res.redirect(`${errorBase}?error=upgrade_required&feature=multiple_linkedin_accounts`);
+    }
+  }
+
   const state = crypto.randomUUID();
-  // Allow callers to signal where to return after OAuth completes.
-  // 'onboarding' is the only recognised source; everything else falls back to
-  // the account page.  Stored inside the signed state blob so it cannot be
-  // tampered with by the client.
   const from = req.query.from;
   const returnTo = from === 'onboarding'
     ? '/onboarding.html?linkedin=connected'
@@ -209,7 +337,7 @@ router.get('/connect', async (req, res) => {
     client_id:     clientId,
     redirect_uri:  redirectUri,
     state,
-    scope:         'openid profile w_member_social',
+    scope:         'openid profile w_member_social w_organization_social',
   });
 
   res.redirect(`https://www.linkedin.com/oauth/v2/authorization?${params}`);
@@ -217,7 +345,7 @@ router.get('/connect', async (req, res) => {
 
 // ---------------------------------------------------------------------------
 // GET /api/linkedin/callback
-// OAuth callback — exchanges code for tokens, stores them, redirects to app
+// OAuth callback — exchanges code for tokens, creates profile + connection rows
 // ---------------------------------------------------------------------------
 router.get('/callback', async (req, res) => {
   const { code, state, error: oauthError } = req.query;
@@ -234,8 +362,6 @@ router.get('/callback', async (req, res) => {
 
   const { userId, tenantId } = stateData;
 
-  // If a user is currently authenticated their session must match the state.
-  // A mismatch means the OAuth was initiated by a different user (stale state, session swap).
   if (req.userId && req.userId !== userId) {
     console.warn(`[linkedin/callback] Session user=${req.userId} doesn't match state user=${userId} — rejecting`);
     const errBase = stateData?.returnTo?.split('?')[0] || '/account.html';
@@ -269,32 +395,31 @@ router.get('/callback', async (req, res) => {
     }
 
     const tokens = await tokenRes.json();
+    const expiresAt = new Date(Date.now() + (tokens.expires_in || 5184000) * 1000).toISOString();
 
     // Fetch LinkedIn profile via OpenID Connect userinfo endpoint
     const profileRes = await fetch('https://api.linkedin.com/v2/userinfo', {
       headers: { 'Authorization': `Bearer ${tokens.access_token}` },
     });
 
-    let linkedin_user_id = null;
-    let linkedin_name    = null;
-    let linkedin_photo   = null;
-    let linkedin_headline = null;
+    let linkedin_member_id = null;
+    let linkedin_name      = null;
+    let linkedin_photo     = null;
 
     if (profileRes.ok) {
       const profile = await profileRes.json();
-      // OpenID Connect: sub = LinkedIn member ID, name = full name, picture = photo URL
-      linkedin_user_id = profile.sub;
-      linkedin_name    = profile.name || `${profile.given_name || ''} ${profile.family_name || ''}`.trim() || null;
-      linkedin_photo   = profile.picture || null;
+      linkedin_member_id = profile.sub;
+      linkedin_name      = profile.name || `${profile.given_name || ''} ${profile.family_name || ''}`.trim() || null;
+      linkedin_photo     = profile.picture || null;
     } else {
       const text = await profileRes.text();
       console.error('[linkedin/callback] userinfo fetch failed:', profileRes.status, text);
     }
 
-    // Always fetch /v2/me for headline; also used as fallback for name and photo.
+    // Fetch /v2/me for headline (also fallback for name/photo)
     try {
       const meRes = await fetch(
-        'https://api.linkedin.com/v2/me?projection=(localizedFirstName,localizedLastName,localizedHeadline,profilePicture(displayImage~:playableStreams))',
+        'https://api.linkedin.com/v2/me?projection=(localizedFirstName,localizedLastName,profilePicture(displayImage~:playableStreams))',
         {
           headers: {
             'Authorization': `Bearer ${tokens.access_token}`,
@@ -302,14 +427,11 @@ router.get('/callback', async (req, res) => {
           },
         }
       );
-
       if (meRes.ok) {
         const me = await meRes.json();
         if (!linkedin_name) {
           linkedin_name = `${me.localizedFirstName || ''} ${me.localizedLastName || ''}`.trim() || null;
         }
-        if (me.localizedHeadline) linkedin_headline = me.localizedHeadline;
-
         if (!linkedin_photo) {
           const streams = me?.profilePicture?.['displayImage~']?.elements || [];
           const best = streams
@@ -323,51 +445,261 @@ router.get('/callback', async (req, res) => {
           if (best?.url) linkedin_photo = best.url;
         }
       } else {
-        const text = await meRes.text();
-        console.warn('[linkedin/callback] me fetch failed:', meRes.status, text);
+        console.warn('[linkedin/callback] me fetch failed:', meRes.status);
       }
     } catch (e) {
       console.warn('[linkedin/callback] me fetch error:', e.message);
     }
 
-    // Block if this LinkedIn account is already connected to a different ScoutHook user.
-    // Skip when linkedin_user_id is unavailable (API failure) — better to allow than hard-block.
-    if (linkedin_user_id) {
-      const claimed = await db.prepare(
-        'SELECT user_id FROM linkedin_tokens WHERE linkedin_user_id = ? AND tenant_id = ?'
-      ).get(linkedin_user_id, tenantId);
+    const errBase = stateData?.returnTo?.split('?')[0] || '/account.html';
 
-      if (claimed && claimed.user_id !== userId) {
-        console.warn(`[linkedin/callback] Duplicate account attempt: linkedin_user_id=${linkedin_user_id} already claimed by user=${claimed.user_id}, rejected user=${userId}`);
-        const errBase = stateData?.returnTo?.split('?')[0] || '/account.html';
+    // Duplicate-member check: reject if this linkedin_member_id is already claimed
+    // by a DIFFERENT workspace member in this workspace.
+    if (linkedin_member_id) {
+      const claimed = await db.prepare(
+        `SELECT authorized_by FROM linkedin_connections WHERE workspace_id = ? AND account_key = ?`
+      ).get(tenantId, 'person_' + linkedin_member_id);
+
+      if (claimed && claimed.authorized_by !== userId) {
+        console.warn(`[linkedin/callback] Duplicate: linkedin_member_id=${linkedin_member_id} already claimed by user=${claimed.authorized_by}, rejected user=${userId}`);
         return res.redirect(`${errBase}?linkedin_error=linkedin_already_connected`);
       }
     }
 
-    await storeTokens(userId, tenantId, {
-      access_token: tokens.access_token,
-      refresh_token: tokens.refresh_token || null,
-      expires_in: tokens.expires_in,
-      linkedin_user_id,
-      linkedin_name,
-      linkedin_photo,
-      linkedin_headline,
-    });
+    const accessTokenEnc  = encrypt(tokens.access_token);
+    const refreshTokenEnc = tokens.refresh_token ? encrypt(tokens.refresh_token) : null;
+    const accountKey      = linkedin_member_id ? 'person_' + linkedin_member_id : 'person_unknown_' + crypto.randomUUID();
 
-    console.log(`[linkedin/callback] Connected user=${userId} as ${linkedin_name} (${linkedin_user_id})`);
+    // Check if this is a reconnect (connection already exists for this account_key)
+    const existingConn = await db.prepare(
+      `SELECT id, profile_id FROM linkedin_connections WHERE workspace_id = ? AND account_key = ?`
+    ).get(tenantId, accountKey);
 
-    // Fire-and-forget: use LinkedIn headline to auto-populate empty profile fields
-    extractVoiceDNAFromLinkedIn(userId, tenantId).catch(e =>
+    let personProfileId;
+    let newProfileId = null; // set only when a brand-new profile is created
+
+    if (existingConn) {
+      // Reconnect: update tokens on existing connection
+      await db.prepare(`
+        UPDATE linkedin_connections
+        SET access_token_enc  = ?,
+            refresh_token_enc = COALESCE(?, refresh_token_enc),
+            expires_at        = ?,
+            display_name      = COALESCE(?, display_name),
+            avatar_url        = COALESCE(?, avatar_url),
+            updated_at        = now()
+        WHERE workspace_id = ? AND account_key = ?
+      `).run(accessTokenEnc, refreshTokenEnc, expiresAt, linkedin_name, linkedin_photo, tenantId, accountKey);
+      personProfileId = existingConn.profile_id;
+      console.log(`[linkedin/callback] Reconnected user=${userId} connection=${existingConn.id} (${linkedin_name})`);
+    } else {
+      // New connection: create a person profile + linkedin_connections row
+      const profileResult = await db.prepare(`
+        INSERT INTO profiles (workspace_id, profile_type, display_name, avatar_url, is_default)
+        VALUES (?, 'person', ?, ?, false)
+        RETURNING id
+      `).run(tenantId, linkedin_name || 'LinkedIn User', linkedin_photo);
+      personProfileId = profileResult.lastInsertRowid;
+      newProfileId    = personProfileId;
+
+      // Is this the first personal connection in this workspace? If so, mark as default.
+      const existingPersonal = await db.prepare(
+        `SELECT id FROM linkedin_connections WHERE workspace_id = ? AND account_type = 'personal' LIMIT 1`
+      ).get(tenantId);
+      const isDefault = !existingPersonal;
+
+      await db.prepare(`
+        INSERT INTO linkedin_connections
+          (workspace_id, profile_id, authorized_by, account_type, account_key,
+           display_name, avatar_url, linkedin_member_id,
+           access_token_enc, refresh_token_enc, expires_at, is_default)
+        VALUES (?, ?, ?, 'personal', ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        tenantId, personProfileId, userId, accountKey,
+        linkedin_name, linkedin_photo, linkedin_member_id,
+        accessTokenEnc, refreshTokenEnc, expiresAt, isDefault
+      );
+      console.log(`[linkedin/callback] Connected user=${userId} as ${linkedin_name} (${linkedin_member_id}), profile=${personProfileId}, default=${isDefault}`);
+    }
+
+    // Fire-and-forget: discover org pages the user administers
+    const brandProfile = await db.prepare(
+      'SELECT id FROM profiles WHERE workspace_id = ? AND is_default = true'
+    ).get(tenantId);
+    if (brandProfile?.id) {
+      discoverOrgPages(tokens.access_token, userId, tenantId, brandProfile.id, expiresAt)
+        .catch(e => console.warn('[linkedin/callback] discoverOrgPages failed (non-fatal):', e.message));
+    }
+
+    // Fire-and-forget: extract voice DNA from LinkedIn activity for the person profile
+    extractVoiceDNAFromLinkedIn(personProfileId).catch(e =>
       console.warn('[linkedin/callback] extractVoiceDNAFromLinkedIn failed (non-fatal):', e.message)
     );
 
-    res.redirect(stateData.returnTo || '/account.html?linkedin_connected=true');
+    // Append profile_id to returnTo so frontend can open mini-onboarding modal
+    let redirectTarget = stateData.returnTo || '/account.html?linkedin_connected=true';
+    if (newProfileId) {
+      const sep = redirectTarget.includes('?') ? '&' : '?';
+      redirectTarget += `${sep}new_profile_id=${newProfileId}`;
+    }
+
+    res.redirect(redirectTarget);
 
   } catch (err) {
     console.error('[linkedin/callback] Error:', err.message);
-    // Redirect errors back to the originating page so onboarding users aren't stranded on account.html
     const errBase = stateData?.returnTo?.split('?')[0] || '/account.html';
     res.redirect(`${errBase}?linkedin_error=${encodeURIComponent(err.message)}`);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/linkedin/connections
+// List all LinkedIn connections in the workspace, grouped by profile
+// ---------------------------------------------------------------------------
+router.get('/connections', async (req, res) => {
+  const tenantId = req.tenantId;
+  if (!tenantId) return res.status(400).json({ ok: false, error: 'missing_tenant' });
+
+  try {
+    const rows = await db.prepare(`
+      SELECT
+        lc.id, lc.profile_id, lc.account_type, lc.account_key, lc.display_name,
+        lc.avatar_url, lc.linkedin_member_id, lc.organization_id,
+        lc.expires_at, lc.is_default, lc.authorized_by,
+        p.profile_type, p.display_name AS profile_display_name, p.avatar_url AS profile_avatar_url
+      FROM linkedin_connections lc
+      JOIN profiles p ON p.id = lc.profile_id
+      WHERE lc.workspace_id = ?
+      ORDER BY p.profile_type DESC, lc.account_type ASC, lc.created_at ASC
+    `).all(tenantId);
+
+    // Group by profile
+    const profileMap = new Map();
+    for (const row of rows) {
+      if (!profileMap.has(row.profile_id)) {
+        profileMap.set(row.profile_id, {
+          id:           row.profile_id,
+          profile_type: row.profile_type,
+          display_name: row.profile_display_name,
+          avatar_url:   row.profile_avatar_url,
+          connections:  [],
+        });
+      }
+      profileMap.get(row.profile_id).connections.push({
+        id:                 row.id,
+        account_type:       row.account_type,
+        account_key:        row.account_key,
+        display_name:       row.display_name,
+        avatar_url:         row.avatar_url,
+        linkedin_member_id: row.linkedin_member_id,
+        organization_id:    row.organization_id,
+        expires_at:         row.expires_at,
+        is_default:         row.is_default,
+        authorized_by:      row.authorized_by,
+      });
+    }
+
+    return res.json({ ok: true, profiles: [...profileMap.values()] });
+  } catch (err) {
+    console.error('[linkedin/connections] Error:', err.message);
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// DELETE /api/linkedin/connections/:id
+// Disconnect a LinkedIn connection. Revokes the token only if it is the last
+// connection sharing that linkedin_member_id in this workspace.
+// ---------------------------------------------------------------------------
+router.delete('/connections/:id', async (req, res) => {
+  const userId   = req.userId;
+  const tenantId = req.tenantId;
+  const id       = Number(req.params.id);
+
+  if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
+  if (!Number.isFinite(id)) return res.status(400).json({ ok: false, error: 'invalid_id' });
+
+  try {
+    const conn = await db.prepare(
+      `SELECT id, workspace_id, authorized_by, account_type, account_key,
+              linkedin_member_id, access_token_enc, profile_id
+       FROM linkedin_connections WHERE id = ? AND workspace_id = ?`
+    ).get(id, tenantId);
+
+    if (!conn) return res.status(404).json({ ok: false, error: 'not_found' });
+
+    // Cancel pending scheduled posts that use this workspace (simplified: all pending)
+    // Full connection-scoped cancellation is deferred to Sprint 3 Task 2
+    // when scheduled_posts.linkedin_connection_id column is added.
+    const activePosts = await db.prepare(`
+      SELECT id, post_id FROM scheduled_posts
+      WHERE tenant_id = ? AND status IN ('pending', 'processing')
+    `).all(tenantId);
+
+    for (const row of activePosts) {
+      await db.prepare(`
+        UPDATE scheduled_posts SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP
+        WHERE id = ? AND tenant_id = ?
+      `).run(row.id, tenantId);
+      if (row.post_id) {
+        await db.prepare(`
+          UPDATE generated_posts SET status = 'draft'
+          WHERE id = ? AND tenant_id = ? AND status = 'scheduled'
+        `).run(row.post_id, tenantId);
+      }
+      removeScheduledJob(Number(row.id)).catch(() => {});
+    }
+
+    // Revoke token only if no other connections in this workspace share the same member_id
+    if (conn.linkedin_member_id) {
+      const sibling = await db.prepare(
+        `SELECT id FROM linkedin_connections WHERE workspace_id = ? AND linkedin_member_id = ? AND id != ? LIMIT 1`
+      ).get(tenantId, conn.linkedin_member_id, id);
+      if (!sibling) {
+        await revokeToken(conn.access_token_enc);
+      }
+    }
+
+    await db.prepare('DELETE FROM linkedin_connections WHERE id = ? AND workspace_id = ?').run(id, tenantId);
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('[linkedin/connections/delete] Error:', err.message);
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/linkedin/connections/:id/set-default
+// Set a connection as the default for its profile
+// ---------------------------------------------------------------------------
+router.post('/connections/:id/set-default', async (req, res) => {
+  const tenantId = req.tenantId;
+  const id       = Number(req.params.id);
+
+  if (!req.userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
+  if (!Number.isFinite(id)) return res.status(400).json({ ok: false, error: 'invalid_id' });
+
+  try {
+    const conn = await db.prepare(
+      `SELECT id, profile_id FROM linkedin_connections WHERE id = ? AND workspace_id = ?`
+    ).get(id, tenantId);
+
+    if (!conn) return res.status(404).json({ ok: false, error: 'not_found' });
+
+    await db.transaction(async tx => {
+      await tx.prepare(
+        `UPDATE linkedin_connections SET is_default = false WHERE profile_id = ?`
+      ).run(conn.profile_id);
+      await tx.prepare(
+        `UPDATE linkedin_connections SET is_default = true WHERE id = ? AND workspace_id = ?`
+      ).run(id, tenantId);
+    });
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('[linkedin/connections/set-default] Error:', err.message);
+    return res.status(500).json({ ok: false, error: err.message });
   }
 });
 
@@ -391,8 +723,8 @@ router.post('/publish', async (req, res) => {
 
   if (postId) {
     const gp = await db.prepare(
-      'SELECT status FROM generated_posts WHERE id = ? AND user_id = ? AND tenant_id = ?'
-    ).get(postId, userId, tenantId);
+      'SELECT status FROM generated_posts WHERE id = ? AND tenant_id = ?'
+    ).get(postId, tenantId);
     if (!gp) return res.status(404).json({ ok: false, error: 'post_not_found' });
     if (gp.status === 'scheduled') {
       return res.status(409).json({ ok: false, error: 'publish_blocked_scheduled' });
@@ -405,25 +737,23 @@ router.post('/publish', async (req, res) => {
       image_url: image_url?.trim() || null,
     });
 
-    // Stamp the originating draft as published and persist the LinkedIn share ID
     if (postId) {
       const assetType = carousel_pdf_url ? 'carousel' : image_url ? 'image' : null;
       await db.prepare(`
         UPDATE generated_posts
         SET status = 'published', published_at = CURRENT_TIMESTAMP, asset_type = ?
-        WHERE id = ? AND user_id = ? AND tenant_id = ?
-      `).run(assetType, postId, userId, tenantId);
+        WHERE id = ? AND tenant_id = ?
+      `).run(assetType, postId, tenantId);
 
       if (result.linkedin_post_id) {
-        await db.prepare(`UPDATE generated_posts SET linkedin_post_id = ? WHERE id = ? AND user_id = ? AND tenant_id = ?`)
-          .run(result.linkedin_post_id, postId, userId, tenantId);
+        await db.prepare(`UPDATE generated_posts SET linkedin_post_id = ? WHERE id = ? AND tenant_id = ?`)
+          .run(result.linkedin_post_id, postId, tenantId);
       }
 
-      // Update archetype preference so hook selection bias improves over time
-      const postRow = await db.prepare('SELECT archetype_used FROM generated_posts WHERE id = ? AND user_id = ? AND tenant_id = ?')
-        .get(postId, userId, tenantId);
-      if (postRow?.archetype_used) {
-        incrementArchetypePreference(userId, tenantId, postRow.archetype_used).catch(() => {});
+      const postRow = await db.prepare('SELECT archetype_used, profile_id FROM generated_posts WHERE id = ? AND tenant_id = ?')
+        .get(postId, tenantId);
+      if (postRow?.archetype_used && postRow.profile_id) {
+        incrementArchetypePreference(postRow.profile_id, postRow.archetype_used).catch(() => {});
       }
     }
 
@@ -454,7 +784,13 @@ router.post('/schedule', async (req, res) => {
   const tenantId = req.tenantId;
   const { content, scheduled_for, post_id, image_url, carousel_pdf_url, first_comment, asset_preview_url, asset_slide_count } = req.body;
 
-  if (!userId)         return res.status(400).json({ ok: false, error: 'missing_user_id' });
+  if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
+
+  // Scheduling requires Solo or higher
+  const schedulePlan = await getUserPlan(userId);
+  if (!planHasFeature(schedulePlan, 'scheduling')) {
+    return res.status(403).json({ ok: false, error: 'feature_not_available', feature: 'scheduling', requiredPlan: 'solo' });
+  }
 
   if (!content?.trim()) return res.status(400).json({ ok: false, error: 'missing_content' });
   if (content.length > 3000) return res.status(400).json({ ok: false, error: 'content_too_long' });
@@ -477,8 +813,6 @@ router.post('/schedule', async (req, res) => {
     return res.status(503).json({ ok: false, error: 'scheduling_disabled' });
   }
 
-  // Don't allow "fake scheduled" rows when the scheduler isn't running.
-  // Scheduling relies on BullMQ + Redis; without it, posts won't auto-publish.
   if (!isSchedulerEnabled()) {
     return res.status(503).json({ ok: false, error: 'scheduling_unavailable' });
   }
@@ -488,7 +822,6 @@ router.post('/schedule', async (req, res) => {
     return res.status(400).json({ ok: false, error: 'scheduled_for_invalid' });
   }
 
-  // Guardrails: must be at least 5 minutes in the future, and not more than 30 days out.
   const now = Date.now();
   const minLeadMs = 5 * 60 * 1000;
   const maxHorizonMs = 30 * 24 * 60 * 60 * 1000;
@@ -500,11 +833,11 @@ router.post('/schedule', async (req, res) => {
     return res.status(400).json({ ok: false, error: 'scheduled_for_too_far' });
   }
 
-  // Verify user is connected
-  const tokenRow = await db.prepare(
-    'SELECT id FROM linkedin_tokens WHERE user_id = ? AND tenant_id = ?'
-  ).get(userId, tenantId);
-  if (!tokenRow) return res.status(401).json({ ok: false, error: 'not_connected' });
+  // Verify workspace has at least one active personal LinkedIn connection
+  const connRow = await db.prepare(
+    `SELECT id FROM linkedin_connections WHERE workspace_id = ? AND account_type = 'personal' LIMIT 1`
+  ).get(tenantId);
+  if (!connRow) return res.status(401).json({ ok: false, error: 'not_connected' });
 
   // Guardrails: cap pending scheduled posts per user
   const { cnt } = await db.prepare(`
@@ -512,12 +845,11 @@ router.post('/schedule', async (req, res) => {
     FROM scheduled_posts
     WHERE user_id = ? AND tenant_id = ? AND status IN ('pending', 'processing')
   `).get(userId, tenantId);
-  // Cap total pending posts per user (2 posts/day × up to 5 days ahead).
   if ((cnt ?? 0) >= 10) {
     return res.status(429).json({ ok: false, error: 'too_many_scheduled' });
   }
 
-  // Guardrails: cap scheduled sends per day (based on scheduled_for date)
+  // Guardrails: cap scheduled sends per day
   const { daily } = await db.prepare(`
     SELECT COUNT(*) AS daily
     FROM scheduled_posts
@@ -529,10 +861,8 @@ router.post('/schedule', async (req, res) => {
     return res.status(429).json({ ok: false, error: 'daily_schedule_limit' });
   }
 
-  // Guardrails: enforce a minimum spacing between scheduled posts per user
-  // (aligned with LinkedIn rate limits and 2-posts-per-day policy)
+  // Guardrails: enforce minimum spacing between scheduled posts
   const MIN_GAP_MINUTES = 240; // 4 hours
-  // Cross-DB: avoid SQLite-only strftime/extract functions; compute spacing in JS.
   const activeTimes = await db.prepare(`
     SELECT scheduled_for
     FROM scheduled_posts
@@ -563,8 +893,6 @@ router.post('/schedule', async (req, res) => {
       first_comment: trimmedFirstComment,
     }));
 
-    // Atomically insert the scheduled_posts row and update generated_posts status.
-    // If either DB write fails the transaction rolls back — no orphaned rows.
     let scheduledPostId;
     await db.transaction(async tx => {
       const result = await tx.prepare(`
@@ -698,7 +1026,7 @@ router.delete('/scheduled/:id', async (req, res) => {
 
 // ---------------------------------------------------------------------------
 // DELETE /api/linkedin/scheduled/:id/dismiss
-// Dismiss a not_sent (failed) post — marks it cancelled so it leaves the feed.
+// Dismiss a not_sent (failed) post.
 // ---------------------------------------------------------------------------
 router.delete('/scheduled/:id/dismiss', async (req, res) => {
   const userId   = req.userId;
@@ -717,9 +1045,10 @@ router.delete('/scheduled/:id/dismiss', async (req, res) => {
     return res.status(400).json({ ok: false, error: 'cannot_dismiss', status: row.status });
   }
 
+  // Trap 16: tenant_id guard on UPDATE
   await db.prepare(
-    `UPDATE scheduled_posts SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP WHERE id = ?`
-  ).run(id);
+    `UPDATE scheduled_posts SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ?`
+  ).run(id, tenantId);
 
   if (row.post_id) {
     await db.prepare(`
@@ -735,8 +1064,7 @@ router.delete('/scheduled/:id/dismiss', async (req, res) => {
 
 // ---------------------------------------------------------------------------
 // POST /api/linkedin/scheduled/:id/reschedule
-// Reschedule a not_sent post. Creates a new scheduled_posts row (same content/
-// assets) and marks the old row cancelled.
+// Reschedule a not_sent post.
 // Body: { scheduled_for: ISO datetime string | null }
 //   null / omitted → publish now (~10 s delay)
 // ---------------------------------------------------------------------------
@@ -769,7 +1097,7 @@ router.post('/scheduled/:id/reschedule', async (req, res) => {
   const publishNowMode = !scheduled_for;
   let scheduledDate;
   if (publishNowMode) {
-    scheduledDate = new Date(Date.now() + 10_000); // fire ~10 s from now
+    scheduledDate = new Date(Date.now() + 10_000);
   } else {
     scheduledDate = new Date(scheduled_for);
     if (isNaN(scheduledDate)) {
@@ -796,9 +1124,10 @@ router.post('/scheduled/:id/reschedule', async (req, res) => {
   let newScheduledPostId;
   try {
     await db.transaction(async tx => {
+      // Trap 16: tenant_id guard on the cancellation UPDATE
       await tx.prepare(
-        `UPDATE scheduled_posts SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP WHERE id = ?`
-      ).run(id);
+        `UPDATE scheduled_posts SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ?`
+      ).run(id, tenantId);
 
       const result = await tx.prepare(`
         INSERT INTO scheduled_posts
@@ -823,9 +1152,10 @@ router.post('/scheduled/:id/reschedule', async (req, res) => {
     logScheduledEvent({ scheduledPostId: newScheduledPostId, userId, tenantId, eventType: 'created', message: `rescheduled_from=${id},scheduled_for=${scheduledDate.toISOString()}` });
 
     const bullJobId = await addScheduledJob(newScheduledPostId, scheduledDate);
+    // Trap 16: tenant_id guard on bull_job_id UPDATE
     await db.prepare(
-      `UPDATE scheduled_posts SET bull_job_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
-    ).run(String(bullJobId), newScheduledPostId);
+      `UPDATE scheduled_posts SET bull_job_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ?`
+    ).run(String(bullJobId), newScheduledPostId, tenantId);
 
     logScheduledEvent({ scheduledPostId: newScheduledPostId, userId, tenantId, eventType: 'enqueued', message: `bull_job_id=${bullJobId}` });
 
@@ -895,8 +1225,8 @@ router.post('/scheduled/pause-by-post', async (req, res) => {
 
   if (!schedRow) {
     const gp = await db.prepare(
-      'SELECT id, status FROM generated_posts WHERE id = ? AND user_id = ? AND tenant_id = ?'
-    ).get(postId, userId, tenantId);
+      'SELECT id, status FROM generated_posts WHERE id = ? AND tenant_id = ?'
+    ).get(postId, tenantId);
     if (!gp) return res.status(404).json({ ok: false, error: 'post_not_found' });
     return res.status(409).json({ ok: false, error: 'no_active_schedule', status: gp.status });
   }
@@ -912,7 +1242,7 @@ router.post('/scheduled/pause-by-post', async (req, res) => {
 
 // ---------------------------------------------------------------------------
 // POST /api/linkedin/disconnect
-// Remove LinkedIn connection for the current user
+// Remove all of the current user's personal LinkedIn connections in this workspace
 // ---------------------------------------------------------------------------
 router.post('/disconnect', (req, res) => {
   const userId   = req.userId;
@@ -920,46 +1250,53 @@ router.post('/disconnect', (req, res) => {
 
   if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
 
-  // Cancel any pending/processing scheduled posts to avoid publishing after disconnect.
   (async () => {
+    // Cancel any pending/processing scheduled posts in this workspace
     const active = await db.prepare(`
       SELECT id, post_id
       FROM scheduled_posts
-      WHERE user_id = ? AND tenant_id = ? AND status IN ('pending', 'processing')
-    `).all(userId, tenantId);
+      WHERE tenant_id = ? AND status IN ('pending', 'processing')
+    `).all(tenantId);
 
     for (const row of active) {
+      // Trap 16: tenant_id guard on UPDATE
       await db.prepare(`
         UPDATE scheduled_posts
         SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-      `).run(row.id);
+        WHERE id = ? AND tenant_id = ?
+      `).run(row.id, tenantId);
 
       if (row.post_id) {
         await db.prepare(`
           UPDATE generated_posts
           SET status = 'draft'
-          WHERE id = ? AND user_id = ? AND tenant_id = ? AND status = 'scheduled'
-        `).run(row.post_id, userId, tenantId);
+          WHERE id = ? AND tenant_id = ? AND status = 'scheduled'
+        `).run(row.post_id, tenantId);
       }
 
-      // Best-effort job removal (non-fatal if scheduler isn't running)
       removeScheduledJob(Number(row.id)).catch(() => {});
-
-      logScheduledEvent({
-        scheduledPostId: row.id,
-        userId,
-        tenantId,
-        eventType: 'cancelled_disconnect',
-      });
     }
 
-    // Revoke the token on LinkedIn's auth server before deleting it locally.
-    await revokeLinkedInToken(userId, tenantId);
+    // Fetch the user's personal connections in this workspace
+    const conns = await db.prepare(`
+      SELECT id, linkedin_member_id, access_token_enc
+      FROM linkedin_connections
+      WHERE workspace_id = ? AND authorized_by = ? AND account_type = 'personal'
+    `).all(tenantId, userId);
 
+    // Revoke tokens (deduplicated by linkedin_member_id so we don't revoke twice)
+    const revokedMemberIds = new Set();
+    for (const conn of conns) {
+      if (conn.linkedin_member_id && !revokedMemberIds.has(conn.linkedin_member_id)) {
+        await revokeToken(conn.access_token_enc);
+        revokedMemberIds.add(conn.linkedin_member_id);
+      }
+    }
+
+    // Delete the personal connections (cascade removes nothing else — profiles remain)
     await db.prepare(
-      'DELETE FROM linkedin_tokens WHERE user_id = ? AND tenant_id = ?'
-    ).run(userId, tenantId);
+      `DELETE FROM linkedin_connections WHERE workspace_id = ? AND authorized_by = ? AND account_type = 'personal'`
+    ).run(tenantId, userId);
 
     return res.json({ ok: true });
   })().catch(err => res.status(500).json({ ok: false, error: err.message }));
@@ -977,8 +1314,17 @@ router.delete('/user-data', (req, res) => {
   if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
 
   (async () => {
-    // Revoke the LinkedIn token before the transaction deletes the encrypted row we need to read.
-    await revokeLinkedInToken(userId, tenantId);
+    // Revoke LinkedIn tokens before the transaction deletes the rows we need to read
+    const conns = await db.prepare(
+      `SELECT access_token_enc, linkedin_member_id FROM linkedin_connections WHERE workspace_id = ? AND authorized_by = ?`
+    ).all(tenantId, userId);
+    const revokedMemberIds = new Set();
+    for (const conn of conns) {
+      if (conn.linkedin_member_id && !revokedMemberIds.has(conn.linkedin_member_id)) {
+        await revokeToken(conn.access_token_enc);
+        revokedMemberIds.add(conn.linkedin_member_id);
+      }
+    }
 
     await db.transaction(async tx => {
       await tx.prepare(`
@@ -991,9 +1337,8 @@ router.delete('/user-data', (req, res) => {
       await tx.prepare('DELETE FROM copy_events WHERE user_id = ? AND tenant_id = ?').run(userId, tenantId);
       await tx.prepare('DELETE FROM generated_posts WHERE user_id = ? AND tenant_id = ?').run(userId, tenantId);
       await tx.prepare('DELETE FROM generation_runs WHERE user_id = ? AND tenant_id = ?').run(userId, tenantId);
-      await tx.prepare('DELETE FROM linkedin_tokens WHERE user_id = ? AND tenant_id = ?').run(userId, tenantId);
-      await tx.prepare('DELETE FROM user_profiles WHERE user_id = ? AND tenant_id = ?').run(userId, tenantId);
-      await tx.prepare('DELETE FROM tenant_settings WHERE tenant_id = ?').run(tenantId);
+      await tx.prepare('DELETE FROM linkedin_connections WHERE workspace_id = ? AND authorized_by = ?').run(tenantId, userId);
+      await tx.prepare('DELETE FROM user_profiles WHERE user_id = ?').run(userId);
     });
 
     console.log(`[linkedin/user-data] All data deleted for user=${userId} tenant=${tenantId}`);
@@ -1004,18 +1349,18 @@ router.delete('/user-data', (req, res) => {
 // ---------------------------------------------------------------------------
 // POST /api/linkedin/sync-metrics
 // Fetches fresh engagement data for a single published post from LinkedIn's
-// Social Metadata API (2026-03). Per-row, user-initiated only — never bulk.
+// Social Metadata API. Per-row, user-initiated only — never bulk.
 // ---------------------------------------------------------------------------
 router.post('/sync-metrics', async (req, res) => {
   const userId   = req.userId;
-  const tenantId = req.tenantId || 'default';
+  const tenantId = req.tenantId;
   const { postId } = req.body;
 
   if (!userId)  return res.status(400).json({ ok: false, error: 'missing_user_id' });
   if (!postId)  return res.status(400).json({ ok: false, error: 'missing_post_id' });
 
   try {
-    const metrics = await syncPostMetrics(Number(postId), userId, tenantId);
+    const metrics = await syncPostMetrics(Number(postId), tenantId);
     return res.json({ ok: true, ...metrics });
   } catch (err) {
     if (err instanceof RateLimitError) {

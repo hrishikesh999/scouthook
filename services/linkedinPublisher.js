@@ -1,7 +1,7 @@
 'use strict';
 
 const { db, backendKind } = require('../db');
-const { getValidAccessToken } = require('./linkedinOAuth');
+const { encrypt, decrypt } = require('./linkedinOAuth');
 const { sendEmailToUser } = require('../emails');
 const path = require('path');
 const storage = require('./storage');
@@ -54,12 +54,188 @@ function checkRateLimit(userId, tenantId) {
 }
 
 // ---------------------------------------------------------------------------
-// Core LinkedIn publish call
+// Connection resolution
 // ---------------------------------------------------------------------------
 
 /**
- * Register a feed-share image upload (consumer API). Returns digitalmediaAsset URN + upload URL.
- * @see https://learn.microsoft.com/en-us/linkedin/consumer/integrations/self-serve/share-on-linkedin
+ * Resolve a linkedin_connections row for the workspace.
+ * Priority: options.connectionId → options.profileId → workspace default profile's default connection.
+ * Returns null if no matching connection is found.
+ *
+ * @param {string} tenantId  Workspace UUID
+ * @param {{ connectionId?: number, profileId?: number }} [options]
+ * @returns {Promise<object|null>}
+ */
+async function resolveConnection(tenantId, options = {}) {
+  if (options.connectionId) {
+    return db.prepare(
+      'SELECT * FROM linkedin_connections WHERE id = ? AND workspace_id = ?'
+    ).get(options.connectionId, tenantId);
+  }
+
+  if (options.profileId) {
+    return db.prepare(
+      'SELECT * FROM linkedin_connections WHERE profile_id = ? AND is_default = true'
+    ).get(options.profileId);
+  }
+
+  // Fallback: workspace default profile → default connection
+  const defaultProfile = await db.prepare(
+    'SELECT id FROM profiles WHERE workspace_id = ? AND is_default = true'
+  ).get(tenantId);
+  if (!defaultProfile) return null;
+
+  return db.prepare(
+    'SELECT * FROM linkedin_connections WHERE profile_id = ? AND is_default = true'
+  ).get(defaultProfile.id);
+}
+
+// ---------------------------------------------------------------------------
+// Token management — linkedin_connections
+// ---------------------------------------------------------------------------
+
+/**
+ * Exchange a refresh token for new tokens and update ALL connections in the
+ * workspace that share the same linkedin_member_id (personal + any org pages
+ * connected by the same user).
+ *
+ * @param {object} connection  Row from linkedin_connections
+ * @returns {Promise<string>}  New plaintext access token
+ */
+async function refreshConnectionToken(connection) {
+  const clientId     = (process.env.LINKEDIN_CLIENT_ID || '').trim();
+  const clientSecret = (process.env.LINKEDIN_CLIENT_SECRET || '').trim();
+  if (!clientId || !clientSecret) throw new Error('linkedin_credentials_not_configured');
+  if (!connection.refresh_token_enc) throw new Error('reconnect_required');
+
+  const refreshToken = decrypt(connection.refresh_token_enc);
+
+  const params = new URLSearchParams({
+    grant_type:    'refresh_token',
+    refresh_token: refreshToken,
+    client_id:     clientId,
+    client_secret: clientSecret,
+  });
+
+  const res = await fetch('https://www.linkedin.com/oauth/v2/accessToken', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body:    params.toString(),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`LinkedIn token refresh failed: ${res.status} ${text}`);
+  }
+
+  const tokens = await res.json();
+  const newAccessTokenEnc  = encrypt(tokens.access_token);
+  const newRefreshTokenEnc = tokens.refresh_token ? encrypt(tokens.refresh_token) : null;
+  const newExpiresAt = new Date(Date.now() + (tokens.expires_in || 5184000) * 1000).toISOString();
+
+  if (connection.linkedin_member_id) {
+    // Update all connections in the workspace sharing this member_id
+    // (personal connection + any org pages that use the same underlying token)
+    await db.prepare(`
+      UPDATE linkedin_connections
+      SET access_token_enc  = ?,
+          refresh_token_enc = COALESCE(?, refresh_token_enc),
+          expires_at        = ?,
+          updated_at        = now()
+      WHERE workspace_id = ? AND linkedin_member_id = ?
+    `).run(newAccessTokenEnc, newRefreshTokenEnc, newExpiresAt,
+           connection.workspace_id, connection.linkedin_member_id);
+  } else {
+    await db.prepare(`
+      UPDATE linkedin_connections
+      SET access_token_enc  = ?,
+          refresh_token_enc = COALESCE(?, refresh_token_enc),
+          expires_at        = ?,
+          updated_at        = now()
+      WHERE id = ?
+    `).run(newAccessTokenEnc, newRefreshTokenEnc, newExpiresAt, connection.id);
+  }
+
+  return decrypt(newAccessTokenEnc);
+}
+
+/**
+ * Return a valid plaintext access token for a connection, refreshing if within
+ * 24 h of expiry. Throws 'reconnect_required' if the token cannot be refreshed.
+ *
+ * @param {object} connection  Row from linkedin_connections
+ * @returns {Promise<string>}
+ */
+async function getValidConnectionToken(connection) {
+  const expiresAt = new Date(connection.expires_at);
+  const hoursUntilExpiry = (expiresAt - Date.now()) / 3_600_000;
+
+  if (hoursUntilExpiry >= 24) {
+    return decrypt(connection.access_token_enc);
+  }
+
+  if (!connection.refresh_token_enc) {
+    await notifyWorkspaceReconnect(connection);
+    throw new Error('reconnect_required');
+  }
+
+  try {
+    return await refreshConnectionToken(connection);
+  } catch (e) {
+    console.warn(`[publisher] Token refresh failed for connection=${connection.id}:`, e.message);
+    await notifyWorkspaceReconnect(connection);
+    throw new Error('reconnect_required');
+  }
+}
+
+/**
+ * Create in-app and email reconnect notifications for every workspace member.
+ * One notification per user at a time — deduped on an existing unread row.
+ * Fire-and-forget — errors are swallowed.
+ *
+ * @param {object} connection  Row from linkedin_connections
+ */
+async function notifyWorkspaceReconnect(connection) {
+  try {
+    const members = await db.prepare(
+      'SELECT user_id FROM workspace_members WHERE workspace_id = ?'
+    ).all(connection.workspace_id);
+
+    const connName = connection.display_name || 'your LinkedIn account';
+    const appUrl   = process.env.APP_URL || '';
+
+    for (const m of members) {
+      try {
+        const existing = await db.prepare(`
+          SELECT id FROM notifications
+          WHERE user_id = ? AND tenant_id = ? AND type = 'reconnect_required' AND read_at IS NULL
+          LIMIT 1
+        `).get(m.user_id, connection.workspace_id);
+        if (existing) continue;
+
+        await db.prepare(`
+          INSERT INTO notifications (user_id, tenant_id, type, title, body, ref_type)
+          VALUES (?, ?, 'reconnect_required', 'LinkedIn reconnection needed', ?, 'linkedin_connection')
+        `).run(
+          m.user_id,
+          connection.workspace_id,
+          `The LinkedIn connection for "${connName}" has expired. Please reconnect to continue publishing.`
+        );
+
+        sendEmailToUser(m.user_id, 'linkedin-reconnect', { app_url: appUrl },
+          { dedupKey: `reconnect_${connection.workspace_id}_${connection.id}`, withinHours: 24 });
+      } catch { /* per-member errors are non-fatal */ }
+    }
+  } catch { /* non-fatal */ }
+}
+
+// ---------------------------------------------------------------------------
+// Core LinkedIn publish helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Register a feed-share image upload (consumer API).
+ * Returns digitalmediaAsset URN + upload URL.
  */
 async function registerFeedshareImageUpload(accessToken, ownerUrn) {
   const res = await fetch(LINKEDIN_ASSETS_REGISTER_URL, {
@@ -121,9 +297,11 @@ async function uploadFeedshareImageBinary(accessToken, uploadUrl, buffer, extraH
   }
 }
 
-/** UGC post with image — uses urn:li:digitalmediaAsset from v2/assets (consumer flow). */
-async function createUgcPostWithImage(accessToken, linkedinUserId, content, assetUrn) {
-  const ownerUrn = `urn:li:person:${linkedinUserId}`;
+/**
+ * UGC post with image — uses urn:li:digitalmediaAsset from v2/assets (consumer flow).
+ * @param {string} ownerUrn  Full author URN: urn:li:person:ID or urn:li:organization:ID
+ */
+async function createUgcPostWithImage(accessToken, ownerUrn, content, assetUrn) {
   const body = {
     author: ownerUrn,
     lifecycleState: 'PUBLISHED',
@@ -165,9 +343,11 @@ async function createUgcPostWithImage(accessToken, linkedinUserId, content, asse
   return data.id;
 }
 
-/** Text-only organic post (legacy UGC endpoint; still reliable for commentary-only). */
-async function callLinkedInAPI(accessToken, linkedinUserId, content) {
-  const ownerUrn = `urn:li:person:${linkedinUserId}`;
+/**
+ * Text-only organic post (legacy UGC endpoint).
+ * @param {string} ownerUrn  Full author URN: urn:li:person:ID or urn:li:organization:ID
+ */
+async function callLinkedInAPI(accessToken, ownerUrn, content) {
   const body = {
     author: ownerUrn,
     lifecycleState: 'PUBLISHED',
@@ -203,9 +383,13 @@ async function callLinkedInAPI(accessToken, linkedinUserId, content) {
   return data.id;
 }
 
-async function createRestPostWithMedia(accessToken, linkedinUserId, commentary, mediaPayload) {
+/**
+ * REST post with media (carousel/document).
+ * @param {string} ownerUrn  Full author URN: urn:li:person:ID or urn:li:organization:ID
+ */
+async function createRestPostWithMedia(accessToken, ownerUrn, commentary, mediaPayload) {
   const body = {
-    author: `urn:li:person:${linkedinUserId}`,
+    author: ownerUrn,
     commentary,
     visibility: 'PUBLIC',
     distribution: {
@@ -250,10 +434,6 @@ async function createRestPostWithMedia(accessToken, linkedinUserId, commentary, 
 /**
  * Read asset bytes from storage for LinkedIn upload.
  * Supports /files/ (generated) and /uploads/ (media library) URL paths.
- * @param {string} urlPath  — e.g. '/files/foo.png' or '/uploads/bar.pdf'
- * @param {string} userId
- * @param {string} tenantId
- * @returns {Promise<Buffer|null>}
  */
 async function readStoredFileBytes(urlPath, userId, tenantId) {
   if (!urlPath || typeof urlPath !== 'string') return null;
@@ -269,7 +449,6 @@ async function readStoredFileBytes(urlPath, userId, tenantId) {
     return null;
   }
 
-  // Validate bare filename — no path separators, safe chars only
   if (!filename || filename !== path.basename(filename)) return null;
   if (!/^[a-zA-Z0-9._-]+$/.test(filename)) return null;
 
@@ -357,25 +536,31 @@ async function waitForDocumentAvailable(accessToken, documentUrn) {
 
 /**
  * Publish a post immediately to LinkedIn.
- * @param {string} userId
- * @param {string} tenantId
+ *
+ * Connection resolution priority:
+ *   options.connectionId → options.profileId → workspace default connection
+ *
+ * @param {string} userId       For rate-limit check only
+ * @param {string} tenantId     Workspace UUID
  * @param {string} content
+ * @param {{ connectionId?: number, profileId?: number, image_url?: string, carousel_pdf_url?: string }} [options]
  * @returns {Promise<{ linkedin_post_id: string }>}
  */
 async function publishNow(userId, tenantId, content, options = {}) {
   // Rate limit — 1 post/hour
   await checkRateLimit(userId, tenantId);
 
-  // Get LinkedIn user ID (needed for author URN)
-  const tokenRow = await db.prepare(
-    'SELECT linkedin_user_id FROM linkedin_tokens WHERE user_id = ? AND tenant_id = ?'
-  ).get(userId, tenantId);
+  // Resolve which LinkedIn connection to use
+  const connection = await resolveConnection(tenantId, options);
+  if (!connection) throw new Error('not_connected');
 
-  if (!tokenRow?.linkedin_user_id) throw new Error('not_connected');
+  // Get a valid (possibly refreshed) access token
+  const accessToken = await getValidConnectionToken(connection);
 
-  const accessToken = await getValidAccessToken(userId, tenantId);
-  const personId = tokenRow.linkedin_user_id;
-  const ownerUrn = `urn:li:person:${personId}`;
+  // Build the author URN — person or organisation
+  const ownerUrn = connection.account_type === 'company'
+    ? `urn:li:organization:${connection.organization_id}`
+    : `urn:li:person:${connection.linkedin_member_id}`;
 
   if (options.carousel_pdf_url) {
     const pdfBytes = await readStoredFileBytes(options.carousel_pdf_url, userId, tenantId);
@@ -384,7 +569,7 @@ async function publishNow(userId, tenantId, content, options = {}) {
     const { uploadUrl, document } = await initializeDocumentUpload(accessToken, ownerUrn);
     await uploadDocumentPdf(accessToken, uploadUrl, pdfBytes);
     await waitForDocumentAvailable(accessToken, document);
-    const linkedin_post_id = await createRestPostWithMedia(accessToken, personId, content, {
+    const linkedin_post_id = await createRestPostWithMedia(accessToken, ownerUrn, content, {
       title: 'Carousel.pdf',
       id: document,
     });
@@ -398,11 +583,11 @@ async function publishNow(userId, tenantId, content, options = {}) {
     const { asset, uploadUrl, uploadHeaders } = await registerFeedshareImageUpload(accessToken, ownerUrn);
     await uploadFeedshareImageBinary(accessToken, uploadUrl, bytes, uploadHeaders);
     await sleep(2000);
-    const linkedin_post_id = await createUgcPostWithImage(accessToken, personId, content, asset);
+    const linkedin_post_id = await createUgcPostWithImage(accessToken, ownerUrn, content, asset);
     return { linkedin_post_id };
   }
 
-  const linkedin_post_id = await callLinkedInAPI(accessToken, personId, content);
+  const linkedin_post_id = await callLinkedInAPI(accessToken, ownerUrn, content);
   return { linkedin_post_id };
 }
 
@@ -420,47 +605,65 @@ const NON_RETRIABLE_ERRORS = new Set([
 
 /**
  * BullMQ job handler — publish a scheduled post.
+ *
  * For transient failures (LinkedIn 429, network errors) the function resets
  * the row to 'pending' and throws so BullMQ retries with exponential backoff.
  * For non-retriable errors it marks the row 'not_sent' without throwing.
+ *
  * @param {number} scheduledPostId
  * @param {{ attemptsMade: number, maxAttempts: number }} [attemptInfo]
  */
 async function publishScheduledPost(scheduledPostId, { attemptsMade = 0, maxAttempts = 3 } = {}) {
   const isFinalAttempt = (attemptsMade + 1) >= maxAttempts;
 
+  // capturedTenantId is set as soon as we fetch `current` so that all
+  // subsequent UPDATE statements carry the tenant guard (Trap 16 defence-in-depth).
+  let capturedTenantId = null;
+
   try {
-    // Fetch current state. All pre-publish logic is inside the try so any DB error
-    // is handled by the catch block (marks not_sent on final attempt).
     const current = await db.prepare('SELECT * FROM scheduled_posts WHERE id = ?').get(scheduledPostId);
     if (!current) {
       console.log(`[publisher] scheduledPostId=${scheduledPostId} not found — skipping`);
       return;
     }
+    capturedTenantId = current.tenant_id;
 
     if (!['pending', 'processing'].includes(current.status)) {
       console.log(`[publisher] scheduledPostId=${scheduledPostId} status=${current.status} — skipping`);
       return;
     }
 
-    // If already published, don't attempt again (idempotency guard).
     if (current.status === 'published' || current.linkedin_post_id) {
       console.log(`[publisher] scheduledPostId=${scheduledPostId} already published — skipping`);
       return;
     }
 
-    // Claim the job if it's pending. For retries, we may see it pending again.
+    // Workspace-active guard (Trap 3): do not publish for deleted or grace-period workspaces.
+    const ws = await db.prepare(
+      'SELECT deleted_at, grace_expires_at FROM workspaces WHERE id = ?'
+    ).get(current.tenant_id);
+    if (!ws || ws.deleted_at || ws.grace_expires_at) {
+      await db.prepare(`
+        UPDATE scheduled_posts
+        SET status = 'cancelled', error_message = 'workspace_inactive', updated_at = CURRENT_TIMESTAMP
+        WHERE id = ? AND tenant_id = ?
+      `).run(scheduledPostId, current.tenant_id);
+      console.log(`[publisher] scheduledPostId=${scheduledPostId} cancelled — workspace inactive (tenant=${current.tenant_id})`);
+      return;
+    }
+
+    // Claim the job if it's pending. Includes tenant guard so a stale job from
+    // another workspace cannot be accidentally claimed across tenants.
     if (current.status === 'pending') {
       const claim = await db.prepare(`
         UPDATE scheduled_posts
         SET status = 'processing',
             attempts = attempts + 1,
             updated_at = CURRENT_TIMESTAMP
-        WHERE id = ? AND status = 'pending'
-      `).run(scheduledPostId);
+        WHERE id = ? AND status = 'pending' AND tenant_id = ?
+      `).run(scheduledPostId, current.tenant_id);
 
       if (claim.changes === 0) {
-        // Another worker claimed it or it was cancelled between reads.
         console.log(`[publisher] scheduledPostId=${scheduledPostId} could not be claimed — skipping`);
         return;
       }
@@ -472,9 +675,9 @@ async function publishScheduledPost(scheduledPostId, { attemptsMade = 0, maxAtte
       console.log(`[publisher] scheduledPostId=${scheduledPostId} not processing — skipping`);
       return;
     }
+    capturedTenantId = row.tenant_id; // keep in sync
 
     // Integrity check: ensure the scheduled payload hasn't been mutated.
-    // (Defends against accidental writes or tampering.)
     if (row.payload_hash) {
       const computed = sha256Hex(JSON.stringify({
         content: row.content,
@@ -495,16 +698,20 @@ async function publishScheduledPost(scheduledPostId, { attemptsMade = 0, maxAtte
       `).run(scheduledPostId, row.user_id, row.tenant_id, `attempt=${row.attempts}`);
     } catch { /* non-fatal */ }
 
+    // Build publish options: asset type + profile/connection context
     const publishOpts = {};
     if (row.asset_type === 'carousel' && row.asset_url) {
       publishOpts.carousel_pdf_url = row.asset_url;
     } else if (row.asset_type === 'image' && row.asset_url) {
       publishOpts.image_url = row.asset_url;
     }
+    // Pass the profile that generated the post so the correct LinkedIn connection is used.
+    if (row.profile_id) {
+      publishOpts.profileId = row.profile_id;
+    }
 
-    // Idempotency guard: if a previous attempt already obtained a linkedin_post_id
-    // but failed to persist the 'published' status, skip the API call to avoid
-    // publishing the same post twice.
+    // Idempotency guard: skip the API call if a linkedin_post_id was already
+    // persisted by a previous attempt that failed after the API call.
     let linkedin_post_id = row.linkedin_post_id || null;
     if (linkedin_post_id) {
       console.log(`[publisher] scheduledPostId=${scheduledPostId} linkedin_post_id already set (${linkedin_post_id}) — skipping API call`);
@@ -514,8 +721,8 @@ async function publishScheduledPost(scheduledPostId, { attemptsMade = 0, maxAtte
 
     await db.prepare(`
       UPDATE scheduled_posts SET status = 'published', linkedin_post_id = ?, updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `).run(linkedin_post_id, scheduledPostId);
+      WHERE id = ? AND tenant_id = ?
+    `).run(linkedin_post_id, scheduledPostId, row.tenant_id);
 
     try {
       await db.prepare(`
@@ -530,13 +737,11 @@ async function publishScheduledPost(scheduledPostId, { attemptsMade = 0, maxAtte
         const { addCommentJob } = require('./scheduler');
         await addCommentJob(scheduledPostId);
       } catch (e) {
-        // Non-fatal — the post is published; a failed comment job shouldn't block.
         console.warn(`[publisher] scheduledPostId=${scheduledPostId} failed to enqueue comment job:`, e.message);
       }
     }
 
-    // Stamp the originating draft as published, including the linkedin_post_id
-    // so the Published page can render a "View on LinkedIn" link.
+    // Stamp the originating draft as published, including the linkedin_post_id.
     if (row.post_id) {
       await db.prepare(`
         UPDATE generated_posts
@@ -546,24 +751,25 @@ async function publishScheduledPost(scheduledPostId, { attemptsMade = 0, maxAtte
 
       // Track archetype preference for hook bias (fire-and-forget)
       try {
-        const postRow = await db.prepare('SELECT archetype_used FROM generated_posts WHERE id = ? AND user_id = ? AND tenant_id = ?')
-          .get(row.post_id, row.user_id, row.tenant_id);
-        if (postRow?.archetype_used) {
+        const postRow = await db.prepare('SELECT archetype_used, profile_id FROM generated_posts WHERE id = ?')
+          .get(row.post_id);
+        const profileId = postRow?.profile_id ?? row.profile_id;
+        if (postRow?.archetype_used && profileId) {
           const prefRow = await db.prepare(
-            'SELECT user_archetype_preference FROM user_profiles WHERE user_id = ? AND tenant_id = ?'
-          ).get(row.user_id, row.tenant_id);
+            'SELECT user_archetype_preference FROM profiles WHERE id = ?'
+          ).get(profileId);
           const prefs = (() => {
             try { return prefRow?.user_archetype_preference ? JSON.parse(prefRow.user_archetype_preference) : {}; }
             catch { return {}; }
           })();
           prefs[postRow.archetype_used] = (prefs[postRow.archetype_used] || 0) + 1;
-          await db.prepare('UPDATE user_profiles SET user_archetype_preference = ? WHERE user_id = ? AND tenant_id = ?')
-            .run(JSON.stringify(prefs), row.user_id, row.tenant_id);
+          await db.prepare('UPDATE profiles SET user_archetype_preference = ? WHERE id = ?')
+            .run(JSON.stringify(prefs), profileId);
         }
       } catch { /* non-fatal */ }
     }
 
-    // Notify the user that their scheduled post was published.
+    // In-app notification
     try {
       await db.prepare(`
         INSERT INTO notifications (user_id, tenant_id, type, title, body, ref_id, ref_type)
@@ -571,19 +777,20 @@ async function publishScheduledPost(scheduledPostId, { attemptsMade = 0, maxAtte
       `).run(
         row.user_id,
         row.tenant_id,
-        `Your scheduled post has been published to LinkedIn.`,
+        'Your scheduled post has been published to LinkedIn.',
         scheduledPostId
       );
     } catch { /* non-fatal */ }
 
-    // Email notification — send asynchronously, never block the publisher.
+    // Email notification
     try {
       const appUrl = process.env.APP_URL || '';
       const postPreview = (row.content || '').slice(0, 120) + ((row.content || '').length > 120 ? '…' : '');
-      // linkedin_post_id is a URN like urn:li:share:123 — construct a direct URL
       const shareId = String(linkedin_post_id || '').split(':').pop();
-      const linkedinPostUrl = shareId ? `https://www.linkedin.com/feed/update/${linkedin_post_id}/` : `${appUrl}/generate.html`;
-      sendEmailToUser(row.user_id, row.tenant_id, 'post-published', {
+      const linkedinPostUrl = shareId
+        ? `https://www.linkedin.com/feed/update/${linkedin_post_id}/`
+        : `${appUrl}/generate.html`;
+      sendEmailToUser(row.user_id, 'post-published', {
         post_preview: postPreview,
         linkedin_post_url: linkedinPostUrl,
         app_url: appUrl,
@@ -595,18 +802,24 @@ async function publishScheduledPost(scheduledPostId, { attemptsMade = 0, maxAtte
     const isNonRetriable = NON_RETRIABLE_ERRORS.has(err.message) || isFinalAttempt;
 
     if (isNonRetriable) {
-      // Permanent failure — mark not_sent and unlock the draft.
-      // Retry the DB write up to 3 times; if it still fails, throw so BullMQ retries
-      // rather than silently leaving the post stuck in 'processing'.
       let markOk = false;
       for (let i = 0; i < 3 && !markOk; i++) {
         try {
           if (i > 0) await new Promise(r => setTimeout(r, 2000));
-          await db.prepare(`
+          const updateResult = await db.prepare(`
             UPDATE scheduled_posts
             SET status = 'not_sent', error_message = ?, updated_at = CURRENT_TIMESTAMP
             WHERE id = ? AND status IN ('pending', 'processing')
-          `).run(err.message, scheduledPostId);
+              AND tenant_id = ?
+          `).run(err.message, scheduledPostId, capturedTenantId);
+          // Fall back without tenant guard if we somehow lost capturedTenantId
+          if (updateResult.changes === 0 && !capturedTenantId) {
+            await db.prepare(`
+              UPDATE scheduled_posts
+              SET status = 'not_sent', error_message = ?, updated_at = CURRENT_TIMESTAMP
+              WHERE id = ? AND status IN ('pending', 'processing')
+            `).run(err.message, scheduledPostId);
+          }
           markOk = true;
         } catch (dbErr) {
           console.error(`[publisher] scheduledPostId=${scheduledPostId} not_sent UPDATE failed (attempt ${i + 1}/3):`, dbErr.message);
@@ -633,7 +846,7 @@ async function publishScheduledPost(scheduledPostId, { attemptsMade = 0, maxAtte
         }
       } catch { /* non-fatal */ }
 
-      // Notify the user that their scheduled post could not be sent.
+      // Failure notification
       try {
         const meta = await db.prepare('SELECT user_id, tenant_id, content, scheduled_for FROM scheduled_posts WHERE id = ?').get(scheduledPostId);
         if (meta) {
@@ -647,24 +860,24 @@ async function publishScheduledPost(scheduledPostId, { attemptsMade = 0, maxAtte
             scheduledPostId
           );
 
-          // Email notification
           const appUrl = process.env.APP_URL || '';
           const postPreview = (meta.content || '').slice(0, 120) + ((meta.content || '').length > 120 ? '…' : '');
           const scheduledFor = meta.scheduled_for
             ? new Date(meta.scheduled_for).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })
             : 'the scheduled time';
           const errorReasonMap = {
-            reconnect_required: 'Your LinkedIn connection has expired — please reconnect.',
-            not_connected: 'Your LinkedIn account is not connected.',
-            rate_limit_exceeded: 'You reached LinkedIn\'s posting rate limit (1 post/hour).',
-            invalid_image_url: 'The attached image could not be accessed.',
-            invalid_carousel_pdf_url: 'The carousel PDF could not be accessed.',
+            reconnect_required:                  'Your LinkedIn connection has expired — please reconnect.',
+            not_connected:                       'Your LinkedIn account is not connected.',
+            rate_limit_exceeded:                 'You reached LinkedIn\'s posting rate limit (1 post/hour).',
+            invalid_image_url:                   'The attached image could not be accessed.',
+            invalid_carousel_pdf_url:            'The carousel PDF could not be accessed.',
             linkedin_document_processing_failed: 'LinkedIn couldn\'t process the carousel document.',
-            linkedin_document_not_ready: 'LinkedIn timed out while processing the carousel document.',
-            linkedin_api_version_error: 'A LinkedIn API version issue occurred — the post has been queued for retry after an update.',
+            linkedin_document_not_ready:         'LinkedIn timed out while processing the carousel document.',
+            linkedin_api_version_error:          'A LinkedIn API version issue occurred — the post has been queued for retry after an update.',
+            workspace_inactive:                  'This workspace is no longer active.',
           };
           const errorReason = errorReasonMap[err.message] || err.message || 'An unexpected error occurred.';
-          sendEmailToUser(meta.user_id, meta.tenant_id, 'post-failed', {
+          sendEmailToUser(meta.user_id, 'post-failed', {
             scheduled_for: scheduledFor,
             error_reason: errorReason,
             post_preview: postPreview,
@@ -681,10 +894,9 @@ async function publishScheduledPost(scheduledPostId, { attemptsMade = 0, maxAtte
         await db.prepare(`
           UPDATE scheduled_posts
           SET status = 'pending', error_message = ?, updated_at = CURRENT_TIMESTAMP
-          WHERE id = ? AND status = 'processing'
-        `).run(err.message, scheduledPostId);
+          WHERE id = ? AND status = 'processing' AND tenant_id = ?
+        `).run(err.message, scheduledPostId, capturedTenantId);
       } catch (dbErr) {
-        // If reset fails, status stays 'processing'; periodic recovery will rescue it.
         console.error(`[publisher] scheduledPostId=${scheduledPostId} pending reset failed:`, dbErr.message);
       }
 
@@ -699,7 +911,7 @@ async function publishScheduledPost(scheduledPostId, { attemptsMade = 0, maxAtte
       } catch { /* non-fatal */ }
 
       console.warn(`[publisher] scheduledPostId=${scheduledPostId} will retry (attempt ${attemptsMade + 1}/${maxAttempts}):`, err.message);
-      throw err; // Let BullMQ apply backoff and retry.
+      throw err;
     }
   }
 }
@@ -710,24 +922,35 @@ async function publishScheduledPost(scheduledPostId, { attemptsMade = 0, maxAtte
  */
 async function publishFirstComment(scheduledPostId) {
   const row = await db.prepare(
-    'SELECT linkedin_post_id, first_comment, user_id, tenant_id FROM scheduled_posts WHERE id = ?'
+    'SELECT linkedin_post_id, first_comment, user_id, tenant_id, profile_id FROM scheduled_posts WHERE id = ?'
   ).get(scheduledPostId);
 
   if (!row?.first_comment || !row?.linkedin_post_id) return;
 
-  const tokenRow = await db.prepare(
-    'SELECT linkedin_user_id FROM linkedin_tokens WHERE user_id = ? AND tenant_id = ?'
-  ).get(row.user_id, row.tenant_id);
-
-  if (!tokenRow?.linkedin_user_id) {
+  // Resolve the connection: prefer the profile that generated the post, then
+  // fall back to the workspace default.
+  const conn = await resolveConnection(row.tenant_id, { profileId: row.profile_id });
+  if (!conn) {
     await db.prepare(
       "UPDATE scheduled_posts SET first_comment_status = 'failed', updated_at = CURRENT_TIMESTAMP WHERE id = ?"
     ).run(scheduledPostId);
     return;
   }
 
-  const accessToken = await getValidAccessToken(row.user_id, row.tenant_id);
-  const actorUrn = `urn:li:person:${tokenRow.linkedin_user_id}`;
+  let accessToken;
+  try {
+    accessToken = await getValidConnectionToken(conn);
+  } catch {
+    await db.prepare(
+      "UPDATE scheduled_posts SET first_comment_status = 'failed', updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+    ).run(scheduledPostId);
+    return;
+  }
+
+  const actorUrn = conn.account_type === 'company'
+    ? `urn:li:organization:${conn.organization_id}`
+    : `urn:li:person:${conn.linkedin_member_id}`;
+
   const shareUrn = row.linkedin_post_id;
 
   const res = await fetch(

@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ScoutHook — Set up your workspace</title>
+  <link rel="stylesheet" href="/css/main.css" />
+  <style>
+    body { display:flex; align-items:center; justify-content:center; min-height:100vh; margin:0; background:var(--bg-app,#f9fafb); }
+    .ws-setup-card {
+      width:100%; max-width:480px; margin:40px 20px;
+      background:#fff; border:1px solid var(--border,#e4e4e7);
+      border-radius:16px; padding:40px 36px;
+      box-shadow:0 4px 20px rgba(0,0,0,0.08);
+    }
+    .ws-logo { height:32px; width:auto; display:block; margin-bottom:28px; }
+    .ws-title { font-size:20px; font-weight:700; color:var(--text-heading,#09090b); margin:0 0 6px; }
+    .ws-subtitle { font-size:14px; color:var(--text-muted,#71717a); margin:0 0 28px; }
+    .ws-label { font-size:13px; font-weight:600; color:var(--text-secondary,#52525b); display:block; margin-bottom:6px; }
+    .ws-input {
+      width:100%; height:44px; padding:0 12px; border:1.5px solid var(--border,#e4e4e7);
+      border-radius:10px; font-size:15px; color:var(--text-primary,#09090b);
+      font-family:var(--font-sans); outline:none; box-sizing:border-box;
+      transition:border-color 0.12s;
+    }
+    .ws-input:focus { border-color:var(--brand,#0f766e); }
+    .ws-divider { border:none; border-top:1px solid var(--border,#f4f4f5); margin:24px 0; }
+    .ws-li-btn {
+      width:100%; display:flex; align-items:center; justify-content:center; gap:10px;
+      height:46px; border:1.5px solid var(--border,#e4e4e7); border-radius:12px;
+      background:#fff; cursor:pointer; font-size:14px; font-weight:600; color:#1a1a1a;
+      text-decoration:none; transition:box-shadow 0.12s, transform 0.12s;
+    }
+    .ws-li-btn:hover { box-shadow:0 2px 8px rgba(0,0,0,0.1); transform:translateY(-1px); }
+    .ws-li-connected { background:#f0fdf4; border-color:#86efac; color:#166534; }
+    .ws-skip { font-size:13px; color:var(--text-muted,#71717a); text-align:center; margin-top:14px; }
+    .ws-skip a { color:var(--brand,#0f766e); cursor:pointer; text-decoration:none; }
+    .ws-skip a:hover { text-decoration:underline; }
+    .ws-error { font-size:13px; color:var(--score-fail,#dc2626); margin-top:8px; display:none; }
+  </style>
+</head>
+<body>
+
+  <div class="ws-setup-card">
+    <img src="/images/scout-hook-logo.png" alt="ScoutHook" class="ws-logo">
+    <h1 class="ws-title">Set up your workspace</h1>
+    <p class="ws-subtitle">Give your workspace a name and connect LinkedIn to start publishing.</p>
+
+    <label class="ws-label" for="ws-name">Workspace name</label>
+    <input id="ws-name" type="text" class="ws-input" placeholder="e.g. Acme Corp" autocomplete="off" />
+    <p id="ws-name-error" class="ws-error">Please enter a workspace name.</p>
+
+    <hr class="ws-divider">
+
+    <p class="ws-label" style="margin-bottom:10px">LinkedIn</p>
+    <a id="ws-li-connect-btn" href="#" class="ws-li-btn" id="liBtn">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="#0A66C2" aria-hidden="true"><path d="M19 0H5a5 5 0 00-5 5v14a5 5 0 005 5h14a5 5 0 005-5V5a5 5 0 00-5-5zM8 19H5V8h3v11zM6.5 6.73a1.77 1.77 0 110-3.54 1.77 1.77 0 010 3.54zM20 19h-3v-5.6c0-3.37-4-3.11-4 0V19h-3V8h3v1.76C14.4 7.14 20 6.95 20 12.63V19z"/></svg>
+      Connect LinkedIn
+    </a>
+    <p id="ws-li-note" style="font-size:12px;color:var(--text-muted);margin:8px 0 0">Optional — you can connect later in workspace settings.</p>
+
+    <hr class="ws-divider">
+
+    <button id="ws-save-btn" class="btn-primary" style="width:100%">Continue to dashboard →</button>
+    <p class="ws-skip">or <a id="ws-skip-link" href="/dashboard.html">set up later</a></p>
+  </div>
+
+  <script src="/js/session.js"></script>
+  <script>
+  (function () {
+    const params = new URLSearchParams(window.location.search);
+    const wsId   = params.get('ws');  // workspace ID passed when redirected here
+
+    const nameInput   = document.getElementById('ws-name');
+    const nameError   = document.getElementById('ws-name-error');
+    const liBtn       = document.getElementById('ws-li-connect-btn');
+    const saveBtn     = document.getElementById('ws-save-btn');
+    const skipLink    = document.getElementById('ws-skip-link');
+
+    // If ws is known, wire up LinkedIn connect to redirect back here
+    if (wsId) {
+      liBtn.href = `/auth/linkedin?returnTo=${encodeURIComponent('/workspace-setup.html?ws=' + wsId)}`;
+    }
+
+    // Check if LinkedIn was just connected (li_connected param)
+    if (params.get('li_connected')) {
+      liBtn.textContent  = '✓ LinkedIn connected';
+      liBtn.className   += ' ws-li-connected';
+      liBtn.style.pointerEvents = 'none';
+    }
+
+    // Pre-fill workspace name if returned from LinkedIn (name stored in session)
+    const prefill = params.get('name');
+    if (prefill && nameInput && !nameInput.value) {
+      nameInput.value = decodeURIComponent(prefill);
+    }
+
+    async function saveName() {
+      const name = nameInput.value.trim();
+      if (!name) { nameError.style.display = ''; nameInput.focus(); return false; }
+      nameError.style.display = 'none';
+
+      if (!wsId) return true; // nothing to PATCH yet; workspace created when this page was generated
+
+      try {
+        await fetch(`/api/workspaces/${wsId}`, {
+          method:  'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ name }),
+          credentials: 'same-origin',
+        });
+      } catch { /* non-fatal — name can be changed in settings */ }
+      return true;
+    }
+
+    saveBtn.addEventListener('click', async function () {
+      saveBtn.disabled    = true;
+      saveBtn.textContent = 'Saving…';
+      const ok = await saveName();
+      if (!ok) { saveBtn.disabled = false; saveBtn.textContent = 'Continue to dashboard →'; return; }
+      window.location.href = '/dashboard.html';
+    });
+
+    // Skip just goes to dashboard
+    skipLink.addEventListener('click', async function (e) {
+      e.preventDefault();
+      await saveName().catch(() => {});
+      window.location.href = '/dashboard.html';
+    });
+  })();
+  </script>
+
+</body>
+</html>

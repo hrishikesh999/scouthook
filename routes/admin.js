@@ -1,9 +1,9 @@
 'use strict';
 
 const express = require('express');
-const router = express.Router();
+const router  = express.Router();
 const { getSetting, setSetting, getAllSettings, db } = require('../db');
-const { getPaddle, upsertSubscription } = require('../services/subscription');
+const { getPaddle, upsertSubscription, getUserPlan } = require('../services/subscription');
 const mailerlite = require('../services/mailerlite');
 const { getUserEmailInfo } = require('../emails');
 
@@ -12,7 +12,6 @@ if (!process.env.ADMIN_PASSWORD) {
 }
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 
-// Simple password check middleware for admin routes
 function requireAdminPassword(req, res, next) {
   const provided = req.headers['x-admin-password'] || req.body?.admin_password;
   if (provided !== ADMIN_PASSWORD) {
@@ -23,7 +22,6 @@ function requireAdminPassword(req, res, next) {
 
 // ---------------------------------------------------------------------------
 // GET /admin/settings
-// Returns all platform settings (values masked for sensitive keys)
 // ---------------------------------------------------------------------------
 router.get('/settings', requireAdminPassword, (req, res) => {
   const SENSITIVE_KEYS = [
@@ -35,26 +33,21 @@ router.get('/settings', requireAdminPassword, (req, res) => {
   (async () => {
     const rows = await getAllSettings();
     const settings = rows.map(row => ({
-      key: row.key,
-      value: SENSITIVE_KEYS.includes(row.key) && row.value
-        ? row.value.slice(0, 6) + '…' + row.value.slice(-4)
-        : row.value,
+      key:    row.key,
+      value:  SENSITIVE_KEYS.includes(row.key) && row.value
+                ? row.value.slice(0, 6) + '…' + row.value.slice(-4)
+                : row.value,
       is_set: !!row.value,
     }));
     return res.json({ ok: true, settings });
-  })().catch(err => {
-    return res.status(500).json({ ok: false, error: err.message });
-  });
+  })().catch(err => res.status(500).json({ ok: false, error: err.message }));
 });
 
 // ---------------------------------------------------------------------------
 // POST /admin/settings
-// Set one or more platform settings
-// Body: { admin_password, settings: { key: value, ... } }
 // ---------------------------------------------------------------------------
 router.post('/settings', requireAdminPassword, (req, res) => {
   const { settings } = req.body;
-
   if (!settings || typeof settings !== 'object') {
     return res.status(400).json({ ok: false, error: 'settings object required' });
   }
@@ -77,46 +70,122 @@ router.post('/settings', requireAdminPassword, (req, res) => {
       updated.push(key);
     }
     return res.json({ ok: true, updated });
-  })().catch(err => {
-    return res.status(500).json({ ok: false, error: err.message });
-  });
+  })().catch(err => res.status(500).json({ ok: false, error: err.message }));
 });
 
 // ---------------------------------------------------------------------------
 // GET /admin/diagnostics
-// Shows users, their subscription state, vault doc counts, and post counts.
-// Useful for debugging "account reset" / user_id mismatch issues.
+// Workspace-aware: shows users, their workspaces, subscription state, counts.
 // ---------------------------------------------------------------------------
 router.get('/diagnostics', requireAdminPassword, (req, res) => {
   (async () => {
     const users = await db.prepare(`
       SELECT
-        p.user_id,
-        p.email,
-        p.display_name,
-        p.tenant_id                          AS profile_tenant_id,
-        p.created_at                         AS profile_created_at,
-        s.plan,
-        s.status,
-        s.current_period_end,
-        s.paddle_subscription_id,
-        (SELECT COUNT(*) FROM vault_documents  v WHERE v.user_id = p.user_id) AS vault_docs_total,
-        (SELECT COUNT(*) FROM vault_documents  v WHERE v.user_id = p.user_id AND v.tenant_id = 'default') AS vault_docs_default_tenant,
-        (SELECT COUNT(*) FROM generated_posts  g WHERE g.user_id = p.user_id) AS posts
-      FROM user_profiles p
-      LEFT JOIN user_subscriptions s ON s.user_id = p.user_id
-      ORDER BY p.created_at DESC
+        up.user_id,
+        up.email,
+        up.display_name,
+        up.created_at           AS profile_created_at,
+        us.plan,
+        us.status,
+        us.trial_ends_at,
+        us.current_period_end,
+        us.paddle_subscription_id,
+        COUNT(DISTINCT wm.workspace_id) AS workspace_count,
+        (
+          SELECT COUNT(*) FROM generated_posts gp
+          JOIN workspace_members wm2 ON wm2.workspace_id = gp.tenant_id
+          WHERE wm2.user_id = up.user_id
+        ) AS post_count,
+        (
+          SELECT COUNT(*) FROM vault_documents vd
+          JOIN workspace_members wm3 ON wm3.workspace_id = vd.tenant_id
+          WHERE wm3.user_id = up.user_id
+        ) AS vault_count
+      FROM user_profiles up
+      LEFT JOIN user_subscriptions us ON us.user_id = up.user_id
+      LEFT JOIN workspace_members wm ON wm.user_id = up.user_id
+      GROUP BY up.user_id, us.plan, us.status, us.trial_ends_at,
+               us.current_period_end, us.paddle_subscription_id
+      ORDER BY up.created_at DESC
       LIMIT 100
     `).all();
+
+    for (const row of users) {
+      row.workspaces = await db.prepare(`
+        SELECT w.id, w.name, w.deleted_at, w.grace_expires_at,
+               COUNT(wm.id) AS member_count
+        FROM workspaces w
+        JOIN workspace_members wm ON wm.workspace_id = w.id
+        WHERE wm.user_id = ? AND wm.role = 'owner'
+        GROUP BY w.id
+        ORDER BY w.created_at
+      `).all(row.user_id);
+    }
 
     return res.json({ ok: true, users });
   })().catch(err => res.status(500).json({ ok: false, error: err.message }));
 });
 
 // ---------------------------------------------------------------------------
+// GET /admin/workspaces/:workspaceId
+// Deep-dive on a single workspace (support escalations).
+// ---------------------------------------------------------------------------
+router.get('/workspaces/:workspaceId', requireAdminPassword, (req, res) => {
+  (async () => {
+    const { workspaceId } = req.params;
+    const ws = await db.prepare('SELECT * FROM workspaces WHERE id = ?').get(workspaceId);
+    if (!ws) return res.status(404).json({ ok: false, error: 'workspace_not_found' });
+
+    const [members, profiles, connections, postRow] = await Promise.all([
+      db.prepare(`
+        SELECT wm.user_id, wm.role, up.email, up.display_name, us.plan, us.status
+        FROM workspace_members wm
+        JOIN user_profiles up ON up.user_id = wm.user_id
+        LEFT JOIN user_subscriptions us ON us.user_id = wm.user_id
+        WHERE wm.workspace_id = ?
+      `).all(workspaceId),
+      db.prepare(`
+        SELECT id, profile_type, display_name, is_default,
+               onboarding_complete, voice_profile_completion_pct
+        FROM profiles WHERE workspace_id = ?
+      `).all(workspaceId),
+      db.prepare(`
+        SELECT id, account_type, display_name, expires_at, is_default
+        FROM linkedin_connections WHERE workspace_id = ?
+      `).all(workspaceId),
+      db.prepare(
+        'SELECT COUNT(*) AS cnt FROM generated_posts WHERE tenant_id = ?'
+      ).get(workspaceId),
+    ]);
+
+    return res.json({
+      ok: true,
+      workspace: ws,
+      members,
+      profiles,
+      connections,
+      post_count: postRow.cnt,
+    });
+  })().catch(err => res.status(500).json({ ok: false, error: err.message }));
+});
+
+// ---------------------------------------------------------------------------
+// POST /admin/workspaces/:workspaceId/clear-grace
+// Admin override: restore a workspace from grace period.
+// ---------------------------------------------------------------------------
+router.post('/workspaces/:workspaceId/clear-grace', requireAdminPassword, (req, res) => {
+  (async () => {
+    const { workspaceId } = req.params;
+    await db.prepare(
+      'UPDATE workspaces SET grace_expires_at = NULL WHERE id = ?'
+    ).run(workspaceId);
+    return res.json({ ok: true });
+  })().catch(err => res.status(500).json({ ok: false, error: err.message }));
+});
+
+// ---------------------------------------------------------------------------
 // POST /admin/sync-subscription
-// Force-syncs a user's subscription by email: searches Paddle for an active
-// subscription, upserts it to the DB, and updates MailerLite.
+// Force-syncs a user's subscription by email, then enforces workspace limits.
 // Body: { admin_password, email }
 // ---------------------------------------------------------------------------
 router.post('/sync-subscription', requireAdminPassword, (req, res) => {
@@ -130,14 +199,19 @@ router.post('/sync-subscription', requireAdminPassword, (req, res) => {
       process.env.PADDLE_PRICE_ID_YEARLY,
     ].filter(Boolean);
 
-    // Resolve user_id from email
-    const profile = await db.prepare(
-      'SELECT user_id FROM user_profiles WHERE email = ? LIMIT 1'
-    ).get(email);
+    // Resolve user_id — check both direct email and auth_providers for email-auth users
+    const profile = await db.prepare(`
+      SELECT up.user_id FROM user_profiles up
+      WHERE up.email = ?
+      UNION
+      SELECT up.user_id FROM user_profiles up
+      JOIN auth_providers ap ON ap.user_id = up.user_id
+      WHERE ap.provider = 'email' AND ap.provider_id = ?
+      LIMIT 1
+    `).get(email, email);
     if (!profile) return res.status(404).json({ ok: false, error: 'user not found' });
     const userId = profile.user_id;
 
-    // Search Paddle for this email's customer + subscription
     const paddle = getPaddle();
     const customerList = await paddle.customers.list({ email: [email] });
     const customers = customerList?.data ?? [];
@@ -173,11 +247,22 @@ router.post('/sync-subscription', requireAdminPassword, (req, res) => {
       priceId,
     });
 
+    // Enforce workspace limits after sync (Trap 1 / 8)
+    try {
+      const { enforceWorkspaceLimitGrace } = require('../lib/workspaceUtils');
+      const sub = await db.prepare(
+        'SELECT plan, extra_workspaces FROM user_subscriptions WHERE user_id = ?'
+      ).get(userId);
+      await enforceWorkspaceLimitGrace(userId, sub.plan, sub.extra_workspaces ?? 0);
+    } catch (e) {
+      console.warn('[admin] enforceWorkspaceLimitGrace failed:', e.message);
+    }
+
     // Sync MailerLite
-    getUserEmailInfo(userId, 'default').then(user => {
+    getUserEmailInfo(userId).then(user => {
       if (!user) return;
-      if (plan === 'pro' && ['active', 'trialing'].includes(subscription.status)) {
-        mailerlite.upgradeSubscriberToPro(user.email, user.name).catch(() => {});
+      if (['solo', 'pro'].includes(plan) && ['active', 'trialing'].includes(subscription.status)) {
+        mailerlite.upgradeSubscriberToPaid(user.email, user.name).catch(() => {});
       } else if (['canceled', 'past_due', 'paused'].includes(subscription.status)) {
         mailerlite.downgradeSubscriberToFree(user.email, user.name).catch(() => {});
       }

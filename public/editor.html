@@ -355,7 +355,7 @@
   <div id="schedule-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="schedule-modal-heading" aria-hidden="true">
     <h2 class="modal-heading" id="schedule-modal-heading">Publish post</h2>
     <p class="schedule-consent-note">Scheduling will automatically publish this post to LinkedIn at your selected time. You can cancel any time before it sends.</p>
-    <p class="free-upgrade-note">Want to schedule posts? <button type="button" onclick="window.PricingModal?.open()" class="free-upgrade-link">Upgrade to Pro →</button></p>
+    <p class="free-upgrade-note">Want to schedule posts? <button type="button" onclick="window.PricingModal?.open({ feature: 'scheduling', requiredPlan: 'solo' })" class="free-upgrade-link">Upgrade →</button></p>
     <p class="schedule-section-label">Quick schedule</p>
     <div class="schedule-presets" id="schedule-presets">
       <button class="schedule-preset-btn" data-preset="2h">In 2 hours</button>
@@ -1080,7 +1080,7 @@ function setSlideOverState(s) {
 function openSlideOver(type, label) {
   if (scheduleEditLocked) return;
   if (!currentPostId) return;
-  if (userPlan === 'free') { window.PricingModal?.open(); return; }
+  if (userPlan === 'free') { window.PricingModal?.open({ feature: 'scheduling', requiredPlan: 'solo' }); return; }
 
   currentAssetType       = type;
   currentAssetUrl        = null;
@@ -1636,7 +1636,7 @@ function wireSchedule() {
       });
       const data = await res.json();
       if (!res.ok || !data.ok) {
-        if (res.status === 403 && data.error === 'pro_only') { closeModal(); window.PricingModal?.open(); return; }
+        if (res.status === 403 && (data.error === 'pro_only' || data.error === 'feature_not_available')) { closeModal(); window.PricingModal?.open({ feature: data.feature || 'scheduling', requiredPlan: data.requiredPlan || 'solo' }); return; }
         const errMap = {
           scheduling_unavailable: 'Scheduling is temporarily unavailable. Please try again in a few minutes.',
           scheduled_for_too_soon: 'Please schedule at least 5 minutes from now.',

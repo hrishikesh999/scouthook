@@ -64,7 +64,7 @@ async function recoverStuckPosts() {
         const scheduledFor = meta.scheduled_for
           ? new Date(meta.scheduled_for).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })
           : 'the scheduled time';
-        sendEmailToUser(meta.user_id, meta.tenant_id, 'post-failed', {
+        sendEmailToUser(meta.user_id, 'post-failed', {
           scheduled_for: scheduledFor,
           error_reason: 'The post worker timed out. Please reschedule.',
           post_preview: postPreview,

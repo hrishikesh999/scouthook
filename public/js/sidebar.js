@@ -55,6 +55,7 @@
     '  <a href="/dashboard.html" class="sidebar-logo">',
     '    <img src="/images/scout-hook-logo.png" alt="ScoutHook" class="sidebar-logo-img">',
     '  </a>',
+    '  <div id="workspace-switcher-slot"></div>',
     '  <div class="sidebar-cta">',
     '    <a href="/generate.html?new=1" class="sidebar-cta-btn">' + svgPlus + 'Create Post</a>',
     '  </div>',

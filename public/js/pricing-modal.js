@@ -7,13 +7,8 @@
 
   if (window.PricingModal) return;
 
-  /** Survives redirect when Paddle omits ?_ptxn= on successUrl (overlay checkout). */
   const PENDING_PADDLE_TXN_KEY = 'scouthook_pending_paddle_txn';
 
-  /**
-   * Paddle.js checkout.completed uses data.transaction_id (see Paddle docs).
-   * Older samples used nested shapes — accept both.
-   */
   function checkoutCompletedTransactionId(payload) {
     if (!payload || typeof payload !== 'object') return null;
     const d = payload.data && typeof payload.data === 'object' ? payload.data : payload;
@@ -26,7 +21,29 @@
     return tid.startsWith('txn_') ? tid : null;
   }
 
-  // ── Inject styles ───────────────────────────────────────────────────────────
+  // ── Feature label map ─────────────────────────────────────────────────────
+  const FEATURE_LABELS = {
+    scheduling:                 'Post scheduling',
+    vault:                      'Content Vault',
+    team_members:               'Team members',
+    company_pages:              'Company pages',
+    multiple_linkedin_accounts: 'Multiple LinkedIn accounts',
+    carousel:                   'Carousel visuals',
+    extra_workspaces:           'Additional workspaces',
+  };
+
+  // Plans that include each feature (for the context banner)
+  const FEATURE_MIN_PLAN = {
+    scheduling:                 'solo',
+    vault:                      'solo',
+    team_members:               'pro',
+    company_pages:              'pro',
+    multiple_linkedin_accounts: 'pro',
+    carousel:                   'pro',
+    extra_workspaces:           'pro',
+  };
+
+  // ── Inject styles ─────────────────────────────────────────────────────────
   const style = document.createElement('style');
   style.textContent = `
   #pm-overlay {
@@ -47,14 +64,14 @@
     border: 1px solid var(--border, #E4E4E7);
     border-radius: 16px;
     width: 100%;
-    max-width: 860px;
+    max-width: 960px;
     position: relative;
     box-shadow: 0 8px 40px rgba(0,0,0,0.22);
     margin: 0 auto;
   }
 
   #pm-modal-body {
-    padding: 48px 36px 40px;
+    padding: 48px 32px 40px;
   }
 
   #pm-close {
@@ -75,7 +92,7 @@
   #pm-close:hover { background: var(--bg-pill, #F4F4F5); }
   #pm-close svg { pointer-events: none; }
 
-  #pm-header { text-align: center; margin-bottom: 28px; }
+  #pm-header { text-align: center; margin-bottom: 20px; }
   #pm-header h2 {
     font-size: 22px;
     font-weight: 700;
@@ -88,77 +105,45 @@
     margin: 0;
   }
 
-  .pm-toggle {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    margin-bottom: 28px;
-  }
-  .pm-toggle-label {
+  #pm-context-banner {
+    display: none;
+    background: var(--bg-pill, #F4F4F5);
+    border: 1px solid var(--border, #E4E4E7);
+    border-radius: 8px;
+    padding: 10px 16px;
     font-size: 13px;
-    font-weight: 500;
-    color: var(--text-muted, #71717A);
-    cursor: pointer;
-    transition: color 0.15s;
+    color: var(--text-body, #27272A);
+    text-align: center;
+    margin-bottom: 20px;
   }
-  .pm-toggle-label.pm-active { color: var(--text-heading, #09090B); }
-
-  .pm-switch {
-    position: relative;
-    width: 40px; height: 22px;
-    cursor: pointer;
-    flex-shrink: 0;
-  }
-  .pm-switch input { opacity: 0; width: 0; height: 0; }
-  .pm-switch-track {
-    position: absolute;
-    inset: 0;
-    background: var(--border, #E4E4E7);
-    border-radius: 22px;
-    transition: background 0.2s;
-  }
-  .pm-switch-track::before {
-    content: '';
-    position: absolute;
-    width: 16px; height: 16px;
-    background: #fff;
-    border-radius: 50%;
-    top: 3px; left: 3px;
-    transition: transform 0.2s;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-  }
-  .pm-switch input:checked + .pm-switch-track { background: var(--brand, #0F766E); }
-  .pm-switch input:checked + .pm-switch-track::before { transform: translateX(18px); }
-
-  .pm-save-chip {
-    background: var(--accent, #10B981);
-    color: #fff;
-    font-size: 11px;
-    font-weight: 600;
-    border-radius: 20px;
-    padding: 2px 7px;
-  }
+  #pm-context-banner.visible { display: block; }
 
   .pm-cards {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 16px;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 14px;
   }
-  @media (max-width: 560px) {
-    #pm-modal-body { padding: 48px 18px 28px; }
+  @media (max-width: 680px) {
+    #pm-modal-body { padding: 48px 16px 28px; }
     .pm-cards { grid-template-columns: 1fr; }
   }
 
   .pm-card {
     border: 1px solid var(--border, #E4E4E7);
     border-radius: 12px;
-    padding: 22px 22px 24px;
+    padding: 20px 18px 22px;
     background: var(--bg-surface, #fff);
+    display: flex;
+    flex-direction: column;
+    transition: border-color 0.15s, box-shadow 0.15s;
   }
   .pm-card.pm-featured {
     border-color: var(--brand, #0F766E);
     box-shadow: 0 0 0 3px rgba(15,118,110,0.1);
+  }
+  .pm-card.pm-featured-solo {
+    border-color: #7C3AED;
+    box-shadow: 0 0 0 3px rgba(124,58,237,0.1);
   }
 
   .pm-plan-name {
@@ -171,8 +156,11 @@
     display: flex;
     align-items: center;
     gap: 6px;
+    flex-wrap: wrap;
   }
-  .pm-plan-name.pm-pro { color: var(--brand, #0F766E); }
+  .pm-plan-name.pm-pro  { color: var(--brand, #0F766E); }
+  .pm-plan-name.pm-solo { color: #7C3AED; }
+
   .pm-current-chip {
     font-size: 10px;
     font-weight: 600;
@@ -183,48 +171,59 @@
     letter-spacing: 0;
     text-transform: none;
   }
+  .pm-popular-chip {
+    font-size: 10px;
+    font-weight: 600;
+    background: var(--brand, #0F766E);
+    color: #fff;
+    border-radius: 20px;
+    padding: 2px 8px;
+    letter-spacing: 0;
+    text-transform: none;
+  }
 
   .pm-price {
-    font-size: 36px;
+    font-size: 32px;
     font-weight: 800;
     color: var(--text-heading, #09090B);
     line-height: 1;
     margin-bottom: 4px;
   }
-  .pm-price sup { font-size: 16px; font-weight: 700; vertical-align: super; }
+  .pm-price sup { font-size: 14px; font-weight: 700; vertical-align: super; }
   .pm-period {
     font-size: 12px;
     color: var(--text-muted, #71717A);
-    margin-bottom: 18px;
+    margin-bottom: 16px;
   }
-  .pm-period-sub { font-size: 11px; color: var(--text-muted, #71717A); }
 
   .pm-divider {
     border: none;
     border-top: 1px solid var(--border-divider, #F4F4F5);
-    margin: 16px 0;
+    margin: 14px 0;
   }
 
   .pm-features {
     list-style: none;
     padding: 0;
-    margin: 0 0 22px;
+    margin: 0 0 18px;
+    flex: 1;
   }
   .pm-features li {
     display: flex;
     align-items: flex-start;
-    gap: 8px;
-    font-size: 13px;
+    gap: 7px;
+    font-size: 12.5px;
     color: var(--text-body, #000);
-    padding: 4px 0;
+    padding: 3px 0;
+    line-height: 1.4;
   }
-  .pm-features li svg { flex-shrink: 0; margin-top: 1px; }
+  .pm-features li svg { flex-shrink: 0; margin-top: 2px; }
   .pm-feature-excluded { color: var(--text-muted, #A1A1AA) !important; }
 
   .pm-cta {
     display: block;
     width: 100%;
-    padding: 11px 16px;
+    padding: 10px 14px;
     border-radius: 9px;
     font-size: 13px;
     font-weight: 600;
@@ -232,6 +231,7 @@
     cursor: pointer;
     border: none;
     transition: background 0.15s, opacity 0.15s;
+    margin-top: auto;
   }
   .pm-cta-primary {
     background: var(--brand, #0F766E);
@@ -239,11 +239,19 @@
   }
   .pm-cta-primary:hover:not(:disabled) { background: var(--brand-hover, #115E59); }
   .pm-cta-primary:disabled { opacity: 0.55; cursor: default; }
+
+  .pm-cta-solo {
+    background: #7C3AED;
+    color: #fff;
+  }
+  .pm-cta-solo:hover:not(:disabled) { background: #6D28D9; }
+  .pm-cta-solo:disabled { opacity: 0.55; cursor: default; }
+
   .pm-cta-muted {
     background: var(--bg-pill, #F4F4F5);
     color: var(--text-muted, #71717A);
-    cursor: default;
   }
+  .pm-cta-muted:disabled { cursor: default; opacity: 0.7; }
 
   .pm-error {
     margin-top: 8px;
@@ -255,153 +263,117 @@
   `;
   document.head.appendChild(style);
 
-  // ── Inject HTML ─────────────────────────────────────────────────────────────
+  // ── SVG helpers ───────────────────────────────────────────────────────────
+  const CHECK = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--accent,#10B981)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>`;
+  const CROSS = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#A1A1AA" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
+
+  function feat(ok, text) {
+    return `<li class="${ok ? '' : 'pm-feature-excluded'}">${ok ? CHECK : CROSS}${text}</li>`;
+  }
+
+  // ── Inject HTML ───────────────────────────────────────────────────────────
   const overlay = document.createElement('div');
   overlay.id = 'pm-overlay';
   overlay.setAttribute('role', 'dialog');
   overlay.setAttribute('aria-modal', 'true');
-  overlay.setAttribute('aria-label', 'Upgrade to Pro');
+  overlay.setAttribute('aria-label', 'Upgrade plan');
   overlay.innerHTML = `
     <div id="pm-modal">
       <button id="pm-close" aria-label="Close">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
+
       <div id="pm-modal-body">
-      <div id="pm-header">
-        <h2>Simple, transparent pricing</h2>
-        <p>Start free. Upgrade when you're ready to go unlimited.</p>
-      </div>
-
-      <div class="pm-toggle" style="display:none">
-        <span class="pm-toggle-label pm-active" id="pm-monthly-lbl">Monthly</span>
-        <label class="pm-switch" aria-label="Switch to annual billing">
-          <input type="checkbox" id="pm-annual-toggle">
-          <span class="pm-switch-track"></span>
-        </label>
-        <span class="pm-toggle-label" id="pm-annual-lbl">Annual &nbsp;<span class="pm-save-chip">Save 17%</span></span>
-      </div>
-
-      <div class="pm-cards">
-
-        <!-- Free -->
-        <div class="pm-card">
-          <div class="pm-plan-name">
-            Free
-            <span class="pm-current-chip" id="pm-free-chip" style="display:none">Current plan</span>
-          </div>
-          <div class="pm-price"><sup>$</sup>0</div>
-          <div class="pm-period">forever</div>
-          <hr class="pm-divider">
-          <ul class="pm-features">
-            <li>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent,#10B981)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              <strong>10</strong>&nbsp;quality-checked posts / month
-            </li>
-            <li>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent,#10B981)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              Generate from a raw idea or a document
-            </li>
-            <li>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent,#10B981)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              All 8 hook archetypes + Hook B alternative
-            </li>
-            <li>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent,#10B981)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              Content Vault — store your docs and turn them into posts
-            </li>
-            <li>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent,#10B981)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              LinkedIn publishing (immediate)
-            </li>
-            <li class="pm-feature-excluded">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#A1A1AA" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-              Post scheduling — Pro only
-            </li>
-            <li>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent,#10B981)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              First comment suggestions
-            </li>
-            <li>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent,#10B981)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              Draft hub &amp; post archive
-            </li>
-            <li class="pm-feature-excluded">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#A1A1AA" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-              Visuals — Pro only
-            </li>
-          </ul>
-          <button class="pm-cta pm-cta-muted" disabled>Current plan</button>
+        <div id="pm-header">
+          <h2 id="pm-title">Simple, transparent pricing</h2>
+          <p id="pm-subtitle">Start free. Upgrade when you're ready to grow.</p>
         </div>
 
-        <!-- Pro -->
-        <div class="pm-card pm-featured">
-          <div class="pm-plan-name pm-pro">
-            Pro
-            <span class="pm-current-chip" id="pm-pro-chip" style="display:none">Current plan</span>
-          </div>
+        <div id="pm-context-banner"></div>
 
-          <div id="pm-price-monthly">
-            <div class="pm-price" style="display:flex;align-items:baseline;gap:8px;">
-              <span><sup>$</sup><span id="pm-monthly-amount">—</span></span>
+        <div class="pm-cards">
+
+          <!-- Free -->
+          <div class="pm-card" id="pm-card-free">
+            <div class="pm-plan-name">
+              Free
+              <span class="pm-current-chip" id="pm-free-chip" style="display:none">Current plan</span>
             </div>
+            <div class="pm-price"><sup>$</sup>0</div>
+            <div class="pm-period">forever</div>
+            <hr class="pm-divider">
+            <ul class="pm-features">
+              ${feat(true,  '<strong>5</strong>&nbsp;posts / month')}
+              ${feat(true,  'Generate from idea or document')}
+              ${feat(true,  'All 8 hook archetypes + Hook B')}
+              ${feat(true,  'Immediate LinkedIn publishing')}
+              ${feat(true,  'Draft hub &amp; post archive')}
+              ${feat(false, 'Post scheduling')}
+              ${feat(false, 'Content Vault')}
+            </ul>
+            <button class="pm-cta pm-cta-muted" id="pm-free-btn" disabled>Current plan</button>
+          </div>
+
+          <!-- Solo -->
+          <div class="pm-card" id="pm-card-solo">
+            <div class="pm-plan-name pm-solo">
+              Solo
+              <span class="pm-current-chip" id="pm-solo-chip" style="display:none">Current plan</span>
+            </div>
+            <div class="pm-price"><sup>$</sup><span id="pm-solo-price">19</span></div>
             <div class="pm-period">/ month</div>
-          </div>
-          <div id="pm-price-annual" style="display:none">
-            <div class="pm-price"><sup>$</sup><span id="pm-annual-amount">490</span></div>
-            <div class="pm-period">/ year &nbsp;<span class="pm-period-sub">(<span id="pm-annual-per-month">$40.83</span> / month)</span></div>
+            <hr class="pm-divider">
+            <ul class="pm-features">
+              ${feat(true,  'Everything in Free')}
+              ${feat(true,  '<strong>20</strong>&nbsp;posts / month')}
+              ${feat(true,  'Post scheduling')}
+              ${feat(true,  'Content Vault')}
+              ${feat(false, 'Unlimited posts')}
+              ${feat(false, 'Multiple LinkedIn accounts')}
+              ${feat(false, 'Team members &amp; workspaces')}
+            </ul>
+            <button class="pm-cta pm-cta-solo" id="pm-solo-btn" type="button">Start free trial</button>
+            <div class="pm-error" id="pm-solo-error"></div>
           </div>
 
-          <hr class="pm-divider">
-          <ul class="pm-features">
-            <li>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent,#10B981)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              Everything in Free
-            </li>
-            <li>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent,#10B981)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              <strong>Unlimited</strong>&nbsp;post generations
-            </li>
-            <li>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent,#10B981)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              <strong>Unlimited</strong>&nbsp;visuals — quote cards, carousels, branded
-            </li>
-            <li>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent,#10B981)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              Post scheduling — up to 30 days ahead
-            </li>
-            <li>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent,#10B981)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              Content funnel analytics (Reach / Trust / Convert)
-            </li>
-            <li>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent,#10B981)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              Performance analytics — top archetypes &amp; best posting days
-            </li>
-            <li>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent,#10B981)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              Weekly performance email digest
-            </li>
-          </ul>
-          <button class="pm-cta pm-cta-primary" id="pm-upgrade-btn" type="button">Upgrade to Pro</button>
-          <div class="pm-error" id="pm-error"></div>
-        </div>
+          <!-- Pro -->
+          <div class="pm-card pm-featured" id="pm-card-pro">
+            <div class="pm-plan-name pm-pro">
+              Pro
+              <span class="pm-popular-chip" id="pm-popular-chip">Most popular</span>
+              <span class="pm-current-chip" id="pm-pro-chip" style="display:none">Current plan</span>
+            </div>
+            <div class="pm-price"><sup>$</sup><span id="pm-pro-price">39</span></div>
+            <div class="pm-period">/ month</div>
+            <hr class="pm-divider">
+            <ul class="pm-features">
+              ${feat(true, 'Everything in Solo')}
+              ${feat(true, '<strong>Unlimited</strong>&nbsp;posts')}
+              ${feat(true, 'Multiple LinkedIn accounts')}
+              ${feat(true, 'Company pages')}
+              ${feat(true, 'Up to 3 workspaces')}
+              ${feat(true, 'Team members')}
+              ${feat(true, 'Carousel visuals')}
+            </ul>
+            <button class="pm-cta pm-cta-primary" id="pm-pro-btn" type="button">Start free trial</button>
+            <div class="pm-error" id="pm-pro-error"></div>
+          </div>
 
-      </div><!-- /pm-cards -->
+        </div><!-- /pm-cards -->
       </div><!-- /pm-modal-body -->
     </div><!-- /pm-modal -->
   `;
   document.body.appendChild(overlay);
 
-  // ── State ────────────────────────────────────────────────────────────────────
-  let priceIdMonthly  = '';
-  let priceIdYearly   = '';
-  let proMonthlyPrice = 29;
-  let configLoaded    = false;
+  // ── State ──────────────────────────────────────────────────────────────────
+  let paddleConfig = null;
+  let configLoaded = false;
+  let currentPlan  = 'free';  // set on open() after subscription fetch
 
-  // ── DOM refs (resolved lazily after injection) ────────────────────────────
+  // ── DOM refs ───────────────────────────────────────────────────────────────
   function $id(id) { return document.getElementById(id); }
 
-  // ── Paddle.js lazy loader ────────────────────────────────────────────────────
+  // ── Paddle.js lazy loader ─────────────────────────────────────────────────
   let paddleInitialized = false;
   let paddleInitPromise = null;
 
@@ -421,35 +393,24 @@
     if (paddleInitPromise) { await paddleInitPromise; return; }
     paddleInitPromise = (async () => {
       await loadPaddleScript();
-      if (env !== 'production') {
-        window.Paddle.Environment.set('sandbox');
-      }
-      // Paddle docs: checkout.completed is delivered to eventCallback on Initialize(),
-      // not on Checkout.open(). Without this, no keepalive sync / sessionStorage txn id runs.
+      if (env !== 'production') window.Paddle.Environment.set('sandbox');
       window.Paddle.Initialize({
         token: clientToken,
         eventCallback: function (data) {
-          if (data.name === 'checkout.completed') {
-            const tid = checkoutCompletedTransactionId(data);
-            try {
-              if (tid) sessionStorage.setItem(PENDING_PADDLE_TXN_KEY, tid);
-            } catch { /* private mode / quota */ }
-            fetch('/api/billing/sync', {
-              method: 'POST',
-              credentials: 'same-origin',
-              keepalive: true,
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ transactionId: tid }),
-            }).catch(() => { /* page-load sync is the backup */ });
-
-            // Navigate the real browser tab, not Paddle's overlay iframe.
-            // window.top escapes the checkout frame; fallback to window.location
-            // in case cross-origin restrictions block access to window.top.
-            try {
-              window.top.location.href = '/billing.html?checkout=success';
-            } catch {
-              window.location.href = '/billing.html?checkout=success';
-            }
+          if (data.name !== 'checkout.completed') return;
+          const tid = checkoutCompletedTransactionId(data);
+          try { if (tid) sessionStorage.setItem(PENDING_PADDLE_TXN_KEY, tid); } catch { /* private mode */ }
+          fetch('/api/billing/sync', {
+            method: 'POST',
+            credentials: 'same-origin',
+            keepalive: true,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ transactionId: tid }),
+          }).catch(() => {});
+          try {
+            window.top.location.href = '/billing.html?checkout=success';
+          } catch {
+            window.location.href = '/billing.html?checkout=success';
           }
         },
       });
@@ -458,215 +419,226 @@
     await paddleInitPromise;
   }
 
-  // ── Config fetch ────────────────────────────────────────────────────────────
-  let paddleConfig = null;
-
+  // ── Config fetch ───────────────────────────────────────────────────────────
   async function loadConfig() {
     if (configLoaded) return;
     try {
       const r = await fetch('/api/billing/config');
       if (!r.ok) return;
       const d = await r.json();
-      priceIdMonthly  = d.priceIdMonthly  || '';
-      priceIdYearly   = d.priceIdYearly   || '';
-      proMonthlyPrice = d.proMonthlyPrice  || 29;
-
-      paddleConfig    = d;
-      configLoaded    = true;
-      applyConfig();
+      paddleConfig = d;
+      configLoaded = true;
+      const proPriceEl  = $id('pm-pro-price');
+      const soloPriceEl = $id('pm-solo-price');
+      if (proPriceEl  && d.proMonthlyPrice)  proPriceEl.textContent  = d.proMonthlyPrice;
+      if (soloPriceEl && d.soloMonthlyPrice) soloPriceEl.textContent = d.soloMonthlyPrice;
     } catch { /* no-op */ }
   }
 
-  // ── applyConfig — update price display and founding badge after config loads ─
-  function applyConfig() {
-    // Update monthly price amount
-    const monthlyAmountEl = $id('pm-monthly-amount');
-    if (monthlyAmountEl) monthlyAmountEl.textContent = proMonthlyPrice;
-
-    // Update annual price (17% off, rounded to nearest dollar)
-    const annualTotal = Math.round(proMonthlyPrice * 12 * 0.83);
-    const annualPerMonth = (proMonthlyPrice * 0.83).toFixed(2);
-    const annualAmountEl = $id('pm-annual-amount');
-    if (annualAmountEl) annualAmountEl.textContent = annualTotal;
-    const annualPerMonthEl = $id('pm-annual-per-month');
-    if (annualPerMonthEl) annualPerMonthEl.textContent = '$' + annualPerMonth;
-
-    // Annual toggle hidden — launch pricing is monthly-only
-    const toggleRow = document.querySelector('.pm-toggle');
-    if (toggleRow) {
-      toggleRow.style.display = 'none';
-    }
-    // Reset to monthly if annual toggle was somehow on
-    const toggle = $id('pm-annual-toggle');
-    if (toggle && toggle.checked) {
-      toggle.checked = false;
-      setAnnual(false);
-    }
-  }
-
-  // ── Toggle ───────────────────────────────────────────────────────────────────
-  function setAnnual(annual) {
-    $id('pm-price-monthly').style.display = annual ? 'none' : '';
-    $id('pm-price-annual').style.display  = annual ? '' : 'none';
-    $id('pm-monthly-lbl').classList.toggle('pm-active', !annual);
-    $id('pm-annual-lbl').classList.toggle('pm-active', annual);
-  }
-
-  $id('pm-annual-toggle').addEventListener('change', function () { setAnnual(this.checked); });
-  $id('pm-monthly-lbl').addEventListener('click', () => { $id('pm-annual-toggle').checked = false; setAnnual(false); });
-  $id('pm-annual-lbl').addEventListener('click',  () => { $id('pm-annual-toggle').checked = true;  setAnnual(true);  });
-
-  // ── Close ────────────────────────────────────────────────────────────────────
+  // ── Close ──────────────────────────────────────────────────────────────────
   function close() {
     overlay.classList.remove('visible');
     document.body.style.overflow = '';
   }
 
   $id('pm-close').addEventListener('click', close);
-  overlay.addEventListener('click', function (e) {
-    if (e.target === overlay) close();
-  });
+  overlay.addEventListener('click', function (e) { if (e.target === overlay) close(); });
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape' && overlay.classList.contains('visible')) close();
   });
 
-  // ── Shared checkout launcher (used by modal button and onboarding page) ──────
-  async function startCheckout() {
+  // ── Checkout launcher ─────────────────────────────────────────────────────
+  async function startPlanCheckout(plan, btn, errorEl) {
     if (!paddleConfig) await loadConfig();
-    if (!paddleConfig || !paddleConfig.clientToken) {
-      throw new Error('Checkout unavailable. Please try again later.');
-    }
-    await ensurePaddle(paddleConfig.clientToken, paddleConfig.env);
-
-    const isAnnual = $id('pm-annual-toggle')?.checked;
-    const priceId  = isAnnual ? priceIdYearly : priceIdMonthly;
-    if (!priceId) throw new Error('Pricing is not configured yet. Please contact support.');
-
-    let userId = null;
-    try {
-      const authData = await window.scouthookAuthReady;
-      userId = authData?.user?.user_id ?? null;
-    } catch { /* no-op */ }
-    if (!userId) {
-      try { userId = localStorage.getItem('scouthook_uid'); } catch { /* no-op */ }
+    if (!paddleConfig?.clientToken) {
+      if (errorEl) { errorEl.textContent = 'Checkout unavailable. Please try again later.'; errorEl.style.display = ''; }
+      return;
     }
 
-    window.Paddle.Checkout.open({
-      items: [{ priceId, quantity: 1 }],
-      customData: userId ? { userId } : undefined,
-      settings: {
-        displayMode: 'overlay',
-        successUrl: window.location.origin + '/billing.html?checkout=success',
-      },
-    });
-  }
-
-  // ── Upgrade click (inside pricing modal) ─────────────────────────────────────
-  $id('pm-upgrade-btn').addEventListener('click', async function () {
-    const btn = this;
-    $id('pm-error').style.display = 'none';
     btn.disabled    = true;
+    const origText  = btn.textContent;
     btn.textContent = 'Loading…';
+    if (errorEl) errorEl.style.display = 'none';
+
     try {
-      await startCheckout();
-      // Reset button — user may close the Paddle overlay without completing
+      const upgradeRes = await fetch('/api/billing/upgrade', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plan }),
+      });
+      const upgradeData = await upgradeRes.json();
+      if (!upgradeRes.ok || !upgradeData.priceId) {
+        throw new Error(upgradeData.error || 'price_not_configured');
+      }
+
+      await ensurePaddle(paddleConfig.clientToken, paddleConfig.env);
+
+      let userId = null;
+      try { userId = (await window.scouthookAuthReady)?.user?.user_id ?? null; } catch { /* no-op */ }
+      if (!userId) { try { userId = localStorage.getItem('scouthook_uid'); } catch { /* no-op */ } }
+
+      window.Paddle.Checkout.open({
+        items: [{ priceId: upgradeData.priceId, quantity: 1 }],
+        customData: { ...(userId ? { userId } : {}), plan },
+        settings: {
+          displayMode: 'overlay',
+          successUrl: window.location.origin + '/billing.html?checkout=success',
+        },
+      });
+
       btn.disabled    = false;
-      btn.textContent = 'Upgrade to Pro';
+      btn.textContent = origText;
     } catch (err) {
       console.error('[pricing-modal] checkout error:', err);
-      showError(err.message || 'Unable to start checkout. Please try again.');
+      if (errorEl) {
+        errorEl.textContent = err.message === 'price_not_configured'
+          ? 'Pricing not yet configured. Contact support.'
+          : (err.message || 'Unable to start checkout. Please try again.');
+        errorEl.style.display = '';
+      }
       btn.disabled    = false;
-      btn.textContent = 'Upgrade to Pro';
+      btn.textContent = origText;
     }
-  });
-
-  function showError(msg) {
-    const el = $id('pm-error');
-    el.textContent    = msg;
-    el.style.display  = '';
   }
 
-  // ── open() ───────────────────────────────────────────────────────────────────
-  async function open() {
-    // Reset state
-    $id('pm-error').style.display  = 'none';
-    $id('pm-annual-toggle').checked = false;
-    setAnnual(false);
-    $id('pm-free-chip').style.display = 'none';
-    $id('pm-pro-chip').style.display  = 'none';
+  // ── Solo button ───────────────────────────────────────────────────────────
+  $id('pm-solo-btn').addEventListener('click', function () {
+    if (this.disabled) return;
+    startPlanCheckout('solo', this, $id('pm-solo-error'));
+  });
 
-    const upgradeBtn = $id('pm-upgrade-btn');
-    upgradeBtn.disabled    = false;
-    upgradeBtn.textContent = 'Upgrade to Pro';
-    upgradeBtn.className   = 'pm-cta pm-cta-primary';
-    upgradeBtn.style.display = '';
+  // ── Pro button — checkout or billing portal for Pro users ─────────────────
+  $id('pm-pro-btn').addEventListener('click', async function () {
+    if (this.disabled) return;
+
+    if (currentPlan === 'pro') {
+      this.disabled    = true;
+      this.textContent = 'Loading…';
+      try {
+        const r = await fetch('/api/billing/portal');
+        const d = await r.json();
+        if (d.portalUrl) { window.location.href = d.portalUrl; return; }
+      } catch { /* fall through */ }
+      $id('pm-pro-error').textContent   = 'Unable to open billing portal.';
+      $id('pm-pro-error').style.display = '';
+      this.disabled    = false;
+      this.textContent = 'Manage subscription';
+      return;
+    }
+
+    startPlanCheckout('pro', this, $id('pm-pro-error'));
+  });
+
+  // ── open(options) ──────────────────────────────────────────────────────────
+  async function open(options) {
+    const opts        = (options && typeof options === 'object') ? options : {};
+    const feature     = opts.feature     || null;
+    const requiredPlan = opts.requiredPlan || null;
+
+    // — Reset chips
+    $id('pm-free-chip').style.display    = 'none';
+    $id('pm-solo-chip').style.display    = 'none';
+    $id('pm-pro-chip').style.display     = 'none';
+    $id('pm-popular-chip').style.display = '';
+
+    // — Reset errors
+    $id('pm-solo-error').style.display = 'none';
+    $id('pm-pro-error').style.display  = 'none';
+
+    // — Reset card highlights: Pro is featured by default
+    $id('pm-card-free').classList.remove('pm-featured', 'pm-featured-solo');
+    $id('pm-card-solo').classList.remove('pm-featured', 'pm-featured-solo');
+    $id('pm-card-pro').classList.remove('pm-featured', 'pm-featured-solo');
+    $id('pm-card-pro').classList.add('pm-featured');
+
+    // — Reset buttons to default (will be updated after sub loads)
+    const soloBtn = $id('pm-solo-btn');
+    const proBtn  = $id('pm-pro-btn');
+    soloBtn.disabled    = false;
+    proBtn.disabled     = false;
+    soloBtn.textContent = 'Start free trial';
+    proBtn.textContent  = 'Start free trial';
+    soloBtn.className   = 'pm-cta pm-cta-solo';
+    proBtn.className    = 'pm-cta pm-cta-primary';
+
+    // — Context banner
+    const bannerEl = $id('pm-context-banner');
+    bannerEl.classList.remove('visible');
+    if (feature && FEATURE_LABELS[feature]) {
+      const label    = FEATURE_LABELS[feature];
+      const minPlan  = FEATURE_MIN_PLAN[feature] || 'solo';
+      const planName = minPlan === 'pro' ? 'Pro' : 'Solo or Pro';
+      bannerEl.textContent = `${label} requires the ${planName} plan.`;
+      bannerEl.classList.add('visible');
+    }
+
+    // — Highlight the required plan card
+    if (requiredPlan === 'solo') {
+      $id('pm-card-pro').classList.remove('pm-featured');
+      $id('pm-card-solo').classList.add('pm-featured-solo');
+      $id('pm-popular-chip').style.display = 'none';
+    }
+    // requiredPlan === 'pro' already highlighted by default
 
     overlay.classList.add('visible');
     document.body.style.overflow = 'hidden';
 
-    // Load config + subscription concurrently
+    // — Load config and subscription in parallel
     const [, subRes] = await Promise.allSettled([
       loadConfig(),
       fetch('/api/billing/subscription').then(r => r.json()).catch(() => null),
     ]);
-    // If config was already cached, applyConfig() wasn't called inside loadConfig() — apply now
-    if (configLoaded) applyConfig();
 
-    const sub = subRes.status === 'fulfilled' ? subRes.value : null;
-    const plan = sub?.plan || 'free';
+    const sub  = (subRes.status === 'fulfilled' ? subRes.value : null) || {};
+    currentPlan = sub.plan || 'free';
 
-    if (plan === 'pro') {
-      $id('pm-pro-chip').style.display   = '';
-      upgradeBtn.textContent = 'Manage subscription';
-      upgradeBtn.className   = 'pm-cta pm-cta-muted';
-      upgradeBtn.disabled    = true;
-      // Replace upgrade handler with portal redirect for Pro users
-      upgradeBtn.onclick = async function () {
-        upgradeBtn.disabled    = true;
-        upgradeBtn.textContent = 'Loading…';
-        try {
-          const r = await fetch('/api/billing/portal');
-          const d = await r.json();
-          if (d.portalUrl) { window.location.href = d.portalUrl; return; }
-        } catch { /* fall through */ }
-        showError('Unable to open billing portal.');
-        upgradeBtn.disabled    = false;
-        upgradeBtn.textContent = 'Manage subscription';
-      };
-      upgradeBtn.disabled = false;
-    } else {
-      $id('pm-free-chip').style.display  = '';
-      upgradeBtn.onclick = null; // use the default addEventListener handler above
+    // — Apply plan state to UI
+    if (currentPlan === 'free') {
+      $id('pm-free-chip').style.display = '';
+      // Solo and Pro keep "Start free trial" text
+    } else if (currentPlan === 'solo') {
+      $id('pm-solo-chip').style.display = '';
+      soloBtn.disabled    = true;
+      soloBtn.textContent = 'Current plan';
+      soloBtn.className   = 'pm-cta pm-cta-muted';
+      proBtn.textContent  = 'Upgrade to Pro';
+      // If Pro is not currently highlighted and Solo is the required plan, keep Solo highlight
+    } else if (currentPlan === 'pro') {
+      $id('pm-pro-chip').style.display     = '';
+      $id('pm-popular-chip').style.display = 'none';
+      proBtn.textContent  = 'Manage subscription';
+      proBtn.className    = 'pm-cta pm-cta-muted';
+      soloBtn.disabled    = true;
+      soloBtn.textContent = 'Included in Pro';
+      soloBtn.className   = 'pm-cta pm-cta-muted';
+    }
+
+    // — Re-apply requiredPlan highlight after plan state (plan state may remove it)
+    if (requiredPlan === 'solo' && currentPlan !== 'solo') {
+      $id('pm-card-pro').classList.remove('pm-featured');
+      $id('pm-card-solo').classList.add('pm-featured-solo');
+      $id('pm-popular-chip').style.display = 'none';
     }
   }
 
-  // ── Post-checkout sync on success redirect ───────────────────────────────────
-  // Paddle may append ?_ptxn=txn_xxx; overlay often omits it — use sessionStorage
-  // filled in checkout.completed as a backup.
+  // ── Post-checkout sync on success redirect ─────────────────────────────────
   if (window.location.search.includes('checkout=success')) {
     const _params = new URLSearchParams(window.location.search);
     let _txnId = _params.get('_ptxn') || null;
     if (!_txnId) {
-      try {
-        _txnId = sessionStorage.getItem(PENDING_PADDLE_TXN_KEY);
-      } catch { /* no-op */ }
+      try { _txnId = sessionStorage.getItem(PENDING_PADDLE_TXN_KEY); } catch { /* no-op */ }
     }
     fetch('/api/billing/sync', {
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ transactionId: _txnId }),
-    })
-      .then(function (r) {
-        if (r.ok) {
-          try {
-            sessionStorage.removeItem(PENDING_PADDLE_TXN_KEY);
-          } catch { /* no-op */ }
-        }
-      })
-      .catch(() => { /* no-op */ });
+    }).then(function (r) {
+      if (r.ok) { try { sessionStorage.removeItem(PENDING_PADDLE_TXN_KEY); } catch { /* no-op */ } }
+    }).catch(() => {});
   }
 
-  // ── Expose globally ──────────────────────────────────────────────────────────
-  window.PricingModal = { open, close, startCheckout };
+  // ── Expose globally ────────────────────────────────────────────────────────
+  window.PricingModal = { open, close };
 })();

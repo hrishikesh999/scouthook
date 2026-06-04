@@ -163,7 +163,7 @@
     if (planData?.plan === 'pro') {
       return `Monthly vault limit reached (${planData.current}/${planData.limit} docs this month). Resets at the start of next month.`;
     }
-    return `Free plan: 1 vault document allowed. <button type="button" onclick="window.PricingModal?.open()" style="background:none;border:none;padding:0;color:var(--brand);font-weight:600;cursor:pointer;font-size:inherit">Upgrade to Pro →</button>`;
+    return `Content Vault requires a paid plan. <button type="button" onclick="window.PricingModal?.open({ feature: 'vault', requiredPlan: 'solo' })" style="background:none;border:none;padding:0;color:var(--brand);font-weight:600;cursor:pointer;font-size:inherit">Upgrade →</button>`;
   }
 
   function guessMime(filename) {

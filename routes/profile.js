@@ -5,97 +5,93 @@ const router = express.Router();
 const { db } = require('../db');
 
 // ---------------------------------------------------------------------------
-// GET /api/profile/:user_id
-// Returns profile fields including voice_fingerprint and voice DNA fields.
+// GET /api/profile/:user_id?
+// Assembles profile from three tables: user_profiles (identity), workspaces
+// (brand settings), profiles (voice DNA + positioning). Returns same shape as
+// the old single-table response so the frontend needs no changes.
 // ---------------------------------------------------------------------------
 router.get('/:user_id?', async (req, res) => {
-  // Identity comes exclusively from the authenticated session — never from the URL
-  // segment, which the client sends as a convenience but must not be trusted for access control.
-  const user_id = req.userId;
+  const userId   = req.userId;
   const tenantId = req.tenantId;
 
-  if (!user_id) {
-    return res.status(401).json({ ok: false, error: 'unauthenticated' });
-  }
+  const [userRow, wsRow, profileRow] = await Promise.all([
+    db.prepare('SELECT user_role, email, display_name FROM user_profiles WHERE user_id = ?').get(userId),
+    db.prepare('SELECT brand_name, brand_bg, brand_accent, brand_text, brand_logo FROM workspaces WHERE id = ?').get(tenantId),
+    db.prepare(`
+      SELECT id, audience_role, audience_pain, content_niche, contrarian_view,
+             voice_fingerprint, writing_samples, onboarding_complete,
+             business_positioning, website_url, website_summary,
+             onboarding_q1, onboarding_q2, onboarding_q3,
+             authority_statements, cta_library, content_principles, content_themes,
+             voice_extraction_quality, voice_profile_completion_pct,
+             input_examples, voice_refinements, content_pillars,
+             user_archetype_preference
+      FROM profiles WHERE workspace_id = ? AND is_default = true
+    `).get(tenantId),
+  ]);
 
-  const profile = await db
-    .prepare(`SELECT audience_role, audience_pain, content_niche, contrarian_view,
-                     voice_fingerprint, writing_samples,
-                     brand_bg, brand_accent, brand_text, brand_name, brand_logo,
-                     user_role, onboarding_complete, business_positioning, website_url,
-                     website_summary, onboarding_q1, onboarding_q2, onboarding_q3,
-                     authority_statements, cta_library, content_principles, content_themes,
-                     voice_extraction_quality, voice_profile_completion_pct,
-                     input_examples, voice_refinements,
-                     content_pillars, user_archetype_preference
-              FROM user_profiles WHERE user_id = ? AND tenant_id = ?`)
-    .get(user_id, tenantId);
-
-  if (!profile) {
+  if (!profileRow) {
     return res.json({ ok: true, profile: null });
   }
 
   return res.json({
     ok: true,
     profile: {
-      audience_role:       profile.audience_role,
-      audience_pain:       profile.audience_pain,
-      content_niche:       profile.content_niche,
-      contrarian_view:     profile.contrarian_view,
-      writing_samples:     profile.writing_samples   || null,
-      has_fingerprint:     !!profile.voice_fingerprint,
-      voice_fingerprint:   profile.voice_fingerprint || null,
-      brand_bg:            profile.brand_bg     || '#0F1A3C',
-      brand_accent:        profile.brand_accent || '#0D7A5F',
-      brand_text:          profile.brand_text   || '#F0F4FF',
-      brand_name:          profile.brand_name   || null,
-      brand_logo:          profile.brand_logo   || null,
-      user_role:                    profile.user_role    || null,
-      onboarding_complete:          !!profile.onboarding_complete,
-      business_positioning:         profile.business_positioning || null,
-      website_url:                  profile.website_url  || null,
-      // Voice DNA fields (Sprint 2)
-      website_summary:              profile.website_summary  || null,
-      onboarding_q1:                profile.onboarding_q1   || null,
-      onboarding_q2:                profile.onboarding_q2   || null,
-      onboarding_q3:                profile.onboarding_q3   || null,
-      authority_statements:         profile.authority_statements  || null,
-      cta_library:                  profile.cta_library           || null,
-      content_principles:           profile.content_principles    || null,
-      content_themes:               profile.content_themes        || null,
-      voice_extraction_quality:     profile.voice_extraction_quality     || null,
-      voice_profile_completion_pct: profile.voice_profile_completion_pct || 0,
-      input_examples:               profile.input_examples               || null,
-      voice_refinements:            profile.voice_refinements            || null,
-      content_pillars:              profile.content_pillars              || null,
-      user_archetype_preference:    profile.user_archetype_preference    || null,
+      audience_role:                profileRow.audience_role,
+      audience_pain:                profileRow.audience_pain,
+      content_niche:                profileRow.content_niche,
+      contrarian_view:              profileRow.contrarian_view,
+      writing_samples:              profileRow.writing_samples   || null,
+      has_fingerprint:              !!profileRow.voice_fingerprint,
+      voice_fingerprint:            profileRow.voice_fingerprint || null,
+      brand_bg:                     wsRow?.brand_bg     || '#0F1A3C',
+      brand_accent:                 wsRow?.brand_accent || '#0D7A5F',
+      brand_text:                   wsRow?.brand_text   || '#F0F4FF',
+      brand_name:                   wsRow?.brand_name   || null,
+      brand_logo:                   wsRow?.brand_logo   || null,
+      user_role:                    userRow?.user_role  || null,
+      onboarding_complete:          !!profileRow.onboarding_complete,
+      business_positioning:         profileRow.business_positioning || null,
+      website_url:                  profileRow.website_url          || null,
+      website_summary:              profileRow.website_summary      || null,
+      onboarding_q1:                profileRow.onboarding_q1        || null,
+      onboarding_q2:                profileRow.onboarding_q2        || null,
+      onboarding_q3:                profileRow.onboarding_q3        || null,
+      authority_statements:         profileRow.authority_statements || null,
+      cta_library:                  profileRow.cta_library          || null,
+      content_principles:           profileRow.content_principles   || null,
+      content_themes:               profileRow.content_themes       || null,
+      voice_extraction_quality:     profileRow.voice_extraction_quality     || null,
+      voice_profile_completion_pct: profileRow.voice_profile_completion_pct || 0,
+      input_examples:               profileRow.input_examples               || null,
+      voice_refinements:            profileRow.voice_refinements            || null,
+      content_pillars:              profileRow.content_pillars              || null,
+      user_archetype_preference:    profileRow.user_archetype_preference    || null,
     },
   });
 });
 
 // ---------------------------------------------------------------------------
 // POST /api/profile
-// Save or update voice and audience profile.
-// Triggers fingerprint extraction if writing_samples changes.
+// Routes each field to the correct table:
+//   user_role              → user_profiles  (identity — per person, not per workspace)
+//   brand_name/bg/accent/… → workspaces     (brand settings)
+//   everything else        → profiles       (voice DNA + positioning)
 // ---------------------------------------------------------------------------
 router.post('/', async (req, res) => {
-  const userId = req.userId;
+  const userId   = req.userId;
   const tenantId = req.tenantId;
 
-  if (!userId) {
-    return res.status(400).json({ ok: false, error: 'missing_user_id' });
-  }
-
-  const { writing_samples, contrarian_view, audience_role, audience_pain, content_niche,
-          brand_bg, brand_accent, brand_text, brand_name, brand_logo,
-          user_role, onboarding_complete, business_positioning, website_url, goal,
-          // Voice DNA fields (Sprint 2)
-          website_summary, website_extracted_at,
-          onboarding_q1, onboarding_q2, onboarding_q3, onboarding_q_completed_at,
-          onboarding_completed_at,
-          authority_statements, cta_library, content_principles, content_themes,
-          // Phase 7: personalized hook strategy
-          content_pillars } = req.body;
+  const {
+    writing_samples, contrarian_view, audience_role, audience_pain, content_niche,
+    brand_bg, brand_accent, brand_text, brand_name, brand_logo,
+    user_role, onboarding_complete, business_positioning, website_url, goal,
+    website_summary, website_extracted_at,
+    onboarding_q1, onboarding_q2, onboarding_q3, onboarding_q_completed_at,
+    onboarding_completed_at,
+    authority_statements, cta_library, content_principles, content_themes,
+    content_pillars,
+  } = req.body;
 
   const hasVoiceDNAField = website_summary || onboarding_q1 || onboarding_q2 || onboarding_q3
     || authority_statements || cta_library || content_principles || content_themes;
@@ -107,86 +103,96 @@ router.post('/', async (req, res) => {
     return res.status(400).json({ ok: false, error: 'no_fields_provided' });
   }
 
-  // Check what's changing (to decide whether to re-extract fingerprint / rebuild prompt)
-  const existing = await db
-    .prepare('SELECT id, writing_samples, business_positioning, website_url, onboarding_complete FROM user_profiles WHERE user_id = ? AND tenant_id = ?')
-    .get(userId, tenantId);
+  // Fetch brand profile — needed for change detection and profileId routing
+  const brandProfile = await db.prepare(
+    'SELECT id, writing_samples, business_positioning, onboarding_complete FROM profiles WHERE workspace_id = ? AND is_default = true'
+  ).get(tenantId);
 
-  const samplesChanged      = writing_samples && writing_samples !== existing?.writing_samples;
-  const positioningChanged  = business_positioning && business_positioning !== existing?.business_positioning;
+  if (!brandProfile) {
+    return res.status(500).json({ ok: false, error: 'no_brand_profile' });
+  }
 
-  // Normalise onboarding_complete: accept 1/true/"1"/"true" → 1, else keep NULL so COALESCE
-  // doesn't overwrite an existing 1 with NULL when the field is omitted from the request.
+  const profileId      = brandProfile.id;
+  const samplesChanged = writing_samples && writing_samples !== brandProfile.writing_samples;
+
+  // Normalise onboarding_complete to boolean (PostgreSQL) or null (preserve existing via COALESCE)
   const obComplete = (onboarding_complete === 1 || onboarding_complete === true
-    || onboarding_complete === '1' || onboarding_complete === 'true') ? 1 : null;
+    || onboarding_complete === '1' || onboarding_complete === 'true') ? true : null;
 
-  // Upsert profile row
-  const result = await db.prepare(`
-    INSERT INTO user_profiles (
-      user_id, tenant_id, writing_samples, contrarian_view, audience_role, audience_pain,
-      content_niche, brand_bg, brand_accent, brand_text, brand_name, brand_logo,
-      user_role, onboarding_complete, business_positioning, website_url, goal,
-      website_summary, website_extracted_at,
-      onboarding_q1, onboarding_q2, onboarding_q3, onboarding_q_completed_at,
-      onboarding_completed_at,
-      authority_statements, cta_library, content_principles, content_themes,
-      content_pillars,
-      updated_at
-    )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-    ON CONFLICT(user_id, tenant_id) DO UPDATE SET
-      writing_samples         = COALESCE(excluded.writing_samples, user_profiles.writing_samples),
-      contrarian_view         = COALESCE(excluded.contrarian_view, user_profiles.contrarian_view),
-      audience_role           = COALESCE(excluded.audience_role, user_profiles.audience_role),
-      audience_pain           = COALESCE(excluded.audience_pain, user_profiles.audience_pain),
-      content_niche           = COALESCE(excluded.content_niche, user_profiles.content_niche),
-      brand_bg                = COALESCE(excluded.brand_bg, user_profiles.brand_bg),
-      brand_accent            = COALESCE(excluded.brand_accent, user_profiles.brand_accent),
-      brand_text              = COALESCE(excluded.brand_text, user_profiles.brand_text),
-      brand_name              = COALESCE(excluded.brand_name, user_profiles.brand_name),
-      brand_logo              = COALESCE(excluded.brand_logo, user_profiles.brand_logo),
-      user_role               = COALESCE(excluded.user_role, user_profiles.user_role),
-      onboarding_complete     = COALESCE(excluded.onboarding_complete, user_profiles.onboarding_complete),
-      business_positioning    = COALESCE(excluded.business_positioning, user_profiles.business_positioning),
-      website_url             = COALESCE(excluded.website_url, user_profiles.website_url),
-      goal                    = COALESCE(excluded.goal, user_profiles.goal),
-      website_summary         = COALESCE(excluded.website_summary, user_profiles.website_summary),
-      website_extracted_at    = COALESCE(excluded.website_extracted_at, user_profiles.website_extracted_at),
-      onboarding_q1           = COALESCE(excluded.onboarding_q1, user_profiles.onboarding_q1),
-      onboarding_q2           = COALESCE(excluded.onboarding_q2, user_profiles.onboarding_q2),
-      onboarding_q3           = COALESCE(excluded.onboarding_q3, user_profiles.onboarding_q3),
-      onboarding_q_completed_at = COALESCE(excluded.onboarding_q_completed_at, user_profiles.onboarding_q_completed_at),
-      onboarding_completed_at = COALESCE(excluded.onboarding_completed_at, user_profiles.onboarding_completed_at),
-      authority_statements    = COALESCE(excluded.authority_statements, user_profiles.authority_statements),
-      cta_library             = COALESCE(excluded.cta_library, user_profiles.cta_library),
-      content_principles      = COALESCE(excluded.content_principles, user_profiles.content_principles),
-      content_themes          = COALESCE(excluded.content_themes, user_profiles.content_themes),
-      content_pillars         = COALESCE(excluded.content_pillars, user_profiles.content_pillars),
-      updated_at              = CURRENT_TIMESTAMP
-  RETURNING id
+  // 1. Identity → user_profiles (no tenant_id column post-migration)
+  if (user_role !== undefined && user_role !== null) {
+    await db.prepare(
+      'UPDATE user_profiles SET user_role = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?'
+    ).run(user_role, userId);
+  }
+
+  // 2. Brand settings → workspaces
+  const hasBrandField = brand_name !== undefined || brand_bg || brand_accent || brand_text
+    || brand_logo !== undefined;
+  if (hasBrandField) {
+    await db.prepare(`
+      UPDATE workspaces SET
+        brand_name   = COALESCE(?, brand_name),
+        brand_bg     = COALESCE(?, brand_bg),
+        brand_accent = COALESCE(?, brand_accent),
+        brand_text   = COALESCE(?, brand_text),
+        brand_logo   = COALESCE(?, brand_logo),
+        updated_at   = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(
+      brand_name || null, brand_bg || null, brand_accent || null, brand_text || null,
+      brand_logo !== undefined ? (brand_logo || null) : null,
+      tenantId
+    );
+  }
+
+  // 3. Voice DNA + positioning → profiles (COALESCE preserves fields not in this request)
+  await db.prepare(`
+    UPDATE profiles SET
+      writing_samples           = COALESCE(?, writing_samples),
+      contrarian_view           = COALESCE(?, contrarian_view),
+      audience_role             = COALESCE(?, audience_role),
+      audience_pain             = COALESCE(?, audience_pain),
+      content_niche             = COALESCE(?, content_niche),
+      business_positioning      = COALESCE(?, business_positioning),
+      website_url               = COALESCE(?, website_url),
+      goal                      = COALESCE(?, goal),
+      website_summary           = COALESCE(?, website_summary),
+      website_extracted_at      = COALESCE(?, website_extracted_at),
+      onboarding_q1             = COALESCE(?, onboarding_q1),
+      onboarding_q2             = COALESCE(?, onboarding_q2),
+      onboarding_q3             = COALESCE(?, onboarding_q3),
+      onboarding_q_completed_at = COALESCE(?, onboarding_q_completed_at),
+      onboarding_completed_at   = COALESCE(?, onboarding_completed_at),
+      authority_statements      = COALESCE(?, authority_statements),
+      cta_library               = COALESCE(?, cta_library),
+      content_principles        = COALESCE(?, content_principles),
+      content_themes            = COALESCE(?, content_themes),
+      content_pillars           = COALESCE(?, content_pillars),
+      onboarding_complete       = COALESCE(?, onboarding_complete),
+      updated_at                = CURRENT_TIMESTAMP
+    WHERE id = ?
   `).run(
-    userId, tenantId,
     writing_samples || null, contrarian_view || null, audience_role || null, audience_pain || null,
-    content_niche || null, brand_bg || null, brand_accent || null, brand_text || null,
-    brand_name || null, brand_logo || null,
-    user_role || null, obComplete, business_positioning || null, website_url || null, goal || null,
+    content_niche || null, business_positioning || null, website_url || null, goal || null,
     website_summary || null, website_extracted_at || null,
     onboarding_q1 || null, onboarding_q2 || null, onboarding_q3 || null,
     onboarding_q_completed_at || null, onboarding_completed_at || null,
     authority_statements || null, cta_library || null, content_principles || null,
-    content_themes || null, content_pillars || null
+    content_themes || null, content_pillars || null,
+    obComplete,
+    profileId,
   );
 
-  const profileId = result.lastInsertRowid || existing?.id;
-
-  // Trigger fingerprint extraction async — never block the response on it
+  // 4a. Fingerprint extraction when writing_samples changes (fire-and-forget)
   if (samplesChanged) {
     const { seedPhrasesFromWritingSamples } = require('../services/writingSampleSeeder');
     seedPhrasesFromWritingSamples(userId, tenantId, writing_samples)
       .then(phrases => {
         if (phrases.length) {
-          return db.prepare('UPDATE user_profiles SET writing_sample_phrases = ? WHERE user_id = ? AND tenant_id = ?')
-            .run(JSON.stringify(phrases), userId, tenantId);
+          return db.prepare(
+            'UPDATE profiles SET writing_sample_phrases = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+          ).run(JSON.stringify(phrases), profileId);
         }
       })
       .catch(err => console.error('[profile] Phrase seeding failed (non-fatal):', err.message));
@@ -196,47 +202,62 @@ router.post('/', async (req, res) => {
     extractFingerprint(writing_samples)
       .then(async fingerprint => {
         if (fingerprint) {
-          await db.prepare('UPDATE user_profiles SET voice_fingerprint = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND tenant_id = ?')
-            .run(JSON.stringify(fingerprint), userId, tenantId);
-          // Recalculate completion pct after fingerprint update
-          const updatedProfile = await db.prepare('SELECT * FROM user_profiles WHERE user_id = ? AND tenant_id = ?').get(userId, tenantId);
-          const liRow = await db.prepare('SELECT 1 FROM linkedin_tokens WHERE user_id = ? AND tenant_id = ?').get(userId, tenantId);
+          await db.prepare(
+            'UPDATE profiles SET voice_fingerprint = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+          ).run(JSON.stringify(fingerprint), profileId);
+          const updatedProfile = await db.prepare('SELECT * FROM profiles WHERE id = ?').get(profileId);
+          const liRow = await db.prepare(
+            'SELECT 1 FROM linkedin_connections WHERE workspace_id = ? AND is_default = true'
+          ).get(tenantId);
           const pct = calculateCompletionPct(updatedProfile || {}, !!liRow);
-          await db.prepare('UPDATE user_profiles SET voice_profile_completion_pct = ? WHERE user_id = ? AND tenant_id = ?').run(pct, userId, tenantId);
+          await db.prepare(
+            'UPDATE profiles SET voice_profile_completion_pct = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+          ).run(pct, profileId);
         }
       })
-      .catch(err => {
-        console.error('[profile] Fingerprint extraction failed (non-fatal):', err.message);
-      });
+      .catch(err => console.error('[profile] Fingerprint extraction failed (non-fatal):', err.message));
   } else if (hasVoiceDNAField) {
+    // 4b. Voice DNA extraction when Q&A answers arrive (fire-and-forget)
     const { extractVoiceDNAFromQA, calculateCompletionPct } = require('../services/voiceExtraction');
     const hasNewQA = onboarding_q1 || onboarding_q2 || onboarding_q3;
-
-    // If any Q&A answers were just saved, run voice DNA extraction (fire-and-forget)
     if (hasNewQA) {
-      extractVoiceDNAFromQA(userId, tenantId).catch(err => {
-        console.error('[profile] extractVoiceDNAFromQA failed (non-fatal):', err.message);
-      });
+      extractVoiceDNAFromQA(profileId).catch(err =>
+        console.error('[profile] extractVoiceDNAFromQA failed (non-fatal):', err.message)
+      );
     }
-
-    // Recalculate completion pct after any voice DNA field update (fire-and-forget)
     Promise.resolve().then(async () => {
-      const updatedProfile = await db.prepare('SELECT * FROM user_profiles WHERE user_id = ? AND tenant_id = ?').get(userId, tenantId);
-      const liRow = await db.prepare('SELECT 1 FROM linkedin_tokens WHERE user_id = ? AND tenant_id = ?').get(userId, tenantId);
+      const updatedProfile = await db.prepare('SELECT * FROM profiles WHERE id = ?').get(profileId);
+      const liRow = await db.prepare(
+        'SELECT 1 FROM linkedin_connections WHERE workspace_id = ? AND is_default = true'
+      ).get(tenantId);
       const pct = calculateCompletionPct(updatedProfile || {}, !!liRow);
-      await db.prepare('UPDATE user_profiles SET voice_profile_completion_pct = ? WHERE user_id = ? AND tenant_id = ?').run(pct, userId, tenantId);
+      await db.prepare(
+        'UPDATE profiles SET voice_profile_completion_pct = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+      ).run(pct, profileId);
     }).catch(() => {});
   }
 
-  // When onboarding completes, generate niche-specific input examples + content pillars (fire-and-forget)
-  if (obComplete === 1 && !existing?.onboarding_complete) {
+  // 5. Onboarding completion: stamp timestamp + fire voice extraction jobs (fire-and-forget)
+  // Service signatures change to (profileId, opts) in Sprint 2; calls fail silently until then.
+  if (obComplete === true && !brandProfile.onboarding_complete) {
+    await db.prepare(
+      'UPDATE profiles SET onboarding_completed_at = CURRENT_TIMESTAMP WHERE id = ? AND onboarding_completed_at IS NULL'
+    ).run(profileId);
+
+    const { extractVoiceDNAFromQA } = require('../services/voiceExtraction');
     const { generateInputExamples, generateContentPillars } = require('../services/inputCoach');
-    generateInputExamples(userId, tenantId).catch(err => {
-      console.error('[profile] generateInputExamples failed (non-fatal):', err.message);
-    });
-    generateContentPillars(userId, tenantId).catch(err => {
-      console.error('[profile] generateContentPillars failed (non-fatal):', err.message);
-    });
+    const userRow = await db.prepare('SELECT user_role FROM user_profiles WHERE user_id = ?').get(userId);
+    const userRole = userRow?.user_role || null;
+
+    extractVoiceDNAFromQA(profileId, { userRole }).catch(err =>
+      console.error('[profile] extractVoiceDNAFromQA failed (non-fatal):', err.message)
+    );
+    generateInputExamples(profileId).catch(err =>
+      console.error('[profile] generateInputExamples failed (non-fatal):', err.message)
+    );
+    generateContentPillars(profileId).catch(err =>
+      console.error('[profile] generateContentPillars failed (non-fatal):', err.message)
+    );
   }
 
   return res.json({ ok: true, profile_id: profileId, fingerprint_updated: samplesChanged });
@@ -248,8 +269,6 @@ router.post('/', async (req, res) => {
 // Used during onboarding to auto-fill niche, audience, and positioning fields.
 // ---------------------------------------------------------------------------
 router.post('/extract-website', async (req, res) => {
-  if (!req.userId) return res.status(401).json({ ok: false, error: 'unauthenticated' });
-
   const { url } = req.body;
   if (!url || !/^https?:\/\//i.test(url)) {
     return res.status(400).json({ ok: false, error: 'invalid_url' });
@@ -260,7 +279,6 @@ router.post('/extract-website', async (req, res) => {
   const { getSetting } = require('../db');
 
   try {
-    // About page first — richer positioning signal than homepage for most consultant/coach sites
     const [aboutText, { text: homepageText }] = await Promise.all([
       extractAboutPage(url).catch(() => null),
       extractUrl(url),
@@ -302,35 +320,31 @@ Return null for any field you cannot confidently infer. Return only the JSON obj
       // Malformed JSON — return empty (client falls back silently)
     }
 
-    // Build website_summary — a narrative paragraph combining the extracted fields.
-    // Distinct from business_positioning (user-entered). Stored for voice extraction use.
     const summaryParts = [];
     if (extracted.content_niche) summaryParts.push(extracted.content_niche);
     if (extracted.audience_pain) summaryParts.push(`Their audience struggles with: ${extracted.audience_pain}`);
     if (extracted.contrarian_view) summaryParts.push(extracted.contrarian_view);
     const website_summary = summaryParts.join(' ') || null;
 
-    // Persist website_summary to DB (fire-and-forget — response does not wait)
-    if (website_summary && req.userId && req.tenantId) {
+    // Persist website_summary to workspace's default profile (fire-and-forget)
+    if (website_summary) {
       db.prepare(
-        `UPDATE user_profiles SET website_summary = ?, website_extracted_at = CURRENT_TIMESTAMP
-         WHERE user_id = ? AND tenant_id = ?`
-      ).run(website_summary, req.userId, req.tenantId).catch(() => {});
+        `UPDATE profiles SET website_summary = ?, website_extracted_at = CURRENT_TIMESTAMP
+         WHERE workspace_id = ? AND is_default = true`
+      ).run(website_summary, req.tenantId).catch(() => {});
     }
 
-    // Fire-and-forget: crawl blog articles for richer voice signal
-    if (req.userId && req.tenantId) {
-      const { extractBlogPosts } = require('../services/vaultMiner');
-      extractBlogPosts(url)
-        .then(articlesText => {
-          if (articlesText && articlesText.trim().length > 200) {
-            return db.prepare(
-              'UPDATE user_profiles SET website_articles_text = ? WHERE user_id = ? AND tenant_id = ?'
-            ).run(articlesText.trim(), req.userId, req.tenantId);
-          }
-        })
-        .catch(err => console.warn('[profile] extractBlogPosts failed (non-fatal):', err.message));
-    }
+    // Crawl blog articles for richer voice signal (fire-and-forget)
+    const { extractBlogPosts } = require('../services/vaultMiner');
+    extractBlogPosts(url)
+      .then(articlesText => {
+        if (articlesText && articlesText.trim().length > 200) {
+          return db.prepare(
+            'UPDATE profiles SET website_articles_text = ? WHERE workspace_id = ? AND is_default = true'
+          ).run(articlesText.trim(), req.tenantId);
+        }
+      })
+      .catch(err => console.warn('[profile] extractBlogPosts failed (non-fatal):', err.message));
 
     return res.json({ ok: true, ...extracted, website_summary });
   } catch (err) {
@@ -345,16 +359,14 @@ Return null for any field you cannot confidently infer. Return only the JSON obj
 // Used by the Voice Profile Wizard Stage 1 to seed the themes chip picker.
 // ---------------------------------------------------------------------------
 router.post('/suggest-themes', async (req, res) => {
-  if (!req.userId) return res.status(401).json({ ok: false, error: 'unauthenticated' });
-
   const Anthropic = require('@anthropic-ai/sdk');
   const { getSetting } = require('../db');
 
   try {
-    const profile = await db.prepare(
-      `SELECT content_niche, website_summary, onboarding_q1, onboarding_q2, onboarding_q3, audience_role
-       FROM user_profiles WHERE user_id = ? AND tenant_id = ?`
-    ).get(req.userId, req.tenantId);
+    const profile = await db.prepare(`
+      SELECT content_niche, website_summary, onboarding_q1, onboarding_q2, onboarding_q3, audience_role
+      FROM profiles WHERE workspace_id = ? AND is_default = true
+    `).get(req.tenantId);
 
     if (!profile) return res.json({ ok: true, themes: [] });
 
@@ -404,7 +416,7 @@ Return ONLY a JSON array of strings:
     return res.json({ ok: true, themes });
   } catch (err) {
     console.error('[profile] suggest-themes error:', err.message);
-    return res.json({ ok: true, themes: [] }); // non-fatal: return empty
+    return res.json({ ok: true, themes: [] });
   }
 });
 
@@ -414,8 +426,6 @@ Return ONLY a JSON array of strings:
 // Returns the suggestion — does NOT save to DB. Client saves via POST /api/profile.
 // ---------------------------------------------------------------------------
 router.post('/generate-positioning', async (req, res) => {
-  if (!req.userId) return res.status(401).json({ ok: false, error: 'unauthenticated' });
-
   const { content_niche, audience_role, audience_pain } = req.body;
   if (!content_niche && !audience_role) {
     return res.status(400).json({ ok: false, error: 'missing_fields', message: 'Provide at least content_niche or audience_role' });
@@ -459,14 +469,17 @@ Be concrete — use the exact audience and niche provided. No preamble, no quote
 // Called manually (e.g. from settings) or auto-triggered at onboarding completion.
 // ---------------------------------------------------------------------------
 router.post('/generate-input-examples', async (req, res) => {
-  if (!req.userId) return res.status(401).json({ ok: false, error: 'unauthenticated' });
-
   try {
+    const brandProfile = await db.prepare(
+      'SELECT id FROM profiles WHERE workspace_id = ? AND is_default = true'
+    ).get(req.tenantId);
+    if (!brandProfile) return res.status(404).json({ ok: false, error: 'no_brand_profile' });
+
     const { generateInputExamples } = require('../services/inputCoach');
-    await generateInputExamples(req.userId, req.tenantId);
-    const row = await db
-      .prepare('SELECT input_examples FROM user_profiles WHERE user_id = ? AND tenant_id = ?')
-      .get(req.userId, req.tenantId);
+    await generateInputExamples(brandProfile.id);
+    const row = await db.prepare(
+      'SELECT input_examples FROM profiles WHERE id = ?'
+    ).get(brandProfile.id);
     return res.json({ ok: true, input_examples: row?.input_examples || null });
   } catch (err) {
     console.error('[profile] generate-input-examples error:', err.message);
@@ -480,18 +493,78 @@ router.post('/generate-input-examples', async (req, res) => {
 // Called at onboarding completion or manually from settings.
 // ---------------------------------------------------------------------------
 router.post('/generate-content-pillars', async (req, res) => {
-  if (!req.userId) return res.status(401).json({ ok: false, error: 'unauthenticated' });
-
   try {
+    const brandProfile = await db.prepare(
+      'SELECT id FROM profiles WHERE workspace_id = ? AND is_default = true'
+    ).get(req.tenantId);
+    if (!brandProfile) return res.status(404).json({ ok: false, error: 'no_brand_profile' });
+
     const { generateContentPillars } = require('../services/inputCoach');
-    await generateContentPillars(req.userId, req.tenantId);
-    const row = await db
-      .prepare('SELECT content_pillars FROM user_profiles WHERE user_id = ? AND tenant_id = ?')
-      .get(req.userId, req.tenantId);
+    await generateContentPillars(brandProfile.id);
+    const row = await db.prepare(
+      'SELECT content_pillars FROM profiles WHERE id = ?'
+    ).get(brandProfile.id);
     return res.json({ ok: true, content_pillars: row?.content_pillars || null });
   } catch (err) {
     console.error('[profile] generate-content-pillars error:', err.message);
     return res.status(500).json({ ok: false, error: 'generation_failed' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/profile/:id/voice-setup
+// Saves writing samples + Q&A for a person-type profile and fires voice
+// extraction jobs. Called by the mini-onboarding modal shown immediately
+// after a personal LinkedIn account is connected.
+// ---------------------------------------------------------------------------
+router.post('/:id/voice-setup', async (req, res) => {
+  const profileId = Number(req.params.id);
+  const tenantId  = req.tenantId;
+
+  if (!Number.isFinite(profileId) || profileId <= 0) {
+    return res.status(400).json({ ok: false, error: 'invalid_profile_id' });
+  }
+
+  const { writingSamples, q1, q2 } = req.body;
+  if (!writingSamples && !q1 && !q2) {
+    return res.status(400).json({ ok: false, error: 'no_fields_provided' });
+  }
+
+  try {
+    const profile = await db.prepare(
+      'SELECT id FROM profiles WHERE id = ? AND workspace_id = ?'
+    ).get(profileId, tenantId);
+
+    if (!profile) {
+      return res.status(404).json({ ok: false, error: 'profile_not_found' });
+    }
+
+    await db.prepare(`
+      UPDATE profiles SET
+        writing_samples = COALESCE(?, writing_samples),
+        onboarding_q1   = COALESCE(?, onboarding_q1),
+        onboarding_q2   = COALESCE(?, onboarding_q2),
+        updated_at      = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(writingSamples || null, q1 || null, q2 || null, profileId);
+
+    const { extractVoiceDNAFromQA } = require('../services/voiceExtraction');
+    const { generateContentPillars, generateInputExamples } = require('../services/inputCoach');
+
+    extractVoiceDNAFromQA(profileId).catch(err =>
+      console.error('[profile/voice-setup] extractVoiceDNAFromQA failed:', err.message)
+    );
+    generateContentPillars(profileId).catch(err =>
+      console.error('[profile/voice-setup] generateContentPillars failed:', err.message)
+    );
+    generateInputExamples(profileId).catch(err =>
+      console.error('[profile/voice-setup] generateInputExamples failed:', err.message)
+    );
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('[profile/voice-setup] Error:', err.message);
+    return res.status(500).json({ ok: false, error: err.message });
   }
 });
 

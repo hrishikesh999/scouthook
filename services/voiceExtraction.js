@@ -8,9 +8,10 @@
  *   buildVoiceDNABlock        — replaces buildFingerprintBlock() in prompt builders (superset)
  *   calculateCompletionPct    — server-side voice profile completion score
  *   captureVoiceRefinement    — edit-delta capture when user edits >30% of a post
- *   extractVoiceDNAFromLinkedIn — STUB (Phase A spike deferred)
+ *   extractVoiceDNAFromLinkedIn — auto-populate empty profile fields from LinkedIn data
  *
- * All functions are additive — nothing in this file replaces or deletes existing behaviour.
+ * All functions accept profileId (integer PK from the profiles table).
+ * Callers that previously passed (userId, tenantId) must be updated.
  */
 
 const Anthropic = require('@anthropic-ai/sdk');
@@ -77,24 +78,34 @@ async function getAnthropicClient() {
   return new Anthropic({ apiKey });
 }
 
+// Guard against callers that still pass (userId, tenantId) instead of profileId.
+// Fire-and-forget callers wrap in .catch(console.error) — this surfaces missed call sites in logs.
+function assertProfileId(profileId, fnName) {
+  if (!Number.isInteger(profileId) || profileId <= 0) {
+    throw new Error(`[${fnName}] profileId must be a positive integer, got ${typeof profileId}: ${JSON.stringify(profileId)}`);
+  }
+}
+
 /* ── 1. extractVoiceDNAFromQA ───────────────────────────────────────────
    Fire-and-forget. Called after onboarding Q3 submit. Never blocks generation.
-   Reads fresh from DB, merges into voice_fingerprint, writes new Voice DNA fields.
+   Reads fresh from DB (profiles table), merges into voice_fingerprint, writes
+   new Voice DNA fields back to profiles.
+   opts.userRole — fetched by caller from user_profiles, never stored on profiles.
    ──────────────────────────────────────────────────────────────────────── */
 
-async function extractVoiceDNAFromQA(userId, tenantId, options = {}) {
+async function extractVoiceDNAFromQA(profileId, options = {}) {
+  assertProfileId(profileId, 'extractVoiceDNAFromQA');
   try {
-    // Read fresh profile from DB — include writing samples and blog articles for richer signal
     const profile = await db.prepare(
-      `SELECT user_role, website_summary, website_articles_text,
+      `SELECT website_summary, website_articles_text,
               onboarding_q1, onboarding_q2, onboarding_q3,
               voice_fingerprint, authority_statements, banned_patterns,
               business_positioning, writing_samples
-       FROM user_profiles WHERE user_id = ? AND tenant_id = ?`
-    ).get(userId, tenantId);
+       FROM profiles WHERE id = ?`
+    ).get(profileId);
 
     if (!profile) {
-      console.warn('[voiceExtraction] extractVoiceDNAFromQA: profile not found', { userId, tenantId });
+      console.warn('[voiceExtraction] extractVoiceDNAFromQA: profile not found', { profileId });
       return;
     }
 
@@ -103,14 +114,16 @@ async function extractVoiceDNAFromQA(userId, tenantId, options = {}) {
     // If all Q&A fields are empty, nothing to extract
     if (!onboarding_q1 && !onboarding_q2 && !onboarding_q3) {
       await db.prepare(
-        `UPDATE user_profiles SET voice_extraction_source = 'none' WHERE user_id = ? AND tenant_id = ?`
-      ).run(userId, tenantId);
+        `UPDATE profiles SET voice_extraction_source = 'none' WHERE id = ?`
+      ).run(profileId);
       return;
     }
 
     const client = await getAnthropicClient();
 
-    const prompt = buildQAExtractionPrompt(profile);
+    // user_role is personal (lives on user_profiles) — passed via opts by caller
+    const profileForPrompt = { ...profile, user_role: options.userRole || null };
+    const prompt = buildQAExtractionPrompt(profileForPrompt);
 
     // fast=true uses Haiku for the inline onboarding extraction (~2s).
     // Default (false) uses Sonnet for richer quality on background re-extractions.
@@ -129,8 +142,8 @@ async function extractVoiceDNAFromQA(userId, tenantId, options = {}) {
     } catch (parseErr) {
       console.error('[voiceExtraction] extractVoiceDNAFromQA: JSON parse failed', parseErr.message);
       await db.prepare(
-        `UPDATE user_profiles SET voice_extraction_source = 'none' WHERE user_id = ? AND tenant_id = ?`
-      ).run(userId, tenantId);
+        `UPDATE profiles SET voice_extraction_source = 'none' WHERE id = ?`
+      ).run(profileId);
       return;
     }
 
@@ -174,7 +187,6 @@ async function extractVoiceDNAFromQA(userId, tenantId, options = {}) {
     const newStatements = Array.isArray(extracted.authority_statements)
       ? extracted.authority_statements.filter(s => typeof s === 'string' && s.trim())
       : [];
-    // Merge: prefer new (freshly extracted), but keep existing if extraction returned nothing
     const mergedStatements = newStatements.length > 0 ? newStatements : existingStatements;
 
     // Banned patterns — universal list always first, then user-specific additions
@@ -188,17 +200,17 @@ async function extractVoiceDNAFromQA(userId, tenantId, options = {}) {
 
     // Check LinkedIn connection for completion pct
     const linkedInRow = await db.prepare(
-      'SELECT 1 FROM linkedin_tokens WHERE user_id = ? AND tenant_id = ?'
-    ).get(userId, tenantId);
+      'SELECT 1 FROM linkedin_connections WHERE profile_id = ? AND is_default = true'
+    ).get(profileId);
     const hasLinkedIn = !!linkedInRow;
 
-    // Build updated profile object for completion calc
+    // Build updated profile object for completion calc; merge user_role from opts
     const updatedProfile = {
       ...profile,
+      user_role: options.userRole || null,
       voice_fingerprint: JSON.stringify(mergedFp),
       authority_statements: JSON.stringify(mergedStatements),
       banned_patterns: JSON.stringify(mergedBanned),
-      // business_positioning: use existing value if already set, otherwise use derived outcome
       business_positioning: profile.business_positioning || positioningOutcome,
     };
     const completionPct = calculateCompletionPct(updatedProfile, hasLinkedIn);
@@ -206,7 +218,7 @@ async function extractVoiceDNAFromQA(userId, tenantId, options = {}) {
     const extractionQuality = (hasWritingSamples || hasBlogArticles) ? 'partial' : 'baseline';
 
     await db.prepare(
-      `UPDATE user_profiles SET
+      `UPDATE profiles SET
          voice_fingerprint            = ?,
          authority_statements         = ?,
          banned_patterns              = ?,
@@ -215,7 +227,7 @@ async function extractVoiceDNAFromQA(userId, tenantId, options = {}) {
          voice_extraction_quality     = ?,
          voice_profile_completion_pct = ?,
          updated_at                   = CURRENT_TIMESTAMP
-       WHERE user_id = ? AND tenant_id = ?`
+       WHERE id = ?`
     ).run(
       JSON.stringify(mergedFp),
       JSON.stringify(mergedStatements),
@@ -224,17 +236,16 @@ async function extractVoiceDNAFromQA(userId, tenantId, options = {}) {
       extractionSource,
       extractionQuality,
       completionPct,
-      userId,
-      tenantId
+      profileId
     );
 
-    console.log('[voiceExtraction] extractVoiceDNAFromQA: complete', { userId, completionPct, extractionSource });
+    console.log('[voiceExtraction] extractVoiceDNAFromQA: complete', { profileId, completionPct, extractionSource });
   } catch (err) {
     console.error('[voiceExtraction] extractVoiceDNAFromQA: error (non-fatal):', err.message);
     try {
       await db.prepare(
-        `UPDATE user_profiles SET voice_extraction_source = 'none' WHERE user_id = ? AND tenant_id = ?`
-      ).run(userId, tenantId);
+        `UPDATE profiles SET voice_extraction_source = 'none' WHERE id = ?`
+      ).run(profileId);
     } catch { /* ignore secondary failure */ }
   }
 }
@@ -340,8 +351,6 @@ function buildVoiceDNABlock(userProfile) {
   }
 
   // 3. Positioning — extracted ideological stance + functional identity fallback
-  // Guard relaxed: render any available positioning fields, not just when pushes_back_against exists.
-  // Falls back to business_positioning for audience/outcome when fp.positioning is absent or thin.
   const pos = fp.positioning;
   const posLines = [];
   if (pos?.stands_for)          posLines.push(`Stands for: ${pos.stands_for}`);
@@ -415,11 +424,10 @@ function buildVoiceDNABlock(userProfile) {
 }
 
 /* ── 3. calculateCompletionPct ──────────────────────────────────────────
-   Server-side scoring. hasLinkedIn is a boolean passed by the caller
-   (NOT userProfile.linkedin_access_token — that lives in linkedin_tokens).
-   Caller must: const hasLinkedIn = !!db.prepare(
-     'SELECT 1 FROM linkedin_tokens WHERE user_id = ? AND tenant_id = ?'
-   ).get(userId, tenantId);
+   Server-side scoring. hasLinkedIn is a boolean passed by the caller.
+   Caller must query: SELECT 1 FROM linkedin_connections WHERE profile_id=? AND is_default=true
+   user_role is personal (lives on user_profiles) — callers should merge it into the
+   profile object before calling if they want it scored.
    ──────────────────────────────────────────────────────────────────────── */
 
 function calculateCompletionPct(userProfile, hasLinkedIn = false) {
@@ -427,7 +435,7 @@ function calculateCompletionPct(userProfile, hasLinkedIn = false) {
 
   if (userProfile.user_role)            score += 5;
   if (userProfile.website_url)          score += 5;
-  if (userProfile.contrarian_view)      score += 5;  // replaces onboarding_q1 (removed from wizard; website extraction populates this)
+  if (userProfile.contrarian_view)      score += 5;
   if (userProfile.onboarding_q2)        score += 5;
   if (userProfile.onboarding_q3)        score += 5;
   if (userProfile.voice_fingerprint)    score += 5;
@@ -456,9 +464,11 @@ function calculateCompletionPct(userProfile, hasLinkedIn = false) {
 /* ── 4. captureVoiceRefinement ──────────────────────────────────────────
    Called fire-and-forget from PATCH /api/posts/:postId when edit ratio > 30%.
    Extracts one short rule from the diff, appends to voice_refinements (cap 20).
+   profileId comes from generated_posts.profile_id on the edited post.
    ──────────────────────────────────────────────────────────────────────── */
 
-async function captureVoiceRefinement(userId, tenantId, oldContent, newContent, changeTypes = ['general']) {
+async function captureVoiceRefinement(profileId, oldContent, newContent, changeTypes = ['general']) {
+  assertProfileId(profileId, 'captureVoiceRefinement');
   try {
     const client = await getAnthropicClient();
 
@@ -501,8 +511,8 @@ Example: "Prefers shorter sentences — never more than 15 words in a row."`,
 
     // Read current refinements
     const row = await db.prepare(
-      'SELECT voice_refinements FROM user_profiles WHERE user_id = ? AND tenant_id = ?'
-    ).get(userId, tenantId);
+      'SELECT voice_refinements FROM profiles WHERE id = ?'
+    ).get(profileId);
 
     if (!row) return;
 
@@ -514,47 +524,50 @@ Example: "Prefers shorter sentences — never more than 15 words in a row."`,
 
     // Recalculate completion pct
     const profile = await db.prepare(
-      'SELECT * FROM user_profiles WHERE user_id = ? AND tenant_id = ?'
-    ).get(userId, tenantId);
+      'SELECT * FROM profiles WHERE id = ?'
+    ).get(profileId);
     const linkedInRow = await db.prepare(
-      'SELECT 1 FROM linkedin_tokens WHERE user_id = ? AND tenant_id = ?'
-    ).get(userId, tenantId);
+      'SELECT 1 FROM linkedin_connections WHERE profile_id = ? AND is_default = true'
+    ).get(profileId);
     const completionPct = calculateCompletionPct(
       { ...profile, voice_refinements: JSON.stringify(refinements) },
       !!linkedInRow
     );
 
     await db.prepare(
-      `UPDATE user_profiles SET
+      `UPDATE profiles SET
          voice_refinements            = ?,
          voice_profile_completion_pct = ?,
          updated_at                   = CURRENT_TIMESTAMP
-       WHERE user_id = ? AND tenant_id = ?`
-    ).run(JSON.stringify(refinements), completionPct, userId, tenantId);
+       WHERE id = ?`
+    ).run(JSON.stringify(refinements), completionPct, profileId);
 
-    console.log('[voiceExtraction] captureVoiceRefinement: captured rules', { userId, rules });
+    console.log('[voiceExtraction] captureVoiceRefinement: captured rules', { profileId, rules });
   } catch (err) {
     console.error('[voiceExtraction] captureVoiceRefinement: error (non-fatal):', err.message);
   }
 }
 
 /* ── 5. extractVoiceDNAFromLinkedIn ────────────────────────────────────
-   Uses the linkedin_headline (collected during OAuth) to auto-populate
-   empty profile fields: content_niche, audience_role, business_positioning,
-   and suggested content themes.
+   Uses the LinkedIn connection display_name to auto-populate empty profile
+   fields: content_niche, audience_role, business_positioning, content_pillars.
    Only fills fields that are currently blank — never overwrites user data.
    Fire-and-forget safe. Called after OAuth callback and on manual refresh.
+   Note: linkedin_headline is not stored in linkedin_connections; this function
+   uses display_name as the available LinkedIn signal for profile inference.
+   Sprint 3 LinkedIn route update should pass richer data if needed.
    ──────────────────────────────────────────────────────────────────────── */
 
-async function extractVoiceDNAFromLinkedIn(userId, tenantId) {
+async function extractVoiceDNAFromLinkedIn(profileId) {
+  assertProfileId(profileId, 'extractVoiceDNAFromLinkedIn');
   try {
-    // Read LinkedIn profile data (stored during OAuth callback)
+    // Read LinkedIn connection data for this profile
     const liRow = await db.prepare(
-      'SELECT linkedin_name, linkedin_headline FROM linkedin_tokens WHERE user_id = ? AND tenant_id = ?'
-    ).get(userId, tenantId);
+      'SELECT display_name FROM linkedin_connections WHERE profile_id = ? AND account_type = ? ORDER BY is_default DESC LIMIT 1'
+    ).get(profileId, 'personal');
 
-    if (!liRow?.linkedin_headline) {
-      console.log('[voiceExtraction] extractVoiceDNAFromLinkedIn: no headline, skipping', { userId });
+    if (!liRow?.display_name) {
+      console.log('[voiceExtraction] extractVoiceDNAFromLinkedIn: no connection data, skipping', { profileId });
       return { updated: [] };
     }
 
@@ -562,28 +575,27 @@ async function extractVoiceDNAFromLinkedIn(userId, tenantId) {
     const profile = await db.prepare(
       `SELECT content_niche, audience_role, business_positioning, content_pillars,
               voice_fingerprint, authority_statements, banned_patterns, writing_samples,
-              cta_library, content_principles, user_role, website_url,
+              cta_library, content_principles, website_url,
               onboarding_q1, onboarding_q2, onboarding_q3, voice_refinements
-       FROM user_profiles WHERE user_id = ? AND tenant_id = ?`
-    ).get(userId, tenantId);
+       FROM profiles WHERE id = ?`
+    ).get(profileId);
 
     if (!profile) return { updated: [] };
 
     const client = await getAnthropicClient();
 
-    const prompt = `You are extracting a LinkedIn creator's professional profile from their LinkedIn headline.
+    const prompt = `You are inferring a LinkedIn creator's professional profile from their name and any available context.
 
-LinkedIn headline: "${liRow.linkedin_headline}"
-${liRow.linkedin_name ? `Name: ${liRow.linkedin_name}` : ''}
+LinkedIn name: "${liRow.display_name}"
 
-Extract the following from the headline only. Be specific and grounded — do not invent.
+Extract the following. Be specific and grounded — do not invent. If you cannot infer something with confidence from the name alone, return null for that field.
 
 Return valid JSON only, no commentary:
 {
-  "content_niche": "2-4 word niche label (e.g. 'B2B SaaS growth', 'executive leadership coaching', 'DTC e-commerce')",
-  "audience_role": "who they help, 5-10 words (e.g. 'early-stage B2B SaaS founders', 'mid-market sales leaders')",
-  "business_positioning": "one sentence: what they do and for whom (derived from headline — verbatim words preferred)",
-  "suggested_themes": ["3-5 content themes this person would naturally write about on LinkedIn — short phrases"]
+  "content_niche": "2-4 word niche label if inferable (e.g. 'B2B SaaS growth', 'executive leadership coaching'), or null",
+  "audience_role": "who they help if inferable, 5-10 words, or null",
+  "business_positioning": "one sentence: what they do and for whom if inferable, or null",
+  "suggested_themes": ["2-3 content themes if inferable — short phrases, or empty array"]
 }`;
 
     const message = await client.messages.create({
@@ -603,27 +615,17 @@ Return valid JSON only, no commentary:
 
     if (!extracted || typeof extracted !== 'object') return { updated: [] };
 
-    // ── Source-aware merge strategy ─────────────────────────────────────────
-    // LinkedIn headline is the BEST signal for persona/positioning fields
-    // (user-crafted professional identity > website marketing copy).
-    // So: always write content_niche, audience_role, business_positioning from
-    // LinkedIn when we have a value — this correctly overrides website-extracted
-    // values which are often generic copywriter language.
-    //
-    // Q&A-sourced fields (voice_fingerprint, authority_statements,
-    // banned_patterns) are NEVER touched here — those come from the user's own
-    // spoken-word interview answers and are a stronger signal.
-    //
-    // content_pillars is always additive: merge, never remove.
-    // ────────────────────────────────────────────────────────────────────────
     const updates = {};
 
-    // Persona fields — LinkedIn wins over website extraction
-    if (extracted.content_niche)        updates.content_niche        = extracted.content_niche;
-    if (extracted.audience_role)        updates.audience_role        = extracted.audience_role;
-    if (extracted.business_positioning) updates.business_positioning = extracted.business_positioning;
+    // Only fill currently blank persona fields
+    if (extracted.content_niche && !profile.content_niche)
+      updates.content_niche = extracted.content_niche;
+    if (extracted.audience_role && !profile.audience_role)
+      updates.audience_role = extracted.audience_role;
+    if (extracted.business_positioning && !profile.business_positioning)
+      updates.business_positioning = extracted.business_positioning;
 
-    // Content pillars — always additive (merge new ones in, never remove existing)
+    // Content pillars — always additive
     const existingPillars = safeParseJSON(profile.content_pillars, []);
     const suggestedThemes = Array.isArray(extracted.suggested_themes)
       ? extracted.suggested_themes.filter(t => typeof t === 'string' && t.trim())
@@ -635,26 +637,25 @@ Return valid JSON only, no commentary:
     }
 
     if (Object.keys(updates).length === 0) {
-      console.log('[voiceExtraction] extractVoiceDNAFromLinkedIn: nothing to update', { userId });
+      console.log('[voiceExtraction] extractVoiceDNAFromLinkedIn: nothing to update', { profileId });
       return { updated: [] };
     }
 
-    // Recalculate completion pct with the new values
+    // Recalculate completion pct
     const linkedInRow = await db.prepare(
-      'SELECT 1 FROM linkedin_tokens WHERE user_id = ? AND tenant_id = ?'
-    ).get(userId, tenantId);
+      'SELECT 1 FROM linkedin_connections WHERE profile_id = ? AND is_default = true'
+    ).get(profileId);
     const updatedProfile = { ...profile, ...updates };
     const completionPct = calculateCompletionPct(updatedProfile, !!linkedInRow);
     updates.voice_profile_completion_pct = completionPct;
 
-    // Build parameterised UPDATE from the updates object
     const keys = Object.keys(updates);
     const setClauses = keys.map(k => `${k} = ?`).join(', ');
     await db.prepare(
-      `UPDATE user_profiles SET ${setClauses}, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND tenant_id = ?`
-    ).run(...keys.map(k => updates[k]), userId, tenantId);
+      `UPDATE profiles SET ${setClauses}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
+    ).run(...keys.map(k => updates[k]), profileId);
 
-    console.log('[voiceExtraction] extractVoiceDNAFromLinkedIn: complete', { userId, updated: keys });
+    console.log('[voiceExtraction] extractVoiceDNAFromLinkedIn: complete', { profileId, updated: keys });
     return { updated: keys, completionPct };
 
   } catch (err) {

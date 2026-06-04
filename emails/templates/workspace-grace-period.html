@@ -1,0 +1,47 @@
+<!-- subject: Action needed: {{grace_count}} workspace(s) are now read-only -->
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f5f5f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f5;padding:40px 0;">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;">
+        <!-- Header -->
+        <tr><td style="background:#0f172a;padding:24px 40px;">
+          <img src="https://app.scouthook.com/images/scout-hook-logo.png" alt="ScoutHook" width="150" height="33" style="display:block;border:0;">
+        </td></tr>
+        <!-- Warning banner -->
+        <tr><td style="background:#fef2f2;border-bottom:1px solid #fecaca;padding:14px 40px;">
+          <p style="margin:0;font-size:13px;font-weight:600;color:#b91c1c;">Workspace(s) are now read-only</p>
+        </td></tr>
+        <!-- Body -->
+        <tr><td style="padding:40px 40px 32px;">
+          <p style="margin:0 0 20px;font-size:16px;color:#111827;">Hi {{display_name}},</p>
+          <p style="margin:0 0 16px;font-size:16px;color:#374151;line-height:1.6;">
+            Your plan change means you now have more workspaces than your plan supports. The following workspace(s) are now <strong>read-only</strong>:
+          </p>
+          <p style="margin:0 0 24px;font-size:15px;color:#374151;background:#f9fafb;border-radius:6px;padding:14px 16px;line-height:1.8;white-space:pre-line;">{{workspace_names_list}}</p>
+          <p style="margin:0 0 24px;font-size:14px;color:#6b7280;line-height:1.6;">
+            Your content is safe for <strong>{{grace_days}} days</strong>. You have until <strong>{{purge_date}}</strong> to either upgrade your plan or delete an excess workspace before the content is permanently removed.
+          </p>
+          <table cellpadding="0" cellspacing="0" style="margin:0 0 16px;">
+            <tr><td style="background:#6366f1;border-radius:6px;">
+              <a href="{{upgrade_url}}"
+                 style="display:inline-block;padding:13px 24px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;">
+                Upgrade to Pro →
+              </a>
+            </td></tr>
+          </table>
+          <a href="{{upgrade_url}}" style="font-size:14px;color:#6366f1;">Or manage your workspaces →</a>
+        </td></tr>
+        <!-- Footer -->
+        <tr><td style="padding:20px 40px;border-top:1px solid #f3f4f6;">
+          <p style="margin:0;font-size:12px;color:#9ca3af;">
+            You're receiving this because your ScoutHook plan changed and some workspaces are now over the limit.
+          </p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>

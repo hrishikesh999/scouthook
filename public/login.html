@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <link rel="icon" type="image/png" href="/favicon.png">
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Scouthook — Sign in</title>
+  <title>ScoutHook — Sign in</title>
   <link rel="stylesheet" href="/css/main.css" />
   <link rel="stylesheet" href="/css/login.css" />
 </head>
@@ -15,10 +15,10 @@
     <!-- Left: dark branding panel -->
     <div class="login-left">
       <div class="login-left-inner">
-        <img src="/images/scout-hook-logo.png" alt="Scouthook" class="login-left-logo" />
-        <h1 class="login-hero-headline">Login to Scouthook</h1>
+        <img src="/images/scout-hook-logo.png" alt="ScoutHook" class="login-left-logo" />
+        <h1 class="login-hero-headline">Welcome back.</h1>
         <p class="login-hero-signup">
-          New to Scouthook? <a href="/signup.html" class="login-signup-link">Sign up</a>
+          New to ScoutHook? <a href="/signup.html" class="login-signup-link">Create an account</a>
         </p>
       </div>
     </div>
@@ -28,6 +28,8 @@
       <div class="login-right-inner">
         <section class="login-card" role="region" aria-label="Sign in">
           <div id="errorBox" class="login-error" hidden></div>
+
+          <!-- Google sign-in -->
           <a href="/auth/google" class="google-btn">
             <span class="google-icon" aria-hidden="true">
               <svg viewBox="0 0 48 48" width="18" height="18">
@@ -38,8 +40,35 @@
                 <path fill="none" d="M1 1h46v46H1z"/>
               </svg>
             </span>
-            <span>Login with Google</span>
+            <span>Sign in with Google</span>
           </a>
+
+          <!-- Or divider -->
+          <div style="display:flex;align-items:center;gap:10px;margin:18px 0;">
+            <hr style="flex:1;border:none;border-top:1px solid var(--border);margin:0;">
+            <span style="font-size:12px;color:var(--text-muted);white-space:nowrap;">or</span>
+            <hr style="flex:1;border:none;border-top:1px solid var(--border);margin:0;">
+          </div>
+
+          <!-- Email / password sign-in -->
+          <form id="loginForm" class="login-email-form" novalidate>
+            <label class="login-email-label" for="li-email">Email</label>
+            <input id="li-email" type="email" class="login-email-input" placeholder="you@example.com" autocomplete="email" required />
+
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:10px">
+              <label class="login-email-label" for="li-password">Password</label>
+              <a href="/forgot-password.html" style="font-size:12px;color:var(--brand);text-decoration:none">Forgot password?</a>
+            </div>
+            <input id="li-password" type="password" class="login-email-input" placeholder="Your password" autocomplete="current-password" required />
+
+            <button type="submit" id="li-submit" class="btn-primary login-continue-btn" style="margin-top:14px;width:100%">
+              Sign in
+            </button>
+          </form>
+
+          <p class="login-meta" style="margin-top:12px">
+            Don't have an account? <a href="/signup.html" style="color:var(--brand)">Sign up free</a>
+          </p>
         </section>
       </div>
     </div>
@@ -47,20 +76,73 @@
   </div>
 
   <script>
-    (function () {
-      const params = new URLSearchParams(window.location.search);
-      const error  = params.get('error');
-      if (error) {
-        const box = document.getElementById('errorBox');
-        if (box) {
-          box.textContent =
-            error === 'google_not_configured' ? 'Google sign-in is not configured on the server.' :
-            error === 'oauth_failed'           ? 'Google sign-in failed. Please try again.' :
-                                                 'Sign-in error. Please try again.';
-          box.hidden = false;
+  (function () {
+    const errorBox = document.getElementById('errorBox');
+
+    // URL-based errors (from OAuth or redirects)
+    const params   = new URLSearchParams(window.location.search);
+    const urlError = params.get('error');
+    if (urlError) {
+      const msg =
+        urlError === 'google_not_configured'   ? 'Google sign-in is not configured on the server.' :
+        urlError === 'oauth_failed'            ? 'Google sign-in failed. Please try again.' :
+        urlError === 'invalid_or_expired_token' ? 'This link is invalid or has expired. Please try again.' :
+        urlError === 'verification_failed'     ? 'Email verification failed. Please try again or request a new link.' :
+                                                  'Sign-in error. Please try again.';
+      errorBox.textContent = msg;
+      errorBox.hidden = false;
+    }
+
+    function showError(msg) { errorBox.textContent = msg; errorBox.hidden = false; }
+    function clearError()   { errorBox.hidden = true; }
+
+    const ERROR_MESSAGES = {
+      invalid_credentials:  'Incorrect email or password.',
+      email_not_verified:   'Please verify your email before signing in. Check your inbox.',
+      too_many_attempts:    'Too many failed attempts. Please wait 15 minutes before trying again.',
+      login_failed:         'Sign in failed. Please try again.',
+    };
+
+    document.getElementById('loginForm').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      clearError();
+
+      const email    = document.getElementById('li-email').value.trim();
+      const password = document.getElementById('li-password').value;
+
+      if (!email)    return showError('Enter your email address.');
+      if (!password) return showError('Enter your password.');
+
+      const btn = document.getElementById('li-submit');
+      btn.disabled    = true;
+      btn.textContent = 'Signing in…';
+
+      try {
+        const res  = await fetch('/auth/login', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ email, password }),
+        });
+        const data = await res.json();
+
+        if (data.ok && data.redirect) {
+          window.location.href = data.redirect;
+          return;
         }
+
+        if (res.status === 429) {
+          showError(ERROR_MESSAGES.too_many_attempts);
+        } else {
+          showError(ERROR_MESSAGES[data.error] || data.error || 'Sign in failed. Please try again.');
+        }
+      } catch {
+        showError('Network error. Please check your connection and try again.');
+      } finally {
+        btn.disabled    = false;
+        btn.textContent = 'Sign in';
       }
-    })();
+    });
+  })();
   </script>
 
 </body>

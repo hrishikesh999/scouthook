@@ -136,80 +136,58 @@ if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
     console.log(`[auth/google] login email=${email} googleId=${googleId} userId=${userId}`);
     if (!userId) return done(null, false);
 
-    // First login == "sign up": ensure an app profile row exists.
-    // Awaited so the profile is guaranteed to exist before the session is created.
     try {
       const displayName = profile?.displayName || email || 'User';
+
+      // 1. Upsert identity row (identity-only — no voice DNA or brand columns post-migration)
       const result = await db.prepare(`
-        INSERT INTO user_profiles (user_id, tenant_id, brand_name, email, display_name)
-        VALUES (?, ?, ?, ?, ?)
-        ON CONFLICT(user_id, tenant_id) DO UPDATE SET
-          email = EXCLUDED.email,
+        INSERT INTO user_profiles (user_id, email, display_name)
+        VALUES (?, ?, ?)
+        ON CONFLICT(user_id) DO UPDATE SET
+          email        = EXCLUDED.email,
           display_name = EXCLUDED.display_name
         RETURNING (xmax = 0) AS is_new_row
-      `).get(userId, 'default', displayName, email, displayName);
+      `).get(userId, email, displayName);
 
-      // Send welcome email only on first login (new row inserted).
-      if (result?.is_new_row && email) {
-        const appUrl = process.env.APP_URL || '';
-        sendEmail('welcome', email, { name: displayName.split(' ')[0] || displayName, app_url: appUrl });
-        require('./services/mailerlite').addFreeSubscriber(email, displayName).catch(() => {});
-      }
-    } catch (err) {
-      console.error('[auth] user_profile bootstrap failed for', userId, err.message);
-      // Still allow login — profile can be recovered, but log clearly so it's not silent.
-    }
+      // 2. Upsert auth_providers row (idempotent on every login)
+      await db.prepare(`
+        INSERT INTO auth_providers (user_id, provider, provider_id)
+        VALUES (?, 'google', ?)
+        ON CONFLICT(provider, provider_id) DO NOTHING
+      `).run(userId, googleId || email || userId);
 
-    // Account consolidation: migrate data from any stale user_id that shares this email
-    // (e.g. google_email:x@y.com created when profile.id was temporarily null) into the
-    // canonical google:${googleId} user_id. Runs on every login — idempotent and self-healing.
-    if (googleId && email) {
-      try {
-        const staleProfiles = await db.prepare(`
-          SELECT user_id FROM user_profiles
-          WHERE email = ? AND tenant_id = 'default' AND user_id != ?
-        `).all(email, userId);
+      // 3. Resolve workspace — find existing membership or create personal workspace
+      const membership = await db.prepare(
+        'SELECT workspace_id FROM workspace_members WHERE user_id = ? ORDER BY created_at ASC LIMIT 1'
+      ).get(userId);
 
-        for (const stale of staleProfiles) {
-          const staleId = stale.user_id;
-          console.log(`[auth] consolidating stale user_id=${staleId} → ${userId}`);
-
-          // Re-parent all data tables
-          await db.prepare(`UPDATE generated_posts   SET user_id = ? WHERE user_id = ? AND tenant_id = 'default'`).run(userId, staleId);
-          await db.prepare(`UPDATE scheduled_posts   SET user_id = ? WHERE user_id = ? AND tenant_id = 'default'`).run(userId, staleId);
-          await db.prepare(`UPDATE linkedin_tokens   SET user_id = ? WHERE user_id = ?`).run(userId, staleId);
-          await db.prepare(`UPDATE post_ideas        SET user_id = ? WHERE user_id = ? AND tenant_id = 'default'`).run(userId, staleId).catch(() => {});
-          await db.prepare(`UPDATE voice_profiles    SET user_id = ? WHERE user_id = ? AND tenant_id = 'default'`).run(userId, staleId).catch(() => {});
-
-          // Carry forward onboarding_complete if stale profile had it set
-          await db.prepare(`
-            UPDATE user_profiles SET onboarding_complete = 1
-            WHERE user_id = ? AND tenant_id = 'default'
-              AND EXISTS (
-                SELECT 1 FROM user_profiles
-                WHERE user_id = ? AND tenant_id = 'default' AND onboarding_complete = 1
-              )
-          `).run(userId, staleId);
-
-          // Remove the now-empty stale profile
-          await db.prepare(`DELETE FROM user_profiles WHERE user_id = ? AND tenant_id = 'default'`).run(staleId);
-          console.log(`[auth] consolidation complete: ${staleId} → ${userId}`);
+      let workspaceId;
+      if (membership) {
+        workspaceId = membership.workspace_id;
+      } else {
+        workspaceId = await createPersonalWorkspace(userId, displayName);
+        // Welcome email only on brand-new signup (new workspace = new user)
+        if (email) {
+          const appUrl = process.env.APP_URL || '';
+          sendEmail('welcome', email, { name: displayName.split(' ')[0] || displayName, app_url: appUrl });
+          require('./services/mailerlite').addFreeSubscriber(email, displayName).catch(() => {});
         }
-      } catch (err) {
-        console.error('[auth] account consolidation failed:', err.message);
-        // Non-fatal — user still logs in; data stays split until next attempt.
       }
-    }
 
-    return done(null, {
-      provider: 'google',
-      id: googleId,
-      user_id: userId,
-      tenant_id: 'default',
-      displayName: profile?.displayName || email || 'User',
-      email,
-      photo,
-    });
+      console.log(`[auth/google] userId=${userId} workspaceId=${workspaceId} isNew=${result?.is_new_row}`);
+      return done(null, {
+        provider: 'google',
+        id: googleId,
+        user_id: userId,
+        tenant_id: workspaceId,
+        displayName,
+        email,
+        photo,
+      });
+    } catch (err) {
+      console.error('[auth] Google OAuth strategy failed:', err.message);
+      return done(err);
+    }
   }));
 } else {
   console.warn('[auth] Google OAuth is not configured (missing GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET).');
@@ -222,10 +200,83 @@ app.use(passport.session());
 // Both values are derived exclusively from the authenticated session; headers are
 // never trusted for identity or tenant resolution.
 app.use((req, res, next) => {
-  req.tenantId = req.user?.tenant_id || 'default';
+  req.tenantId = req.user?.tenant_id || null;
   req.userId   = req.user?.user_id   || null;
   next();
 });
+
+// ---------------------------------------------------------------------------
+// Helper: create personal workspace + brand profile on first signup
+// ---------------------------------------------------------------------------
+async function createPersonalWorkspace(userId, displayName) {
+  const wsRow = await db.prepare(
+    'INSERT INTO workspaces (name, created_by) VALUES (?, ?) RETURNING id'
+  ).get(`${displayName}'s Workspace`, userId);
+  const workspaceId = wsRow.id;
+  await db.prepare(
+    'INSERT INTO workspace_members (workspace_id, user_id, role, joined_at) VALUES (?, ?, ?, now())'
+  ).run(workspaceId, userId, 'owner');
+  await db.prepare(
+    'INSERT INTO profiles (workspace_id, profile_type, display_name, is_default, onboarding_complete) VALUES (?, ?, ?, true, false)'
+  ).run(workspaceId, 'brand', displayName);
+  return workspaceId;
+}
+
+// ---------------------------------------------------------------------------
+// requireWorkspaceMember — applied to all workspace-scoped /api/* routes.
+// Verifies the session workspace exists, is not deleted, and the user is a member.
+// Sets req.workspaceRole for downstream use.
+// ---------------------------------------------------------------------------
+async function requireWorkspaceMember(req, res, next) {
+  try {
+    if (!req.userId)   return res.status(401).json({ ok: false, error: 'not_authenticated' });
+    if (!req.tenantId) return res.status(401).json({ ok: false, error: 'no_workspace_context' });
+
+    const ws = await db.prepare(
+      'SELECT deleted_at FROM workspaces WHERE id = ?'
+    ).get(req.tenantId);
+    if (!ws || ws.deleted_at) return res.status(403).json({ ok: false, error: 'workspace_not_found' });
+
+    const member = await db.prepare(
+      'SELECT role FROM workspace_members WHERE workspace_id = ? AND user_id = ?'
+    ).get(req.tenantId, req.userId);
+    if (!member) return res.status(403).json({ ok: false, error: 'not_a_member' });
+
+    req.workspaceRole = member.role;
+    next();
+  } catch (err) {
+    next(err);
+  }
+}
+
+function requireOwner(req, res, next) {
+  if (req.workspaceRole !== 'owner') {
+    return res.status(403).json({ ok: false, error: 'owner_required' });
+  }
+  next();
+}
+
+// requireWorkspaceActive — applied to mutating routes (POST/PUT/PATCH/DELETE) on
+// workspaces that may be in grace period (soft-read-only after a plan downgrade).
+// GETs are always allowed so users can still view their content.
+async function requireWorkspaceActive(req, res, next) {
+  if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) return next();
+  try {
+    const ws = await db.prepare(
+      'SELECT grace_expires_at FROM workspaces WHERE id = ?'
+    ).get(req.tenantId);
+    if (ws?.grace_expires_at) {
+      return res.status(403).json({
+        ok: false,
+        error: 'workspace_in_grace_period',
+        grace_expires_at: ws.grace_expires_at,
+      });
+    }
+    next();
+  } catch (err) {
+    next(err);
+  }
+}
 
 // API-only rate limit (do not apply globally — static JS/CSS/HTML each count as a request
 // and 100/15min per IP breaks normal use). Tighter limits exist on /api/generate.
@@ -271,28 +322,17 @@ app.get('/auth/google/callback',
 
     // Route new users to the onboarding wizard; returning users go straight to dashboard.
     try {
-      const row = await db.prepare(
-        'SELECT onboarding_complete FROM user_profiles WHERE user_id = ? AND tenant_id = ?'
-      ).get(req.user.user_id, 'default');
-      console.log(`[auth/google/callback] user_id=${req.user.user_id} onboarding_complete=${row?.onboarding_complete}`);
-      if (!row?.onboarding_complete) {
-        // Before sending to onboarding, check if this is actually a returning user whose
-        // onboarding_complete flag was reset (e.g. by the DEFAULT 0 migration backfill or
-        // by a session mixup). Any user with existing posts is treated as complete.
+      const brandProfile = await db.prepare(
+        'SELECT id, onboarding_complete FROM profiles WHERE workspace_id = ? AND is_default = true'
+      ).get(req.user.tenant_id);
+      console.log(`[auth/google/callback] userId=${req.user.user_id} workspaceId=${req.user.tenant_id} onboarding_complete=${brandProfile?.onboarding_complete}`);
+      if (!brandProfile?.onboarding_complete) {
+        // Safety check: workspace has existing posts → user is returning, mark complete.
         const postCount = await db.prepare(
-          'SELECT COUNT(*) AS cnt FROM generated_posts WHERE user_id = ? AND tenant_id = ?'
-        ).get(req.user.user_id, 'default');
-        const profileCheck = await db.prepare(
-          'SELECT created_at FROM user_profiles WHERE user_id = ? AND tenant_id = ?'
-        ).get(req.user.user_id, 'default');
-        // Treat as returning user if they have any posts OR if profile was created before
-        // this deploy (i.e. an existing account that got backfilled to onboarding_complete=0)
-        const hasActivity = (postCount?.cnt > 0) || (profileCheck?.created_at && new Date(profileCheck.created_at) < new Date('2026-01-01'));
-        console.log(`[auth/google/callback] user_id=${req.user.user_id} post_count=${postCount?.cnt} has_activity=${hasActivity}`);
-        if (hasActivity) {
-          await db.prepare(
-            'UPDATE user_profiles SET onboarding_complete = 1 WHERE user_id = ? AND tenant_id = ?'
-          ).run(req.user.user_id, 'default');
+          'SELECT COUNT(*) AS cnt FROM generated_posts WHERE tenant_id = ?'
+        ).get(req.user.tenant_id);
+        if ((postCount?.cnt || 0) > 0 && brandProfile?.id) {
+          await db.prepare('UPDATE profiles SET onboarding_complete = true WHERE id = ?').run(brandProfile.id);
         } else {
           return res.redirect('/onboarding.html');
         }
@@ -305,6 +345,9 @@ app.get('/auth/google/callback',
     return res.redirect(proIntent ? '/billing.html?upgrade=1' : '/dashboard.html');
   }
 );
+
+// Email/password auth routes (signup, verify-email, login, forgot-password, reset-password)
+app.use('/auth', require('./routes/email-auth'));
 
 app.post('/auth/logout', (req, res) => {
   const finish = () => {
@@ -396,22 +439,34 @@ app.get('/healthz', async (req, res) => {
 // Routes (API before static so /api/* is never shadowed by public files)
 // ---------------------------------------------------------------------------
 
-app.use('/api/profile', require('./routes/profile'));
-app.use('/api/recipes', require('./routes/recipes'));
-app.use('/api/generate', require('./routes/generate'));
-app.use('/api/visuals', require('./routes/visuals'));
-app.use('/api/linkedin', require('./routes/linkedin'));
-app.use('/api/events', require('./routes/events'));
-app.use('/api/media', require('./routes/media'));
-app.use('/api/notifications', require('./routes/notifications'));
-app.use('/api/vault', require('./routes/vault'));
-app.use('/api/funnel', require('./routes/funnel'));
-app.use('/api/billing', require('./routes/billing'));
-app.use('/api/checklist', require('./routes/checklist'));
-app.use('/api/posts', require('./routes/performance'));
+const { requireFeature } = require('./middleware/requireFeature');
+
+// Vault write gate — POST/PUT/PATCH/DELETE require the 'vault' feature (Solo+)
+function requireVaultFeatureForWrites(req, res, next) {
+  if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) return next();
+  return requireFeature('vault')(req, res, next);
+}
+
+// Workspace-scoped routes — require authenticated session + valid workspace membership
+app.use('/api/profile',       requireWorkspaceMember, require('./routes/profile'));
+app.use('/api/recipes',       requireWorkspaceMember, require('./routes/recipes'));
+app.use('/api/generate',      requireWorkspaceMember, requireWorkspaceActive, require('./routes/generate'));
+app.use('/api/visuals',       requireWorkspaceMember, require('./routes/visuals'));
+app.use('/api/linkedin',      requireWorkspaceMember, requireWorkspaceActive, require('./routes/linkedin'));
+app.use('/api/events',        requireWorkspaceMember, require('./routes/events'));
+app.use('/api/media',         requireWorkspaceMember, require('./routes/media'));
+app.use('/api/notifications', requireWorkspaceMember, require('./routes/notifications'));
+app.use('/api/vault',         requireWorkspaceMember, requireWorkspaceActive, requireVaultFeatureForWrites, require('./routes/vault'));
+app.use('/api/funnel',        requireWorkspaceMember, require('./routes/funnel'));
+app.use('/api/checklist',     requireWorkspaceMember, require('./routes/checklist'));
+app.use('/api/posts',         requireWorkspaceMember, require('./routes/performance'));
+app.use('/api/workspaces',    require('./routes/workspaces'));
+app.use('/api/invites',       require('./routes/invites'));
+// User-scoped routes — require authenticated user, no workspace check
+app.use('/api/billing',  require('./routes/billing'));
 app.use('/api/feedback', require('./routes/feedback'));
-app.use('/api/support', require('./routes/support'));
-app.use('/api', require('./routes/stats'));
+app.use('/api/support',  require('./routes/support'));
+app.use('/api',          requireWorkspaceMember, require('./routes/stats'));
 
 // Unmatched /api/* — avoid falling through to static/HTML 404
 app.use('/api', (req, res) => {
@@ -431,6 +486,7 @@ app.get('/', (req, res) => {
 // Protect main app HTML (session + account UI)
 app.get([
   '/onboarding.html',
+  '/workspace-setup.html',
   '/dashboard.html',
   '/generate.html',
   '/drafts.html',
@@ -565,7 +621,7 @@ async function sendExpiringSoonEmails() {
     for (const row of rows) {
       const accessEnds = new Date(row.current_period_end).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
       const dedupKey = `expiring-soon:${row.current_period_end}`;
-      sendEmailToUser(row.user_id, 'default', 'expiring-soon', { access_ends: accessEnds, app_url: appUrl },
+      sendEmailToUser(row.user_id, 'expiring-soon', { access_ends: accessEnds, app_url: appUrl },
         { dedupKey, withinHours: 7 * 24 });
     }
   } catch (e) {
@@ -590,11 +646,16 @@ async function sendWeeklyDigestEmails() {
     const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
     // Users who have published at least 1 post ever (engaged users worth emailing).
     const users = await db.prepare(`
-      SELECT DISTINCT user_id, tenant_id FROM generated_posts WHERE status = 'published'
+      SELECT DISTINCT user_id FROM generated_posts WHERE status = 'published'
     `).all();
-    for (const { user_id, tenant_id } of users) {
+    for (const { user_id } of users) {
       const [genCount, pubCount] = await Promise.all([
-        db.prepare(`SELECT COUNT(*) AS n FROM generation_runs WHERE user_id = ? AND created_at > ?`).get(user_id, oneWeekAgo),
+        // Trap 15: count across all workspaces the user is a member of
+        db.prepare(`
+          SELECT COUNT(*) AS n FROM generation_runs gr
+          JOIN workspace_members wm ON wm.workspace_id = gr.tenant_id
+          WHERE wm.user_id = ? AND gr.created_at > ?
+        `).get(user_id, oneWeekAgo),
         db.prepare(`SELECT COUNT(*) AS n FROM generated_posts WHERE user_id = ? AND status = 'published' AND published_at > ?`).get(user_id, oneWeekAgo),
       ]);
       const [schedCountRow, nextSchedRow] = await Promise.all([
@@ -605,7 +666,7 @@ async function sendWeeklyDigestEmails() {
         ? `<p style="margin:0 0 20px;font-size:14px;color:#374151;">Your next post goes live on <strong>${new Date(nextSchedRow.scheduled_for).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</strong>.</p>`
         : '';
       const dedupKey = `weekly:${new Date().toISOString().slice(0, 10)}`;
-      sendEmailToUser(user_id, tenant_id, 'weekly-digest', {
+      sendEmailToUser(user_id, 'weekly-digest', {
         posts_generated: String(genCount?.n || 0),
         posts_published: String(pubCount?.n || 0),
         posts_scheduled: String(schedCountRow?.n || 0),
@@ -619,6 +680,88 @@ async function sendWeeklyDigestEmails() {
 }
 // Check once every 6 hours — the Sunday guard inside ensures it only sends on Sunday.
 setInterval(sendWeeklyDigestEmails, 6 * 60 * 60 * 1000);
+
+// ---------------------------------------------------------------------------
+// Billing: daily subscription re-sync for expired/stale subscriptions.
+// Re-fetches plan state from Paddle for subscriptions whose current_period_end
+// has passed but were not updated in the last 12 hours (missed renewal events).
+// Runs enforceWorkspaceLimitGrace after each sync so plan changes propagate.
+// ---------------------------------------------------------------------------
+async function syncExpiredSubscriptions() {
+  try {
+    const { forceSyncSubscriptionForUser } = require('./services/subscription');
+    const { enforceWorkspaceLimitGrace }   = require('./lib/workspaceUtils');
+
+    const stale = await db.prepare(`
+      SELECT user_id FROM user_subscriptions
+      WHERE status IN ('active', 'trialing', 'canceled')
+        AND current_period_end IS NOT NULL
+        AND current_period_end < now()
+        AND updated_at < now() - interval '12 hours'
+    `).all();
+
+    for (const row of stale) {
+      try {
+        const result = await forceSyncSubscriptionForUser(row.user_id);
+        if (result) {
+          const sub = await db.prepare(
+            'SELECT plan, extra_workspaces FROM user_subscriptions WHERE user_id = ?'
+          ).get(row.user_id);
+          await enforceWorkspaceLimitGrace(row.user_id, sub?.plan ?? 'free', sub?.extra_workspaces ?? 0);
+        }
+      } catch (err) {
+        console.error('[billing-sync-cron] failed for', row.user_id, err.message);
+      }
+    }
+  } catch (e) {
+    console.warn('[billing-sync-cron] failed (non-fatal):', e.message);
+  }
+}
+// Run 15 minutes after startup so Paddle SDK is warmed up, then daily.
+setTimeout(() => {
+  syncExpiredSubscriptions();
+  setInterval(syncExpiredSubscriptions, 24 * 60 * 60 * 1000);
+}, 15 * 60 * 1000);
+
+// ---------------------------------------------------------------------------
+// Email: trial expiry — warn trialing users 3 days before trial ends.
+// ---------------------------------------------------------------------------
+async function sendTrialExpiryEmails() {
+  try {
+    const users = await db.prepare(`
+      SELECT up.user_id, up.email, up.display_name, us.trial_ends_at
+      FROM user_subscriptions us
+      JOIN user_profiles up ON up.user_id = us.user_id
+      WHERE us.status = 'trialing'
+        AND us.trial_ends_at BETWEEN now() + INTERVAL '2 days' AND now() + INTERVAL '3 days'
+    `).all();
+    for (const u of users) {
+      const trialEndDate = new Date(u.trial_ends_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
+      sendEmailToUser(u.user_id, 'trial-expiry', {
+        display_name: u.display_name || 'there',
+        trial_end_date: trialEndDate,
+        days_left: '3',
+        upgrade_url: `${process.env.APP_URL || 'https://app.scouthook.com'}/billing.html`,
+      }, { dedupKey: `trial_expiry:${u.user_id}`, withinHours: 168 }).catch(() => {});
+    }
+  } catch (e) {
+    console.warn('[email-cron] trial-expiry check failed (non-fatal):', e.message);
+  }
+}
+// Runs daily — offset from other crons via immediate + interval pattern.
+setTimeout(() => {
+  sendTrialExpiryEmails();
+  setInterval(sendTrialExpiryEmails, 24 * 60 * 60 * 1000);
+}, 20 * 60 * 1000);
+
+// ---------------------------------------------------------------------------
+// Workspace purge — hard-delete workspaces whose 30-day grace period expired.
+// ---------------------------------------------------------------------------
+const { purgeExpiredWorkspaces } = require('./workers/workspacePurge');
+setTimeout(() => {
+  purgeExpiredWorkspaces();
+  setInterval(purgeExpiredWorkspaces, 24 * 60 * 60 * 1000);
+}, 25 * 60 * 1000);
 
 // ---------------------------------------------------------------------------
 // Scheduler (BullMQ worker — only starts if Redis is configured)

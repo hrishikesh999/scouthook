@@ -4,37 +4,68 @@ const crypto = require('crypto');
 const { db, getSettingSync } = require('../db');
 const { sendEmailToUser } = require('../emails');
 
-async function createReconnectNotification(userId, tenantId) {
+// ---------------------------------------------------------------------------
+// Reconnect notifications — sent to ALL workspace members
+// ---------------------------------------------------------------------------
+
+/**
+ * Create an in-app reconnect notification for a user in a workspace.
+ * Deduped: only one unread notification per user + workspace at a time.
+ * Also sends a reconnect email (deduplicated to once per 24 h).
+ *
+ * @param {string} userId
+ * @param {string} workspaceId
+ * @param {string|null} [connectionName]  Display name of the expired connection
+ */
+async function createReconnectNotification(userId, workspaceId, connectionName = null) {
   try {
-    // Only create one unread reconnect notification at a time.
     const existing = await db.prepare(`
       SELECT id FROM notifications
       WHERE user_id = ? AND tenant_id = ? AND type = 'reconnect_required' AND read_at IS NULL
       LIMIT 1
-    `).get(userId, tenantId);
+    `).get(userId, workspaceId);
     if (existing) return;
+
+    const body = connectionName
+      ? `The LinkedIn connection for "${connectionName}" has expired. Please reconnect to continue publishing.`
+      : 'Your LinkedIn connection has expired. Please reconnect to continue publishing.';
 
     await db.prepare(`
       INSERT INTO notifications (user_id, tenant_id, type, title, body, ref_type)
-      VALUES (?, ?, 'reconnect_required', 'LinkedIn reconnection needed',
-              'Your LinkedIn connection has expired. Please reconnect to continue publishing.',
-              'linkedin_token')
-    `).run(userId, tenantId);
+      VALUES (?, ?, 'reconnect_required', 'LinkedIn reconnection needed', ?, 'linkedin_connection')
+    `).run(userId, workspaceId, body);
 
-    // Email — deduplicated to once per 24h so repeated token checks don't spam.
     const appUrl = process.env.APP_URL || '';
-    sendEmailToUser(userId, tenantId, 'linkedin-reconnect', { app_url: appUrl },
-      { dedupKey: 'reconnect', withinHours: 24 });
+    sendEmailToUser(userId, 'linkedin-reconnect', { app_url: appUrl },
+      { dedupKey: `reconnect_${workspaceId}`, withinHours: 24 });
   } catch { /* non-fatal */ }
 }
 
-const ALGORITHM = 'aes-256-gcm';
-const IV_LENGTH = 12; // 96-bit IV — recommended for GCM
+/**
+ * Notify every member of a workspace that a LinkedIn connection needs reconnecting.
+ * Fire-and-forget.
+ *
+ * @param {string} workspaceId
+ * @param {string|null} [connectionName]
+ */
+async function notifyAllWorkspaceMembersReconnect(workspaceId, connectionName = null) {
+  try {
+    const members = await db.prepare(
+      'SELECT user_id FROM workspace_members WHERE workspace_id = ?'
+    ).all(workspaceId);
+    for (const m of members) {
+      await createReconnectNotification(m.user_id, workspaceId, connectionName);
+    }
+  } catch { /* non-fatal */ }
+}
 
 // ---------------------------------------------------------------------------
-// Encryption helpers — AES-256-GCM, key from platform_settings
+// AES-256-GCM encryption helpers
 // Storage format: iv_hex:authTag_hex:ciphertext_hex
 // ---------------------------------------------------------------------------
+
+const ALGORITHM = 'aes-256-gcm';
+const IV_LENGTH = 12; // 96-bit IV — recommended for GCM
 
 function getEncryptionKey() {
   const key = (process.env.TOKEN_ENCRYPTION_KEY || '').trim() || getSettingSync('token_encryption_key');
@@ -64,103 +95,65 @@ function decrypt(encryptedStr) {
 }
 
 // ---------------------------------------------------------------------------
-// Token storage
+// Token retrieval — reads from linkedin_connections
 // ---------------------------------------------------------------------------
 
 /**
- * Encrypt and upsert LinkedIn tokens into linkedin_tokens.
- * @param {string} userId
- * @param {string} tenantId
- * @param {{ access_token, refresh_token?, expires_in, linkedin_user_id, linkedin_name, linkedin_photo?, linkedin_headline? }} tokenData
- */
-async function storeTokens(userId, tenantId, tokenData) {
-  const {
-    access_token,
-    refresh_token,
-    expires_in,
-    linkedin_user_id,
-    linkedin_name,
-    linkedin_photo    = null,
-    linkedin_headline = null,
-  } = tokenData;
-
-  const accessTokenEnc  = encrypt(access_token);
-  const refreshTokenEnc = refresh_token ? encrypt(refresh_token) : null;
-  const expiresAt = new Date(Date.now() + (expires_in || 5184000) * 1000).toISOString(); // default 60 days
-
-  await db.prepare(`
-    INSERT INTO linkedin_tokens
-      (user_id, tenant_id, access_token_enc, refresh_token_enc, expires_at, linkedin_user_id, linkedin_name, linkedin_photo, linkedin_headline, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-    ON CONFLICT(user_id, tenant_id) DO UPDATE SET
-      access_token_enc  = excluded.access_token_enc,
-      refresh_token_enc = COALESCE(excluded.refresh_token_enc, linkedin_tokens.refresh_token_enc),
-      expires_at        = excluded.expires_at,
-      linkedin_user_id  = excluded.linkedin_user_id,
-      linkedin_name     = excluded.linkedin_name,
-      linkedin_photo    = COALESCE(excluded.linkedin_photo, linkedin_tokens.linkedin_photo),
-      linkedin_headline = COALESCE(excluded.linkedin_headline, linkedin_tokens.linkedin_headline),
-      updated_at        = CURRENT_TIMESTAMP
-  `).run(userId, tenantId, accessTokenEnc, refreshTokenEnc, expiresAt, linkedin_user_id, linkedin_name, linkedin_photo, linkedin_headline);
-}
-
-// ---------------------------------------------------------------------------
-// Token retrieval
-// ---------------------------------------------------------------------------
-
-/**
- * Return a valid plaintext access token, refreshing automatically if within 24h of expiry.
- * @param {string} userId
- * @param {string} tenantId
+ * Return a valid plaintext access token for a workspace, refreshing automatically
+ * if within 24 h of expiry.
+ *
+ * Resolves in order: workspaceId → default personal connection's token.
+ * Notifies ALL workspace members if reconnection is needed.
+ *
+ * @param {string} workspaceId
  * @returns {Promise<string>} plaintext access token
  */
-async function getValidAccessToken(userId, tenantId) {
-  const row = await db.prepare(
-    'SELECT * FROM linkedin_tokens WHERE user_id = ? AND tenant_id = ?'
-  ).get(userId, tenantId);
+async function getValidAccessToken(workspaceId) {
+  const row = await db.prepare(`
+    SELECT * FROM linkedin_connections
+    WHERE workspace_id = ? AND account_type = 'personal' AND is_default = true
+  `).get(workspaceId);
 
   if (!row) throw new Error('not_connected');
 
   const expiresAt = new Date(row.expires_at);
   const hoursUntilExpiry = (expiresAt - Date.now()) / 3_600_000;
 
-  if (hoursUntilExpiry < 24) {
-    if (!row.refresh_token_enc) {
-      await createReconnectNotification(userId, tenantId);
-      throw new Error('reconnect_required');
-    }
-    try {
-      await refreshLinkedInToken(userId, tenantId, row.refresh_token_enc);
-      // Re-fetch the updated row
-      const updated = await db.prepare(
-        'SELECT access_token_enc FROM linkedin_tokens WHERE user_id = ? AND tenant_id = ?'
-      ).get(userId, tenantId);
-      return decrypt(updated.access_token_enc);
-    } catch {
-      await createReconnectNotification(userId, tenantId);
-      throw new Error('reconnect_required');
-    }
+  if (hoursUntilExpiry >= 24) {
+    return decrypt(row.access_token_enc);
   }
 
-  return decrypt(row.access_token_enc);
+  if (!row.refresh_token_enc) {
+    await notifyAllWorkspaceMembersReconnect(workspaceId, row.display_name);
+    throw new Error('reconnect_required');
+  }
+
+  try {
+    const newToken = await refreshConnectionToken(row);
+    return newToken;
+  } catch {
+    await notifyAllWorkspaceMembersReconnect(workspaceId, row.display_name);
+    throw new Error('reconnect_required');
+  }
 }
 
 // ---------------------------------------------------------------------------
-// Token refresh
+// Token refresh — writes back to linkedin_connections
 // ---------------------------------------------------------------------------
 
 /**
- * Exchange a refresh token for new tokens and update the DB row.
- * @param {string} userId
- * @param {string} tenantId
- * @param {string} encryptedRefreshToken
+ * Exchange a refresh token for new tokens and update ALL connections sharing
+ * the same linkedin_member_id in the workspace.
+ *
+ * @param {object} connection  Row from linkedin_connections
+ * @returns {Promise<string>}  New plaintext access token
  */
-async function refreshLinkedInToken(userId, tenantId, encryptedRefreshToken) {
+async function refreshConnectionToken(connection) {
   const clientId     = (process.env.LINKEDIN_CLIENT_ID || '').trim();
   const clientSecret = (process.env.LINKEDIN_CLIENT_SECRET || '').trim();
   if (!clientId || !clientSecret) throw new Error('linkedin_credentials_not_configured');
 
-  const refreshToken = decrypt(encryptedRefreshToken);
+  const refreshToken = decrypt(connection.refresh_token_enc);
 
   const params = new URLSearchParams({
     grant_type:    'refresh_token',
@@ -181,20 +174,33 @@ async function refreshLinkedInToken(userId, tenantId, encryptedRefreshToken) {
   }
 
   const tokens = await res.json();
+  const newAccessTokenEnc  = encrypt(tokens.access_token);
+  const newRefreshTokenEnc = tokens.refresh_token ? encrypt(tokens.refresh_token) : null;
+  const newExpiresAt = new Date(Date.now() + (tokens.expires_in || 5184000) * 1000).toISOString();
 
-  // Keep existing linkedin_user_id / linkedin_name — only tokens change on refresh
-  const existing = await db.prepare(
-    'SELECT linkedin_user_id, linkedin_name, linkedin_photo FROM linkedin_tokens WHERE user_id = ? AND tenant_id = ?'
-  ).get(userId, tenantId);
+  if (connection.linkedin_member_id) {
+    // Update all connections in this workspace sharing the same member_id
+    await db.prepare(`
+      UPDATE linkedin_connections
+      SET access_token_enc  = ?,
+          refresh_token_enc = COALESCE(?, refresh_token_enc),
+          expires_at        = ?,
+          updated_at        = now()
+      WHERE workspace_id = ? AND linkedin_member_id = ?
+    `).run(newAccessTokenEnc, newRefreshTokenEnc, newExpiresAt,
+           connection.workspace_id, connection.linkedin_member_id);
+  } else {
+    await db.prepare(`
+      UPDATE linkedin_connections
+      SET access_token_enc  = ?,
+          refresh_token_enc = COALESCE(?, refresh_token_enc),
+          expires_at        = ?,
+          updated_at        = now()
+      WHERE id = ?
+    `).run(newAccessTokenEnc, newRefreshTokenEnc, newExpiresAt, connection.id);
+  }
 
-  await storeTokens(userId, tenantId, {
-    access_token:    tokens.access_token,
-    refresh_token:   tokens.refresh_token || null,
-    expires_in:      tokens.expires_in,
-    linkedin_user_id: existing?.linkedin_user_id,
-    linkedin_name:    existing?.linkedin_name,
-    linkedin_photo:   existing?.linkedin_photo,
-  });
+  return decrypt(newAccessTokenEnc);
 }
 
 // ---------------------------------------------------------------------------
@@ -202,15 +208,19 @@ async function refreshLinkedInToken(userId, tenantId, encryptedRefreshToken) {
 // ---------------------------------------------------------------------------
 
 /**
- * Revoke the stored LinkedIn access token on LinkedIn's auth server.
- * Best-effort — logs a warning on failure but never throws.
- * Must be called before deleting the token row from the DB.
+ * Revoke all personal LinkedIn access tokens for a workspace.
+ * Best-effort — logs warnings on failure but never throws.
+ * Must be called before deleting connection rows from the DB.
+ *
+ * @param {string} workspaceId
  */
-async function revokeLinkedInToken(userId, tenantId) {
-  const row = await db.prepare(
-    'SELECT access_token_enc FROM linkedin_tokens WHERE user_id = ? AND tenant_id = ?'
-  ).get(userId, tenantId);
-  if (!row) return; // already gone
+async function revokeLinkedInToken(workspaceId) {
+  const rows = await db.prepare(`
+    SELECT id, access_token_enc, linkedin_member_id
+    FROM   linkedin_connections
+    WHERE  workspace_id = ? AND account_type = 'personal'
+  `).all(workspaceId);
+  if (!rows.length) return;
 
   const clientId     = (process.env.LINKEDIN_CLIENT_ID || '').trim();
   const clientSecret = (process.env.LINKEDIN_CLIENT_SECRET || '').trim();
@@ -219,27 +229,39 @@ async function revokeLinkedInToken(userId, tenantId) {
     return;
   }
 
-  try {
-    const accessToken = decrypt(row.access_token_enc);
-    const params = new URLSearchParams({
-      client_id:     clientId,
-      client_secret: clientSecret,
-      token:         accessToken,
-    });
-    const res = await fetch('https://www.linkedin.com/oauth/v2/revoke', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body:    params.toString(),
-    });
-    if (!res.ok) {
-      const text = await res.text();
-      console.warn(`[linkedinOAuth] Token revocation returned ${res.status}: ${text}`);
-    } else {
-      console.log(`[linkedinOAuth] Token revoked for user=${userId}`);
+  const revokedMemberIds = new Set();
+  for (const row of rows) {
+    if (row.linkedin_member_id && revokedMemberIds.has(row.linkedin_member_id)) continue;
+    try {
+      const accessToken = decrypt(row.access_token_enc);
+      const params = new URLSearchParams({
+        client_id:     clientId,
+        client_secret: clientSecret,
+        token:         accessToken,
+      });
+      const res = await fetch('https://www.linkedin.com/oauth/v2/revoke', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body:    params.toString(),
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        console.warn(`[linkedinOAuth] Token revocation returned ${res.status}: ${text}`);
+      } else {
+        console.log(`[linkedinOAuth] Token revoked for workspace=${workspaceId}, member=${row.linkedin_member_id}`);
+      }
+      if (row.linkedin_member_id) revokedMemberIds.add(row.linkedin_member_id);
+    } catch (err) {
+      console.warn('[linkedinOAuth] Token revocation failed (non-fatal):', err.message);
     }
-  } catch (err) {
-    console.warn('[linkedinOAuth] Token revocation failed (non-fatal):', err.message);
   }
 }
 
-module.exports = { encrypt, decrypt, storeTokens, getValidAccessToken, refreshLinkedInToken, revokeLinkedInToken };
+module.exports = {
+  encrypt,
+  decrypt,
+  getValidAccessToken,
+  revokeLinkedInToken,
+  createReconnectNotification,
+  notifyAllWorkspaceMembersReconnect,
+};

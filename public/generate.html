@@ -617,6 +617,72 @@
       line-height: 1.35;
     }
 
+    /* ── "Creating for" profile selector ───────────────────── */
+    #profile-selector {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding-bottom: 4px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 4px;
+    }
+    .profile-sel-label {
+      font-size: 0.6875rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .profile-sel-btns {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .profile-sel-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 12px;
+      border: 1.5px solid var(--border);
+      border-radius: 999px;
+      background: var(--bg-surface);
+      font-family: var(--font-sans);
+      font-size: 0.8125rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: border-color 0.14s, color 0.14s, background 0.14s;
+    }
+    .profile-sel-btn:hover {
+      border-color: var(--brand);
+      color: var(--brand);
+    }
+    .profile-sel-btn.active {
+      border-color: var(--brand);
+      color: var(--brand);
+      background: color-mix(in srgb, var(--brand) 6%, var(--bg-surface));
+    }
+    .profile-sel-avatar {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      object-fit: cover;
+      flex-shrink: 0;
+    }
+    .profile-sel-initial {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: var(--brand);
+      color: #fff;
+      font-size: 0.5625rem;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
     /* ── Profile gate nudge ─────────────────────────────────── */
     .profile-gate-nudge {
       background: color-mix(in srgb, var(--brand) 8%, var(--bg-surface));
@@ -811,6 +877,12 @@
 
         <!-- ── Main input card ──────────────────────────────────── -->
         <div id="guided-chat">
+
+          <!-- Profile selector — hidden when workspace has only one profile -->
+          <div id="profile-selector" style="display:none">
+            <span class="profile-sel-label">Creating for</span>
+            <div id="profile-sel-btns" class="profile-sel-btns"></div>
+          </div>
 
           <!-- Vault quality banner (if no docs) -->
           <div id="vault-quality-banner" style="display:none"></div>

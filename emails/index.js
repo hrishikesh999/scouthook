@@ -72,11 +72,11 @@ async function sendEmail(templateName, to, vars = {}) {
  * Look up a user's email and first name from user_profiles.
  * Returns { email, name } or null if not found / no email stored.
  */
-async function getUserEmailInfo(userId, tenantId = 'default') {
+async function getUserEmailInfo(userId) {
   try {
     const row = await db.prepare(
-      'SELECT email, display_name FROM user_profiles WHERE user_id = ? AND tenant_id = ?'
-    ).get(userId, tenantId);
+      'SELECT email, display_name FROM user_profiles WHERE user_id = ?'
+    ).get(userId);
     if (!row?.email) return null;
     const name = (row.display_name || '').split(' ')[0] || row.display_name || 'there';
     return { email: row.email, name };
@@ -131,14 +131,14 @@ async function logEmailSent(userId, template, dedupKey = null) {
 }
 
 /**
- * Send a templated email to a user identified by userId/tenantId.
+ * Send a templated email to a user identified by userId.
  * Looks up their email from user_profiles automatically.
  * Optionally deduplicates using dedupKey + withinHours.
  *
  * Pass dedupKey: false to skip deduplication entirely (e.g. post-published).
  */
-async function sendEmailToUser(userId, tenantId = 'default', templateName, vars = {}, { dedupKey = null, withinHours = 24 } = {}) {
-  const user = await getUserEmailInfo(userId, tenantId);
+async function sendEmailToUser(userId, templateName, vars = {}, { dedupKey = null, withinHours = 24 } = {}) {
+  const user = await getUserEmailInfo(userId);
   if (!user) return;
 
   if (dedupKey !== false && await alreadySent(userId, templateName, dedupKey, withinHours)) {

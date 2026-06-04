@@ -88,22 +88,22 @@ router.get('/stats', async (req, res) => {
     const postsThisMonth = await db.prepare(`
       SELECT COUNT(*) AS cnt
       FROM generated_posts
-      WHERE user_id = ? AND tenant_id = ? AND created_at >= ?
-    `).get(req.userId, req.tenantId, monthStartIso);
+      WHERE tenant_id = ? AND created_at >= ?
+    `).get(req.tenantId, monthStartIso);
 
     // Average quality score across all posts
     const avgScore = await db.prepare(`
       SELECT AVG(quality_score) AS avg
       FROM generated_posts
-      WHERE user_id = ? AND tenant_id = ?
-    `).get(req.userId, req.tenantId);
+      WHERE tenant_id = ?
+    `).get(req.tenantId);
 
     // Count of pending scheduled posts
     const scheduledCount = await db.prepare(`
       SELECT COUNT(*) AS cnt
       FROM scheduled_posts
-      WHERE user_id = ? AND tenant_id = ? AND status = 'pending'
-    `).get(req.userId, req.tenantId);
+      WHERE tenant_id = ? AND status = 'pending'
+    `).get(req.tenantId);
 
     return res.json({
       ok: true,
@@ -131,10 +131,10 @@ router.get('/posts/recent', async (req, res) => {
       SELECT id, content, quality_score, passed_gate, created_at, status,
              archetype_used, published_at, performance_tag
       FROM generated_posts
-      WHERE user_id = ? AND tenant_id = ? AND status != 'scheduled'
+      WHERE tenant_id = ? AND status != 'scheduled'
       ORDER BY created_at DESC
       LIMIT 5
-    `).all(req.userId, req.tenantId);
+    `).all(req.tenantId);
 
     const mapped = posts.map(p => ({
       id:              p.id,
@@ -170,10 +170,10 @@ router.get('/posts/scheduled', async (req, res) => {
     const posts = await db.prepare(`
       SELECT id, content, scheduled_for, created_at
       FROM scheduled_posts
-      WHERE user_id = ? AND tenant_id = ? AND status = 'pending' AND scheduled_for > ?
+      WHERE tenant_id = ? AND status = 'pending' AND scheduled_for > ?
       ORDER BY scheduled_for ASC
       LIMIT 5
-    `).all(req.userId, req.tenantId, nowIso);
+    `).all(req.tenantId, nowIso);
 
     const mapped = posts.map(p => ({
       id:            p.id,
@@ -196,7 +196,7 @@ router.get('/posts/scheduled', async (req, res) => {
 // ---------------------------------------------------------------------------
 router.get('/posts/:id', async (req, res) => {
   const userId   = req.userId;
-  const tenantId = req.tenantId || 'default';
+  const tenantId = req.tenantId;
   const postId   = req.params.id;
 
   if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
@@ -211,15 +211,15 @@ router.get('/posts/:id', async (req, res) => {
                idea_input, funnel_type, asset_url, asset_preview_url, asset_type, asset_slide_count,
                published_at, linkedin_post_id, performance_tag, performance_note, archetype_used
         FROM   generated_posts
-        WHERE  id = ? AND user_id = ? AND tenant_id = ?
-      `).get(postId, userId, tenantId);
+        WHERE  id = ? AND tenant_id = ?
+      `).get(postId, tenantId);
     } catch {
       post = await db.prepare(`
         SELECT id, content, format_slug, quality_score, quality_flags, passed_gate, status, created_at,
                idea_input, funnel_type
         FROM   generated_posts
-        WHERE  id = ? AND user_id = ? AND tenant_id = ?
-      `).get(postId, userId, tenantId);
+        WHERE  id = ? AND tenant_id = ?
+      `).get(postId, tenantId);
     }
 
     if (!post) return res.status(404).json({ ok: false, error: 'post_not_found' });
@@ -227,8 +227,8 @@ router.get('/posts/:id', async (req, res) => {
     const sched = await db.prepare(`
       SELECT id AS scheduled_post_id, scheduled_for, status AS scheduled_status, first_comment
       FROM   scheduled_posts
-      WHERE  post_id = ? AND user_id = ? AND tenant_id = ? AND status IN ('pending', 'processing')
-    `).get(postId, userId, tenantId);
+      WHERE  post_id = ? AND tenant_id = ? AND status IN ('pending', 'processing')
+    `).get(postId, tenantId);
 
     const payload = {
       ...post,
@@ -251,7 +251,7 @@ router.get('/posts/:id', async (req, res) => {
 // ---------------------------------------------------------------------------
 router.patch('/posts/:id', async (req, res) => {
   const userId   = req.userId;
-  const tenantId = req.tenantId || 'default';
+  const tenantId = req.tenantId;
   const postId   = req.params.id;
   const { content, idea_input, first_comment,
           asset_url, asset_preview_url, asset_type, asset_slide_count } = req.body;
@@ -261,11 +261,11 @@ router.patch('/posts/:id', async (req, res) => {
 
   try {
     const existing = await db.prepare(`
-      SELECT status, content AS old_content,
+      SELECT status, content AS old_content, profile_id,
              format_slug, funnel_type, archetype_used, post_type, lead_magnet_inputs
       FROM generated_posts
-      WHERE id = ? AND user_id = ? AND tenant_id = ?
-    `).get(postId, userId, tenantId);
+      WHERE id = ? AND tenant_id = ?
+    `).get(postId, tenantId);
 
     if (!existing) return res.status(404).json({ ok: false, error: 'post_not_found' });
     if (existing.status !== 'draft') {
@@ -288,18 +288,18 @@ router.patch('/posts/:id', async (req, res) => {
               asset_preview_url = ?,
               asset_type        = ?,
               asset_slide_count = ?
-          WHERE id = ? AND user_id = ? AND tenant_id = ? AND status = 'draft'
+          WHERE id = ? AND tenant_id = ? AND status = 'draft'
         `).run(content, idea_input ?? null, firstCommentVal ?? null,
                asset_url ?? null, asset_preview_url ?? null,
                asset_type ?? null, asset_slide_count ?? null,
-               postId, userId, tenantId)
+               postId, tenantId)
       : await db.prepare(`
           UPDATE generated_posts
           SET content       = ?,
               idea_input    = COALESCE(?, idea_input),
               first_comment = COALESCE(?, first_comment)
-          WHERE id = ? AND user_id = ? AND tenant_id = ? AND status = 'draft'
-        `).run(content, idea_input ?? null, firstCommentVal ?? null, postId, userId, tenantId);
+          WHERE id = ? AND tenant_id = ? AND status = 'draft'
+        `).run(content, idea_input ?? null, firstCommentVal ?? null, postId, tenantId);
 
     if (result.changes === 0) {
       return res.status(409).json({ ok: false, error: 'post_not_editable' });
@@ -311,7 +311,9 @@ router.patch('/posts/:id', async (req, res) => {
     if (oldContent && content) {
       const changeTypes = detectChangeTypes(oldContent, content);
       if (changeTypes.length > 0) {
-        captureVoiceRefinement(userId, tenantId, oldContent, content, changeTypes).catch(() => {});
+        if (existing.profile_id) {
+          captureVoiceRefinement(existing.profile_id, oldContent, content, changeTypes).catch(() => {});
+        }
         voiceRefined = true;
       }
     }
@@ -320,8 +322,8 @@ router.patch('/posts/:id', async (req, res) => {
     let qualityPayload = null;
     try {
       const profileRow  = await db.prepare(
-        `SELECT voice_fingerprint, content_niche FROM user_profiles WHERE user_id = ? AND tenant_id = ?`
-      ).get(userId, tenantId);
+        `SELECT voice_fingerprint, content_niche FROM profiles WHERE workspace_id = ? AND is_default = true`
+      ).get(tenantId);
       const voiceProfile = profileRow || {};
       let lmKeyword = null;
       try { lmKeyword = JSON.parse(existing.lead_magnet_inputs || 'null')?.keyword || null; } catch {}
@@ -335,8 +337,8 @@ router.patch('/posts/:id', async (req, res) => {
       await db.prepare(`
         UPDATE generated_posts
         SET quality_score = ?, quality_flags = ?, passed_gate = ?
-        WHERE id = ? AND user_id = ? AND tenant_id = ?
-      `).run(gate.score, JSON.stringify(gate.flags), gate.passed ? 1 : 0, postId, userId, tenantId);
+        WHERE id = ? AND tenant_id = ?
+      `).run(gate.score, JSON.stringify(gate.flags), gate.passed ? 1 : 0, postId, tenantId);
       qualityPayload = {
         score:      gate.score,
         passed:     gate.passed,
@@ -362,7 +364,7 @@ router.patch('/posts/:id', async (req, res) => {
 // ---------------------------------------------------------------------------
 async function handleDeleteDraft(req, res) {
   const userId   = req.userId;
-  const tenantId = req.tenantId || 'default';
+  const tenantId = req.tenantId;
   const postId   = Number(req.params.id);
 
   if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
@@ -371,8 +373,8 @@ async function handleDeleteDraft(req, res) {
   try {
     const existing = await db.prepare(`
       SELECT id, status FROM generated_posts
-      WHERE id = ? AND user_id = ? AND tenant_id = ?
-    `).get(postId, userId, tenantId);
+      WHERE id = ? AND tenant_id = ?
+    `).get(postId, tenantId);
 
     if (!existing) return res.status(404).json({ ok: false, error: 'post_not_found' });
 
@@ -382,8 +384,8 @@ async function handleDeleteDraft(req, res) {
 
     const activeSchedule = await db.prepare(`
       SELECT id FROM scheduled_posts
-      WHERE post_id = ? AND user_id = ? AND tenant_id = ? AND status IN ('pending', 'processing')
-    `).get(postId, userId, tenantId);
+      WHERE post_id = ? AND tenant_id = ? AND status IN ('pending', 'processing')
+    `).get(postId, tenantId);
 
     if (activeSchedule) {
       return res.status(409).json({ ok: false, error: 'cannot_delete_scheduled_post' });
@@ -395,8 +397,8 @@ async function handleDeleteDraft(req, res) {
 
     const schedRows = await db.prepare(`
       SELECT id FROM scheduled_posts
-      WHERE post_id = ? AND user_id = ? AND tenant_id = ?
-    `).all(postId, userId, tenantId);
+      WHERE post_id = ? AND tenant_id = ?
+    `).all(postId, tenantId);
 
     for (const row of schedRows) {
       try {
@@ -411,18 +413,18 @@ async function handleDeleteDraft(req, res) {
         DELETE FROM scheduled_post_events
         WHERE scheduled_post_id IN (
           SELECT id FROM scheduled_posts
-          WHERE post_id = ? AND user_id = ? AND tenant_id = ?
+          WHERE post_id = ? AND tenant_id = ?
         )
-      `).run(postId, userId, tenantId);
-      await tx.prepare('DELETE FROM copy_events WHERE post_id = ? AND user_id = ?').run(postId, userId);
+      `).run(postId, tenantId);
+      await tx.prepare('DELETE FROM copy_events WHERE post_id = ? AND tenant_id = ?').run(postId, tenantId);
       await tx.prepare(`
         DELETE FROM scheduled_posts
-        WHERE post_id = ? AND user_id = ? AND tenant_id = ?
-      `).run(postId, userId, tenantId);
+        WHERE post_id = ? AND tenant_id = ?
+      `).run(postId, tenantId);
       const r = await tx.prepare(`
         DELETE FROM generated_posts
-        WHERE id = ? AND user_id = ? AND tenant_id = ? AND status = ?
-      `).run(postId, userId, tenantId, 'draft');
+        WHERE id = ? AND tenant_id = ? AND status = ?
+      `).run(postId, tenantId, 'draft');
       if (r.changes === 0) throw new Error('delete_failed');
     });
 
@@ -442,7 +444,7 @@ router.post('/posts/:id/delete', handleDeleteDraft);
 // ---------------------------------------------------------------------------
 router.patch('/posts/:id/type', async (req, res) => {
   const userId   = req.userId;
-  const tenantId = req.tenantId || 'default';
+  const tenantId = req.tenantId;
   const postId   = req.params.id;
   const { post_type } = req.body;
 
@@ -454,8 +456,8 @@ router.patch('/posts/:id/type', async (req, res) => {
   try {
     const result = await db.prepare(`
       UPDATE generated_posts SET post_type = ?
-      WHERE id = ? AND user_id = ? AND tenant_id = ?
-    `).run(post_type, postId, userId, tenantId);
+      WHERE id = ? AND tenant_id = ?
+    `).run(post_type, postId, tenantId);
 
     if (result.changes === 0) {
       return res.status(404).json({ ok: false, error: 'post_not_found' });
@@ -474,7 +476,7 @@ router.patch('/posts/:id/type', async (req, res) => {
 // ---------------------------------------------------------------------------
 router.get('/posts/mix-recommendation', async (req, res) => {
   const userId   = req.userId;
-  const tenantId = req.tenantId || 'default';
+  const tenantId = req.tenantId;
 
   if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
 
@@ -482,12 +484,12 @@ router.get('/posts/mix-recommendation', async (req, res) => {
     const rows = await db.prepare(`
       SELECT post_type, COUNT(*) AS n
       FROM   generated_posts
-      WHERE  user_id = ? AND tenant_id = ?
+      WHERE  tenant_id = ?
         AND  status = 'published'
         AND  post_type IN ('reach', 'trust', 'convert')
         AND  published_at > NOW() - INTERVAL '30 days'
       GROUP  BY post_type
-    `).all(userId, tenantId);
+    `).all(tenantId);
 
     const total = rows.reduce((s, r) => s + Number(r.n), 0);
 
@@ -536,7 +538,7 @@ router.get('/posts/mix-recommendation', async (req, res) => {
 // ---------------------------------------------------------------------------
 router.get('/posts', async (req, res) => {
   const userId   = req.userId;
-  const tenantId = req.tenantId || 'default';
+  const tenantId = req.tenantId;
   const status   = req.query.status === 'published' ? 'published' : 'draft';
   if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
 
@@ -547,16 +549,16 @@ router.get('/posts', async (req, res) => {
         SELECT id, content, format_slug, published_at, linkedin_post_id,
                asset_type, funnel_type, performance_tag, archetype_used
         FROM   generated_posts
-        WHERE  user_id = ? AND tenant_id = ? AND status = 'published'
+        WHERE  tenant_id = ? AND status = 'published'
         ORDER  BY published_at DESC
-      `).all(userId, tenantId);
+      `).all(tenantId);
     } else {
       posts = await db.prepare(`
         SELECT id, content, quality_score, passed_gate, format_slug, status, created_at, funnel_type, first_comment
         FROM   generated_posts
-        WHERE  user_id = ? AND tenant_id = ? AND status = 'draft'
+        WHERE  tenant_id = ? AND status = 'draft'
         ORDER  BY created_at DESC
-      `).all(userId, tenantId);
+      `).all(tenantId);
     }
 
     return res.json({ ok: true, posts });

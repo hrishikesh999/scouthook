@@ -11,7 +11,7 @@ const VALID_TAGS = new Set(['strong', 'decent', 'weak']);
 // Body: { tag: 'strong'|'decent'|'weak', note?: string }
 router.post('/:postId/performance', async (req, res) => {
   const userId   = req.userId;
-  const tenantId = req.tenantId || 'default';
+  const tenantId = req.tenantId;
   if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
 
   const postId = parseInt(req.params.postId, 10);
@@ -44,7 +44,7 @@ router.post('/:postId/performance', async (req, res) => {
 // Returns aggregated performance data for the Content Intelligence dashboard card.
 router.get('/performance-summary', async (req, res) => {
   const userId   = req.userId;
-  const tenantId = req.tenantId || 'default';
+  const tenantId = req.tenantId;
   if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
 
   try {
@@ -114,7 +114,7 @@ router.get('/performance-summary', async (req, res) => {
 // Returns published posts without a performance tag (for rating nudge). Available on all plans.
 router.get('/untagged-published', async (req, res) => {
   const userId   = req.userId;
-  const tenantId = req.tenantId || 'default';
+  const tenantId = req.tenantId;
   if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
 
   try {

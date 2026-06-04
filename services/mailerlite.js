@@ -50,7 +50,9 @@ async function addFreeSubscriber(email, name) {
   }
 }
 
-async function upgradeSubscriberToPro(email, name) {
+// Both solo and pro go to the same MailerLite group (MAILERLITE_GROUP_PRO).
+// No separate Solo group — keeping one "paid" group simplifies email sequences.
+async function upgradeSubscriberToPaid(email, name) {
   const { apiKey, groupFree, groupPro } = getConfig();
   if (!apiKey) return;
   try {
@@ -59,9 +61,12 @@ async function upgradeSubscriberToPro(email, name) {
       await removeFromGroup(subscriberId, groupFree).catch(() => {});
     }
   } catch (err) {
-    console.error('[mailerlite] upgradeSubscriberToPro failed:', err.message);
+    console.error('[mailerlite] upgradeSubscriberToPaid failed:', err.message);
   }
 }
+
+// Backward-compat alias — call sites that used upgradeSubscriberToPro still work.
+const upgradeSubscriberToPro = upgradeSubscriberToPaid;
 
 async function downgradeSubscriberToFree(email, name) {
   const { apiKey, groupFree, groupPro } = getConfig();
@@ -76,4 +81,4 @@ async function downgradeSubscriberToFree(email, name) {
   }
 }
 
-module.exports = { addFreeSubscriber, upgradeSubscriberToPro, downgradeSubscriberToFree };
+module.exports = { addFreeSubscriber, upgradeSubscriberToPro, upgradeSubscriberToPaid, downgradeSubscriberToFree };

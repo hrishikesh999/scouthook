@@ -36,23 +36,6 @@ async function getAllSettings() {
   return backend.prepare('SELECT key, value FROM platform_settings ORDER BY key').all();
 }
 
-async function getTenantSetting(tenantId, key) {
-  try {
-    const row = await backend.prepare(
-      'SELECT value FROM tenant_settings WHERE tenant_id = ? AND key = ?'
-    ).get(tenantId, key);
-    return row ? row.value : null;
-  } catch {
-    return null;
-  }
-}
-
-async function setTenantSetting(tenantId, key, value) {
-  return backend.prepare(
-    'INSERT INTO tenant_settings (tenant_id, key, value, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP) ON CONFLICT(tenant_id, key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP'
-  ).run(tenantId, key, value);
-}
-
 module.exports = {
   db,
   backendKind: backend.kind,
@@ -60,6 +43,4 @@ module.exports = {
   getSettingSync,
   setSetting,
   getAllSettings,
-  getTenantSetting,
-  setTenantSetting,
 };

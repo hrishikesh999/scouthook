@@ -109,11 +109,11 @@ router.post('/:postId', async (req, res) => {
     // ── RENDER MODE — generate image from provided (or auto-extracted) content ──
     if (visual_type === 'branded_quote') {
       const li = await db.prepare(
-        'SELECT linkedin_name, linkedin_photo FROM linkedin_tokens WHERE user_id = ? AND tenant_id = ?'
-      ).get(post.user_id, tenantId);
+        'SELECT display_name, avatar_url FROM linkedin_connections WHERE workspace_id = ? AND is_default = true'
+      ).get(tenantId);
 
-      const photoUrl = li?.linkedin_photo?.trim();
-      const displayName = li?.linkedin_name?.trim();
+      const photoUrl = li?.avatar_url?.trim();
+      const displayName = li?.display_name?.trim();
       if (!photoUrl || !displayName) {
         return res.status(400).json({ ok: false, error: 'branded_quote_requires_linkedin' });
       }

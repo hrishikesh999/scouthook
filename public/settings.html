@@ -17,11 +17,16 @@
   <div class="profile-page">
 
     <nav class="account-tabs" aria-label="Account settings">
-      <a href="/settings.html" class="account-tab active" aria-current="page">Voice profile</a>
+      <a href="/settings.html" class="account-tab" id="tab-nav-voice" data-panel="voice">Voice profile</a>
       <a href="/account.html" class="account-tab">My account</a>
       <a href="/brand.html" class="account-tab">Brand settings</a>
       <a href="/billing.html" class="account-tab">Subscription</a>
+      <a href="#members" class="account-tab" id="tab-nav-members" data-panel="members">Members</a>
+      <a href="#linkedin" class="account-tab" id="tab-nav-linkedin" data-panel="linkedin">LinkedIn</a>
+      <a href="#billing" class="account-tab" id="tab-nav-billing" data-panel="billing">Billing</a>
     </nav>
+
+    <div id="panel-voice">
 
     <div class="page-header">
       <div>
@@ -410,11 +415,518 @@
       </div><!-- /.vw-content -->
     </div><!-- /.vw-body -->
 
-  </div><!-- /.profile-page -->
+    </div><!-- /#panel-voice -->
+
+  <!-- ── Members panel ──────────────────────────────────────────── -->
+  <div id="panel-members" hidden>
+
+    <div class="page-header">
+      <div>
+        <h1 class="profile-heading">Team members</h1>
+        <p class="profile-subheading">Invite teammates to collaborate on this workspace.</p>
+      </div>
+    </div>
+
+    <!-- Invite form -->
+    <div class="vw-stage-panel" style="max-width:640px;margin-bottom:32px">
+      <div class="vw-stage-header">
+        <h2 class="vw-stage-title">Invite someone</h2>
+      </div>
+      <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
+        <div style="flex:1;min-width:200px">
+          <label class="field-label" for="invite-email">Email address</label>
+          <input type="email" id="invite-email" class="field-input" placeholder="colleague@example.com" style="width:100%" />
+        </div>
+        <button id="invite-btn" class="vw-save-btn" type="button" style="margin-bottom:0;height:40px">Send invite</button>
+      </div>
+      <p class="field-helper" id="invite-status" hidden></p>
+    </div>
+
+    <!-- Current members -->
+    <div class="vw-stage-panel" style="max-width:640px;margin-bottom:32px">
+      <div class="vw-stage-header">
+        <h2 class="vw-stage-title">Members</h2>
+      </div>
+      <div id="members-list">
+        <p class="vw-chips-empty">Loading…</p>
+      </div>
+    </div>
+
+    <!-- Pending invites (shown only when there are pending invites) -->
+    <div class="vw-stage-panel" id="pending-invites-section" style="max-width:640px;margin-bottom:32px" hidden>
+      <div class="vw-stage-header">
+        <h2 class="vw-stage-title">Pending invitations</h2>
+      </div>
+      <div id="pending-invites-list"></div>
+    </div>
+
+  </div><!-- /#panel-members -->
+
+  <!-- ── LinkedIn panel ─────────────────────────────────────────── -->
+  <div id="panel-linkedin" hidden>
+
+    <div class="page-header">
+      <div>
+        <h1 class="profile-heading">LinkedIn connections</h1>
+        <p class="profile-subheading">Connect personal accounts and company pages for this workspace.</p>
+      </div>
+    </div>
+
+    <div style="margin-bottom:24px">
+      <a href="/api/linkedin/connect?from=settings" class="vw-save-btn" style="display:inline-flex;align-items:center;gap:8px;text-decoration:none">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6zM2 9h4v12H2z"/><circle cx="4" cy="4" r="2"/></svg>
+        Add LinkedIn account
+      </a>
+    </div>
+
+    <div id="linkedin-profiles-list">
+      <p class="vw-chips-empty">Loading…</p>
+    </div>
+
+  </div><!-- /#panel-linkedin -->
+
+  <!-- ── Billing panel ──────────────────────────────────────────── -->
+  <div id="panel-billing" hidden>
+
+    <div class="page-header">
+      <div>
+        <h1 class="profile-heading">Billing</h1>
+        <p class="profile-subheading">Your plan, workspace usage, and subscription management.</p>
+      </div>
+    </div>
+
+    <!-- Trial countdown (shown only when status=trialing) -->
+    <div id="billing-trial-card" class="vw-stage-panel" style="max-width:640px;margin-bottom:24px;display:none">
+      <p style="margin:0 0 8px;font-size:13px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:0.05em">Free trial</p>
+      <p id="billing-trial-text" style="margin:0 0 12px;font-size:16px;color:#111827"></p>
+      <div style="background:#e5e7eb;border-radius:4px;height:6px;margin-bottom:16px">
+        <div id="billing-trial-bar" style="background:#6366f1;border-radius:4px;height:6px;width:0%"></div>
+      </div>
+      <button id="billing-upgrade-from-trial" class="vw-save-btn" type="button" style="margin:0">Upgrade now — keep everything</button>
+    </div>
+
+    <!-- Plan card -->
+    <div class="vw-stage-panel" style="max-width:640px;margin-bottom:24px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+        <div>
+          <span id="billing-plan-badge" style="background:#ede9fe;color:#6d28d9;border-radius:4px;padding:3px 10px;font-size:13px;font-weight:700;text-transform:capitalize;margin-right:8px">Free</span>
+          <span id="billing-status-label" style="font-size:13px;color:#9ca3af"></span>
+        </div>
+        <a href="/billing.html" class="vw-save-btn" style="text-decoration:none;padding:8px 14px;font-size:13px">Manage billing →</a>
+      </div>
+
+      <!-- Workspace usage (all plans) -->
+      <div style="border-top:1px solid #f3f4f6;padding-top:16px">
+        <p style="margin:0 0 6px;font-size:14px;font-weight:600;color:#374151">Workspaces</p>
+        <p id="billing-ws-usage" style="margin:0 0 8px;font-size:14px;color:#6b7280">Loading…</p>
+        <div style="background:#e5e7eb;border-radius:4px;height:6px;margin-bottom:12px">
+          <div id="billing-ws-bar" style="background:#6366f1;border-radius:4px;height:6px;width:0%"></div>
+        </div>
+        <!-- Pro: add-on workspace button -->
+        <button id="billing-add-workspace-btn" type="button" class="vw-save-btn" style="display:none;margin:0;font-size:13px;padding:8px 14px">
+          + Add workspace · $29/mo
+        </button>
+        <!-- Free/Solo: upgrade hint -->
+        <p id="billing-ws-upgrade-hint" style="display:none;font-size:13px;color:#6b7280">
+          Pro plan includes 3 workspaces. <a href="#" id="billing-open-upgrade" style="color:#6366f1">Upgrade →</a>
+        </p>
+      </div>
+    </div>
+
+    <!-- Upgrade CTA (shown for free/solo non-trialing) -->
+    <div id="billing-upgrade-cta" class="vw-stage-panel" style="max-width:640px;display:none">
+      <p style="margin:0 0 8px;font-size:16px;font-weight:600;color:#111827">Upgrade to Pro</p>
+      <p style="margin:0 0 16px;font-size:14px;color:#6b7280;line-height:1.5">
+        Unlimited posts, multiple LinkedIn accounts, company pages, Content Vault, and team collaboration.
+      </p>
+      <button id="billing-upgrade-btn" class="vw-save-btn" type="button" style="margin:0">Start 7-day free trial →</button>
+    </div>
+
+  </div><!-- /#panel-billing -->
+
+  </div><!-- /.profile-page (voice panel wrapper) -->
   </div><!-- /#main-content -->
 
   <script src="/js/session.js"></script>
   <script src="/js/account-bar.js"></script>
   <script src="/js/settings.js" defer></script>
+
+  <script>
+  /* ── Settings page tab switching + Members/LinkedIn data ── */
+  (function () {
+
+    function escapeHtml(s) {
+      return String(s || '')
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+        .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    // ── Tab switching ──────────────────────────────────────────
+    const ALL_PANELS = ['voice', 'members', 'linkedin', 'billing'];
+
+    function getActivePanel() {
+      const hash = window.location.hash.replace('#', '');
+      if (ALL_PANELS.includes(hash) && hash !== 'voice') return hash;
+      const tab = new URLSearchParams(window.location.search).get('tab');
+      if (ALL_PANELS.includes(tab) && tab !== 'voice') return tab;
+      return 'voice';
+    }
+
+    function showPanel(name) {
+      ALL_PANELS.forEach(p => {
+        const el = document.getElementById('panel-' + p);
+        if (el) el.hidden = (p !== name);
+      });
+
+      // Update active tab styling
+      document.querySelectorAll('.account-tab[data-panel]').forEach(a => {
+        const isActive = a.dataset.panel === name;
+        a.classList.toggle('active', isActive);
+        if (isActive) a.setAttribute('aria-current', 'page');
+        else          a.removeAttribute('aria-current');
+      });
+
+      // Load panel data on first view
+      if (name === 'members' && !membersEl.dataset.loaded) {
+        membersEl.dataset.loaded = '1';
+        loadMembers();
+      }
+      if (name === 'linkedin' && !linkedinEl.dataset.loaded) {
+        linkedinEl.dataset.loaded = '1';
+        loadLinkedinConnections();
+      }
+      const billingEl = document.getElementById('panel-billing');
+      if (name === 'billing' && billingEl && !billingEl.dataset.loaded) {
+        billingEl.dataset.loaded = '1';
+        loadBillingData();
+      }
+    }
+
+    // Tab click handlers — voice tab navigates (full reload), others switch in-page
+    document.querySelectorAll('.account-tab[data-panel]').forEach(a => {
+      a.addEventListener('click', e => {
+        const panel = a.dataset.panel;
+        if (panel === 'voice') return; // let href="/settings.html" navigate
+        e.preventDefault();
+        window.history.replaceState({}, '', '#' + panel);
+        showPanel(panel);
+      });
+    });
+
+    // ── Members panel ──────────────────────────────────────────
+    let currentWorkspaceId = null;
+    let currentUserRole    = null;
+    let currentUserId      = null;
+
+    async function loadMembers() {
+      if (!currentWorkspaceId) return;
+      const [membersResp] = await Promise.all([
+        fetch(`/api/workspaces/${currentWorkspaceId}/members`, { credentials: 'same-origin' }).then(r => r.json()).catch(() => null),
+      ]);
+      renderMembers(membersResp);
+    }
+
+    function renderMembers(data) {
+      const list        = document.getElementById('members-list');
+      const pendingWrap = document.getElementById('pending-invites-section');
+      const pendingList = document.getElementById('pending-invites-list');
+
+      if (!data || !data.ok) {
+        list.innerHTML = '<p class="vw-chips-empty">Unable to load members.</p>';
+        return;
+      }
+
+      const members = data.members || [];
+      const pending = data.pending_invites || [];
+
+      if (members.length === 0) {
+        list.innerHTML = '<p class="vw-chips-empty">No members yet.</p>';
+      } else {
+        list.innerHTML = members.map(m => {
+          const isMe      = m.user_id === currentUserId;
+          const canRemove = currentUserRole === 'owner' && !isMe;
+          return `<div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid #f3f4f6">
+            <div style="flex:1">
+              <p style="margin:0;font-size:14px;font-weight:600;color:#111827">${escapeHtml(m.display_name || m.email)}</p>
+              ${m.display_name ? `<p style="margin:0;font-size:12px;color:#9ca3af">${escapeHtml(m.email)}</p>` : ''}
+            </div>
+            <span style="background:#f3f4f6;color:#6b7280;border-radius:4px;padding:2px 8px;font-size:12px;font-weight:600;text-transform:capitalize">${escapeHtml(m.role)}</span>
+            ${canRemove ? `<button class="vw-chip-remove" data-remove-user="${escapeHtml(m.user_id)}" type="button" title="Remove member" style="flex-shrink:0">✕</button>` : ''}
+          </div>`;
+        }).join('');
+
+        list.querySelectorAll('[data-remove-user]').forEach(btn => {
+          btn.addEventListener('click', () => removeMember(btn.dataset.removeUser));
+        });
+      }
+
+      if (pending.length > 0) {
+        pendingWrap.hidden = false;
+        pendingList.innerHTML = pending.map(inv => `
+          <div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid #f3f4f6">
+            <div style="flex:1">
+              <p style="margin:0;font-size:14px;color:#374151">${escapeHtml(inv.email)}</p>
+              <p style="margin:0;font-size:12px;color:#9ca3af">Expires ${new Date(inv.expires_at).toLocaleDateString()}</p>
+            </div>
+            <span style="background:#fffbeb;color:#92400e;border-radius:4px;padding:2px 8px;font-size:12px;font-weight:600">Pending</span>
+            <button class="vw-chip-remove" data-revoke-invite="${inv.id}" type="button" title="Revoke invite" style="flex-shrink:0">✕</button>
+          </div>
+        `).join('');
+
+        pendingList.querySelectorAll('[data-revoke-invite]').forEach(btn => {
+          btn.addEventListener('click', () => revokeInvite(Number(btn.dataset.revokeInvite)));
+        });
+      } else {
+        pendingWrap.hidden = true;
+      }
+    }
+
+    async function removeMember(userId) {
+      if (!confirm('Remove this member from the workspace?')) return;
+      try {
+        const r = await fetch(`/api/workspaces/${currentWorkspaceId}/members/${encodeURIComponent(userId)}`, {
+          method: 'DELETE', credentials: 'same-origin',
+        });
+        const d = await r.json();
+        if (d.ok) loadMembers();
+        else alert(d.error || 'Could not remove member.');
+      } catch { alert('Network error.'); }
+    }
+
+    async function revokeInvite(inviteId) {
+      if (!confirm('Cancel this invitation?')) return;
+      try {
+        const r = await fetch(`/api/workspaces/${currentWorkspaceId}/invites/${inviteId}`, {
+          method: 'DELETE', credentials: 'same-origin',
+        });
+        const d = await r.json();
+        if (d.ok) loadMembers();
+        else alert(d.error || 'Could not revoke invite.');
+      } catch { alert('Network error.'); }
+    }
+
+    const inviteBtn    = document.getElementById('invite-btn');
+    const inviteEmail  = document.getElementById('invite-email');
+    const inviteStatus = document.getElementById('invite-status');
+
+    if (inviteBtn) {
+      inviteBtn.addEventListener('click', async () => {
+        const email = (inviteEmail.value || '').trim();
+        if (!email) { inviteEmail.focus(); return; }
+        inviteBtn.disabled = true;
+        inviteBtn.textContent = 'Sending…';
+        inviteStatus.hidden = true;
+
+        try {
+          const r = await fetch(`/api/workspaces/${currentWorkspaceId}/invites`, {
+            method: 'POST', credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email }),
+          });
+          const d = await r.json();
+          if (d.ok) {
+            inviteEmail.value = '';
+            inviteStatus.textContent = 'Invitation sent.';
+            inviteStatus.className = 'field-helper vw-save-status--ok';
+            inviteStatus.hidden = false;
+            loadMembers();
+          } else {
+            const msg = d.error === 'already_a_member' ? 'This person is already a member.'
+              : d.error === 'invite_already_pending' ? 'An invitation is already pending for this email.'
+              : d.error === 'feature_not_available' ? 'Team members require the Pro plan.'
+              : (d.error || 'Failed to send invite.');
+            inviteStatus.textContent = msg;
+            inviteStatus.className = 'field-helper vw-save-status--error';
+            inviteStatus.hidden = false;
+          }
+        } catch {
+          inviteStatus.textContent = 'Network error. Please try again.';
+          inviteStatus.className = 'field-helper vw-save-status--error';
+          inviteStatus.hidden = false;
+        } finally {
+          inviteBtn.disabled = false;
+          inviteBtn.textContent = 'Send invite';
+        }
+      });
+    }
+
+    // ── LinkedIn panel ──────────────────────────────────────────
+    async function loadLinkedinConnections() {
+      const container = document.getElementById('linkedin-profiles-list');
+      try {
+        const r = await fetch('/api/linkedin/connections', { credentials: 'same-origin' });
+        const d = await r.json();
+        if (!d.ok || !Array.isArray(d.profiles) || d.profiles.length === 0) {
+          container.innerHTML = '<p class="vw-chips-empty">No LinkedIn accounts connected yet.</p>';
+          return;
+        }
+        renderLinkedinProfiles(d.profiles);
+      } catch {
+        container.innerHTML = '<p class="vw-chips-empty">Unable to load connections.</p>';
+      }
+    }
+
+    function renderLinkedinProfiles(profiles) {
+      const container = document.getElementById('linkedin-profiles-list');
+      container.innerHTML = profiles.map(profile => {
+        const connsHtml = (profile.connections || []).map(conn => {
+          const expired = conn.expires_at && new Date(conn.expires_at) < new Date();
+          return `<div style="display:flex;align-items:center;gap:12px;padding:10px 12px;background:#f9fafb;border-radius:8px;margin-bottom:8px">
+            ${conn.avatar_url ? `<img src="${escapeHtml(conn.avatar_url)}" width="32" height="32" style="border-radius:50%;flex-shrink:0" alt="" />` : `<div style="width:32px;height:32px;border-radius:50%;background:#e5e7eb;flex-shrink:0"></div>`}
+            <div style="flex:1;min-width:0">
+              <p style="margin:0;font-size:14px;font-weight:600;color:#111827;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(conn.display_name || conn.account_key)}</p>
+              <p style="margin:0;font-size:12px;color:#9ca3af;text-transform:capitalize">${escapeHtml(conn.account_type)}${expired ? ' · <span style="color:#ef4444">Token expired</span>' : ''}</p>
+            </div>
+            ${conn.is_default ? `<span style="background:#d1fae5;color:#065f46;border-radius:4px;padding:2px 7px;font-size:11px;font-weight:700">Default</span>` : `<button data-set-default="${conn.id}" type="button" style="font-size:12px;color:#6366f1;background:none;border:none;cursor:pointer;text-decoration:underline;white-space:nowrap">Set default</button>`}
+            <button data-disconnect="${conn.id}" type="button" style="font-size:12px;color:#ef4444;background:none;border:none;cursor:pointer;text-decoration:underline;white-space:nowrap;flex-shrink:0">Disconnect</button>
+          </div>`;
+        }).join('');
+
+        return `<div class="vw-stage-panel" style="max-width:640px;margin-bottom:24px">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+            ${profile.avatar_url ? `<img src="${escapeHtml(profile.avatar_url)}" width="36" height="36" style="border-radius:50%;flex-shrink:0" alt="" />` : `<div style="width:36px;height:36px;border-radius:50%;background:#e5e7eb;flex-shrink:0"></div>`}
+            <div>
+              <p style="margin:0;font-size:14px;font-weight:600;color:#111827">${escapeHtml(profile.display_name)}</p>
+              <p style="margin:0;font-size:12px;color:#9ca3af;text-transform:capitalize">${escapeHtml(profile.profile_type)} profile</p>
+            </div>
+          </div>
+          ${connsHtml || '<p class="vw-chips-empty" style="margin:0">No connections under this profile.</p>'}
+        </div>`;
+      }).join('');
+
+      // Wire up set-default and disconnect buttons
+      container.querySelectorAll('[data-set-default]').forEach(btn => {
+        btn.addEventListener('click', () => setDefaultConnection(Number(btn.dataset.setDefault)));
+      });
+      container.querySelectorAll('[data-disconnect]').forEach(btn => {
+        btn.addEventListener('click', () => disconnectConnection(Number(btn.dataset.disconnect)));
+      });
+    }
+
+    async function setDefaultConnection(connId) {
+      try {
+        const r = await fetch(`/api/linkedin/connections/${connId}/set-default`, {
+          method: 'POST', credentials: 'same-origin',
+        });
+        const d = await r.json();
+        if (d.ok) loadLinkedinConnections();
+        else alert(d.error || 'Failed to set default.');
+      } catch { alert('Network error.'); }
+    }
+
+    async function disconnectConnection(connId) {
+      if (!confirm('Disconnect this LinkedIn account? Any pending scheduled posts will be cancelled.')) return;
+      try {
+        const r = await fetch(`/api/linkedin/connections/${connId}`, {
+          method: 'DELETE', credentials: 'same-origin',
+        });
+        const d = await r.json();
+        if (d.ok) loadLinkedinConnections();
+        else alert(d.error || 'Failed to disconnect.');
+      } catch { alert('Network error.'); }
+    }
+
+    // ── Billing panel ──────────────────────────────────────────
+    async function loadBillingData() {
+      let sub;
+      try {
+        const r = await fetch('/api/billing/subscription', { credentials: 'same-origin' });
+        sub = await r.json();
+      } catch { return; }
+      if (!sub.ok) return;
+
+      const plan   = sub.plan || 'free';
+      const status = sub.status || 'free';
+      const label  = plan === 'pro' ? 'Pro' : plan === 'solo' ? 'Solo' : 'Free';
+      const badge  = document.getElementById('billing-plan-badge');
+      const statusLbl = document.getElementById('billing-status-label');
+      if (badge) badge.textContent = label;
+      if (statusLbl) statusLbl.textContent = status === 'trialing' ? '(trial)' : status === 'active' ? '' : status;
+
+      // Trial countdown
+      if (status === 'trialing' && sub.trial_ends_at) {
+        const trialCard = document.getElementById('billing-trial-card');
+        const trialText = document.getElementById('billing-trial-text');
+        const trialBar  = document.getElementById('billing-trial-bar');
+        const daysLeft  = Math.max(0, Math.ceil((new Date(sub.trial_ends_at) - Date.now()) / 86400000));
+        if (trialCard) trialCard.style.display = 'block';
+        if (trialText) trialText.textContent = `${daysLeft} day${daysLeft !== 1 ? 's' : ''} left in your free trial.`;
+        if (trialBar)  trialBar.style.width = `${Math.round((7 - daysLeft) / 7 * 100)}%`;
+      }
+
+      // Workspace usage
+      const wsCount = sub.workspace_count ?? 0;
+      const wsLimit = sub.workspace_limit ?? 1;
+      const wsUsage = document.getElementById('billing-ws-usage');
+      const wsBar   = document.getElementById('billing-ws-bar');
+      if (wsUsage) wsUsage.textContent = `${wsCount} of ${wsLimit} used`;
+      if (wsBar)   wsBar.style.width = `${Math.min(100, Math.round(wsCount / Math.max(wsLimit, 1) * 100))}%`;
+
+      // Workspace CTAs
+      const addWsBtn   = document.getElementById('billing-add-workspace-btn');
+      const wsHint     = document.getElementById('billing-ws-upgrade-hint');
+      if (plan === 'pro') {
+        if (addWsBtn) addWsBtn.style.display = 'inline-flex';
+      } else {
+        if (wsHint) wsHint.style.display = 'block';
+      }
+
+      // Upgrade CTA (only for free/solo non-trialing)
+      const upgradeCta = document.getElementById('billing-upgrade-cta');
+      if (upgradeCta && plan !== 'pro' && status !== 'trialing') {
+        upgradeCta.style.display = 'block';
+      }
+    }
+
+    // Upgrade button opens Paddle checkout or navigates to billing page
+    document.getElementById('billing-upgrade-btn')?.addEventListener('click', () => {
+      window.location.href = '/billing.html';
+    });
+    document.getElementById('billing-upgrade-from-trial')?.addEventListener('click', () => {
+      window.location.href = '/billing.html';
+    });
+    document.getElementById('billing-open-upgrade')?.addEventListener('click', e => {
+      e.preventDefault();
+      window.location.href = '/billing.html';
+    });
+    document.getElementById('billing-add-workspace-btn')?.addEventListener('click', async () => {
+      try {
+        const r = await fetch('/api/billing/add-workspace', { method: 'POST', credentials: 'same-origin' });
+        const d = await r.json();
+        if (d.ok && d.priceId && window.Paddle) {
+          window.Paddle.Checkout.open({ items: [{ priceId: d.priceId, quantity: 1 }], customData: d.customData });
+        } else {
+          window.location.href = '/billing.html';
+        }
+      } catch { window.location.href = '/billing.html'; }
+    });
+
+    // ── Boot ───────────────────────────────────────────────────
+    window.scouthookAuthReady.then(authData => {
+      const user = authData && authData.user;
+      if (user) {
+        currentWorkspaceId = user.tenant_id;
+        currentUserId      = user.user_id;
+      }
+
+      // Determine current role
+      if (currentWorkspaceId) {
+        fetch(`/api/workspaces/${currentWorkspaceId}/members`, { credentials: 'same-origin' })
+          .then(r => r.json())
+          .then(d => {
+            if (d.ok && Array.isArray(d.members)) {
+              const me = d.members.find(m => m.user_id === currentUserId);
+              if (me) currentUserRole = me.role;
+            }
+          })
+          .catch(() => {});
+      }
+
+      const activePanel = getActivePanel();
+      showPanel(activePanel);
+    }).catch(() => showPanel('voice'));
+
+  })();
+  </script>
 </body>
 </html>

@@ -95,7 +95,11 @@ async function getUserPlan(userId) {
 // Falls back to FOUNDING_2 price ID only if FOUNDING_1 is not configured.
 // ---------------------------------------------------------------------------
 async function getFoundingTierInfo() {
-  const priceId = process.env.PADDLE_PRICE_ID_FOUNDING_1 || process.env.PADDLE_PRICE_ID_FOUNDING_2;
+  // Check founding-tier IDs first, then fall back to the generic PADDLE_PRICE_ID_PRO
+  // so deployments that set the simpler name continue to work.
+  const priceId = process.env.PADDLE_PRICE_ID_FOUNDING_1
+    || process.env.PADDLE_PRICE_ID_FOUNDING_2
+    || process.env.PADDLE_PRICE_ID_PRO;
   return {
     priceId,
     price: 39,

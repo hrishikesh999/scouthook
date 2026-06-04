@@ -842,6 +842,9 @@ document.querySelectorAll('.start-pill[data-prompt]').forEach(pill => {
     pill.classList.add('active');
     pillQuestion.textContent = pill.dataset.prompt;
     pillQuestion.classList.add('visible');
+    // Close the Get ideas panel if open
+    const vaultPanel = document.getElementById('vault-panel');
+    if (vaultPanel) vaultPanel.style.display = 'none';
     chatInput.focus();
   });
 });

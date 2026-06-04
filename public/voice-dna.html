@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Voice DNA — ScoutHook</title>
+  <link rel="stylesheet" href="/css/main.css">
+  <style>
+    .vdna-back {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-muted);
+      text-decoration: none;
+      margin-bottom: 20px;
+      transition: color 0.15s;
+    }
+    .vdna-back:hover { color: var(--text-body); }
+
+    .vdna-profile-header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 28px;
+    }
+    .vdna-avatar {
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      object-fit: cover;
+      flex-shrink: 0;
+    }
+    .vdna-avatar-placeholder {
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      background: var(--bg-pill);
+      border: 1px solid var(--border);
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text-muted);
+    }
+    .vdna-profile-name {
+      margin: 0 0 4px;
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text-heading);
+    }
+    .vdna-profile-type {
+      margin: 0;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    /* Completion bar */
+    .vdna-completion {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px 20px;
+      background: var(--bg-surface);
+      margin-bottom: 24px;
+    }
+    .vdna-completion-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    .vdna-completion-label {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-body);
+    }
+    .vdna-completion-pct {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--brand);
+    }
+    .vdna-completion-pct.low { color: var(--score-fail); }
+    .vdna-completion-pct.mid { color: var(--score-borderline); }
+    .vdna-bar-track {
+      height: 6px;
+      border-radius: 6px;
+      background: var(--border);
+      overflow: hidden;
+    }
+    .vdna-bar-fill {
+      height: 100%;
+      border-radius: 6px;
+      background: var(--brand);
+      transition: width 0.5s ease;
+    }
+    .vdna-bar-fill.low { background: var(--score-fail); }
+    .vdna-bar-fill.mid { background: var(--score-borderline); }
+
+    /* Sections */
+    .vdna-section {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--bg-surface);
+      overflow: hidden;
+      margin-bottom: 20px;
+    }
+    .vdna-section-header {
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .vdna-section-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      margin: 0;
+    }
+    .vdna-section-badge {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      background: var(--bg-pill);
+      border-radius: 4px;
+      padding: 1px 7px;
+    }
+    .vdna-row {
+      display: grid;
+      grid-template-columns: 160px 1fr;
+      gap: 0;
+      border-bottom: 1px solid var(--border-divider);
+      min-height: 44px;
+    }
+    .vdna-row:last-child { border-bottom: none; }
+    .vdna-row-label {
+      padding: 12px 16px 12px 20px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      display: flex;
+      align-items: flex-start;
+      padding-top: 14px;
+    }
+    .vdna-row-value {
+      padding: 12px 20px 12px 0;
+      font-size: 14px;
+      color: var(--text-body);
+      line-height: 1.5;
+      display: flex;
+      align-items: flex-start;
+    }
+    .vdna-row-value.editable {
+      padding-right: 0;
+    }
+    .vdna-field-input {
+      width: 100%;
+      font-size: 14px;
+      font-family: var(--font-sans);
+      color: var(--text-body);
+      background: transparent;
+      border: none;
+      outline: none;
+      padding: 0;
+      line-height: 1.5;
+      resize: none;
+    }
+    .vdna-field-input:focus {
+      background: var(--bg-pill);
+      border-radius: 6px;
+      padding: 4px 8px;
+      margin: -4px -8px;
+    }
+    .vdna-empty {
+      font-size: 13px;
+      color: var(--text-muted);
+      font-style: italic;
+    }
+    .vdna-chip {
+      display: inline-block;
+      background: var(--bg-pill);
+      color: var(--text-secondary);
+      border-radius: 6px;
+      padding: 3px 9px;
+      font-size: 12px;
+      font-weight: 500;
+      margin: 2px 4px 2px 0;
+    }
+    .vdna-fp-list {
+      padding: 0;
+      margin: 0;
+      list-style: none;
+    }
+    .vdna-fp-item {
+      display: grid;
+      grid-template-columns: 160px 1fr;
+      gap: 0;
+      border-bottom: 1px solid var(--border-divider);
+      font-size: 13px;
+    }
+    .vdna-fp-item:last-child { border-bottom: none; }
+    .vdna-fp-key {
+      padding: 10px 16px 10px 20px;
+      font-weight: 600;
+      color: var(--text-muted);
+      font-size: 12px;
+    }
+    .vdna-fp-val {
+      padding: 10px 20px 10px 0;
+      color: var(--text-body);
+      line-height: 1.4;
+    }
+
+    /* Actions bar */
+    .vdna-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 24px 0 8px;
+    }
+    .vdna-save-status {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--brand);
+      display: none;
+    }
+    .vdna-save-status.error { color: var(--text-danger); }
+  </style>
+</head>
+<body>
+
+  <script src="/js/sidebar.js"></script>
+
+  <div id="main-content">
+  <div class="profile-page" style="max-width:700px">
+
+    <a href="/linkedin.html" class="vdna-back">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      LinkedIn connections
+    </a>
+
+    <div id="vdna-content">
+      <p class="vw-chips-empty">Loading…</p>
+    </div>
+
+  </div>
+  </div>
+
+  <script src="/js/session.js"></script>
+  <script src="/js/account-bar.js"></script>
+  <script>
+  (function () {
+    function escapeHtml(s) {
+      return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+    function safeJSON(s, fallback) {
+      try { return JSON.parse(s); } catch { return fallback; }
+    }
+
+    const profileId = new URLSearchParams(window.location.search).get('profile_id');
+    const container = document.getElementById('vdna-content');
+
+    if (!profileId) {
+      container.innerHTML = '<p class="vw-chips-empty">No profile specified.</p>';
+      return; // stop execution
+    }
+
+    let _profile = null;
+
+    async function load() {
+      try {
+        const r = await fetch(`/api/profile?profile_id=${encodeURIComponent(profileId)}`, { credentials: 'same-origin' });
+        const d = await r.json();
+        if (!d.ok || !d.profile) {
+          container.innerHTML = '<p class="vw-chips-empty">Profile not found.</p>';
+          return;
+        }
+        _profile = d.profile;
+        render(_profile);
+      } catch {
+        container.innerHTML = '<p class="vw-chips-empty">Unable to load profile.</p>';
+      }
+    }
+
+    function pctClass(pct) {
+      if (pct < 30) return 'low';
+      if (pct < 60) return 'mid';
+      return '';
+    }
+
+    function render(p) {
+      const pct  = p.voice_profile_completion_pct || 0;
+      const cls  = pctClass(pct);
+      const name = p.display_name || 'LinkedIn account';
+      const initial = name[0]?.toUpperCase() || '?';
+      const avatar = p.avatar_url
+        ? `<img class="vdna-avatar" src="${escapeHtml(p.avatar_url)}" alt="" />`
+        : `<div class="vdna-avatar-placeholder">${escapeHtml(initial)}</div>`;
+
+      // Parse voice fingerprint
+      const fp = safeJSON(p.voice_fingerprint, {});
+      const fpFields = [
+        { key: 'Opening style',       val: fp.opening_style },
+        { key: 'Sentence structure',  val: fp.sentence_structure },
+        { key: 'Tone',                val: fp.tone },
+        { key: 'Energy',              val: fp.energy },
+        { key: 'Vocabulary',          val: fp.vocabulary_tier },
+        { key: 'Argument structure',  val: fp.argument_structure },
+        { key: 'Signature moves',     val: Array.isArray(fp.signature_moves) ? fp.signature_moves.join(', ') : fp.signature_moves },
+        { key: 'Never sounds like',   val: fp.never_sounds_like },
+        { key: 'Never says',          val: fp.never_says },
+      ].filter(f => f.val);
+
+      // Authority statements
+      const statements = safeJSON(p.authority_statements, []);
+
+      // Pillars
+      const pillars = safeJSON(p.content_pillars, null);
+      const pillarsArr = Array.isArray(pillars) ? pillars : (p.content_pillars ? [p.content_pillars] : []);
+
+      container.innerHTML = `
+        <div class="vdna-profile-header">
+          ${avatar}
+          <div>
+            <p class="vdna-profile-name">${escapeHtml(name)}</p>
+            <p class="vdna-profile-type">Personal LinkedIn account · Voice DNA</p>
+          </div>
+        </div>
+
+        <!-- Completion -->
+        <div class="vdna-completion">
+          <div class="vdna-completion-row">
+            <span class="vdna-completion-label">Voice DNA completeness</span>
+            <span class="vdna-completion-pct ${cls}">${pct}%</span>
+          </div>
+          <div class="vdna-bar-track">
+            <div class="vdna-bar-fill ${cls}" style="width:${pct}%"></div>
+          </div>
+        </div>
+
+        <!-- Voice fingerprint (auto-extracted, read-only) -->
+        <div class="vdna-section">
+          <div class="vdna-section-header">
+            <p class="vdna-section-title">Voice fingerprint</p>
+            <span class="vdna-section-badge">Auto-extracted from LinkedIn</span>
+          </div>
+          ${fpFields.length ? `
+            <ul class="vdna-fp-list">
+              ${fpFields.map(f => `
+                <li class="vdna-fp-item">
+                  <span class="vdna-fp-key">${escapeHtml(f.key)}</span>
+                  <span class="vdna-fp-val">${escapeHtml(String(f.val))}</span>
+                </li>`).join('')}
+            </ul>` : `
+            <div style="padding:20px;color:var(--text-muted);font-size:13px">
+              Voice fingerprint not yet extracted. Click <strong>Re-extract from LinkedIn</strong> below to analyse posting history.
+            </div>`}
+        </div>
+
+        <!-- Authority statements (auto-extracted, read-only) -->
+        ${statements.length ? `
+        <div class="vdna-section">
+          <div class="vdna-section-header">
+            <p class="vdna-section-title">Authority statements</p>
+            <span class="vdna-section-badge">Auto-extracted</span>
+          </div>
+          <div style="padding:14px 20px;display:flex;flex-direction:column;gap:8px">
+            ${statements.map(s => `
+              <div style="display:flex;align-items:flex-start;gap:10px;font-size:14px;color:var(--text-body);line-height:1.5">
+                <span style="color:var(--brand);flex-shrink:0;margin-top:2px">✓</span>
+                <span>${escapeHtml(String(s))}</span>
+              </div>`).join('')}
+          </div>
+        </div>` : ''}
+
+        <!-- Editable fields -->
+        <div class="vdna-section" id="editable-section">
+          <div class="vdna-section-header">
+            <p class="vdna-section-title">Topics &amp; positioning</p>
+            <span class="vdna-section-badge">Editable</span>
+          </div>
+          <div class="vdna-row">
+            <span class="vdna-row-label">Content niche</span>
+            <div class="vdna-row-value editable">
+              <input class="vdna-field-input" id="f-niche" type="text" value="${escapeHtml(p.content_niche || '')}" placeholder="e.g. B2B SaaS growth" />
+            </div>
+          </div>
+          <div class="vdna-row">
+            <span class="vdna-row-label">Target audience</span>
+            <div class="vdna-row-value editable">
+              <input class="vdna-field-input" id="f-audience" type="text" value="${escapeHtml(p.audience_role || '')}" placeholder="e.g. Startup founders" />
+            </div>
+          </div>
+          <div class="vdna-row">
+            <span class="vdna-row-label">Audience challenge</span>
+            <div class="vdna-row-value editable">
+              <input class="vdna-field-input" id="f-pain" type="text" value="${escapeHtml(p.audience_pain || '')}" placeholder="e.g. Struggle to scale without losing culture" />
+            </div>
+          </div>
+          <div class="vdna-row">
+            <span class="vdna-row-label">Contrarian view</span>
+            <div class="vdna-row-value editable">
+              <textarea class="vdna-field-input" id="f-contrarian" rows="2" placeholder="The opinion most people in your space would disagree with…">${escapeHtml(p.contrarian_view || '')}</textarea>
+            </div>
+          </div>
+          <div class="vdna-row">
+            <span class="vdna-row-label">Content pillars</span>
+            <div class="vdna-row-value" style="flex-wrap:wrap;padding-top:10px;padding-bottom:10px">
+              ${pillarsArr.length
+                ? pillarsArr.map(x => `<span class="vdna-chip">${escapeHtml(String(x))}</span>`).join('')
+                : `<span class="vdna-empty">Not yet set</span>`}
+            </div>
+          </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="vdna-actions">
+          <button type="button" class="btn-primary" id="save-btn" style="gap:6px">Save changes</button>
+          <button type="button" class="btn-secondary" id="reextract-btn" style="gap:6px">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+            Re-extract from LinkedIn
+          </button>
+          <span class="vdna-save-status" id="save-status"></span>
+        </div>`;
+
+      document.getElementById('save-btn').addEventListener('click', save);
+      document.getElementById('reextract-btn').addEventListener('click', reExtract);
+    }
+
+    async function save() {
+      const btn    = document.getElementById('save-btn');
+      const status = document.getElementById('save-status');
+      btn.disabled = true;
+      btn.textContent = 'Saving…';
+      status.style.display = 'none';
+      try {
+        const body = {
+          content_niche:   document.getElementById('f-niche')?.value?.trim()      || null,
+          audience_role:   document.getElementById('f-audience')?.value?.trim()   || null,
+          audience_pain:   document.getElementById('f-pain')?.value?.trim()       || null,
+          contrarian_view: document.getElementById('f-contrarian')?.value?.trim() || null,
+        };
+        const r = await fetch(`/api/profile/person/${profileId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify(body),
+        });
+        const d = await r.json();
+        if (d.ok) {
+          status.textContent = 'Saved';
+          status.className = 'vdna-save-status';
+          status.style.display = '';
+          setTimeout(() => { status.style.display = 'none'; }, 3000);
+        } else {
+          throw new Error(d.error || 'save failed');
+        }
+      } catch (e) {
+        status.textContent = 'Save failed — ' + e.message;
+        status.className = 'vdna-save-status error';
+        status.style.display = '';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Save changes';
+      }
+    }
+
+    async function reExtract() {
+      const btn    = document.getElementById('reextract-btn');
+      const status = document.getElementById('save-status');
+      btn.disabled = true;
+      btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="animation:spin 0.8s linear infinite"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Extracting…';
+      status.style.display = 'none';
+      try {
+        const r = await fetch('/api/linkedin/extract-profile', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ profile_id: Number(profileId) }),
+        });
+        const d = await r.json();
+        if (d.ok) {
+          status.textContent = 'Re-extraction complete — reloading…';
+          status.className = 'vdna-save-status';
+          status.style.display = '';
+          setTimeout(() => load(), 1200);
+        } else {
+          throw new Error(d.error || 'extraction failed');
+        }
+      } catch (e) {
+        status.textContent = 'Extraction failed — ' + e.message;
+        status.className = 'vdna-save-status error';
+        status.style.display = '';
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Re-extract from LinkedIn';
+      }
+    }
+
+    // spin keyframe for re-extract button
+    const style = document.createElement('style');
+    style.textContent = '@keyframes spin { to { transform: rotate(360deg); } }';
+    document.head.appendChild(style);
+
+    load();
+  })();
+  </script>
+</body>
+</html>

@@ -14,20 +14,40 @@ router.get('/:user_id?', async (req, res) => {
   const userId   = req.userId;
   const tenantId = req.tenantId;
 
+  // Optional ?profile_id=N loads a specific profile (must belong to this workspace).
+  // Used by voice-dna.html to display a personal LinkedIn profile's extracted DNA.
+  const requestedProfileId = req.query.profile_id ? Number(req.query.profile_id) : null;
+
+  const profileQuery = requestedProfileId
+    ? db.prepare(`
+        SELECT id, profile_type, display_name, avatar_url,
+               audience_role, audience_pain, content_niche, contrarian_view,
+               voice_fingerprint, writing_samples, onboarding_complete,
+               business_positioning, website_url, website_summary,
+               onboarding_q1, onboarding_q2, onboarding_q3,
+               authority_statements, cta_library, content_principles, content_themes,
+               voice_extraction_quality, voice_profile_completion_pct,
+               input_examples, voice_refinements, content_pillars,
+               user_archetype_preference
+        FROM profiles WHERE id = ? AND workspace_id = ?
+      `).get(requestedProfileId, tenantId)
+    : db.prepare(`
+        SELECT id, profile_type, display_name, avatar_url,
+               audience_role, audience_pain, content_niche, contrarian_view,
+               voice_fingerprint, writing_samples, onboarding_complete,
+               business_positioning, website_url, website_summary,
+               onboarding_q1, onboarding_q2, onboarding_q3,
+               authority_statements, cta_library, content_principles, content_themes,
+               voice_extraction_quality, voice_profile_completion_pct,
+               input_examples, voice_refinements, content_pillars,
+               user_archetype_preference
+        FROM profiles WHERE workspace_id = ? AND is_default = true
+      `).get(tenantId);
+
   const [userRow, wsRow, profileRow] = await Promise.all([
     db.prepare('SELECT user_role, email, display_name FROM user_profiles WHERE user_id = ?').get(userId),
     db.prepare('SELECT brand_name, brand_bg, brand_accent, brand_text, brand_logo FROM workspaces WHERE id = ?').get(tenantId),
-    db.prepare(`
-      SELECT id, audience_role, audience_pain, content_niche, contrarian_view,
-             voice_fingerprint, writing_samples, onboarding_complete,
-             business_positioning, website_url, website_summary,
-             onboarding_q1, onboarding_q2, onboarding_q3,
-             authority_statements, cta_library, content_principles, content_themes,
-             voice_extraction_quality, voice_profile_completion_pct,
-             input_examples, voice_refinements, content_pillars,
-             user_archetype_preference
-      FROM profiles WHERE workspace_id = ? AND is_default = true
-    `).get(tenantId),
+    profileQuery,
   ]);
 
   if (!profileRow) {
@@ -37,6 +57,10 @@ router.get('/:user_id?', async (req, res) => {
   return res.json({
     ok: true,
     profile: {
+      id:                           profileRow.id,
+      profile_type:                 profileRow.profile_type   || 'brand',
+      display_name:                 profileRow.display_name   || null,
+      avatar_url:                   profileRow.avatar_url     || null,
       audience_role:                profileRow.audience_role,
       audience_pain:                profileRow.audience_pain,
       content_niche:                profileRow.content_niche,
@@ -564,6 +588,56 @@ router.post('/:id/voice-setup', async (req, res) => {
     return res.json({ ok: true });
   } catch (err) {
     console.error('[profile/voice-setup] Error:', err.message);
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// PUT /api/profile/person/:id
+// Update editable voice-DNA fields on a personal (LinkedIn) profile.
+// Only allows fields that make sense for a person profile — brand/workspace
+// fields (brand colours, positioning) are intentionally excluded.
+// ---------------------------------------------------------------------------
+router.put('/person/:id', async (req, res) => {
+  const tenantId  = req.tenantId;
+  const profileId = Number(req.params.id);
+
+  if (!req.userId)                        return res.status(401).json({ ok: false, error: 'unauthenticated' });
+  if (!Number.isFinite(profileId))        return res.status(400).json({ ok: false, error: 'invalid_id' });
+
+  try {
+    // Verify the profile exists in this workspace and is a person profile
+    const existing = await db.prepare(
+      `SELECT id FROM profiles WHERE id = ? AND workspace_id = ? AND profile_type = 'person'`
+    ).get(profileId, tenantId);
+    if (!existing) return res.status(404).json({ ok: false, error: 'not_found' });
+
+    const allowed = [
+      'content_niche', 'audience_role', 'audience_pain',
+      'contrarian_view', 'content_pillars', 'content_themes',
+    ];
+
+    const updates = {};
+    for (const field of allowed) {
+      if (req.body[field] !== undefined) {
+        updates[field] = req.body[field] || null;
+      }
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return res.json({ ok: true, updated: [] });
+    }
+
+    const setClauses = Object.keys(updates).map(k => `${k} = ?`).join(', ');
+    const values     = [...Object.values(updates), profileId, tenantId];
+
+    await db.prepare(
+      `UPDATE profiles SET ${setClauses}, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND workspace_id = ?`
+    ).run(...values);
+
+    return res.json({ ok: true, updated: Object.keys(updates) });
+  } catch (err) {
+    console.error('[profile/person/put] Error:', err.message);
     return res.status(500).json({ ok: false, error: err.message });
   }
 });

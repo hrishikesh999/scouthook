@@ -270,17 +270,29 @@ router.post('/extract-profile', async (req, res) => {
   if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
 
   try {
-    const brandProfile = await db.prepare(
-      'SELECT id FROM profiles WHERE workspace_id = ? AND is_default = true'
-    ).get(tenantId);
-    if (!brandProfile) return res.status(404).json({ ok: false, error: 'profile_not_found' });
+    // Optional body.profile_id targets a specific person profile.
+    // Without it, falls back to the default brand profile (original behaviour).
+    let targetProfile;
+    if (req.body?.profile_id) {
+      const pid = Number(req.body.profile_id);
+      if (!Number.isFinite(pid)) return res.status(400).json({ ok: false, error: 'invalid_profile_id' });
+      targetProfile = await db.prepare(
+        'SELECT id FROM profiles WHERE id = ? AND workspace_id = ?'
+      ).get(pid, tenantId);
+    } else {
+      targetProfile = await db.prepare(
+        'SELECT id FROM profiles WHERE workspace_id = ? AND is_default = true'
+      ).get(tenantId);
+    }
 
-    const result = await extractVoiceDNAFromLinkedIn(brandProfile.id);
+    if (!targetProfile) return res.status(404).json({ ok: false, error: 'profile_not_found' });
+
+    const result = await extractVoiceDNAFromLinkedIn(targetProfile.id);
     const profile = await db.prepare(
       `SELECT content_niche, audience_role, business_positioning, content_pillars,
               voice_profile_completion_pct
        FROM profiles WHERE id = ?`
-    ).get(brandProfile.id);
+    ).get(targetProfile.id);
     return res.json({ ok: true, updated: result.updated || [], profile: profile || {} });
   } catch (err) {
     console.error('[linkedin/extract-profile] Error:', err.message);

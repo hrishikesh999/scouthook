@@ -301,7 +301,10 @@
             <div class="li-voice-dna">
               <div class="li-voice-header">
                 <span class="li-voice-label">Voice DNA</span>
-                <span class="li-voice-pct ${cls}">${pct}% complete</span>
+                <div style="display:flex;align-items:center;gap:12px">
+                  <span class="li-voice-pct ${cls}">${pct}% complete</span>
+                  <a href="/voice-dna.html?profile_id=${profile.id}" style="font-size:12px;font-weight:600;color:var(--brand);text-decoration:none;white-space:nowrap">View full profile →</a>
+                </div>
               </div>
               <div class="li-voice-bar-track">
                 <div class="li-voice-bar-fill ${cls}" style="width:${pct}%"></div>

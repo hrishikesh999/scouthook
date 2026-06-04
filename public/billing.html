@@ -761,6 +761,8 @@
     async function render(sub, priceMap) {
       const isPro      = sub.plan === 'pro';
       const isCanceled = sub.status === 'canceled';
+      // App-level trial: trialing status with no price_id means no Paddle subscription yet.
+      const isAppTrial = sub.status === 'trialing' && !sub.price_id;
 
       // ── Tier bar color ─────────────────────────────────────
       const tierBar = document.getElementById('plan-tier-bar');
@@ -800,9 +802,13 @@
         }
 
         // Renewal / access line
-        if (sub.current_period_end) {
-          const renewalLine = document.getElementById('renewal-line');
-          const renewalText = document.getElementById('renewal-text');
+        const renewalLine = document.getElementById('renewal-line');
+        const renewalText = document.getElementById('renewal-text');
+        if (isAppTrial && sub.trial_ends_at) {
+          renewalLine.style.display = '';
+          const daysLeft = Math.max(0, Math.ceil((new Date(sub.trial_ends_at) - Date.now()) / 86400000));
+          renewalText.innerHTML = `Trial ends on <strong>${fmt(sub.trial_ends_at)}</strong> &mdash; ${daysLeft} day${daysLeft !== 1 ? 's' : ''} left`;
+        } else if (sub.current_period_end) {
           renewalLine.style.display = '';
           renewalText.innerHTML = isCanceled
             ? `Pro access until <strong>${fmt(sub.current_period_end)}</strong>`
@@ -817,7 +823,12 @@
             `Subscription canceled, you keep Pro access until ${fmt(sub.current_period_end)}.`;
         }
 
-        document.getElementById('pro-actions').style.display = '';
+        // Trial users see upgrade CTA; paid Pro users see payment management
+        if (isAppTrial) {
+          document.getElementById('free-actions').style.display = '';
+        } else {
+          document.getElementById('pro-actions').style.display = '';
+        }
 
       } else {
         // Free plan
@@ -840,12 +851,12 @@
 
       document.getElementById('reset-note').textContent = isPro ? resetNote() : '';
 
-      if (!isPro) document.getElementById('usage-upgrade-nudge').style.display = '';
+      if (!isPro || isAppTrial) document.getElementById('usage-upgrade-nudge').style.display = '';
 
       // ── Bottom card ───────────────────────────────────────────
       const bottomCard = document.getElementById('bottom-card');
       bottomCard.style.display = '';
-      if (isPro) {
+      if (isPro && !isAppTrial) {
         if (isCanceled) {
           document.getElementById('canceled-info').style.display = '';
           document.getElementById('canceled-info-text').textContent = sub.current_period_end

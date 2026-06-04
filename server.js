@@ -14,6 +14,7 @@ const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const { db } = require('./db');
 const { sendEmail } = require('./emails');
+const { seedTrialSubscription } = require('./services/subscription');
 
 // Initialise DB adapter (schema is managed by migrations)
 require('./db');
@@ -166,6 +167,7 @@ if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
         workspaceId = membership.workspace_id;
       } else {
         workspaceId = await createPersonalWorkspace(userId, displayName);
+        seedTrialSubscription(userId).catch(() => {});
         // Welcome email only on brand-new signup (new workspace = new user)
         if (email) {
           const appUrl = process.env.APP_URL || '';

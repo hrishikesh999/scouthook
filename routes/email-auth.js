@@ -7,6 +7,7 @@ const { rateLimit, ipKeyGenerator } = require('express-rate-limit');
 const router     = express.Router();
 const { db }     = require('../db');
 const { sendEmail } = require('../emails');
+const { seedTrialSubscription } = require('../services/subscription');
 
 const APP_URL = process.env.APP_URL || '';
 
@@ -163,6 +164,7 @@ router.get('/verify-email', async (req, res) => {
       workspaceId = membership.workspace_id;
     } else {
       workspaceId = await createPersonalWorkspaceForUser(row.user_id, row.display_name);
+      seedTrialSubscription(row.user_id).catch(() => {});
       // Welcome email
       sendEmail('welcome', row.email, {
         name:    row.display_name.split(' ')[0] || row.display_name,

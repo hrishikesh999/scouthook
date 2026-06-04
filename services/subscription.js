@@ -70,6 +70,10 @@ async function getUserPlan(userId) {
     if (!sub.current_period_end) return 'free';
     if (new Date(sub.current_period_end) <= new Date()) return 'free';
   }
+  // App-level trial: enforce expiry via trial_ends_at (no Paddle subscription involved).
+  if (sub.status === 'trialing' && sub.trial_ends_at && new Date(sub.trial_ends_at) <= new Date()) {
+    return 'free';
+  }
 
   // Founding members bought at the $29/mo founding price → Solo features.
   // They keep their price but are mapped to the Solo tier for feature gating.
@@ -296,12 +300,31 @@ async function forceSyncSubscriptionForUser(userId) {
   return { plan, status: subscription.status };
 }
 
+// ---------------------------------------------------------------------------
+// seedTrialSubscription
+// Called on new-user signup. Inserts a 7-day Pro trial row.
+// ON CONFLICT DO NOTHING ensures it never overwrites an existing subscription.
+// ---------------------------------------------------------------------------
+async function seedTrialSubscription(userId) {
+  const trialEnd = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  try {
+    await db.prepare(`
+      INSERT INTO user_subscriptions (user_id, plan, status, trial_ends_at)
+      VALUES (?, 'pro', 'trialing', ?)
+      ON CONFLICT (user_id) DO NOTHING
+    `).run(userId, trialEnd.toISOString());
+  } catch (err) {
+    console.error('[subscription] seedTrialSubscription error (non-fatal):', err.message);
+  }
+}
+
 module.exports = {
   getPaddle,
   getPaddleEnvironment,
   getUserSubscription,
   getUserPlan,
   getFoundingTierInfo,
+  seedTrialSubscription,
   canGeneratePost,
   canGenerateVisual,
   logVisualGeneration,

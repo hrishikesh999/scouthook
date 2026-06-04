@@ -329,9 +329,7 @@ router.get('/connect', async (req, res) => {
     ? '/editor.html?linkedin=connected'
     : from === 'settings'
     ? '/settings.html?linkedin_connected=true#voice-stage-6'
-    : from === 'settings_linkedin'
-    ? '/settings.html?linkedin_connected=true#linkedin'
-    : '/account.html?linkedin_connected=true';
+    : '/linkedin.html?linkedin_connected=true';
   await setOAuthState(state, { userId, tenantId, returnTo });
 
   const params = new URLSearchParams({

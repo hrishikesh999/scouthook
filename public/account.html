@@ -20,14 +20,14 @@
         <a href="/settings.html" class="account-tab">Voice profile</a>
         <a href="/account.html" class="account-tab active" aria-current="page">My account</a>
         <a href="/brand.html" class="account-tab">Brand settings</a>
-        <a href="/settings.html#linkedin" class="account-tab">LinkedIn</a>
+        <a href="/linkedin.html" class="account-tab">LinkedIn</a>
         <a href="/settings.html#members" class="account-tab">Members</a>
         <a href="/billing.html" class="account-tab">Subscription</a>
       </nav>
       <div class="page-header">
         <div>
           <h1 class="profile-heading">My account</h1>
-          <p class="profile-subheading">Manage sign-in and connected accounts.</p>
+          <p class="profile-subheading">Manage your sign-in details and account.</p>
         </div>
       </div>
 
@@ -47,14 +47,6 @@
               </div>
             </div>
           </div>
-        </div>
-      </div>
-
-      <!-- LinkedIn connection card -->
-      <div class="profile-card" id="linkedin-connection-card">
-        <div class="profile-field" style="margin-bottom:0">
-          <label class="field-label">LinkedIn connection</label>
-          <div id="linkedin-status-area" style="margin-top:10px"></div>
         </div>
       </div>
 
@@ -168,67 +160,6 @@
       } catch {
         loadingEl.textContent = 'Unable to load account info.';
       }
-    })();
-
-    // LinkedIn connection card
-    (async () => {
-      const area = document.getElementById('linkedin-status-area');
-
-      function renderConnected(d) {
-        const initials = (d.name || 'LI').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
-        area.innerHTML = `
-          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-            <div style="flex-shrink:0;width:44px;height:44px;border-radius:50%;overflow:hidden;background:var(--bg-pill);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:var(--text-muted)">
-              ${d.photo_url
-                ? `<img src="${d.photo_url}" alt="${d.name || 'LinkedIn photo'}" style="width:100%;height:100%;object-fit:cover">`
-                : initials}
-            </div>
-            <div style="flex:1;min-width:0">
-              <div style="font-size:14px;font-weight:600;color:var(--text)">${d.name || 'LinkedIn user'}</div>
-              ${d.headline ? `<div style="font-size:13px;color:var(--text-muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${d.headline}</div>` : ''}
-              <div style="display:flex;align-items:center;gap:5px;margin-top:5px">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="#0A66C2" aria-hidden="true"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
-                <span style="font-size:12px;color:var(--text-muted)">Connected</span>
-              </div>
-            </div>
-            <button id="linkedin-disconnect-btn" class="btn-secondary" style="padding:6px 12px;font-size:13px" type="button">Disconnect</button>
-          </div>`;
-        document.getElementById('linkedin-disconnect-btn').addEventListener('click', handleDisconnect);
-      }
-
-      function renderNotConnected() {
-        area.innerHTML = `
-          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-            <span style="font-size:13px;color:var(--text-muted)">You're not connected to LinkedIn</span>
-            <a href="/api/linkedin/connect" class="btn-secondary" style="padding:6px 12px;font-size:13px;text-decoration:none">Connect LinkedIn</a>
-          </div>`;
-      }
-
-      async function refreshStatus() {
-        try {
-          const r = await fetch('/api/linkedin/status');
-          const d = await r.json();
-          if (d.connected) {
-            renderConnected(d);
-          } else {
-            renderNotConnected();
-          }
-        } catch {
-          area.innerHTML = `<span class="field-helper" style="margin:0">Unable to check status</span>`;
-        }
-      }
-
-      async function handleDisconnect() {
-        const btn = document.getElementById('linkedin-disconnect-btn');
-        if (!confirm('Disconnect LinkedIn? This removes your access token from ScoutHook.')) return;
-        if (btn) { btn.disabled = true; btn.textContent = 'Disconnecting…'; }
-        try {
-          await fetch('/api/linkedin/disconnect', { method: 'POST' });
-        } catch { /* ignore */ }
-        await refreshStatus();
-      }
-
-      await refreshStatus();
     })();
 
     // Delete account flow

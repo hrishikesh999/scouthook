@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LinkedIn — Scouthook</title>
+  <link rel="stylesheet" href="/css/main.css">
+</head>
+<body>
+
+  <script src="/js/sidebar.js"></script>
+
+  <div id="main-content">
+  <div class="profile-page">
+
+    <div id="li-banner" role="status" aria-live="polite" style="display:none;margin-bottom:16px;padding:12px 14px;border-radius:12px;border:1px solid var(--border);background:var(--bg-surface);font-size:13px;font-weight:600;"></div>
+
+    <nav class="account-tabs" aria-label="Account settings">
+      <a href="/settings.html" class="account-tab">Voice profile</a>
+      <a href="/account.html" class="account-tab">My account</a>
+      <a href="/brand.html" class="account-tab">Brand settings</a>
+      <a href="/linkedin.html" class="account-tab active" aria-current="page">LinkedIn</a>
+      <a href="/settings.html#members" class="account-tab">Members</a>
+      <a href="/billing.html" class="account-tab">Subscription</a>
+    </nav>
+
+    <div class="page-header">
+      <div>
+        <h1 class="profile-heading">LinkedIn connections</h1>
+        <p class="profile-subheading">Connect personal accounts and company pages for this workspace.</p>
+      </div>
+    </div>
+
+    <div style="margin-bottom:24px">
+      <a href="/api/linkedin/connect?from=linkedin_page" class="vw-save-btn" style="display:inline-flex;align-items:center;gap:8px;text-decoration:none">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6zM2 9h4v12H2z"/><circle cx="4" cy="4" r="2"/></svg>
+        Add LinkedIn account
+      </a>
+    </div>
+
+    <div id="linkedin-profiles-list">
+      <p class="vw-chips-empty">Loading…</p>
+    </div>
+
+  </div><!-- /.profile-page -->
+  </div><!-- /#main-content -->
+
+  <script src="/js/session.js"></script>
+  <script src="/js/account-bar.js"></script>
+  <script>
+  (function () {
+    function escapeHtml(s) {
+      return String(s || '')
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+        .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    // ── Post-OAuth banner ─────────────────────────────────────────
+    const banner = document.getElementById('li-banner');
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('linkedin_connected') === 'true') {
+      banner.textContent = 'LinkedIn connected successfully.';
+      banner.style.cssText += ';display:block;border-color:rgba(16,185,129,0.35);background:var(--bg-pill-pass);color:var(--score-pass)';
+      setTimeout(() => { banner.style.display = 'none'; }, 7000);
+    } else if (params.get('error')) {
+      const err = params.get('error');
+      const msg = err === 'linkedin_already_connected'
+        ? 'This LinkedIn account is already connected to another profile. Disconnect it there first.'
+        : `LinkedIn connection failed: ${err}`;
+      banner.textContent = msg;
+      banner.style.cssText += ';display:block;border-color:rgba(220,38,38,0.35);background:var(--bg-pill-fail);color:var(--score-fail)';
+      setTimeout(() => { banner.style.display = 'none'; }, 7000);
+    }
+
+    // ── Load connections ──────────────────────────────────────────
+    async function loadLinkedinConnections() {
+      const container = document.getElementById('linkedin-profiles-list');
+      try {
+        const r = await fetch('/api/linkedin/connections', { credentials: 'same-origin' });
+        const d = await r.json();
+        if (!d.ok || !Array.isArray(d.profiles) || d.profiles.length === 0) {
+          container.innerHTML = '<p class="vw-chips-empty">No LinkedIn accounts connected yet.</p>';
+          return;
+        }
+        renderLinkedinProfiles(d.profiles);
+      } catch {
+        container.innerHTML = '<p class="vw-chips-empty">Unable to load connections.</p>';
+      }
+    }
+
+    function renderLinkedinProfiles(profiles) {
+      const container = document.getElementById('linkedin-profiles-list');
+      container.innerHTML = profiles.map(profile => {
+        const connsHtml = (profile.connections || []).map(conn => {
+          const expired = conn.expires_at && new Date(conn.expires_at) < new Date();
+          return `<div style="display:flex;align-items:center;gap:12px;padding:10px 12px;background:#f9fafb;border-radius:8px;margin-bottom:8px">
+            ${conn.avatar_url
+              ? `<img src="${escapeHtml(conn.avatar_url)}" width="32" height="32" style="border-radius:50%;flex-shrink:0" alt="" />`
+              : `<div style="width:32px;height:32px;border-radius:50%;background:#e5e7eb;flex-shrink:0"></div>`}
+            <div style="flex:1;min-width:0">
+              <p style="margin:0;font-size:14px;font-weight:600;color:#111827;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(conn.display_name || conn.account_key)}</p>
+              <p style="margin:0;font-size:12px;color:#9ca3af;text-transform:capitalize">${escapeHtml(conn.account_type)}${expired ? ' &middot; <span style="color:#ef4444">Token expired — reconnect</span>' : ''}</p>
+            </div>
+            ${conn.is_default
+              ? `<span style="background:#d1fae5;color:#065f46;border-radius:4px;padding:2px 7px;font-size:11px;font-weight:700">Default</span>`
+              : `<button data-set-default="${conn.id}" type="button" style="font-size:12px;color:#6366f1;background:none;border:none;cursor:pointer;text-decoration:underline;white-space:nowrap">Set default</button>`}
+            <button data-disconnect="${conn.id}" type="button" style="font-size:12px;color:#ef4444;background:none;border:none;cursor:pointer;text-decoration:underline;white-space:nowrap;flex-shrink:0">Disconnect</button>
+          </div>`;
+        }).join('');
+
+        return `<div class="vw-stage-panel" style="max-width:640px;margin-bottom:24px">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+            ${profile.avatar_url
+              ? `<img src="${escapeHtml(profile.avatar_url)}" width="36" height="36" style="border-radius:50%;flex-shrink:0" alt="" />`
+              : `<div style="width:36px;height:36px;border-radius:50%;background:#e5e7eb;flex-shrink:0"></div>`}
+            <div>
+              <p style="margin:0;font-size:14px;font-weight:600;color:#111827">${escapeHtml(profile.display_name)}</p>
+              <p style="margin:0;font-size:12px;color:#9ca3af;text-transform:capitalize">${escapeHtml(profile.profile_type)} profile</p>
+            </div>
+          </div>
+          ${connsHtml || '<p class="vw-chips-empty" style="margin:0">No connections under this profile.</p>'}
+        </div>`;
+      }).join('');
+
+      container.querySelectorAll('[data-set-default]').forEach(btn => {
+        btn.addEventListener('click', () => setDefaultConnection(Number(btn.dataset.setDefault)));
+      });
+      container.querySelectorAll('[data-disconnect]').forEach(btn => {
+        btn.addEventListener('click', () => disconnectConnection(Number(btn.dataset.disconnect)));
+      });
+    }
+
+    async function setDefaultConnection(connId) {
+      try {
+        const r = await fetch(`/api/linkedin/connections/${connId}/set-default`, {
+          method: 'POST', credentials: 'same-origin',
+        });
+        const d = await r.json();
+        if (d.ok) loadLinkedinConnections();
+        else alert(d.error || 'Failed to set default.');
+      } catch { alert('Network error.'); }
+    }
+
+    async function disconnectConnection(connId) {
+      if (!confirm('Disconnect this LinkedIn account? Any pending scheduled posts will be cancelled.')) return;
+      try {
+        const r = await fetch(`/api/linkedin/connections/${connId}`, {
+          method: 'DELETE', credentials: 'same-origin',
+        });
+        const d = await r.json();
+        if (d.ok) loadLinkedinConnections();
+        else alert(d.error || 'Failed to disconnect.');
+      } catch { alert('Network error.'); }
+    }
+
+    loadLinkedinConnections();
+  })();
+  </script>
+</body>
+</html>

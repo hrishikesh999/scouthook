@@ -457,6 +457,10 @@ app.get([
   '/Media.html',
   '/profile.html',
   '/brand.html',
+  '/account.html',
+  '/settings.html',
+  '/billing.html',
+  '/linkedin.html',
   '/vault.html',
   '/ideas.html',
 ], requireLoginHtml);

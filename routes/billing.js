@@ -77,12 +77,8 @@ router.get('/config', async (req, res) => {
     // priceIdMonthly returns the *currently active* tier price ID (29/39)
     priceIdMonthly:  tierInfo.priceId,
     priceIdYearly:   process.env.PADDLE_PRICE_ID_YEARLY || '',
-    priceIdFounding1: process.env.PADDLE_PRICE_ID_FOUNDING_1 || '',
-    priceIdFounding2: process.env.PADDLE_PRICE_ID_FOUNDING_2 || '',
     proMonthlyPrice:  tierInfo.price,
     soloMonthlyPrice: 19,
-    foundingTier:    tierInfo.tier,
-    spotsRemaining:  tierInfo.spotsRemaining,
   });
 });
 
@@ -100,8 +96,7 @@ router.get('/subscription', requireAuth, async (req, res) => {
   // Check if a live refresh is needed before reading from DB
   const { db } = require('../db');
   const proPriceIds = [
-    process.env.PADDLE_PRICE_ID_FOUNDING_1,
-    process.env.PADDLE_PRICE_ID_FOUNDING_2,
+    process.env.PADDLE_PRICE_ID_PRO,
     process.env.PADDLE_PRICE_ID_YEARLY,
   ].filter(Boolean);
 
@@ -378,8 +373,7 @@ router.post('/sync', requireAuth, async (req, res) => {
   const paddle = getPaddle();
 
   const proPriceIds = [
-    process.env.PADDLE_PRICE_ID_FOUNDING_1,
-    process.env.PADDLE_PRICE_ID_FOUNDING_2,
+    process.env.PADDLE_PRICE_ID_PRO,
     process.env.PADDLE_PRICE_ID_YEARLY,
   ].filter(Boolean);
 

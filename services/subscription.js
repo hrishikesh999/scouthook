@@ -75,35 +75,20 @@ async function getUserPlan(userId) {
     return 'free';
   }
 
-  // Founding members bought at the $29/mo founding price → Solo features.
-  // They keep their price but are mapped to the Solo tier for feature gating.
-  // They can upgrade to Pro ($39/mo) for unlimited posts + company pages + teams.
-  if (tier === 'pro' && sub.price_id) {
-    const foundingIds = [
-      process.env.PADDLE_PRICE_ID_FOUNDING_1,
-      process.env.PADDLE_PRICE_ID_FOUNDING_2,
-    ].filter(Boolean);
-    if (foundingIds.includes(sub.price_id)) return 'solo';
-  }
 
   return tier; // 'solo' | 'pro'
 }
 
 // ---------------------------------------------------------------------------
 // getFoundingTierInfo
-// Returns the standard Pro price ($39/month) for all new subscribers.
-// Falls back to FOUNDING_2 price ID only if FOUNDING_1 is not configured.
+// Returns the Pro price ID from PADDLE_PRICE_ID_PRO.
 // ---------------------------------------------------------------------------
 async function getFoundingTierInfo() {
-  // Check founding-tier IDs first, then fall back to the generic PADDLE_PRICE_ID_PRO
-  // so deployments that set the simpler name continue to work.
-  const priceId = process.env.PADDLE_PRICE_ID_FOUNDING_1
-    || process.env.PADDLE_PRICE_ID_FOUNDING_2
-    || process.env.PADDLE_PRICE_ID_PRO;
+  const priceId = process.env.PADDLE_PRICE_ID_PRO;
   return {
     priceId,
     price: 39,
-    tier: 'founding_1',
+    tier: 'pro',
     spotsRemaining: 0,
   };
 }
@@ -262,8 +247,7 @@ async function upsertSubscription({
 // Returns { plan, status } of the synced subscription, or null if not found.
 // ---------------------------------------------------------------------------
 const FORCE_SYNC_PRO_PRICE_IDS = [
-  process.env.PADDLE_PRICE_ID_FOUNDING_1,
-  process.env.PADDLE_PRICE_ID_FOUNDING_2,
+  process.env.PADDLE_PRICE_ID_PRO,
   process.env.PADDLE_PRICE_ID_YEARLY,
 ].filter(Boolean);
 

@@ -194,8 +194,7 @@ router.post('/sync-subscription', requireAdminPassword, (req, res) => {
     if (!email) return res.status(400).json({ ok: false, error: 'email is required' });
 
     const proPriceIds = [
-      process.env.PADDLE_PRICE_ID_FOUNDING_1,
-      process.env.PADDLE_PRICE_ID_FOUNDING_2,
+      process.env.PADDLE_PRICE_ID_PRO,
       process.env.PADDLE_PRICE_ID_YEARLY,
     ].filter(Boolean);
 

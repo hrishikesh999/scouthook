@@ -44,11 +44,17 @@ router.get('/:user_id?', async (req, res) => {
         FROM profiles WHERE workspace_id = ? AND is_default = true
       `).get(tenantId);
 
-  const [userRow, wsRow, profileRow] = await Promise.all([
-    db.prepare('SELECT user_role, email, display_name FROM user_profiles WHERE user_id = ?').get(userId),
-    db.prepare('SELECT brand_name, brand_bg, brand_accent, brand_text, brand_logo FROM workspaces WHERE id = ?').get(tenantId),
-    profileQuery,
-  ]);
+  let userRow, wsRow, profileRow;
+  try {
+    [userRow, wsRow, profileRow] = await Promise.all([
+      db.prepare('SELECT user_role, email, display_name FROM user_profiles WHERE user_id = ?').get(userId),
+      db.prepare('SELECT brand_name, brand_bg, brand_accent, brand_text, brand_logo FROM workspaces WHERE id = ?').get(tenantId),
+      profileQuery,
+    ]);
+  } catch (err) {
+    console.error('[profile/get] DB error:', err.message);
+    return res.status(500).json({ ok: false, error: 'db_error' });
+  }
 
   if (!profileRow) {
     return res.json({ ok: true, profile: null });

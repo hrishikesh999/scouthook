@@ -261,7 +261,11 @@
       return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
     function safeJSON(s, fallback) {
-      try { return JSON.parse(s); } catch { return fallback; }
+      if (s == null) return fallback;
+      try {
+        const v = JSON.parse(s);
+        return v ?? fallback;   // JSON.parse(null) === null → use fallback
+      } catch { return fallback; }
     }
 
     const profileId = new URLSearchParams(window.location.search).get('profile_id');
@@ -284,8 +288,9 @@
         }
         _profile = d.profile;
         render(_profile);
-      } catch {
-        container.innerHTML = '<p class="vw-chips-empty">Unable to load profile.</p>';
+      } catch (err) {
+        console.error('[voice-dna] load error:', err);
+        container.innerHTML = `<p class="vw-chips-empty">Unable to load profile — ${escapeHtml(err?.message || 'unknown error')}.</p>`;
       }
     }
 

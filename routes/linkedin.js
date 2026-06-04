@@ -337,7 +337,7 @@ router.get('/connect', async (req, res) => {
     client_id:     clientId,
     redirect_uri:  redirectUri,
     state,
-    scope:         'openid profile w_member_social w_organization_social',
+    scope:         'openid profile w_member_social',
   });
 
   res.redirect(`https://www.linkedin.com/oauth/v2/authorization?${params}`);
@@ -350,13 +350,16 @@ router.get('/connect', async (req, res) => {
 router.get('/callback', async (req, res) => {
   const { code, state, error: oauthError } = req.query;
 
+  const stateData = state ? await getOAuthState(state) : null;
+  const errBase = stateData?.returnTo?.split('?')[0] || '/linkedin.html';
+
   if (oauthError) {
-    return res.redirect(`/account.html?linkedin_error=${encodeURIComponent(oauthError)}`);
+    if (stateData) await deleteOAuthState(state);
+    return res.redirect(`${errBase}?linkedin_error=${encodeURIComponent(oauthError)}`);
   }
 
-  const stateData = state ? await getOAuthState(state) : null;
   if (!stateData) {
-    return res.redirect('/account.html?linkedin_error=invalid_state');
+    return res.redirect('/linkedin.html?linkedin_error=invalid_state');
   }
   await deleteOAuthState(state);
 
@@ -364,7 +367,6 @@ router.get('/callback', async (req, res) => {
 
   if (req.userId && req.userId !== userId) {
     console.warn(`[linkedin/callback] Session user=${req.userId} doesn't match state user=${userId} — rejecting`);
-    const errBase = stateData?.returnTo?.split('?')[0] || '/account.html';
     return res.redirect(`${errBase}?linkedin_error=session_mismatch`);
   }
 

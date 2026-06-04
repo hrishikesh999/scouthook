@@ -428,9 +428,20 @@
 
   // ── Checkout launcher ─────────────────────────────────────────────────────
   async function startPlanCheckout(plan, btn, errorEl) {
+    console.log('[checkout] step 1 — loading config, plan=' + plan);
     if (!paddleConfig) await loadConfig();
+
+    console.log('[checkout] step 2 — config loaded:', JSON.stringify({
+      hasClientToken: !!paddleConfig?.clientToken,
+      env: paddleConfig?.env,
+      priceIdMonthly: paddleConfig?.priceIdMonthly,
+    }));
+
     if (!paddleConfig?.clientToken) {
-      if (errorEl) { errorEl.textContent = 'Checkout unavailable. Please try again later.'; errorEl.style.display = ''; }
+      const msg = 'Checkout unavailable: PADDLE_CLIENT_TOKEN is not configured.';
+      console.error('[checkout]', msg);
+      if (window.toast) window.toast.error(msg);
+      else if (errorEl) { errorEl.textContent = msg; errorEl.style.display = ''; }
       return;
     }
 
@@ -440,6 +451,7 @@
     if (errorEl) errorEl.style.display = 'none';
 
     try {
+      console.log('[checkout] step 3 — calling /api/billing/upgrade');
       const upgradeRes = await fetch('/api/billing/upgrade', {
         method: 'POST',
         credentials: 'same-origin',
@@ -447,11 +459,15 @@
         body: JSON.stringify({ plan }),
       });
       const upgradeData = await upgradeRes.json();
+      console.log('[checkout] step 4 — upgrade response:', JSON.stringify(upgradeData));
+
       if (!upgradeRes.ok || !upgradeData.priceId) {
         throw new Error(upgradeData.error || 'price_not_configured');
       }
 
+      console.log('[checkout] step 5 — initialising Paddle.js');
       await ensurePaddle(paddleConfig.clientToken, paddleConfig.env);
+      console.log('[checkout] step 6 — Paddle ready, opening checkout priceId=' + upgradeData.priceId);
 
       let userId = null;
       try { userId = (await window.scouthookAuthReady)?.user?.user_id ?? null; } catch { /* no-op */ }
@@ -470,10 +486,11 @@
         },
       });
 
+      console.log('[checkout] step 7 — Paddle.Checkout.open() called successfully');
       btn.disabled    = false;
       btn.textContent = origText;
     } catch (err) {
-      console.error('[pricing-modal] checkout error:', err);
+      console.error('[checkout] FAILED at step — error:', err);
       const msg = err.message === 'price_not_configured'
         ? 'Pricing not yet configured. Please contact support.'
         : (err.message || 'Unable to start checkout. Please try again.');

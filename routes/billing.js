@@ -521,9 +521,13 @@ router.post('/upgrade', requireAuth, async (req, res) => {
   if (!['solo', 'pro'].includes(plan)) {
     return res.status(400).json({ ok: false, error: 'invalid_plan' });
   }
-  const priceId = plan === 'pro'
-    ? process.env.PADDLE_PRICE_ID_PRO
-    : process.env.PADDLE_PRICE_ID_SOLO;
+  let priceId;
+  if (plan === 'pro') {
+    const tierInfo = await getFoundingTierInfo();
+    priceId = tierInfo.priceId;
+  } else {
+    priceId = process.env.PADDLE_PRICE_ID_SOLO;
+  }
   if (!priceId) {
     return res.status(500).json({ ok: false, error: 'price_not_configured' });
   }

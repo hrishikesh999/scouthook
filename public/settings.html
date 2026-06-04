@@ -20,10 +20,9 @@
       <a href="/settings.html" class="account-tab" id="tab-nav-voice" data-panel="voice">Voice profile</a>
       <a href="/account.html" class="account-tab">My account</a>
       <a href="/brand.html" class="account-tab">Brand settings</a>
-      <a href="/billing.html" class="account-tab">Subscription</a>
-      <a href="#members" class="account-tab" id="tab-nav-members" data-panel="members">Members</a>
       <a href="#linkedin" class="account-tab" id="tab-nav-linkedin" data-panel="linkedin">LinkedIn</a>
-      <a href="#billing" class="account-tab" id="tab-nav-billing" data-panel="billing">Billing</a>
+      <a href="#members" class="account-tab" id="tab-nav-members" data-panel="members">Members</a>
+      <a href="/billing.html" class="account-tab">Subscription</a>
     </nav>
 
     <div id="panel-voice">
@@ -485,65 +484,6 @@
 
   </div><!-- /#panel-linkedin -->
 
-  <!-- ── Billing panel ──────────────────────────────────────────── -->
-  <div id="panel-billing" hidden>
-
-    <div class="page-header">
-      <div>
-        <h1 class="profile-heading">Billing</h1>
-        <p class="profile-subheading">Your plan, workspace usage, and subscription management.</p>
-      </div>
-    </div>
-
-    <!-- Trial countdown (shown only when status=trialing) -->
-    <div id="billing-trial-card" class="vw-stage-panel" style="max-width:640px;margin-bottom:24px;display:none">
-      <p style="margin:0 0 8px;font-size:13px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:0.05em">Free trial</p>
-      <p id="billing-trial-text" style="margin:0 0 12px;font-size:16px;color:#111827"></p>
-      <div style="background:#e5e7eb;border-radius:4px;height:6px;margin-bottom:16px">
-        <div id="billing-trial-bar" style="background:#6366f1;border-radius:4px;height:6px;width:0%"></div>
-      </div>
-      <button id="billing-upgrade-from-trial" class="vw-save-btn" type="button" style="margin:0">Upgrade now — keep everything</button>
-    </div>
-
-    <!-- Plan card -->
-    <div class="vw-stage-panel" style="max-width:640px;margin-bottom:24px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-        <div>
-          <span id="billing-plan-badge" style="background:#ede9fe;color:#6d28d9;border-radius:4px;padding:3px 10px;font-size:13px;font-weight:700;text-transform:capitalize;margin-right:8px">Free</span>
-          <span id="billing-status-label" style="font-size:13px;color:#9ca3af"></span>
-        </div>
-        <a href="/billing.html" class="vw-save-btn" style="text-decoration:none;padding:8px 14px;font-size:13px">Manage billing →</a>
-      </div>
-
-      <!-- Workspace usage (all plans) -->
-      <div style="border-top:1px solid #f3f4f6;padding-top:16px">
-        <p style="margin:0 0 6px;font-size:14px;font-weight:600;color:#374151">Workspaces</p>
-        <p id="billing-ws-usage" style="margin:0 0 8px;font-size:14px;color:#6b7280">Loading…</p>
-        <div style="background:#e5e7eb;border-radius:4px;height:6px;margin-bottom:12px">
-          <div id="billing-ws-bar" style="background:#6366f1;border-radius:4px;height:6px;width:0%"></div>
-        </div>
-        <!-- Pro: add-on workspace button -->
-        <button id="billing-add-workspace-btn" type="button" class="vw-save-btn" style="display:none;margin:0;font-size:13px;padding:8px 14px">
-          + Add workspace · $29/mo
-        </button>
-        <!-- Free/Solo: upgrade hint -->
-        <p id="billing-ws-upgrade-hint" style="display:none;font-size:13px;color:#6b7280">
-          Pro plan includes 3 workspaces. <a href="#" id="billing-open-upgrade" style="color:#6366f1">Upgrade →</a>
-        </p>
-      </div>
-    </div>
-
-    <!-- Upgrade CTA (shown for free/solo non-trialing) -->
-    <div id="billing-upgrade-cta" class="vw-stage-panel" style="max-width:640px;display:none">
-      <p style="margin:0 0 8px;font-size:16px;font-weight:600;color:#111827">Upgrade to Pro</p>
-      <p style="margin:0 0 16px;font-size:14px;color:#6b7280;line-height:1.5">
-        Unlimited posts, multiple LinkedIn accounts, company pages, Content Vault, and team collaboration.
-      </p>
-      <button id="billing-upgrade-btn" class="vw-save-btn" type="button" style="margin:0">Start 7-day free trial →</button>
-    </div>
-
-  </div><!-- /#panel-billing -->
-
   </div><!-- /.profile-page (voice panel wrapper) -->
   </div><!-- /#main-content -->
 
@@ -562,7 +502,7 @@
     }
 
     // ── Tab switching ──────────────────────────────────────────
-    const ALL_PANELS = ['voice', 'members', 'linkedin', 'billing'];
+    const ALL_PANELS = ['voice', 'members', 'linkedin'];
 
     function getActivePanel() {
       const hash = window.location.hash.replace('#', '');
@@ -594,11 +534,6 @@
       if (name === 'linkedin' && !linkedinEl.dataset.loaded) {
         linkedinEl.dataset.loaded = '1';
         loadLinkedinConnections();
-      }
-      const billingEl = document.getElementById('panel-billing');
-      if (name === 'billing' && billingEl && !billingEl.dataset.loaded) {
-        billingEl.dataset.loaded = '1';
-        loadBillingData();
       }
     }
 
@@ -825,81 +760,6 @@
         else alert(d.error || 'Failed to disconnect.');
       } catch { alert('Network error.'); }
     }
-
-    // ── Billing panel ──────────────────────────────────────────
-    async function loadBillingData() {
-      let sub;
-      try {
-        const r = await fetch('/api/billing/subscription', { credentials: 'same-origin' });
-        sub = await r.json();
-      } catch { return; }
-      if (!sub.ok) return;
-
-      const plan   = sub.plan || 'free';
-      const status = sub.status || 'free';
-      const label  = plan === 'pro' ? 'Pro' : plan === 'solo' ? 'Solo' : 'Free';
-      const badge  = document.getElementById('billing-plan-badge');
-      const statusLbl = document.getElementById('billing-status-label');
-      if (badge) badge.textContent = label;
-      if (statusLbl) statusLbl.textContent = status === 'trialing' ? '(trial)' : status === 'active' ? '' : status;
-
-      // Trial countdown
-      if (status === 'trialing' && sub.trial_ends_at) {
-        const trialCard = document.getElementById('billing-trial-card');
-        const trialText = document.getElementById('billing-trial-text');
-        const trialBar  = document.getElementById('billing-trial-bar');
-        const daysLeft  = Math.max(0, Math.ceil((new Date(sub.trial_ends_at) - Date.now()) / 86400000));
-        if (trialCard) trialCard.style.display = 'block';
-        if (trialText) trialText.textContent = `${daysLeft} day${daysLeft !== 1 ? 's' : ''} left in your free trial.`;
-        if (trialBar)  trialBar.style.width = `${Math.round((7 - daysLeft) / 7 * 100)}%`;
-      }
-
-      // Workspace usage
-      const wsCount = sub.workspace_count ?? 0;
-      const wsLimit = sub.workspace_limit ?? 1;
-      const wsUsage = document.getElementById('billing-ws-usage');
-      const wsBar   = document.getElementById('billing-ws-bar');
-      if (wsUsage) wsUsage.textContent = `${wsCount} of ${wsLimit} used`;
-      if (wsBar)   wsBar.style.width = `${Math.min(100, Math.round(wsCount / Math.max(wsLimit, 1) * 100))}%`;
-
-      // Workspace CTAs
-      const addWsBtn   = document.getElementById('billing-add-workspace-btn');
-      const wsHint     = document.getElementById('billing-ws-upgrade-hint');
-      if (plan === 'pro') {
-        if (addWsBtn) addWsBtn.style.display = 'inline-flex';
-      } else {
-        if (wsHint) wsHint.style.display = 'block';
-      }
-
-      // Upgrade CTA (only for free/solo non-trialing)
-      const upgradeCta = document.getElementById('billing-upgrade-cta');
-      if (upgradeCta && plan !== 'pro' && status !== 'trialing') {
-        upgradeCta.style.display = 'block';
-      }
-    }
-
-    // Upgrade button opens Paddle checkout or navigates to billing page
-    document.getElementById('billing-upgrade-btn')?.addEventListener('click', () => {
-      window.location.href = '/billing.html';
-    });
-    document.getElementById('billing-upgrade-from-trial')?.addEventListener('click', () => {
-      window.location.href = '/billing.html';
-    });
-    document.getElementById('billing-open-upgrade')?.addEventListener('click', e => {
-      e.preventDefault();
-      window.location.href = '/billing.html';
-    });
-    document.getElementById('billing-add-workspace-btn')?.addEventListener('click', async () => {
-      try {
-        const r = await fetch('/api/billing/add-workspace', { method: 'POST', credentials: 'same-origin' });
-        const d = await r.json();
-        if (d.ok && d.priceId && window.Paddle) {
-          window.Paddle.Checkout.open({ items: [{ priceId: d.priceId, quantity: 1 }], customData: d.customData });
-        } else {
-          window.location.href = '/billing.html';
-        }
-      } catch { window.location.href = '/billing.html'; }
-    });
 
     // ── Boot ───────────────────────────────────────────────────
     window.scouthookAuthReady.then(authData => {

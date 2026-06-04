@@ -665,7 +665,7 @@
       padding: 10px 14px;
       background: var(--bg-pill);
       border-radius: 10px;
-      margin-bottom: 10px;
+      margin-top: 12px;
     }
     .profile-sel-label {
       font-size: 0.6875rem;
@@ -948,12 +948,6 @@
         <!-- ── Main input card ──────────────────────────────────── -->
         <div id="guided-chat">
 
-          <!-- Profile selector — hidden until a personal LinkedIn profile exists -->
-          <div id="profile-selector" style="display:none">
-            <span class="profile-sel-label">Writing as</span>
-            <div id="profile-sel-btns" class="profile-sel-btns"></div>
-          </div>
-
           <!-- Vault quality banner (if no docs) -->
           <div id="vault-quality-banner" style="display:none"></div>
 
@@ -985,6 +979,12 @@
           <div id="specificity-nudge" role="status" aria-live="polite"></div>
 
         </div><!-- /#guided-chat -->
+
+        <!-- Profile selector — shown below card when a personal LinkedIn profile exists -->
+        <div id="profile-selector" style="display:none">
+          <span class="profile-sel-label">Writing as</span>
+          <div id="profile-sel-btns" class="profile-sel-btns"></div>
+        </div>
 
         <!-- ── Processing screen ─────────────────────────────── -->
         <div id="processing-screen">

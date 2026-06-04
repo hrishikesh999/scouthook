@@ -18,13 +18,13 @@
     #tabs { display: block !important; width: 100% !important; }
     #visual-btns { display: flex !important; flex-wrap: wrap !important; gap: 8px !important; }
     @media (max-width: 1023px) {
-      #edit-content-wrap { flex-direction: column !important; max-width: 100% !important; }
+      #content-area { flex-direction: column !important; }
+      #edit-meta { flex: none !important; width: 100% !important; height: auto !important; max-height: 380px !important; border-left: none !important; border-top: 1px solid var(--border) !important; }
+      #improver-chat { max-height: 150px !important; }
+      #edit-content-wrap { max-width: 100% !important; }
       #edit-main { flex: none !important; width: 100% !important; }
-      #edit-meta { flex: none !important; width: 100% !important; position: static !important; max-height: 420px !important; }
-      #improver-chat { max-height: 160px !important; }
     }
     @media (max-width: 767px) {
-      #content-area { flex-direction: column !important; }
       #edit-view:not([hidden]) { padding: 16px 16px 32px !important; }
     }
 
@@ -35,21 +35,23 @@
     /* ── Post-publish state (overrides main.css .post-publish-state { display:none }) ── */
     #post-publish-state:not([hidden]) { display: flex !important; align-items: center !important; gap: 8px !important; }
 
-    /* ── Edit view layout — [post 680px + gap 32px + improver 280px = 992px] centred as one block ── */
+    /* ── Edit view layout — post 680px centred within scrollable #editor ── */
     #edit-view:not([hidden]) { display: block; padding: 28px 40px 48px; width: 100%; box-sizing: border-box; }
-    #edit-content-wrap { display: flex; align-items: flex-start; gap: 32px; max-width: 992px; margin-left: auto; margin-right: auto; }
+    #edit-content-wrap { display: flex; align-items: flex-start; max-width: 720px; margin-left: auto; margin-right: auto; }
     #edit-main { flex: 0 0 680px; min-width: 0; display: flex; flex-direction: column; gap: 20px; }
-    #edit-meta { flex: 0 0 280px; display: flex; flex-direction: column; gap: 0; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; position: sticky; top: 20px; max-height: calc(100vh - 100px); background: var(--bg-surface, #fff); }
+    /* Improver panel: full-height sidebar, persists across tab switches */
+    #edit-meta { flex: 0 0 280px; display: flex; flex-direction: column; gap: 0; border-left: 1px solid var(--border); overflow: hidden; height: 100%; background: var(--bg-surface, #fff); }
     #linkedin-preview:not([hidden]) { display: block; padding: 28px 64px 48px; }
     #post-body { outline: none; cursor: text; min-height: 80px; }
     #post-body[contenteditable="false"] { cursor: default; opacity: 0.75; }
     #post-body p { margin: 0 0 12px; }
     #post-body p:last-child { margin-bottom: 0; }
 
-    /* ── Tabs inner — 992px centred, border aligns with content below ── */
-    #tabs-inner { display: flex; align-items: flex-end; justify-content: center; max-width: 992px; margin: 0 auto; padding: 0 40px; box-sizing: border-box; border-bottom: 1px solid var(--border); position: relative; }
+    /* ── Tabs — full-width border; inner row centres the tab buttons ── */
+    #tabs { border-bottom: 1px solid var(--border) !important; }
+    #tabs-inner { display: flex; align-items: flex-end; justify-content: center; max-width: 720px; margin: 0 auto; padding: 0 40px; box-sizing: border-box; position: relative; }
 
-    /* ── Post Improver panel ── */
+    /* ── Post Improver panel (full-height sidebar) ── */
     #improver-header { padding: 14px 16px 10px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
     #improver-title { font-weight: 700; font-size: 13px; color: var(--text-heading); display: block; letter-spacing: -0.01em; }
     #improver-subtitle { font-size: 11px; color: var(--text-secondary); margin-top: 2px; display: block; }
@@ -286,54 +288,6 @@
           </div>
           <!-- /edit-main -->
 
-          <!-- Right: Post Improver panel -->
-          <div id="edit-meta" role="complementary" aria-label="Post Improver">
-
-            <!-- Header -->
-            <div id="improver-header">
-              <span id="improver-title">✦ Post Improver</span>
-              <span id="improver-subtitle">Brand voice · vault context</span>
-            </div>
-
-            <!-- Compact meta strip — same element IDs as before so JS works unchanged -->
-            <div id="improver-meta-strip">
-              <div id="quality-feedback" hidden></div>
-              <div id="meta-post-type-row" class="meta-info-row" hidden>
-                <span class="meta-info-label">Type</span>
-                <span class="meta-info-value" id="meta-post-type-value"></span>
-                <span class="meta-tip" id="meta-post-type-tip" data-tip="" tabindex="0" aria-label="About this post type">?</span>
-              </div>
-              <div id="meta-hook-row" class="meta-info-row" hidden>
-                <span class="meta-info-label">Hook</span>
-                <span class="meta-info-value" id="meta-hook-value"></span>
-                <span class="meta-tip" id="meta-hook-tip" data-tip="" tabindex="0" aria-label="About this hook">?</span>
-              </div>
-              <div id="meta-words-row" class="meta-info-row" hidden>
-                <span class="meta-info-label">Words</span>
-                <span class="meta-info-value" id="status-word-count"></span>
-              </div>
-            </div>
-
-            <!-- Chat messages -->
-            <div id="improver-chat" role="log" aria-live="polite" aria-label="Post improvement conversation"></div>
-
-            <!-- Quick-action chips -->
-            <div id="improver-chips" aria-label="Quick improvement options">
-              <button class="improve-chip" data-instruction="Sharpen the hook — make line 1 impossible to scroll past">Sharper hook</button>
-              <button class="improve-chip" data-instruction="Make it punchier — shorter sentences, stronger verbs, cut flab">Punchier</button>
-              <button class="improve-chip" data-instruction="Add more specific details — replace vague claims with concrete numbers, names, or outcomes">More specific</button>
-              <button class="improve-chip" data-instruction="Make it shorter — cut weak or redundant sentences without losing the core message">Shorter</button>
-            </div>
-
-            <!-- Input row -->
-            <div id="improver-input-row">
-              <textarea id="improver-input" placeholder="How should I improve this?" rows="2" maxlength="500" aria-label="Improvement instruction"></textarea>
-              <button id="improver-send" aria-label="Send improvement request">↑</button>
-            </div>
-
-          </div>
-          <!-- /edit-meta -->
-
           </div>
           <!-- /edit-content-wrap -->
         </div>
@@ -384,7 +338,53 @@
       </div>
       <!-- /editor -->
 
+      <!-- Post Improver panel — sibling of #editor so it persists across tab switches -->
+      <div id="edit-meta" role="complementary" aria-label="Post Improver">
 
+        <!-- Header -->
+        <div id="improver-header">
+          <span id="improver-title">✦ Post Improver</span>
+          <span id="improver-subtitle">Brand voice · vault context</span>
+        </div>
+
+        <!-- Compact meta strip — same element IDs so existing JS works unchanged -->
+        <div id="improver-meta-strip">
+          <div id="quality-feedback" hidden></div>
+          <div id="meta-post-type-row" class="meta-info-row" hidden>
+            <span class="meta-info-label">Type</span>
+            <span class="meta-info-value" id="meta-post-type-value"></span>
+            <span class="meta-tip" id="meta-post-type-tip" data-tip="" tabindex="0" aria-label="About this post type">?</span>
+          </div>
+          <div id="meta-hook-row" class="meta-info-row" hidden>
+            <span class="meta-info-label">Hook</span>
+            <span class="meta-info-value" id="meta-hook-value"></span>
+            <span class="meta-tip" id="meta-hook-tip" data-tip="" tabindex="0" aria-label="About this hook">?</span>
+          </div>
+          <div id="meta-words-row" class="meta-info-row" hidden>
+            <span class="meta-info-label">Words</span>
+            <span class="meta-info-value" id="status-word-count"></span>
+          </div>
+        </div>
+
+        <!-- Chat messages -->
+        <div id="improver-chat" role="log" aria-live="polite" aria-label="Post improvement conversation"></div>
+
+        <!-- Quick-action chips (hidden once conversation starts) -->
+        <div id="improver-chips" aria-label="Quick improvement options">
+          <button class="improve-chip" data-instruction="Sharpen the hook — make line 1 impossible to scroll past">Sharper hook</button>
+          <button class="improve-chip" data-instruction="Make it punchier — shorter sentences, stronger verbs, cut flab">Punchier</button>
+          <button class="improve-chip" data-instruction="Add more specific details — replace vague claims with concrete numbers, names, or outcomes">More specific</button>
+          <button class="improve-chip" data-instruction="Make it shorter — cut weak or redundant sentences without losing the core message">Shorter</button>
+        </div>
+
+        <!-- Input row -->
+        <div id="improver-input-row">
+          <textarea id="improver-input" placeholder="How should I improve this?" rows="2" maxlength="500" aria-label="Improvement instruction"></textarea>
+          <button id="improver-send" aria-label="Send improvement request">↑</button>
+        </div>
+
+      </div>
+      <!-- /edit-meta -->
 
     </div>
     <!-- /content-area -->
@@ -2010,6 +2010,9 @@ async function sendImproveRequest(instruction) {
 
   appendImproverMessage('user', instruction);
   appendImproverMessage('assistant', null, true);
+  // Hide chips once conversation starts — more room for chat
+  const chips = document.getElementById('improver-chips');
+  if (chips) chips.hidden = true;
 
   improverHistory.push({ role: 'user', content: instruction });
 

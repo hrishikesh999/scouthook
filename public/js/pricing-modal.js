@@ -120,7 +120,7 @@
 
   .pm-cards {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-columns: 1fr 1fr;
     gap: 14px;
   }
   @media (max-width: 680px) {
@@ -292,27 +292,6 @@
         <div id="pm-context-banner"></div>
 
         <div class="pm-cards">
-
-          <!-- Free -->
-          <div class="pm-card" id="pm-card-free">
-            <div class="pm-plan-name">
-              Free
-              <span class="pm-current-chip" id="pm-free-chip" style="display:none">Current plan</span>
-            </div>
-            <div class="pm-price"><sup>$</sup>0</div>
-            <div class="pm-period">forever</div>
-            <hr class="pm-divider">
-            <ul class="pm-features">
-              ${feat(true,  '<strong>5</strong>&nbsp;posts / month')}
-              ${feat(true,  'Generate from idea or document')}
-              ${feat(true,  'All 8 hook archetypes + Hook B')}
-              ${feat(true,  'Immediate LinkedIn publishing')}
-              ${feat(true,  'Draft hub &amp; post archive')}
-              ${feat(false, 'Post scheduling')}
-              ${feat(false, 'Content Vault')}
-            </ul>
-            <button class="pm-cta pm-cta-muted" id="pm-free-btn" disabled>Current plan</button>
-          </div>
 
           <!-- Solo -->
           <div class="pm-card" id="pm-card-solo">
@@ -537,7 +516,6 @@
     const requiredPlan = opts.requiredPlan || null;
 
     // — Reset chips
-    $id('pm-free-chip').style.display    = 'none';
     $id('pm-solo-chip').style.display    = 'none';
     $id('pm-pro-chip').style.display     = 'none';
     $id('pm-popular-chip').style.display = '';
@@ -547,7 +525,6 @@
     $id('pm-pro-error').style.display  = 'none';
 
     // — Reset card highlights: Pro is featured by default
-    $id('pm-card-free').classList.remove('pm-featured', 'pm-featured-solo');
     $id('pm-card-solo').classList.remove('pm-featured', 'pm-featured-solo');
     $id('pm-card-pro').classList.remove('pm-featured', 'pm-featured-solo');
     $id('pm-card-pro').classList.add('pm-featured');
@@ -594,10 +571,7 @@
     currentPlan = sub.plan || 'free';
 
     // — Apply plan state to UI
-    if (currentPlan === 'free') {
-      $id('pm-free-chip').style.display = '';
-      // Solo and Pro keep "Start free trial" text
-    } else if (currentPlan === 'solo') {
+    if (currentPlan === 'solo') {
       $id('pm-solo-chip').style.display = '';
       soloBtn.disabled    = true;
       soloBtn.textContent = 'Current plan';

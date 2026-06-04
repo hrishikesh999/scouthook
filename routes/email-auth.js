@@ -3,7 +3,7 @@
 const express    = require('express');
 const crypto     = require('crypto');
 const bcrypt     = require('bcryptjs');
-const { rateLimit } = require('express-rate-limit');
+const { rateLimit, ipKeyGenerator } = require('express-rate-limit');
 const router     = express.Router();
 const { db }     = require('../db');
 const { sendEmail } = require('../emails');
@@ -58,7 +58,7 @@ async function establishSession(req, userId, workspaceId) {
 const loginLimiter = rateLimit({
   windowMs:      15 * 60 * 1000,
   max:           5,
-  keyGenerator:  req => req.ip,
+  keyGenerator:  (req, res) => ipKeyGenerator(req, res),
   skipSuccessfulRequests: true,
   handler:       (req, res) => res.status(429).json({ ok: false, error: 'too_many_attempts' }),
 });
@@ -67,7 +67,7 @@ const loginLimiter = rateLimit({
 const resendLimiter = rateLimit({
   windowMs:      60 * 60 * 1000,
   max:           3,
-  keyGenerator:  req => (req.body?.email || req.ip),
+  keyGenerator:  (req, res) => (req.body?.email || ipKeyGenerator(req, res)),
   handler:       (req, res) => res.status(429).json({ ok: false, error: 'too_many_resend_attempts' }),
 });
 

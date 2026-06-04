@@ -309,10 +309,4 @@ module.exports = {
   getPaddleCustomerId,
   upsertSubscription,
   forceSyncSubscriptionForUser,
-  FREE_GENERATION_LIMIT,
-  FREE_VISUAL_LIMIT,
-  FREE_VAULT_DOC_LIMIT,
-  PRO_GENERATION_LIMIT,
-  PRO_VISUAL_LIMIT,
-  PRO_VAULT_DOC_LIMIT,
 };

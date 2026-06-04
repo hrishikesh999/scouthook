@@ -1190,4 +1190,4 @@ async function backgroundExtractCtaAlternatives(postId, post, rawIdea, db) {
   } catch { /* non-fatal — editor shows empty CTA alternatives */ }
 }
 
-module.exports = { ideaToPost, generateInsightAlternativePost, vaultSeedToPost, checkSubstance, backgroundExtractCtaAlternatives };
+module.exports = { ideaToPost, generateInsightAlternativePost, vaultSeedToPost, checkSubstance, backgroundExtractCtaAlternatives, buildRefineSystemPrompt };

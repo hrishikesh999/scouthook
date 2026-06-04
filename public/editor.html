@@ -17,8 +17,15 @@
     #editor { flex: 1 !important; min-width: 0 !important; overflow-y: auto !important; overflow-x: hidden !important; height: 100% !important; }
     #tabs { display: block !important; width: 100% !important; }
     #visual-btns { display: flex !important; flex-wrap: wrap !important; gap: 8px !important; }
+    @media (max-width: 1023px) {
+      #edit-content-wrap { flex-direction: column !important; max-width: 100% !important; }
+      #edit-main { flex: none !important; width: 100% !important; }
+      #edit-meta { flex: none !important; width: 100% !important; position: static !important; max-height: 420px !important; }
+      #improver-chat { max-height: 160px !important; }
+    }
     @media (max-width: 767px) {
       #content-area { flex-direction: column !important; }
+      #edit-view:not([hidden]) { padding: 16px 16px 32px !important; }
     }
 
     /* ── Viewport containment ── */
@@ -28,19 +35,51 @@
     /* ── Post-publish state (overrides main.css .post-publish-state { display:none }) ── */
     #post-publish-state:not([hidden]) { display: flex !important; align-items: center !important; gap: 8px !important; }
 
-    /* ── Edit view layout — [post 680px + gap 32px + meta 168px = 880px] centred as one block ── */
+    /* ── Edit view layout — [post 680px + gap 32px + improver 280px = 992px] centred as one block ── */
     #edit-view:not([hidden]) { display: block; padding: 28px 40px 48px; width: 100%; box-sizing: border-box; }
-    #edit-content-wrap { display: flex; align-items: flex-start; gap: 32px; max-width: 880px; margin-left: auto; margin-right: auto; }
+    #edit-content-wrap { display: flex; align-items: flex-start; gap: 32px; max-width: 992px; margin-left: auto; margin-right: auto; }
     #edit-main { flex: 0 0 680px; min-width: 0; display: flex; flex-direction: column; gap: 20px; }
-    #edit-meta { flex: 0 0 168px; display: flex; flex-direction: column; gap: 14px; }
+    #edit-meta { flex: 0 0 280px; display: flex; flex-direction: column; gap: 0; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; position: sticky; top: 20px; max-height: calc(100vh - 100px); background: var(--bg-surface, #fff); }
     #linkedin-preview:not([hidden]) { display: block; padding: 28px 64px 48px; }
     #post-body { outline: none; cursor: text; min-height: 80px; }
     #post-body[contenteditable="false"] { cursor: default; opacity: 0.75; }
     #post-body p { margin: 0 0 12px; }
     #post-body p:last-child { margin-bottom: 0; }
 
-    /* ── Tabs inner — 880px centred, border aligns with content below ── */
-    #tabs-inner { display: flex; align-items: flex-end; justify-content: center; max-width: 880px; margin: 0 auto; padding: 0 40px; box-sizing: border-box; border-bottom: 1px solid var(--border); position: relative; }
+    /* ── Tabs inner — 992px centred, border aligns with content below ── */
+    #tabs-inner { display: flex; align-items: flex-end; justify-content: center; max-width: 992px; margin: 0 auto; padding: 0 40px; box-sizing: border-box; border-bottom: 1px solid var(--border); position: relative; }
+
+    /* ── Post Improver panel ── */
+    #improver-header { padding: 14px 16px 10px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    #improver-title { font-weight: 700; font-size: 13px; color: var(--text-heading); display: block; letter-spacing: -0.01em; }
+    #improver-subtitle { font-size: 11px; color: var(--text-secondary); margin-top: 2px; display: block; }
+    #improver-meta-strip { padding: 10px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0; display: flex; flex-direction: column; gap: 6px; }
+    #improver-meta-strip #quality-feedback { font-size: 12px; text-align: left; padding: 0; }
+    #improver-meta-strip .meta-info-row { display: flex; align-items: baseline; gap: 4px; flex-wrap: wrap; }
+    #improver-chat { flex: 1; overflow-y: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+    .improver-msg-user { align-self: flex-end; background: var(--bg-subtle, #f3f4f6); border-radius: 10px 10px 2px 10px; padding: 7px 11px; font-size: 12px; max-width: 90%; line-height: 1.4; color: var(--text-body); word-break: break-word; }
+    .improver-msg-ai { align-self: flex-start; width: 100%; }
+    .improver-msg-card { background: var(--bg-subtle, #f9fafb); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 12px; line-height: 1.6; white-space: pre-wrap; color: var(--text-body); word-break: break-word; }
+    .improver-apply-btn { font-size: 11px; font-weight: 600; color: var(--accent, #2563eb); background: none; border: none; cursor: pointer; padding: 5px 0 2px; display: block; transition: opacity 0.1s; }
+    .improver-apply-btn:hover { opacity: 0.75; }
+    .improver-apply-btn.applied { color: #16a34a; cursor: default; }
+    .improver-apply-btn.applied:hover { opacity: 1; }
+    .improver-loading { display: flex; gap: 5px; align-items: center; padding: 10px 2px; }
+    .improver-loading span { width: 6px; height: 6px; background: var(--text-muted, #9ca3af); border-radius: 50%; animation: impDot 1.2s ease-in-out infinite; }
+    .improver-loading span:nth-child(2) { animation-delay: 0.2s; }
+    .improver-loading span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes impDot { 0%,60%,100% { transform: scale(0.7); opacity: 0.4; } 30% { transform: scale(1); opacity: 1; } }
+    .improver-error { font-size: 12px; color: #dc2626; padding: 6px 2px; }
+    #improver-chips { padding: 8px 14px; display: flex; flex-wrap: wrap; gap: 6px; border-top: 1px solid var(--border); flex-shrink: 0; }
+    .improve-chip { background: var(--bg-subtle, #f3f4f6); border: 1px solid var(--border); border-radius: 20px; font-size: 11px; padding: 4px 10px; cursor: pointer; color: var(--text-secondary); font-family: inherit; transition: background 0.1s, color 0.1s, border-color 0.1s; white-space: nowrap; line-height: 1.4; }
+    .improve-chip:hover { background: #eff6ff; border-color: #93c5fd; color: #1d4ed8; }
+    .improve-chip:disabled { opacity: 0.45; cursor: default; }
+    #improver-input-row { display: flex; gap: 8px; padding: 10px 14px 12px; border-top: 1px solid var(--border); flex-shrink: 0; align-items: flex-end; }
+    #improver-input { flex: 1; resize: none; border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; font-size: 12px; font-family: inherit; line-height: 1.45; outline: none; background: var(--bg-surface, #fff); color: var(--text-body); }
+    #improver-input:focus { border-color: var(--accent, #2563eb); box-shadow: 0 0 0 2px rgba(37,99,235,0.12); }
+    #improver-send { width: 30px; height: 30px; min-width: 30px; border-radius: 50%; background: var(--accent, #2563eb); color: #fff; border: none; cursor: pointer; font-size: 15px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: background 0.15s; }
+    #improver-send:hover { background: #1d4ed8; }
+    #improver-send:disabled { background: var(--bg-subtle, #e5e7eb); color: var(--text-muted, #9ca3af); cursor: default; }
 
 
     /* ── LinkedIn connect banner ── */
@@ -247,30 +286,51 @@
           </div>
           <!-- /edit-main -->
 
-          <!-- Right: meta panel -->
-          <div id="edit-meta">
-            <!-- 1. Quality status -->
-            <div id="quality-feedback" hidden></div>
+          <!-- Right: Post Improver panel -->
+          <div id="edit-meta" role="complementary" aria-label="Post Improver">
 
-            <!-- 2. Post type -->
-            <div id="meta-post-type-row" class="meta-info-row" hidden>
-              <span class="meta-info-label">Post type</span>
-              <span class="meta-info-value" id="meta-post-type-value"></span>
-              <span class="meta-tip" id="meta-post-type-tip" data-tip="" tabindex="0" aria-label="About this post type">?</span>
+            <!-- Header -->
+            <div id="improver-header">
+              <span id="improver-title">✦ Post Improver</span>
+              <span id="improver-subtitle">Brand voice · vault context</span>
             </div>
 
-            <!-- 3. Hook -->
-            <div id="meta-hook-row" class="meta-info-row" hidden>
-              <span class="meta-info-label">Hook</span>
-              <span class="meta-info-value" id="meta-hook-value"></span>
-              <span class="meta-tip" id="meta-hook-tip" data-tip="" tabindex="0" aria-label="About this hook">?</span>
+            <!-- Compact meta strip — same element IDs as before so JS works unchanged -->
+            <div id="improver-meta-strip">
+              <div id="quality-feedback" hidden></div>
+              <div id="meta-post-type-row" class="meta-info-row" hidden>
+                <span class="meta-info-label">Type</span>
+                <span class="meta-info-value" id="meta-post-type-value"></span>
+                <span class="meta-tip" id="meta-post-type-tip" data-tip="" tabindex="0" aria-label="About this post type">?</span>
+              </div>
+              <div id="meta-hook-row" class="meta-info-row" hidden>
+                <span class="meta-info-label">Hook</span>
+                <span class="meta-info-value" id="meta-hook-value"></span>
+                <span class="meta-tip" id="meta-hook-tip" data-tip="" tabindex="0" aria-label="About this hook">?</span>
+              </div>
+              <div id="meta-words-row" class="meta-info-row" hidden>
+                <span class="meta-info-label">Words</span>
+                <span class="meta-info-value" id="status-word-count"></span>
+              </div>
             </div>
 
-            <!-- 4. Word count -->
-            <div id="meta-words-row" class="meta-info-row" hidden>
-              <span class="meta-info-label">Words</span>
-              <span class="meta-info-value" id="status-word-count"></span>
+            <!-- Chat messages -->
+            <div id="improver-chat" role="log" aria-live="polite" aria-label="Post improvement conversation"></div>
+
+            <!-- Quick-action chips -->
+            <div id="improver-chips" aria-label="Quick improvement options">
+              <button class="improve-chip" data-instruction="Sharpen the hook — make line 1 impossible to scroll past">Sharper hook</button>
+              <button class="improve-chip" data-instruction="Make it punchier — shorter sentences, stronger verbs, cut flab">Punchier</button>
+              <button class="improve-chip" data-instruction="Add more specific details — replace vague claims with concrete numbers, names, or outcomes">More specific</button>
+              <button class="improve-chip" data-instruction="Make it shorter — cut weak or redundant sentences without losing the core message">Shorter</button>
             </div>
+
+            <!-- Input row -->
+            <div id="improver-input-row">
+              <textarea id="improver-input" placeholder="How should I improve this?" rows="2" maxlength="500" aria-label="Improvement instruction"></textarea>
+              <button id="improver-send" aria-label="Send improvement request">↑</button>
+            </div>
+
           </div>
           <!-- /edit-meta -->
 
@@ -1829,6 +1889,7 @@ function init() {
   wireSchedulePause();
   wireFirstComment();
   wireEmojiStrip();
+  wireImprover();
 
   document.getElementById('post-body').addEventListener('input', scheduleAutoSave);
 
@@ -1867,6 +1928,153 @@ function wireEmojiStrip() {
       }
       scheduleAutoSave();
     });
+  });
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   POST IMPROVER
+════════════════════════════════════════════════════════════════════════ */
+let improverHistory = [];
+let improverBusy    = false;
+
+function appendImproverMessage(role, text, isLoading) {
+  const chat = document.getElementById('improver-chat');
+  if (!chat) return null;
+
+  const wrap = document.createElement('div');
+
+  if (role === 'user') {
+    wrap.className  = 'improver-msg-user';
+    wrap.textContent = text;
+  } else if (isLoading) {
+    wrap.className  = 'improver-msg-ai';
+    wrap.innerHTML  = '<div class="improver-loading"><span></span><span></span><span></span></div>';
+  } else {
+    buildAIMessageNode(wrap, text);
+  }
+
+  chat.appendChild(wrap);
+  chat.scrollTop = chat.scrollHeight;
+  return wrap;
+}
+
+function buildAIMessageNode(wrap, text) {
+  wrap.className   = 'improver-msg-ai';
+  wrap.innerHTML   = '';
+
+  const card = document.createElement('div');
+  card.className   = 'improver-msg-card';
+  card.textContent = text;
+
+  const applyBtn   = document.createElement('button');
+  applyBtn.className   = 'improver-apply-btn';
+  applyBtn.textContent = '▶ Apply to post';
+  applyBtn.addEventListener('click', () => {
+    const postBody = document.getElementById('post-body');
+    const paras    = text.split(/\n\n+/).filter(Boolean);
+    postBody.innerHTML = paras.map(t =>
+      `<p class="text-post" data-style="normal">${escHtml(t).replace(/\n/g, '<br>')}</p>`
+    ).join('');
+    scheduleAutoSave();
+    applyBtn.textContent = '✓ Applied';
+    applyBtn.className   = 'improver-apply-btn applied';
+  });
+
+  wrap.appendChild(card);
+  wrap.appendChild(applyBtn);
+}
+
+function replaceLastImproverMessage(text, isError) {
+  const chat = document.getElementById('improver-chat');
+  if (!chat) return;
+  const last = chat.lastElementChild;
+  if (!last) return;
+
+  if (isError) {
+    last.className   = 'improver-msg-ai';
+    last.innerHTML   = `<span class="improver-error">${escHtml(text)}</span>`;
+  } else {
+    buildAIMessageNode(last, text);
+  }
+
+  chat.scrollTop = chat.scrollHeight;
+}
+
+async function sendImproveRequest(instruction) {
+  if (improverBusy) return;
+  const currentText = getPostContent();
+  if (!currentText) return;
+
+  improverBusy = true;
+  setImproverBusyState(true);
+
+  appendImproverMessage('user', instruction);
+  appendImproverMessage('assistant', null, true);
+
+  improverHistory.push({ role: 'user', content: instruction });
+
+  try {
+    const res  = await fetch('/api/generate/improve', {
+      method:      'POST',
+      credentials: 'include',
+      headers:     { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        postId:      currentPostId,
+        instruction,
+        currentText,
+        history:     improverHistory.slice(-6),
+      }),
+    });
+    const data = await res.json();
+
+    if (!res.ok || !data.ok) {
+      replaceLastImproverMessage('Something went wrong. Please try again.', true);
+      improverHistory.pop();
+    } else {
+      replaceLastImproverMessage(data.post, false);
+      improverHistory.push({ role: 'assistant', content: data.post });
+    }
+  } catch {
+    replaceLastImproverMessage('Something went wrong. Please try again.', true);
+    improverHistory.pop();
+  } finally {
+    improverBusy = false;
+    setImproverBusyState(false);
+  }
+}
+
+function setImproverBusyState(busy) {
+  const sendBtn = document.getElementById('improver-send');
+  const input   = document.getElementById('improver-input');
+  if (sendBtn) sendBtn.disabled = busy;
+  document.querySelectorAll('.improve-chip').forEach(c => { c.disabled = busy; });
+  if (!busy && input) input.focus();
+}
+
+function wireImprover() {
+  document.querySelectorAll('.improve-chip').forEach(chip => {
+    chip.addEventListener('click', () => sendImproveRequest(chip.dataset.instruction));
+  });
+
+  const sendBtn = document.getElementById('improver-send');
+  const input   = document.getElementById('improver-input');
+  if (!sendBtn || !input) return;
+
+  sendBtn.addEventListener('click', () => {
+    const val = input.value.trim();
+    if (!val) return;
+    input.value = '';
+    sendImproveRequest(val);
+  });
+
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      const val = input.value.trim();
+      if (!val) return;
+      input.value = '';
+      sendImproveRequest(val);
+    }
   });
 }
 

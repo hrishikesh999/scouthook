@@ -1077,4 +1077,158 @@ Return ONLY valid JSON, nothing else:
   }
 });
 
+// ---------------------------------------------------------------------------
+// POST /api/generate/improve
+// Chat-based post improver. Reshapes the current post text using the refine
+// prompt (copy-editor model: tightens what is there, never invents).
+// Uses brand voice profile + vault chunk context when available.
+// Body: { postId, instruction, currentText, history? }
+// ---------------------------------------------------------------------------
+router.post('/improve', async (req, res) => {
+  const { userId, tenantId } = req;
+  if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
+
+  const { postId, instruction, currentText, history = [] } = req.body;
+
+  if (!currentText?.trim()) {
+    return res.status(400).json({ ok: false, error: 'currentText is required' });
+  }
+  if (!instruction?.trim()) {
+    return res.status(400).json({ ok: false, error: 'instruction is required' });
+  }
+
+  // Fetch post metadata to get post_type, profile, and vault context
+  let postMeta = null;
+  if (postId) {
+    try {
+      postMeta = await db.prepare(`
+        SELECT gp.post_type, gp.funnel_type, gp.profile_id, gr.input_data
+        FROM   generated_posts gp
+        LEFT   JOIN generation_runs gr ON gr.id = gp.run_id
+        WHERE  gp.id = ? AND gp.tenant_id = ?
+        LIMIT  1
+      `).get(postId, tenantId);
+    } catch { /* non-fatal — proceed without post metadata */ }
+  }
+
+  let profile = await resolveProfile(tenantId, postMeta?.profile_id);
+  if (!profile) return res.status(400).json({ ok: false, error: 'complete_profile_first' });
+
+  if (profile.profile_type === 'person') {
+    const brandProfile = await db.prepare(
+      'SELECT * FROM profiles WHERE workspace_id = ? AND is_default = true'
+    ).get(tenantId);
+    if (brandProfile) profile = mergeProfiles(brandProfile, profile);
+  }
+
+  // Fetch vault chunk context if this post was generated from a vault idea
+  let vaultContext = null;
+  try {
+    let vaultIdeaId = null;
+    if (postMeta?.input_data) {
+      const inputData = JSON.parse(postMeta.input_data);
+      vaultIdeaId = inputData?.vault_idea_id || null;
+    }
+    if (vaultIdeaId) {
+      const vaultIdea = await db.prepare(
+        'SELECT chunk_id FROM vault_ideas WHERE id = ? AND tenant_id = ?'
+      ).get(vaultIdeaId, tenantId);
+      if (vaultIdea?.chunk_id) {
+        const chunk = await db.prepare(
+          'SELECT content FROM vault_chunks WHERE id = ? AND tenant_id = ?'
+        ).get(vaultIdea.chunk_id, tenantId);
+        if (chunk?.content) vaultContext = chunk.content.slice(0, 2000);
+      }
+    }
+  } catch { /* non-fatal — improve without vault context */ }
+
+  const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim();
+  if (!apiKey) return res.status(500).json({ ok: false, error: 'no_api_key' });
+
+  try {
+    const { buildRefineSystemPrompt } = require('../services/ideaPath');
+    const Anthropic = require('@anthropic-ai/sdk');
+    const client = new Anthropic({ apiKey });
+
+    const systemPrompt = buildRefineSystemPrompt(
+      profile,
+      null,
+      postMeta?.post_type || null,
+      null,
+      null
+    );
+
+    // Build the history preamble for multi-turn context
+    const historyBlock = history.length
+      ? '\n\nPREVIOUS EXCHANGES (for context only — apply the new instruction below):\n' +
+        history.slice(-6).map(m =>
+          `${m.role === 'user' ? 'Author request' : 'Previous version'}: ${m.content.slice(0, 400)}`
+        ).join('\n\n---\n\n')
+      : '';
+
+    const vaultBlock = vaultContext
+      ? `\n\nSOURCE MATERIAL (from the author's vault — reference specific details when relevant):\n<source>\n${vaultContext}\n</source>\n`
+      : '';
+
+    const userPrompt = `AUTHOR'S SPECIFIC REQUEST: ${instruction}
+
+Apply this change while preserving all the author's specifics (numbers, names, outcomes, timeframes) and everything else not targeted by this request.${historyBlock}${vaultBlock}
+
+CURRENT POST:
+${currentText}
+
+SPECIFICITY CHECK: Before reshaping, identify the most concrete fact or result in the post. Keep it verbatim.
+
+Return ONLY valid JSON:
+{
+  "synthesis": {
+    "suggested_angle": "one sentence describing what changed and why",
+    "recommended_structure": "one sentence on structure",
+    "supporting_insight": "the closing CTA used"
+  },
+  "post": "full revised post text",
+  "cta_alternatives": [
+    "one alternative closing question — different angle",
+    "one alternative closing question — softer or more specific"
+  ]
+}
+
+No markdown fences. No explanation. Only the JSON object.`;
+
+    const message = await client.messages.create({
+      model:      'claude-sonnet-4-6',
+      max_tokens: 1200,
+      system:     systemPrompt,
+      messages:   [{ role: 'user', content: userPrompt }],
+    });
+
+    const raw = message.content[0]?.text?.trim() || '{}';
+    let result = {};
+    try {
+      const match = raw.match(/\{[\s\S]*\}/);
+      result = JSON.parse(match ? match[0] : raw);
+    } catch {
+      return res.status(500).json({ ok: false, error: 'parse_failed' });
+    }
+
+    if (!result.post?.trim()) {
+      return res.status(500).json({ ok: false, error: 'empty_result' });
+    }
+
+    return res.json({
+      ok:              true,
+      post:            result.post,
+      note:            result.synthesis?.suggested_angle || null,
+      ctaAlternatives: result.cta_alternatives || [],
+    });
+
+  } catch (err) {
+    if (err.status === 429 || err.status === 529) {
+      return res.status(503).json({ ok: false, error: 'high_demand', retry_after_sec: 30 });
+    }
+    console.error('[improve] Error:', err.message);
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 module.exports = router;

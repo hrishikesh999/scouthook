@@ -568,7 +568,8 @@ router.get('/connections', async (req, res) => {
         lc.id, lc.profile_id, lc.account_type, lc.account_key, lc.display_name,
         lc.avatar_url, lc.linkedin_member_id, lc.organization_id,
         lc.expires_at, lc.is_default, lc.authorized_by,
-        p.profile_type, p.display_name AS profile_display_name, p.avatar_url AS profile_avatar_url
+        p.profile_type, p.display_name AS profile_display_name, p.avatar_url AS profile_avatar_url,
+        p.content_niche, p.audience_role, p.content_pillars, p.voice_profile_completion_pct
       FROM linkedin_connections lc
       JOIN profiles p ON p.id = lc.profile_id
       WHERE lc.workspace_id = ?
@@ -580,11 +581,15 @@ router.get('/connections', async (req, res) => {
     for (const row of rows) {
       if (!profileMap.has(row.profile_id)) {
         profileMap.set(row.profile_id, {
-          id:           row.profile_id,
-          profile_type: row.profile_type,
-          display_name: row.profile_display_name,
-          avatar_url:   row.profile_avatar_url,
-          connections:  [],
+          id:                          row.profile_id,
+          profile_type:                row.profile_type,
+          display_name:                row.profile_display_name,
+          avatar_url:                  row.profile_avatar_url,
+          content_niche:               row.content_niche               || null,
+          audience_role:               row.audience_role               || null,
+          content_pillars:             row.content_pillars             || null,
+          voice_profile_completion_pct: row.voice_profile_completion_pct || 0,
+          connections:                 [],
         });
       }
       profileMap.get(row.profile_id).connections.push({

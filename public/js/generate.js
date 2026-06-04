@@ -1282,7 +1282,12 @@ async function loadProfileSelector() {
   try {
     const res  = await fetch('/api/workspaces/profiles', { headers: apiHeaders() });
     const data = await res.json();
-    if (!data.ok || !data.profiles?.length || data.profiles.length <= 1) return;
+    if (!data.ok || !data.profiles?.length) return;
+
+    // Only show the selector when there is at least one personal (LinkedIn) profile —
+    // that's the first moment the user has a real choice of whose voice to write in.
+    const hasPersonal = data.profiles.some(p => p.profile_type === 'person');
+    if (!hasPersonal) return;
 
     const selector = document.getElementById('profile-selector');
     const btnsEl   = document.getElementById('profile-sel-btns');
@@ -1292,12 +1297,15 @@ async function loadProfileSelector() {
     _selectedProfileId   = defaultProfile.id;
 
     function renderBtn(p) {
-      const initial = (p.display_name || '?')[0].toUpperCase();
-      const avatar  = p.avatar_url
+      const initial  = (p.display_name || '?')[0].toUpperCase();
+      const avatar   = p.avatar_url
         ? `<img class="profile-sel-avatar" src="${escapeHtml(p.avatar_url)}" alt="">`
         : `<span class="profile-sel-initial">${escapeHtml(initial)}</span>`;
+      const typeText = p.profile_type === 'brand' ? 'Brand' : 'LinkedIn';
+      const pct      = p.voice_profile_completion_pct || 0;
+      const meta     = `<span class="profile-sel-meta">${typeText} · ${pct}%</span>`;
       return `<button class="profile-sel-btn${p.id === _selectedProfileId ? ' active' : ''}"
-        type="button" data-profile-id="${p.id}">${avatar}<span>${escapeHtml(p.display_name)}</span></button>`;
+        type="button" data-profile-id="${p.id}">${avatar}<span class="profile-sel-name">${escapeHtml(p.display_name)}</span>${meta}</button>`;
     }
 
     btnsEl.innerHTML = data.profiles.map(renderBtn).join('');

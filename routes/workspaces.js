@@ -357,6 +357,7 @@ router.get('/profiles', requireAuth, async (req, res) => {
   try {
     const profiles = await db.prepare(`
       SELECT p.id, p.profile_type, p.display_name, p.is_default, p.avatar_url,
+             p.voice_profile_completion_pct,
              (SELECT COUNT(*) FROM linkedin_connections lc WHERE lc.profile_id = p.id) AS connection_count
       FROM profiles p
       WHERE p.workspace_id = ?

@@ -7,6 +7,140 @@
   <title>LinkedIn — Scouthook</title>
   <link rel="stylesheet" href="/css/main.css">
   <link rel="stylesheet" href="/css/settings.css">
+  <style>
+    .li-conn-card {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--bg-surface);
+      overflow: hidden;
+      max-width: 660px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+    .li-conn-card-header {
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-secondary);
+    }
+    .li-conn-row {
+      border-bottom: 1px solid var(--border-divider);
+    }
+    .li-conn-row:last-child {
+      border-bottom: none;
+    }
+    .li-conn-top {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px 12px;
+    }
+    .li-conn-avatar {
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      border: 1px solid var(--border);
+      object-fit: cover;
+    }
+    .li-conn-avatar-placeholder {
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      background: var(--bg-pill);
+      flex-shrink: 0;
+      border: 1px solid var(--border);
+    }
+    .li-conn-name {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-heading);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .li-conn-sub {
+      margin: 2px 0 0;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .li-conn-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+      margin-left: auto;
+    }
+    .li-conn-badge-default {
+      background: var(--bg-pill-pass);
+      color: var(--score-pass);
+      border-radius: 6px;
+      padding: 2px 9px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+      white-space: nowrap;
+    }
+    /* Voice DNA section */
+    .li-voice-dna {
+      padding: 10px 16px 14px 66px; /* 16 card + 38 avatar + 12 gap */
+      border-top: 1px solid var(--border-divider);
+    }
+    .li-voice-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+    .li-voice-label {
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+    }
+    .li-voice-pct {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--brand);
+    }
+    .li-voice-pct.low { color: var(--score-fail); }
+    .li-voice-pct.mid { color: var(--score-borderline); }
+    .li-voice-bar-track {
+      height: 4px;
+      border-radius: 4px;
+      background: var(--border);
+      overflow: hidden;
+      margin-bottom: 10px;
+    }
+    .li-voice-bar-fill {
+      height: 100%;
+      border-radius: 4px;
+      background: var(--brand);
+      transition: width 0.4s ease;
+    }
+    .li-voice-bar-fill.low { background: var(--score-fail); }
+    .li-voice-bar-fill.mid { background: var(--score-borderline); }
+    .li-voice-fields {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .li-voice-chip {
+      background: var(--bg-pill);
+      color: var(--text-secondary);
+      border-radius: 6px;
+      padding: 3px 9px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+    .li-voice-empty {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin: 0;
+    }
+  </style>
 </head>
 <body>
 
@@ -29,7 +163,7 @@
     <div class="page-header" style="margin-bottom:24px">
       <div class="page-header-content">
         <h1 class="profile-heading">LinkedIn connections</h1>
-        <p class="profile-subheading">Connect personal accounts for this workspace.</p>
+        <p class="profile-subheading">Each connected account gets its own voice profile, extracted from your LinkedIn activity.</p>
       </div>
       <div class="page-header-actions">
         <button type="button" class="btn-primary" id="add-linkedin-btn" style="gap:8px">
@@ -64,9 +198,9 @@
     const banner = document.getElementById('li-banner');
     const params = new URLSearchParams(window.location.search);
     if (params.get('linkedin_connected') === 'true') {
-      banner.textContent = 'LinkedIn connected successfully.';
+      banner.textContent = 'LinkedIn connected successfully. Voice DNA is being extracted in the background.';
       banner.style.cssText += ';display:block;border-color:rgba(16,185,129,0.35);background:var(--bg-pill-pass);color:var(--score-pass)';
-      setTimeout(() => { banner.style.display = 'none'; }, 7000);
+      setTimeout(() => { banner.style.display = 'none'; }, 9000);
     } else if (params.get('linkedin_error') || params.get('error')) {
       const err = params.get('linkedin_error') || params.get('error');
       const msg = err === 'linkedin_already_connected'
@@ -84,50 +218,102 @@
         const r = await fetch('/api/linkedin/connections', { credentials: 'same-origin' });
         const d = await r.json();
 
-        const allConns = (d.profiles || [])
-          .flatMap(p => (p.connections || []).filter(c => c.account_type === 'personal'));
+        // Build { conn, profile } items — personal only
+        const items = (d.profiles || []).flatMap(profile =>
+          (profile.connections || [])
+            .filter(c => c.account_type === 'personal')
+            .map(conn => ({ conn, profile }))
+        );
 
-        if (!d.ok || allConns.length === 0) {
+        if (!d.ok || items.length === 0) {
           container.innerHTML = '<p class="vw-chips-empty">No LinkedIn accounts connected yet.</p>';
           return;
         }
-        renderConnections(allConns);
+        renderConnections(items);
       } catch {
         container.innerHTML = '<p class="vw-chips-empty">Unable to load connections.</p>';
       }
     }
 
-    function renderConnections(conns) {
+    function voicePctClass(pct) {
+      if (pct < 30) return 'low';
+      if (pct < 60) return 'mid';
+      return '';
+    }
+
+    function renderConnections(items) {
       const container = document.getElementById('linkedin-profiles-list');
 
-      const rows = conns.map((conn, i) => {
+      const rows = items.map(({ conn, profile }) => {
         const expired = conn.expires_at && new Date(conn.expires_at) < new Date();
-        const isLast = i === conns.length - 1;
+        const pct     = profile.voice_profile_completion_pct || 0;
+        const cls     = voicePctClass(pct);
+
         const avatar = conn.avatar_url
-          ? `<img src="${escapeHtml(conn.avatar_url)}" width="36" height="36" style="border-radius:50%;flex-shrink:0;border:1px solid var(--border)" alt="" />`
-          : `<div style="width:36px;height:36px;border-radius:50%;background:var(--bg-pill);flex-shrink:0;border:1px solid var(--border)"></div>`;
+          ? `<img class="li-conn-avatar" src="${escapeHtml(conn.avatar_url)}" alt="" />`
+          : `<div class="li-conn-avatar-placeholder"></div>`;
+
+        // Voice DNA fields
+        const fields = [];
+        if (profile.content_niche)  fields.push({ label: 'Niche', value: profile.content_niche });
+        if (profile.audience_role)  fields.push({ label: 'Audience', value: profile.audience_role });
+
+        let pillarsChips = '';
+        if (profile.content_pillars) {
+          try {
+            const pillars = JSON.parse(profile.content_pillars);
+            if (Array.isArray(pillars) && pillars.length) {
+              pillarsChips = pillars.slice(0, 4).map(p =>
+                `<span class="li-voice-chip">${escapeHtml(String(p))}</span>`
+              ).join('');
+            }
+          } catch { /* non-JSON string fallback */ }
+          if (!pillarsChips) {
+            pillarsChips = `<span class="li-voice-chip">${escapeHtml(String(profile.content_pillars))}</span>`;
+          }
+        }
+
+        const fieldChips = fields.map(f =>
+          `<span class="li-voice-chip"><span style="font-weight:600;color:var(--text-muted);font-size:11px">${escapeHtml(f.label)}&nbsp;</span>${escapeHtml(f.value)}</span>`
+        ).join('');
+
+        const voiceContent = (fields.length || pillarsChips)
+          ? `<div class="li-voice-fields">${fieldChips}${pillarsChips}</div>`
+          : `<p class="li-voice-empty">Voice DNA not yet extracted — it will appear here after LinkedIn activity is analysed.</p>`;
 
         return `
-          <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;${isLast ? '' : 'border-bottom:1px solid var(--border-divider);'}">
-            ${avatar}
-            <div style="flex:1;min-width:0">
-              <p style="margin:0;font-size:14px;font-weight:600;color:var(--text-heading);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(conn.display_name || conn.account_key)}</p>
-              <p style="margin:0;font-size:12px;color:var(--text-muted);margin-top:1px">${expired ? '<span style="color:var(--text-danger)">Token expired — reconnect</span>' : 'Personal account'}</p>
+          <div class="li-conn-row">
+            <div class="li-conn-top">
+              ${avatar}
+              <div style="flex:1;min-width:0">
+                <p class="li-conn-name">${escapeHtml(conn.display_name || conn.account_key)}</p>
+                <p class="li-conn-sub">${expired
+                  ? '<span style="color:var(--text-danger)">Token expired — reconnect</span>'
+                  : 'Personal account'}</p>
+              </div>
+              <div class="li-conn-actions">
+                ${conn.is_default
+                  ? `<span class="li-conn-badge-default">Default</span>`
+                  : `<button data-set-default="${conn.id}" type="button" class="btn-outlined" style="height:28px;padding:0 10px;font-size:12px">Set default</button>`}
+                <button data-disconnect="${conn.id}" type="button" class="btn-outlined" style="height:28px;padding:0 10px;font-size:12px;color:var(--text-danger)">Disconnect</button>
+              </div>
             </div>
-            <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
-              ${conn.is_default
-                ? `<span style="background:var(--bg-pill-pass);color:var(--score-pass);border-radius:6px;padding:2px 9px;font-size:11px;font-weight:700;letter-spacing:0.01em">Default</span>`
-                : `<button data-set-default="${conn.id}" type="button" class="btn-outlined" style="height:28px;padding:0 10px;font-size:12px">Set default</button>`}
-              <button data-disconnect="${conn.id}" type="button" class="btn-outlined" style="height:28px;padding:0 10px;font-size:12px;color:var(--text-danger)">Disconnect</button>
+            <div class="li-voice-dna">
+              <div class="li-voice-header">
+                <span class="li-voice-label">Voice DNA</span>
+                <span class="li-voice-pct ${cls}">${pct}% complete</span>
+              </div>
+              <div class="li-voice-bar-track">
+                <div class="li-voice-bar-fill ${cls}" style="width:${pct}%"></div>
+              </div>
+              ${voiceContent}
             </div>
           </div>`;
       }).join('');
 
       container.innerHTML = `
-        <div style="border:1px solid var(--border);border-radius:12px;background:var(--bg-surface);overflow:hidden;max-width:640px;box-shadow:0 1px 3px rgba(0,0,0,0.04)">
-          <div style="padding:10px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px">
-            <span style="font-size:13px;font-weight:600;color:var(--text-secondary)">${conns.length} account${conns.length !== 1 ? 's' : ''} connected</span>
-          </div>
+        <div class="li-conn-card">
+          <div class="li-conn-card-header">${items.length} account${items.length !== 1 ? 's' : ''} connected</div>
           ${rows}
         </div>`;
 

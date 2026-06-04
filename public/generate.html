@@ -617,21 +617,22 @@
       line-height: 1.35;
     }
 
-    /* ── "Creating for" profile selector ───────────────────── */
+    /* ── Voice profile selector ─────────────────────────────── */
     #profile-selector {
       display: flex;
       flex-direction: column;
-      gap: 6px;
-      padding-bottom: 4px;
-      border-bottom: 1px solid var(--border);
-      margin-bottom: 4px;
+      gap: 8px;
+      padding: 10px 14px;
+      background: var(--bg-pill);
+      border-radius: 10px;
+      margin-bottom: 10px;
     }
     .profile-sel-label {
       font-size: 0.6875rem;
       font-weight: 700;
       color: var(--text-muted);
       text-transform: uppercase;
-      letter-spacing: 0.06em;
+      letter-spacing: 0.07em;
     }
     .profile-sel-btns {
       display: flex;
@@ -642,36 +643,49 @@
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      padding: 5px 12px;
+      padding: 5px 12px 5px 8px;
       border: 1.5px solid var(--border);
       border-radius: 999px;
       background: var(--bg-surface);
       font-family: var(--font-sans);
-      font-size: 0.8125rem;
-      font-weight: 600;
-      color: var(--text-muted);
       cursor: pointer;
-      transition: border-color 0.14s, color 0.14s, background 0.14s;
+      transition: border-color 0.14s, background 0.14s;
     }
     .profile-sel-btn:hover {
       border-color: var(--brand);
-      color: var(--brand);
+      background: color-mix(in srgb, var(--brand) 4%, var(--bg-surface));
     }
     .profile-sel-btn.active {
       border-color: var(--brand);
+      background: color-mix(in srgb, var(--brand) 7%, var(--bg-surface));
+    }
+    .profile-sel-name {
+      font-size: 0.8125rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+    }
+    .profile-sel-btn.active .profile-sel-name {
       color: var(--brand);
-      background: color-mix(in srgb, var(--brand) 6%, var(--bg-surface));
+    }
+    .profile-sel-meta {
+      font-size: 0.6875rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      letter-spacing: 0.01em;
+    }
+    .profile-sel-btn.active .profile-sel-meta {
+      color: color-mix(in srgb, var(--brand) 65%, transparent);
     }
     .profile-sel-avatar {
-      width: 18px;
-      height: 18px;
+      width: 20px;
+      height: 20px;
       border-radius: 50%;
       object-fit: cover;
       flex-shrink: 0;
     }
     .profile-sel-initial {
-      width: 18px;
-      height: 18px;
+      width: 20px;
+      height: 20px;
       border-radius: 50%;
       background: var(--brand);
       color: #fff;
@@ -878,9 +892,9 @@
         <!-- ── Main input card ──────────────────────────────────── -->
         <div id="guided-chat">
 
-          <!-- Profile selector — hidden when workspace has only one profile -->
+          <!-- Profile selector — hidden until a personal LinkedIn profile exists -->
           <div id="profile-selector" style="display:none">
-            <span class="profile-sel-label">Creating for</span>
+            <span class="profile-sel-label">Writing as</span>
             <div id="profile-sel-btns" class="profile-sel-btns"></div>
           </div>
 

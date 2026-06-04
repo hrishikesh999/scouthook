@@ -376,45 +376,6 @@ app.get('/api/auth/me', (req, res) => {
   return res.json({ ok: true, user: req.user });
 });
 
-// Temporary diagnostic — shows post counts for the currently logged-in user
-app.get('/api/auth/diag', async (req, res) => {
-  if (!req.isAuthenticated?.() || !req.user) return res.status(401).json({ ok: false, error: 'not_authenticated' });
-  try {
-    const { db } = require('./db');
-    const uid = req.user.user_id;
-    const email = req.user.email;
-    const tid = 'default';
-
-    // Posts under current user_id
-    const counts = await db.prepare(`
-      SELECT status, COUNT(*) AS cnt
-      FROM generated_posts
-      WHERE user_id = ? AND tenant_id = ?
-      GROUP BY status
-    `).all(uid, tid);
-
-    const profile = await db.prepare(`
-      SELECT user_id, email, onboarding_complete FROM user_profiles WHERE user_id = ? AND tenant_id = ?
-    `).get(uid, tid);
-
-    // All profiles sharing this email (catches google_email: vs google: splits)
-    const allProfiles = email ? await db.prepare(`
-      SELECT user_id, email, onboarding_complete FROM user_profiles WHERE email = ? AND tenant_id = ?
-    `).all(email, tid) : [];
-
-    // Post counts for every matching profile
-    const allCounts = await Promise.all(allProfiles.map(async p => {
-      const c = await db.prepare(`
-        SELECT status, COUNT(*) AS cnt FROM generated_posts WHERE user_id = ? AND tenant_id = ? GROUP BY status
-      `).all(p.user_id, tid);
-      return { user_id: p.user_id, counts: c };
-    }));
-
-    return res.json({ ok: true, user_id: uid, email, profile, counts, all_profiles_by_email: allCounts });
-  } catch (err) {
-    return res.status(500).json({ ok: false, error: err.message });
-  }
-});
 
 function requireLoginHtml(req, res, next) {
   if (req.isAuthenticated?.()) return next();

@@ -52,10 +52,10 @@ router.post('/:postId', async (req, res) => {
     return res.status(404).json({ ok: false, error: 'post_not_found' });
   }
 
-  // Load brand settings from the post owner's profile (fall back to defaults)
+  // Load brand settings from the workspace (fall back to defaults)
   const profile = await db.prepare(
-    'SELECT brand_bg, brand_accent, brand_text, brand_name, brand_logo FROM user_profiles WHERE user_id = ? AND tenant_id = ?'
-  ).get(post.user_id, tenantId);
+    'SELECT brand_bg, brand_accent, brand_text, brand_name, brand_logo FROM workspaces WHERE id = ?'
+  ).get(tenantId);
 
   const brand = {
     bg:     profile?.brand_bg     || '#0F1A3C',

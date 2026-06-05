@@ -2216,14 +2216,14 @@ body {
   display: block;
 }
 
-/* Free-plan publish-only modal */
-.modal--publish-only .schedule-consent-note,
+/* Free-plan publish-only modal — hide scheduling UI, keep Publish now */
 .modal--publish-only .schedule-section-label,
 .modal--publish-only .schedule-presets,
 .modal--publish-only .schedule-divider,
 .modal--publish-only .schedule-custom-row,
 .modal--publish-only .schedule-tz-label,
-.modal--publish-only #schedule-confirm-btn { display: none; }
+.modal--publish-only .schedule-later-divider,
+.modal--publish-only .modal-footer { display: none; }
 
 .modal--publish-only .free-upgrade-note { display: block; }
 

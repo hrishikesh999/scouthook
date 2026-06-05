@@ -163,7 +163,29 @@
     .li-comment-author { font-size: 13px; font-weight: 600; color: #000; margin: 0 0 2px; }
     .li-comment-text { font-size: 13px; color: #333; margin: 0; white-space: pre-wrap; }
 
-    /* ── Topbar scheduled state ── */
+    /* ── Schedule modal overrides ── */
+    .modal-header-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+    .modal-header-row .modal-heading { margin-bottom: 0; }
+    .modal-x-close { background: none; border: none; cursor: pointer; font-size: 17px; color: var(--text-muted); padding: 2px 6px; border-radius: 4px; line-height: 1; flex-shrink: 0; }
+    .modal-x-close:hover { color: var(--text-heading); background: var(--bg-subtle, #f3f4f6); }
+
+    /* LinkedIn account strip */
+    .modal-li-account { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 16px; background: var(--bg-subtle, #f9fafb); }
+    .modal-li-avatar { width: 36px; height: 36px; min-width: 36px; border-radius: 50%; background: #0a66c2; color: #fff; font-size: 15px; font-weight: 600; display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0; }
+    .modal-li-avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+    .modal-li-info { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+    .modal-li-name { font-size: 13px; font-weight: 600; color: var(--text-heading); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+    .modal-li-label { font-size: 11px; color: var(--text-muted); }
+
+    /* Publish-now button — LinkedIn blue, full-width */
+    .btn-publish-now { width: 100%; display: flex; align-items: center; justify-content: center; gap: 7px; height: 42px; padding: 0 16px; background: #0A66C2; color: #fff; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; font-family: var(--font-sans, inherit); cursor: pointer; transition: background 0.15s; margin-bottom: 16px; }
+    .btn-publish-now:hover:not(:disabled) { background: #004182; }
+    .btn-publish-now:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* Divider spacing above "or schedule for later" */
+    .schedule-later-divider { margin-top: 4px; }
+
+    /* Topbar scheduled state ── */
     #topbar-scheduled { display: none; align-items: center; justify-content: space-between; width: 100%; gap: 16px; }
     #topbar { transition: background 0.2s; }
     #topbar.is-scheduled { background: #fefce8 !important; border-bottom-color: #fde68a !important; }
@@ -424,9 +446,34 @@
 
   <!-- Schedule modal -->
   <div id="schedule-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="schedule-modal-heading" aria-hidden="true">
-    <h2 class="modal-heading" id="schedule-modal-heading">Publish post</h2>
-    <p class="schedule-consent-note">Scheduling will automatically publish this post to LinkedIn at your selected time. You can cancel any time before it sends.</p>
-    <p class="free-upgrade-note">Want to schedule posts? <button type="button" onclick="window.PricingModal?.open({ feature: 'scheduling', requiredPlan: 'solo' })" class="free-upgrade-link">Upgrade →</button></p>
+
+    <!-- Header row -->
+    <div class="modal-header-row">
+      <h2 class="modal-heading" id="schedule-modal-heading">Publish post</h2>
+      <button class="modal-x-close" id="schedule-modal-close" aria-label="Close">✕</button>
+    </div>
+
+    <!-- LinkedIn account strip: who will post -->
+    <div id="modal-li-account" class="modal-li-account">
+      <div id="modal-li-avatar" class="modal-li-avatar"></div>
+      <div class="modal-li-info">
+        <span id="modal-li-name" class="modal-li-name">LinkedIn account</span>
+        <span class="modal-li-label">Posting to LinkedIn</span>
+      </div>
+    </div>
+
+    <!-- Upgrade note (free plan only) -->
+    <p class="free-upgrade-note">Scheduling requires a paid plan. <button type="button" onclick="window.PricingModal?.open({ feature: 'scheduling', requiredPlan: 'solo' })" class="free-upgrade-link">Upgrade →</button></p>
+
+    <!-- Publish now section -->
+    <button id="publish-now-btn" class="btn-publish-now">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+      Post to LinkedIn now
+    </button>
+
+    <!-- Schedule later section -->
+    <div class="schedule-divider schedule-later-divider"><span>or schedule for later</span></div>
+
     <p class="schedule-section-label">Quick schedule</p>
     <div class="schedule-presets" id="schedule-presets">
       <button class="schedule-preset-btn" data-preset="2h">In 2 hours</button>
@@ -446,13 +493,12 @@
       </div>
     </div>
     <p class="schedule-tz-label" id="schedule-tz-label"></p>
+
     <div class="modal-footer">
-      <button class="btn-outlined" id="schedule-cancel" style="height:36px">Cancel</button>
-      <div style="display:flex;gap:8px">
-        <button class="btn-outlined" id="publish-now-btn" style="height:36px">Publish now</button>
-        <button id="schedule-confirm-btn" class="btn-teal-filled">Schedule</button>
-      </div>
+      <button class="btn-outlined" id="schedule-cancel">Cancel</button>
+      <button id="schedule-confirm-btn" class="btn-teal-filled">Schedule →</button>
     </div>
+
     <div class="modal-error" id="modal-error" role="alert"></div>
   </div>
 
@@ -496,9 +542,11 @@
 ════════════════════════════════════════════════════════════════════════ */
 const postId = window.location.pathname.split('/').filter(Boolean).pop();
 
-let currentPostId      = null;
-let userPlan           = null;
-let linkedinConnected  = false;
+let currentPostId        = null;
+let userPlan             = null;
+let linkedinConnected    = false;
+let linkedinProfileName  = '';
+let linkedinProfilePhoto = '';
 let scheduleEditLocked = false;
 let attachedAssetUrl   = null;
 let attachedPreviewUrl = null;
@@ -860,6 +908,10 @@ async function checkLinkedInStatus() {
       if (strip) strip.hidden = true;
       if (schedBtn && !scheduleEditLocked) { schedBtn.disabled = false; schedBtn.title = ''; }
       const name = data.name || '';
+      linkedinProfileName  = name;
+      linkedinProfilePhoto = data.photo_url || '';
+
+      // LinkedIn preview panel
       const nameEl   = document.getElementById('li-name');
       const metaEl   = document.getElementById('li-meta');
       const avatarEl = document.getElementById('li-avatar');
@@ -877,6 +929,9 @@ async function checkLinkedInStatus() {
           avatarEl.textContent = name ? name.charAt(0).toUpperCase() : '';
         }
       }
+
+      // Pre-populate modal account strip now that we have the data
+      populateModalAccount();
     } else {
       if (strip) strip.hidden = false;
       if (schedBtn) { schedBtn.disabled = true; schedBtn.title = 'Connect LinkedIn to schedule'; }
@@ -1102,6 +1157,22 @@ function showScheduleSuccessSheet(scheduledFor) {
 /* ════════════════════════════════════════════════════════════════════════
    SCHEDULE MODAL
 ════════════════════════════════════════════════════════════════════════ */
+function populateModalAccount() {
+  const nameEl   = document.getElementById('modal-li-name');
+  const avatarEl = document.getElementById('modal-li-avatar');
+  if (!nameEl || !avatarEl) return;
+  nameEl.textContent = linkedinProfileName || 'LinkedIn account';
+  avatarEl.innerHTML = '';
+  if (linkedinProfilePhoto) {
+    const img = document.createElement('img');
+    img.src = linkedinProfilePhoto;
+    img.alt = linkedinProfileName || 'LinkedIn profile';
+    avatarEl.appendChild(img);
+  } else {
+    avatarEl.textContent = linkedinProfileName ? linkedinProfileName.charAt(0).toUpperCase() : 'L';
+  }
+}
+
 function openModal(freePlan = false) {
   if (scheduleEditLocked) return;
   const modal = document.getElementById('schedule-modal');
@@ -1119,8 +1190,9 @@ function openModal(freePlan = false) {
   const tzLabel = document.getElementById('schedule-tz-label');
   if (tzLabel) {
     const tz = getUserTimezone(), abbr = getUserTzAbbr();
-    tzLabel.textContent = tz ? `Times shown in your local timezone: ${abbr} (${tz})` : '';
+    tzLabel.textContent = tz ? `Times shown in ${abbr} (${tz})` : '';
   }
+  populateModalAccount();
 }
 
 function closeModal() {
@@ -1128,10 +1200,13 @@ function closeModal() {
   modal.classList.remove('visible', 'modal--publish-only');
   modal.setAttribute('aria-hidden', 'true');
   maybeHideOverlay();
-  document.getElementById('schedule-confirm-btn').textContent = 'Schedule';
+  document.getElementById('schedule-confirm-btn').textContent = 'Schedule →';
   document.getElementById('schedule-confirm-btn').disabled    = false;
-  document.getElementById('publish-now-btn').textContent = 'Publish now';
-  document.getElementById('publish-now-btn').disabled    = false;
+  const pnBtn = document.getElementById('publish-now-btn');
+  if (pnBtn) {
+    pnBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg> Post to LinkedIn now';
+    pnBtn.disabled = false;
+  }
 }
 
 function calcPreset(key) {
@@ -1622,8 +1697,9 @@ function bindEvents() {
     closeSlideOver();
   });
 
-  /* Modal cancel */
+  /* Modal cancel + X close */
   document.getElementById('schedule-cancel').addEventListener('click', closeModal);
+  document.getElementById('schedule-modal-close').addEventListener('click', closeModal);
 
   /* Preset buttons */
   document.querySelectorAll('.schedule-preset-btn').forEach(btn => {
@@ -1748,12 +1824,18 @@ function wireSchedule() {
 
   document.getElementById('publish-now-btn').addEventListener('click', async () => {
     if (scheduleEditLocked) return;
-    const content = getPostContent();
-    if (!content) return;
+    const content  = getPostContent();
     const btn      = document.getElementById('publish-now-btn');
     const modalErr = document.getElementById('modal-error');
-    btn.textContent = 'Publishing…'; btn.disabled = true;
+    if (!content) {
+      modalErr.textContent = 'Your post is empty. Add some content before publishing.';
+      modalErr.classList.add('visible');
+      return;
+    }
+    btn.innerHTML = 'Publishing…';
+    btn.disabled  = true;
     modalErr.classList.remove('visible');
+    let published = false;
     try {
       const payload = { content, postId: currentPostId };
       if (attachedAssetUrl) {
@@ -1767,9 +1849,16 @@ function wireSchedule() {
       });
       const data = await res.json();
       if (!res.ok || !data.ok) {
-        if (data.error === 'publish_blocked_scheduled') throw new Error('Pause scheduling before publishing, or wait for the scheduled send.');
-        throw new Error(data.error || 'Publish failed');
+        const errMap = {
+          publish_blocked_scheduled: 'This post is scheduled. Pause scheduling before publishing immediately.',
+          not_connected:    'LinkedIn is not connected. Please reconnect your account.',
+          token_expired:    'Your LinkedIn session has expired. Reconnect your account in Settings.',
+          content_too_long: 'Your post is too long for LinkedIn (max 3000 characters).',
+          rate_limited:     'LinkedIn rate limit reached. Please wait a few minutes and try again.',
+        };
+        throw new Error(errMap[data.error] || data.error || 'Publish failed. Please try again.');
       }
+      published = true;
       closeModal();
       sessionStorage.setItem('sh_just_published', '1');
       showPublishedState('Published · just now');
@@ -1779,9 +1868,13 @@ function wireSchedule() {
       document.getElementById('asset-chip-label').textContent = '';
       showPublishSuccessSheet(data.linkedin_post_id);
     } catch (err) {
-      btn.textContent = 'Publish now'; btn.disabled = false;
       modalErr.textContent = err.message || 'Publish failed. Please try again.';
       modalErr.classList.add('visible');
+    } finally {
+      if (!published) {
+        btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg> Post to LinkedIn now';
+        btn.disabled = false;
+      }
     }
   });
 }

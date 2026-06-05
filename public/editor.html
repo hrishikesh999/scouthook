@@ -163,6 +163,25 @@
     .li-comment-author { font-size: 13px; font-weight: 600; color: #000; margin: 0 0 2px; }
     .li-comment-text { font-size: 13px; color: #333; margin: 0; white-space: pre-wrap; }
 
+    /* ── Version history bar ── */
+    #version-bar { background: #fffbeb; border: 1px solid #fcd34d; border-radius: var(--radius-md, 8px); padding: 7px 12px; }
+    .version-bar-inner { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-secondary); }
+    #version-label { font-size: 12px; font-weight: 600; color: var(--text-heading); }
+    .version-nav-group { display: flex; gap: 2px; }
+    .version-nav-btn { background: none; border: 1px solid var(--border); border-radius: 4px; padding: 2px 8px; cursor: pointer; font-size: 13px; color: var(--text-secondary); transition: background 0.1s; font-family: inherit; }
+    .version-nav-btn:hover:not(:disabled) { background: var(--bg-subtle, #f3f4f6); }
+    .version-nav-btn:disabled { opacity: 0.35; cursor: default; }
+    .version-bar-sep { width: 1px; height: 14px; background: var(--border); margin: 0 2px; flex-shrink: 0; }
+    .version-revert-btn { background: none; border: none; cursor: pointer; font-size: 12px; color: var(--text-muted); font-family: inherit; padding: 0; }
+    .version-revert-btn:hover { color: var(--text-heading); text-decoration: underline; }
+
+    /* ── Improver chat: compact confirmation row ── */
+    .improver-confirm-row { display: flex; align-items: center; gap: 10px; padding: 6px 2px; }
+    .improver-applied-badge { font-size: 13px; font-weight: 600; color: #16a34a; }
+    .improver-undo-chat-btn { background: none; border: none; cursor: pointer; font-size: 12px; color: var(--text-muted); font-family: inherit; padding: 0; text-decoration: underline; }
+    .improver-undo-chat-btn:hover { color: var(--text-heading); }
+    .improver-undo-chat-btn:disabled { opacity: 0.45; cursor: default; text-decoration: none; }
+
     /* ── Schedule modal overrides ── */
     .modal-header-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
     .modal-header-row .modal-heading { margin-bottom: 0; }
@@ -261,6 +280,20 @@
 
           <!-- post + visuals + first comment -->
           <div id="edit-main">
+
+          <!-- Version history bar — visible only after first AI improvement -->
+          <div id="version-bar" hidden>
+            <div class="version-bar-inner">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><polyline points="12 7 12 12 15 15"/></svg>
+              <span id="version-label"></span>
+              <div class="version-nav-group">
+                <button id="version-prev" class="version-nav-btn" title="Older version" aria-label="Older version">←</button>
+                <button id="version-next" class="version-nav-btn" title="Newer version" aria-label="Newer version">→</button>
+              </div>
+              <div class="version-bar-sep" aria-hidden="true"></div>
+              <button id="version-revert" class="version-revert-btn" hidden>↩ Revert to original</button>
+            </div>
+          </div>
 
           <div class="post-edit-card">
             <div id="post-toolbar" role="toolbar" aria-label="Formatting toolbar">
@@ -566,6 +599,9 @@ const visualCache = new Map();
 let _autoSaveTimer        = null;
 let _lastAutoSavedContent = null;
 
+let postVersions  = [];  // [{text, label}] — AI improvement snapshots
+let currentVerIdx = -1;
+
 const state = {
   activeTab: 'edit',
 };
@@ -678,6 +714,9 @@ async function loadPost(id) {
     ).join('');
     // Initialise auto-save baseline so we don't trigger on the loaded content
     _lastAutoSavedContent = getPostContent();
+
+    // Seed version history with the loaded content as the "Original"
+    initVersionHistory();
 
     // Auto-focus editor when in Edit tab and not locked
     if (state.activeTab === 'edit' && !scheduleEditLocked) {
@@ -2017,6 +2056,7 @@ function init() {
   wireEmojiStrip();
   wirePostBodyKeys();
   wireFormattingToolbar();
+  wireVersionBar();
   wireImprover();
 
   document.getElementById('post-body').addEventListener('input', scheduleAutoSave);
@@ -2221,42 +2261,100 @@ function appendImproverMessage(role, text, isLoading) {
   return wrap;
 }
 
-function applyTextToEditor(text) {
+/* ── Version history ─────────────────────────────────────────────────── */
+function setEditorContent(text) {
   const postBody = document.getElementById('post-body');
   if (!postBody) return;
   const paras = text.split(/\n\n+/).filter(Boolean);
   postBody.innerHTML = paras.map(t =>
     `<p class="text-post" data-style="normal">${escHtml(t).replace(/\n/g, '<br>')}</p>`
   ).join('');
+  if (state.activeTab === 'preview') switchTab('preview');
+}
+
+function pushVersion(text) {
+  postVersions  = postVersions.slice(0, currentVerIdx + 1);
+  postVersions.push({ text, label: `Improvement ${postVersions.length}` });
+  currentVerIdx = postVersions.length - 1;
+  renderVersionBar();
+}
+
+function applyTextToEditor(text) {
+  pushVersion(text);
+  setEditorContent(text);
+}
+
+function navigateVersion(delta) {
+  const newIdx = currentVerIdx + delta;
+  if (newIdx < 0 || newIdx >= postVersions.length) return;
+  currentVerIdx = newIdx;
+  setEditorContent(postVersions[newIdx].text);
+  scheduleAutoSave();
+  renderVersionBar();
+}
+
+function renderVersionBar() {
+  const bar = document.getElementById('version-bar');
+  if (!bar) return;
+  if (postVersions.length <= 1) { bar.hidden = true; return; }
+  bar.hidden = false;
+  const total   = postVersions.length;
+  const current = currentVerIdx + 1;
+  document.getElementById('version-label').textContent  = `v${current} of ${total}`;
+  document.getElementById('version-prev').disabled      = currentVerIdx === 0;
+  document.getElementById('version-next').disabled      = currentVerIdx === total - 1;
+  document.getElementById('version-revert').hidden      = currentVerIdx === 0;
+}
+
+function initVersionHistory() {
+  const text = getPostContent();
+  if (!text) return;
+  postVersions  = [{ text, label: 'Original' }];
+  currentVerIdx = 0;
+  renderVersionBar();
+}
+
+function wireVersionBar() {
+  document.getElementById('version-prev')?.addEventListener('click', () => { navigateVersion(-1); });
+  document.getElementById('version-next')?.addEventListener('click', () => { navigateVersion(+1); });
+  document.getElementById('version-revert')?.addEventListener('click', () => {
+    currentVerIdx = 0;
+    setEditorContent(postVersions[0].text);
+    scheduleAutoSave();
+    renderVersionBar();
+  });
 }
 
 function buildAIMessageNode(wrap, text, autoApplied) {
-  wrap.className   = 'improver-msg-ai';
-  wrap.innerHTML   = '';
-
-  const card = document.createElement('div');
-  card.className   = 'improver-msg-card';
-  card.textContent = text;
-  wrap.appendChild(card);
+  wrap.className = 'improver-msg-ai';
+  wrap.innerHTML = '';
 
   if (autoApplied) {
-    const appliedLabel = document.createElement('button');
-    appliedLabel.className   = 'improver-apply-btn applied';
-    appliedLabel.textContent = '✓ Applied to post';
-    wrap.appendChild(appliedLabel);
+    const row = document.createElement('div');
+    row.className = 'improver-confirm-row';
+
+    const badge = document.createElement('span');
+    badge.className = 'improver-applied-badge';
+    badge.textContent = '✓ Post improved';
+    row.appendChild(badge);
 
     const undoBtn = document.createElement('button');
-    undoBtn.className   = 'improver-apply-btn';
+    undoBtn.className = 'improver-undo-chat-btn';
     undoBtn.textContent = '↩ Undo';
-    undoBtn.style.marginLeft = '12px';
     undoBtn.addEventListener('click', () => {
-      applyTextToEditor(wrap.dataset.previousText || '');
+      navigateVersion(-1);
       scheduleAutoSave();
-      undoBtn.remove();
-      appliedLabel.textContent = '(reverted)';
+      badge.textContent = '↩ Reverted';
+      undoBtn.disabled = true;
     });
-    wrap.appendChild(undoBtn);
+    row.appendChild(undoBtn);
+    wrap.appendChild(row);
   } else {
+    const card = document.createElement('div');
+    card.className   = 'improver-msg-card';
+    card.textContent = text;
+    wrap.appendChild(card);
+
     const applyBtn = document.createElement('button');
     applyBtn.className   = 'improver-apply-btn';
     applyBtn.textContent = '▶ Apply to post';
@@ -2277,10 +2375,9 @@ function replaceLastImproverMessage(text, isError, autoApply) {
   if (!last) return;
 
   if (isError) {
-    last.className   = 'improver-msg-ai';
-    last.innerHTML   = `<span class="improver-error">${escHtml(text)}</span>`;
+    last.className = 'improver-msg-ai';
+    last.innerHTML = `<span class="improver-error">${escHtml(text)}</span>`;
   } else if (autoApply) {
-    last.dataset.previousText = getPostContent();
     applyTextToEditor(text);
     scheduleAutoSave();
     buildAIMessageNode(last, text, true);

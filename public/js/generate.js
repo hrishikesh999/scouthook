@@ -985,6 +985,7 @@ async function triggerGenerate(opts = {}) {
       if (!sseResult?.post_id) throw new Error('stream_incomplete');
 
       await sleep(600);
+      sessionStorage.setItem('sh_from_gen', '1');
       window.location.href = `/editor/${encodeURIComponent(sseResult.post_id)}`;
       return;
     }
@@ -1000,6 +1001,7 @@ async function triggerGenerate(opts = {}) {
 
     finaliseProcessingSteps(data);
     await sleep(600);
+    sessionStorage.setItem('sh_from_gen', '1');
     window.location.href = `/editor/${encodeURIComponent(data.id)}`;
 
   } catch (err) {

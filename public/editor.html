@@ -16,7 +16,7 @@
     #content-area { display: flex !important; flex: 1 !important; overflow: hidden !important; position: relative !important; min-height: 0 !important; width: 100% !important; }
     #editor { flex: 1 !important; min-width: 0 !important; overflow-y: auto !important; overflow-x: hidden !important; height: 100% !important; }
     #tabs { display: block !important; width: 100% !important; }
-    #visual-btns { display: flex !important; flex-wrap: wrap !important; gap: 8px !important; }
+    /* #visual-btns removed — media buttons now in #post-toolbar */
     @media (max-width: 1023px) {
       #content-area { flex-direction: column !important; }
       #edit-meta { flex: none !important; width: 100% !important; height: auto !important; max-height: 380px !important; border-left: none !important; border-top: 1px solid var(--border) !important; }
@@ -42,10 +42,10 @@
     /* Improver panel: full-height sidebar, persists across tab switches */
     #edit-meta { flex: 0 0 322px; display: flex; flex-direction: column; gap: 0; border-left: 1px solid var(--border); overflow: hidden; height: 100%; background: var(--bg-surface, #fff); }
     #linkedin-preview:not([hidden]) { display: block; padding: 28px 64px 48px; }
-    #post-body { outline: none; cursor: text; min-height: 80px; }
+    #post-body { outline: none; cursor: text; min-height: 80px; padding: 12px 36px 20px; }
     #post-body[contenteditable="false"] { cursor: default; opacity: 0.75; }
-    #post-body p { margin: 0 0 12px; }
-    #post-body p:last-child { margin-bottom: 0; }
+    #post-body p { margin: 0; line-height: 1.6; }
+    #post-body p + p { margin-top: 0.85em; }
 
     /* ── Tabs — full-width border; inner row centres the tab buttons ── */
     #tabs { border-bottom: 1px solid var(--border) !important; }
@@ -98,8 +98,7 @@
     .back-to-new-post { font-size: 13px; color: var(--text-secondary); text-decoration: none; transition: color 0.12s; padding-right: 20px; }
     .back-to-new-post:hover { color: var(--text-heading); }
 
-    /* ── Visuals section ── */
-    #visuals-section { display: flex; flex-direction: column; gap: 8px; }
+    /* ── Visuals section (removed — media buttons now in #post-toolbar) ── */
 
     /* ── First comment ── */
     #first-comment-section:not([hidden]) { display: flex; flex-direction: column; }
@@ -108,10 +107,20 @@
     .first-comment-footer      { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
 
     /* ── Post edit card ── */
-    .post-edit-card { background: #fff; border: 1px solid var(--border); border-radius: var(--radius-lg, 12px); padding: 28px 36px; }
+    .post-edit-card { background: #fff; border: 1px solid var(--border); border-radius: var(--radius-lg, 12px); padding: 0; overflow: hidden; }
 
-    /* ── Visuals toolbar strip ── */
-    #visuals-section { background: var(--bg-subtle, #f3f4f6) !important; border-radius: var(--radius-md, 8px) !important; padding: 12px 16px !important; gap: 10px !important; }
+    /* ── Unified post toolbar ── */
+    #post-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 2px; padding: 6px 10px; border-bottom: 1px solid var(--border); background: var(--bg-surface, #fff); }
+    .ptb-group { display: flex; align-items: center; gap: 1px; }
+    .ptb-divider { width: 1px; height: 18px; background: var(--border); margin: 0 6px; flex-shrink: 0; }
+    .ptb-btn { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border: none; background: none; border-radius: 5px; cursor: pointer; font-size: 13px; line-height: 1; color: var(--text-secondary); transition: background 0.1s, color 0.1s; flex-shrink: 0; font-family: var(--font-sans, inherit); }
+    .ptb-btn:hover { background: var(--bg-subtle, #f3f4f6); color: var(--text-heading); }
+    .ptb-btn.active { background: var(--bg-subtle, #f3f4f6); color: var(--brand, #2563eb); }
+    .ptb-btn.disabled { opacity: 0.35; cursor: not-allowed; pointer-events: none; }
+
+    /* ── Fade-in animation for fresh-from-generation editor ── */
+    @keyframes editorFadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+    #editor.is-fresh { animation: editorFadeIn 0.35s ease-out both; }
 
     /* ── Autosave indicator — absolute right within #tabs-inner ── */
     #autosave-indicator { position: absolute; right: 40px; bottom: 8px; font-size: 11px; color: var(--text-muted); white-space: nowrap; }
@@ -136,10 +145,8 @@
     .meta-tip:hover::after, .meta-tip:focus::after { opacity: 1; }
     .meta-tip[data-tip=""]::after { display: none; }
 
-    /* ── Post card footer — persistent emoji strip ── */
-    #post-card-footer { display: flex; align-items: center; gap: 2px; padding: 8px 0 0; margin-top: 12px; border-top: 1px solid var(--border); }
-    .emoji-insert-btn { background: none; border: none; font-size: 15px; padding: 3px 6px; border-radius: 4px; cursor: pointer; line-height: 1; opacity: 0.55; transition: opacity 0.1s; }
-    .emoji-insert-btn:hover { opacity: 1; background: var(--bg-subtle, #f3f4f6); }
+    /* ── Emoji insert buttons — now inside #post-toolbar as .ptb-btn ── */
+    .emoji-insert-btn { font-size: 15px; }
 
 
     /* ── LinkedIn preview body — matches real LinkedIn feed rendering ── */
@@ -234,42 +241,44 @@
           <div id="edit-main">
 
           <div class="post-edit-card">
+            <div id="post-toolbar" role="toolbar" aria-label="Formatting toolbar">
+              <div class="ptb-group">
+                <button class="ptb-btn" id="fmt-bold"   title="Bold (Cmd+B)" aria-label="Bold">𝗕</button>
+                <button class="ptb-btn" id="fmt-italic" title="Italic (Cmd+I)" aria-label="Italic">𝘐</button>
+                <button class="ptb-btn" id="fmt-bullet" title="Bullet list" aria-label="Bullet list" style="font-size:16px">•</button>
+                <button class="ptb-btn" id="fmt-num"    title="Numbered list" aria-label="Numbered list" style="font-size:11px;width:32px">1.</button>
+              </div>
+              <div class="ptb-divider" aria-hidden="true"></div>
+              <div class="ptb-group">
+                <button class="ptb-btn emoji-insert-btn" data-emoji="→"  title="Insert →">→</button>
+                <button class="ptb-btn emoji-insert-btn" data-emoji="✓"  title="Insert ✓">✓</button>
+                <button class="ptb-btn emoji-insert-btn" data-emoji="💡" title="Insert 💡">💡</button>
+                <button class="ptb-btn emoji-insert-btn" data-emoji="🎯" title="Insert 🎯">🎯</button>
+              </div>
+              <div class="ptb-divider" aria-hidden="true"></div>
+              <div class="ptb-group">
+                <button class="ptb-btn" id="media-library-btn"  title="Attach image / PDF" aria-label="Attach from media library">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                </button>
+                <button class="ptb-btn" id="carousel-btn" title="Generate carousel" aria-label="Generate carousel">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7" y="5" width="10" height="14" rx="1.5"/><rect x="3" y="8" width="3" height="8" rx="1"/><rect x="18" y="8" width="3" height="8" rx="1"/></svg>
+                </button>
+                <button class="ptb-btn" id="quote-card-btn" title="Generate quote card" aria-label="Generate quote card">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                </button>
+                <button class="ptb-btn" id="branded-quote-btn" title="Generate branded quote" aria-label="Generate branded quote">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M12 7l1.5 3.5L17 12l-3.5 1.5L12 17l-1.5-3.5L7 12l3.5-1.5z"/></svg>
+                </button>
+              </div>
+            </div>
+
             <div id="post-body" contenteditable="true" spellcheck="true" role="textbox" aria-multiline="true" aria-label="Post content"></div>
 
             <div id="preview-asset" class="preview-asset hidden" aria-hidden="true"></div>
 
-            <div id="asset-chip" class="asset-chip hidden" role="status" aria-live="polite">
+            <div id="asset-chip" class="asset-chip hidden" role="status" aria-live="polite" style="margin: 0 36px 12px;">
               <span id="asset-chip-label"></span>
               <button id="asset-chip-remove" class="asset-chip-remove" aria-label="Remove attached asset">×</button>
-            </div>
-
-            <div id="post-card-footer">
-              <button class="emoji-insert-btn" data-emoji="→" title="Insert →">→</button>
-              <button class="emoji-insert-btn" data-emoji="✓" title="Insert ✓">✓</button>
-              <button class="emoji-insert-btn" data-emoji="💡" title="Insert 💡">💡</button>
-              <button class="emoji-insert-btn" data-emoji="🎯" title="Insert 🎯">🎯</button>
-            </div>
-          </div>
-
-          <div id="visuals-section">
-            <p id="visuals-label" class="score-label">Visuals</p>
-            <div id="visual-btns">
-              <button class="asset-action-btn" id="quote-card-btn" aria-label="Generate quote card">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="9" y1="10" x2="15" y2="10"/><line x1="9" y1="14" x2="13" y2="14"/></svg>
-                <span class="asset-action-label">Quote card</span>
-              </button>
-              <button class="asset-action-btn" id="carousel-btn" aria-label="Generate carousel">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7" y="5" width="10" height="14" rx="1.5"/><rect x="3" y="8" width="3" height="8" rx="1"/><rect x="18" y="8" width="3" height="8" rx="1"/></svg>
-                <span class="asset-action-label">Carousel</span>
-              </button>
-              <button class="asset-action-btn" id="branded-quote-btn" aria-label="Generate branded quote">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M12 7l1.5 3.5L17 12l-3.5 1.5L12 17l-1.5-3.5L7 12l3.5-1.5z"/></svg>
-                <span class="asset-action-label">Branded</span>
-              </button>
-              <button class="asset-action-btn" id="media-library-btn" aria-label="Attach from media library">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-                <span class="asset-action-label">Media</span>
-              </button>
             </div>
           </div>
 
@@ -615,11 +624,25 @@ async function loadPost(id) {
 
     const rawText = typeof p.content === 'string' ? p.content : '';
     const paras   = rawText.split(/\n\n+/).filter(Boolean);
-    document.getElementById('post-body').innerHTML = paras.map(t =>
+    const postBody = document.getElementById('post-body');
+    postBody.innerHTML = paras.map(t =>
       `<p class="text-post" data-style="normal">${escHtml(t).replace(/\n/g, '<br>')}</p>`
     ).join('');
     // Initialise auto-save baseline so we don't trigger on the loaded content
     _lastAutoSavedContent = getPostContent();
+
+    // Auto-focus editor when in Edit tab and not locked
+    if (state.activeTab === 'edit' && !scheduleEditLocked) {
+      postBody.focus();
+      try {
+        const range = document.createRange();
+        const sel   = window.getSelection();
+        range.selectNodeContents(postBody);
+        range.collapse(false);
+        sel.removeAllRanges();
+        sel.addRange(range);
+      } catch { /* non-fatal */ }
+    }
 
     // Autosave indicator — show timestamp at load so user always sees a time
     updateAutosaveIndicator();
@@ -631,7 +654,8 @@ async function loadPost(id) {
     const wc = rawText.split(/\s+/).filter(Boolean).length;
     renderStatusLine(wc, p.archetypeUsed || null, p.postType || null);
 
-    // li-body-text is synced from post-body when switching to preview tab
+    // If preview tab is active (fresh-from-generation), sync content now that it's loaded
+    if (state.activeTab === 'preview') switchTab('preview');
 
     const fcSection = document.getElementById('first-comment-section');
     if (fcSection) fcSection.hidden = false;
@@ -962,7 +986,7 @@ function applyScheduleLockUi(scheduledFor) {
   const schedBtn = document.getElementById('btn-schedule');
   if (schedBtn) { schedBtn.disabled = true; schedBtn.style.setProperty('display', 'none', 'important'); }
   document.getElementById('post-body').contentEditable = 'false';
-  ['quote-card-btn','carousel-btn','branded-quote-btn','media-library-btn'].forEach(id => {
+  ['quote-card-btn','carousel-btn','branded-quote-btn','media-library-btn','fmt-bold','fmt-italic','fmt-bullet','fmt-num'].forEach(id => {
     document.getElementById(id)?.classList.add('disabled');
   });
   const chipRemove = document.getElementById('asset-chip-remove');
@@ -983,7 +1007,7 @@ function clearScheduleLockUi() {
   const schedBtnRestore = document.getElementById('btn-schedule');
   if (schedBtnRestore) schedBtnRestore.style.removeProperty('display');
   if (linkedinConnected && schedBtnRestore) schedBtnRestore.disabled = false;
-  ['quote-card-btn','carousel-btn','branded-quote-btn','media-library-btn'].forEach(id => {
+  ['quote-card-btn','carousel-btn','branded-quote-btn','media-library-btn','fmt-bold','fmt-italic','fmt-bullet','fmt-num'].forEach(id => {
     document.getElementById(id)?.classList.remove('disabled');
   });
   const chipRemove = document.getElementById('asset-chip-remove');
@@ -1884,6 +1908,13 @@ async function doAutoSave() {
    INIT
 ════════════════════════════════════════════════════════════════════════ */
 function init() {
+  // Fresh-from-generation: smooth fade-in + open in Preview so user sees the result first
+  if (sessionStorage.getItem('sh_from_gen') === '1') {
+    sessionStorage.removeItem('sh_from_gen');
+    document.getElementById('editor')?.classList.add('is-fresh');
+    switchTab('preview');
+  }
+
   bindEvents();
   wireSchedule();
   wireVisualButtons();
@@ -1891,6 +1922,8 @@ function init() {
   wireSchedulePause();
   wireFirstComment();
   wireEmojiStrip();
+  wirePostBodyKeys();
+  wireFormattingToolbar();
   wireImprover();
 
   document.getElementById('post-body').addEventListener('input', scheduleAutoSave);
@@ -1934,6 +1967,141 @@ function wireEmojiStrip() {
 }
 
 /* ════════════════════════════════════════════════════════════════════════
+   POST BODY KEY HANDLING (Enter, Cmd+B, Cmd+I)
+════════════════════════════════════════════════════════════════════════ */
+function wirePostBodyKeys() {
+  const postBody = document.getElementById('post-body');
+  if (!postBody) return;
+  postBody.addEventListener('keydown', e => {
+    // Enter: normalise to <p> across browsers; Shift+Enter: <br> line break
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      document.execCommand(e.shiftKey ? 'insertLineBreak' : 'insertParagraph');
+      scheduleAutoSave();
+      return;
+    }
+    // Cmd+B / Ctrl+B — Unicode bold toggle
+    if (e.key === 'b' && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      applyUnicodeFormat('bold');
+      return;
+    }
+    // Cmd+I / Ctrl+I — Unicode italic toggle
+    if (e.key === 'i' && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      applyUnicodeFormat('italic');
+    }
+  });
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   UNICODE FORMATTING (bold / italic via Math Sans-Serif codepoints)
+════════════════════════════════════════════════════════════════════════ */
+const UNICODE_BOLD_NORM   = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+const UNICODE_BOLD_CHARS  = '𝗔𝗕𝗖𝗗𝗘𝗙𝗚𝗛𝗜𝗝𝗞𝗟𝗠𝗡𝗢𝗣𝗤𝗥𝗦𝗧𝗨𝗩𝗪𝗫𝗬𝗭𝗮𝗯𝗰𝗱𝗲𝗳𝗴𝗵𝗶𝗷𝗸𝗹𝗺𝗻𝗼𝗽𝗾𝗿𝘀𝘁𝘂𝘃𝘄𝘅𝘆𝘇𝟬𝟭𝟮𝟯𝟰𝟱𝟲𝟳𝟴𝟵';
+const UNICODE_ITALIC_NORM  = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+const UNICODE_ITALIC_CHARS = '𝘈𝘉𝘊𝘋𝘌𝘍𝘎𝘏𝘐𝘑𝘒𝘓𝘔𝘕𝘖𝘗𝘘𝘙𝘚𝘛𝘜𝘝𝘞𝘟𝘠𝘡𝘢𝘣𝘤𝘥𝘦𝘧𝘨𝘩𝘪𝘫𝘬𝘭𝘮𝘯𝘰𝘱𝘲𝘳𝘴𝘵𝘶𝘷𝘸𝘹𝘺𝘻';
+
+function buildUnicodeMap(norm, chars) {
+  const normArr  = [...norm];
+  const charArr  = [...chars];
+  const toMap    = {};
+  const fromMap  = {};
+  normArr.forEach((c, i) => { toMap[c] = charArr[i]; fromMap[charArr[i]] = c; });
+  return { toMap, fromMap };
+}
+const BOLD_MAP   = buildUnicodeMap(UNICODE_BOLD_NORM,   UNICODE_BOLD_CHARS);
+const ITALIC_MAP = buildUnicodeMap(UNICODE_ITALIC_NORM, UNICODE_ITALIC_CHARS);
+
+function convertUnicode(str, mapObj) {
+  return [...str].map(c => mapObj.toMap[c] || c).join('');
+}
+function revertUnicode(str, mapObj) {
+  return [...str].map(c => mapObj.fromMap[c] || c).join('');
+}
+function isFullyFormatted(str, mapObj) {
+  const alphas = [...str].filter(c => /[a-zA-Z0-9]/.test(revertUnicode(c, mapObj)));
+  return alphas.length > 0 && alphas.every(c => mapObj.fromMap[c] !== undefined);
+}
+
+function applyUnicodeFormat(type) {
+  const postBody = document.getElementById('post-body');
+  if (!postBody) return;
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) return;
+  const range = sel.getRangeAt(0);
+  if (range.collapsed) return;
+  const selectedText = range.toString();
+  const mapObj       = type === 'bold' ? BOLD_MAP : ITALIC_MAP;
+  const replacement  = isFullyFormatted(selectedText, mapObj)
+    ? revertUnicode(selectedText, mapObj)
+    : convertUnicode(selectedText, mapObj);
+  try { document.execCommand('insertText', false, replacement); }
+  catch {
+    range.deleteContents();
+    range.insertNode(document.createTextNode(replacement));
+    range.collapse(false);
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+  scheduleAutoSave();
+  updateToolbarActiveState();
+}
+
+function updateToolbarActiveState() {
+  const sel  = window.getSelection();
+  const text = sel ? sel.toString() : '';
+  document.getElementById('fmt-bold')?.classList.toggle('active',   isFullyFormatted(text, BOLD_MAP));
+  document.getElementById('fmt-italic')?.classList.toggle('active', isFullyFormatted(text, ITALIC_MAP));
+}
+
+function wireFormattingToolbar() {
+  const postBody = document.getElementById('post-body');
+  if (!postBody) return;
+
+  document.getElementById('fmt-bold')?.addEventListener('click', () => {
+    postBody.focus(); applyUnicodeFormat('bold');
+  });
+  document.getElementById('fmt-italic')?.addEventListener('click', () => {
+    postBody.focus(); applyUnicodeFormat('italic');
+  });
+
+  document.getElementById('fmt-bullet')?.addEventListener('click', () => {
+    postBody.focus();
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return;
+    const range = sel.getRangeAt(0);
+    const paras = Array.from(postBody.querySelectorAll('p')).filter(p => range.intersectsNode(p));
+    if (!paras.length) {
+      const last = postBody.querySelector('p:last-child');
+      if (last && !last.innerText.startsWith('• ')) last.innerHTML = '• ' + last.innerHTML;
+    } else {
+      paras.forEach(p => { if (!p.innerText.startsWith('• ')) p.innerHTML = '• ' + p.innerHTML; });
+    }
+    scheduleAutoSave();
+  });
+
+  document.getElementById('fmt-num')?.addEventListener('click', () => {
+    postBody.focus();
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return;
+    const range = sel.getRangeAt(0);
+    const paras = Array.from(postBody.querySelectorAll('p')).filter(p => range.intersectsNode(p));
+    if (!paras.length) {
+      const last = postBody.querySelector('p:last-child');
+      if (last && !/^\d+\. /.test(last.innerText)) last.innerHTML = '1. ' + last.innerHTML;
+    } else {
+      paras.forEach((p, i) => { if (!/^\d+\. /.test(p.innerText)) p.innerHTML = `${i + 1}. ` + p.innerHTML; });
+    }
+    scheduleAutoSave();
+  });
+
+  // Update active state on selection change
+  postBody.addEventListener('keyup',   updateToolbarActiveState);
+  postBody.addEventListener('mouseup', updateToolbarActiveState);
+}
+
+/* ════════════════════════════════════════════════════════════════════════
    POST IMPROVER
 ════════════════════════════════════════════════════════════════════════ */
 let improverHistory = [];
@@ -1960,33 +2128,56 @@ function appendImproverMessage(role, text, isLoading) {
   return wrap;
 }
 
-function buildAIMessageNode(wrap, text) {
+function applyTextToEditor(text) {
+  const postBody = document.getElementById('post-body');
+  if (!postBody) return;
+  const paras = text.split(/\n\n+/).filter(Boolean);
+  postBody.innerHTML = paras.map(t =>
+    `<p class="text-post" data-style="normal">${escHtml(t).replace(/\n/g, '<br>')}</p>`
+  ).join('');
+}
+
+function buildAIMessageNode(wrap, text, autoApplied) {
   wrap.className   = 'improver-msg-ai';
   wrap.innerHTML   = '';
 
   const card = document.createElement('div');
   card.className   = 'improver-msg-card';
   card.textContent = text;
-
-  const applyBtn   = document.createElement('button');
-  applyBtn.className   = 'improver-apply-btn';
-  applyBtn.textContent = '▶ Apply to post';
-  applyBtn.addEventListener('click', () => {
-    const postBody = document.getElementById('post-body');
-    const paras    = text.split(/\n\n+/).filter(Boolean);
-    postBody.innerHTML = paras.map(t =>
-      `<p class="text-post" data-style="normal">${escHtml(t).replace(/\n/g, '<br>')}</p>`
-    ).join('');
-    scheduleAutoSave();
-    applyBtn.textContent = '✓ Applied';
-    applyBtn.className   = 'improver-apply-btn applied';
-  });
-
   wrap.appendChild(card);
-  wrap.appendChild(applyBtn);
+
+  if (autoApplied) {
+    const appliedLabel = document.createElement('button');
+    appliedLabel.className   = 'improver-apply-btn applied';
+    appliedLabel.textContent = '✓ Applied to post';
+    wrap.appendChild(appliedLabel);
+
+    const undoBtn = document.createElement('button');
+    undoBtn.className   = 'improver-apply-btn';
+    undoBtn.textContent = '↩ Undo';
+    undoBtn.style.marginLeft = '12px';
+    undoBtn.addEventListener('click', () => {
+      applyTextToEditor(wrap.dataset.previousText || '');
+      scheduleAutoSave();
+      undoBtn.remove();
+      appliedLabel.textContent = '(reverted)';
+    });
+    wrap.appendChild(undoBtn);
+  } else {
+    const applyBtn = document.createElement('button');
+    applyBtn.className   = 'improver-apply-btn';
+    applyBtn.textContent = '▶ Apply to post';
+    applyBtn.addEventListener('click', () => {
+      applyTextToEditor(text);
+      scheduleAutoSave();
+      applyBtn.textContent = '✓ Applied';
+      applyBtn.className   = 'improver-apply-btn applied';
+    });
+    wrap.appendChild(applyBtn);
+  }
 }
 
-function replaceLastImproverMessage(text, isError) {
+function replaceLastImproverMessage(text, isError, autoApply) {
   const chat = document.getElementById('improver-chat');
   if (!chat) return;
   const last = chat.lastElementChild;
@@ -1995,8 +2186,13 @@ function replaceLastImproverMessage(text, isError) {
   if (isError) {
     last.className   = 'improver-msg-ai';
     last.innerHTML   = `<span class="improver-error">${escHtml(text)}</span>`;
+  } else if (autoApply) {
+    last.dataset.previousText = getPostContent();
+    applyTextToEditor(text);
+    scheduleAutoSave();
+    buildAIMessageNode(last, text, true);
   } else {
-    buildAIMessageNode(last, text);
+    buildAIMessageNode(last, text, false);
   }
 
   chat.scrollTop = chat.scrollHeight;
@@ -2036,7 +2232,7 @@ async function sendImproveRequest(instruction) {
       replaceLastImproverMessage('Something went wrong. Please try again.', true);
       improverHistory.pop();
     } else {
-      replaceLastImproverMessage(data.post, false);
+      replaceLastImproverMessage(data.post, false, true);
       improverHistory.push({ role: 'assistant', content: data.post });
     }
   } catch {

@@ -1,19 +1,30 @@
 /* dashboard.js — home page data fetching and rendering */
 
-/* ── DOM References ──────────────────────────────────────────── */
-const recentList = document.getElementById('recent-posts-list');
-
 /* ── Init ────────────────────────────────────────────────────── */
-(async function init() {
+let _perfTimer1 = null, _perfTimer2 = null;
+
+async function init() {
+  const recentList = document.getElementById('recent-posts-list');
+  if (!recentList) return; // not on dashboard
   await window.scouthookAuthReady;
   loadRecentPosts();
   loadChecklist();
   loadPerformance();
   loadLinkedInExpiryBanner();
-})();
+}
+
+window.__pageInit = init;
+window.__pageCleanup = function () {
+  clearTimeout(_perfTimer1);
+  clearTimeout(_perfTimer2);
+  _perfTimer1 = _perfTimer2 = null;
+};
+
+init();
 
 /* ── Recent posts ────────────────────────────────────────────── */
 async function loadRecentPosts() {
+  const recentList = document.getElementById('recent-posts-list');
   try {
     const res  = await fetch('/api/posts/recent', { headers: apiHeaders() });
     if (!res.ok) throw new Error('No recent posts endpoint');
@@ -32,7 +43,8 @@ async function loadRecentPosts() {
 }
 
 function showEmptyRecent() {
-  recentList.innerHTML = `
+  const recentList = document.getElementById('recent-posts-list');
+  if (recentList) recentList.innerHTML = `
     <div class="card-empty-state">
       No posts yet — <a href="/generate.html?new=1">Generate your first post →</a>
     </div>`;
@@ -307,7 +319,7 @@ async function loadPerfNudge() {
     _perfIndex = 0;
 
     // Let the page settle, then auto-show
-    setTimeout(openPerfModal, 1500);
+    _perfTimer1 = setTimeout(openPerfModal, 1500);
   } catch {
     // Non-fatal
   }
@@ -391,7 +403,7 @@ function _showPerfSuccess(tag, modal) {
       <p class="perf-modal-success-sub">${m.sub}</p>
     </div>`;
 
-  setTimeout(() => _advancePerfModal(false), 1800);
+  _perfTimer2 = setTimeout(() => _advancePerfModal(false), 1800);
 }
 
 function _advancePerfModal(wasDismissed) {

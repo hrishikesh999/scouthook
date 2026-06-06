@@ -22,7 +22,7 @@ function buildLinkedInChip(name, photoUrl) {
   return `<div class="nav-linkedin-connected">${avatarHtml}${nameHtml}</div>`;
 }
 
-(async function bootProfilePage() {
+async function bootProfilePage() {
   await window.scouthookAuthReady;
 
   const connectBtn = document.getElementById('linkedin-connect-btn');
@@ -112,9 +112,13 @@ saveBtn.addEventListener('click', async () => {
     saveBtn.textContent = origText;
     saveBtn.disabled = false;
     saveError.textContent = err.message || 'Something went wrong. Try again.';
-    saveError.classList.add('visible');
-    if (window.toast && typeof window.toast.error === 'function') {
-      window.toast.error('Couldn’t update voice profile. Please try again.');
+    saveError.classList.add(‘visible’);
+    if (window.toast && typeof window.toast.error === ‘function’) {
+      window.toast.error(‘Couldn’t update voice profile. Please try again.’);
     }
   }
-});
+}
+
+window.__pageInit = bootProfilePage;
+window.__pageCleanup = null;
+bootProfilePage();

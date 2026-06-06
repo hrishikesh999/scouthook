@@ -55,10 +55,8 @@
 
     let workspaces;
     try {
-      const r = await fetch('/api/workspaces', { credentials: 'same-origin' });
-      if (!r.ok) return;
-      const d = await r.json();
-      if (!d.ok || !Array.isArray(d.workspaces) || d.workspaces.length === 0) return;
+      const d = await cachedFetch('/api/workspaces', { credentials: 'same-origin' });
+      if (!d || !d.ok || !Array.isArray(d.workspaces) || d.workspaces.length === 0) return;
       workspaces = d.workspaces;
     } catch { return; }
 
@@ -108,7 +106,10 @@
       swBtn.setAttribute('aria-expanded', String(opening));
     });
 
-    document.addEventListener('click', closeMenu);
+    if (!slot._closeMenuAttached) {
+      document.addEventListener('click', closeMenu);
+      slot._closeMenuAttached = true;
+    }
 
     slot.querySelectorAll('.ws-sw-item').forEach(item => {
       item.addEventListener('click', async e => {
@@ -118,7 +119,10 @@
         try {
           const resp = await fetch(`/api/workspaces/${wsId}/switch`, { method: 'POST', credentials: 'same-origin' });
           const data = await resp.json();
-          if (data.ok) window.location.href = data.redirect || '/dashboard.html';
+          if (data.ok) {
+            cachedFetch.bustAll();
+            window.location.href = data.redirect || '/dashboard.html';
+          }
         } catch { /* page reload on next interaction will correct state */ }
       });
     });
@@ -201,8 +205,7 @@
   async function initTrialBanner() {
     if (localStorage.getItem('trial_banner_dismissed')) return;
     try {
-      const r = await fetch('/api/billing/subscription', { credentials: 'same-origin' });
-      const sub = await r.json();
+      const sub = await cachedFetch('/api/billing/subscription', { credentials: 'same-origin' });
       if (!sub.ok || sub.status !== 'trialing' || !sub.trial_ends_at) return;
       const daysLeft = Math.max(0, Math.ceil((new Date(sub.trial_ends_at) - Date.now()) / 86400000));
       if (daysLeft <= 0) return;
@@ -235,9 +238,8 @@
     const sidebarBottom = document.querySelector('#sidebar .sidebar-bottom');
     if (!sidebarBottom) return;
     try {
-      const r = await fetch('/api/billing/subscription');
-      if (!r.ok) return;
-      const d = await r.json();
+      const d = await cachedFetch('/api/billing/subscription', { credentials: 'same-origin' });
+      if (!d) return;
       if (d.plan !== 'free') return;
 
       const btn = document.createElement('button');
@@ -407,6 +409,9 @@
       }
     });
   }
+
+  // Expose for the SPA router to call after each page swap
+  window._renderPageHeaderActions = renderPageHeaderActions;
 
   // ── Boot ─────────────────────────────────────────────────────
   // Render page header actions immediately (help link doesn't need auth)

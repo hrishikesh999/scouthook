@@ -306,7 +306,7 @@ async function reloadStream() {
   }
 }
 
-document.addEventListener('DOMContentLoaded', async () => {
+async function init() {
   checkLinkedInStatus();
   await reloadStream();
 
@@ -395,4 +395,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       } catch { alert('Publish failed — please try again.'); }
     }
   });
-});
+}
+
+window.__pageInit = init;
+window.__pageCleanup = null;
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}

@@ -52,8 +52,7 @@ function apiHeaders() {
  */
 window.scouthookAuthReady = (async () => {
   try {
-    const r = await fetch('/api/auth/me', { credentials: 'same-origin' });
-    const d = await r.json();
+    const d = await cachedFetch('/api/auth/me', { credentials: 'same-origin' });
     if (d && d.user && d.user.user_id) {
       try {
         localStorage.setItem('scouthook_uid', d.user.user_id);

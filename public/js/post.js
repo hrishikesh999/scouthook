@@ -1,7 +1,6 @@
 /* post.js — Published post detail page */
 
-const POST_ID = new URLSearchParams(window.location.search).get('id');
-if (!POST_ID) window.location.replace('/Published.html');
+// POST_ID is resolved lazily in init() so SPA back-navigation picks up the current URL
 
 const RATING_META = {
   strong: { emoji: '🔥', label: 'Strong' },
@@ -111,6 +110,7 @@ function renderRating(tag) {
 }
 
 async function submitRating(tag) {
+  const POST_ID = new URLSearchParams(window.location.search).get('id');
   const res  = await fetch(`/api/posts/${POST_ID}/performance`, {
     method:  'POST',
     headers: { 'Content-Type': 'application/json', ...apiHeaders() },
@@ -124,13 +124,19 @@ async function submitRating(tag) {
 // Boot
 // ---------------------------------------------------------------------------
 
-document.addEventListener('DOMContentLoaded', async () => {
-  document.getElementById('post-rating-btns').addEventListener('click', async e => {
-    const btn = e.target.closest('[data-tag]');
-    if (!btn) return;
-    btn.disabled = true;
-    await submitRating(btn.dataset.tag);
-  });
+async function init() {
+  const POST_ID = new URLSearchParams(window.location.search).get('id');
+  if (!POST_ID) { window.location.replace('/Published.html'); return; }
+
+  const ratingBtns = document.getElementById('post-rating-btns');
+  if (ratingBtns) {
+    ratingBtns.addEventListener('click', async e => {
+      const btn = e.target.closest('[data-tag]');
+      if (!btn) return;
+      btn.disabled = true;
+      await submitRating(btn.dataset.tag);
+    });
+  }
 
   // Fetch post and LinkedIn profile in parallel
   const [postResult, profileResult] = await Promise.allSettled([
@@ -163,4 +169,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   populateLiCard(post, profile);
   populateLinkedInLink(post);
   renderRating(post.performance_tag || null);
-});
+}
+
+window.__pageInit = init;
+window.__pageCleanup = null;
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}

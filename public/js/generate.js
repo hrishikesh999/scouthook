@@ -1342,7 +1342,7 @@ async function loadProfileSelector() {
 }
 
 /* ── Init ────────────────────────────────────────────────────── */
-(async function init() {
+async function init() {
   await window.scouthookAuthReady;
 
   // Default to reach immediately; loadMixRecommendation may update this
@@ -1369,4 +1369,14 @@ async function loadProfileSelector() {
     chatInput.style.height = 'auto';
     chatInput.style.height = chatInput.scrollHeight + 'px';
   }
-})();
+}
+
+window.__pageInit = init;
+window.__pageCleanup = function () {
+  clearTimeout(_tensionDebounce);
+  clearTimeout(_nudgeDebounce);
+  _tensionDebounce = null;
+  _nudgeDebounce = null;
+};
+
+init();

@@ -1,0 +1,169 @@
+    .help-page {
+      padding: var(--space-8);
+      max-width: 720px;
+    }
+    .help-subheading {
+      font-size: 15px;
+      color: var(--text-secondary);
+      margin: 0 0 var(--space-8);
+    }
+
+    /* ── Section heading ─────────────────────────────────────── */
+    .help-section-title {
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: var(--text-muted);
+      margin: 0 0 12px;
+    }
+
+    /* ── FAQ accordion ───────────────────────────────────────── */
+    .faq-list {
+      list-style: none;
+      padding: 0;
+      margin: 0 0 48px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .faq-item {
+      border-bottom: 1px solid var(--border);
+      background: #ffffff;
+    }
+    .faq-item:last-child { border-bottom: none; }
+
+    .faq-btn {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 18px 20px;
+      text-align: left;
+      font-size: 14px;
+      font-weight: 600;
+      color: #111111;
+      font-family: inherit;
+      transition: background 0.12s;
+    }
+    .faq-btn:hover { background: var(--bg-pill); }
+    .faq-btn[aria-expanded="true"] { color: var(--brand); }
+
+    .faq-chevron {
+      flex-shrink: 0;
+      transition: transform 0.2s;
+      color: var(--text-muted);
+    }
+    .faq-btn[aria-expanded="true"] .faq-chevron {
+      transform: rotate(180deg);
+      color: var(--brand);
+    }
+
+    .faq-body {
+      display: none;
+      padding: 0 20px 18px;
+      font-size: 14px;
+      color: #111111;
+      line-height: 1.65;
+    }
+    .faq-body.open { display: block; }
+    .faq-body p { margin: 0 0 10px; }
+    .faq-body p:last-child { margin-bottom: 0; }
+    .faq-body a { color: var(--brand); text-decoration: none; }
+    .faq-body a:hover { text-decoration: underline; }
+
+    /* ── Support form card ───────────────────────────────────── */
+    .support-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 28px 28px 24px;
+      margin-bottom: 48px;
+    }
+    .support-card-title {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--text-heading);
+      margin: 0 0 4px;
+    }
+    .support-card-sub {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin: 0 0 20px;
+    }
+
+    .support-field { margin-bottom: 16px; }
+    .support-label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+    }
+    .support-select,
+    .support-textarea {
+      width: 100%;
+      box-sizing: border-box;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 14px;
+      color: var(--text-heading);
+      font-family: inherit;
+      background: var(--bg-surface);
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .support-select:focus,
+    .support-textarea:focus { border-color: var(--brand); }
+    .support-textarea {
+      min-height: 110px;
+      resize: vertical;
+    }
+    .support-textarea::placeholder { color: var(--text-muted); }
+
+    .support-actions {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 4px;
+    }
+    #support-submit {
+      background: var(--brand);
+      border: none;
+      border-radius: 8px;
+      padding: 10px 22px;
+      font-size: 14px;
+      font-weight: 600;
+      color: #fff;
+      cursor: pointer;
+      font-family: inherit;
+      transition: opacity 0.15s;
+    }
+    #support-submit:hover { opacity: 0.88; }
+    #support-submit:disabled { opacity: 0.5; cursor: default; }
+
+    .support-success {
+      display: none;
+      align-items: center;
+      gap: 10px;
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      border-radius: 8px;
+      padding: 14px 16px;
+      font-size: 14px;
+      color: #166534;
+      margin-top: 16px;
+    }
+    .support-success.visible { display: flex; }
+
+    .support-error {
+      display: none;
+      font-size: 13px;
+      color: #dc2626;
+      margin-top: 8px;
+    }
+    .support-error.visible { display: block; }

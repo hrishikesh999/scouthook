@@ -5,7 +5,7 @@
    7 stages: Basics · Content Pillars · Credibility · CTAs · Rules · LinkedIn · Samples
    ============================================================ */
 
-(async () => {
+async function init() {
 
   await window.scouthookAuthReady;
 
@@ -739,4 +739,8 @@
     switchToStep(firstIncompleteStep());
   }
 
-})();
+}
+
+window.__pageInit = init;
+window.__pageCleanup = null;
+init();

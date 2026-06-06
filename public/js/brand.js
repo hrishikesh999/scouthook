@@ -55,11 +55,15 @@ async function checkLinkedInStatus() {
 }
 
 /* ── Init ─────────────────────────────────────────────────────── */
-(async function init() {
+async function init() {
   await window.scouthookAuthReady;
   await checkLinkedInStatus();
   await loadBrand();
-})();
+}
+
+window.__pageInit = init;
+window.__pageCleanup = null;
+init();
 
 /* ── Load saved brand ─────────────────────────────────────────── */
 async function loadBrand() {

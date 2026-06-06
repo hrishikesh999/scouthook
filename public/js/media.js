@@ -39,10 +39,14 @@ async function checkLinkedInStatus() {
 }
 
 /* ── Init ─────────────────────────────────────────────────────── */
-(async function init() {
+async function init() {
   await checkLinkedInStatus();
   await loadMedia();
-})();
+}
+
+window.__pageInit = init;
+window.__pageCleanup = null;
+init();
 
 /* ── Load & render ────────────────────────────────────────────── */
 async function loadMedia() {

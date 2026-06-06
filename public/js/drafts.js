@@ -123,7 +123,7 @@ function bindRowClicks(container) {
 }
 
 /* ── Init ────────────────────────────────────────────────────── */
-document.addEventListener('DOMContentLoaded', async () => {
+async function init() {
   if (sessionStorage.getItem('sh_just_published') === '1') {
     sessionStorage.removeItem('sh_just_published');
     if (window.toast?.success) window.toast.success('Post published successfully.');
@@ -147,4 +147,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   } catch {
     renderEmpty();
   }
-});
+}
+
+window.__pageInit = init;
+window.__pageCleanup = null;
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}

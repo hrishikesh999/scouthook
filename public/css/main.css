@@ -6524,3 +6524,46 @@ a.pub-card {
     flex-direction: column;
   }
 }
+
+/* ── SPA navigation transitions ─────────────────────────────── */
+
+/* Sidebar stays completely static — exclude from view transitions */
+#sidebar { view-transition-name: none; }
+#main-content { view-transition-name: main-content; }
+
+/* Forward navigation: new content slides in from the right */
+html[data-nav-dir="forward"]::view-transition-old(main-content) {
+  animation: spa-slide-out-left 180ms ease-in forwards;
+}
+html[data-nav-dir="forward"]::view-transition-new(main-content) {
+  animation: spa-slide-in-right 220ms ease-out forwards;
+}
+
+/* Back navigation: new content slides in from the left */
+html[data-nav-dir="back"]::view-transition-old(main-content) {
+  animation: spa-slide-out-right 180ms ease-in forwards;
+}
+html[data-nav-dir="back"]::view-transition-new(main-content) {
+  animation: spa-slide-in-left 220ms ease-out forwards;
+}
+
+@keyframes spa-slide-in-right  { from { opacity: 0; transform: translateX(20px);  } to { opacity: 1; transform: none; } }
+@keyframes spa-slide-out-left  { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateX(-20px); } }
+@keyframes spa-slide-in-left   { from { opacity: 0; transform: translateX(-20px); } to { opacity: 1; transform: none; } }
+@keyframes spa-slide-out-right { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateX(20px);  } }
+
+/* CSS class fallback for browsers without View Transitions API */
+#main-content.spa-entering {
+  animation: spa-slide-in-right 220ms ease-out forwards;
+}
+html[data-nav-dir="back"] #main-content.spa-entering {
+  animation: spa-slide-in-left 220ms ease-out forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(main-content),
+  ::view-transition-new(main-content),
+  #main-content.spa-entering {
+    animation: none;
+  }
+}

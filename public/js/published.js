@@ -69,7 +69,7 @@ function renderList(posts) {
   }).join('');
 }
 
-document.addEventListener('DOMContentLoaded', async () => {
+async function init() {
   try {
     const res  = await fetch('/api/posts?status=published', { headers: apiHeaders() });
     const data = await res.json();
@@ -82,4 +82,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   } catch {
     renderEmpty();
   }
-});
+}
+
+window.__pageInit = init;
+window.__pageCleanup = null;
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}

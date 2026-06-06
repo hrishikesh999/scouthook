@@ -626,12 +626,12 @@ const chat = (() => {
       chatSendBtn.innerHTML = _coach.exchangeCount >= 2 ? 'Write my post →' : 'Next →';
       chatSendBtn.classList.add('text-mode');
       chatSendBtn.setAttribute('aria-label', _coach.exchangeCount >= 2 ? 'Generate post' : 'Next question');
-      if (micBtn) micBtn.style.display = 'none';
+      if (micBtn) micBtn.classList.add('coach-mode');
     } else {
       chatSendBtn.innerHTML = ARROW_SVG;
       chatSendBtn.classList.remove('text-mode');
       chatSendBtn.setAttribute('aria-label', 'Generate post');
-      if (micBtn && voiceCtrl) micBtn.style.display = 'flex';
+      if (micBtn) micBtn.classList.remove('coach-mode');
     }
   }
 
@@ -898,7 +898,6 @@ chatInput.addEventListener('keydown', e => {
 voiceCtrl = initVoiceInput({
   input: chatInput,
   btn:   document.getElementById('mic-btn'),
-  guard: () => _coach.active,
 });
 
 /* ── Generate ────────────────────────────────────────────────── */

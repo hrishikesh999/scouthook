@@ -462,6 +462,9 @@
       animation: mic-pulse 1.2s ease-in-out infinite;
     }
     #mic-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    /* In coach/text-mode the send button sits at right:12px and may be wide.
+       Shift the mic to the left side so the two buttons never overlap. */
+    #mic-btn.coach-mode { right: auto; left: 12px; bottom: 12px; }
     @keyframes mic-pulse {
       0%, 100% { box-shadow: 0 0 0 0 rgba(220,38,38,0.3); }
       50%       { box-shadow: 0 0 0 6px rgba(220,38,38,0); }

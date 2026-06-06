@@ -890,6 +890,13 @@ chatInput.addEventListener('keydown', e => {
 });
 
 
+/* ── Voice input ─────────────────────────────────────────────── */
+initVoiceInput({
+  input: chatInput,
+  btn:   document.getElementById('mic-btn'),
+  guard: () => _coach.active,
+});
+
 /* ── Generate ────────────────────────────────────────────────── */
 chatImproveInput.addEventListener('click', () => {
   hideSubstanceWarning();

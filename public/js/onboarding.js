@@ -656,6 +656,9 @@ const Onboarding = (() => {
     initS4();
     initS6();
 
+    initVoiceInput({ input: document.getElementById('ob-answer'),       btn: document.getElementById('ob-answer-mic') });
+    initVoiceInput({ input: document.getElementById('ob-profile-answer'), btn: document.getElementById('ob-profile-mic') });
+
     showScreen('s1');
   }
 

@@ -1639,3 +1639,38 @@ body.ob-shell {
 .ob-linkedin-nudge a:hover {
   text-decoration: underline;
 }
+
+/* ── Voice mic button ─────────────────────────────────────────── */
+.ob-mic-wrap {
+  position: relative;
+}
+.ob-mic-wrap .ob-textarea {
+  padding-bottom: 46px;
+}
+.ob-mic-btn {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--bg-surface, #fff);
+  color: #6B7280;
+  border: 1.5px solid var(--border);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.ob-mic-btn:hover { color: var(--brand); border-color: var(--brand); }
+.ob-mic-btn.recording {
+  background: #FEF2F2;
+  color: #DC2626;
+  border-color: #DC2626;
+  animation: mic-pulse 1.2s ease-in-out infinite;
+}
+@keyframes mic-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(220,38,38,0.3); }
+  50%       { box-shadow: 0 0 0 5px rgba(220,38,38,0); }
+}

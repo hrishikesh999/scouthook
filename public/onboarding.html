@@ -94,8 +94,18 @@
         <div id="ob-profile-step" hidden>
           <p class="ob-q-text">What do you do, and who do you help?</p>
           <p class="ob-website-hint">One sentence is enough. This shapes the language of your post.</p>
-          <textarea id="ob-profile-answer" class="ob-textarea ob-textarea--interview" rows="3"
-                    placeholder="e.g. I help early-stage founders close their first enterprise deals"></textarea>
+          <div class="ob-mic-wrap">
+            <textarea id="ob-profile-answer" class="ob-textarea ob-textarea--interview" rows="3"
+                      placeholder="e.g. I help early-stage founders close their first enterprise deals"></textarea>
+            <button id="ob-profile-mic" type="button" aria-label="Record voice input" style="display:none" class="ob-mic-btn">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                <line x1="12" y1="19" x2="12" y2="23"/>
+                <line x1="8" y1="23" x2="16" y2="23"/>
+              </svg>
+            </button>
+          </div>
           <div class="ob-interview-actions" style="margin-top:16px">
             <button id="ob-profile-next" class="ob-btn-primary" type="button">Next →</button>
             <button id="ob-profile-skip" class="ob-skip-link" type="button">Skip</button>
@@ -109,8 +119,18 @@
           <p id="ob-q-text" class="ob-q-text"></p>
           <p id="ob-q-hint" class="ob-website-hint"></p>
 
-          <textarea id="ob-answer" class="ob-textarea ob-textarea--interview" rows="5"
-                    placeholder="Write freely. You can edit the post afterwards."></textarea>
+          <div class="ob-mic-wrap">
+            <textarea id="ob-answer" class="ob-textarea ob-textarea--interview" rows="5"
+                      placeholder="Write freely. You can edit the post afterwards."></textarea>
+            <button id="ob-answer-mic" type="button" aria-label="Record voice input" style="display:none" class="ob-mic-btn">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                <line x1="12" y1="19" x2="12" y2="23"/>
+                <line x1="8" y1="23" x2="16" y2="23"/>
+              </svg>
+            </button>
+          </div>
 
           <div class="ob-interview-actions">
             <button id="ob-answer-next" class="ob-btn-primary" type="button">Next →</button>
@@ -226,6 +246,7 @@
   </section>
 
   <script src="/js/session.js"></script>
+  <script src="/js/voice-input.js"></script>
   <script src="/js/onboarding.js" defer></script>
 </body>
 </html>

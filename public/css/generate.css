@@ -288,6 +288,11 @@
     }
     @media (max-width: 600px) {
       .idea-engine-grid { grid-template-columns: 1fr; }
+      .vault-panel-items { grid-template-columns: repeat(2, 1fr); }
+      #idea-page { padding: 24px 16px 40px; }
+    }
+    @media (max-width: 480px) {
+      .vault-panel-items { grid-template-columns: 1fr; }
     }
     .idea-engine-card {
       display: flex;

@@ -2938,32 +2938,106 @@ body {
     height: auto;
     flex-direction: row;
     align-items: center;
-    padding: 0 var(--space-4);
+    padding: 0 var(--space-3);
     border-right: none;
     border-bottom: 1px solid var(--border);
   }
 
-  .sidebar-logo {
-    padding: var(--space-4) var(--space-4) var(--space-4) 0;
-    border-bottom: none;
-    border-right: 1px solid var(--border);
-    margin-right: var(--space-4);
+  /* Hide workspace switcher — too wide for the mobile top bar */
+  #workspace-switcher-slot {
+    display: none;
+  }
+
+  /* Pull Create Post out of the top bar and float as a FAB */
+  .sidebar-cta {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    padding: 0;
+    z-index: 200;
+  }
+
+  .sidebar-cta-btn {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    padding: 0;
+    font-size: 0;
+    line-height: 0;
+    justify-content: center;
+    box-shadow: 0 4px 16px rgba(15, 118, 110, 0.45), 0 1px 4px rgba(0,0,0,0.18);
+  }
+
+  .sidebar-cta-btn svg {
+    width: 20px;
+    height: 20px;
     flex-shrink: 0;
   }
 
+  .sidebar-logo {
+    padding: var(--space-3) var(--space-3) var(--space-3) 0;
+    border-bottom: none;
+    border-right: 1px solid rgba(255,255,255,0.1);
+    margin-right: var(--space-3);
+    flex-shrink: 0;
+  }
+
+  /* Icon-only nav links — font-size:0 hides text nodes, SVG children stay visible */
   .sidebar-nav {
     flex-direction: row;
-    padding: var(--space-2) 0;
-    gap: var(--space-1);
+    padding: var(--space-1) 0;
+    gap: 2px;
     flex: 1;
     overflow-x: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
   }
 
+  .sidebar-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .sidebar-link {
+    font-size: 0;
+    padding: 10px;
+    gap: 0;
+    border-radius: var(--radius-md);
+  }
+
+  .sidebar-link svg {
+    width: 20px;
+    height: 20px;
+    opacity: 0.65;
+  }
+
+  .sidebar-link.active svg,
+  .sidebar-link:hover svg {
+    opacity: 1;
+  }
+
+  /* Account foot — show avatar only; logout accessible via Settings → My Account */
   .sidebar-bottom {
     border-top: none;
-    border-left: 1px solid var(--border);
-    padding: var(--space-2) 0 var(--space-2) var(--space-4);
+    border-left: 1px solid rgba(255,255,255,0.1);
+    padding: var(--space-2) 0 var(--space-2) var(--space-3);
     flex-shrink: 0;
+  }
+
+  .sidebar-account-foot-label,
+  .sidebar-account-foot-name,
+  .sidebar-account-foot-email,
+  .sidebar-account-foot-logout,
+  .sidebar-upgrade-btn {
+    display: none;
+  }
+
+  .sidebar-account-foot-inner {
+    gap: 0;
+  }
+
+  .sidebar-account-foot-avatar {
+    width: 32px;
+    height: 32px;
   }
 
   #main-content {
@@ -3037,6 +3111,57 @@ body {
 
   .hero-btn {
     width: 100%;
+  }
+
+  /* Page-level padding reductions */
+  .dashboard-page { padding: var(--space-5); }
+  .drafts-page    { padding: var(--space-5); }
+  .published-page { padding: var(--space-5); }
+
+  /* Account settings tabs — horizontal scroll instead of multi-line wrap */
+  .account-tabs {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .account-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .account-tab {
+    flex-shrink: 0;
+  }
+
+  /* Media drawer as bottom sheet (matches .slide-over pattern) */
+  .media-drawer {
+    width: 100%;
+    height: 85vh;
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    border-radius: 16px 16px 0 0;
+    border-left: none;
+    border-top: 1px solid var(--border);
+    transform: translateY(100%);
+    transition: transform 280ms ease;
+  }
+
+  .media-drawer.open {
+    transform: translateY(0);
+  }
+
+  .media-drawer-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Schedule form — stack date+time inputs on small phones */
+@media (max-width: 480px) {
+  .schedule-custom-row {
+    flex-direction: column;
   }
 }
 

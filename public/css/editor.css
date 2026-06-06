@@ -16,6 +16,10 @@
     }
     @media (max-width: 767px) {
       #edit-view:not([hidden]) { padding: 16px 16px 32px !important; }
+      #tabs-inner { padding: 0 16px !important; }
+      #autosave-indicator { right: 16px !important; }
+      #linkedin-preview:not([hidden]) { padding: 28px 16px 48px !important; }
+      #no-linkedin-actions:not([hidden]) { flex-direction: column !important; align-items: flex-start !important; gap: 12px !important; }
     }
 
     /* ── Viewport containment ── */

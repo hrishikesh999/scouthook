@@ -167,3 +167,7 @@
       margin-top: 8px;
     }
     .support-error.visible { display: block; }
+
+    @media (max-width: 768px) {
+      .help-page { padding: var(--space-5); }
+    }

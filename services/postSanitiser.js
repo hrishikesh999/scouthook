@@ -62,6 +62,8 @@ function sanitiseAiTells(text) {
     .replace(/,\s*\?/g, '?')
     // Clean up a leading comma at the start of a line (from em-dash list markers)
     .replace(/^,\s*/gm, '')
+    // Collapse multiple horizontal spaces to one (preserves newlines)
+    .replace(/[^\S\n]{2,}/g, ' ')
     .trim();
 }
 

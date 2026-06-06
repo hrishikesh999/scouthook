@@ -41,7 +41,7 @@
     #post-body { outline: none; cursor: text; min-height: 80px; padding: 12px 36px 20px; }
     #post-body[contenteditable="false"] { cursor: default; opacity: 0.75; }
     #post-body p { margin: 0; line-height: 1.6; }
-    #post-body p + p { margin-top: 0.85em; }
+    #post-body p + p { margin-top: 1.6em; }
 
     /* ── Tabs — full-width border; inner row centres the tab buttons ── */
     #tabs { border-bottom: 1px solid var(--border) !important; }
@@ -150,7 +150,7 @@
 
 
     /* ── LinkedIn preview body — matches real LinkedIn feed rendering ── */
-    #li-body-text { font-size: 14px; line-height: 1.5; color: #000; font-family: -apple-system, system-ui, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; white-space: pre-wrap; word-break: break-word; }
+    #li-body-text { font-size: 14px; line-height: 1.5; color: #000; font-family: -apple-system, system-ui, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; white-space: pre-line; word-break: break-word; }
     .li-see-more-btn { color: rgba(0,0,0,0.6); font-size: 14px; cursor: pointer; font-weight: 600; }
     .li-see-more-btn:hover { color: rgba(0,0,0,0.9); text-decoration: underline; }
 

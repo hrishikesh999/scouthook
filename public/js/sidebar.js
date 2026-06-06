@@ -57,4 +57,54 @@
   var aside = el.firstChild;
   document.body.insertBefore(aside, document.body.firstChild);
 
+  // ── Mobile top bar (visible only on ≤768px via CSS) ─────────
+  var svgHamburger = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>';
+
+  var topbarEl = document.createElement('div');
+  topbarEl.id = 'mobile-topbar';
+  topbarEl.innerHTML = [
+    '<a href="/dashboard.html" class="mobile-logo-link">',
+    '  <img src="/images/scout-hook-logo.png" alt="ScoutHook" class="sidebar-logo-img">',
+    '</a>',
+    '<div class="mobile-topbar-right">',
+    '  <a href="/generate.html?new=1" class="mobile-create-btn">' + svgPlus + ' Create Post</a>',
+    '  <button type="button" id="mobile-menu-toggle" aria-label="Open navigation" aria-expanded="false">',
+    '    ' + svgHamburger,
+    '  </button>',
+    '</div>',
+  ].join('');
+  document.body.insertBefore(topbarEl, aside.nextSibling);
+
+  var backdropEl = document.createElement('div');
+  backdropEl.id = 'sidebar-backdrop';
+  backdropEl.setAttribute('aria-hidden', 'true');
+  document.body.insertBefore(backdropEl, topbarEl.nextSibling);
+
+  // ── Hamburger toggle ─────────────────────────────────────────
+  var menuToggle = topbarEl.querySelector('#mobile-menu-toggle');
+
+  function openMenu() {
+    aside.classList.add('mobile-open');
+    backdropEl.classList.add('visible');
+    menuToggle.setAttribute('aria-expanded', 'true');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeMenu() {
+    aside.classList.remove('mobile-open');
+    backdropEl.classList.remove('visible');
+    menuToggle.setAttribute('aria-expanded', 'false');
+    document.body.style.overflow = '';
+  }
+
+  menuToggle.addEventListener('click', function () {
+    aside.classList.contains('mobile-open') ? closeMenu() : openMenu();
+  });
+
+  backdropEl.addEventListener('click', closeMenu);
+
+  aside.querySelectorAll('.sidebar-link').forEach(function (link) {
+    link.addEventListener('click', closeMenu);
+  });
+
 })();

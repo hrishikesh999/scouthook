@@ -65,4 +65,6 @@ function initVoiceInput({ input, btn, guard, onResult } = {}) {
     if (guard && guard()) return;
     recording ? stop() : start();
   });
+
+  return { stop };
 }

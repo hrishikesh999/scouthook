@@ -89,6 +89,7 @@ const procPreview         = document.getElementById('proc-preview');
 const procPreviewText     = document.getElementById('proc-preview-text');
 const specificityNudge    = document.getElementById('specificity-nudge');
 let _nudgeDebounce        = null;
+let voiceCtrl             = null;
 
 /* ── Per-type chat configs ───────────────────────────────────── */
 const CHAT_CONFIGS = {
@@ -620,14 +621,17 @@ const chat = (() => {
   const ARROW_SVG = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>`;
 
   function updateSendBtn() {
+    const micBtn = document.getElementById('mic-btn');
     if (_coach.active) {
       chatSendBtn.innerHTML = _coach.exchangeCount >= 2 ? 'Write my post →' : 'Next →';
       chatSendBtn.classList.add('text-mode');
       chatSendBtn.setAttribute('aria-label', _coach.exchangeCount >= 2 ? 'Generate post' : 'Next question');
+      if (micBtn) micBtn.style.display = 'none';
     } else {
       chatSendBtn.innerHTML = ARROW_SVG;
       chatSendBtn.classList.remove('text-mode');
       chatSendBtn.setAttribute('aria-label', 'Generate post');
+      if (micBtn && voiceCtrl) micBtn.style.display = 'flex';
     }
   }
 
@@ -850,7 +854,7 @@ document.querySelectorAll('.start-pill[data-prompt]').forEach(pill => {
 });
 
 /* ── Chat input wiring ───────────────────────────────────────── */
-chatSendBtn.addEventListener('click', () => chat.advance());
+chatSendBtn.addEventListener('click', () => { voiceCtrl?.stop(); chat.advance(); });
 
 chatInput.addEventListener('input', () => {
   chatInput.style.height = 'auto';
@@ -880,18 +884,18 @@ chatInput.addEventListener('keydown', e => {
   if (e.key !== 'Enter') return;
   if (_coach.active) {
     // Coach answer: Enter submits (single-line answers expected)
-    if (!e.shiftKey) { e.preventDefault(); chat.advance(); }
+    if (!e.shiftKey) { e.preventDefault(); voiceCtrl?.stop(); chat.advance(); }
     return;
   }
   if (selectedType) {
     // Initial brief: always multiline — only Cmd/Ctrl+Enter submits
-    if (e.metaKey || e.ctrlKey) { e.preventDefault(); chat.advance(); }
+    if (e.metaKey || e.ctrlKey) { e.preventDefault(); voiceCtrl?.stop(); chat.advance(); }
   }
 });
 
 
 /* ── Voice input ─────────────────────────────────────────────── */
-initVoiceInput({
+voiceCtrl = initVoiceInput({
   input: chatInput,
   btn:   document.getElementById('mic-btn'),
   guard: () => _coach.active,

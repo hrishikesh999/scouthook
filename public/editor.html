@@ -2272,11 +2272,25 @@ function setEditorContent(text) {
   if (state.activeTab === 'preview') switchTab('preview');
 }
 
+const VERSION_STORAGE_KEY = () => `sh_ver_${postId}`;
+const VERSION_MAX         = 11; // original + up to 10 improvements
+
+function saveVersionHistory() {
+  try {
+    localStorage.setItem(VERSION_STORAGE_KEY(), JSON.stringify({ versions: postVersions, idx: currentVerIdx }));
+  } catch { /* non-fatal: localStorage full or unavailable */ }
+}
+
 function pushVersion(text) {
   postVersions  = postVersions.slice(0, currentVerIdx + 1);
   postVersions.push({ text, label: `Improvement ${postVersions.length}` });
+  // Cap to VERSION_MAX — drop oldest improvement (keep original at index 0)
+  if (postVersions.length > VERSION_MAX) {
+    postVersions = [postVersions[0], ...postVersions.slice(-(VERSION_MAX - 1))];
+  }
   currentVerIdx = postVersions.length - 1;
   renderVersionBar();
+  saveVersionHistory();
 }
 
 function applyTextToEditor(text) {
@@ -2291,6 +2305,7 @@ function navigateVersion(delta) {
   setEditorContent(postVersions[newIdx].text);
   scheduleAutoSave();
   renderVersionBar();
+  saveVersionHistory();
 }
 
 function renderVersionBar() {
@@ -2307,10 +2322,29 @@ function renderVersionBar() {
 }
 
 function initVersionHistory() {
+  // Try to restore from localStorage first
+  try {
+    const saved = localStorage.getItem(VERSION_STORAGE_KEY());
+    if (saved) {
+      const { versions, idx } = JSON.parse(saved);
+      if (Array.isArray(versions) && versions.length > 0 && idx >= 0 && idx < versions.length) {
+        postVersions  = versions;
+        currentVerIdx = idx;
+        // Restore the version the user was on (may differ from what DB loaded)
+        setEditorContent(postVersions[currentVerIdx].text);
+        _lastAutoSavedContent = getPostContent(); // prevent spurious auto-save
+        renderVersionBar();
+        return;
+      }
+    }
+  } catch { /* corrupt data — fall through to fresh init */ }
+
+  // No saved history — seed with the content just loaded from DB
   const text = getPostContent();
   if (!text) return;
   postVersions  = [{ text, label: 'Original' }];
   currentVerIdx = 0;
+  saveVersionHistory();
   renderVersionBar();
 }
 
@@ -2322,6 +2356,7 @@ function wireVersionBar() {
     setEditorContent(postVersions[0].text);
     scheduleAutoSave();
     renderVersionBar();
+    saveVersionHistory();
   });
 }
 

@@ -988,7 +988,9 @@ async function triggerGenerate(opts = {}) {
           throw err;
         }
         const err = new Error(sseError.error || 'generation_failed');
-        if (sseError.error === 'plan_limit_exceeded') { err.planCurrent = sseError.current; err.planLimit = sseError.limit; }
+        if (sseError.error === 'plan_limit_exceeded' || sseError.error === 'monthly_quota_reached') {
+          err.planCurrent = sseError.current ?? sseError.used; err.planLimit = sseError.limit;
+        }
         throw err;
       }
 
@@ -1004,7 +1006,9 @@ async function triggerGenerate(opts = {}) {
     const data = await res.json();
     if (!res.ok || !data.ok) {
       const err = new Error(data.error || 'generation_failed');
-      if (data.error === 'plan_limit_exceeded') { err.planCurrent = data.current; err.planLimit = data.limit; }
+      if (data.error === 'plan_limit_exceeded' || data.error === 'monthly_quota_reached') {
+        err.planCurrent = data.current ?? data.used; err.planLimit = data.limit;
+      }
       if (data.error === 'missing_substance')   { err.substancePrompt = data.prompt; err.substanceTier = data.substance_tier; }
       throw err;
     }
@@ -1022,7 +1026,7 @@ async function triggerGenerate(opts = {}) {
       showChatError('This is taking longer than expected. <a href="#">Try again →</a>');
     } else if (err.message === 'complete_profile_first') {
       showChatError('Your voice profile is incomplete — posts need it to generate. <a href="/settings.html">Complete it →</a>');
-    } else if (err.message === 'plan_limit_exceeded') {
+    } else if (err.message === 'plan_limit_exceeded' || err.message === 'monthly_quota_reached') {
       const used = (err.planCurrent != null && err.planLimit != null)
         ? ` You've used ${err.planCurrent} of ${err.planLimit} this month.` : '';
       showChatError(`You've reached your monthly post limit.${used} <a href="#" class="js-upgrade-cta" data-feature="generate">Upgrade →</a>`);

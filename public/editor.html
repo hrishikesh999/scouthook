@@ -303,7 +303,7 @@
     </div>
 
     <!-- Upgrade note (free plan only) -->
-    <p class="free-upgrade-note">Scheduling requires a paid plan. <button type="button" onclick="window.PricingModal?.open({ feature: 'scheduling', requiredPlan: 'solo' })" class="free-upgrade-link">Upgrade →</button></p>
+    <p class="free-upgrade-note">Scheduling requires a paid plan. <button type="button" onclick="window.PricingModal?.open({ feature: 'scheduling' })" class="free-upgrade-link">Upgrade →</button></p>
 
     <!-- Publish now section -->
     <button id="publish-now-btn" class="btn-publish-now">
@@ -805,7 +805,9 @@ function switchTab(tab) {
     const plainText = paragraphs.length
       ? Array.from(paragraphs).map(p => p.innerText).join('\n\n')
       : postBody.innerText;
-    document.getElementById('li-body-text').textContent = plainText;
+    const liBodyText = document.getElementById('li-body-text');
+    liBodyText.textContent = plainText;
+    delete liBodyText.dataset.liFullText; // clear stale cache so renderLinkedInSeeMore re-reads fresh text
     renderLinkedInSeeMore();
     renderPreviewAsset();
     const fcText  = document.getElementById('first-comment-input')?.value?.trim();
@@ -1087,7 +1089,7 @@ function setSlideOverState(s) {
 function openSlideOver(type, label) {
   if (scheduleEditLocked) return;
   if (!currentPostId) return;
-  if (userPlan === 'free') { window.PricingModal?.open({ feature: 'scheduling', requiredPlan: 'solo' }); return; }
+  if (userPlan === 'free') { window.PricingModal?.open({ feature: 'scheduling' }); return; }
 
   currentAssetType       = type;
   currentAssetUrl        = null;
@@ -1644,7 +1646,7 @@ function wireSchedule() {
       });
       const data = await res.json();
       if (!res.ok || !data.ok) {
-        if (res.status === 403 && (data.error === 'pro_only' || data.error === 'feature_not_available')) { closeModal(); window.PricingModal?.open({ feature: data.feature || 'scheduling', requiredPlan: data.requiredPlan || 'solo' }); return; }
+        if (res.status === 403 && (data.error === 'pro_only' || data.error === 'feature_not_available')) { closeModal(); window.PricingModal?.open({ feature: data.feature || 'scheduling' }); return; }
         const errMap = {
           scheduling_unavailable: 'Scheduling is temporarily unavailable. Please try again in a few minutes.',
           scheduled_for_too_soon: 'Please schedule at least 5 minutes from now.',

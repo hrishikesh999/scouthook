@@ -681,6 +681,16 @@ router.delete('/connections/:id', async (req, res) => {
 
     await db.prepare('DELETE FROM linkedin_connections WHERE id = ? AND workspace_id = ?').run(id, tenantId);
 
+    // Clean up the associated person profile if it has no remaining connections
+    if (conn.profile_id) {
+      const remaining = await db.prepare(
+        `SELECT id FROM linkedin_connections WHERE profile_id = ? LIMIT 1`
+      ).get(conn.profile_id);
+      if (!remaining) {
+        await db.prepare('DELETE FROM profiles WHERE id = ? AND workspace_id = ? AND profile_type = ?').run(conn.profile_id, tenantId, 'person');
+      }
+    }
+
     return res.json({ ok: true });
   } catch (err) {
     console.error('[linkedin/connections/delete] Error:', err.message);
@@ -805,10 +815,10 @@ router.post('/schedule', async (req, res) => {
 
   if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
 
-  // Scheduling requires Solo or higher
+  // Scheduling requires Pro
   const schedulePlan = await getUserPlan(userId);
   if (!planHasFeature(schedulePlan, 'scheduling')) {
-    return res.status(403).json({ ok: false, error: 'feature_not_available', feature: 'scheduling', requiredPlan: 'solo' });
+    return res.status(403).json({ ok: false, error: 'feature_not_available', feature: 'scheduling', requiredPlan: 'pro' });
   }
 
   if (!content?.trim()) return res.status(400).json({ ok: false, error: 'missing_content' });

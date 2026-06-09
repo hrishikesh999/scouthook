@@ -87,7 +87,7 @@ async function getFoundingTierInfo() {
   const priceId = process.env.PADDLE_PRICE_ID_PRO;
   return {
     priceId,
-    price: 39,
+    price: 27,
     tier: 'pro',
     spotsRemaining: 0,
   };

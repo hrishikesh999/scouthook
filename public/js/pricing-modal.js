@@ -32,17 +32,6 @@
     extra_workspaces:           'Additional workspaces',
   };
 
-  // Plans that include each feature (for the context banner)
-  const FEATURE_MIN_PLAN = {
-    scheduling:                 'solo',
-    vault:                      'solo',
-    team_members:               'pro',
-    company_pages:              'pro',
-    multiple_linkedin_accounts: 'pro',
-    carousel:                   'pro',
-    extra_workspaces:           'pro',
-  };
-
   // ── Inject styles ─────────────────────────────────────────────────────────
   const style = document.createElement('style');
   style.textContent = `
@@ -64,7 +53,7 @@
     border: 1px solid var(--border, #E4E4E7);
     border-radius: 16px;
     width: 100%;
-    max-width: 960px;
+    max-width: 480px;
     position: relative;
     box-shadow: 0 8px 40px rgba(0,0,0,0.22);
     margin: 0 auto;
@@ -120,12 +109,11 @@
 
   .pm-cards {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
     gap: 14px;
   }
-  @media (max-width: 680px) {
+  @media (max-width: 540px) {
     #pm-modal-body { padding: 48px 16px 28px; }
-    .pm-cards { grid-template-columns: 1fr; }
   }
 
   .pm-card {
@@ -141,10 +129,6 @@
     border-color: var(--brand, #0F766E);
     box-shadow: 0 0 0 3px rgba(15,118,110,0.1);
   }
-  .pm-card.pm-featured-solo {
-    border-color: #7C3AED;
-    box-shadow: 0 0 0 3px rgba(124,58,237,0.1);
-  }
 
   .pm-plan-name {
     font-size: 11px;
@@ -159,7 +143,6 @@
     flex-wrap: wrap;
   }
   .pm-plan-name.pm-pro  { color: var(--brand, #0F766E); }
-  .pm-plan-name.pm-solo { color: #7C3AED; }
 
   .pm-current-chip {
     font-size: 10px;
@@ -171,17 +154,6 @@
     letter-spacing: 0;
     text-transform: none;
   }
-  .pm-popular-chip {
-    font-size: 10px;
-    font-weight: 600;
-    background: var(--brand, #0F766E);
-    color: #fff;
-    border-radius: 20px;
-    padding: 2px 8px;
-    letter-spacing: 0;
-    text-transform: none;
-  }
-
   .pm-price {
     font-size: 32px;
     font-weight: 800;
@@ -240,13 +212,6 @@
   .pm-cta-primary:hover:not(:disabled) { background: var(--brand-hover, #115E59); }
   .pm-cta-primary:disabled { opacity: 0.55; cursor: default; }
 
-  .pm-cta-solo {
-    background: #7C3AED;
-    color: #fff;
-  }
-  .pm-cta-solo:hover:not(:disabled) { background: #6D28D9; }
-  .pm-cta-solo:disabled { opacity: 0.55; cursor: default; }
-
   .pm-cta-muted {
     background: var(--bg-pill, #F4F4F5);
     color: var(--text-muted, #71717A);
@@ -293,41 +258,19 @@
 
         <div class="pm-cards">
 
-          <!-- Solo -->
-          <div class="pm-card" id="pm-card-solo">
-            <div class="pm-plan-name pm-solo">
-              Solo
-              <span class="pm-current-chip" id="pm-solo-chip" style="display:none">Current plan</span>
-            </div>
-            <div class="pm-price"><sup>$</sup><span id="pm-solo-price">19</span></div>
-            <div class="pm-period">/ month</div>
-            <hr class="pm-divider">
-            <ul class="pm-features">
-              ${feat(true,  'Everything in Free')}
-              ${feat(true,  '<strong>20</strong>&nbsp;posts / month')}
-              ${feat(true,  'Post scheduling')}
-              ${feat(true,  'Content Vault')}
-              ${feat(false, 'Unlimited posts')}
-              ${feat(false, 'Multiple LinkedIn accounts')}
-              ${feat(false, 'Team members &amp; workspaces')}
-            </ul>
-            <button class="pm-cta pm-cta-solo" id="pm-solo-btn" type="button">Upgrade now</button>
-            <div class="pm-error" id="pm-solo-error"></div>
-          </div>
-
           <!-- Pro -->
           <div class="pm-card pm-featured" id="pm-card-pro">
             <div class="pm-plan-name pm-pro">
               Pro
-              <span class="pm-popular-chip" id="pm-popular-chip">Most popular</span>
               <span class="pm-current-chip" id="pm-pro-chip" style="display:none">Current plan</span>
             </div>
-            <div class="pm-price"><sup>$</sup><span id="pm-pro-price">39</span></div>
+            <div class="pm-price"><sup>$</sup><span id="pm-pro-price">27</span></div>
             <div class="pm-period">/ month</div>
             <hr class="pm-divider">
             <ul class="pm-features">
-              ${feat(true, 'Everything in Solo')}
               ${feat(true, '<strong>Unlimited</strong>&nbsp;posts')}
+              ${feat(true, 'Post scheduling')}
+              ${feat(true, 'Content Vault')}
               ${feat(true, 'Multiple LinkedIn accounts')}
               ${feat(true, 'Company pages')}
               ${feat(true, 'Up to 3 workspaces')}
@@ -407,10 +350,8 @@
       const d = await r.json();
       paddleConfig = d;
       configLoaded = true;
-      const proPriceEl  = $id('pm-pro-price');
-      const soloPriceEl = $id('pm-solo-price');
-      if (proPriceEl  && d.proMonthlyPrice)  proPriceEl.textContent  = d.proMonthlyPrice;
-      if (soloPriceEl && d.soloMonthlyPrice) soloPriceEl.textContent = d.soloMonthlyPrice;
+      const proPriceEl = $id('pm-pro-price');
+      if (proPriceEl && d.proMonthlyPrice) proPriceEl.textContent = d.proMonthlyPrice;
     } catch { /* no-op */ }
   }
 
@@ -505,12 +446,6 @@
     }
   }
 
-  // ── Solo button ───────────────────────────────────────────────────────────
-  $id('pm-solo-btn').addEventListener('click', function () {
-    if (this.disabled) return;
-    startPlanCheckout('solo', this, $id('pm-solo-error'));
-  });
-
   // ── Pro button — checkout or billing portal for Pro users ─────────────────
   $id('pm-pro-btn').addEventListener('click', async function () {
     if (this.disabled) return;
@@ -535,52 +470,26 @@
 
   // ── open(options) ──────────────────────────────────────────────────────────
   async function open(options) {
-    const opts        = (options && typeof options === 'object') ? options : {};
-    const feature     = opts.feature     || null;
-    const requiredPlan = opts.requiredPlan || null;
+    const opts    = (options && typeof options === 'object') ? options : {};
+    const feature = opts.feature || null;
 
-    // — Reset chips
-    $id('pm-solo-chip').style.display    = 'none';
-    $id('pm-pro-chip').style.display     = 'none';
-    $id('pm-popular-chip').style.display = '';
+    // — Reset chips and errors
+    $id('pm-pro-chip').style.display = 'none';
+    $id('pm-pro-error').style.display = 'none';
 
-    // — Reset errors
-    $id('pm-solo-error').style.display = 'none';
-    $id('pm-pro-error').style.display  = 'none';
-
-    // — Reset card highlights: Pro is featured by default
-    $id('pm-card-solo').classList.remove('pm-featured', 'pm-featured-solo');
-    $id('pm-card-pro').classList.remove('pm-featured', 'pm-featured-solo');
-    $id('pm-card-pro').classList.add('pm-featured');
-
-    // — Reset buttons to default (will be updated after sub loads)
-    const soloBtn = $id('pm-solo-btn');
-    const proBtn  = $id('pm-pro-btn');
-    soloBtn.disabled    = false;
+    // — Reset button to default (will be updated after sub loads)
+    const proBtn = $id('pm-pro-btn');
     proBtn.disabled     = false;
-    soloBtn.textContent = 'Upgrade now';
     proBtn.textContent  = 'Upgrade now';
-    soloBtn.className   = 'pm-cta pm-cta-solo';
     proBtn.className    = 'pm-cta pm-cta-primary';
 
     // — Context banner
     const bannerEl = $id('pm-context-banner');
     bannerEl.classList.remove('visible');
     if (feature && FEATURE_LABELS[feature]) {
-      const label    = FEATURE_LABELS[feature];
-      const minPlan  = FEATURE_MIN_PLAN[feature] || 'solo';
-      const planName = minPlan === 'pro' ? 'Pro' : 'Solo or Pro';
-      bannerEl.textContent = `${label} requires the ${planName} plan.`;
+      bannerEl.textContent = `${FEATURE_LABELS[feature]} requires the Pro plan.`;
       bannerEl.classList.add('visible');
     }
-
-    // — Highlight the required plan card
-    if (requiredPlan === 'solo') {
-      $id('pm-card-pro').classList.remove('pm-featured');
-      $id('pm-card-solo').classList.add('pm-featured-solo');
-      $id('pm-popular-chip').style.display = 'none';
-    }
-    // requiredPlan === 'pro' already highlighted by default
 
     overlay.classList.add('visible');
     document.body.style.overflow = 'hidden';
@@ -591,35 +500,17 @@
       fetch('/api/billing/subscription').then(r => r.json()).catch(() => null),
     ]);
 
-    const sub  = (subRes.status === 'fulfilled' ? subRes.value : null) || {};
+    const sub = (subRes.status === 'fulfilled' ? subRes.value : null) || {};
     // App-level trial users have plan='pro' but no Paddle subscription yet.
-    // Treat them as 'free' so both checkout buttons work normally.
+    // Treat them as 'free' so the checkout button works normally.
     const isAppTrial = sub.status === 'trialing' && !sub.price_id;
     currentPlan = isAppTrial ? 'free' : (sub.plan || 'free');
 
     // — Apply plan state to UI
-    if (currentPlan === 'solo') {
-      $id('pm-solo-chip').style.display = '';
-      soloBtn.disabled    = true;
-      soloBtn.textContent = 'Current plan';
-      soloBtn.className   = 'pm-cta pm-cta-muted';
-      proBtn.textContent  = 'Upgrade to Pro';
-      // If Pro is not currently highlighted and Solo is the required plan, keep Solo highlight
-    } else if (currentPlan === 'pro') {
-      $id('pm-pro-chip').style.display     = '';
-      $id('pm-popular-chip').style.display = 'none';
-      proBtn.textContent  = 'Manage subscription';
-      proBtn.className    = 'pm-cta pm-cta-muted';
-      soloBtn.disabled    = true;
-      soloBtn.textContent = 'Included in Pro';
-      soloBtn.className   = 'pm-cta pm-cta-muted';
-    }
-
-    // — Re-apply requiredPlan highlight after plan state (plan state may remove it)
-    if (requiredPlan === 'solo' && currentPlan !== 'solo') {
-      $id('pm-card-pro').classList.remove('pm-featured');
-      $id('pm-card-solo').classList.add('pm-featured-solo');
-      $id('pm-popular-chip').style.display = 'none';
+    if (currentPlan === 'pro') {
+      $id('pm-pro-chip').style.display = '';
+      proBtn.textContent = 'Manage subscription';
+      proBtn.className   = 'pm-cta pm-cta-muted';
     }
   }
 

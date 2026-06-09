@@ -1223,7 +1223,7 @@ function showChatError(html) {
     if (window.PricingModal) {
       e.preventDefault();
       const feature = e.currentTarget.dataset.feature || null;
-      window.PricingModal.open(feature ? { feature, requiredPlan: 'solo' } : {});
+      window.PricingModal.open(feature ? { feature } : {});
     }
   });
 }

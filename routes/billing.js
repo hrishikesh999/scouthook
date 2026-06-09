@@ -78,7 +78,6 @@ router.get('/config', async (req, res) => {
     priceIdMonthly:  tierInfo.priceId,
     priceIdYearly:   process.env.PADDLE_PRICE_ID_YEARLY || '',
     proMonthlyPrice:  tierInfo.price,
-    soloMonthlyPrice: 19,
   });
 });
 
@@ -512,16 +511,12 @@ router.post('/sync', requireAuth, async (req, res) => {
 // ---------------------------------------------------------------------------
 router.post('/upgrade', requireAuth, async (req, res) => {
   const { plan } = req.body || {};
-  if (!['solo', 'pro'].includes(plan)) {
+  if (plan !== 'pro') {
     return res.status(400).json({ ok: false, error: 'invalid_plan' });
   }
   let priceId;
-  if (plan === 'pro') {
-    const tierInfo = await getFoundingTierInfo();
-    priceId = tierInfo.priceId;
-  } else {
-    priceId = process.env.PADDLE_PRICE_ID_SOLO;
-  }
+  const tierInfo = await getFoundingTierInfo();
+  priceId = tierInfo.priceId;
   if (!priceId) {
     return res.status(500).json({ ok: false, error: 'price_not_configured' });
   }

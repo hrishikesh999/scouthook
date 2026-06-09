@@ -61,7 +61,7 @@
       <!-- Left: coaching panel -->
       <div class="ob-interview-left" aria-hidden="true">
         <p class="ob-guide-title">You're almost there</p>
-        <p class="ob-guide-body">Three short questions. Your answers give Scouthook enough to write a post that sounds like you, not a template.</p>
+        <p class="ob-guide-body">Two questions. Your answers give Scouthook enough to write a post that sounds like you, not a template.</p>
         <ul class="ob-guide-tips">
           <li>No perfect answers. Just honest ones.</li>
           <li>More specific beats more polished.</li>
@@ -115,6 +115,12 @@
         <!-- Interview questions -->
         <div id="ob-question-step" hidden>
           <p id="ob-q-progress" class="ob-q-progress" aria-live="polite"></p>
+
+          <!-- Preamble: shown only on first question -->
+          <p id="ob-question-preamble" class="ob-question-preamble" hidden>
+            Two questions. They're the only voice inputs that directly shape your first post — the more specific you are, the better it sounds like you.
+          </p>
+
           <p id="ob-q-context" class="ob-question-context"></p>
           <p id="ob-q-text" class="ob-q-text"></p>
           <p id="ob-q-hint" class="ob-website-hint"></p>
@@ -136,6 +142,14 @@
             <button id="ob-answer-next" class="ob-btn-primary" type="button">Next →</button>
             <button id="ob-answer-skip" class="ob-skip-link" type="button">Skip this question</button>
           </div>
+
+          <!-- Optional hot take: revealed on the last question (Q3) -->
+          <div id="ob-hot-take-wrap" hidden class="ob-hot-take-wrap">
+            <p class="ob-hot-take-label">Your take <span class="ob-optional-tag">optional</span></p>
+            <p class="ob-hot-take-hint">One thing most people in your field get wrong.</p>
+            <input id="ob-hot-take" class="ob-field ob-hot-take-input" type="text"
+                   placeholder='e.g. Everyone says "post consistently" — I think consistency without a POV just adds noise.' />
+          </div>
         </div>
       </div>
 
@@ -147,30 +161,31 @@
     <div class="ob-interview-wrap">
 
       <div class="ob-interview-left" aria-hidden="true">
-        <p class="ob-guide-title">This is what makes posts sound like you</p>
-        <p class="ob-guide-body">Paste 2–3 of your best LinkedIn posts. We extract your exact vocabulary, hook style, and sentence rhythm — so your first post doesn't read like a template.</p>
+        <p class="ob-guide-title">One post changes everything</p>
+        <p class="ob-guide-body">Your actual writing is the strongest voice signal we have. One good post beats any amount of interview answers for matching your style.</p>
         <ul class="ob-guide-tips">
-          <li>Any posts you've written work — older ones are fine.</li>
-          <li>The more you paste, the sharper the match.</li>
-          <li>No LinkedIn posts yet? Skip — you can add them later.</li>
+          <li>LinkedIn posts, emails, or messages all count.</li>
+          <li>Any post you're proud of — older ones are fine.</li>
+          <li>Nothing yet? Skip — add it from settings later.</li>
         </ul>
       </div>
 
       <div class="ob-interview-right">
         <button class="ob-back-btn" id="ob-s2-back" type="button">← Back</button>
 
-        <p class="ob-q-text">Paste 2–3 of your best LinkedIn posts here.</p>
-        <p class="ob-website-hint">We use them to mirror your sentence rhythm, vocabulary, and opening style — not copy them verbatim.</p>
+        <p class="ob-q-text">How do you actually sound when you write?</p>
+        <p class="ob-website-hint">Paste something you wrote that felt like you — a LinkedIn post, an email, a message. This is how we calibrate your sentence rhythm, vocabulary, and opening style.</p>
 
         <textarea id="ob-writing-sample" class="ob-textarea ob-textarea--interview" rows="8"
-                  maxlength="3000"
-                  placeholder="Paste your LinkedIn posts here. Separate each post with a blank line."></textarea>
+                  maxlength="1200"
+                  placeholder="e.g. The best pipeline review I ever ran had nothing to do with the pipeline. We spent 90 minutes on the one deal that had been 'almost closed' for six months. Turns out the champion had left the company three weeks earlier. Nobody had told us. That's not a sales problem — that's a listening problem."></textarea>
         <p class="ob-char-count" id="ob-writing-char-count" aria-live="polite"></p>
 
         <div class="ob-interview-actions" style="margin-top:16px">
           <button id="ob-writing-next" class="ob-btn-primary" type="button">Continue →</button>
-          <button id="ob-writing-skip" class="ob-skip-link" type="button">I don't have LinkedIn posts yet →</button>
+          <button id="ob-writing-skip" class="ob-skip-link" type="button">Skip for now</button>
         </div>
+        <p class="ob-skip-cost" id="ob-writing-skip-cost">Without this, your first post uses a generic writing style — your voice comes from your writing, not templates.</p>
       </div>
 
     </div>
@@ -237,9 +252,11 @@
         Your voice profile is building. It gets sharper every time you publish.
       </p>
 
-      <p class="ob-linkedin-nudge" style="margin-top:8px; text-align:center; font-size:13px">
-        <a href="/settings.html#voice-stage-6">Connect LinkedIn to sharpen your profile →</a>
-      </p>
+      <!-- Dynamic next steps: driven by what was skipped during onboarding -->
+      <div id="ob-next-steps-wrap" class="ob-next-steps-wrap" hidden>
+        <p class="ob-next-steps-title">Strengthen your voice</p>
+        <ul id="ob-next-steps" class="ob-next-steps"></ul>
+      </div>
 
       <p id="ob-s6-error" class="ob-field-error" hidden role="alert"></p>
     </div>

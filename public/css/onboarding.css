@@ -1674,3 +1674,103 @@ body.ob-shell {
   0%, 100% { box-shadow: 0 0 0 0 rgba(220,38,38,0.3); }
   50%       { box-shadow: 0 0 0 5px rgba(220,38,38,0); }
 }
+
+/* ── Interview: expectation-setting preamble (first question only) ── */
+.ob-question-preamble {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.55;
+  margin: 0 0 18px;
+  padding: 10px 14px;
+  background: var(--bg-subtle, rgba(0,0,0,0.03));
+  border-radius: 8px;
+  border-left: 3px solid var(--brand, #0d7a5f);
+}
+
+/* ── Interview: optional hot take field (last question) ─────────── */
+.ob-hot-take-wrap {
+  margin-top: 22px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+
+.ob-hot-take-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin: 0 0 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ob-optional-tag {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: var(--bg-subtle, rgba(0,0,0,0.04));
+  border: 1px solid var(--border);
+  border-radius: 100px;
+  padding: 2px 8px;
+  letter-spacing: 0.03em;
+}
+
+.ob-hot-take-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0 0 10px;
+}
+
+.ob-hot-take-input {
+  width: 100%;
+  font-size: 14px;
+}
+
+/* ── Writing sample: skip cost signal ───────────────────────────── */
+.ob-skip-cost {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: center;
+  line-height: 1.5;
+}
+
+/* ── Post reveal: next steps ─────────────────────────────────────── */
+.ob-next-steps-wrap {
+  margin-top: 24px;
+  padding: 16px 18px;
+  background: var(--bg-subtle, rgba(0,0,0,0.03));
+  border-radius: 10px;
+  border: 1px solid var(--border);
+}
+
+.ob-next-steps-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin: 0 0 10px;
+}
+
+.ob-next-steps {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ob-next-steps li {
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.ob-next-steps a {
+  color: var(--brand, #0d7a5f);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.ob-next-steps a:hover {
+  text-decoration: underline;
+}

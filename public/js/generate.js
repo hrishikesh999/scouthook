@@ -1343,13 +1343,33 @@ async function loadProfileSelector() {
     }
 
     btnsEl.innerHTML = data.profiles.map(renderBtn).join('');
+
+    const nudgeEl = document.getElementById('profile-voice-nudge');
+
+    function updateVoiceNudge(profileId) {
+      if (!nudgeEl) return;
+      const p = data.profiles.find(pr => pr.id === profileId);
+      if (!p || p.profile_type !== 'person') { nudgeEl.hidden = true; return; }
+      const pct = p.voice_profile_completion_pct || 0;
+      if (pct < 40) {
+        nudgeEl.innerHTML = `Posts for <strong>${escapeHtml(p.display_name)}</strong> may not match your voice yet. <a href="/settings.html">Set up voice profile →</a>`;
+        nudgeEl.hidden = false;
+      } else {
+        nudgeEl.hidden = true;
+      }
+    }
+
     btnsEl.querySelectorAll('.profile-sel-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         _selectedProfileId = Number(btn.dataset.profileId);
         btnsEl.querySelectorAll('.profile-sel-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
+        updateVoiceNudge(_selectedProfileId);
       });
     });
+
+    // Run nudge check for the initially selected profile
+    updateVoiceNudge(_selectedProfileId);
 
     selector.style.display = '';
   } catch { /* non-fatal — falls back to workspace default profile */ }

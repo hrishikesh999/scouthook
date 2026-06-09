@@ -770,6 +770,15 @@
       flex-shrink: 0;
     }
 
+    /* ── Profile voice nudge (low-completion personal profile) ─ */
+    .profile-voice-nudge {
+      font-size: 0.8125rem;
+      color: var(--text-muted);
+      margin: 8px 0 0;
+      line-height: 1.5;
+    }
+    .profile-voice-nudge a { color: var(--brand); font-weight: 500; }
+
     /* ── Profile gate nudge ─────────────────────────────────── */
     .profile-gate-nudge {
       background: color-mix(in srgb, var(--brand) 8%, var(--bg-surface));

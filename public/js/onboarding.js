@@ -24,6 +24,7 @@ const Onboarding = (() => {
     post:          null,
     vaultDocId:    null,   // set if user uploads a doc in the vault step
     writingSample: '',     // pasted writing sample from s2
+    hotTake:       '',     // optional contrarian view captured after last Q&A question
   };
 
   /* ── Interview questions ─────────────────────────────────
@@ -190,12 +191,27 @@ const Onboarding = (() => {
     const q     = QUESTIONS[state.questionIndex];
     const total = QUESTIONS.length;
     const idx   = state.questionIndex;
+    const isLast = idx === total - 1;
 
     qs('ob-q-progress').textContent = `Question ${idx + 1} of ${total}`;
     qs('ob-q-context').textContent  = q.context;
     qs('ob-q-text').textContent     = q.text;
     const hintEl = qs('ob-q-hint');
     if (hintEl) hintEl.textContent  = q.hint || '';
+
+    // Show expectation-setting preamble only on first question
+    const preamble = qs('ob-question-preamble');
+    if (preamble) preamble.hidden = idx !== 0;
+
+    // Show optional hot take field only on last question
+    const hotTakeWrap = qs('ob-hot-take-wrap');
+    if (hotTakeWrap) {
+      hotTakeWrap.hidden = !isLast;
+      if (isLast) {
+        const hotTakeInput = qs('ob-hot-take');
+        if (hotTakeInput) hotTakeInput.value = state.hotTake || '';
+      }
+    }
 
     const answerEl = qs('ob-answer');
     answerEl.value       = state.answers[idx]?.answer || '';
@@ -214,7 +230,7 @@ const Onboarding = (() => {
       };
     }
 
-    qs('ob-answer-next').textContent = idx === total - 1 ? 'Generate my post →' : 'Next →';
+    qs('ob-answer-next').textContent = isLast ? 'Generate my post →' : 'Next →';
   }
 
   function initS4() {
@@ -246,11 +262,9 @@ const Onboarding = (() => {
     });
   }
 
-  async function submitWebsite() {
+  function submitWebsite() {
     const input   = qs('ob-website-url');
     const errEl   = qs('ob-website-error');
-    const loadEl  = qs('ob-website-loading');
-    const nextBtn = qs('ob-website-next');
     const raw     = (input?.value || '').trim();
 
     // Empty domain — treat same as skip
@@ -265,41 +279,43 @@ const Onboarding = (() => {
     errEl.hidden = valid;
     if (!valid) { input?.focus(); return; }
 
-    nextBtn.disabled = true;
-    loadEl.hidden    = false;
-
-    let extracted = {};
-    try {
-      const res  = await fetch('/api/profile/extract-website', {
-        method:  'POST',
-        headers: apiHeaders(),
-        body:    JSON.stringify({ url }),
-      });
-      const data = await res.json();
-      if (data.ok) {
-        const { content_niche, audience_role, audience_pain, contrarian_view, business_positioning } = data;
-        extracted = { content_niche, audience_role, audience_pain, contrarian_view, business_positioning };
-      }
-    } catch {
-      // Non-fatal — fall through to Q1
-    } finally {
-      nextBtn.disabled = false;
-      loadEl.hidden    = true;
-    }
-
-    // Always save website_url — regardless of whether extraction succeeded.
-    // website_url was never being persisted before; this fixes the 5-point
-    // completion gap and lets settings show the URL the user entered.
-    const profile = { website_url: url };
-    Object.entries(extracted).forEach(([k, v]) => { if (v) profile[k] = v; });
+    // Save website_url immediately — don't wait for extraction.
     fetch('/api/profile', {
       method:  'POST',
       headers: apiHeaders(),
-      body:    JSON.stringify(profile),
+      body:    JSON.stringify({ website_url: url }),
     }).catch(() => {});
 
+    // Fire website extraction in the background while user answers Q&A.
+    // By the time they finish typing (~2–3 minutes), extraction will have
+    // completed and the fields will be saved before saveProfileAndGenerate() fires.
+    extractWebsiteInBackground(url);
+
+    // Advance to interview immediately — no spinner wait.
     state.questionIndex = 0;
     renderQuestion();
+  }
+
+  function extractWebsiteInBackground(url) {
+    fetch('/api/profile/extract-website', {
+      method:  'POST',
+      headers: apiHeaders(),
+      body:    JSON.stringify({ url }),
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (!data.ok) return;
+      const fields = {};
+      ['content_niche', 'audience_role', 'audience_pain', 'contrarian_view', 'business_positioning']
+        .forEach(k => { if (data[k]) fields[k] = data[k]; });
+      if (Object.keys(fields).length === 0) return;
+      fetch('/api/profile', {
+        method:  'POST',
+        headers: apiHeaders(),
+        body:    JSON.stringify(fields),
+      }).catch(() => {});
+    })
+    .catch(() => {}); // Non-fatal
   }
 
   function recordAnswer(override) {
@@ -318,6 +334,8 @@ const Onboarding = (() => {
       state.questionIndex++;
       renderQuestion();
     } else {
+      // Capture optional hot take before leaving the interview screen
+      state.hotTake = (qs('ob-hot-take')?.value || '').trim();
       showScreen('s2');
       initS2Focus();
     }
@@ -338,7 +356,7 @@ const Onboarding = (() => {
     if (textarea && charCount) {
       textarea.addEventListener('input', () => {
         const len = textarea.value.length;
-        charCount.textContent = len > 0 ? `${len} / 3000 characters` : '';
+        charCount.textContent = len > 0 ? `${len} / 1200 characters` : '';
       });
     }
 
@@ -426,6 +444,12 @@ const Onboarding = (() => {
     });
     if (state.writingSample) {
       qPayload.writing_samples = state.writingSample;
+    }
+    // Hot take (optional contrarian view) — saves to both columns so either
+    // prompt builder path can read it without a join.
+    if (state.hotTake) {
+      qPayload.onboarding_q1   = state.hotTake;
+      qPayload.contrarian_view = state.hotTake;
     }
     // Seed starter CTAs so the generation engine never has to invent them.
     // buildVoiceDNABlock() has a hard rule: "never invent a CTA" — this satisfies it
@@ -548,6 +572,55 @@ const Onboarding = (() => {
     const badgesEl = qs('ob-badges');
     if (badgesEl) badgesEl.style.display = 'flex';
 
+    renderNextSteps(freshProfile);
+  }
+
+  function renderNextSteps(profile) {
+    const stepsEl = qs('ob-next-steps');
+    const wrapEl  = qs('ob-next-steps-wrap');
+    if (!stepsEl || !wrapEl) return;
+
+    const suggestions = [];
+
+    // Missing writing sample — biggest voice quality lever
+    if (!state.writingSample) {
+      suggestions.push({
+        label: 'Add a writing sample — the biggest lever on post quality',
+        href:  '/settings.html',
+      });
+    }
+
+    // LinkedIn not connected — needed for direct posting
+    const hasLinkedIn = (profile.voice_extraction_source || '').includes('linkedin');
+    if (!hasLinkedIn) {
+      suggestions.push({
+        label: 'Connect LinkedIn to post directly without copy-pasting',
+        href:  '/linkedin.html',
+      });
+    }
+
+    // No content pillars set — stops the "what should I write about?" loop
+    const hasPillars = isPopulated(profile.content_pillars);
+    if (!hasPillars) {
+      suggestions.push({
+        label: 'Set your content pillars — stop wondering what to write about',
+        href:  '/settings.html',
+      });
+    }
+
+    const shown = suggestions.slice(0, 2);
+    if (shown.length === 0) return;
+
+    stepsEl.innerHTML = shown
+      .map(s => `<li><a href="${s.href}">${escHtml(s.label)} →</a></li>`)
+      .join('');
+    wrapEl.hidden = false;
+  }
+
+  function isPopulated(val) {
+    if (val === null || val === undefined) return false;
+    const t = String(val).trim();
+    return t.length > 0 && t !== 'null' && t !== '{}' && t !== '[]';
   }
 
 

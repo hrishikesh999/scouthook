@@ -341,6 +341,7 @@ router.post('/', async (req, res) => {
           funnel_type:     funnelType,
           post_type:       post_type || null,
           stage1Blueprint: ideaRaw.stage1Blueprint,
+          content_feedback: ideaRaw.contentFeedback || null,
         });
         return res.end();
 
@@ -418,12 +419,12 @@ router.post('/', async (req, res) => {
         }
       );
       ideaResult = {
-        synthesis:      ideaRaw.synthesis,
-        post:           ideaRaw.post,
-        archetypeUsed:  ideaRaw.archetypeUsed,
-        hookConfidence: ideaRaw.hookConfidence,
+        synthesis:       ideaRaw.synthesis,
+        post:            ideaRaw.post,
+        archetypeUsed:   ideaRaw.archetypeUsed,
+        hookConfidence:  ideaRaw.hookConfidence,
         primaryGate,
-        contentFeedback: null,
+        contentFeedback: ideaRaw.contentFeedback || null,
       };
     }
 

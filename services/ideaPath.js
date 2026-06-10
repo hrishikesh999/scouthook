@@ -154,6 +154,10 @@ async function ideaToPost(rawIdea, userProfile, options = {}) {
       : buildStructureBlueprint(rawIdea, postType, client, userProfile),
   ]);
 
+  // Substance feedback: computed when quality check ran and the idea passed.
+  // Returned alongside the post so the editor can show a quiet improvement nudge.
+  let contentFeedback = null;
+
   if (shouldCheckSubstance && quality) {
     const substanceCheck = buildSubstancePromptForPostType(quality, userProfile, postType);
     if (substanceCheck) {
@@ -162,6 +166,8 @@ async function ideaToPost(rawIdea, userProfile, options = {}) {
       err.substanceTier   = substanceCheck.tier;
       throw err;
     }
+    // Idea passed — attach a soft improvement nudge if one dimension was weak
+    contentFeedback = buildContentFeedback(quality);
   }
 
   // Caller-supplied tensionStatement takes precedence over Stage 1's derived tension
@@ -175,7 +181,7 @@ async function ideaToPost(rawIdea, userProfile, options = {}) {
   const ctaHint         = archetypeRecord.ctaHint || null;
   const ctaInstruction  = buildCtaInstruction(postType, ctaHint, convertCtaIntent);
 
-  return runTwoStageGeneration({
+  const result = await runTwoStageGeneration({
     rawIdea,
     userProfile,
     options,
@@ -186,6 +192,7 @@ async function ideaToPost(rawIdea, userProfile, options = {}) {
     postType,
     ctaInstruction,
   });
+  return { ...result, contentFeedback };
 }
 
 /**
@@ -516,15 +523,15 @@ AUDIENCE:
 - Who they are: ${userProfile.audience_role || 'professionals in the author\'s field'}
 - What keeps them up at night: ${userProfile.audience_pain || 'professional challenges in their field'}
 
-EDITORIAL CONTEXT (use where it strengthens the post):
-${userProfile.contrarian_view || 'Draw on the raw idea for tension and specificity.'}
-
+${userProfile.contrarian_view ? `EDITORIAL CONTEXT (the author's established worldview — let this colour the angle and framing):
+${userProfile.contrarian_view}
+` : ''}
 LINKEDIN FORMATTING (non-negotiable):
 - One sentence per line. Never write paragraph blocks. Every sentence gets its own line.
 - Put a blank line between every 2–3 lines to create visual breathing room.
 - The post must be visually scannable — a wall of text kills engagement before anyone reads it.
 
-ABOVE THE FOLD (critical for reach):
+ABOVE THE FOLD (LinkedIn truncates every post — not just reach):
 - LinkedIn shows only the first 2–3 lines before the "see more" truncation.
 - Line 1 is the hook — handled by the archetype instruction above.
 - Lines 2–3 must sharpen the tension, not explain or contextualise it.
@@ -1054,4 +1061,4 @@ async function checkSubstance(rawIdea, userProfile, postType) {
   return buildSubstancePromptForPostType(quality, userProfile, postType);
 }
 
-module.exports = { ideaToPost, generateInsightAlternativePost, vaultSeedToPost, checkSubstance, buildRefineSystemPrompt };
+module.exports = { ideaToPost, vaultSeedToPost, buildRefineSystemPrompt };

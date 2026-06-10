@@ -1348,7 +1348,9 @@ async function loadProfileSelector() {
 
     function updateVoiceNudge(profileId) {
       if (!nudgeEl) return;
-      const p = data.profiles.find(pr => pr.id === profileId);
+      // Normalize to string: API returns id as string, but button clicks set it
+      // via Number(btn.dataset.profileId) — strict equality would always miss.
+      const p = data.profiles.find(pr => String(pr.id) === String(profileId));
       if (!p || p.profile_type !== 'person') { nudgeEl.hidden = true; return; }
       const pct = p.voice_profile_completion_pct || 0;
       if (pct < 40) {

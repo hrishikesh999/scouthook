@@ -353,17 +353,22 @@ const Onboarding = (() => {
     const skipBtn    = qs('ob-writing-skip');
     const backBtn    = qs('ob-s2-back');
 
+    const skipCost = qs('ob-writing-skip-cost');
+
     if (textarea && charCount) {
       textarea.addEventListener('input', () => {
         const len = textarea.value.length;
         charCount.textContent = len > 0 ? `${len} / 1200 characters` : '';
+        // Hide the skip-cost warning once the user has typed something
+        if (skipCost) skipCost.hidden = len > 0;
       });
     }
 
     if (backBtn) {
       backBtn.addEventListener('click', () => {
-        // Back goes to last question
+        // Back goes to last question — must re-activate S4 screen first
         state.questionIndex = QUESTIONS.length - 1;
+        showScreen('s4');
         renderQuestion();
       });
     }
@@ -586,7 +591,7 @@ const Onboarding = (() => {
     if (!state.writingSample) {
       suggestions.push({
         label: 'Add a writing sample — the biggest lever on post quality',
-        href:  '/settings.html',
+        href:  '/settings.html?step=7',
       });
     }
 
@@ -604,7 +609,7 @@ const Onboarding = (() => {
     if (!hasPillars) {
       suggestions.push({
         label: 'Set your content pillars — stop wondering what to write about',
-        href:  '/settings.html',
+        href:  '/settings.html?step=2',
       });
     }
 

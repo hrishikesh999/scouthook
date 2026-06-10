@@ -732,8 +732,17 @@ async function init() {
     switchToStep(7);
   });
 
-  // Initial step: go to LinkedIn step if just connected, otherwise first incomplete
-  if (window.location.search.includes('linkedin_connected=true')) {
+  // Initial step: honour explicit ?step= param (e.g. from onboarding next-steps links),
+  // then linkedin_connected redirect, then first incomplete step
+  const stepParam = new URLSearchParams(window.location.search).get('step');
+  if (stepParam) {
+    const n = parseInt(stepParam, 10);
+    if (n >= 1 && n <= 7) {
+      switchToStep(n);
+    } else {
+      switchToStep(firstIncompleteStep());
+    }
+  } else if (window.location.search.includes('linkedin_connected=true')) {
     switchToStep(6);
   } else {
     switchToStep(firstIncompleteStep());

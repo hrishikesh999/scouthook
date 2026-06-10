@@ -327,9 +327,14 @@ function buildVoiceDNABlock(userProfile) {
   const parts = [];
   const fp = safeParseJSON(userProfile.voice_fingerprint, {});
 
-  // 1. Core fingerprint — backward compat (calls existing function)
-  const fingerprintBlock = buildFingerprintBlock(userProfile);
-  if (fingerprintBlock) parts.push(fingerprintBlock);
+  // 1. Core fingerprint — only inject when full DNA extraction hasn't run.
+  // When fp.tone is present, section 2 provides richer versions of the same signals
+  // (opening_move supersedes opening_style; sentence_rhythm supersedes sentence_structure).
+  // Showing both creates redundancy and mild contradictions for fully-extracted profiles.
+  if (!fp.tone) {
+    const fingerprintBlock = buildFingerprintBlock(userProfile);
+    if (fingerprintBlock) parts.push(fingerprintBlock);
+  }
 
   // 2. Extended voice dimensions (populated by extractVoiceDNAFromQA)
   if (fp.tone) {
@@ -342,6 +347,7 @@ function buildVoiceDNABlock(userProfile) {
     if (fp.vocabulary_tier)    voiceLines.push(`Vocabulary: ${fp.vocabulary_tier}`);
     if (fp.opening_move)       voiceLines.push(`Opening move: ${fp.opening_move}`);
     if (fp.argument_structure) voiceLines.push(`Argument structure: ${fp.argument_structure}`);
+    if (fp.specificity_level)  voiceLines.push(`Specificity level: ${fp.specificity_level} — calibrate how concrete and evidence-heavy the post should feel`);
     parts.push(`VOICE:\n${voiceLines.join('\n')}`);
   }
 
@@ -355,8 +361,10 @@ function buildVoiceDNABlock(userProfile) {
   const posLines = [];
   if (pos?.stands_for)          posLines.push(`Stands for: ${pos.stands_for}`);
   if (pos?.pushes_back_against) posLines.push(`Pushes back against: ${pos.pushes_back_against}`);
-  if (pos?.audience)            posLines.push(`Audience: ${pos.audience}`);
-  else if (userProfile.business_positioning) posLines.push(`What they do: ${userProfile.business_positioning}`);
+  // Only inject pos.audience when audience_role isn't already surfaced separately in the
+  // system prompt's AUDIENCE block — avoids two audience descriptions that can contradict.
+  if (pos?.audience && !userProfile.audience_role) posLines.push(`Audience: ${pos.audience}`);
+  else if (!pos?.audience && userProfile.business_positioning) posLines.push(`What they do: ${userProfile.business_positioning}`);
   if (pos?.outcome)             posLines.push(`Outcome they deliver: ${pos.outcome}`);
   if (posLines.length)          parts.push(`POSITIONING:\n${posLines.join('\n')}`);
 
@@ -401,9 +409,9 @@ function buildVoiceDNABlock(userProfile) {
     );
   }
 
-  // 9. Recent voice refinements (last 5 from edit-delta capture)
+  // 9. Recent voice refinements — use last 10 (not 5) to surface more learned preferences
   const refinements = safeParseJSON(userProfile.voice_refinements, []);
-  const recent = refinements.slice(-5);
+  const recent = refinements.slice(-10);
   if (recent.length > 0) {
     parts.push(
       `RECENT CORRECTIONS (the author has demonstrated these preferences through edits):\n` +
@@ -411,12 +419,16 @@ function buildVoiceDNABlock(userProfile) {
     );
   }
 
-  // 10. Content pillars (the user's 2-4 strategic content domains)
+  // 10. Content pillars — use content_pillars (preferred) with content_themes as fallback.
+  // content_themes is the legacy field; content_pillars supersedes it but some profiles
+  // only have themes. Either supplies the same signal — strategic topic focus areas.
   const pillars = safeParseJSON(userProfile.content_pillars, []);
-  if (pillars.length > 0) {
+  const themes  = safeParseJSON(userProfile.content_themes, []);
+  const topicSignal = pillars.length > 0 ? pillars : themes;
+  if (topicSignal.length > 0) {
     parts.push(
       `CONTENT PILLARS (your core strategic domains — keep posts within these areas):\n` +
-      pillars.map(t => `- ${t}`).join('\n')
+      topicSignal.map(t => `- ${t}`).join('\n')
     );
   }
 

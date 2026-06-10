@@ -6,7 +6,7 @@ const { extractJsonFromResponse } = require('./voiceFingerprint');
 const { buildVoiceDNABlock } = require('./voiceExtraction');
 const { selectHook, buildHookInjection, getTopArchetypes } = require('./hookSelector');
 const { HOOK_ARCHETYPES, ARCHETYPE_KEYS } = require('./hookArchetypes');
-const { selectExamples, buildExamplesBlock } = require('./exampleLibrary');
+// exampleLibrary is retained but injection removed — explicit structural system handles calibration
 const { AI_TELLS_PROHIBITION, sanitiseAiTells } = require('./postSanitiser');
 const { LINKEDIN_RULES } = require('../modules/formatIntelligence/rules');
 
@@ -113,57 +113,6 @@ SELF-CHECK BEFORE OUTPUTTING:
 5. Would someone who knows this author think "that sounds like them"? If not, rewrite.
 Output only the post as plain text after all five pass. No JSON. No labels. No explanation.`;
 
-// Maps each archetype to structurally different contrast options.
-// Goal: Hook B always uses a different emotional mechanism from Hook A.
-const ARCHETYPE_CONTRAST = {
-  CONFESSION:    ['NUMBER', 'MYTH_BUST', 'CURIOSITY_GAP'],
-  BEFORE_AFTER:  ['MYTH_BUST', 'INSIGHT', 'DIRECT_ADDRESS'],
-  INSIGHT:       ['CONFESSION', 'MYTH_BUST', 'BEFORE_AFTER'],
-  DIRECT_ADDRESS:['MYTH_BUST', 'NUMBER', 'BEFORE_AFTER'],
-  NUMBER:        ['CONFESSION', 'MYTH_BUST', 'REFRAME'],
-  MYTH_BUST:     ['CONFESSION', 'NUMBER', 'BEFORE_AFTER'],
-  CURIOSITY_GAP: ['CONFESSION', 'BEFORE_AFTER', 'INSIGHT'],
-  REFRAME:       ['CONFESSION', 'NUMBER', 'DIRECT_ADDRESS'],
-};
-
-const ARCHETYPE_INSTRUCTIONS = {
-  CONFESSION:    "Lead with a personal admission, mistake, or past belief — past tense, specific, under 12 words",
-  BEFORE_AFTER:  "Contrast a past state with a present state in a single line — concrete specifics in both",
-  INSIGHT:       "State a non-obvious truth as a confident plain-spoken fact — no 'I think' or 'I've noticed'",
-  DIRECT_ADDRESS:"Speak directly to a specific type of person in a specific situation ('If you're billing by the hour…')",
-  NUMBER:        "Start with a specific, striking number in the first three words — under 10 words total",
-  MYTH_BUST:     "Name the common belief in the first line, then immediately flip it in the second",
-  CURIOSITY_GAP: "Withhold the key detail the reader most wants to know — create the gap without filling it",
-  REFRAME:       "Name the familiar situation, then reposition it from an unexpected angle in one line",
-};
-
-/**
- * Generate a single alternative first line (hook B) using Haiku.
- * Picks a structurally contrasting archetype from Hook A's category.
- * Returns { text, archetype } or null on any failure — always non-blocking.
- */
-async function generateAlternativeHook(post, usedArchetype, client) {
-  try {
-    const candidates     = ARCHETYPE_CONTRAST[usedArchetype] || ['MYTH_BUST', 'NUMBER', 'INSIGHT'];
-    const targetArchetype = candidates[Math.floor(Math.random() * candidates.length)];
-    const instruction    = ARCHETYPE_INSTRUCTIONS[targetArchetype] || 'Write a punchy, specific opening line';
-
-    const response = await client.messages.create({
-      model:      HAIKU_MODEL,
-      max_tokens: 80,
-      system:     'You are a LinkedIn hook writer. Write one alternative opening line for a LinkedIn post. Under 12 words. No explanation. Plain text only.',
-      messages:   [{
-        role:    'user',
-        content: `This post opens with a ${usedArchetype} hook:\n\n${post.split('\n').slice(0, 3).join('\n')}\n\nWrite one alternative first line as a ${targetArchetype} hook. ${instruction}. Make it specific to this post's content. Plain text only — no quotes, no labels.`,
-      }],
-    });
-    const line = response.content?.[0]?.text?.trim() || null;
-    if (!line || line.length === 0) return null;
-    return { text: line, archetype: targetArchetype };
-  } catch {
-    return null; // non-blocking
-  }
-}
 
 /**
  * Idea path: two-stage generation (Haiku blueprint → Sonnet voice writing).
@@ -394,9 +343,8 @@ async function buildStructureBlueprint(rawIdea, postType, client, userProfile = 
  *               blueprint → body structure → hook → niche/audience → formatting →
  *               above the fold → POV → prohibitions → specificity → CTA
  */
-function buildVoiceWritingSystemPrompt(blueprint, userProfile, hookInjectionBlock, ctaInstruction = '', postType = null, examples = []) {
+function buildVoiceWritingSystemPrompt(blueprint, userProfile, hookInjectionBlock, ctaInstruction = '', postType = null) {
   const { tension, arc, hook_draft, archetype } = blueprint;
-  const examplesBlock      = buildExamplesBlock(examples);
   const phraseLibraryBlock = buildPhraseLibraryBlock(userProfile);
   const voiceDNABlock      = buildVoiceDNABlock(userProfile);
   const postTypeBlock      = buildPostTypeBlock(postType, archetype);
@@ -412,7 +360,7 @@ Use this as a foundation or ignore it — whatever produces the strongest post.
 `;
 
   return `You are writing a LinkedIn post for a professional. You have full creative authority — structure, hook, tone, arc. A structural suggestion is provided below as a starting point; improve on it, override it, or take a completely different angle if you see something stronger.
-${examplesBlock}${phraseLibraryBlock}${voiceDNABlock}${postTypeBlock}
+${phraseLibraryBlock}${voiceDNABlock}${postTypeBlock}
 ${blueprintBlock}
 ${bodyStructureBlock}
 ${hookInjectionBlock}
@@ -422,20 +370,23 @@ CONTENT NICHE: ${userProfile.content_niche || 'not specified'}
 AUDIENCE:
 - Who they are: ${userProfile.audience_role || 'professionals in the author\'s field'}
 - What keeps them up at night: ${userProfile.audience_pain || 'professional challenges in their field'}
-
+${userProfile.contrarian_view ? `
+EDITORIAL CONTEXT (the author's established worldview — let this colour the angle and framing):
+${userProfile.contrarian_view}
+` : ''}
 LINKEDIN FORMATTING (non-negotiable):
 - One sentence per line. Never write paragraph blocks. Every sentence gets its own line.
 - Put a blank line between every 2–3 lines to create visual breathing room.
 - The post must be visually scannable — a wall of text kills engagement before anyone reads it.
-${postType === 'reach' || !postType ? `
-ABOVE THE FOLD (critical for reach):
+
+ABOVE THE FOLD (LinkedIn truncates every post — not just reach):
 - LinkedIn shows only the first 2–3 lines before the "see more" truncation.
 - Line 1 is the hook — handled by the archetype instruction above.
 - Lines 2–3 must deepen the tension, not explain or contextualise it.
 - Avoid "not X, not Y" patterns — they are safe but flat. Instead, add a second sharp fact, a stark contrast, or a consequence that makes the hook land harder.
 - Lines 2–3 should make the reader feel they will miss something if they do not click "see more".
 - Never use lines 2–3 for background, setup, or "let me tell you about X" framing.
-` : ''}
+
 POINT OF VIEW (non-negotiable):
 Take the strongest defensible position the raw idea supports — not the safest one.
 Never present both sides without choosing one. A hedged first draft cannot be sharpened; a strong one can be dialled back.
@@ -447,8 +398,8 @@ ${AI_TELLS_PROHIBITION}${SPECIFICITY_MANDATE}${ctaInstruction}`;
  * Streaming variant — omits STREAMING_SELF_CHECK because the model can't pause
  * mid-stream to revise; the self-check only adds tokens without being executable.
  */
-function buildStreamingVoiceWritingSystemPrompt(blueprint, userProfile, hookInjectionBlock, ctaInstruction = '', postType = null, examples = []) {
-  return buildVoiceWritingSystemPrompt(blueprint, userProfile, hookInjectionBlock, ctaInstruction, postType, examples);
+function buildStreamingVoiceWritingSystemPrompt(blueprint, userProfile, hookInjectionBlock, ctaInstruction = '', postType = null) {
+  return buildVoiceWritingSystemPrompt(blueprint, userProfile, hookInjectionBlock, ctaInstruction, postType);
 }
 
 /** User prompt for the streaming path — asks for plain text instead of JSON wrapper. */
@@ -462,41 +413,6 @@ Output only the post as plain text. No JSON, no labels, no explanation.`;
 }
 
 /**
- * Post-processing step: extract synthesis + cta_alternatives from the finished post via Haiku.
- * Keeps creative generation (Sonnet) separate from structured metadata extraction.
- */
-async function extractPostMetadata(post, rawIdea, client) {
-  try {
-    const response = await client.messages.create({
-      model:      HAIKU_MODEL,
-      max_tokens: 150,
-      temperature: 0,
-      system:     'You are a content analyst. Return only valid JSON — no explanation, no markdown.',
-      messages:   [{
-        role:    'user',
-        content: `Write two alternative closing lines for this LinkedIn post.
-
-POST (closing lines):
-${post.split('\n').slice(-6).join('\n').slice(0, 600)}
-
-Return JSON only:
-{
-  "cta_alternatives": [
-    "one alternative closing line — different question angle or engagement prompt",
-    "one alternative closing line — soft conversion invite (DM, follow, or resource in comments)"
-  ]
-}`,
-      }],
-    });
-    const parsed = extractJsonFromResponse(response.content[0]?.text?.trim() || '');
-    return {
-      cta_alternatives: Array.isArray(parsed.cta_alternatives) ? parsed.cta_alternatives.slice(0, 2) : [],
-    };
-  } catch {
-    return { cta_alternatives: [] };
-  }
-}
-
 /**
  * Runs Stage 2 Sonnet generation with a blueprint-grounded system prompt.
  * Used exclusively by ideaToPost() — vault and editorial paths use runSinglePostGeneration().
@@ -518,12 +434,9 @@ async function runTwoStageGeneration({
 
   const extraHints = [options._funnelHint, options.qualityRetryHint, options._regenerateHint].filter(Boolean).join('\n\n');
 
-  // Select calibration examples — non-blocking, never throws
-  const examples = await selectExamples(postType, archetypeUsed);
-
   // ── Streaming path: plain-text output, token-by-token via onToken callback ──
   if (options.onToken) {
-    const streamSysPrompt  = buildStreamingVoiceWritingSystemPrompt(blueprint, userProfile, hookInjection, ctaInstruction, postType, examples);
+    const streamSysPrompt  = buildStreamingVoiceWritingSystemPrompt(blueprint, userProfile, hookInjection, ctaInstruction, postType);
     const streamUserPrompt = buildStreamingUserPrompt(rawIdea);
     const streamUserFinal  = extraHints ? `${streamUserPrompt}\n\n${extraHints}` : streamUserPrompt;
 
@@ -545,14 +458,13 @@ async function runTwoStageGeneration({
     await stream.done();
 
     const cleanPost   = sanitiseAiTells(fullText.trim());
-    const hookBResult = await generateAlternativeHook(cleanPost, archetypeUsed, client);
-    return { synthesis: null, post: cleanPost, hookB: hookBResult?.text || null, hookBArchetype: hookBResult?.archetype || null, ctaAlternatives: [], archetypeUsed, hookConfidence, stage1Blueprint: blueprint };
+    return { synthesis: null, post: cleanPost, archetypeUsed, hookConfidence, stage1Blueprint: blueprint };
   }
 
   // ── Non-streaming path: plain-text post, metadata extracted separately ───────
   // Model completes its full response before we see it, so STREAMING_SELF_CHECK
   // is actually executable here (unlike the streaming path where it cannot be).
-  const systemPrompt    = buildStreamingVoiceWritingSystemPrompt(blueprint, userProfile, hookInjection, ctaInstruction, postType, examples)
+  const systemPrompt    = buildStreamingVoiceWritingSystemPrompt(blueprint, userProfile, hookInjection, ctaInstruction, postType)
     + '\n' + STREAMING_SELF_CHECK;
   const userPrompt      = buildUserPrompt(rawIdea);
   const userPromptFinal = extraHints ? `${userPrompt}\n\n${extraHints}` : userPrompt;
@@ -569,13 +481,9 @@ async function runTwoStageGeneration({
     const responseText = message.content.find(b => b.type === 'text')?.text?.trim() || '';
     const cleanPost    = sanitiseAiTells(responseText);
 
-    const hookBResult = await generateAlternativeHook(cleanPost, archetypeUsed, client);
     return {
-      synthesis:       null,
-      post:            cleanPost,
-      hookB:           hookBResult?.text || null,
-      hookBArchetype:  hookBResult?.archetype || null,
-      ctaAlternatives: [],
+      synthesis:      null,
+      post:           cleanPost,
       archetypeUsed,
       hookConfidence,
       stage1Blueprint: blueprint,
@@ -677,7 +585,7 @@ Write a LinkedIn post that:
 - Opens on the sharpest specific from the source — a number, outcome, or named scenario that is ALREADY in the text above
 - Preserves depth and proprietary framing from the original passage — do NOT genericise, approximate, or replace concrete details with vague language
 - Reads as the author sharing hard-won, specific knowledge — not an AI summary of it
-- Every factual claim must trace back to the source text above; use [SPECIFIC NEEDED] for anything not grounded there
+- Every factual claim must trace back to the source text above; if a claim cannot be grounded in the source, omit it rather than approximating or inventing
 
 LENGTH: ${getLengthGuidance(vaultIdea.funnel_type)}
 
@@ -688,11 +596,7 @@ Return ONLY valid JSON in this exact structure:
     "recommended_structure": "one sentence on the best structure given the audience",
     "supporting_insight": "one sentence of editorial context that makes this idea stronger"
   },
-  "post": "full text of the single LinkedIn post",
-  "cta_alternatives": [
-    "one alternative closing line — different question angle or engagement prompt",
-    "one alternative closing line — soft conversion invite (DM, follow, or resource in comments)"
-  ]
+  "post": "full text of the single LinkedIn post"
 }
 
 No markdown fences. No explanation. Only the JSON object.`;
@@ -734,11 +638,7 @@ Return ONLY valid JSON in this exact structure:
     "recommended_structure": "one sentence on the best structure given the audience",
     "supporting_insight": "one sentence of editorial context that makes this idea stronger"
   },
-  "post": "full text of the single LinkedIn post",
-  "cta_alternatives": [
-    "one alternative closing line — different question angle or engagement prompt",
-    "one alternative closing line — soft conversion invite (DM, follow, or resource in comments)"
-  ]
+  "post": "full text of the single LinkedIn post"
 }
 
 No markdown fences. No explanation. Only the JSON object.`;
@@ -787,15 +687,11 @@ async function runSinglePostGeneration({
     });
 
     responseText = message.content[0]?.text?.trim() || '';
-    const validated   = validateSinglePostResponse(extractJsonFromResponse(responseText));
-    const cleanPost   = sanitiseAiTells(validated.post);
-    const hookBResult = await generateAlternativeHook(cleanPost, archetypeUsed, client);
+    const validated = validateSinglePostResponse(extractJsonFromResponse(responseText));
+    const cleanPost = sanitiseAiTells(validated.post);
     return {
-      synthesis:       validated.synthesis,
-      post:            cleanPost,
-      hookB:           hookBResult?.text || null,
-      hookBArchetype:  hookBResult?.archetype || null,
-      ctaAlternatives: validated.ctaAlternatives,
+      synthesis:  validated.synthesis,
+      post:       cleanPost,
       archetypeUsed,
       hookConfidence,
     };
@@ -814,15 +710,11 @@ async function runSinglePostGeneration({
           ],
         });
         responseText = retry.content[0]?.text?.trim() || '';
-        const validated   = validateSinglePostResponse(extractJsonFromResponse(responseText));
-        const cleanPost   = sanitiseAiTells(validated.post);
-        const hookBResult = await generateAlternativeHook(cleanPost, archetypeUsed, client);
+        const validated = validateSinglePostResponse(extractJsonFromResponse(responseText));
+        const cleanPost = sanitiseAiTells(validated.post);
         return {
-          synthesis:       validated.synthesis,
-          post:            cleanPost,
-          hookB:           hookBResult?.text || null,
-          hookBArchetype:  hookBResult?.archetype || null,
-          ctaAlternatives: validated.ctaAlternatives,
+          synthesis:  validated.synthesis,
+          post:       cleanPost,
           archetypeUsed,
           hookConfidence,
         };
@@ -842,10 +734,7 @@ function validateSinglePostResponse(parsed) {
   if (!s.suggested_angle || !s.recommended_structure || !s.supporting_insight) {
     throw new SyntaxError('Response synthesis missing required fields');
   }
-  const ctaAlternatives = Array.isArray(parsed.cta_alternatives)
-    ? parsed.cta_alternatives.filter(l => typeof l === 'string' && l.trim()).slice(0, 2)
-    : [];
-  return { synthesis: parsed.synthesis, post: parsed.post.trim(), ctaAlternatives };
+  return { synthesis: parsed.synthesis, post: parsed.post.trim() };
 }
 
 /**
@@ -987,7 +876,7 @@ ${documentContext.slice(0, 2000)}
 Key insight to focus on:
 ${sourceText}
 
-SPECIFICITY CHECK: Before shaping the post, identify the most concrete experience, result, or data point in the insight and source. If the insight is too vague (no specific outcome, no named result, no concrete moment), mark each gap with [SPECIFIC NEEDED] in the post rather than proceeding with vague content.
+SPECIFICITY CHECK: Before shaping the post, identify the most concrete element in the insight and source — a specific outcome, named result, scenario, or decision. If the input has no hard numbers, work with what IS concrete (the situation, the process, the named role) rather than approximating or adding invented details.
 
 INSTRUCTION:
 1. Open with the strongest, most memorable idea from the insight and source material.
@@ -1003,11 +892,7 @@ Return ONLY valid JSON:
     "recommended_structure": "one sentence on how you ordered the body",
     "supporting_insight": "the CTA question you added"
   },
-  "post": "full text of the shaped LinkedIn post",
-  "cta_alternatives": [
-    "one alternative closing question — different angle",
-    "one alternative closing question — softer or more specific"
-  ]
+  "post": "full text of the shaped LinkedIn post"
 }
 
 No markdown fences. No explanation. Only the JSON object.`;
@@ -1016,7 +901,7 @@ No markdown fences. No explanation. Only the JSON object.`;
   return `AUTHOR'S TEXT:
 ${sourceText}
 
-SPECIFICITY CHECK: Before shaping the post, identify the most concrete experience, result, or data point in the author's text. If the input is too vague (no specific outcome, no named result, no concrete moment), mark each gap with [SPECIFIC NEEDED] in the post rather than proceeding with vague content.
+SPECIFICITY CHECK: Before shaping the post, identify the most concrete element in the author's text — a specific outcome, named result, scenario, or decision. If the input has no hard numbers, work with what IS concrete (the situation, the process, the named role) rather than approximating or adding invented details.
 
 INSTRUCTION:
 1. Find the author's strongest idea. Open with it — sharpened from their words, not rewritten from scratch.
@@ -1032,11 +917,7 @@ Return ONLY valid JSON:
     "recommended_structure": "one sentence on how you ordered the body",
     "supporting_insight": "the CTA question you added"
   },
-  "post": "full text of the shaped LinkedIn post",
-  "cta_alternatives": [
-    "one alternative closing question — different angle",
-    "one alternative closing question — softer or more specific"
-  ]
+  "post": "full text of the shaped LinkedIn post"
 }
 
 No markdown fences. No explanation. Only the JSON object.`;
@@ -1173,21 +1054,4 @@ async function checkSubstance(rawIdea, userProfile, postType) {
   return buildSubstancePromptForPostType(quality, userProfile, postType);
 }
 
-/**
- * Fire-and-forget: extract CTA alternatives after SSE done and update generated_posts row.
- * Called in the route after res.end() so it never delays the user-facing response.
- */
-async function backgroundExtractCtaAlternatives(postId, post, rawIdea, db) {
-  try {
-    const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
-    if (!apiKey) return;
-    const client = new Anthropic({ apiKey });
-    const metadata = await extractPostMetadata(post, rawIdea, client);
-    if (metadata.cta_alternatives?.length) {
-      db.prepare(`UPDATE generated_posts SET cta_alternatives = ? WHERE id = ?`)
-        .run(JSON.stringify(metadata.cta_alternatives), postId);
-    }
-  } catch { /* non-fatal — editor shows empty CTA alternatives */ }
-}
-
-module.exports = { ideaToPost, generateInsightAlternativePost, vaultSeedToPost, checkSubstance, backgroundExtractCtaAlternatives, buildRefineSystemPrompt };
+module.exports = { ideaToPost, generateInsightAlternativePost, vaultSeedToPost, checkSubstance, buildRefineSystemPrompt };

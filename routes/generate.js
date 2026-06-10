@@ -4,7 +4,7 @@ const express = require('express');
 const router = express.Router();
 const { db } = require('../db');
 const { runQualityGate } = require('../services/qualityGate');
-const { ideaToPost, vaultSeedToPost, backgroundExtractCtaAlternatives } = require('../services/ideaPath');
+const { ideaToPost, vaultSeedToPost } = require('../services/ideaPath');
 const { classifyContent } = require('../services/funnelClassifier');
 const { canGeneratePost } = require('../services/subscription');
 const { sendEmailToUser } = require('../emails');
@@ -312,18 +312,15 @@ router.post('/', async (req, res) => {
         const primaryInsert = await db.prepare(`
           INSERT INTO generated_posts
             (run_id, user_id, tenant_id, profile_id, format_slug, content, ai_content, quality_score, quality_flags, passed_gate,
-             funnel_type, vault_source_ref, hook_b, hook_b_archetype, cta_alternatives, idea_input, archetype_used, source,
+             funnel_type, vault_source_ref, idea_input, archetype_used, source,
              post_type, quality_verdict)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           RETURNING id
         `).run(
           runId, userId, tenantId, profile.id, IDEA_SLUG,
           ideaRaw.post, ideaRaw.post,
           primaryGate.score, JSON.stringify(primaryGate.flags), primaryGate.passed_gate ? 1 : 0,
           funnelType, null,
-          ideaRaw.hookB || null,
-          ideaRaw.hookBArchetype || null,
-          ideaRaw.ctaAlternatives?.length ? JSON.stringify(ideaRaw.ctaAlternatives) : null,
           raw_idea || null,
           ideaRaw.archetypeUsed || null,
           source || null,
@@ -334,17 +331,10 @@ router.post('/', async (req, res) => {
 
         const primaryQuality = buildQualityPayload(primaryGate, 1, true);
 
-        // Start background extraction before ending the response so the Haiku call
-        // is in-flight during the frontend's 600ms sleep and page-load — reduces the
-        // chance the editor arrives before cta_alternatives are written to DB.
-        backgroundExtractCtaAlternatives(primaryId, ideaRaw.post, raw_idea, db);
-
         sseWrite('done', {
           post_id:         primaryId,
           run_id:          runId,
           post:            ideaRaw.post,
-          hookB:           ideaRaw.hookB || null,
-          hookBArchetype:  ideaRaw.hookBArchetype || null,
           quality:         { ...primaryQuality, verdict: primaryGate.verdict },
           archetypeUsed:   ideaRaw.archetypeUsed,
           hookConfidence:  ideaRaw.hookConfidence,
@@ -392,11 +382,10 @@ router.post('/', async (req, res) => {
         }
       );
       ideaResult = {
-        synthesis:       vaultResult.synthesis,
-        post:            vaultResult.post,
-        ctaAlternatives: vaultResult.ctaAlternatives || [],
-        archetypeUsed:   vaultResult.archetypeUsed,
-        hookConfidence:  vaultResult.hookConfidence,
+        synthesis:      vaultResult.synthesis,
+        post:           vaultResult.post,
+        archetypeUsed:  vaultResult.archetypeUsed,
+        hookConfidence: vaultResult.hookConfidence,
         primaryGate,
         contentFeedback: null,
       };
@@ -429,13 +418,10 @@ router.post('/', async (req, res) => {
         }
       );
       ideaResult = {
-        synthesis:       ideaRaw.synthesis,
-        post:            ideaRaw.post,
-        hookB:           ideaRaw.hookB || null,
-        hookBArchetype:  ideaRaw.hookBArchetype || null,
-        ctaAlternatives: ideaRaw.ctaAlternatives || [],
-        archetypeUsed:   ideaRaw.archetypeUsed,
-        hookConfidence:  ideaRaw.hookConfidence,
+        synthesis:      ideaRaw.synthesis,
+        post:           ideaRaw.post,
+        archetypeUsed:  ideaRaw.archetypeUsed,
+        hookConfidence: ideaRaw.hookConfidence,
         primaryGate,
         contentFeedback: null,
       };
@@ -445,9 +431,6 @@ router.post('/', async (req, res) => {
       const {
         synthesis,
         post,
-        hookB,
-        hookBArchetype,
-        ctaAlternatives,
         archetypeUsed,
         hookConfidence,
         primaryGate,
@@ -485,9 +468,9 @@ router.post('/', async (req, res) => {
       const primaryInsert = await db.prepare(`
         INSERT INTO generated_posts
           (run_id, user_id, tenant_id, profile_id, format_slug, content, ai_content, quality_score, quality_flags, passed_gate,
-           funnel_type, vault_source_ref, hook_b, hook_b_archetype, cta_alternatives, idea_input, archetype_used, source,
+           funnel_type, vault_source_ref, idea_input, archetype_used, source,
            post_type, quality_verdict)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         RETURNING id
       `).run(
         runId,
@@ -502,9 +485,6 @@ router.post('/', async (req, res) => {
         primaryGate.passed_gate ? 1 : 0,
         funnelType,
         vaultSourceRef,
-        hookB || null,
-        hookBArchetype || null,
-        ctaAlternatives?.length ? JSON.stringify(ctaAlternatives) : null,
         inputData.raw_idea || null,
         archetypeUsed || null,
         source || null,
@@ -522,19 +502,11 @@ router.post('/', async (req, res) => {
 
       const primaryQuality = buildQualityPayload(primaryGate, 1, true);
 
-      // Background: extract CTA alternatives for non-vault idea path (vault path gets them from model JSON)
-      if (!vaultIdea && !ctaAlternatives?.length) {
-        backgroundExtractCtaAlternatives(primaryId, post, raw_idea, db);
-      }
-
       return res.json({
         ok: true,
         run_id: runId,
         synthesis,
         post,
-        hookB:           hookB || null,
-        hookBArchetype:  hookBArchetype || null,
-        ctaAlternatives: ctaAlternatives || [],
         id: primaryId,
         archetypeUsed,
         hookConfidence,
@@ -788,7 +760,7 @@ router.post('/from-doc', async (req, res) => {
   if (!apiKey) return res.status(500).json({ ok: false, error: 'no_api_key' });
 
   try {
-    const { synthesis, post, hookB, hookBArchetype, ctaAlternatives, archetypeUsed, hookConfidence, stage1Blueprint } =
+    const { synthesis, post, archetypeUsed, hookConfidence, stage1Blueprint } =
       await ideaToPost(truncated, profile, { skipSubstanceCheck: skipSubstanceCheckDoc });
 
     const primaryGate = runQualityGate(
@@ -818,16 +790,13 @@ router.post('/from-doc', async (req, res) => {
 
     const primaryInsert = await db.prepare(`
       INSERT INTO generated_posts
-        (run_id, user_id, tenant_id, profile_id, format_slug, content, ai_content, quality_score, quality_flags, passed_gate, funnel_type, hook_b, hook_b_archetype, cta_alternatives, idea_input, archetype_used)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (run_id, user_id, tenant_id, profile_id, format_slug, content, ai_content, quality_score, quality_flags, passed_gate, funnel_type, idea_input, archetype_used)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       RETURNING id
     `).run(
       runId, userId, tenantId, profile.id, IDEA_SLUG,
       post, post, primaryGate.score, JSON.stringify(primaryGate.flags), primaryGate.passed_gate ? 1 : 0,
-      funnelType, hookB || null, hookBArchetype || null,
-      ctaAlternatives?.length ? JSON.stringify(ctaAlternatives) : null,
-      truncated,
-      archetypeUsed || null
+      funnelType, truncated, archetypeUsed || null
     );
     const primaryId = primaryInsert.lastInsertRowid;
 
@@ -843,9 +812,6 @@ router.post('/from-doc', async (req, res) => {
       run_id:          runId,
       synthesis,
       post,
-      hookB:           hookB || null,
-      hookBArchetype:  hookBArchetype || null,
-      ctaAlternatives: ctaAlternatives || [],
       id:              primaryId,
       archetypeUsed,
       hookConfidence,
@@ -1097,12 +1063,12 @@ router.post('/improve', async (req, res) => {
     return res.status(400).json({ ok: false, error: 'instruction is required' });
   }
 
-  // Fetch post metadata to get post_type, profile, and vault context
+  // Fetch post metadata to get post_type, funnel_type, archetype, profile, and vault context
   let postMeta = null;
   if (postId) {
     try {
       postMeta = await db.prepare(`
-        SELECT gp.post_type, gp.funnel_type, gp.profile_id, gr.input_data
+        SELECT gp.post_type, gp.funnel_type, gp.archetype_used, gp.profile_id, gr.input_data
         FROM   generated_posts gp
         LEFT   JOIN generation_runs gr ON gr.id = gp.run_id
         WHERE  gp.id = ? AND gp.tenant_id = ?
@@ -1147,22 +1113,34 @@ router.post('/improve', async (req, res) => {
 
   try {
     const { buildRefineSystemPrompt } = require('../services/ideaPath');
+    const { buildHookInjection }       = require('../services/hookSelector');
+    const { HOOK_ARCHETYPES }          = require('../services/hookArchetypes');
     const Anthropic = require('@anthropic-ai/sdk');
     const client = new Anthropic({ apiKey });
 
+    // Build hook injection from the archetype the post was originally generated with.
+    // Falls back to null (generic hook rule) when no archetype is stored.
+    const archetypeKey     = postMeta?.archetype_used || null;
+    const archetypeRecord  = archetypeKey ? (HOOK_ARCHETYPES[archetypeKey] || null) : null;
+    const hookInjection    = archetypeRecord ? buildHookInjection(archetypeRecord) : null;
+
+    // funnel_type is the more reliably populated field; post_type is the explicit override
+    const resolvedPostType = postMeta?.post_type || postMeta?.funnel_type || null;
+
     const systemPrompt = buildRefineSystemPrompt(
       profile,
-      null,
-      postMeta?.post_type || null,
+      hookInjection,
+      resolvedPostType,
       null,
       null
     );
 
-    // Build the history preamble for multi-turn context
+    // Build the history preamble for multi-turn context.
+    // Keep last 6 exchanges; truncate each entry to 800 chars (enough for a full post).
     const historyBlock = history.length
       ? '\n\nPREVIOUS EXCHANGES (for context only — apply the new instruction below):\n' +
         history.slice(-6).map(m =>
-          `${m.role === 'user' ? 'Author request' : 'Previous version'}: ${m.content.slice(0, 400)}`
+          `${m.role === 'user' ? 'Author request' : 'Previous version'}: ${m.content.slice(0, 800)}`
         ).join('\n\n---\n\n')
       : '';
 
@@ -1186,18 +1164,14 @@ Return ONLY valid JSON:
     "recommended_structure": "one sentence on structure",
     "supporting_insight": "the closing CTA used"
   },
-  "post": "full revised post text",
-  "cta_alternatives": [
-    "one alternative closing question — different angle",
-    "one alternative closing question — softer or more specific"
-  ]
+  "post": "full revised post text"
 }
 
 No markdown fences. No explanation. Only the JSON object.`;
 
     const message = await client.messages.create({
       model:      'claude-sonnet-4-6',
-      max_tokens: 1200,
+      max_tokens: 2000,
       system:     systemPrompt,
       messages:   [{ role: 'user', content: userPrompt }],
     });
@@ -1216,10 +1190,9 @@ No markdown fences. No explanation. Only the JSON object.`;
     }
 
     return res.json({
-      ok:              true,
-      post:            result.post,
-      note:            result.synthesis?.suggested_angle || null,
-      ctaAlternatives: result.cta_alternatives || [],
+      ok:   true,
+      post: result.post,
+      note: result.synthesis?.suggested_angle || null,
     });
 
   } catch (err) {

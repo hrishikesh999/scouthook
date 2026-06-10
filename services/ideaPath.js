@@ -151,7 +151,7 @@ async function ideaToPost(rawIdea, userProfile, options = {}) {
           arc:        '',
           hook_draft: '',
         })
-      : buildStructureBlueprint(rawIdea, postType, client, userProfile),
+      : buildStructureBlueprint(rawIdea, postType, client, userProfile, options.isInterviewPath),
   ]);
 
   // Substance feedback: computed when quality check ran and the idea passed.
@@ -187,8 +187,7 @@ async function ideaToPost(rawIdea, userProfile, options = {}) {
     options,
     blueprint,
     hookInjection,
-    archetypeUsed:  blueprint.archetype,
-    hookConfidence: blueprint.confidence,
+    archetypeUsed: blueprint.archetype,
     postType,
     ctaInstruction,
   });
@@ -196,9 +195,10 @@ async function ideaToPost(rawIdea, userProfile, options = {}) {
 }
 
 /**
- * Second option when primary hook confidence is low: same raw idea, INSIGHT archetype structure only.
+ * Fallback: same raw idea, INSIGHT archetype structure only.
+ * Available for future use if low-confidence blueprint routing is added.
  *
- * @returns {Promise<{ synthesis: object, post: string, archetypeUsed: 'INSIGHT', hookConfidence: null }>}
+ * @returns {Promise<{ synthesis: object, post: string, archetypeUsed: 'INSIGHT' }>}
  */
 async function generateInsightAlternativePost(rawIdea, userProfile, options = {}) {
   const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
@@ -220,16 +220,6 @@ async function generateInsightAlternativePost(rawIdea, userProfile, options = {}
     archetypeUsed: 'INSIGHT',
     hookConfidence: null,
   };
-}
-
-function buildTensionBlock(tension) {
-  if (!tension) return '';
-  return `\nCENTRAL TENSION (the only reason this post exists):
-${tension}
-
-Every sentence must earn the right to be in this post by building toward, deepening, or resolving this tension.
-If a sentence does not serve the tension — cut it.
-The hook opens on the tension. The body unpacks it. The close lands it.\n`;
 }
 
 function buildPhraseLibraryBlock(userProfile) {
@@ -289,7 +279,7 @@ ${funnelInstruction}${hintLine}`;
  * Identifies tension, arc, archetype, and hook draft in one coherent pass.
  * Replaces the separate selectHook() + tensionExtractor calls for the idea path.
  */
-async function buildStructureBlueprint(rawIdea, postType, client, userProfile = null) {
+async function buildStructureBlueprint(rawIdea, postType, client, userProfile = null, isInterviewPath = false) {
   const archetypeLines = ARCHETYPE_KEYS.map(key => `- ${key}: ${HOOK_ARCHETYPES[key].trigger}`).join('\n');
   const postTypeBlock  = postType && ARCHETYPE_POST_TYPE_PREFERENCES[postType]
     ? `\nPOST GOAL: ${postType.toUpperCase()}\nPreferred archetypes: ${ARCHETYPE_POST_TYPE_PREFERENCES[postType].join(', ')}\nWeight toward these when the input fits multiple.\n`
@@ -314,6 +304,14 @@ async function buildStructureBlueprint(rawIdea, postType, client, userProfile = 
       (samplePhrase                 ? `Voice sample (match this register): "${samplePhrase}"\n` : '')
     : '';
 
+  // When input comes from the guided interview, the raw idea is structured Q&A —
+  // multiple question/answer pairs, not a single narrative. Tell Haiku to synthesise
+  // across all answers to find the strongest single tension and hook, rather than
+  // treating the first question line as the hook seed.
+  const inputFraming = isInterviewPath
+    ? `\nINPUT FORMAT NOTE: The raw idea below is a set of guided Q&A answers. Read all answers together and derive the strongest single tension and hook from the combined content — do not treat the first question as the hook seed.\n`
+    : '';
+
   try {
     const response = await client.messages.create({
       model:       HAIKU_MODEL,
@@ -322,7 +320,7 @@ async function buildStructureBlueprint(rawIdea, postType, client, userProfile = 
       system:      [{ type: 'text', text: BLUEPRINT_SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
       messages: [{
         role:    'user',
-        content: `ARCHETYPES:\n${archetypeLines}\n${postTypeBlock}${voiceContextBlock}\nRAW IDEA:\n${rawIdea}\n\nReturn the blueprint JSON. hook_draft must reflect the actual content of this specific idea.`,
+        content: `ARCHETYPES:\n${archetypeLines}\n${postTypeBlock}${voiceContextBlock}${inputFraming}\nRAW IDEA:\n${rawIdea}\n\nReturn the blueprint JSON. hook_draft must reflect the actual content of this specific idea.`,
       }],
     });
 
@@ -339,7 +337,11 @@ async function buildStructureBlueprint(rawIdea, postType, client, userProfile = 
       arc:        typeof parsed.arc         === 'string' ? parsed.arc         : '',
       hook_draft: typeof parsed.hook_draft  === 'string' ? parsed.hook_draft  : '',
     };
-  } catch {
+  } catch (err) {
+    // Stage 1 failed — log so it's visible in server output, then fall back to
+    // INSIGHT with empty structural fields. Stage 2 still runs but without
+    // blueprint guidance; the post will be weaker than usual.
+    console.warn('[buildStructureBlueprint] Stage 1 failed, falling back to empty blueprint:', err.message);
     return { archetype: 'INSIGHT', confidence: 0.5, tension: '', arc: '', hook_draft: '' };
   }
 }
@@ -431,7 +433,6 @@ async function runTwoStageGeneration({
   blueprint,
   hookInjection,
   archetypeUsed,
-  hookConfidence,
   postType = null,
   ctaInstruction = '',
 }) {
@@ -453,7 +454,7 @@ async function runTwoStageGeneration({
     const stream = client.messages.stream({
       model:       'claude-sonnet-4-6',
       max_tokens:  3000,
-      temperature: 0.9,
+      temperature: 0.8,
       system:      [{ type: 'text', text: streamSysPrompt, cache_control: { type: 'ephemeral' } }],
       messages:    [{ role: 'user', content: streamUserFinal }],
     });
@@ -465,7 +466,7 @@ async function runTwoStageGeneration({
     await stream.done();
 
     const cleanPost   = sanitiseAiTells(fullText.trim());
-    return { synthesis: null, post: cleanPost, archetypeUsed, hookConfidence, stage1Blueprint: blueprint };
+    return { synthesis: null, post: cleanPost, archetypeUsed, stage1Blueprint: blueprint };
   }
 
   // ── Non-streaming path: plain-text post, metadata extracted separately ───────
@@ -480,7 +481,7 @@ async function runTwoStageGeneration({
     const message = await client.messages.create({
       model:       'claude-sonnet-4-6',
       max_tokens:  3000,
-      temperature: 0.9,
+      temperature: 0.8,
       system:      [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
       messages:    [{ role: 'user', content: userPromptFinal }],
     });
@@ -489,61 +490,14 @@ async function runTwoStageGeneration({
     const cleanPost    = sanitiseAiTells(responseText);
 
     return {
-      synthesis:      null,
-      post:           cleanPost,
+      synthesis:       null,
+      post:            cleanPost,
       archetypeUsed,
-      hookConfidence,
       stage1Blueprint: blueprint,
     };
   } catch (err) {
     throw new Error(`Generation failed: ${err.message}`);
   }
-}
-
-function buildSystemPrompt(userProfile, hookInjectionBlock, ctaInstruction = '', postType = null, tensionStatement = null, archetype = null) {
-  const tensionBlock       = buildTensionBlock(tensionStatement);
-  const phraseLibraryBlock = buildPhraseLibraryBlock(userProfile);
-  const fingerprintBlock   = buildVoiceDNABlock(userProfile);
-  const postTypeBlock      = buildPostTypeBlock(postType, archetype);
-  const bodyStructureBlock = buildBodyStructureBlock(archetype);
-  return `You are an editorial thinking partner for a professional who creates LinkedIn content. Your job is to take a raw idea and transform it into one polished, high-quality LinkedIn post that sounds exactly like the author — not like AI.
-${tensionBlock}${phraseLibraryBlock}
-${fingerprintBlock}${postTypeBlock}
-${bodyStructureBlock}
-${hookInjectionBlock}
-
-FIND THE VOICE:
-For any claim, explanation, or description, check the phrase library above.
-Use exact language where it fits the shape built by the body structure. Plain, specific language where it does not.
-The structure is non-negotiable. The phrases are available material.
-
-CONTENT NICHE: ${userProfile.content_niche || 'not specified'}
-
-AUDIENCE:
-- Who they are: ${userProfile.audience_role || 'professionals in the author\'s field'}
-- What keeps them up at night: ${userProfile.audience_pain || 'professional challenges in their field'}
-
-${userProfile.contrarian_view ? `EDITORIAL CONTEXT (the author's established worldview — let this colour the angle and framing):
-${userProfile.contrarian_view}
-` : ''}
-LINKEDIN FORMATTING (non-negotiable):
-- One sentence per line. Never write paragraph blocks. Every sentence gets its own line.
-- Put a blank line between every 2–3 lines to create visual breathing room.
-- The post must be visually scannable — a wall of text kills engagement before anyone reads it.
-
-ABOVE THE FOLD (LinkedIn truncates every post — not just reach):
-- LinkedIn shows only the first 2–3 lines before the "see more" truncation.
-- Line 1 is the hook — handled by the archetype instruction above.
-- Lines 2–3 must sharpen the tension, not explain or contextualise it.
-- Avoid "not X, not Y" patterns — they are safe but flat. Instead, add a second sharp fact, a stark contrast, or a consequence that makes the hook land harder.
-- Lines 2–3 should make the reader feel they will miss something if they do not click "see more".
-- Never use lines 2–3 for background, setup, or "let me tell you about X" framing.
-
-POINT OF VIEW (non-negotiable):
-Take the strongest defensible position the raw idea supports — not the safest one.
-Never present both sides without choosing one. A hedged first draft cannot be sharpened; a strong one can be dialled back.
-If the idea contains a provocative angle, lead with it — do not bury it in the body.
-${AI_TELLS_PROHIBITION}${SPECIFICITY_MANDATE}${ctaInstruction}`;
 }
 
 function buildUserPrompt(rawIdea) {
@@ -657,7 +611,6 @@ async function runSinglePostGeneration({
   options,
   hookInjection,
   archetypeUsed,
-  hookConfidence,
   userPromptOverride,
   funnelType = null,
   systemOverride = null,
@@ -672,7 +625,14 @@ async function runSinglePostGeneration({
   const ctaHint = HOOK_ARCHETYPES[archetypeUsed]?.ctaHint || null;
   const effectiveFunnelType = funnelType || postType;
   const ctaInstruction = buildCtaInstruction(effectiveFunnelType, ctaHint, convertCtaIntent);
-  const systemPrompt = systemOverride || buildSystemPrompt(userProfile, hookInjection, ctaInstruction, postType, tensionStatement, archetypeUsed);
+  const minimalBlueprint = {
+    archetype:  archetypeUsed || 'INSIGHT',
+    confidence: 1,
+    tension:    tensionStatement || '',
+    arc:        '',
+    hook_draft: '',
+  };
+  const systemPrompt = systemOverride || buildVoiceWritingSystemPrompt(minimalBlueprint, userProfile, hookInjection, ctaInstruction, postType);
   let userPrompt = userPromptOverride || buildUserPrompt(rawIdea);
 
   const extraHints = [
@@ -696,12 +656,7 @@ async function runSinglePostGeneration({
     responseText = message.content[0]?.text?.trim() || '';
     const validated = validateSinglePostResponse(extractJsonFromResponse(responseText));
     const cleanPost = sanitiseAiTells(validated.post);
-    return {
-      synthesis:  validated.synthesis,
-      post:       cleanPost,
-      archetypeUsed,
-      hookConfidence,
-    };
+    return { synthesis: validated.synthesis, post: cleanPost, archetypeUsed };
   } catch (firstErr) {
     if (firstErr instanceof SyntaxError && responseText) {
       try {
@@ -719,12 +674,7 @@ async function runSinglePostGeneration({
         responseText = retry.content[0]?.text?.trim() || '';
         const validated = validateSinglePostResponse(extractJsonFromResponse(responseText));
         const cleanPost = sanitiseAiTells(validated.post);
-        return {
-          synthesis:  validated.synthesis,
-          post:       cleanPost,
-          archetypeUsed,
-          hookConfidence,
-        };
+        return { synthesis: validated.synthesis, post: cleanPost, archetypeUsed };
       } catch (retryErr) {
         throw new Error(`Generation failed after retry: ${retryErr.message}`);
       }
@@ -791,16 +741,15 @@ async function vaultSeedToPost(vaultIdea, chunkText, userProfile, options = {}) 
       });
 
   return runSinglePostGeneration({
-    rawIdea:      options.rawIdea || vaultIdea.seed_text,
+    rawIdea:          options.rawIdea || vaultIdea.seed_text,
     userProfile,
     options,
     hookInjection,
-    archetypeUsed:  archetype,
-    hookConfidence: 1.0,
+    archetypeUsed:    archetype,
     userPromptOverride,
-    funnelType:     vaultIdea.funnel_type || null,
-    systemOverride: null,
-    postType:       options.postType || vaultIdea.funnel_type || null,
+    funnelType:       vaultIdea.funnel_type || null,
+    systemOverride:   null,
+    postType:         options.postType || vaultIdea.funnel_type || null,
     tensionStatement: options.tensionStatement || null,
   });
 }
@@ -948,7 +897,7 @@ async function assessInputQuality(text, client, userProfile = {}) {
 3. NICHE RELEVANCE — is this content clearly relevant to the niche "${niche || 'professional work'}" aimed at "${audience || 'professionals'}"? If no niche is set, return true.
 4. NOT A CLICHÉ — is this a genuinely fresh angle? Only return false if the input is clearly a recycled overused idea ("hustle is dead", "wake up grateful", "leadership is about people not profits", "mindset is everything"). Return true if there is any specific detail or nuance.
 
-TEXT: ${text.slice(0, 1200)}
+TEXT: ${text.slice(0, 2500)}
 
 Return only: {"has_specific": true/false, "has_tension": true/false, "has_relevance": true/false, "has_novelty": true/false}`,
       }],

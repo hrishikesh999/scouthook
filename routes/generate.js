@@ -63,14 +63,13 @@ async function checkRateLimit(tenantId) {
   return { limited: false };
 }
 
-function gateOptions(post, profile, genPath, archetypeUsed, hookConfidence, funnelType = null) {
+function gateOptions(post, profile, genPath, archetypeUsed, funnelType = null) {
   return {
-    voiceProfile: profile,
+    voiceProfile:  profile,
     archetypeUsed: archetypeUsed ?? null,
-    hookConfidence: hookConfidence ?? null,
-    formatSlug: post.format_slug,
-    path: genPath,
-    funnelType: funnelType ?? null,
+    formatSlug:    post.format_slug,
+    path:          genPath,
+    funnelType:    funnelType ?? null,
   };
 }
 
@@ -155,12 +154,16 @@ router.post('/', async (req, res) => {
           tension_statement } = req.body;
   let { raw_idea } = req.body;
 
-  // Interview path: format Q&A answers into a structured raw_idea string
+  // Interview path: format Q&A answers into a structured raw_idea string.
+  // Flag is passed to Stage 1 so Haiku knows to synthesise across answers,
+  // not treat the first question line as a hook seed.
+  let isInterviewPath = false;
   if (!raw_idea?.trim() && Array.isArray(interview_answers) && interview_answers.length) {
     raw_idea = interview_answers
       .filter(a => a.answer?.trim())
       .map(a => `${a.question}\n${a.answer.trim()}`)
       .join('\n\n');
+    isInterviewPath = true;
   }
 
   if (!genPath) return res.status(400).json({ ok: false, error: 'missing_path' });
@@ -286,6 +289,7 @@ router.post('/', async (req, res) => {
           postType:            post_type || null,
           convertCtaIntent:    convert_cta_intent || null,
           tensionStatement:    tension_statement || null,
+          isInterviewPath,
           onStep:  (stepData) => sseWrite('step', stepData),
           onToken: (text)     => sseWrite('token', { text }),
         });
@@ -295,7 +299,7 @@ router.post('/', async (req, res) => {
         const primaryGate = runQualityGate(ideaRaw.post, {
           ...gateOptions(
             { format_slug: IDEA_SLUG, content: ideaRaw.post },
-            profile, 'idea', ideaRaw.archetypeUsed, ideaRaw.hookConfidence, funnelTypeForGate
+            profile, 'idea', ideaRaw.archetypeUsed, funnelTypeForGate
           ),
           postType: post_type || null,
         });
@@ -337,7 +341,6 @@ router.post('/', async (req, res) => {
           post:            ideaRaw.post,
           quality:         { ...primaryQuality, verdict: primaryGate.verdict },
           archetypeUsed:   ideaRaw.archetypeUsed,
-          hookConfidence:  ideaRaw.hookConfidence,
           funnel_type:     funnelType,
           post_type:       post_type || null,
           stage1Blueprint: ideaRaw.stage1Blueprint,
@@ -376,7 +379,6 @@ router.post('/', async (req, res) => {
             profile,
             'idea',
             vaultResult.archetypeUsed,
-            vaultResult.hookConfidence,
             funnelTypeForGate
           ),
           postType: post_type || vaultIdea.funnel_type || null,
@@ -386,7 +388,6 @@ router.post('/', async (req, res) => {
         synthesis:      vaultResult.synthesis,
         post:           vaultResult.post,
         archetypeUsed:  vaultResult.archetypeUsed,
-        hookConfidence: vaultResult.hookConfidence,
         primaryGate,
         contentFeedback: null,
       };
@@ -403,6 +404,7 @@ router.post('/', async (req, res) => {
         postType:            post_type || null,
         convertCtaIntent:    convert_cta_intent || null,
         tensionStatement:    tension_statement || null,
+        isInterviewPath,
       });
       const primaryGate = runQualityGate(
         ideaRaw.post,
@@ -412,7 +414,6 @@ router.post('/', async (req, res) => {
             profile,
             'idea',
             ideaRaw.archetypeUsed,
-            ideaRaw.hookConfidence,
             funnelTypeForGate
           ),
           postType: post_type || null,
@@ -422,7 +423,6 @@ router.post('/', async (req, res) => {
         synthesis:       ideaRaw.synthesis,
         post:            ideaRaw.post,
         archetypeUsed:   ideaRaw.archetypeUsed,
-        hookConfidence:  ideaRaw.hookConfidence,
         primaryGate,
         contentFeedback: ideaRaw.contentFeedback || null,
       };
@@ -433,7 +433,6 @@ router.post('/', async (req, res) => {
         synthesis,
         post,
         archetypeUsed,
-        hookConfidence,
         primaryGate,
         contentFeedback,
       } = ideaResult;
@@ -510,7 +509,6 @@ router.post('/', async (req, res) => {
         post,
         id: primaryId,
         archetypeUsed,
-        hookConfidence,
         quality: { ...primaryQuality, verdict: primaryGate.verdict },
         alternative: null,
         funnel_type: funnelType,
@@ -761,7 +759,7 @@ router.post('/from-doc', async (req, res) => {
   if (!apiKey) return res.status(500).json({ ok: false, error: 'no_api_key' });
 
   try {
-    const { synthesis, post, archetypeUsed, hookConfidence, stage1Blueprint } =
+    const { synthesis, post, archetypeUsed, stage1Blueprint } =
       await ideaToPost(truncated, profile, { skipSubstanceCheck: skipSubstanceCheckDoc });
 
     const primaryGate = runQualityGate(
@@ -771,7 +769,6 @@ router.post('/from-doc', async (req, res) => {
         profile,
         'doc',
         archetypeUsed,
-        hookConfidence,
         null
       )
     );
@@ -815,7 +812,6 @@ router.post('/from-doc', async (req, res) => {
       post,
       id:              primaryId,
       archetypeUsed,
-      hookConfidence,
       quality:         primaryQuality,
       alternative:     null,
       funnel_type:     funnelType,
@@ -871,12 +867,12 @@ async function saveDocToVaultAsync({ userId, tenantId, filename, buffer, sourceT
 // ---------------------------------------------------------------------------
 // POST /api/quality-check
 // Re-scores post text after manual client-side edits. No generation.
-// Body: { postText, archetypeUsed, hookConfidence }
+// Body: { postText, archetypeUsed, funnel_type }
 // ---------------------------------------------------------------------------
 router.post('/quality-check', async (req, res) => {
   const userId = req.userId;
   const tenantId = req.tenantId;
-  const { postText, archetypeUsed = null, hookConfidence = null, funnel_type = null } = req.body;
+  const { postText, archetypeUsed = null, funnel_type = null } = req.body;
 
   if (!postText || typeof postText !== 'string') {
     return res.status(400).json({ ok: false, error: 'postText is required' });
@@ -888,7 +884,6 @@ router.post('/quality-check', async (req, res) => {
 
   const quality = runQualityGate(postText, {
     archetypeUsed: archetypeUsed ?? null,
-    hookConfidence: typeof hookConfidence === 'number' ? hookConfidence : null,
     voiceProfile: profile || {},
     path: 'idea',
     funnelType: funnel_type ?? null,

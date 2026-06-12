@@ -365,10 +365,11 @@ router.post('/', async (req, res) => {
       // Purpose-built generation: expert source framing, full chunk + neighbor
       // context, stored archetype, substance check bypassed (vault = grounded).
       const vaultResult = await vaultSeedToPost(vaultIdea, vaultChunkText, profile, {
-        rawIdea:         raw_idea,
-        neighborContext: vaultNeighborContext || null,
-        postType:        post_type || vaultIdea.funnel_type || null,
-        tensionStatement: tension_statement || null,
+        rawIdea:            raw_idea,
+        neighborContext:    vaultNeighborContext || null,
+        postType:           post_type || vaultIdea.funnel_type || null,
+        tensionStatement:   tension_statement || null,
+        convertCtaIntent:   convert_cta_intent || null,
         skipSubstanceCheck: true,
       });
       const primaryGate = runQualityGate(
@@ -752,7 +753,7 @@ router.post('/from-doc', async (req, res) => {
 
   const truncated = docText.slice(0, 4000);
 
-  const profile = await resolveProfile(tenantId);
+  const profile = await resolveProfile(tenantId, req.body.profileId);
   if (!profile) return res.status(400).json({ ok: false, error: 'complete_profile_first' });
 
   const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
@@ -788,13 +789,14 @@ router.post('/from-doc', async (req, res) => {
 
     const primaryInsert = await db.prepare(`
       INSERT INTO generated_posts
-        (run_id, user_id, tenant_id, profile_id, format_slug, content, ai_content, quality_score, quality_flags, passed_gate, funnel_type, idea_input, archetype_used)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (run_id, user_id, tenant_id, profile_id, format_slug, content, ai_content, quality_score, quality_flags, passed_gate,
+         funnel_type, vault_source_ref, idea_input, archetype_used, source, post_type, quality_verdict)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       RETURNING id
     `).run(
       runId, userId, tenantId, profile.id, IDEA_SLUG,
       post, post, primaryGate.score, JSON.stringify(primaryGate.flags), primaryGate.passed_gate ? 1 : 0,
-      funnelType, truncated, archetypeUsed || null
+      funnelType, null, truncated, archetypeUsed || null, 'doc', null, primaryGate.verdict || null
     );
     const primaryId = primaryInsert.lastInsertRowid;
 

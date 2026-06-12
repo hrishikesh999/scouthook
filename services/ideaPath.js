@@ -4,7 +4,7 @@ const Anthropic = require('@anthropic-ai/sdk');
 const { getSetting } = require('../db');
 const { extractJsonFromResponse } = require('./voiceFingerprint');
 const { buildVoiceDNABlock } = require('./voiceExtraction');
-const { selectHook, buildHookInjection, getTopArchetypes } = require('./hookSelector');
+const { buildHookInjection, getTopArchetypes } = require('./hookSelector');
 const { HOOK_ARCHETYPES, ARCHETYPE_KEYS } = require('./hookArchetypes');
 // exampleLibrary is retained but injection removed — explicit structural system handles calibration
 const { AI_TELLS_PROHIBITION, sanitiseAiTells } = require('./postSanitiser');
@@ -125,7 +125,7 @@ Output only the post as plain text after all five pass. No JSON. No labels. No e
  * @param {object} [options]
  * @param {string} [options.qualityRetryHint]
  * @param {string} [options._regenerateHint]
- * @returns {Promise<{ synthesis: object, post: string, archetypeUsed: string, hookConfidence: number, stage1Blueprint: object }>}
+ * @returns {Promise<{ synthesis: object, post: string, archetypeUsed: string, stage1Blueprint: object, contentFeedback: string|null }>}
  */
 async function ideaToPost(rawIdea, userProfile, options = {}) {
   const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
@@ -244,20 +244,6 @@ ${lines}
 
 Study these samples before writing. Match the rhythm, directness, and vocabulary — not the content.
 Use verbatim phrases where they fit naturally; never force inclusion or restructure the argument to accommodate one.\n`;
-}
-
-function buildFingerprintBlock(userProfile) {
-  const fingerprint = userProfile.voice_fingerprint
-    ? JSON.parse(userProfile.voice_fingerprint)
-    : null;
-  if (!fingerprint) return '';
-  return `
-VOICE FINGERPRINT (strictly follow these patterns):
-- Opening style: ${fingerprint.opening_style}
-- Sentence structure: ${fingerprint.sentence_structure}
-- Credibility mechanism: ${fingerprint.credibility_mechanism}
-- Signature moves: ${fingerprint.signature_moves?.join(', ')}
-`;
 }
 
 function buildCtaInstruction(funnelType, ctaHint, convertCtaIntent = null) {
@@ -416,12 +402,11 @@ function buildStreamingUserPrompt(rawIdea) {
   return `RAW IDEA:
 ${rawIdea}
 
-EXTRACTION INSTRUCTION: Before structuring the post, identify the most concrete element in the raw idea — a specific scenario, decision, moment, named role, direction of change, or result. Build from that. If the input has no numbers, do not add or invent any — the scenario itself is the specificity. Never use [SPECIFIC NEEDED] markers.
+EXTRACTION INSTRUCTION: Before structuring the post, identify the most concrete element in the raw idea — a specific scenario, decision, moment, named role, direction of change, or result. Build from that. If the input has no numbers, do not add or invent any — the scenario itself is the specificity. Never use [SPECIFIC NEEDED] markers. If the input is genuinely abstract with no concrete anchor, produce the strongest possible post from the material given, grounded in the author's niche and voice.
 
 Output only the post as plain text. No JSON, no labels, no explanation.`;
 }
 
-/**
 /**
  * Runs Stage 2 Sonnet generation with a blueprint-grounded system prompt.
  * Used exclusively by ideaToPost() — vault and editorial paths use runSinglePostGeneration().
@@ -648,7 +633,7 @@ async function runSinglePostGeneration({
     const message = await client.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 3000,
-      temperature: 0.7,
+      temperature: 0.8,
       system: systemPrompt,
       messages: [{ role: 'user', content: userPromptFinal }],
     });
@@ -663,7 +648,7 @@ async function runSinglePostGeneration({
         const retry = await client.messages.create({
           model: 'claude-sonnet-4-6',
           max_tokens: 3000,
-          temperature: 0.7,
+          temperature: 0.8,
           system: systemPrompt,
           messages: [
             { role: 'user', content: userPromptFinal },
@@ -694,19 +679,6 @@ function validateSinglePostResponse(parsed) {
   return { synthesis: parsed.synthesis, post: parsed.post.trim() };
 }
 
-/**
- * Vault path: generate a LinkedIn post from a pre-classified vault seed.
- *
- * Differences from ideaToPost:
- * - Skips Haiku hook reclassification — uses stored hook_archetype directly.
- * - Uses buildVaultUserPrompt so Claude knows the input is expert source material.
- * - Optionally includes the original chunk text for deeper context.
- *
- * @param {object} vaultIdea  — row from vault_ideas (seed_text, hook_archetype, funnel_type, source_ref)
- * @param {string|null} chunkText — raw text of the source chunk, or null
- * @param {object} userProfile
- * @param {object} [options]
- */
 /**
  * Vault path: generate a LinkedIn post from a pre-classified vault seed.
  *
@@ -747,10 +719,11 @@ async function vaultSeedToPost(vaultIdea, chunkText, userProfile, options = {}) 
     hookInjection,
     archetypeUsed:    archetype,
     userPromptOverride,
-    funnelType:       vaultIdea.funnel_type || null,
-    systemOverride:   null,
-    postType:         options.postType || vaultIdea.funnel_type || null,
-    tensionStatement: options.tensionStatement || null,
+    funnelType:        vaultIdea.funnel_type || null,
+    systemOverride:    null,
+    postType:          options.postType || vaultIdea.funnel_type || null,
+    tensionStatement:  options.tensionStatement || null,
+    convertCtaIntent:  options.convertCtaIntent || null,
   });
 }
 

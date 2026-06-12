@@ -3,14 +3,14 @@
 /**
  * LinkedIn duplicate-account check tests.
  *
- * Verifies the OAuth callback blocks connecting a LinkedIn profile that is
- * already claimed by a different ScoutHook user, while allowing:
- *   - first-time connections
- *   - the same user reconnecting their own account
- *   - connections where linkedin_user_id is unavailable (API failure)
+ * Verifies the OAuth callback's workspace-scoped duplicate check:
+ *   - Blocks a different user from connecting the same LinkedIn within the SAME workspace
+ *   - Allows the same user to reconnect their own account
+ *   - Allows the same LinkedIn to be connected in a DIFFERENT workspace (cross-workspace sharing)
+ *   - Skips the check when linkedin_member_id is unavailable (API failure)
  *
- * Tests the logic directly (not the full OAuth flow) by extracting the
- * duplicate-check query and redirect behaviour from the callback handler.
+ * Tests the logic directly against the current linkedin_connections schema
+ * (linkedin_tokens was dropped in migration 036).
  *
  * Run: node tests/security.linkedinDuplicate.test.js
  */
@@ -39,18 +39,16 @@ async function test(name, fn) {
 
 // ─── Duplicate-check logic extracted for unit testing ────────────────────────
 //
-// Rather than spinning up the full OAuth flow (which requires Redis, LinkedIn
-// API mocks, etc.), we extract and test the duplicate-check decision logic
-// directly. This is the exact conditional added to routes/linkedin.js.
+// Mirrors the workspace-scoped check in routes/linkedin.js callback.
+// The check queries linkedin_connections (not the dropped linkedin_tokens table).
 
-async function runDuplicateCheck({ db, linkedin_user_id, userId, tenantId, stateData }) {
-  // Mirrors the code in routes/linkedin.js exactly
-  if (linkedin_user_id) {
+async function runDuplicateCheck({ db, linkedin_member_id, userId, tenantId, stateData }) {
+  if (linkedin_member_id) {
     const claimed = await db.prepare(
-      'SELECT user_id FROM linkedin_tokens WHERE linkedin_user_id = ? AND tenant_id = ?'
-    ).get(linkedin_user_id, tenantId);
+      `SELECT authorized_by FROM linkedin_connections WHERE workspace_id = ? AND account_key = ?`
+    ).get(tenantId, 'person_' + linkedin_member_id);
 
-    if (claimed && claimed.user_id !== userId) {
+    if (claimed && claimed.authorized_by !== userId) {
       const errBase = stateData?.returnTo?.split('?')[0] || '/account.html';
       return { blocked: true, redirectTo: `${errBase}?linkedin_error=linkedin_already_connected` };
     }
@@ -64,7 +62,7 @@ function makeDb(claimedUserId = null) {
     prepare: (sql) => ({
       get: async (...args) => {
         calls.push({ sql, args });
-        return claimedUserId ? { user_id: claimedUserId } : null;
+        return claimedUserId ? { authorized_by: claimedUserId } : null;
       },
     }),
     _calls: calls,
@@ -75,87 +73,100 @@ function makeDb(claimedUserId = null) {
 
 async function main() {
 
-console.log('\nroutes/linkedin.js — duplicate LinkedIn account check');
+console.log('\nroutes/linkedin.js — duplicate LinkedIn account check (workspace-scoped)');
 
-await test('new connection (no existing claim) → allowed', async () => {
-  const db = makeDb(null); // no existing row
+await test('new connection (no existing claim in workspace) → allowed', async () => {
+  const db = makeDb(null);
   const result = await runDuplicateCheck({
     db,
-    linkedin_user_id: 'li_abc123',
+    linkedin_member_id: 'li_abc123',
     userId:    'google:user_a',
-    tenantId:  'tenant_a',
+    tenantId:  'workspace_a',
     stateData: { returnTo: '/account.html' },
   });
   assert.strictEqual(result.blocked, false);
-  // DB was queried to confirm no existing claim
-  assert.ok(db._calls.some(c => c.sql.includes('linkedin_tokens')), 'Must query linkedin_tokens');
+  assert.ok(
+    db._calls.some(c => c.sql.includes('linkedin_connections')),
+    'Must query linkedin_connections (not the dropped linkedin_tokens table)'
+  );
 });
 
-await test('same user reconnecting own account → allowed', async () => {
-  // linkedin_user_id already exists but claimed by the SAME user
+await test('same user reconnecting own account in same workspace → allowed', async () => {
   const db = makeDb('google:user_a');
   const result = await runDuplicateCheck({
     db,
-    linkedin_user_id: 'li_abc123',
-    userId:    'google:user_a',  // same as claimedUserId
-    tenantId:  'tenant_a',
+    linkedin_member_id: 'li_abc123',
+    userId:    'google:user_a',
+    tenantId:  'workspace_a',
     stateData: { returnTo: '/account.html' },
   });
   assert.strictEqual(result.blocked, false, 'Same user reconnecting must not be blocked');
 });
 
-await test('different user trying to claim already-connected LinkedIn account → blocked', async () => {
-  const db = makeDb('google:user_b'); // user_b already owns this LinkedIn account
+await test('different user, same workspace, already-connected LinkedIn → blocked', async () => {
+  const db = makeDb('google:user_b'); // user_b already owns this LinkedIn in workspace_a
   const result = await runDuplicateCheck({
     db,
-    linkedin_user_id: 'li_abc123',
-    userId:    'google:user_a',  // attacker / second user
-    tenantId:  'tenant_a',
+    linkedin_member_id: 'li_abc123',
+    userId:    'google:user_a',  // different user, same workspace
+    tenantId:  'workspace_a',
     stateData: { returnTo: '/account.html' },
   });
-  assert.strictEqual(result.blocked, true, 'Duplicate connection must be blocked');
+  assert.strictEqual(result.blocked, true, 'Different user in same workspace must be blocked');
   assert.ok(
     result.redirectTo.includes('linkedin_error=linkedin_already_connected'),
     `Redirect must include linkedin_already_connected error, got: ${result.redirectTo}`
   );
 });
 
+await test('same LinkedIn, different workspace → allowed (cross-workspace sharing)', async () => {
+  // workspace_b has NO existing row for this linkedin_member_id — makeDb returns null
+  const db = makeDb(null);
+  const result = await runDuplicateCheck({
+    db,
+    linkedin_member_id: 'li_abc123',
+    userId:    'google:user_b',
+    tenantId:  'workspace_b',   // different workspace from where user_a connected
+    stateData: { returnTo: '/account.html' },
+  });
+  assert.strictEqual(result.blocked, false, 'Same LinkedIn in a different workspace must be allowed');
+});
+
 await test('blocked redirect preserves returnTo base path', async () => {
   const db = makeDb('google:user_b');
   const result = await runDuplicateCheck({
     db,
-    linkedin_user_id: 'li_abc123',
+    linkedin_member_id: 'li_abc123',
     userId:    'google:user_a',
-    tenantId:  'tenant_a',
-    stateData: { returnTo: '/preview.html?post_id=42' }, // has query string
+    tenantId:  'workspace_a',
+    stateData: { returnTo: '/preview.html?post_id=42' },
   });
   assert.strictEqual(result.blocked, true);
-  // Must use base path only (strip existing query string), then append error
   assert.ok(result.redirectTo.startsWith('/preview.html?'), `Expected /preview.html base, got: ${result.redirectTo}`);
   assert.ok(!result.redirectTo.includes('post_id=42'), 'Stale query params from returnTo must be stripped');
   assert.ok(result.redirectTo.includes('linkedin_error=linkedin_already_connected'));
 });
 
-await test('null linkedin_user_id (API failure) → check skipped, no redirect', async () => {
+await test('null linkedin_member_id (API failure) → check skipped, no redirect', async () => {
   const db = makeDb('google:user_b'); // would block if check ran
   const result = await runDuplicateCheck({
     db,
-    linkedin_user_id: null, // LinkedIn API didn't return the ID
+    linkedin_member_id: null,
     userId:    'google:user_a',
-    tenantId:  'tenant_a',
+    tenantId:  'workspace_a',
     stateData: { returnTo: '/account.html' },
   });
-  assert.strictEqual(result.blocked, false, 'Null linkedin_user_id must skip the check');
-  assert.strictEqual(db._calls.length, 0, 'DB must not be queried when linkedin_user_id is null');
+  assert.strictEqual(result.blocked, false, 'Null linkedin_member_id must skip the check');
+  assert.strictEqual(db._calls.length, 0, 'DB must not be queried when linkedin_member_id is null');
 });
 
-await test('empty string linkedin_user_id → check skipped (falsy)', async () => {
+await test('empty string linkedin_member_id → check skipped (falsy)', async () => {
   const db = makeDb('google:user_b');
   const result = await runDuplicateCheck({
     db,
-    linkedin_user_id: '',
+    linkedin_member_id: '',
     userId:    'google:user_a',
-    tenantId:  'tenant_a',
+    tenantId:  'workspace_a',
     stateData: { returnTo: '/account.html' },
   });
   assert.strictEqual(result.blocked, false);

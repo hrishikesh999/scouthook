@@ -669,11 +669,11 @@ router.delete('/connections/:id', async (req, res) => {
       removeScheduledJob(Number(row.id)).catch(() => {});
     }
 
-    // Revoke token only if no other connections in this workspace share the same member_id
+    // Revoke token only if no other connection (in any workspace) shares the same member_id
     if (conn.linkedin_member_id) {
       const sibling = await db.prepare(
-        `SELECT id FROM linkedin_connections WHERE workspace_id = ? AND linkedin_member_id = ? AND id != ? LIMIT 1`
-      ).get(tenantId, conn.linkedin_member_id, id);
+        `SELECT id FROM linkedin_connections WHERE linkedin_member_id = ? AND id != ? LIMIT 1`
+      ).get(conn.linkedin_member_id, id);
       if (!sibling) {
         await revokeToken(conn.access_token_enc);
       }
@@ -1313,11 +1313,16 @@ router.post('/disconnect', (req, res) => {
       WHERE workspace_id = ? AND authorized_by = ? AND account_type = 'personal'
     `).all(tenantId, userId);
 
-    // Revoke tokens (deduplicated by linkedin_member_id so we don't revoke twice)
+    // Revoke tokens only when no other workspace still has the same linkedin_member_id connected
     const revokedMemberIds = new Set();
     for (const conn of conns) {
       if (conn.linkedin_member_id && !revokedMemberIds.has(conn.linkedin_member_id)) {
-        await revokeToken(conn.access_token_enc);
+        const otherWorkspaceConn = await db.prepare(
+          `SELECT id FROM linkedin_connections WHERE linkedin_member_id = ? AND workspace_id != ? LIMIT 1`
+        ).get(conn.linkedin_member_id, tenantId);
+        if (!otherWorkspaceConn) {
+          await revokeToken(conn.access_token_enc);
+        }
         revokedMemberIds.add(conn.linkedin_member_id);
       }
     }
@@ -1350,7 +1355,12 @@ router.delete('/user-data', (req, res) => {
     const revokedMemberIds = new Set();
     for (const conn of conns) {
       if (conn.linkedin_member_id && !revokedMemberIds.has(conn.linkedin_member_id)) {
-        await revokeToken(conn.access_token_enc);
+        const otherWorkspaceConn = await db.prepare(
+          `SELECT id FROM linkedin_connections WHERE linkedin_member_id = ? AND workspace_id != ? LIMIT 1`
+        ).get(conn.linkedin_member_id, tenantId);
+        if (!otherWorkspaceConn) {
+          await revokeToken(conn.access_token_enc);
+        }
         revokedMemberIds.add(conn.linkedin_member_id);
       }
     }

@@ -465,6 +465,11 @@ function maybeHideOverlay() {
   }
 }
 
+function normalizeFullStopSpacing(text) {
+  // Add a space after a period that is immediately followed by a letter (missing sentence space)
+  return text.replace(/\.([A-Za-z])/g, '. $1');
+}
+
 /* ════════════════════════════════════════════════════════════════════════
    ASSET PREVIEW
 ════════════════════════════════════════════════════════════════════════ */
@@ -514,7 +519,7 @@ async function loadPost(id) {
     const p = data.post;
 
     const rawText = typeof p.content === 'string' ? p.content : '';
-    const paras   = rawText.split(/\n\n+/).filter(Boolean);
+    const paras   = normalizeFullStopSpacing(rawText).split(/\n\n+/).filter(Boolean);
     const postBody = document.getElementById('post-body');
     postBody.innerHTML = paras.map(t =>
       `<p class="text-post" data-style="normal">${escHtml(t).replace(/\n/g, '<br>')}</p>`
@@ -1932,6 +1937,19 @@ function wirePostBodyKeys() {
     if (e.key === 'i' && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
       applyUnicodeFormat('italic');
+      return;
+    }
+    // Cmd+Z / Ctrl+Z — undo
+    if (e.key === 'z' && (e.metaKey || e.ctrlKey) && !e.shiftKey) {
+      e.preventDefault();
+      document.execCommand('undo');
+      return;
+    }
+    // Cmd+Shift+Z / Ctrl+Y — redo
+    if ((e.key === 'z' && (e.metaKey || e.ctrlKey) && e.shiftKey) || (e.key === 'y' && e.ctrlKey)) {
+      e.preventDefault();
+      document.execCommand('redo');
+      return;
     }
   });
 }
@@ -2014,12 +2032,26 @@ function wireFormattingToolbar() {
     if (!sel || sel.rangeCount === 0) return;
     const range = sel.getRangeAt(0);
     const paras = Array.from(postBody.querySelectorAll('p')).filter(p => range.intersectsNode(p));
-    if (!paras.length) {
-      const last = postBody.querySelector('p:last-child');
-      if (last && !last.innerText.startsWith('• ')) last.innerHTML = '• ' + last.innerHTML;
-    } else {
-      paras.forEach(p => { if (!p.innerText.startsWith('• ')) p.innerHTML = '• ' + p.innerHTML; });
-    }
+    const targets = paras.length ? paras : [postBody.querySelector('p:last-child')].filter(Boolean);
+    if (!targets.length) return;
+    const allBulleted = targets.every(p => p.innerText.startsWith('• '));
+    targets.forEach(p => {
+      const walker = document.createTreeWalker(p, NodeFilter.SHOW_TEXT);
+      const firstText = walker.nextNode();
+      if (allBulleted) {
+        if (!firstText || !firstText.textContent.startsWith('• ')) return;
+        const r = document.createRange();
+        r.setStart(firstText, 0); r.setEnd(firstText, 2);
+        sel.removeAllRanges(); sel.addRange(r);
+        document.execCommand('insertText', false, '');
+      } else if (!p.innerText.startsWith('• ')) {
+        const r = document.createRange();
+        if (firstText) { r.setStart(firstText, 0); } else { r.setStart(p, 0); }
+        r.collapse(true);
+        sel.removeAllRanges(); sel.addRange(r);
+        document.execCommand('insertText', false, '• ');
+      }
+    });
     scheduleAutoSave();
   });
 
@@ -2029,12 +2061,29 @@ function wireFormattingToolbar() {
     if (!sel || sel.rangeCount === 0) return;
     const range = sel.getRangeAt(0);
     const paras = Array.from(postBody.querySelectorAll('p')).filter(p => range.intersectsNode(p));
-    if (!paras.length) {
-      const last = postBody.querySelector('p:last-child');
-      if (last && !/^\d+\. /.test(last.innerText)) last.innerHTML = '1. ' + last.innerHTML;
-    } else {
-      paras.forEach((p, i) => { if (!/^\d+\. /.test(p.innerText)) p.innerHTML = `${i + 1}. ` + p.innerHTML; });
-    }
+    const targets = paras.length ? paras : [postBody.querySelector('p:last-child')].filter(Boolean);
+    if (!targets.length) return;
+    const allNumbered = targets.every(p => /^\d+\. /.test(p.innerText));
+    targets.forEach((p, idx) => {
+      const walker = document.createTreeWalker(p, NodeFilter.SHOW_TEXT);
+      const firstText = walker.nextNode();
+      if (allNumbered) {
+        if (!firstText) return;
+        const match = firstText.textContent.match(/^(\d+\. )/);
+        if (!match) return;
+        const r = document.createRange();
+        r.setStart(firstText, 0); r.setEnd(firstText, match[1].length);
+        sel.removeAllRanges(); sel.addRange(r);
+        document.execCommand('insertText', false, '');
+      } else if (!/^\d+\. /.test(p.innerText)) {
+        const prefix = `${idx + 1}. `;
+        const r = document.createRange();
+        if (firstText) { r.setStart(firstText, 0); } else { r.setStart(p, 0); }
+        r.collapse(true);
+        sel.removeAllRanges(); sel.addRange(r);
+        document.execCommand('insertText', false, prefix);
+      }
+    });
     scheduleAutoSave();
   });
 
@@ -2074,7 +2123,7 @@ function appendImproverMessage(role, text, isLoading) {
 function setEditorContent(text) {
   const postBody = document.getElementById('post-body');
   if (!postBody) return;
-  const paras = text.split(/\n\n+/).filter(Boolean);
+  const paras = normalizeFullStopSpacing(text).split(/\n\n+/).filter(Boolean);
   postBody.innerHTML = paras.map(t =>
     `<p class="text-post" data-style="normal">${escHtml(t).replace(/\n/g, '<br>')}</p>`
   ).join('');

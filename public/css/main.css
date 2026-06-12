@@ -190,6 +190,15 @@ body {
   padding: var(--space-6) 0;
 }
 
+body.has-trial-banner #sidebar {
+  top: var(--trial-bar-h, 40px);
+  height: calc(100vh - var(--trial-bar-h, 40px));
+}
+
+body.has-trial-banner #main-content {
+  padding-top: var(--trial-bar-h, 40px);
+}
+
 .sidebar-logo {
   font-size: 18px;
   font-family: var(--font-sans);

@@ -227,9 +227,15 @@
           aria-label="Dismiss trial banner">✕</button>
       `;
       document.body.prepend(banner);
+      document.body.classList.add('has-trial-banner');
+      requestAnimationFrame(() => {
+        document.documentElement.style.setProperty('--trial-bar-h', banner.offsetHeight + 'px');
+      });
       banner.querySelector('button').addEventListener('click', () => {
         localStorage.setItem('trial_banner_dismissed', '1');
         banner.remove();
+        document.body.classList.remove('has-trial-banner');
+        document.documentElement.style.removeProperty('--trial-bar-h');
       });
     } catch { /* non-fatal */ }
   }

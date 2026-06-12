@@ -127,6 +127,7 @@
             </div>
 
             <div id="post-body" contenteditable="true" spellcheck="true" role="textbox" aria-multiline="true" aria-label="Post content"></div>
+            <div id="post-char-count" class="post-char-count" aria-live="polite"></div>
 
             <div id="preview-asset" class="preview-asset hidden" aria-hidden="true"></div>
 
@@ -466,8 +467,10 @@ function maybeHideOverlay() {
 }
 
 function normalizeFullStopSpacing(text) {
-  // Add a space after a period that is immediately followed by a letter (missing sentence space)
-  return text.replace(/\.([A-Za-z])/g, '. $1');
+  // Add a space after a period only when a lowercase letter precedes it (end of word)
+  // and an uppercase letter follows it (start of new sentence).
+  // This avoids corrupting tech terms like Node.js, ASP.NET, test.com, v1.2, etc.
+  return text.replace(/(?<=[a-z])\.([A-Z])/g, '. $1');
 }
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -529,6 +532,9 @@ async function loadPost(id) {
 
     // Seed version history with the loaded content as the "Original"
     initVersionHistory();
+
+    // Initialise character counter now that content is in the DOM
+    updateCharCount();
 
     // Auto-focus editor when in Edit tab and not locked
     if (state.activeTab === 'edit' && !scheduleEditLocked) {
@@ -633,7 +639,7 @@ function renderStatusLine(wordCount, archetype, postType) {
   // Word count
   const wcEl   = document.getElementById('status-word-count');
   const wcRow  = document.getElementById('meta-words-row');
-  if (wcEl) wcEl.textContent = wordCount;
+  if (wcEl) wcEl.textContent = wordCount + ' words';
   if (wcRow) wcRow.hidden = false;
 
   // Post type
@@ -743,6 +749,25 @@ function updateAutosaveIndicator() {
   const time = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const tz   = now.toLocaleTimeString('en', { timeZoneName: 'short' }).split(' ').pop();
   el.textContent = `Saved ${time} ${tz}`;
+}
+
+function showAutosaveError() {
+  const el = document.getElementById('autosave-indicator');
+  if (!el) return;
+  el.textContent = 'Save failed';
+  el.classList.add('autosave-error');
+  setTimeout(() => {
+    el.classList.remove('autosave-error');
+    updateAutosaveIndicator();
+  }, 4000);
+}
+
+function updateCharCount() {
+  const counter = document.getElementById('post-char-count');
+  if (!counter) return;
+  const len = getPostContent().length;
+  counter.textContent = `${len} / 3,000`;
+  counter.classList.toggle('over-limit', len > 3000);
 }
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -1770,7 +1795,7 @@ function wireSchedulePause() {
       if (!res.ok || !data.ok) {
         if (data.error === 'no_active_schedule') {
           scheduleEditLocked = false; clearScheduleLockUi();
-          if (msg) msg.textContent = 'Schedule already ended — state refreshed.';
+          if (window.toast?.success) window.toast.success('Schedule already ended — you can edit this post now.');
           return;
         }
         throw new Error(data.error || 'Could not pause');
@@ -1827,7 +1852,7 @@ function scheduleAutoSave() {
 async function doAutoSave() {
   if (!currentPostId || scheduleEditLocked) return;
   const content = getPostContent();
-  if (!content || content === _lastAutoSavedContent) return;
+  if (content === _lastAutoSavedContent) return;
 
   // Update word count in status line
   const wc = content.split(/\s+/).filter(Boolean).length;
@@ -1845,8 +1870,10 @@ async function doAutoSave() {
     if (data.ok) {
       _lastAutoSavedContent = content;
       updateAutosaveIndicator();
+    } else {
+      showAutosaveError();
     }
-  } catch { /* non-fatal */ }
+  } catch { showAutosaveError(); }
 }
 
 
@@ -1874,6 +1901,7 @@ function init() {
   wireImprover();
 
   document.getElementById('post-body').addEventListener('input', scheduleAutoSave);
+  document.getElementById('post-body').addEventListener('input', updateCharCount);
 
   fetch('/api/billing/subscription', { credentials: 'include' })
     .then(r => r.ok ? r.json() : { plan: 'free' })
@@ -1951,6 +1979,16 @@ function wirePostBodyKeys() {
       document.execCommand('redo');
       return;
     }
+  });
+
+  // Paste: strip all HTML markup and insert as plain text so pasted content
+  // never injects foreign styles, spans, or hidden characters into the editor.
+  postBody.addEventListener('paste', e => {
+    e.preventDefault();
+    const text = (e.clipboardData || window.clipboardData)?.getData('text/plain') || '';
+    if (!text) return;
+    document.execCommand('insertText', false, text);
+    scheduleAutoSave();
   });
 }
 
@@ -2052,6 +2090,14 @@ function wireFormattingToolbar() {
         document.execCommand('insertText', false, '• ');
       }
     });
+    // Restore selection spanning all modified paragraphs so the user can see
+    // what was formatted and continue editing without losing their place.
+    try {
+      const r = document.createRange();
+      r.setStart(targets[0], 0);
+      r.setEnd(targets[targets.length - 1], targets[targets.length - 1].childNodes.length);
+      sel.removeAllRanges(); sel.addRange(r);
+    } catch { /* non-fatal */ }
     scheduleAutoSave();
   });
 
@@ -2084,6 +2130,13 @@ function wireFormattingToolbar() {
         document.execCommand('insertText', false, prefix);
       }
     });
+    // Restore selection spanning all modified paragraphs
+    try {
+      const r = document.createRange();
+      r.setStart(targets[0], 0);
+      r.setEnd(targets[targets.length - 1], targets[targets.length - 1].childNodes.length);
+      sel.removeAllRanges(); sel.addRange(r);
+    } catch { /* non-fatal */ }
     scheduleAutoSave();
   });
 
@@ -2128,6 +2181,7 @@ function setEditorContent(text) {
     `<p class="text-post" data-style="normal">${escHtml(t).replace(/\n/g, '<br>')}</p>`
   ).join('');
   if (state.activeTab === 'preview') switchTab('preview');
+  updateCharCount();
 }
 
 const VERSION_STORAGE_KEY = () => `sh_ver_${postId}`;
@@ -2180,27 +2234,36 @@ function renderVersionBar() {
 }
 
 function initVersionHistory() {
+  const dbText = getPostContent();
   // Try to restore from localStorage first
   try {
     const saved = localStorage.getItem(VERSION_STORAGE_KEY());
     if (saved) {
       const { versions, idx } = JSON.parse(saved);
       if (Array.isArray(versions) && versions.length > 0 && idx >= 0 && idx < versions.length) {
-        postVersions  = versions;
-        currentVerIdx = idx;
-        // Restore the version the user was on (may differ from what DB loaded)
-        setEditorContent(postVersions[currentVerIdx].text);
-        _lastAutoSavedContent = getPostContent(); // prevent spurious auto-save
-        renderVersionBar();
-        return;
+        // Only restore when the saved "Original" matches the DB content.
+        // If they differ the post was edited elsewhere — discard stale local history
+        // so the user always sees the authoritative DB version.
+        if (versions[0].text === dbText) {
+          postVersions  = versions;
+          currentVerIdx = idx;
+          if (currentVerIdx !== 0) {
+            // Restore the AI-improved version the user was viewing
+            setEditorContent(postVersions[currentVerIdx].text);
+            _lastAutoSavedContent = getPostContent();
+          }
+          renderVersionBar();
+          return;
+        }
+        // DB content differs from saved original — localStorage is stale, discard it
+        localStorage.removeItem(VERSION_STORAGE_KEY());
       }
     }
   } catch { /* corrupt data — fall through to fresh init */ }
 
-  // No saved history — seed with the content just loaded from DB
-  const text = getPostContent();
-  if (!text) return;
-  postVersions  = [{ text, label: 'Original' }];
+  // No saved history (or stale) — seed with the content just loaded from DB
+  if (!dbText) return;
+  postVersions  = [{ text: dbText, label: 'Original' }];
   currentVerIdx = 0;
   saveVersionHistory();
   renderVersionBar();
@@ -2291,9 +2354,6 @@ async function sendImproveRequest(instruction) {
 
   appendImproverMessage('user', instruction);
   appendImproverMessage('assistant', null, true);
-  // Hide chips once conversation starts — more room for chat
-  const chips = document.getElementById('improver-chips');
-  if (chips) chips.hidden = true;
 
   improverHistory.push({ role: 'user', content: instruction });
 

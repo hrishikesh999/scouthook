@@ -209,3 +209,10 @@
     #topbar { transition: background 0.2s; }
     #topbar.is-scheduled { background: #fefce8 !important; border-bottom-color: #fde68a !important; }
 
+    /* ── Post body character count ── */
+    .post-char-count { font-size: 11px; color: var(--text-muted); text-align: right; padding: 2px 36px 8px; transition: color 0.15s; }
+    .post-char-count.over-limit { color: #dc2626; font-weight: 600; }
+
+    /* ── Autosave failure indicator ── */
+    #autosave-indicator.autosave-error { color: #dc2626 !important; }
+

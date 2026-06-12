@@ -70,6 +70,11 @@ async function getUserPlan(userId) {
     if (!sub.current_period_end) return 'free';
     if (new Date(sub.current_period_end) <= new Date()) return 'free';
   }
+  // past_due: allow access during Paddle's retry window (~7–10 days), then lapse.
+  if (sub.status === 'past_due' && sub.current_period_end) {
+    const GRACE_MS = 14 * 24 * 60 * 60 * 1000;
+    if (new Date(sub.current_period_end).getTime() + GRACE_MS < Date.now()) return 'free';
+  }
   // App-level trial: enforce expiry via trial_ends_at (no Paddle subscription involved).
   if (sub.status === 'trialing' && sub.trial_ends_at && new Date(sub.trial_ends_at) <= new Date()) {
     return 'free';
@@ -270,7 +275,10 @@ async function forceSyncSubscriptionForUser(userId) {
   if (!subscription) return null;
 
   const priceId = subscription.items?.[0]?.price?.id ?? null;
-  const plan    = !priceId || FORCE_SYNC_PRO_PRICE_IDS.includes(priceId) ? 'pro' : 'free';
+  // If price ID list is empty (env vars missing), default to 'pro' to avoid silently downgrading users.
+  const plan    = (FORCE_SYNC_PRO_PRICE_IDS.length === 0 || !priceId || FORCE_SYNC_PRO_PRICE_IDS.includes(priceId))
+    ? 'pro'
+    : 'free';
 
   await upsertSubscription({
     userId,

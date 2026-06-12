@@ -120,7 +120,7 @@ router.post('/', async (req, res) => {
 
   if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
 
-  const rl = await checkRateLimit(tenantId);
+  const rl = await checkRateLimit(userId);
   if (rl.limited) {
     return res.status(429).json({ ok: false, error: 'rate_limit_exceeded', retry_after_sec: rl.retryAfterSec });
   }

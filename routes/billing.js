@@ -511,19 +511,20 @@ router.post('/sync', requireAuth, async (req, res) => {
 // ---------------------------------------------------------------------------
 router.post('/upgrade', requireAuth, async (req, res) => {
   const { plan } = req.body || {};
-  if (plan !== 'pro') {
+  if (!['pro'].includes(plan)) { // 'solo' is not currently available for purchase
     return res.status(400).json({ ok: false, error: 'invalid_plan' });
   }
-  let priceId;
   const tierInfo = await getFoundingTierInfo();
-  priceId = tierInfo.priceId;
+  const priceId = tierInfo.priceId;
   if (!priceId) {
     return res.status(500).json({ ok: false, error: 'price_not_configured' });
   }
+  const sub = await getUserSubscription(req.userId);
+  const alreadyTrialed = !!sub.trial_ends_at;
   return res.json({
     ok: true,
     priceId,
-    trialDays: 7,
+    ...(alreadyTrialed ? {} : { trialDays: 7 }),
     customData: { userId: req.userId, plan },
   });
 });

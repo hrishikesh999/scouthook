@@ -39,11 +39,12 @@
     position: fixed;
     inset: 0;
     z-index: 900;
-    background: rgba(9,9,11,0.5);
+    background: rgba(9,9,11,0.6);
+    backdrop-filter: blur(3px);
     display: none;
     align-items: flex-start;
     justify-content: center;
-    padding: 24px;
+    padding: 32px 16px;
     overflow-y: auto;
   }
   #pm-overlay.visible { display: flex; }
@@ -51,21 +52,30 @@
   #pm-modal {
     background: var(--bg-surface, #fff);
     border: 1px solid var(--border, #E4E4E7);
-    border-radius: 16px;
+    border-radius: 20px;
     width: 100%;
-    max-width: 480px;
+    max-width: 640px;
     position: relative;
-    box-shadow: 0 8px 40px rgba(0,0,0,0.22);
+    box-shadow: 0 24px 80px rgba(0,0,0,0.28), 0 0 0 1px rgba(0,0,0,0.04);
     margin: 0 auto;
+    overflow: hidden;
+  }
+
+  /* Accent bar at the top of the modal */
+  #pm-modal::before {
+    content: '';
+    display: block;
+    height: 4px;
+    background: linear-gradient(90deg, #4f46e5 0%, #0D9488 100%);
   }
 
   #pm-modal-body {
-    padding: 48px 32px 40px;
+    padding: 40px 40px 36px;
   }
 
   #pm-close {
     position: absolute;
-    top: 12px;
+    top: 16px;
     right: 16px;
     z-index: 2;
     background: none;
@@ -73,76 +83,127 @@
     cursor: pointer;
     color: var(--text-muted, #71717A);
     padding: 8px;
-    border-radius: 6px;
+    border-radius: 8px;
     line-height: 1;
     display: flex;
     align-items: center;
+    transition: background 0.15s, color 0.15s;
   }
-  #pm-close:hover { background: var(--bg-pill, #F4F4F5); }
+  #pm-close:hover { background: var(--bg-pill, #F4F4F5); color: var(--text-heading, #09090B); }
   #pm-close svg { pointer-events: none; }
 
-  #pm-header { text-align: center; margin-bottom: 20px; }
-  #pm-header h2 {
-    font-size: 22px;
+  #pm-header { text-align: center; margin-bottom: 28px; }
+  #pm-header-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
     font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: #4f46e5;
+    background: rgba(79,70,229,0.08);
+    border: 1px solid rgba(79,70,229,0.18);
+    border-radius: 20px;
+    padding: 4px 12px;
+    margin-bottom: 14px;
+  }
+  #pm-header h2 {
+    font-size: 26px;
+    font-weight: 800;
     color: var(--text-heading, #09090B);
-    margin: 0 0 6px;
+    margin: 0 0 8px;
+    letter-spacing: -0.4px;
+    line-height: 1.25;
   }
   #pm-header p {
-    font-size: 14px;
+    font-size: 15px;
     color: var(--text-muted, #71717A);
     margin: 0;
+    line-height: 1.5;
   }
 
   #pm-context-banner {
     display: none;
-    background: var(--bg-pill, #F4F4F5);
-    border: 1px solid var(--border, #E4E4E7);
-    border-radius: 8px;
-    padding: 10px 16px;
+    background: rgba(79,70,229,0.06);
+    border: 1px solid rgba(79,70,229,0.18);
+    border-radius: 10px;
+    padding: 11px 16px;
     font-size: 13px;
-    color: var(--text-body, #27272A);
+    font-weight: 500;
+    color: #4338CA;
     text-align: center;
     margin-bottom: 20px;
   }
   #pm-context-banner.visible { display: block; }
+
+  /* Feature highlights grid above the plan card */
+  .pm-feature-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 20px;
+    margin-bottom: 24px;
+    padding: 20px;
+    background: var(--bg-subtle, #FAFAFA);
+    border: 1px solid var(--border, #E4E4E7);
+    border-radius: 12px;
+  }
+  .pm-feature-grid-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text-body, #27272A);
+    font-weight: 500;
+  }
+  .pm-feature-grid-item svg { color: #10B981; flex-shrink: 0; }
 
   .pm-cards {
     display: grid;
     grid-template-columns: 1fr;
     gap: 14px;
   }
-  @media (max-width: 540px) {
-    #pm-modal-body { padding: 48px 16px 28px; }
+  @media (max-width: 600px) {
+    #pm-modal-body { padding: 32px 20px 28px; }
+    .pm-feature-grid { grid-template-columns: 1fr; }
+    #pm-header h2 { font-size: 22px; }
   }
 
   .pm-card {
     border: 1px solid var(--border, #E4E4E7);
-    border-radius: 12px;
-    padding: 20px 18px 22px;
+    border-radius: 14px;
+    padding: 24px 24px 26px;
     background: var(--bg-surface, #fff);
     display: flex;
     flex-direction: column;
     transition: border-color 0.15s, box-shadow 0.15s;
   }
   .pm-card.pm-featured {
-    border-color: var(--brand, #0F766E);
-    box-shadow: 0 0 0 3px rgba(15,118,110,0.1);
+    border-color: #0D9488;
+    box-shadow: 0 0 0 3px rgba(13,148,136,0.1);
+    background: linear-gradient(135deg, rgba(13,148,136,0.02) 0%, #fff 60%);
+  }
+
+  .pm-card-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 16px;
   }
 
   .pm-plan-name {
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 700;
     letter-spacing: 0.06em;
     text-transform: uppercase;
     color: var(--text-muted, #71717A);
-    margin-bottom: 12px;
+    margin-bottom: 6px;
     display: flex;
     align-items: center;
     gap: 6px;
     flex-wrap: wrap;
   }
-  .pm-plan-name.pm-pro  { color: var(--brand, #0F766E); }
+  .pm-plan-name.pm-pro { color: #0D9488; }
 
   .pm-current-chip {
     font-size: 10px;
@@ -155,62 +216,73 @@
     text-transform: none;
   }
   .pm-price {
-    font-size: 32px;
-    font-weight: 800;
+    font-size: 40px;
+    font-weight: 900;
     color: var(--text-heading, #09090B);
     line-height: 1;
-    margin-bottom: 4px;
+    margin-bottom: 3px;
+    letter-spacing: -1px;
   }
-  .pm-price sup { font-size: 14px; font-weight: 700; vertical-align: super; }
+  .pm-price sup { font-size: 18px; font-weight: 700; vertical-align: super; letter-spacing: 0; }
   .pm-period {
-    font-size: 12px;
+    font-size: 13px;
     color: var(--text-muted, #71717A);
-    margin-bottom: 16px;
+    margin-bottom: 20px;
+    font-weight: 500;
   }
 
   .pm-divider {
     border: none;
     border-top: 1px solid var(--border-divider, #F4F4F5);
-    margin: 14px 0;
+    margin: 16px 0;
   }
 
   .pm-features {
     list-style: none;
     padding: 0;
-    margin: 0 0 18px;
+    margin: 0 0 22px;
     flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px 12px;
   }
   .pm-features li {
     display: flex;
     align-items: flex-start;
     gap: 7px;
-    font-size: 12.5px;
+    font-size: 13px;
     color: var(--text-body, #000);
-    padding: 3px 0;
+    padding: 4px 0;
     line-height: 1.4;
   }
-  .pm-features li svg { flex-shrink: 0; margin-top: 2px; }
+  .pm-features li svg { flex-shrink: 0; margin-top: 1px; }
   .pm-feature-excluded { color: var(--text-muted, #A1A1AA) !important; }
 
   .pm-cta {
     display: block;
     width: 100%;
-    padding: 10px 14px;
-    border-radius: 9px;
-    font-size: 13px;
-    font-weight: 600;
+    padding: 13px 18px;
+    border-radius: 11px;
+    font-size: 15px;
+    font-weight: 700;
     text-align: center;
     cursor: pointer;
     border: none;
-    transition: background 0.15s, opacity 0.15s;
+    transition: background 0.15s, opacity 0.15s, transform 0.1s;
     margin-top: auto;
+    letter-spacing: -0.1px;
   }
+  .pm-cta:active:not(:disabled) { transform: scale(0.98); }
   .pm-cta-primary {
-    background: var(--brand, #0F766E);
+    background: linear-gradient(135deg, #0D9488 0%, #0F766E 100%);
     color: #fff;
+    box-shadow: 0 4px 14px rgba(13,148,136,0.35);
   }
-  .pm-cta-primary:hover:not(:disabled) { background: var(--brand-hover, #115E59); }
-  .pm-cta-primary:disabled { opacity: 0.55; cursor: default; }
+  .pm-cta-primary:hover:not(:disabled) {
+    background: linear-gradient(135deg, #0F9F92 0%, #115E59 100%);
+    box-shadow: 0 6px 20px rgba(13,148,136,0.4);
+  }
+  .pm-cta-primary:disabled { opacity: 0.55; cursor: default; box-shadow: none; }
 
   .pm-cta-muted {
     background: var(--bg-pill, #F4F4F5);
@@ -218,8 +290,19 @@
   }
   .pm-cta-muted:disabled { cursor: default; opacity: 0.7; }
 
+  .pm-guarantee {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    margin-top: 14px;
+    font-size: 12px;
+    color: var(--text-muted, #71717A);
+  }
+  .pm-guarantee svg { color: #10B981; flex-shrink: 0; }
+
   .pm-error {
-    margin-top: 8px;
+    margin-top: 10px;
     font-size: 12px;
     color: var(--score-fail, #DC2626);
     text-align: center;
@@ -250,22 +333,57 @@
 
       <div id="pm-modal-body">
         <div id="pm-header">
-          <h2 id="pm-title">Simple, transparent pricing</h2>
-          <p id="pm-subtitle">Start free. Upgrade when you're ready to grow.</p>
+          <div id="pm-header-badge">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            ScoutHook Pro
+          </div>
+          <h2 id="pm-title">Unlock the full ScoutHook experience</h2>
+          <p id="pm-subtitle">Everything you need to build authority and grow on LinkedIn.</p>
         </div>
 
         <div id="pm-context-banner"></div>
+
+        <div class="pm-feature-grid">
+          <div class="pm-feature-grid-item">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+            Unlimited post generations
+          </div>
+          <div class="pm-feature-grid-item">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+            Unlimited visual creations
+          </div>
+          <div class="pm-feature-grid-item">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+            Post scheduling
+          </div>
+          <div class="pm-feature-grid-item">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+            Content Vault
+          </div>
+          <div class="pm-feature-grid-item">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+            Multiple LinkedIn accounts
+          </div>
+          <div class="pm-feature-grid-item">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+            Team members &amp; workspaces
+          </div>
+        </div>
 
         <div class="pm-cards">
 
           <!-- Pro -->
           <div class="pm-card pm-featured" id="pm-card-pro">
-            <div class="pm-plan-name pm-pro">
-              Pro
-              <span class="pm-current-chip" id="pm-pro-chip" style="display:none">Current plan</span>
+            <div class="pm-card-top">
+              <div>
+                <div class="pm-plan-name pm-pro">
+                  Pro plan
+                  <span class="pm-current-chip" id="pm-pro-chip" style="display:none">Current plan</span>
+                </div>
+                <div class="pm-price"><sup>$</sup><span id="pm-pro-price">29</span></div>
+                <div class="pm-period">per month · cancel anytime</div>
+              </div>
             </div>
-            <div class="pm-price"><sup>$</sup><span id="pm-pro-price">29</span></div>
-            <div class="pm-period">/ month</div>
             <hr class="pm-divider">
             <ul class="pm-features">
               ${feat(true, '<strong>Unlimited</strong>&nbsp;posts')}
@@ -277,11 +395,16 @@
               ${feat(true, 'Team members')}
               ${feat(true, 'Carousel visuals')}
             </ul>
-            <button class="pm-cta pm-cta-primary" id="pm-pro-btn" type="button">Upgrade now</button>
+            <button class="pm-cta pm-cta-primary" id="pm-pro-btn" type="button">Upgrade to Pro →</button>
             <div class="pm-error" id="pm-pro-error"></div>
           </div>
 
         </div><!-- /pm-cards -->
+
+        <div class="pm-guarantee">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          Secure checkout via Paddle &middot; Cancel anytime
+        </div>
       </div><!-- /pm-modal-body -->
     </div><!-- /pm-modal -->
   `;
@@ -461,7 +584,7 @@
       $id('pm-pro-error').textContent   = 'Unable to open billing portal.';
       $id('pm-pro-error').style.display = '';
       this.disabled    = false;
-      this.textContent = 'Manage subscription';
+      this.textContent = 'Manage subscription →';
       return;
     }
 
@@ -480,7 +603,7 @@
     // — Reset button to default (will be updated after sub loads)
     const proBtn = $id('pm-pro-btn');
     proBtn.disabled     = false;
-    proBtn.textContent  = 'Upgrade now';
+    proBtn.textContent  = 'Upgrade to Pro →';
     proBtn.className    = 'pm-cta pm-cta-primary';
 
     // — Context banner

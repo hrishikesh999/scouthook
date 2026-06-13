@@ -38,23 +38,21 @@
     /* Improver panel: full-height sidebar, persists across tab switches */
     #edit-meta { flex: 0 0 322px; display: flex; flex-direction: column; gap: 0; border-left: 1px solid var(--border); height: 100%; background: var(--bg-surface, #fff); }
     #linkedin-preview:not([hidden]) { display: block; padding: 28px 64px 48px; }
-    .post-body-wrapper { display: grid; }
-    .post-body-wrapper > * { grid-area: 1 / 1; }
+    .post-body-wrapper { position: relative; }
     #post-body-backdrop {
+      position: absolute; inset: 0;
       pointer-events: none; user-select: none;
       font: inherit; line-height: 1.6; color: transparent;
       padding: 12px 36px 20px; white-space: pre-wrap; word-break: break-word;
-      box-sizing: border-box; min-height: 80px;
-      align-self: start; /* sizes the grid row — backdrop content determines height */
-      word-wrap: break-word;
+      overflow: hidden; box-sizing: border-box;
     }
     #post-body {
+      position: relative; display: block; width: 100%;
       outline: none; min-height: 80px; padding: 12px 36px 20px;
-      line-height: 1.6; width: 100%; box-sizing: border-box;
+      line-height: 1.6; box-sizing: border-box;
       background: transparent; border: none; resize: none;
-      display: block; color: inherit; font: inherit;
+      color: inherit; font: inherit;
       white-space: pre-wrap; word-break: break-word; overflow: hidden;
-      align-self: stretch; /* stretches to match the grid row sized by the backdrop */
     }
     #post-body:disabled { cursor: default; opacity: 0.75; }
 

@@ -126,7 +126,10 @@
               </div>
             </div>
 
-            <div id="post-body" contenteditable="true" spellcheck="true" role="textbox" aria-multiline="true" aria-label="Post content"></div>
+            <div class="post-body-wrapper">
+              <div id="post-body-backdrop" aria-hidden="true"></div>
+              <textarea id="post-body" spellcheck="true" aria-multiline="true" aria-label="Post content" rows="1"></textarea>
+            </div>
             <div id="post-char-count" class="post-char-count" aria-live="polite"></div>
 
             <div id="preview-asset" class="preview-asset hidden" aria-hidden="true"></div>
@@ -418,7 +421,7 @@ const state = {
    HELPERS
 ════════════════════════════════════════════════════════════════════════ */
 function getPostContent() {
-  return document.getElementById('post-body').innerText.replace(/\n+$/, '').trim();
+  return (document.getElementById('post-body')?.value || '').replace(/\n+$/, '').trim();
 }
 
 function escHtml(str) {
@@ -512,7 +515,8 @@ function clearPreviewAssetDOM() {
 ════════════════════════════════════════════════════════════════════════ */
 async function loadPost(id) {
   currentPostId = id;
-  document.getElementById('post-body').innerHTML = '<p class="field-helper">Loading…</p>';
+  const _loadingTa = document.getElementById('post-body');
+  if (_loadingTa) _loadingTa.value = '';
 
   try {
     const res  = await fetch(`/api/generate/post/${encodeURIComponent(id)}`, { credentials: 'include' });
@@ -522,11 +526,10 @@ async function loadPost(id) {
     const p = data.post;
 
     const rawText = typeof p.content === 'string' ? p.content : '';
-    const paras   = normalizeFullStopSpacing(rawText).split(/\n\n+/).filter(Boolean);
     const postBody = document.getElementById('post-body');
-    postBody.innerHTML = paras.map(t =>
-      `<p class="text-post" data-style="normal">${escHtml(t).replace(/\n/g, '<br>')}</p>`
-    ).join('');
+    postBody.value = normalizeFullStopSpacing(rawText);
+    autosizeTextarea(postBody);
+    syncBackdrop();
     // Initialise auto-save baseline so we don't trigger on the loaded content
     _lastAutoSavedContent = getPostContent();
 
@@ -536,17 +539,10 @@ async function loadPost(id) {
     // Initialise character counter now that content is in the DOM
     updateCharCount();
 
-    // Auto-focus editor when in Edit tab and not locked
+    // Auto-focus editor and move cursor to end
     if (state.activeTab === 'edit' && !scheduleEditLocked) {
       postBody.focus();
-      try {
-        const range = document.createRange();
-        const sel   = window.getSelection();
-        range.selectNodeContents(postBody);
-        range.collapse(false);
-        sel.removeAllRanges();
-        sel.addRange(range);
-      } catch { /* non-fatal */ }
+      postBody.setSelectionRange(postBody.value.length, postBody.value.length);
     }
 
     // Autosave indicator — show timestamp at load so user always sees a time
@@ -594,8 +590,8 @@ async function loadPost(id) {
     checkIfScheduled(currentPostId);
 
   } catch {
-    document.getElementById('post-body').innerHTML =
-      `<p class="field-helper">Failed to load post. <a href="/drafts.html">Back to Drafts</a></p>`;
+    const ta = document.getElementById('post-body');
+    if (ta) ta.value = 'Failed to load post. Go to /drafts.html to return to your drafts.';
   }
 }
 
@@ -680,11 +676,38 @@ const FLAG_LABELS = {
   KEYWORD_MISSING:      'Lead magnet CTA keyword missing from post body',
 };
 
+let _pendingHighlights = {};
+
+function syncBackdrop() {
+  const ta = document.getElementById('post-body');
+  const bd = document.getElementById('post-body-backdrop');
+  if (!ta || !bd) return;
+  const text = ta.value;
+  let html = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  Object.entries(_pendingHighlights).forEach(([flag, phrases]) => {
+    (phrases || []).forEach(phrase => {
+      if (!phrase) return;
+      const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      html = html.replace(new RegExp(escaped, 'i'), m =>
+        `<mark class="qf-mark" data-flag="${flag}">${m}</mark>`
+      );
+    });
+  });
+  bd.innerHTML = html;
+}
+
+function autosizeTextarea(ta) {
+  if (!ta) return;
+  ta.style.height = 'auto';
+  ta.style.height = ta.scrollHeight + 'px';
+}
+
 function renderQualityFeedback(flags, matches) {
   const el = document.getElementById('quality-feedback');
   if (!el) return;
   el.hidden = false;
-  applyQualityHighlights(matches || {});
+  _pendingHighlights = matches || {};
+  syncBackdrop();
   const unique = [...new Set(flags || [])];
   if (!unique.length) {
     el.innerHTML = '<span class="qf-status-clean">✓ Ready to post</span>';
@@ -696,47 +719,6 @@ function renderQualityFeedback(flags, matches) {
     return `<li>${label}${hit && hit.length ? ': <em>"' + escHtml(hit[0]) + '"</em>' : ''}</li>`;
   }).join('');
   el.innerHTML = `<span class="qf-status-bad">✗ Not ready</span><ul>${items}</ul>`;
-}
-
-function clearQualityHighlights() {
-  document.getElementById('post-body')?.querySelectorAll('mark.qf-mark').forEach(m => {
-    const p = m.parentNode;
-    while (m.firstChild) p.insertBefore(m.firstChild, m);
-    p.removeChild(m);
-    p.normalize();
-  });
-}
-
-function highlightPhrase(root, phrase, flag) {
-  if (!phrase) return;
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-  let node;
-  while ((node = walker.nextNode())) {
-    const idx = node.textContent.toLowerCase().indexOf(phrase.toLowerCase());
-    if (idx === -1) continue;
-    try {
-      const r = document.createRange();
-      r.setStart(node, idx);
-      r.setEnd(node, idx + phrase.length);
-      const mark = document.createElement('mark');
-      mark.className = 'qf-mark';
-      mark.dataset.flag = flag;
-      r.surroundContents(mark);
-    } catch { /* skip if range crosses element boundary */ }
-    break; // first occurrence only
-  }
-}
-
-function applyQualityHighlights(matches) {
-  clearQualityHighlights();
-  const postBody = document.getElementById('post-body');
-  if (!postBody) return;
-  Object.entries(matches).forEach(([flag, phrases]) =>
-    (phrases || []).forEach(phrase => highlightPhrase(postBody, phrase, flag))
-  );
-  if (Object.keys(matches).length) {
-    postBody.addEventListener('input', clearQualityHighlights, { once: true });
-  }
 }
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -829,12 +811,7 @@ function switchTab(tab) {
   document.getElementById('edit-view').hidden        = tab !== 'edit';
   document.getElementById('linkedin-preview').hidden = tab !== 'preview';
   if (tab === 'preview') {
-    // Extract plain text from <p> nodes, join with double newlines (matches LinkedIn rendering)
-    const postBody = document.getElementById('post-body');
-    const paragraphs = postBody.querySelectorAll('p');
-    const plainText = paragraphs.length
-      ? Array.from(paragraphs).map(p => p.innerText).join('\n\n')
-      : postBody.innerText;
+    const plainText = getPostContent();
     const liBodyText = document.getElementById('li-body-text');
     liBodyText.textContent = plainText;
     delete liBodyText.dataset.liFullText; // clear stale cache so renderLinkedInSeeMore re-reads fresh text
@@ -918,7 +895,7 @@ function applyScheduleLockUi(scheduledFor) {
 
   const schedBtn = document.getElementById('btn-schedule');
   if (schedBtn) { schedBtn.disabled = true; schedBtn.style.setProperty('display', 'none', 'important'); }
-  document.getElementById('post-body').contentEditable = 'false';
+  document.getElementById('post-body').disabled = true;
   ['quote-card-btn','carousel-btn','branded-quote-btn','media-library-btn','fmt-bold','fmt-italic','fmt-bullet','fmt-num'].forEach(id => {
     document.getElementById(id)?.classList.add('disabled');
   });
@@ -936,7 +913,7 @@ function clearScheduleLockUi() {
   if (topbarRight)  topbarRight.style.removeProperty('display');
   document.getElementById('topbar')?.classList.remove('is-scheduled');
 
-  document.getElementById('post-body').contentEditable = 'true';
+  document.getElementById('post-body').disabled = false;
   const schedBtnRestore = document.getElementById('btn-schedule');
   if (schedBtnRestore) schedBtnRestore.style.removeProperty('display');
   if (linkedinConnected && schedBtnRestore) schedBtnRestore.disabled = false;
@@ -1900,8 +1877,16 @@ function init() {
   wireVersionBar();
   wireImprover();
 
-  document.getElementById('post-body').addEventListener('input', scheduleAutoSave);
-  document.getElementById('post-body').addEventListener('input', updateCharCount);
+  const _ta = document.getElementById('post-body');
+  if (_ta) {
+    _ta.addEventListener('input', () => {
+      _pendingHighlights = {};
+      syncBackdrop();
+      autosizeTextarea(_ta);
+      updateCharCount();
+      scheduleAutoSave();
+    });
+  }
 
   fetch('/api/billing/subscription', { credentials: 'include' })
     .then(r => r.ok ? r.json() : { plan: 'free' })
@@ -1916,79 +1901,34 @@ function init() {
    EMOJI STRIP
 ════════════════════════════════════════════════════════════════════════ */
 function wireEmojiStrip() {
-  const postBody = document.getElementById('post-body');
-  if (!postBody) return;
+  const ta = document.getElementById('post-body');
+  if (!ta) return;
   document.querySelectorAll('.emoji-insert-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const sym = ' ' + btn.dataset.emoji + ' ';
-      postBody.focus();
-      const sel = window.getSelection();
-      if (sel && sel.rangeCount > 0 && postBody.contains(sel.getRangeAt(0).commonAncestorContainer)) {
-        if (!sel.isCollapsed) sel.collapseToEnd();
-        try { document.execCommand('insertText', false, sym); }
-        catch {
-          const r = sel.getRangeAt(0);
-          r.insertNode(document.createTextNode(sym));
-          r.collapse(false);
-        }
-      } else {
-        // No cursor in post-body — append to last paragraph
-        const last = postBody.querySelector('p:last-child') || postBody;
-        last.appendChild(document.createTextNode(sym));
-      }
+      ta.focus();
+      const pos = ta.selectionStart ?? ta.value.length;
+      ta.setRangeText(sym, pos, ta.selectionEnd ?? pos, 'end');
+      ta.dispatchEvent(new Event('input'));
       scheduleAutoSave();
     });
   });
 }
 
 /* ════════════════════════════════════════════════════════════════════════
-   POST BODY KEY HANDLING (Enter, Cmd+B, Cmd+I)
+   POST BODY KEY HANDLING (Cmd+B, Cmd+I only — textarea handles everything else)
 ════════════════════════════════════════════════════════════════════════ */
 function wirePostBodyKeys() {
-  const postBody = document.getElementById('post-body');
-  if (!postBody) return;
-  postBody.addEventListener('keydown', e => {
-    // Enter: normalise to <p> across browsers; Shift+Enter: <br> line break
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      document.execCommand(e.shiftKey ? 'insertLineBreak' : 'insertParagraph');
-      scheduleAutoSave();
-      return;
-    }
-    // Cmd+B / Ctrl+B — Unicode bold toggle
+  const ta = document.getElementById('post-body');
+  if (!ta) return;
+  ta.addEventListener('keydown', e => {
     if (e.key === 'b' && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
       applyUnicodeFormat('bold');
-      return;
-    }
-    // Cmd+I / Ctrl+I — Unicode italic toggle
-    if (e.key === 'i' && (e.metaKey || e.ctrlKey)) {
+    } else if (e.key === 'i' && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
       applyUnicodeFormat('italic');
-      return;
     }
-    // Cmd+Z / Ctrl+Z — undo
-    if (e.key === 'z' && (e.metaKey || e.ctrlKey) && !e.shiftKey) {
-      e.preventDefault();
-      document.execCommand('undo');
-      return;
-    }
-    // Cmd+Shift+Z / Ctrl+Y — redo
-    if ((e.key === 'z' && (e.metaKey || e.ctrlKey) && e.shiftKey) || (e.key === 'y' && e.ctrlKey)) {
-      e.preventDefault();
-      document.execCommand('redo');
-      return;
-    }
-  });
-
-  // Paste: strip all HTML markup and insert as plain text so pasted content
-  // never injects foreign styles, spans, or hidden characters into the editor.
-  postBody.addEventListener('paste', e => {
-    e.preventDefault();
-    const text = (e.clipboardData || window.clipboardData)?.getData('text/plain') || '';
-    if (!text) return;
-    document.execCommand('insertText', false, text);
-    scheduleAutoSave();
   });
 }
 
@@ -2023,126 +1963,70 @@ function isFullyFormatted(str, mapObj) {
 }
 
 function applyUnicodeFormat(type) {
-  const postBody = document.getElementById('post-body');
-  if (!postBody) return;
-  const sel = window.getSelection();
-  if (!sel || sel.rangeCount === 0) return;
-  const range = sel.getRangeAt(0);
-  if (range.collapsed) return;
-  const selectedText = range.toString();
-  const mapObj       = type === 'bold' ? BOLD_MAP : ITALIC_MAP;
-  const replacement  = isFullyFormatted(selectedText, mapObj)
-    ? revertUnicode(selectedText, mapObj)
-    : convertUnicode(selectedText, mapObj);
-  try { document.execCommand('insertText', false, replacement); }
-  catch {
-    range.deleteContents();
-    range.insertNode(document.createTextNode(replacement));
-    range.collapse(false);
-    sel.removeAllRanges();
-    sel.addRange(range);
-  }
+  const ta = document.getElementById('post-body');
+  if (!ta) return;
+  const start = ta.selectionStart, end = ta.selectionEnd;
+  if (start === end) return;
+  const selected = ta.value.substring(start, end);
+  const mapObj   = type === 'bold' ? BOLD_MAP : ITALIC_MAP;
+  const replacement = isFullyFormatted(selected, mapObj)
+    ? revertUnicode(selected, mapObj)
+    : convertUnicode(selected, mapObj);
+  ta.setRangeText(replacement, start, end, 'select');
+  ta.dispatchEvent(new Event('input'));
   scheduleAutoSave();
   updateToolbarActiveState();
 }
 
 function updateToolbarActiveState() {
-  const sel  = window.getSelection();
-  const text = sel ? sel.toString() : '';
+  const ta = document.getElementById('post-body');
+  if (!ta) return;
+  const text = ta.value.substring(ta.selectionStart, ta.selectionEnd);
   document.getElementById('fmt-bold')?.classList.toggle('active',   isFullyFormatted(text, BOLD_MAP));
   document.getElementById('fmt-italic')?.classList.toggle('active', isFullyFormatted(text, ITALIC_MAP));
 }
 
+function toggleLinePrefix(prefix, numbered) {
+  const ta = document.getElementById('post-body');
+  if (!ta) return;
+  const selStart = ta.selectionStart;
+  const selEnd   = ta.selectionEnd;
+  const lineStart = ta.value.lastIndexOf('\n', selStart - 1) + 1;
+  const lineEndRaw = ta.value.indexOf('\n', selEnd);
+  const lineEnd = lineEndRaw === -1 ? ta.value.length : lineEndRaw;
+  const block = ta.value.slice(lineStart, lineEnd);
+  const lines = block.split('\n');
+  const allPrefixed = numbered
+    ? lines.every((l, i) => l.startsWith(`${i + 1}. `))
+    : lines.every(l => l.startsWith(prefix));
+  const newLines = allPrefixed
+    ? lines.map(l => numbered ? l.replace(/^\d+\. /, '') : l.replace(/^• /, ''))
+    : lines.map((l, i) => numbered ? `${i + 1}. ${l}` : l.startsWith(prefix) ? l : `${prefix}${l}`);
+  ta.setRangeText(newLines.join('\n'), lineStart, lineEnd, 'select');
+  autosizeTextarea(ta);
+  ta.dispatchEvent(new Event('input'));
+  scheduleAutoSave();
+}
+
 function wireFormattingToolbar() {
-  const postBody = document.getElementById('post-body');
-  if (!postBody) return;
+  const ta = document.getElementById('post-body');
+  if (!ta) return;
 
   document.getElementById('fmt-bold')?.addEventListener('click', () => {
-    postBody.focus(); applyUnicodeFormat('bold');
+    ta.focus(); applyUnicodeFormat('bold');
   });
   document.getElementById('fmt-italic')?.addEventListener('click', () => {
-    postBody.focus(); applyUnicodeFormat('italic');
+    ta.focus(); applyUnicodeFormat('italic');
   });
-
   document.getElementById('fmt-bullet')?.addEventListener('click', () => {
-    postBody.focus();
-    const sel = window.getSelection();
-    if (!sel || sel.rangeCount === 0) return;
-    const range = sel.getRangeAt(0);
-    const paras = Array.from(postBody.querySelectorAll('p')).filter(p => range.intersectsNode(p));
-    const targets = paras.length ? paras : [postBody.querySelector('p:last-child')].filter(Boolean);
-    if (!targets.length) return;
-    const allBulleted = targets.every(p => p.innerText.startsWith('• '));
-    targets.forEach(p => {
-      const walker = document.createTreeWalker(p, NodeFilter.SHOW_TEXT);
-      const firstText = walker.nextNode();
-      if (allBulleted) {
-        if (!firstText || !firstText.textContent.startsWith('• ')) return;
-        const r = document.createRange();
-        r.setStart(firstText, 0); r.setEnd(firstText, 2);
-        sel.removeAllRanges(); sel.addRange(r);
-        document.execCommand('insertText', false, '');
-      } else if (!p.innerText.startsWith('• ')) {
-        const r = document.createRange();
-        if (firstText) { r.setStart(firstText, 0); } else { r.setStart(p, 0); }
-        r.collapse(true);
-        sel.removeAllRanges(); sel.addRange(r);
-        document.execCommand('insertText', false, '• ');
-      }
-    });
-    // Restore selection spanning all modified paragraphs so the user can see
-    // what was formatted and continue editing without losing their place.
-    try {
-      const r = document.createRange();
-      r.setStart(targets[0], 0);
-      r.setEnd(targets[targets.length - 1], targets[targets.length - 1].childNodes.length);
-      sel.removeAllRanges(); sel.addRange(r);
-    } catch { /* non-fatal */ }
-    scheduleAutoSave();
+    ta.focus(); toggleLinePrefix('• ');
   });
-
   document.getElementById('fmt-num')?.addEventListener('click', () => {
-    postBody.focus();
-    const sel = window.getSelection();
-    if (!sel || sel.rangeCount === 0) return;
-    const range = sel.getRangeAt(0);
-    const paras = Array.from(postBody.querySelectorAll('p')).filter(p => range.intersectsNode(p));
-    const targets = paras.length ? paras : [postBody.querySelector('p:last-child')].filter(Boolean);
-    if (!targets.length) return;
-    const allNumbered = targets.every(p => /^\d+\. /.test(p.innerText));
-    targets.forEach((p, idx) => {
-      const walker = document.createTreeWalker(p, NodeFilter.SHOW_TEXT);
-      const firstText = walker.nextNode();
-      if (allNumbered) {
-        if (!firstText) return;
-        const match = firstText.textContent.match(/^(\d+\. )/);
-        if (!match) return;
-        const r = document.createRange();
-        r.setStart(firstText, 0); r.setEnd(firstText, match[1].length);
-        sel.removeAllRanges(); sel.addRange(r);
-        document.execCommand('insertText', false, '');
-      } else if (!/^\d+\. /.test(p.innerText)) {
-        const prefix = `${idx + 1}. `;
-        const r = document.createRange();
-        if (firstText) { r.setStart(firstText, 0); } else { r.setStart(p, 0); }
-        r.collapse(true);
-        sel.removeAllRanges(); sel.addRange(r);
-        document.execCommand('insertText', false, prefix);
-      }
-    });
-    // Restore selection spanning all modified paragraphs
-    try {
-      const r = document.createRange();
-      r.setStart(targets[0], 0);
-      r.setEnd(targets[targets.length - 1], targets[targets.length - 1].childNodes.length);
-      sel.removeAllRanges(); sel.addRange(r);
-    } catch { /* non-fatal */ }
-    scheduleAutoSave();
+    ta.focus(); toggleLinePrefix('', true);
   });
 
-  // Update active state on selection change
-  postBody.addEventListener('keyup',   updateToolbarActiveState);
-  postBody.addEventListener('mouseup', updateToolbarActiveState);
+  ta.addEventListener('select', updateToolbarActiveState);
+  ta.addEventListener('keyup',  updateToolbarActiveState);
 }
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -2174,12 +2058,11 @@ function appendImproverMessage(role, text, isLoading) {
 
 /* ── Version history ─────────────────────────────────────────────────── */
 function setEditorContent(text) {
-  const postBody = document.getElementById('post-body');
-  if (!postBody) return;
-  const paras = normalizeFullStopSpacing(text).split(/\n\n+/).filter(Boolean);
-  postBody.innerHTML = paras.map(t =>
-    `<p class="text-post" data-style="normal">${escHtml(t).replace(/\n/g, '<br>')}</p>`
-  ).join('');
+  const ta = document.getElementById('post-body');
+  if (!ta) return;
+  ta.value = normalizeFullStopSpacing(text);
+  autosizeTextarea(ta);
+  syncBackdrop();
   if (state.activeTab === 'preview') switchTab('preview');
   updateCharCount();
 }
@@ -2372,7 +2255,15 @@ async function sendImproveRequest(instruction) {
     const data = await res.json();
 
     if (!res.ok || !data.ok) {
-      replaceLastImproverMessage('Something went wrong. Please try again.', true);
+      const errCode = data?.error || '';
+      const errMsg = errCode === 'complete_profile_first'
+        ? 'Set up your Voice DNA profile in Settings before using the improver.'
+        : errCode === 'no_api_key'
+          ? 'API key not configured. Please contact support.'
+          : errCode === 'high_demand'
+            ? 'AI is busy right now. Please wait 30 seconds and try again.'
+            : 'Something went wrong. Please try again.';
+      replaceLastImproverMessage(errMsg, true);
       improverHistory.pop();
     } else {
       replaceLastImproverMessage(data.post, false, true);

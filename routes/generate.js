@@ -2,7 +2,7 @@
 
 const express = require('express');
 const router = express.Router();
-const { db } = require('../db');
+const { db, getSetting } = require('../db');
 const { runQualityGate } = require('../services/qualityGate');
 const { ideaToPost, vaultSeedToPost } = require('../services/ideaPath');
 const { classifyContent } = require('../services/funnelClassifier');
@@ -1106,7 +1106,7 @@ router.post('/improve', async (req, res) => {
     }
   } catch { /* non-fatal — improve without vault context */ }
 
-  const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim();
+  const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
   if (!apiKey) return res.status(500).json({ ok: false, error: 'no_api_key' });
 
   try {

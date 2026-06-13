@@ -38,10 +38,22 @@
     /* Improver panel: full-height sidebar, persists across tab switches */
     #edit-meta { flex: 0 0 322px; display: flex; flex-direction: column; gap: 0; border-left: 1px solid var(--border); overflow: hidden; height: 100%; background: var(--bg-surface, #fff); }
     #linkedin-preview:not([hidden]) { display: block; padding: 28px 64px 48px; }
-    #post-body { outline: none; cursor: text; min-height: 80px; padding: 12px 36px 20px; }
-    #post-body[contenteditable="false"] { cursor: default; opacity: 0.75; }
-    #post-body p { margin: 0; line-height: 1.6; }
-    #post-body p + p { margin-top: 1.6em; }
+    .post-body-wrapper { display: grid; }
+    .post-body-wrapper > * { grid-area: 1 / 1; }
+    #post-body-backdrop {
+      pointer-events: none; user-select: none;
+      font: inherit; line-height: 1.6; color: transparent;
+      padding: 12px 36px 20px; white-space: pre-wrap; word-break: break-word;
+      overflow: hidden; box-sizing: border-box; min-height: 80px;
+    }
+    #post-body {
+      outline: none; min-height: 80px; padding: 12px 36px 20px;
+      line-height: 1.6; width: 100%; box-sizing: border-box;
+      background: transparent; border: none; resize: none;
+      display: block; color: inherit; font: inherit;
+      white-space: pre-wrap; word-break: break-word; overflow: hidden;
+    }
+    #post-body:disabled { cursor: default; opacity: 0.75; }
 
     /* ── Tabs — full-width border; inner row centres the tab buttons ── */
     #tabs { border-bottom: 1px solid var(--border) !important; }

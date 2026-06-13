@@ -97,6 +97,9 @@
           <div class="post-edit-card">
             <div id="post-toolbar" role="toolbar" aria-label="Formatting toolbar">
               <div class="ptb-group">
+                <button class="ptb-btn" id="fmt-undo"   title="Undo (Cmd+Z)" aria-label="Undo">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7v6h6"/><path d="M3 13C5 8 9.5 5 15 5a9 9 0 0 1 6 16"/></svg>
+                </button>
                 <button class="ptb-btn" id="fmt-bold"   title="Bold (Cmd+B)" aria-label="Bold">𝗕</button>
                 <button class="ptb-btn" id="fmt-italic" title="Italic (Cmd+I)" aria-label="Italic">𝘐</button>
                 <button class="ptb-btn" id="fmt-bullet" title="Bullet list" aria-label="Bullet list" style="font-size:16px">•</button>
@@ -896,7 +899,7 @@ function applyScheduleLockUi(scheduledFor) {
   const schedBtn = document.getElementById('btn-schedule');
   if (schedBtn) { schedBtn.disabled = true; schedBtn.style.setProperty('display', 'none', 'important'); }
   document.getElementById('post-body').disabled = true;
-  ['quote-card-btn','carousel-btn','branded-quote-btn','media-library-btn','fmt-bold','fmt-italic','fmt-bullet','fmt-num'].forEach(id => {
+  ['quote-card-btn','carousel-btn','branded-quote-btn','media-library-btn','fmt-undo','fmt-bold','fmt-italic','fmt-bullet','fmt-num'].forEach(id => {
     document.getElementById(id)?.classList.add('disabled');
   });
   const chipRemove = document.getElementById('asset-chip-remove');
@@ -917,7 +920,7 @@ function clearScheduleLockUi() {
   const schedBtnRestore = document.getElementById('btn-schedule');
   if (schedBtnRestore) schedBtnRestore.style.removeProperty('display');
   if (linkedinConnected && schedBtnRestore) schedBtnRestore.disabled = false;
-  ['quote-card-btn','carousel-btn','branded-quote-btn','media-library-btn','fmt-bold','fmt-italic','fmt-bullet','fmt-num'].forEach(id => {
+  ['quote-card-btn','carousel-btn','branded-quote-btn','media-library-btn','fmt-undo','fmt-bold','fmt-italic','fmt-bullet','fmt-num'].forEach(id => {
     document.getElementById(id)?.classList.remove('disabled');
   });
   const chipRemove = document.getElementById('asset-chip-remove');
@@ -2012,6 +2015,9 @@ function wireFormattingToolbar() {
   const ta = document.getElementById('post-body');
   if (!ta) return;
 
+  document.getElementById('fmt-undo')?.addEventListener('click', () => {
+    ta.focus(); document.execCommand('undo');
+  });
   document.getElementById('fmt-bold')?.addEventListener('click', () => {
     ta.focus(); applyUnicodeFormat('bold');
   });

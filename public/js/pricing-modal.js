@@ -176,6 +176,7 @@
     background: var(--bg-surface, #fff);
     display: flex;
     flex-direction: column;
+    gap: 20px;
     transition: border-color 0.15s, box-shadow 0.15s;
   }
   .pm-card.pm-featured {
@@ -184,12 +185,7 @@
     background: linear-gradient(135deg, rgba(13,148,136,0.02) 0%, #fff 60%);
   }
 
-  .pm-card-top {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    margin-bottom: 16px;
-  }
+  .pm-card-top { /* price block */ }
 
   .pm-plan-name {
     font-size: 12px;
@@ -230,33 +226,6 @@
     margin-bottom: 20px;
     font-weight: 500;
   }
-
-  .pm-divider {
-    border: none;
-    border-top: 1px solid var(--border-divider, #F4F4F5);
-    margin: 16px 0;
-  }
-
-  .pm-features {
-    list-style: none;
-    padding: 0;
-    margin: 0 0 22px;
-    flex: 1;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 4px 12px;
-  }
-  .pm-features li {
-    display: flex;
-    align-items: flex-start;
-    gap: 7px;
-    font-size: 13px;
-    color: var(--text-body, #000);
-    padding: 4px 0;
-    line-height: 1.4;
-  }
-  .pm-features li svg { flex-shrink: 0; margin-top: 1px; }
-  .pm-feature-excluded { color: var(--text-muted, #A1A1AA) !important; }
 
   .pm-cta {
     display: block;
@@ -310,14 +279,6 @@
   }
   `;
   document.head.appendChild(style);
-
-  // ── SVG helpers ───────────────────────────────────────────────────────────
-  const CHECK = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--accent,#10B981)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>`;
-  const CROSS = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#A1A1AA" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
-
-  function feat(ok, text) {
-    return `<li class="${ok ? '' : 'pm-feature-excluded'}">${ok ? CHECK : CROSS}${text}</li>`;
-  }
 
   // ── Inject HTML ───────────────────────────────────────────────────────────
   const overlay = document.createElement('div');
@@ -384,18 +345,7 @@
                 <div class="pm-period">per month · cancel anytime</div>
               </div>
             </div>
-            <hr class="pm-divider">
-            <ul class="pm-features">
-              ${feat(true, '<strong>Unlimited</strong>&nbsp;posts')}
-              ${feat(true, 'Post scheduling')}
-              ${feat(true, 'Content Vault')}
-              ${feat(true, 'Multiple LinkedIn accounts')}
-              ${feat(true, 'Company pages')}
-              ${feat(true, 'Up to 3 workspaces')}
-              ${feat(true, 'Team members')}
-              ${feat(true, 'Carousel visuals')}
-            </ul>
-            <button class="pm-cta pm-cta-primary" id="pm-pro-btn" type="button">Upgrade to Pro →</button>
+            <button class="pm-cta pm-cta-primary" id="pm-pro-btn" type="button">Upgrade now</button>
             <div class="pm-error" id="pm-pro-error"></div>
           </div>
 
@@ -584,7 +534,7 @@
       $id('pm-pro-error').textContent   = 'Unable to open billing portal.';
       $id('pm-pro-error').style.display = '';
       this.disabled    = false;
-      this.textContent = 'Manage subscription →';
+      this.textContent = 'Manage subscription';
       return;
     }
 
@@ -603,7 +553,7 @@
     // — Reset button to default (will be updated after sub loads)
     const proBtn = $id('pm-pro-btn');
     proBtn.disabled     = false;
-    proBtn.textContent  = 'Upgrade to Pro →';
+    proBtn.textContent  = 'Upgrade now';
     proBtn.className    = 'pm-cta pm-cta-primary';
 
     // — Context banner

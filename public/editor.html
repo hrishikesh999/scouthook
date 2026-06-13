@@ -530,8 +530,8 @@ async function loadPost(id) {
 
     const rawText = typeof p.content === 'string' ? p.content : '';
     const postBody = document.getElementById('post-body');
+    postBody.style.height = ''; // clear any stale inline height from old code
     postBody.value = normalizeFullStopSpacing(rawText);
-    autosizeTextarea(postBody);
     syncBackdrop();
     // Initialise auto-save baseline so we don't trigger on the loaded content
     _lastAutoSavedContent = getPostContent();
@@ -699,10 +699,10 @@ function syncBackdrop() {
   bd.innerHTML = html;
 }
 
-function autosizeTextarea(ta) {
-  if (!ta) return;
-  ta.style.height = 'auto';
-  ta.style.height = ta.scrollHeight + 'px';
+function autosizeTextarea() {
+  // Height is CSS-driven: backdrop (align-self:start) sizes the grid row,
+  // textarea (align-self:stretch) fills it. syncBackdrop() is the trigger.
+  syncBackdrop();
 }
 
 function renderQualityFeedback(flags, matches) {

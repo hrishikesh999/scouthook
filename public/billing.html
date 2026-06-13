@@ -61,6 +61,23 @@
           <span>You're now on <strong>Pro</strong>. Welcome to ScoutHook Pro! Your account has been upgraded.</span>
         </div>
 
+        <!-- ── Trial upgrade highlight (only shown for trial users) ── -->
+        <div id="trial-upgrade-box" class="trial-upgrade-box" style="display:none">
+          <div class="trial-upgrade-left">
+            <div class="trial-upgrade-icon" aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            </div>
+            <div>
+              <div class="trial-upgrade-title">You're on a free trial</div>
+              <div class="trial-upgrade-desc" id="trial-upgrade-desc">Upgrade to Pro before your trial ends to keep full access.</div>
+            </div>
+          </div>
+          <button type="button" class="btn-primary trial-upgrade-cta" id="btn-trial-upgrade-box">
+            Upgrade to Pro
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="margin-left:5px"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
+        </div>
+
         <div class="billing-grid">
 
           <!-- ── Card 1: Current Plan ───────────────────── -->
@@ -468,6 +485,17 @@
         document.getElementById('upgrade-cta').style.display = '';
       }
 
+      // ── Trial upgrade box ─────────────────────────────────────
+      if (isAppTrial && sub.trial_ends_at) {
+        const box = document.getElementById('trial-upgrade-box');
+        box.style.display = '';
+        const daysLeft = Math.max(0, Math.ceil((new Date(sub.trial_ends_at) - Date.now()) / 86400000));
+        document.getElementById('trial-upgrade-desc').textContent =
+          daysLeft > 0
+            ? `${daysLeft} day${daysLeft !== 1 ? 's' : ''} left — upgrade now to keep unlimited generations, visuals, and more.`
+            : 'Your trial ends today — upgrade now to keep full access.';
+      }
+
       // Show content, hide skeleton
       document.getElementById('billing-loading').style.display = 'none';
       document.getElementById('billing-content').style.display = '';
@@ -544,6 +572,7 @@
     document.getElementById('btn-upgrade').addEventListener('click', openModal);
     document.getElementById('btn-upgrade-cta').addEventListener('click', openModal);
     document.getElementById('btn-upgrade-nudge').addEventListener('click', openModal);
+    document.getElementById('btn-trial-upgrade-box').addEventListener('click', openModal);
 
     // ── Bootstrap ──────────────────────────────────────────────
     (async () => {

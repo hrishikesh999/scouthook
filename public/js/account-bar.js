@@ -221,7 +221,9 @@
       ].join(';');
       banner.innerHTML = `
         <span>${daysLeft} day${daysLeft !== 1 ? 's' : ''} left in your free trial.</span>
-        <a href="/billing.html" style="color:#fff;font-weight:700;text-decoration:underline">Upgrade now →</a>
+        <button type="button" class="trial-banner-upgrade"
+          style="background:none;border:none;color:#fff;font-weight:700;text-decoration:underline;cursor:pointer;font-size:14px;padding:0"
+        >Upgrade now →</button>
         <button type="button"
           style="background:none;border:none;color:rgba(255,255,255,0.7);cursor:pointer;font-size:18px;line-height:1;padding:0 4px"
           aria-label="Dismiss trial banner">✕</button>
@@ -231,7 +233,14 @@
       requestAnimationFrame(() => {
         document.documentElement.style.setProperty('--trial-bar-h', banner.offsetHeight + 'px');
       });
-      banner.querySelector('button').addEventListener('click', () => {
+      banner.querySelector('.trial-banner-upgrade').addEventListener('click', () => {
+        if (window.PricingModal) {
+          window.PricingModal.open();
+        } else {
+          window.location.href = '/billing.html?upgrade=1';
+        }
+      });
+      banner.querySelector('button[aria-label]').addEventListener('click', () => {
         localStorage.setItem('trial_banner_dismissed', '1');
         banner.remove();
         document.body.classList.remove('has-trial-banner');

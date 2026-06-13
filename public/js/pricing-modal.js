@@ -264,7 +264,7 @@
               Pro
               <span class="pm-current-chip" id="pm-pro-chip" style="display:none">Current plan</span>
             </div>
-            <div class="pm-price"><sup>$</sup><span id="pm-pro-price">27</span></div>
+            <div class="pm-price"><sup>$</sup><span id="pm-pro-price">29</span></div>
             <div class="pm-period">/ month</div>
             <hr class="pm-divider">
             <ul class="pm-features">

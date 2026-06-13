@@ -534,7 +534,7 @@
       $id('pm-pro-error').textContent   = 'Unable to open billing portal.';
       $id('pm-pro-error').style.display = '';
       this.disabled    = false;
-      this.textContent = 'Manage subscription';
+      this.textContent = 'Upgrade now';
       return;
     }
 
@@ -582,8 +582,8 @@
     // — Apply plan state to UI
     if (currentPlan === 'pro') {
       $id('pm-pro-chip').style.display = '';
-      proBtn.textContent = 'Manage subscription';
-      proBtn.className   = 'pm-cta pm-cta-muted';
+      proBtn.textContent = 'Upgrade now';
+      proBtn.className   = 'pm-cta pm-cta-primary';
     }
   }
 

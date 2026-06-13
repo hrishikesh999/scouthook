@@ -473,10 +473,13 @@ function maybeHideOverlay() {
 }
 
 function normalizeFullStopSpacing(text) {
-  // Add a space after a period only when a lowercase letter precedes it (end of word)
-  // and an uppercase letter follows it (start of new sentence).
-  // This avoids corrupting tech terms like Node.js, ASP.NET, test.com, v1.2, etc.
-  return text.replace(/(?<=[a-z])\.([A-Z])/g, '. $1');
+  // Collapse 3+ consecutive newlines to 2 (paragraph break) — mirrors the old
+  // editor's split(/\n\n+/) behaviour so legacy posts don't show double-blank-lines.
+  // Add a space after a period only when a lowercase letter precedes it and an
+  // uppercase letter follows (avoids corrupting Node.js, ASP.NET, v1.2, etc.).
+  return text
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/(?<=[a-z])\.([A-Z])/g, '. $1');
 }
 
 /* ════════════════════════════════════════════════════════════════════════

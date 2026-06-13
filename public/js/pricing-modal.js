@@ -574,9 +574,9 @@
     ]);
 
     const sub = (subRes.status === 'fulfilled' ? subRes.value : null) || {};
-    // App-level trial users have plan='pro' but no Paddle subscription yet.
-    // Treat them as 'free' so the checkout button works normally.
-    const isAppTrial = sub.status === 'trialing' && !sub.price_id;
+    // Trial users should always go through checkout, not the management portal —
+    // even if they have a stale price_id from a prior cancelled subscription.
+    const isAppTrial = sub.status === 'trialing';
     currentPlan = isAppTrial ? 'free' : (sub.plan || 'free');
 
     // — Apply plan state to UI

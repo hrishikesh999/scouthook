@@ -696,8 +696,6 @@ async function init() {
     });
 
     currentStep = n;
-    // Scroll wizard body into view
-    document.querySelector('.vw-body')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
   function firstIncompleteStep() {

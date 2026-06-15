@@ -647,15 +647,19 @@ router.delete('/connections/:id', async (req, res) => {
 
     if (!conn) return res.status(404).json({ ok: false, error: 'not_found' });
 
-    // Cancel pending scheduled posts that use this workspace (simplified: all pending)
-    // Full connection-scoped cancellation is deferred to Sprint 3 Task 2
-    // when scheduled_posts.linkedin_connection_id column is added.
-    const activePosts = await db.prepare(`
+    // Cancel only scheduled posts tied to this connection's profile.
+    // Also cancel legacy posts (profile_id IS NULL) created by the connection owner.
+    const profilePosts = conn.profile_id ? await db.prepare(`
       SELECT id, post_id FROM scheduled_posts
-      WHERE tenant_id = ? AND status IN ('pending', 'processing')
-    `).all(tenantId);
+      WHERE tenant_id = ? AND profile_id = ? AND status IN ('pending', 'processing')
+    `).all(tenantId, conn.profile_id) : [];
 
-    for (const row of activePosts) {
+    const nullProfilePosts = await db.prepare(`
+      SELECT id, post_id FROM scheduled_posts
+      WHERE tenant_id = ? AND profile_id IS NULL AND user_id = ? AND status IN ('pending', 'processing')
+    `).all(tenantId, conn.authorized_by);
+
+    for (const row of [...profilePosts, ...nullProfilePosts]) {
       await db.prepare(`
         UPDATE scheduled_posts SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP
         WHERE id = ? AND tenant_id = ?
@@ -740,7 +744,7 @@ router.post('/connections/:id/set-default', async (req, res) => {
 router.post('/publish', async (req, res) => {
   const userId   = req.userId;
   const tenantId = req.tenantId;
-  const { content, image_url, carousel_pdf_url, postId } = req.body;
+  const { content, image_url, carousel_pdf_url, postId, connectionId } = req.body;
 
   if (!userId)  return res.status(400).json({ ok: false, error: 'missing_user_id' });
   if (!content?.trim()) return res.status(400).json({ ok: false, error: 'missing_content' });
@@ -760,11 +764,20 @@ router.post('/publish', async (req, res) => {
     }
   }
 
+  const publishOpts = {
+    carousel_pdf_url: carousel_pdf_url?.trim() || null,
+    image_url: image_url?.trim() || null,
+  };
+  if (connectionId) {
+    // Validate the requested connection belongs to this workspace before trusting the id
+    const conn = await db.prepare(
+      'SELECT id FROM linkedin_connections WHERE id = ? AND workspace_id = ?'
+    ).get(Number(connectionId), tenantId);
+    if (conn) publishOpts.connectionId = conn.id;
+  }
+
   try {
-    const result = await publishNow(userId, tenantId, content.trim(), {
-      carousel_pdf_url: carousel_pdf_url?.trim() || null,
-      image_url: image_url?.trim() || null,
-    });
+    const result = await publishNow(userId, tenantId, content.trim(), publishOpts);
 
     if (postId) {
       const assetType = carousel_pdf_url ? 'carousel' : image_url ? 'image' : null;
@@ -811,7 +824,7 @@ router.post('/publish', async (req, res) => {
 router.post('/schedule', async (req, res) => {
   const userId   = req.userId;
   const tenantId = req.tenantId;
-  const { content, scheduled_for, post_id, image_url, carousel_pdf_url, first_comment, asset_preview_url, asset_slide_count } = req.body;
+  const { content, scheduled_for, post_id, image_url, carousel_pdf_url, first_comment, asset_preview_url, asset_slide_count, connectionId } = req.body;
 
   if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
 
@@ -913,6 +926,20 @@ router.post('/schedule', async (req, res) => {
     }
   }
 
+  // Look up the workspace's default LinkedIn connection to record profile_id on the post.
+  const defConn = await db.prepare(
+    "SELECT profile_id FROM linkedin_connections WHERE workspace_id = ? AND account_type = 'personal' AND is_default = true"
+  ).get(tenantId);
+  let schedProfileId = defConn?.profile_id ?? null;
+
+  // If the caller specified a connection, use that connection's profile_id instead.
+  if (connectionId) {
+    const selectedConn = await db.prepare(
+      'SELECT profile_id FROM linkedin_connections WHERE id = ? AND workspace_id = ?'
+    ).get(Number(connectionId), tenantId);
+    if (selectedConn) schedProfileId = selectedConn.profile_id;
+  }
+
   try {
     const payloadHash = sha256Hex(JSON.stringify({
       content: content.trim(),
@@ -925,8 +952,8 @@ router.post('/schedule', async (req, res) => {
     let scheduledPostId;
     await db.transaction(async tx => {
       const result = await tx.prepare(`
-        INSERT INTO scheduled_posts (user_id, tenant_id, post_id, content, scheduled_for, status, asset_type, asset_url, payload_hash, first_comment, first_comment_status)
-        VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)
+        INSERT INTO scheduled_posts (user_id, tenant_id, post_id, content, scheduled_for, status, asset_type, asset_url, payload_hash, first_comment, first_comment_status, profile_id)
+        VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?)
         RETURNING id
       `).run(
         userId,
@@ -938,7 +965,8 @@ router.post('/schedule', async (req, res) => {
         (carousel_pdf_url || image_url)?.trim() || null,
         payloadHash,
         trimmedFirstComment,
-        trimmedFirstComment ? 'pending' : null
+        trimmedFirstComment ? 'pending' : null,
+        schedProfileId
       );
       scheduledPostId = Number(result.lastInsertRowid);
 
@@ -1160,8 +1188,8 @@ router.post('/scheduled/:id/reschedule', async (req, res) => {
 
       const result = await tx.prepare(`
         INSERT INTO scheduled_posts
-          (user_id, tenant_id, post_id, content, scheduled_for, status, asset_type, asset_url, payload_hash, first_comment, first_comment_status)
-        VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)
+          (user_id, tenant_id, post_id, content, scheduled_for, status, asset_type, asset_url, payload_hash, first_comment, first_comment_status, profile_id)
+        VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?)
         RETURNING id
       `).run(
         userId, tenantId,
@@ -1172,7 +1200,8 @@ router.post('/scheduled/:id/reschedule', async (req, res) => {
         old.asset_url || null,
         payloadHash,
         oldFirstComment,
-        oldFirstComment ? 'pending' : null
+        oldFirstComment ? 'pending' : null,
+        old.profile_id || null
       );
       newScheduledPostId = Number(result.lastInsertRowid);
     });
@@ -1280,40 +1309,69 @@ router.post('/disconnect', (req, res) => {
   if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
 
   (async () => {
-    // Cancel any pending/processing scheduled posts in this workspace
-    const active = await db.prepare(`
-      SELECT id, post_id
-      FROM scheduled_posts
-      WHERE tenant_id = ? AND status IN ('pending', 'processing')
-    `).all(tenantId);
+    // Workspace owners can disconnect any personal connection; editors only their own.
+    const membership = await db.prepare(
+      'SELECT role FROM workspace_members WHERE workspace_id = ? AND user_id = ?'
+    ).get(tenantId, userId);
+    const isOwner = membership?.role === 'owner';
 
-    for (const row of active) {
-      // Trap 16: tenant_id guard on UPDATE
-      await db.prepare(`
-        UPDATE scheduled_posts
-        SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP
-        WHERE id = ? AND tenant_id = ?
-      `).run(row.id, tenantId);
+    // Fetch the personal connections to be removed.
+    const conns = await db.prepare(
+      isOwner
+        ? `SELECT id, linkedin_member_id, access_token_enc, profile_id, authorized_by
+           FROM linkedin_connections
+           WHERE workspace_id = ? AND account_type = 'personal'`
+        : `SELECT id, linkedin_member_id, access_token_enc, profile_id, authorized_by
+           FROM linkedin_connections
+           WHERE workspace_id = ? AND authorized_by = ? AND account_type = 'personal'`
+    ).all(...(isOwner ? [tenantId] : [tenantId, userId]));
 
-      if (row.post_id) {
-        await db.prepare(`
-          UPDATE generated_posts
-          SET status = 'draft'
-          WHERE id = ? AND tenant_id = ? AND status = 'scheduled'
-        `).run(row.post_id, tenantId);
+    if (!conns.length) return res.json({ ok: true });
+
+    // Cancel only scheduled posts tied to these connections' profiles (scoped cancellation).
+    // Also cancel legacy posts (profile_id IS NULL) created by each connection's owner.
+    const seenNullOwners = new Set();
+    for (const conn of conns) {
+      if (conn.profile_id) {
+        const profilePosts = await db.prepare(`
+          SELECT id, post_id FROM scheduled_posts
+          WHERE tenant_id = ? AND profile_id = ? AND status IN ('pending', 'processing')
+        `).all(tenantId, conn.profile_id);
+        for (const row of profilePosts) {
+          await db.prepare(
+            `UPDATE scheduled_posts SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ?`
+          ).run(row.id, tenantId);
+          if (row.post_id) {
+            await db.prepare(
+              `UPDATE generated_posts SET status = 'draft' WHERE id = ? AND tenant_id = ? AND status = 'scheduled'`
+            ).run(row.post_id, tenantId);
+          }
+          removeScheduledJob(Number(row.id)).catch(() => {});
+        }
       }
 
-      removeScheduledJob(Number(row.id)).catch(() => {});
+      // Legacy: cancel NULL-profile posts created by this connection's authorizing user.
+      if (!seenNullOwners.has(conn.authorized_by)) {
+        seenNullOwners.add(conn.authorized_by);
+        const nullPosts = await db.prepare(`
+          SELECT id, post_id FROM scheduled_posts
+          WHERE tenant_id = ? AND profile_id IS NULL AND user_id = ? AND status IN ('pending', 'processing')
+        `).all(tenantId, conn.authorized_by);
+        for (const row of nullPosts) {
+          await db.prepare(
+            `UPDATE scheduled_posts SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ?`
+          ).run(row.id, tenantId);
+          if (row.post_id) {
+            await db.prepare(
+              `UPDATE generated_posts SET status = 'draft' WHERE id = ? AND tenant_id = ? AND status = 'scheduled'`
+            ).run(row.post_id, tenantId);
+          }
+          removeScheduledJob(Number(row.id)).catch(() => {});
+        }
+      }
     }
 
-    // Fetch the user's personal connections in this workspace
-    const conns = await db.prepare(`
-      SELECT id, linkedin_member_id, access_token_enc
-      FROM linkedin_connections
-      WHERE workspace_id = ? AND authorized_by = ? AND account_type = 'personal'
-    `).all(tenantId, userId);
-
-    // Revoke tokens only when no other workspace still has the same linkedin_member_id connected
+    // Revoke tokens only when no other workspace still has the same linkedin_member_id connected.
     const revokedMemberIds = new Set();
     for (const conn of conns) {
       if (conn.linkedin_member_id && !revokedMemberIds.has(conn.linkedin_member_id)) {
@@ -1327,10 +1385,12 @@ router.post('/disconnect', (req, res) => {
       }
     }
 
-    // Delete the personal connections (cascade removes nothing else — profiles remain)
+    // Delete the connections.
     await db.prepare(
-      `DELETE FROM linkedin_connections WHERE workspace_id = ? AND authorized_by = ? AND account_type = 'personal'`
-    ).run(tenantId, userId);
+      isOwner
+        ? `DELETE FROM linkedin_connections WHERE workspace_id = ? AND account_type = 'personal'`
+        : `DELETE FROM linkedin_connections WHERE workspace_id = ? AND authorized_by = ? AND account_type = 'personal'`
+    ).run(...(isOwner ? [tenantId] : [tenantId, userId]));
 
     return res.json({ ok: true });
   })().catch(err => res.status(500).json({ ok: false, error: err.message }));

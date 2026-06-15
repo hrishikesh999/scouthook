@@ -79,15 +79,10 @@ async function resolveConnection(tenantId, options = {}) {
     ).get(options.profileId);
   }
 
-  // Fallback: workspace default profile → default connection
-  const defaultProfile = await db.prepare(
-    'SELECT id FROM profiles WHERE workspace_id = ? AND is_default = true'
-  ).get(tenantId);
-  if (!defaultProfile) return null;
-
+  // Fallback: workspace default personal connection (matches status endpoint logic)
   return db.prepare(
-    'SELECT * FROM linkedin_connections WHERE profile_id = ? AND is_default = true'
-  ).get(defaultProfile.id);
+    "SELECT * FROM linkedin_connections WHERE workspace_id = ? AND account_type = 'personal' AND is_default = true"
+  ).get(tenantId);
 }
 
 // ---------------------------------------------------------------------------
@@ -932,8 +927,8 @@ async function publishFirstComment(scheduledPostId) {
   const conn = await resolveConnection(row.tenant_id, { profileId: row.profile_id });
   if (!conn) {
     await db.prepare(
-      "UPDATE scheduled_posts SET first_comment_status = 'failed', updated_at = CURRENT_TIMESTAMP WHERE id = ?"
-    ).run(scheduledPostId);
+      "UPDATE scheduled_posts SET first_comment_status = 'failed', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ?"
+    ).run(scheduledPostId, row.tenant_id);
     return;
   }
 
@@ -942,8 +937,8 @@ async function publishFirstComment(scheduledPostId) {
     accessToken = await getValidConnectionToken(conn);
   } catch {
     await db.prepare(
-      "UPDATE scheduled_posts SET first_comment_status = 'failed', updated_at = CURRENT_TIMESTAMP WHERE id = ?"
-    ).run(scheduledPostId);
+      "UPDATE scheduled_posts SET first_comment_status = 'failed', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ?"
+    ).run(scheduledPostId, row.tenant_id);
     return;
   }
 
@@ -974,14 +969,14 @@ async function publishFirstComment(scheduledPostId) {
     const errText = await res.text().catch(() => '');
     console.error(`[publisher] first comment failed for scheduledPostId=${scheduledPostId}: ${res.status} ${errText}`);
     await db.prepare(
-      "UPDATE scheduled_posts SET first_comment_status = 'failed', updated_at = CURRENT_TIMESTAMP WHERE id = ?"
-    ).run(scheduledPostId);
+      "UPDATE scheduled_posts SET first_comment_status = 'failed', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ?"
+    ).run(scheduledPostId, row.tenant_id);
     throw new Error(`linkedin_comment_api_error_${res.status}`);
   }
 
   await db.prepare(
-    "UPDATE scheduled_posts SET first_comment_status = 'posted', updated_at = CURRENT_TIMESTAMP WHERE id = ?"
-  ).run(scheduledPostId);
+    "UPDATE scheduled_posts SET first_comment_status = 'posted', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ?"
+  ).run(scheduledPostId, row.tenant_id);
 
   try {
     await db.prepare(

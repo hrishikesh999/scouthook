@@ -208,6 +208,7 @@
     .modal-li-info { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
     .modal-li-name { font-size: 13px; font-weight: 600; color: var(--text-heading); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
     .modal-li-label { font-size: 11px; color: var(--text-muted); }
+    .modal-li-selector { font-size: 13px; font-weight: 600; color: var(--text-heading); background: transparent; border: none; padding: 0; cursor: pointer; max-width: 180px; font-family: inherit; }
 
     /* Publish-now button — LinkedIn blue, full-width */
     .btn-publish-now { width: 100%; display: flex; align-items: center; justify-content: center; gap: 7px; height: 42px; padding: 0 16px; background: #0A66C2; color: #fff; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; font-family: var(--font-sans, inherit); cursor: pointer; transition: background 0.15s; margin-bottom: 16px; }

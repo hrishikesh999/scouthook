@@ -722,6 +722,38 @@ setTimeout(() => {
 }, 20 * 60 * 1000);
 
 // ---------------------------------------------------------------------------
+// Email: LinkedIn token expiry — warn workspace members 7 days before expiry.
+// ---------------------------------------------------------------------------
+async function sendLinkedInTokenExpiryWarnings() {
+  try {
+    const { sendEmailToUser } = require('./emails');
+    const rows = await db.prepare(`
+      SELECT lc.workspace_id, lc.display_name, lc.expires_at,
+             wm.user_id
+      FROM linkedin_connections lc
+      JOIN workspace_members wm ON wm.workspace_id = lc.workspace_id
+      WHERE lc.is_default = true
+        AND lc.expires_at BETWEEN now() + INTERVAL '6 days' AND now() + INTERVAL '7 days'
+    `).all();
+    for (const row of rows) {
+      const daysLeft = Math.ceil((new Date(row.expires_at) - Date.now()) / 86400000);
+      sendEmailToUser(row.user_id, 'linkedin-token-expiring-soon', {
+        connection_name: row.display_name || 'LinkedIn',
+        days_left:       String(daysLeft),
+        reconnect_url:   `${process.env.APP_URL || 'https://app.scouthook.com'}/account.html`,
+      }, { dedupKey: `linkedin_expiry_${row.workspace_id}`, withinHours: 168 }).catch(() => {});
+    }
+  } catch (e) {
+    console.warn('[email-cron] linkedin-token-expiry check failed (non-fatal):', e.message);
+  }
+}
+// Runs daily — offset 30 min from startup to stagger with other crons.
+setTimeout(() => {
+  sendLinkedInTokenExpiryWarnings();
+  setInterval(sendLinkedInTokenExpiryWarnings, 24 * 60 * 60 * 1000);
+}, 30 * 60 * 1000);
+
+// ---------------------------------------------------------------------------
 // Workspace purge — hard-delete workspaces whose 30-day grace period expired.
 // ---------------------------------------------------------------------------
 const { purgeExpiredWorkspaces } = require('./workers/workspacePurge');

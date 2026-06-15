@@ -394,6 +394,8 @@ let userPlan             = null;
 let linkedinConnected    = false;
 let linkedinProfileName  = '';
 let linkedinProfilePhoto = '';
+let linkedinConnections  = [];
+let selectedConnectionId = null;
 let scheduleEditLocked = false;
 let attachedAssetUrl   = null;
 let attachedPreviewUrl = null;
@@ -766,9 +768,25 @@ async function checkLinkedInStatus() {
   const strip    = document.getElementById('no-linkedin-actions');
   const schedBtn = document.getElementById('btn-schedule');
   try {
-    const res  = await fetch('/api/linkedin/status', { credentials: 'include' });
+    const [res, connRes] = await Promise.all([
+      fetch('/api/linkedin/status',      { credentials: 'include' }),
+      fetch('/api/linkedin/connections', { credentials: 'include' }),
+    ]);
     const data = await res.json();
     linkedinConnected = !!data.connected;
+
+    // Populate connections array for the account selector
+    if (connRes.ok) {
+      const connData = await connRes.json();
+      if (connData.ok && connData.profiles) {
+        linkedinConnections = connData.profiles.flatMap(p =>
+          p.connections.map(c => ({ ...c, profile_display_name: p.display_name }))
+        );
+        const def = linkedinConnections.find(c => c.is_default);
+        selectedConnectionId = def?.id ?? linkedinConnections[0]?.id ?? null;
+      }
+    }
+
     if (linkedinConnected) {
       if (strip) strip.hidden = true;
       if (schedBtn && !scheduleEditLocked) { schedBtn.disabled = false; schedBtn.title = ''; }
@@ -1019,19 +1037,52 @@ function showScheduleSuccessSheet(scheduledFor) {
 /* ════════════════════════════════════════════════════════════════════════
    SCHEDULE MODAL
 ════════════════════════════════════════════════════════════════════════ */
+function setModalAvatar(el, photoUrl, name) {
+  el.innerHTML = '';
+  if (photoUrl) {
+    const img = document.createElement('img');
+    img.src = photoUrl;
+    img.alt = name || 'LinkedIn profile';
+    el.appendChild(img);
+  } else {
+    el.textContent = name ? name.charAt(0).toUpperCase() : 'L';
+  }
+}
+
 function populateModalAccount() {
   const nameEl   = document.getElementById('modal-li-name');
   const avatarEl = document.getElementById('modal-li-avatar');
   if (!nameEl || !avatarEl) return;
-  nameEl.textContent = linkedinProfileName || 'LinkedIn account';
-  avatarEl.innerHTML = '';
-  if (linkedinProfilePhoto) {
-    const img = document.createElement('img');
-    img.src = linkedinProfilePhoto;
-    img.alt = linkedinProfileName || 'LinkedIn profile';
-    avatarEl.appendChild(img);
+
+  // Remove any selector rendered by a previous call
+  document.getElementById('modal-li-select')?.remove();
+
+  if (linkedinConnections.length > 1) {
+    // Multiple accounts — render a <select> and hide the static name span
+    nameEl.style.display = 'none';
+    const sel = document.createElement('select');
+    sel.id = 'modal-li-select';
+    sel.className = 'modal-li-selector';
+    linkedinConnections.forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c.id;
+      opt.textContent = c.display_name || 'LinkedIn account';
+      if (c.id === selectedConnectionId) opt.selected = true;
+      sel.appendChild(opt);
+    });
+    sel.addEventListener('change', () => {
+      selectedConnectionId = Number(sel.value);
+      const conn = linkedinConnections.find(c => c.id === selectedConnectionId);
+      if (conn) setModalAvatar(avatarEl, conn.avatar_url, conn.display_name);
+    });
+    nameEl.parentElement.insertBefore(sel, nameEl);
+    const conn = linkedinConnections.find(c => c.id === selectedConnectionId) || linkedinConnections[0];
+    if (conn) setModalAvatar(avatarEl, conn.avatar_url, conn.display_name);
   } else {
-    avatarEl.textContent = linkedinProfileName ? linkedinProfileName.charAt(0).toUpperCase() : 'L';
+    // Single connection — keep existing static display
+    nameEl.style.display = '';
+    nameEl.textContent = linkedinProfileName || 'LinkedIn account';
+    setModalAvatar(avatarEl, linkedinProfilePhoto, linkedinProfileName);
   }
 }
 
@@ -1641,8 +1692,9 @@ function wireSchedule() {
       const firstComment = document.getElementById('first-comment-input')?.value.trim() || null;
       const payload = {
         content, scheduled_for: scheduledFor,
-        ...(currentPostId  ? { post_id: currentPostId } : {}),
-        ...(firstComment   ? { first_comment: firstComment } : {}),
+        ...(currentPostId        ? { post_id: currentPostId } : {}),
+        ...(firstComment         ? { first_comment: firstComment } : {}),
+        ...(selectedConnectionId ? { connectionId: selectedConnectionId } : {}),
       };
       if (attachedAssetUrl) {
         if (attachedAssetType === 'carousel' || attachedAssetType === 'media_pdf') {
@@ -1700,6 +1752,7 @@ function wireSchedule() {
     let published = false;
     try {
       const payload = { content, postId: currentPostId };
+      if (selectedConnectionId) payload.connectionId = selectedConnectionId;
       if (attachedAssetUrl) {
         if (attachedAssetType === 'carousel' || attachedAssetType === 'media_pdf') payload.carousel_pdf_url = attachedAssetUrl;
         else payload.image_url = attachedAssetUrl;

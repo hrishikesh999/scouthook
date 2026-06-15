@@ -62,23 +62,31 @@
 
 /* ── Wizard layout ───────────────────────────────────────── */
 .vw-body {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 40px;
+  align-items: start;
   max-width: 920px;
 }
 
-/* ── Stage navigation (horizontal tabs) ─────────────────── */
+@media (max-width: 700px) {
+  .vw-body { grid-template-columns: 1fr; gap: 24px; }
+}
+
+/* ── Stage navigation (left sidebar) ────────────────────── */
 .vw-stages {
+  position: sticky;
+  top: 24px;
   display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 4px;
-  margin-bottom: 16px;
 }
 
 .vw-stage-link {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 14px;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 12px;
   border-radius: 8px;
   text-decoration: none;
   color: var(--text-body);
@@ -102,8 +110,8 @@
 
 .vw-stage-num {
   flex-shrink: 0;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   border: 1.5px solid var(--border, #1f2d4a);
   font-size: 11px;
@@ -112,13 +120,15 @@
   align-items: center;
   justify-content: center;
   color: var(--text-muted);
+  margin-top: 1px;
 }
 
 .vw-stage-info {
   display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 0;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+  min-width: 0;
 }
 
 .vw-stage-name {
@@ -129,7 +139,8 @@
 }
 
 .vw-stage-desc {
-  display: none;
+  font-size: 11px;
+  color: var(--text-muted);
 }
 
 .vw-stage-check {
@@ -137,6 +148,7 @@
   color: var(--brand, #0d7a5f);
   font-weight: 700;
   flex-shrink: 0;
+  margin-top: 4px;
 }
 
 /* ── Stage panels ────────────────────────────────────────── */

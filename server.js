@@ -484,8 +484,7 @@ app.use(express.static(path.join(__dirname, 'public'), {
 }));
 
 // Serve generated visuals and uploads behind session auth.
-// In local mode: sendFile from disk.  In S3 mode: stream from S3 using the
-// authenticated user's tenant/user prefix (only the owner's session resolves the correct key).
+// In local mode: sendFile from disk.  In S3 mode: stream from S3.
 const storage = require('./services/storage');
 
 function serveStoredFile(type) {
@@ -499,7 +498,19 @@ function serveStoredFile(type) {
       return res.status(400).end();
     }
 
-    const key = storage.buildKey(req.tenantId, req.userId, type, filename);
+    // For permanent uploads, resolve the original uploader's user_id from DB so
+    // any workspace member can access the file (S3 key includes the uploader's user_id).
+    // Generated files are ephemeral and only accessed in the generating user's session.
+    let ownerId = req.userId;
+    if (type === 'uploads') {
+      const row = db.prepare(
+        'SELECT user_id FROM media_files WHERE stored_name = ? AND tenant_id = ?'
+      ).get(filename, req.tenantId);
+      if (!row) return res.status(404).end();
+      ownerId = row.user_id;
+    }
+
+    const key = storage.buildKey(req.tenantId, ownerId, type, filename);
     await storage.stream(key, res, next);
   };
 }

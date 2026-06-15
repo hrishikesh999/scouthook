@@ -119,7 +119,7 @@ router.post('/upload', async (req, res) => {
 
     // Upload to storage first
     try {
-      await storage.upload(storageKey, req.body, mimeType);
+      await storage.upload(req.body, { tenantId, userId, type: 'vault', filename, mimeType });
     } catch (err) {
       return res.status(500).json({ ok: false, error: 'storage_upload_failed', detail: err.message });
     }

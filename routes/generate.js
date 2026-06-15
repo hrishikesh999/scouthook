@@ -1110,71 +1110,46 @@ router.post('/improve', async (req, res) => {
   if (!apiKey) return res.status(500).json({ ok: false, error: 'no_api_key' });
 
   try {
-    const { buildRefineSystemPrompt } = require('../services/ideaPath');
-    const { buildHookInjection }       = require('../services/hookSelector');
-    const { HOOK_ARCHETYPES }          = require('../services/hookArchetypes');
+    const { buildImproveSystemPrompt } = require('../services/ideaPath');
     const Anthropic = require('@anthropic-ai/sdk');
     const client = new Anthropic({ apiKey });
 
-    // Build hook injection from the archetype the post was originally generated with.
-    // Falls back to null (generic hook rule) when no archetype is stored.
-    const archetypeKey     = postMeta?.archetype_used || null;
-    const archetypeRecord  = archetypeKey ? (HOOK_ARCHETYPES[archetypeKey] || null) : null;
-    const hookInjection    = archetypeRecord ? buildHookInjection(archetypeRecord) : null;
+    const systemPrompt = buildImproveSystemPrompt(profile);
 
-    // funnel_type is the more reliably populated field; post_type is the explicit override
-    const resolvedPostType = postMeta?.post_type || postMeta?.funnel_type || null;
+    // Build real multi-turn conversation from history.
+    // history arrives as [{role:'user', content: instruction}, {role:'assistant', content: improved_post}]
+    // — pass them as actual API message turns so Claude tracks conversational evolution.
+    const messages = [];
+    for (const turn of history.slice(-8)) {
+      messages.push({
+        role:    turn.role === 'assistant' ? 'assistant' : 'user',
+        content: turn.content,
+      });
+    }
 
-    const systemPrompt = buildRefineSystemPrompt(
-      profile,
-      hookInjection,
-      resolvedPostType,
-      null,
-      null
-    );
-
-    // Build the history preamble for multi-turn context.
-    // Keep last 6 exchanges; truncate each entry to 800 chars (enough for a full post).
-    const historyBlock = history.length
-      ? '\n\nPREVIOUS EXCHANGES (for context only — apply the new instruction below):\n' +
-        history.slice(-6).map(m =>
-          `${m.role === 'user' ? 'Author request' : 'Previous version'}: ${m.content.slice(0, 800)}`
-        ).join('\n\n---\n\n')
-      : '';
-
+    // Final user turn always includes the full current post so Claude has the exact
+    // current state (user may have manually edited since the last AI turn).
     const vaultBlock = vaultContext
-      ? `\n\nSOURCE MATERIAL (from the author's vault — reference specific details when relevant):\n<source>\n${vaultContext}\n</source>\n`
+      ? `SOURCE MATERIAL (from the author's vault):\n<source>\n${vaultContext}\n</source>\n\n`
       : '';
 
-    const userPrompt = `AUTHOR'S SPECIFIC REQUEST: ${instruction}
-
-Apply this change while preserving all the author's specifics (numbers, names, outcomes, timeframes) and everything else not targeted by this request.${historyBlock}${vaultBlock}
-
-CURRENT POST:
-${currentText}
-
-SPECIFICITY CHECK: Before reshaping, identify the most concrete fact or result in the post. Keep it verbatim.
-
-Return ONLY valid JSON:
-{
-  "synthesis": {
-    "suggested_angle": "one sentence describing what changed and why",
-    "recommended_structure": "one sentence on structure",
-    "supporting_insight": "the closing CTA used"
-  },
-  "post": "full revised post text"
-}
-
-No markdown fences. No explanation. Only the JSON object.`;
-
-    const message = await client.messages.create({
-      model:      'claude-sonnet-4-6',
-      max_tokens: 2000,
-      system:     systemPrompt,
-      messages:   [{ role: 'user', content: userPrompt }],
+    messages.push({
+      role:    'user',
+      content: `${vaultBlock}CURRENT POST:\n${currentText}\n\nINSTRUCTION: ${instruction}\n\nReturn ONLY valid JSON:\n{\n  "synthesis": {\n    "suggested_angle": "one sentence: what changed and why",\n    "recommended_structure": "one sentence on structure",\n    "supporting_insight": "the closing CTA used"\n  },\n  "post": "full revised post text"\n}\n\nNo markdown fences. No explanation. Only the JSON object.`,
     });
 
-    const raw = message.content[0]?.text?.trim() || '{}';
+    // Extended thinking lets Claude reason through what to change vs. preserve before writing.
+    // This is the single biggest quality improvement for surgical editing tasks.
+    const message = await client.messages.create({
+      model:      'claude-sonnet-4-6',
+      max_tokens: 10000,
+      thinking:   { type: 'enabled', budget_tokens: 4000 },
+      system:     systemPrompt,
+      messages,
+    });
+
+    const textBlock = message.content.find(b => b.type === 'text');
+    const raw = textBlock?.text?.trim() || '{}';
     let result = {};
     try {
       const match = raw.match(/\{[\s\S]*\}/);

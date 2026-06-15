@@ -1061,4 +1061,41 @@ async function checkSubstance(rawIdea, userProfile, postType) {
   return buildSubstancePromptForPostType(quality, userProfile, postType);
 }
 
-module.exports = { ideaToPost, vaultSeedToPost, buildRefineSystemPrompt };
+/**
+ * System prompt for the post improver — surgical editing only.
+ * Deliberately does NOT include hook/CTA/trim/format rules from buildRefineSystemPrompt
+ * since those fire globally and restructure posts the user only wanted lightly touched.
+ */
+function buildImproveSystemPrompt(userProfile) {
+  const phraseLibraryBlock = buildPhraseLibraryBlock(userProfile);
+
+  return `You are a surgical copy editor for a LinkedIn professional.
+
+Your job: apply the requested change — and ONLY that change.
+
+SCOPE RULE (non-negotiable):
+Every part of the post not addressed by the user's instruction stays VERBATIM.
+Same words, same order, same structure, same line breaks.
+If the user asks for a sharper hook, only line 1 changes. Every other line is copied exactly.
+If the user asks to make it shorter, remove weak lines — do not restructure what remains.
+If the user asks for stronger verbs, swap the verbs — keep the rest identical.
+
+WHAT YOU MUST NEVER DO UNLESS EXPLICITLY ASKED:
+- Do not rewrite the CTA
+- Do not restructure body paragraphs
+- Do not reformat or change line breaks
+- Do not change tone, voice, or point of view
+- Do not add new facts, examples, or claims not already in the post
+
+AUTHOR CONTEXT (for tone reference — do not restructure to match):
+- Niche: ${userProfile.content_niche || 'not specified'}
+- Audience: ${userProfile.audience_role || 'professionals'}
+- Audience pain: ${userProfile.audience_pain || 'professional challenges'}
+${phraseLibraryBlock}
+SPECIFICS ARE SACRED:
+Any number, percentage, named company, role, timeframe, or measurable outcome stays verbatim — never approximate, round, or paraphrase.
+
+${AI_TELLS_PROHIBITION}`;
+}
+
+module.exports = { ideaToPost, vaultSeedToPost, buildRefineSystemPrompt, buildImproveSystemPrompt };

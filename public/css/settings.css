@@ -65,11 +65,10 @@
   max-width: 920px;
 }
 
-/* ── Stage navigation (horizontal tabs) ─────────────────── */
+/* ── Stage navigation (vertical list) ───────────────────── */
 .vw-stages {
   display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 4px;
   margin-bottom: 16px;
 }

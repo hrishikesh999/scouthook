@@ -1,7 +1,7 @@
 'use strict';
 
 const Anthropic = require('@anthropic-ai/sdk');
-const { getSetting } = require('../db');
+const { db, getSetting } = require('../db');
 const { extractJsonFromResponse } = require('./voiceFingerprint');
 const { buildVoiceDNABlock } = require('./voiceExtraction');
 const { buildHookInjection, getTopArchetypes } = require('./hookSelector');
@@ -17,6 +17,73 @@ const ARCHETYPE_POST_TYPE_PREFERENCES = {
   trust:   ['INSIGHT', 'MYTH_BUST', 'DIRECT_ADDRESS'],
   convert: ['NUMBER', 'BEFORE_AFTER', 'REFRAME'],
 };
+
+/**
+ * Fetch up to 3 of the profile's best published posts to use as voice examples.
+ * Returns a formatted block string, or '' if none exist.
+ */
+async function fetchPublishedExamples(profileId) {
+  if (!profileId) return '';
+  try {
+    const rows = await db.prepare(`
+      SELECT content FROM generated_posts
+      WHERE profile_id = ? AND status = 'published' AND content IS NOT NULL
+      ORDER BY quality_score DESC, published_at DESC
+      LIMIT 3
+    `).all(profileId);
+    if (!rows.length) return '';
+    return `\nEXAMPLES — this author's actual published posts (study these first — match their rhythm, sentence length, directness, and register exactly):\n\n` +
+      rows.map((r, i) => `--- Example ${i + 1} ---\n${r.content}`).join('\n\n') +
+      '\n\nDo not copy these posts. Use them to calibrate voice and register only.\n';
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Stage 3 — Claude critiques and rewrites its own draft.
+ * Evaluates hook strength, structural completeness, and specificity.
+ * Returns the improved post, or the original if all checks pass.
+ * Only runs on the non-streaming path.
+ */
+async function critiqueAndRefine(draftPost, rawIdea, archetypeKey, client) {
+  const archetypeRecord = HOOK_ARCHETYPES[archetypeKey] || HOOK_ARCHETYPES.INSIGHT;
+  const moves = archetypeRecord.bodyStructure.map((m, i) => `${i + 1}. ${m}`).join('\n');
+
+  try {
+    const response = await client.messages.create({
+      model:       'claude-sonnet-4-6',
+      max_tokens:  2000,
+      temperature: 0.3,
+      messages: [{
+        role:    'user',
+        content: `You are editing a LinkedIn post. Evaluate it against three criteria, then output the best version.
+
+ORIGINAL IDEA (ground truth — the post must stay grounded in this):
+${rawIdea.slice(0, 1000)}
+
+REQUIRED STRUCTURAL MOVES (${archetypeKey}):
+${moves}
+
+DRAFT POST:
+${draftPost}
+
+EVALUATE:
+1. LINE 1: Would a complete stranger stop scrolling? State yes or no and one sentence why.
+2. STRUCTURE: Which of the ${archetypeRecord.bodyStructure.length} required moves were skipped or compressed into a single line?
+3. SPECIFICITY: Did anything from the original idea get genericized, approximated, or invented?
+
+If any check reveals a real problem, rewrite the post to fix exactly that issue — nothing else.
+If all three pass, return the post unchanged.
+
+Output only the final post text. No labels, no evaluation, no explanation.`,
+      }],
+    });
+    return response.content[0]?.text?.trim() || draftPost;
+  } catch {
+    return draftPost;
+  }
+}
 
 const BLUEPRINT_SYSTEM_PROMPT = `You are a LinkedIn content strategist. Analyze the raw idea and return a structural blueprint for a single LinkedIn post.
 
@@ -138,8 +205,8 @@ async function ideaToPost(rawIdea, userProfile, options = {}) {
 
   const shouldCheckSubstance = !options.skipSubstanceCheck && rawIdea.trim().length >= 15 && !archetypeOverride;
 
-  // Run substance check and blueprint in parallel — saves ~1.5s vs sequential
-  const [quality, blueprint] = await Promise.all([
+  // Run substance check, blueprint, and example fetch in parallel — all three are independent
+  const [quality, blueprint, examplesBlock] = await Promise.all([
     shouldCheckSubstance
       ? assessInputQuality(rawIdea, client, userProfile)
       : Promise.resolve(null),
@@ -152,6 +219,7 @@ async function ideaToPost(rawIdea, userProfile, options = {}) {
           hook_draft: '',
         })
       : buildStructureBlueprint(rawIdea, postType, client, userProfile, options.isInterviewPath),
+    fetchPublishedExamples(userProfile.id),
   ]);
 
   // Substance feedback: computed when quality check ran and the idea passed.
@@ -190,6 +258,7 @@ async function ideaToPost(rawIdea, userProfile, options = {}) {
     archetypeUsed: blueprint.archetype,
     postType,
     ctaInstruction,
+    examplesBlock,
   });
   return { ...result, contentFeedback };
 }
@@ -338,7 +407,7 @@ async function buildStructureBlueprint(rawIdea, postType, client, userProfile = 
  *               blueprint → body structure → hook → niche/audience → formatting →
  *               above the fold → POV → prohibitions → specificity → CTA
  */
-function buildVoiceWritingSystemPrompt(blueprint, userProfile, hookInjectionBlock, ctaInstruction = '', postType = null) {
+function buildVoiceWritingSystemPrompt(blueprint, userProfile, hookInjectionBlock, ctaInstruction = '', postType = null, examplesBlock = '') {
   const { tension, arc, hook_draft, archetype } = blueprint;
   const phraseLibraryBlock = buildPhraseLibraryBlock(userProfile);
   const voiceDNABlock      = buildVoiceDNABlock(userProfile);
@@ -355,7 +424,7 @@ Use this as a foundation or ignore it — whatever produces the strongest post.
 `;
 
   return `You are writing a LinkedIn post for a professional. You have full creative authority — structure, hook, tone, arc. A structural suggestion is provided below as a starting point; improve on it, override it, or take a completely different angle if you see something stronger.
-${phraseLibraryBlock}${voiceDNABlock}${postTypeBlock}
+${examplesBlock}${phraseLibraryBlock}${voiceDNABlock}${postTypeBlock}
 ${blueprintBlock}
 ${bodyStructureBlock}
 ${hookInjectionBlock}
@@ -393,14 +462,16 @@ ${AI_TELLS_PROHIBITION}${SPECIFICITY_MANDATE}${ctaInstruction}`;
  * Streaming variant — omits STREAMING_SELF_CHECK because the model can't pause
  * mid-stream to revise; the self-check only adds tokens without being executable.
  */
-function buildStreamingVoiceWritingSystemPrompt(blueprint, userProfile, hookInjectionBlock, ctaInstruction = '', postType = null) {
-  return buildVoiceWritingSystemPrompt(blueprint, userProfile, hookInjectionBlock, ctaInstruction, postType);
+function buildStreamingVoiceWritingSystemPrompt(blueprint, userProfile, hookInjectionBlock, ctaInstruction = '', postType = null, examplesBlock = '') {
+  return buildVoiceWritingSystemPrompt(blueprint, userProfile, hookInjectionBlock, ctaInstruction, postType, examplesBlock);
 }
 
 /** User prompt for the streaming path — asks for plain text instead of JSON wrapper. */
 function buildStreamingUserPrompt(rawIdea) {
   return `RAW IDEA:
 ${rawIdea}
+
+OPENING: Silently draft 3 candidate first lines applying the hook archetype to this specific idea. Pick the one that would make a complete stranger stop scrolling. Write the full post starting from that line.
 
 EXTRACTION INSTRUCTION: Before structuring the post, identify the most concrete element in the raw idea — a specific scenario, decision, moment, named role, direction of change, or result. Build from that. If the input has no numbers, do not add or invent any — the scenario itself is the specificity. Never use [SPECIFIC NEEDED] markers. If the input is genuinely abstract with no concrete anchor, produce the strongest possible post from the material given, grounded in the author's niche and voice.
 
@@ -420,6 +491,7 @@ async function runTwoStageGeneration({
   archetypeUsed,
   postType = null,
   ctaInstruction = '',
+  examplesBlock = '',
 }) {
   const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
   if (!apiKey) throw new Error('anthropic_api_key not configured');
@@ -428,8 +500,9 @@ async function runTwoStageGeneration({
   const extraHints = [options._funnelHint, options.qualityRetryHint, options._regenerateHint].filter(Boolean).join('\n\n');
 
   // ── Streaming path: plain-text output, token-by-token via onToken callback ──
+  // No critique pass here — we're sending tokens in real-time and can't revise.
   if (options.onToken) {
-    const streamSysPrompt  = buildStreamingVoiceWritingSystemPrompt(blueprint, userProfile, hookInjection, ctaInstruction, postType);
+    const streamSysPrompt  = buildStreamingVoiceWritingSystemPrompt(blueprint, userProfile, hookInjection, ctaInstruction, postType, examplesBlock);
     const streamUserPrompt = buildStreamingUserPrompt(rawIdea);
     const streamUserFinal  = extraHints ? `${streamUserPrompt}\n\n${extraHints}` : streamUserPrompt;
 
@@ -454,10 +527,9 @@ async function runTwoStageGeneration({
     return { synthesis: null, post: cleanPost, archetypeUsed, stage1Blueprint: blueprint };
   }
 
-  // ── Non-streaming path: plain-text post, metadata extracted separately ───────
-  // Model completes its full response before we see it, so STREAMING_SELF_CHECK
-  // is actually executable here (unlike the streaming path where it cannot be).
-  const systemPrompt    = buildStreamingVoiceWritingSystemPrompt(blueprint, userProfile, hookInjection, ctaInstruction, postType)
+  // ── Non-streaming path ───────────────────────────────────────────────────────
+  // Stage 2: write the post. Stage 3: Claude critiques and rewrites its own draft.
+  const systemPrompt    = buildStreamingVoiceWritingSystemPrompt(blueprint, userProfile, hookInjection, ctaInstruction, postType, examplesBlock)
     + '\n' + STREAMING_SELF_CHECK;
   const userPrompt      = buildUserPrompt(rawIdea);
   const userPromptFinal = extraHints ? `${userPrompt}\n\n${extraHints}` : userPrompt;
@@ -472,11 +544,15 @@ async function runTwoStageGeneration({
     });
 
     const responseText = message.content.find(b => b.type === 'text')?.text?.trim() || '';
-    const cleanPost    = sanitiseAiTells(responseText);
+    const draftPost    = sanitiseAiTells(responseText);
+
+    // Stage 3 — critique and rewrite. Fire-and-forget on failure (returns draft).
+    const refinedPost  = await critiqueAndRefine(draftPost, rawIdea, archetypeUsed, client);
+    const finalPost    = sanitiseAiTells(refinedPost);
 
     return {
       synthesis:       null,
-      post:            cleanPost,
+      post:            finalPost,
       archetypeUsed,
       stage1Blueprint: blueprint,
     };
@@ -488,6 +564,8 @@ async function runTwoStageGeneration({
 function buildUserPrompt(rawIdea) {
   return `RAW IDEA:
 ${rawIdea}
+
+OPENING: Silently draft 3 candidate first lines applying the hook archetype to this specific idea. Pick the one that would make a complete stranger stop scrolling. Write the full post starting from that line.
 
 EXTRACTION INSTRUCTION: Before structuring the post, identify the most concrete element in the raw idea — a specific scenario, decision, moment, named role, direction of change, or result. Build from that. If the input has no numbers, do not add or invent any — the scenario itself is the specificity. Never use [SPECIFIC NEEDED] markers. If the input is genuinely abstract with no concrete anchor, produce the strongest possible post from the material given, grounded in the author's niche and voice.
 

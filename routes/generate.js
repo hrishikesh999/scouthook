@@ -933,9 +933,9 @@ router.post('/chat-intake', async (req, res) => {
   const { brief, history = [], post_type, exchange_count = 0 } = req.body;
   if (!brief?.trim()) return res.json({ ok: true, ready: true });
 
-  // Hard cap: after 2+ exchanges always generate — don't over-interrogate
+  // Hard cap: after 4 exchanges always generate — don't over-interrogate
   // (The LLM prompt also says >=2 → ready:true, but we enforce it server-side for reliability)
-  if (exchange_count >= 2) return res.json({ ok: true, ready: true });
+  if (exchange_count >= 4) return res.json({ ok: true, ready: true });
 
   try {
     const profile = await db.prepare(`
@@ -998,7 +998,7 @@ Score this brief on 4 dimensions. A dimension scores TRUE only if the brief actu
 
 RULES:
 - If 3 or more dimensions score TRUE → set ready: true, no question needed
-- If exchange_count >= 2 → set ready: true regardless (don't over-interrogate)
+- If exchange_count >= 4 → set ready: true regardless (don't over-interrogate)
 - Otherwise identify the SINGLE most important missing dimension and ask ONE targeted, conversational question
 - The question must reference something specific from their brief — NOT generic
 - Also write a skip_suggestion: a 1-2 sentence plausible answer they could use, written in first person, grounded in their profile and niche

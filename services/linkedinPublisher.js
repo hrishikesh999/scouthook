@@ -27,30 +27,29 @@ function sleep(ms) {
 // Rate limit check — 1 published post per hour per user
 // ---------------------------------------------------------------------------
 
-function checkRateLimit(userId, tenantId) {
-  const sql = backendKind === 'sqlite'
-    ? `
-      SELECT COUNT(*) AS cnt FROM scheduled_posts
-      WHERE user_id = ? AND tenant_id = ?
-        AND status = 'published'
-        AND updated_at > datetime('now', ?)
-    `
-    : `
-      SELECT COUNT(*)::int AS cnt FROM scheduled_posts
-      WHERE user_id = ? AND tenant_id = ?
-        AND status = 'published'
-        AND updated_at > (now() - ($3::text)::interval)
-    `;
+async function checkRateLimit(userId, tenantId) {
+  const windowParam = backendKind === 'sqlite'
+    ? `-${RATE_LIMIT_WINDOW_HOURS} hours`
+    : `${RATE_LIMIT_WINDOW_HOURS} hours`;
 
-  return db.prepare(sql).get(
-    userId,
-    tenantId,
-    backendKind === 'sqlite' ? `-${RATE_LIMIT_WINDOW_HOURS} hours` : `${RATE_LIMIT_WINDOW_HOURS} hours`
-  ).then(({ cnt } = {}) => {
-    if ((cnt ?? 0) > 0) {
-      throw Object.assign(new Error('rate_limit_exceeded'), { statusCode: 429 });
-    }
-  });
+  // Covers posts published via the scheduler (always writes a scheduled_posts row).
+  const scheduledSql = backendKind === 'sqlite'
+    ? `SELECT COUNT(*) AS cnt FROM scheduled_posts WHERE user_id = ? AND tenant_id = ? AND status = 'published' AND updated_at > datetime('now', ?)`
+    : `SELECT COUNT(*)::int AS cnt FROM scheduled_posts WHERE user_id = ? AND tenant_id = ? AND status = 'published' AND updated_at > (now() - ($3::text)::interval)`;
+
+  // Covers posts published immediately via POST /api/linkedin/publish (no scheduled_posts row created).
+  const immediateSql = backendKind === 'sqlite'
+    ? `SELECT COUNT(*) AS cnt FROM generated_posts WHERE user_id = ? AND tenant_id = ? AND status = 'published' AND published_at > datetime('now', ?)`
+    : `SELECT COUNT(*)::int AS cnt FROM generated_posts WHERE user_id = ? AND tenant_id = ? AND status = 'published' AND published_at > (now() - ($3::text)::interval)`;
+
+  const [{ cnt: scheduledCnt } = {}, { cnt: immediateCnt } = {}] = await Promise.all([
+    db.prepare(scheduledSql).get(userId, tenantId, windowParam),
+    db.prepare(immediateSql).get(userId, tenantId, windowParam),
+  ]);
+
+  if ((scheduledCnt ?? 0) > 0 || (immediateCnt ?? 0) > 0) {
+    throw Object.assign(new Error('rate_limit_exceeded'), { statusCode: 429 });
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -75,8 +74,8 @@ async function resolveConnection(tenantId, options = {}) {
 
   if (options.profileId) {
     return db.prepare(
-      'SELECT * FROM linkedin_connections WHERE profile_id = ? AND is_default = true'
-    ).get(options.profileId);
+      'SELECT * FROM linkedin_connections WHERE profile_id = ? AND workspace_id = ? AND is_default = true'
+    ).get(options.profileId, tenantId);
   }
 
   // Fallback: workspace default personal connection (matches status endpoint logic)
@@ -274,12 +273,12 @@ async function registerFeedshareImageUpload(accessToken, ownerUrn) {
   return { asset, uploadUrl, uploadHeaders };
 }
 
-async function uploadFeedshareImageBinary(accessToken, uploadUrl, buffer, extraHeaders = {}) {
+async function uploadFeedshareImageBinary(accessToken, uploadUrl, buffer, extraHeaders = {}, contentType = 'image/jpeg') {
   const res = await fetch(uploadUrl, {
     method: 'PUT',
     headers: {
       'Authorization': `Bearer ${accessToken}`,
-      'Content-Type': 'image/png',
+      'Content-Type': contentType,
       ...extraHeaders,
     },
     body: buffer,
@@ -575,8 +574,12 @@ async function publishNow(userId, tenantId, content, options = {}) {
     const bytes = await readStoredFileBytes(options.image_url, userId, tenantId);
     if (!bytes) throw new Error('invalid_image_url');
 
+    const ext = path.extname(options.image_url).toLowerCase();
+    const mimeMap = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp' };
+    const imageMime = mimeMap[ext] || 'image/png';
+
     const { asset, uploadUrl, uploadHeaders } = await registerFeedshareImageUpload(accessToken, ownerUrn);
-    await uploadFeedshareImageBinary(accessToken, uploadUrl, bytes, uploadHeaders);
+    await uploadFeedshareImageBinary(accessToken, uploadUrl, bytes, uploadHeaders, imageMime);
     await sleep(2000);
     const linkedin_post_id = await createUgcPostWithImage(accessToken, ownerUrn, content, asset);
     return { linkedin_post_id };
@@ -917,10 +920,12 @@ async function publishScheduledPost(scheduledPostId, { attemptsMade = 0, maxAtte
  */
 async function publishFirstComment(scheduledPostId) {
   const row = await db.prepare(
-    'SELECT linkedin_post_id, first_comment, user_id, tenant_id, profile_id FROM scheduled_posts WHERE id = ?'
+    'SELECT linkedin_post_id, first_comment, first_comment_status, user_id, tenant_id, profile_id FROM scheduled_posts WHERE id = ?'
   ).get(scheduledPostId);
 
   if (!row?.first_comment || !row?.linkedin_post_id) return;
+  // Already resolved on a previous attempt — skip to avoid spamming LinkedIn API on retries.
+  if (row.first_comment_status === 'posted' || row.first_comment_status === 'failed') return;
 
   // Resolve the connection: prefer the profile that generated the post, then
   // fall back to the workspace default.
@@ -971,7 +976,8 @@ async function publishFirstComment(scheduledPostId) {
     await db.prepare(
       "UPDATE scheduled_posts SET first_comment_status = 'failed', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ?"
     ).run(scheduledPostId, row.tenant_id);
-    throw new Error(`linkedin_comment_api_error_${res.status}`);
+    // Do not throw — the status is persisted and the guard above prevents retries.
+    return;
   }
 
   await db.prepare(

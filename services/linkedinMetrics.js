@@ -1,7 +1,7 @@
 'use strict';
 
 const { db } = require('../db');
-const { decrypt } = require('./linkedinOAuth');
+const { getValidAccessToken } = require('./linkedinOAuth');
 
 const LINKEDIN_API_BASE    = 'https://api.linkedin.com';
 const LINKEDIN_API_VERSION = '202501';
@@ -28,18 +28,9 @@ class RateLimitError extends Error {
 // reconnect_required when the token is expiring soon.
 // ---------------------------------------------------------------------------
 async function resolveWorkspaceToken(workspaceId) {
-  const conn = await db.prepare(
-    'SELECT access_token_enc, expires_at FROM linkedin_connections WHERE workspace_id = ? AND is_default = true'
-  ).get(workspaceId);
-
-  if (!conn) throw new Error('not_connected');
-
-  const hoursUntilExpiry = (new Date(conn.expires_at) - Date.now()) / 3_600_000;
-  if (hoursUntilExpiry < 24) {
-    throw new Error('reconnect_required');
-  }
-
-  return decrypt(conn.access_token_enc);
+  // Delegates to the shared token getter: handles refresh, reconnect notifications,
+  // and filters to account_type='personal' — consistent with the publisher path.
+  return getValidAccessToken(workspaceId);
 }
 
 // ---------------------------------------------------------------------------

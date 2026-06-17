@@ -349,7 +349,7 @@ router.get('/callback', async (req, res) => {
   const { code, state, error: oauthError } = req.query;
 
   const stateData = state ? await getOAuthState(state) : null;
-  const errBase = stateData?.returnTo?.split('?')[0] || '/linkedin.html';
+  const errBase = stateData?.returnTo?.split('?')[0] || '/account.html';
 
   if (oauthError) {
     if (stateData) await deleteOAuthState(state);
@@ -366,6 +366,10 @@ router.get('/callback', async (req, res) => {
   if (req.userId && req.userId !== userId) {
     console.warn(`[linkedin/callback] Session user=${req.userId} doesn't match state user=${userId} — rejecting`);
     return res.redirect(`${errBase}?linkedin_error=session_mismatch`);
+  }
+
+  if (!code) {
+    return res.redirect(`${errBase}?linkedin_error=missing_code`);
   }
 
   try {
@@ -391,7 +395,7 @@ router.get('/callback', async (req, res) => {
     if (!tokenRes.ok) {
       const text = await tokenRes.text();
       console.error('[linkedin/callback] Token exchange failed:', text);
-      return res.redirect('/account.html?linkedin_error=token_exchange_failed');
+      return res.redirect(`${errBase}?linkedin_error=token_exchange_failed`);
     }
 
     const tokens = await tokenRes.json();
@@ -450,8 +454,6 @@ router.get('/callback', async (req, res) => {
     } catch (e) {
       console.warn('[linkedin/callback] me fetch error:', e.message);
     }
-
-    const errBase = stateData?.returnTo?.split('?')[0] || '/account.html';
 
     // Duplicate-member check: reject if this linkedin_member_id is already claimed
     // by a DIFFERENT workspace member in this workspace.
@@ -558,7 +560,6 @@ router.get('/callback', async (req, res) => {
 
   } catch (err) {
     console.error('[linkedin/callback] Error:', err.message);
-    const errBase = stateData?.returnTo?.split('?')[0] || '/account.html';
     res.redirect(`${errBase}?linkedin_error=${encodeURIComponent(err.message)}`);
   }
 });
@@ -766,11 +767,11 @@ router.post('/publish', async (req, res) => {
     image_url: image_url?.trim() || null,
   };
   if (connectionId) {
-    // Validate the requested connection belongs to this workspace before trusting the id
     const conn = await db.prepare(
       'SELECT id FROM linkedin_connections WHERE id = ? AND workspace_id = ?'
     ).get(Number(connectionId), tenantId);
-    if (conn) publishOpts.connectionId = conn.id;
+    if (!conn) return res.status(400).json({ ok: false, error: 'connection_not_found' });
+    publishOpts.connectionId = conn.id;
   }
 
   try {
@@ -934,7 +935,8 @@ router.post('/schedule', async (req, res) => {
     const selectedConn = await db.prepare(
       'SELECT profile_id FROM linkedin_connections WHERE id = ? AND workspace_id = ?'
     ).get(Number(connectionId), tenantId);
-    if (selectedConn) schedProfileId = selectedConn.profile_id;
+    if (!selectedConn) return res.status(400).json({ ok: false, error: 'connection_not_found' });
+    schedProfileId = selectedConn.profile_id;
   }
 
   try {
@@ -1420,6 +1422,14 @@ router.delete('/user-data', (req, res) => {
         }
         revokedMemberIds.add(conn.linkedin_member_id);
       }
+    }
+
+    // Cancel BullMQ jobs before the transaction removes the rows we need to look up.
+    const pendingPosts = await db.prepare(
+      `SELECT id FROM scheduled_posts WHERE user_id = ? AND tenant_id = ? AND status IN ('pending', 'processing')`
+    ).all(userId, tenantId);
+    for (const p of pendingPosts) {
+      removeScheduledJob(Number(p.id)).catch(() => {});
     }
 
     await db.transaction(async tx => {

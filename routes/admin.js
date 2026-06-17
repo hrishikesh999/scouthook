@@ -3,6 +3,7 @@
 const express = require('express');
 const router  = express.Router();
 const { getSetting, setSetting, getAllSettings, db } = require('../db');
+const { pool } = require('../db/pg');
 const { getPaddle, upsertSubscription, getUserPlan } = require('../services/subscription');
 const mailerlite = require('../services/mailerlite');
 const { getUserEmailInfo } = require('../emails');
@@ -104,7 +105,8 @@ router.get('/diagnostics', requireAdminPassword, (req, res) => {
       FROM user_profiles up
       LEFT JOIN user_subscriptions us ON us.user_id = up.user_id
       LEFT JOIN workspace_members wm ON wm.user_id = up.user_id
-      GROUP BY up.user_id, us.plan, us.status, us.trial_ends_at,
+      GROUP BY up.user_id, up.email, up.display_name, up.created_at,
+               us.plan, us.status, us.trial_ends_at,
                us.current_period_end, us.paddle_subscription_id
       ORDER BY up.created_at DESC
       LIMIT 100
@@ -269,6 +271,70 @@ router.post('/sync-subscription', requireAdminPassword, (req, res) => {
 
     console.log(`[admin] force-synced subscription for ${email}: plan=${plan} status=${subscription.status}`);
     return res.json({ ok: true, email, userId, plan, status: subscription.status, subscriptionId: subscription.id });
+  })().catch(err => res.status(500).json({ ok: false, error: err.message }));
+});
+
+// ---------------------------------------------------------------------------
+// POST /admin/users/:userId/set-workspace
+// Immediately switch a user's active workspace: updates their live sessions
+// AND persists last_active_workspace_id so future logins also land correctly.
+// Body: { admin_password, workspaceId }
+// ---------------------------------------------------------------------------
+router.post('/users/:userId/set-workspace', requireAdminPassword, (req, res) => {
+  (async () => {
+    const { userId } = req.params;
+    const { workspaceId } = req.body || {};
+    if (!workspaceId) return res.status(400).json({ ok: false, error: 'workspaceId required' });
+
+    // Validate workspace exists and user is a member
+    const member = await db.prepare(
+      'SELECT wm.workspace_id FROM workspace_members wm JOIN workspaces w ON w.id = wm.workspace_id WHERE wm.user_id = ? AND wm.workspace_id = ? AND w.deleted_at IS NULL'
+    ).get(userId, workspaceId);
+    if (!member) return res.status(404).json({ ok: false, error: 'user is not a member of that workspace (or workspace is deleted)' });
+
+    // Persist preference so future logins land here too
+    await db.prepare(
+      'UPDATE user_profiles SET last_active_workspace_id = ? WHERE user_id = ?'
+    ).run(workspaceId, userId);
+
+    // Patch all live sessions for this user — uses pg JSONB ops directly
+    // (the db wrapper's qmarkToDollar would mangle the jsonb -> operator)
+    const result = await pool.query(
+      `UPDATE session
+       SET sess = jsonb_set(sess::jsonb, '{passport,user,tenant_id}', to_jsonb($1::text), true)
+       WHERE sess::jsonb -> 'passport' -> 'user' ->> 'user_id' = $2
+         AND expire > now()`,
+      [workspaceId, userId]
+    );
+
+    return res.json({ ok: true, sessions_updated: result.rowCount });
+  })().catch(err => res.status(500).json({ ok: false, error: err.message }));
+});
+
+// ---------------------------------------------------------------------------
+// GET /admin/users/:userId/workspaces
+// List all workspaces for a user with post counts — used to diagnose blank-post issues.
+// ---------------------------------------------------------------------------
+router.get('/users/:userId/workspaces', requireAdminPassword, (req, res) => {
+  (async () => {
+    const { userId } = req.params;
+    const up = await db.prepare(
+      'SELECT last_active_workspace_id FROM user_profiles WHERE user_id = ?'
+    ).get(userId);
+    if (!up) return res.status(404).json({ ok: false, error: 'user not found' });
+
+    const workspaces = await db.prepare(`
+      SELECT w.id, w.name, w.deleted_at, wm.role, wm.created_at AS joined_at,
+             (SELECT COUNT(*) FROM generated_posts WHERE tenant_id = w.id) AS post_count,
+             (SELECT COUNT(*) FROM scheduled_posts WHERE tenant_id = w.id AND user_id = ?) AS scheduled_count,
+             (SELECT COUNT(*) FROM linkedin_connections WHERE workspace_id = w.id) AS linkedin_connections
+      FROM workspace_members wm
+      JOIN workspaces w ON w.id = wm.workspace_id
+      WHERE wm.user_id = ?
+      ORDER BY post_count DESC, wm.created_at ASC
+    `).all(userId, userId);
+
+    return res.json({ ok: true, last_active_workspace_id: up.last_active_workspace_id, workspaces });
   })().catch(err => res.status(500).json({ ok: false, error: err.message }));
 });
 

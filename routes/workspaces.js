@@ -179,8 +179,11 @@ router.delete('/:id', requireAuth, requireMemberOf, requireOwnerOf, async (req, 
         WHERE wm.user_id = ? AND wm.workspace_id != ? AND w.deleted_at IS NULL
         ORDER BY wm.created_at ASC LIMIT 1
       `).get(req.userId, workspaceId);
-      if (next && req.session?.user) {
-        req.session.user = { ...req.session.user, tenant_id: next.workspace_id };
+      if (next && req.user) {
+        req.user.tenant_id = next.workspace_id;
+        await new Promise((resolve, reject) =>
+          req.session.save(err => err ? reject(err) : resolve())
+        );
       }
     }
 
@@ -335,11 +338,15 @@ router.delete('/:id/members/:userId', requireAuth, requireMemberOf, requireOwner
 router.post('/:id/switch', requireAuth, requireMemberOf, async (req, res) => {
   const workspaceId = req.params.id;
   try {
-    // Update session
     req.user.tenant_id = workspaceId;
-    await new Promise((resolve, reject) =>
-      req.session.save(err => err ? reject(err) : resolve())
-    );
+    await Promise.all([
+      new Promise((resolve, reject) =>
+        req.session.save(err => err ? reject(err) : resolve())
+      ),
+      db.prepare(
+        'UPDATE user_profiles SET last_active_workspace_id = ? WHERE user_id = ?'
+      ).run(workspaceId, req.userId),
+    ]);
     return res.json({ ok: true, redirect: '/dashboard.html' });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });

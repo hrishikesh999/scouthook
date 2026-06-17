@@ -157,22 +157,38 @@ if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
         ON CONFLICT(provider, provider_id) DO NOTHING
       `).run(userId, googleId || email || userId);
 
-      // 3. Resolve workspace — find existing membership or create personal workspace
-      const membership = await db.prepare(
-        'SELECT workspace_id FROM workspace_members WHERE user_id = ? ORDER BY created_at ASC LIMIT 1'
+      // 3. Resolve workspace — prefer last active, fall back to oldest non-deleted
+      const upRow = await db.prepare(
+        'SELECT last_active_workspace_id FROM user_profiles WHERE user_id = ?'
       ).get(userId);
 
       let workspaceId;
-      if (membership) {
-        workspaceId = membership.workspace_id;
-      } else {
-        workspaceId = await createPersonalWorkspace(userId, displayName);
-        seedTrialSubscription(userId).catch(() => {});
-        // Welcome email only on brand-new signup (new workspace = new user)
-        if (email) {
-          const appUrl = process.env.APP_URL || '';
-          sendEmail('welcome', email, { name: displayName.split(' ')[0] || displayName, app_url: appUrl });
-          require('./services/mailerlite').addFreeSubscriber(email, displayName).catch(() => {});
+      if (upRow?.last_active_workspace_id) {
+        const ws = await db.prepare(
+          'SELECT id FROM workspaces WHERE id = ? AND deleted_at IS NULL'
+        ).get(upRow.last_active_workspace_id);
+        if (ws) workspaceId = ws.id;
+      }
+
+      if (!workspaceId) {
+        const membership = await db.prepare(
+          `SELECT wm.workspace_id FROM workspace_members wm
+           JOIN workspaces w ON w.id = wm.workspace_id
+           WHERE wm.user_id = ? AND w.deleted_at IS NULL
+           ORDER BY wm.created_at ASC LIMIT 1`
+        ).get(userId);
+
+        if (membership) {
+          workspaceId = membership.workspace_id;
+        } else {
+          workspaceId = await createPersonalWorkspace(userId, displayName);
+          seedTrialSubscription(userId).catch(() => {});
+          // Welcome email only on brand-new signup (new workspace = new user)
+          if (email) {
+            const appUrl = process.env.APP_URL || '';
+            sendEmail('welcome', email, { name: displayName.split(' ')[0] || displayName, app_url: appUrl });
+            require('./services/mailerlite').addFreeSubscriber(email, displayName).catch(() => {});
+          }
         }
       }
 
@@ -791,8 +807,10 @@ initRedis().catch(err => {
 // Start
 // ---------------------------------------------------------------------------
 
+module.exports = { app };
+
 const PORT = process.env.PORT || 4000;
-(async () => {
+if (require.main === module) (async () => {
   try {
     await runSeed();
   } catch (e) {

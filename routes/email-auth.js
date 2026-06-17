@@ -220,16 +220,31 @@ router.post('/login', loginLimiter, async (req, res) => {
       return res.status(401).json({ ok: false, error: 'invalid_credentials' });
     }
 
-    // Resolve workspace
-    const membership = await db.prepare(
-      'SELECT workspace_id FROM workspace_members WHERE user_id = ? ORDER BY created_at ASC LIMIT 1'
+    // Resolve workspace — prefer last active, fall back to oldest non-deleted
+    const profile = await db.prepare(
+      'SELECT last_active_workspace_id FROM user_profiles WHERE user_id = ?'
     ).get(row.user_id);
 
     let workspaceId;
-    if (membership) {
-      workspaceId = membership.workspace_id;
-    } else {
-      workspaceId = await createPersonalWorkspaceForUser(row.user_id, row.display_name);
+    if (profile?.last_active_workspace_id) {
+      const ws = await db.prepare(
+        'SELECT id FROM workspaces WHERE id = ? AND deleted_at IS NULL'
+      ).get(profile.last_active_workspace_id);
+      if (ws) workspaceId = ws.id;
+    }
+
+    if (!workspaceId) {
+      const membership = await db.prepare(
+        `SELECT wm.workspace_id FROM workspace_members wm
+         JOIN workspaces w ON w.id = wm.workspace_id
+         WHERE wm.user_id = ? AND w.deleted_at IS NULL
+         ORDER BY wm.created_at ASC LIMIT 1`
+      ).get(row.user_id);
+      if (membership) {
+        workspaceId = membership.workspace_id;
+      } else {
+        workspaceId = await createPersonalWorkspaceForUser(row.user_id, row.display_name);
+      }
     }
 
     await establishSession(req, row.user_id, workspaceId);
@@ -304,16 +319,31 @@ router.post('/reset-password', async (req, res) => {
       WHERE user_id = ? AND provider = 'email'
     `).run(credentialHash, row.user_id);
 
-    // Establish session on successful reset
-    const membership = await db.prepare(
-      'SELECT workspace_id FROM workspace_members WHERE user_id = ? ORDER BY created_at ASC LIMIT 1'
+    // Establish session on successful reset — prefer last active workspace
+    const upRow = await db.prepare(
+      'SELECT last_active_workspace_id FROM user_profiles WHERE user_id = ?'
     ).get(row.user_id);
 
     let workspaceId;
-    if (membership) {
-      workspaceId = membership.workspace_id;
-    } else {
-      workspaceId = await createPersonalWorkspaceForUser(row.user_id, row.display_name);
+    if (upRow?.last_active_workspace_id) {
+      const ws = await db.prepare(
+        'SELECT id FROM workspaces WHERE id = ? AND deleted_at IS NULL'
+      ).get(upRow.last_active_workspace_id);
+      if (ws) workspaceId = ws.id;
+    }
+
+    if (!workspaceId) {
+      const membership = await db.prepare(
+        `SELECT wm.workspace_id FROM workspace_members wm
+         JOIN workspaces w ON w.id = wm.workspace_id
+         WHERE wm.user_id = ? AND w.deleted_at IS NULL
+         ORDER BY wm.created_at ASC LIMIT 1`
+      ).get(row.user_id);
+      if (membership) {
+        workspaceId = membership.workspace_id;
+      } else {
+        workspaceId = await createPersonalWorkspaceForUser(row.user_id, row.display_name);
+      }
     }
 
     await establishSession(req, row.user_id, workspaceId);

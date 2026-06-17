@@ -317,20 +317,6 @@ router.get('/connect', async (req, res) => {
     return res.status(500).json({ ok: false, error: 'linkedin_not_configured' });
   }
 
-  // Multiple LinkedIn accounts require Pro plan.
-  // Check before starting OAuth so the user sees the error immediately.
-  const connectPlan = await getUserPlan(userId);
-  if (!planHasFeature(connectPlan, 'multiple_linkedin_accounts')) {
-    const existingPersonal = await db.prepare(
-      "SELECT id FROM linkedin_connections WHERE workspace_id = ? AND account_type = 'personal' LIMIT 1"
-    ).get(tenantId);
-    if (existingPersonal) {
-      const from2 = req.query.from;
-      const errorBase = from2 === 'settings' ? '/settings.html' : '/account.html';
-      return res.redirect(`${errorBase}?error=upgrade_required&feature=multiple_linkedin_accounts`);
-    }
-  }
-
   const state = crypto.randomUUID();
   const from = req.query.from;
   const returnTo = from === 'onboarding'
@@ -507,6 +493,17 @@ router.get('/callback', async (req, res) => {
       personProfileId = existingConn.profile_id;
       console.log(`[linkedin/callback] Reconnected user=${userId} connection=${existingConn.id} (${linkedin_name})`);
     } else {
+      // New connection: enforce plan limit (reconnects skip this — they hit the existingConn branch above)
+      const connectPlan = await getUserPlan(userId);
+      if (!planHasFeature(connectPlan, 'multiple_linkedin_accounts')) {
+        const existingPersonal = await db.prepare(
+          "SELECT id FROM linkedin_connections WHERE workspace_id = ? AND account_type = 'personal' LIMIT 1"
+        ).get(tenantId);
+        if (existingPersonal) {
+          return res.redirect(`${errBase}?linkedin_error=upgrade_required`);
+        }
+      }
+
       // New connection: create a person profile + linkedin_connections row
       const profileResult = await db.prepare(`
         INSERT INTO profiles (workspace_id, profile_type, display_name, avatar_url, is_default)

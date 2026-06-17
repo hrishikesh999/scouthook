@@ -1034,6 +1034,8 @@ async function triggerGenerate(opts = {}) {
       showChatError("You've hit the hourly generation limit. Wait a few minutes and try again.");
     } else if (err.message === 'high_demand') {
       showChatError('ScoutHook is under high demand right now. Wait 30 seconds and try again.');
+    } else if (err.message === 'anthropic_api_key not configured') {
+      showChatError('AI service is not configured. Set ANTHROPIC_API_KEY in the admin settings.');
     } else if (err.message === 'missing_substance') {
       showSubstanceWarning(err.substancePrompt || 'Add more detail to generate a stronger post.');
       if (err.substanceTier === 'warn') {

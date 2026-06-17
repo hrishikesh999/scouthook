@@ -54,7 +54,7 @@ router.get('/performance-summary', async (req, res) => {
       FROM   generated_posts
       WHERE  user_id = ? AND tenant_id = ? AND performance_tag IS NOT NULL
     `).get(userId, tenantId);
-    const total = countRow?.total || 0;
+    const total = parseInt(countRow?.total || 0, 10);
 
     if (total < 3) {
       return res.json({ ok: true, enough_data: false, total_tagged: total });

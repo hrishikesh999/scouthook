@@ -38,7 +38,6 @@ async function getAllSettings() {
 
 module.exports = {
   db,
-  backendKind: backend.kind,
   getSetting,
   getSettingSync,
   setSetting,

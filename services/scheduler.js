@@ -1,6 +1,6 @@
 'use strict';
 
-const { getSetting, db, backendKind } = require('../db');
+const { getSetting, db } = require('../db');
 const { sendEmailToUser } = require('../emails');
 
 let postQueue = null;
@@ -19,9 +19,7 @@ function scheduledJobId(scheduledPostId) {
  * Called at startup and every 10 minutes by a periodic timer.
  */
 async function recoverStuckPosts() {
-  const stuckSql = backendKind === 'sqlite'
-    ? `SELECT id, scheduled_for FROM scheduled_posts WHERE status = 'processing' AND updated_at < datetime('now', '-20 minutes')`
-    : `SELECT id, scheduled_for FROM scheduled_posts WHERE status = 'processing' AND updated_at < (now() - interval '20 minutes')`;
+  const stuckSql = `SELECT id, scheduled_for FROM scheduled_posts WHERE status = 'processing' AND updated_at < (now() - interval '20 minutes')`;
   const stuck = await db.prepare(stuckSql).all();
 
   for (const row of stuck) {

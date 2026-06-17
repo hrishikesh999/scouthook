@@ -18,12 +18,16 @@ router.get('/', async (req, res) => {
   const tid = req.tenantId;
 
   try {
+    const userRow = await db.prepare(`
+      SELECT display_name FROM user_profiles WHERE user_id = ?
+    `).get(uid);
+
     const profile = await db.prepare(`
-      SELECT display_name, writing_samples, content_niche, brand_name, brand_logo,
+      SELECT writing_samples, content_niche, avatar_url,
              audience_role, audience_pain, business_positioning
-      FROM   user_profiles
-      WHERE  user_id = ? AND tenant_id = ?
-    `).get(uid, tid);
+      FROM   profiles
+      WHERE  workspace_id = ? AND is_default = true
+    `).get(tid);
 
     const publishedRow = await db.prepare(`
       SELECT COUNT(*) AS n FROM generated_posts
@@ -47,7 +51,7 @@ router.get('/', async (req, res) => {
       {
         id:    'brand_settings',
         label: 'Update your brand settings',
-        done:  !!(profile?.brand_name && profile?.brand_logo),
+        done:  !!(profile?.avatar_url && profile?.business_positioning),
         href:  '/brand.html',
       },
       {
@@ -68,7 +72,7 @@ router.get('/', async (req, res) => {
 
     return res.json({
       ok:              true,
-      display_name:    profile?.display_name || null,
+      display_name:    userRow?.display_name || null,
       steps,
       completed_count: completedCount,
       total:           steps.length,

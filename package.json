@@ -7,7 +7,14 @@
     "build": "npm install",
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "migrate": "node scripts/migrate.js"
+    "migrate": "node scripts/migrate.js",
+    "test": "jest tests/integration --forceExit --runInBand",
+    "test:unit": "jest tests/unit --forceExit --runInBand",
+    "test:all": "jest tests/integration tests/unit --forceExit --runInBand"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "testTimeout": 30000
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
@@ -36,5 +43,10 @@
     "resend": "^6.12.0",
     "sharp": "^0.33.0",
     "uuid": "^10.0.0"
+  },
+  "devDependencies": {
+    "@jest/globals": "^30.4.1",
+    "jest": "^30.4.2",
+    "supertest": "^7.2.2"
   }
 }

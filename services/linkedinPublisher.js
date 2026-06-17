@@ -1,6 +1,6 @@
 'use strict';
 
-const { db, backendKind } = require('../db');
+const { db } = require('../db');
 const { encrypt, decrypt } = require('./linkedinOAuth');
 const { sendEmailToUser } = require('../emails');
 const path = require('path');
@@ -28,19 +28,11 @@ function sleep(ms) {
 // ---------------------------------------------------------------------------
 
 async function checkRateLimit(userId, tenantId) {
-  const windowParam = backendKind === 'sqlite'
-    ? `-${RATE_LIMIT_WINDOW_HOURS} hours`
-    : `${RATE_LIMIT_WINDOW_HOURS} hours`;
+  const windowParam = `${RATE_LIMIT_WINDOW_HOURS} hours`;
 
-  // Covers posts published via the scheduler (always writes a scheduled_posts row).
-  const scheduledSql = backendKind === 'sqlite'
-    ? `SELECT COUNT(*) AS cnt FROM scheduled_posts WHERE user_id = ? AND tenant_id = ? AND status = 'published' AND updated_at > datetime('now', ?)`
-    : `SELECT COUNT(*)::int AS cnt FROM scheduled_posts WHERE user_id = ? AND tenant_id = ? AND status = 'published' AND updated_at > (now() - ($3::text)::interval)`;
+  const scheduledSql = `SELECT COUNT(*)::int AS cnt FROM scheduled_posts WHERE user_id = ? AND tenant_id = ? AND status = 'published' AND updated_at > (now() - ($3::text)::interval)`;
 
-  // Covers posts published immediately via POST /api/linkedin/publish (no scheduled_posts row created).
-  const immediateSql = backendKind === 'sqlite'
-    ? `SELECT COUNT(*) AS cnt FROM generated_posts WHERE user_id = ? AND tenant_id = ? AND status = 'published' AND published_at > datetime('now', ?)`
-    : `SELECT COUNT(*)::int AS cnt FROM generated_posts WHERE user_id = ? AND tenant_id = ? AND status = 'published' AND published_at > (now() - ($3::text)::interval)`;
+  const immediateSql = `SELECT COUNT(*)::int AS cnt FROM generated_posts WHERE user_id = ? AND tenant_id = ? AND status = 'published' AND published_at > (now() - ($3::text)::interval)`;
 
   const [{ cnt: scheduledCnt } = {}, { cnt: immediateCnt } = {}] = await Promise.all([
     db.prepare(scheduledSql).get(userId, tenantId, windowParam),

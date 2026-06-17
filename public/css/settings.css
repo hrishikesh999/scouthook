@@ -62,7 +62,15 @@
 
 /* ── Wizard layout ───────────────────────────────────────── */
 .vw-body {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 32px;
+  align-items: start;
   max-width: 920px;
+}
+
+@media (max-width: 680px) {
+  .vw-body { grid-template-columns: 1fr; gap: 20px; }
 }
 
 /* ── Stage navigation (vertical list) ───────────────────── */
@@ -70,7 +78,6 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  margin-bottom: 16px;
 }
 
 .vw-stage-link {

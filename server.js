@@ -158,17 +158,18 @@ if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
       `).run(userId, googleId || email || userId);
 
       // 3. Resolve workspace — prefer last active, fall back to oldest non-deleted
-      const upRow = await db.prepare(
-        'SELECT last_active_workspace_id FROM user_profiles WHERE user_id = ?'
-      ).get(userId);
-
       let workspaceId;
-      if (upRow?.last_active_workspace_id) {
-        const ws = await db.prepare(
-          'SELECT id FROM workspaces WHERE id = ? AND deleted_at IS NULL'
-        ).get(upRow.last_active_workspace_id);
-        if (ws) workspaceId = ws.id;
-      }
+      try {
+        const upRow = await db.prepare(
+          'SELECT last_active_workspace_id FROM user_profiles WHERE user_id = ?'
+        ).get(userId);
+        if (upRow?.last_active_workspace_id) {
+          const ws = await db.prepare(
+            'SELECT id FROM workspaces WHERE id = ? AND deleted_at IS NULL'
+          ).get(upRow.last_active_workspace_id);
+          if (ws) workspaceId = ws.id;
+        }
+      } catch { /* last_active_workspace_id column missing — migration 038 not yet applied */ }
 
       if (!workspaceId) {
         const membership = await db.prepare(

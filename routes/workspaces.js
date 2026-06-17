@@ -339,14 +339,15 @@ router.post('/:id/switch', requireAuth, requireMemberOf, async (req, res) => {
   const workspaceId = req.params.id;
   try {
     req.user.tenant_id = workspaceId;
-    await Promise.all([
-      new Promise((resolve, reject) =>
-        req.session.save(err => err ? reject(err) : resolve())
-      ),
-      db.prepare(
-        'UPDATE user_profiles SET last_active_workspace_id = ? WHERE user_id = ?'
-      ).run(workspaceId, req.userId),
-    ]);
+    await new Promise((resolve, reject) =>
+      req.session.save(err => err ? reject(err) : resolve())
+    );
+    // Non-fatal: persist preference so future logins land here (requires migration 038)
+    db.prepare(
+      'UPDATE user_profiles SET last_active_workspace_id = ? WHERE user_id = ?'
+    ).run(workspaceId, req.userId).catch(e =>
+      console.warn('[workspaces/switch] last_active_workspace_id update skipped:', e.message)
+    );
     return res.json({ ok: true, redirect: '/dashboard.html' });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });

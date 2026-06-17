@@ -5,12 +5,22 @@ require('dotenv').config();
 const request = require('supertest');
 const crypto  = require('crypto');
 const bcrypt  = require('bcryptjs');
-const { db }  = require('../../../db');
 
-let _app;
+// Use global to share a single server + db instance across Jest's per-file module
+// registries. Without this, each test file creates a new server + connection pool,
+// exhausting PostgreSQL connections after ~10 files.
+function getDb() {
+  if (!global.__scouthookDb) {
+    global.__scouthookDb = require('../../../db').db;
+  }
+  return global.__scouthookDb;
+}
+
 function getApp() {
-  if (!_app) _app = require('../../../server').app;
-  return _app;
+  if (!global.__scouthookApp) {
+    global.__scouthookApp = require('../../../server').app;
+  }
+  return global.__scouthookApp;
 }
 
 function agent() {
@@ -25,6 +35,8 @@ async function createUser(overrides = {}) {
   const displayName = overrides.displayName || 'Test User';
   const password    = overrides.password    || 'TestPass123!';
   const userId      = `user_${crypto.randomUUID()}`;
+
+  const db = getDb();
 
   await db.prepare(`
     INSERT INTO user_profiles (user_id, email, display_name)
@@ -75,6 +87,7 @@ async function loginAs(user) {
 // Truncate all user-data tables between tests
 // ---------------------------------------------------------------------------
 async function truncateAll() {
+  const db = getDb();
   await db.prepare(`
     TRUNCATE workspace_members, workspace_invites,
              profiles, linkedin_connections, generated_posts, scheduled_posts,

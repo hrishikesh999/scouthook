@@ -186,6 +186,24 @@ router.post('/workspaces/:workspaceId/clear-grace', requireAdminPassword, (req, 
 });
 
 // ---------------------------------------------------------------------------
+// POST /admin/workspaces/:workspaceId/restore
+// Undo a soft-delete — clears deleted_at and purge_at so the workspace reappears.
+// Use this when a workspace was accidentally deleted and needs to be recovered.
+// ---------------------------------------------------------------------------
+router.post('/workspaces/:workspaceId/restore', requireAdminPassword, (req, res) => {
+  (async () => {
+    const { workspaceId } = req.params;
+    const ws = await db.prepare('SELECT id, deleted_at FROM workspaces WHERE id = ?').get(workspaceId);
+    if (!ws) return res.status(404).json({ ok: false, error: 'workspace_not_found' });
+    if (!ws.deleted_at) return res.json({ ok: true, note: 'workspace was not deleted' });
+    await db.prepare(
+      "UPDATE workspaces SET deleted_at = NULL, purge_at = NULL WHERE id = ?"
+    ).run(workspaceId);
+    return res.json({ ok: true, restored: workspaceId });
+  })().catch(err => res.status(500).json({ ok: false, error: err.message }));
+});
+
+// ---------------------------------------------------------------------------
 // POST /admin/sync-subscription
 // Force-syncs a user's subscription by email, then enforces workspace limits.
 // Body: { admin_password, email }
@@ -292,10 +310,14 @@ router.post('/users/:userId/set-workspace', requireAdminPassword, (req, res) => 
     ).get(userId, workspaceId);
     if (!member) return res.status(404).json({ ok: false, error: 'user is not a member of that workspace (or workspace is deleted)' });
 
-    // Persist preference so future logins land here too
-    await db.prepare(
-      'UPDATE user_profiles SET last_active_workspace_id = ? WHERE user_id = ?'
-    ).run(workspaceId, userId);
+    // Persist preference so future logins land here too (non-fatal if migration 038 not applied)
+    try {
+      await db.prepare(
+        'UPDATE user_profiles SET last_active_workspace_id = ? WHERE user_id = ?'
+      ).run(workspaceId, userId);
+    } catch (e) {
+      console.warn('[admin/set-workspace] last_active_workspace_id update skipped:', e.message);
+    }
 
     // Patch all live sessions for this user — uses pg JSONB ops directly
     // (the db wrapper's qmarkToDollar would mangle the jsonb -> operator)
@@ -319,9 +341,18 @@ router.get('/users/:userId/workspaces', requireAdminPassword, (req, res) => {
   (async () => {
     const { userId } = req.params;
     const up = await db.prepare(
-      'SELECT last_active_workspace_id FROM user_profiles WHERE user_id = ?'
+      'SELECT user_id FROM user_profiles WHERE user_id = ?'
     ).get(userId);
     if (!up) return res.status(404).json({ ok: false, error: 'user not found' });
+
+    // last_active_workspace_id requires migration 038 — degrade gracefully if missing
+    let lastActiveWorkspaceId = null;
+    try {
+      const upEx = await db.prepare(
+        'SELECT last_active_workspace_id FROM user_profiles WHERE user_id = ?'
+      ).get(userId);
+      lastActiveWorkspaceId = upEx?.last_active_workspace_id ?? null;
+    } catch { /* column not yet added */ }
 
     const workspaces = await db.prepare(`
       SELECT w.id, w.name, w.deleted_at, wm.role, wm.created_at AS joined_at,
@@ -334,7 +365,7 @@ router.get('/users/:userId/workspaces', requireAdminPassword, (req, res) => {
       ORDER BY post_count DESC, wm.created_at ASC
     `).all(userId, userId);
 
-    return res.json({ ok: true, last_active_workspace_id: up.last_active_workspace_id, workspaces });
+    return res.json({ ok: true, last_active_workspace_id: lastActiveWorkspaceId, workspaces });
   })().catch(err => res.status(500).json({ ok: false, error: err.message }));
 });
 

@@ -221,17 +221,18 @@ router.post('/login', loginLimiter, async (req, res) => {
     }
 
     // Resolve workspace — prefer last active, fall back to oldest non-deleted
-    const profile = await db.prepare(
-      'SELECT last_active_workspace_id FROM user_profiles WHERE user_id = ?'
-    ).get(row.user_id);
-
     let workspaceId;
-    if (profile?.last_active_workspace_id) {
-      const ws = await db.prepare(
-        'SELECT id FROM workspaces WHERE id = ? AND deleted_at IS NULL'
-      ).get(profile.last_active_workspace_id);
-      if (ws) workspaceId = ws.id;
-    }
+    try {
+      const profile = await db.prepare(
+        'SELECT last_active_workspace_id FROM user_profiles WHERE user_id = ?'
+      ).get(row.user_id);
+      if (profile?.last_active_workspace_id) {
+        const ws = await db.prepare(
+          'SELECT id FROM workspaces WHERE id = ? AND deleted_at IS NULL'
+        ).get(profile.last_active_workspace_id);
+        if (ws) workspaceId = ws.id;
+      }
+    } catch { /* last_active_workspace_id column missing — migration 038 not yet applied */ }
 
     if (!workspaceId) {
       const membership = await db.prepare(
@@ -320,17 +321,18 @@ router.post('/reset-password', async (req, res) => {
     `).run(credentialHash, row.user_id);
 
     // Establish session on successful reset — prefer last active workspace
-    const upRow = await db.prepare(
-      'SELECT last_active_workspace_id FROM user_profiles WHERE user_id = ?'
-    ).get(row.user_id);
-
     let workspaceId;
-    if (upRow?.last_active_workspace_id) {
-      const ws = await db.prepare(
-        'SELECT id FROM workspaces WHERE id = ? AND deleted_at IS NULL'
-      ).get(upRow.last_active_workspace_id);
-      if (ws) workspaceId = ws.id;
-    }
+    try {
+      const upRow = await db.prepare(
+        'SELECT last_active_workspace_id FROM user_profiles WHERE user_id = ?'
+      ).get(row.user_id);
+      if (upRow?.last_active_workspace_id) {
+        const ws = await db.prepare(
+          'SELECT id FROM workspaces WHERE id = ? AND deleted_at IS NULL'
+        ).get(upRow.last_active_workspace_id);
+        if (ws) workspaceId = ws.id;
+      }
+    } catch { /* last_active_workspace_id column missing — migration 038 not yet applied */ }
 
     if (!workspaceId) {
       const membership = await db.prepare(

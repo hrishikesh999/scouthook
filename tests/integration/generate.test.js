@@ -1,7 +1,6 @@
 'use strict';
 
 require('dotenv').config();
-const { db } = require('../../db');
 const { createUser, loginAs, truncateAll } = require('./helpers/setup');
 
 afterEach(truncateAll);
@@ -26,6 +25,7 @@ describe('Generate — validation gates (no Anthropic call)', () => {
   test('returns 400 complete_profile_first when no default profile exists', async () => {
     const user = await createUser();
     // Remove the default profile so resolveProfile returns null
+    const db = global.__scouthookDb || require('../../db').db;
     await db.prepare('DELETE FROM profiles WHERE workspace_id = ?').run(user.workspaceId);
 
     const ag  = await loginAs(user);

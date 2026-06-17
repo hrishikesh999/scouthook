@@ -2,12 +2,12 @@
 
 require('dotenv').config();
 const crypto = require('crypto');
-const { db } = require('../../db');
 const { agent, createUser, loginAs, truncateAll } = require('./helpers/setup');
 
 afterEach(truncateAll);
 
 async function createInvite({ workspaceId, invitedBy, email, role = 'editor' }) {
+  const db = global.__scouthookDb || require('../../db').db;
   const token = crypto.randomUUID();
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
   await db.prepare(`

@@ -77,7 +77,7 @@ async function revokeToken(accessTokenEnc) {
  * and upsert them as company connections on the workspace's brand profile.
  * Fire-and-forget — errors are swallowed.
  */
-async function discoverOrgPages(accessToken, userId, workspaceId, brandProfileId, expiresAt) {
+async function discoverOrgPages(accessToken, userId, workspaceId, expiresAt) {
   try {
     const aclRes = await fetch(
       'https://api.linkedin.com/v2/organizationalEntityAcls?q=roleAssignee&role=ADMINISTRATOR&state=APPROVED',
@@ -140,16 +140,16 @@ async function discoverOrgPages(accessToken, userId, workspaceId, brandProfileId
       const accountKey = 'org_' + orgId;
       await db.prepare(`
         INSERT INTO linkedin_connections
-          (workspace_id, profile_id, authorized_by, account_type, account_key,
+          (workspace_id, authorized_by, account_type, account_key,
            display_name, avatar_url, organization_id, access_token_enc, expires_at, is_default)
-        VALUES (?, ?, ?, 'company', ?, ?, ?, ?, ?, ?, false)
+        VALUES (?, ?, 'company', ?, ?, ?, ?, ?, ?, false)
         ON CONFLICT (workspace_id, account_key) DO UPDATE SET
           display_name     = EXCLUDED.display_name,
           avatar_url       = COALESCE(EXCLUDED.avatar_url, linkedin_connections.avatar_url),
           access_token_enc = EXCLUDED.access_token_enc,
           expires_at       = EXCLUDED.expires_at,
           updated_at       = now()
-      `).run(workspaceId, brandProfileId, userId, accountKey, orgName, orgLogo, orgId, accessTokenEnc, expiresAt);
+      `).run(workspaceId, userId, accountKey, orgName, orgLogo, orgId, accessTokenEnc, expiresAt);
     }
     console.log(`[linkedin/discoverOrgPages] Upserted ${orgIds.length} org pages for workspace=${workspaceId}`);
   } catch (e) {
@@ -270,20 +270,9 @@ router.post('/extract-profile', async (req, res) => {
   if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
 
   try {
-    // Optional body.profile_id targets a specific person profile.
-    // Without it, falls back to the default brand profile (original behaviour).
-    let targetProfile;
-    if (req.body?.profile_id) {
-      const pid = Number(req.body.profile_id);
-      if (!Number.isFinite(pid)) return res.status(400).json({ ok: false, error: 'invalid_profile_id' });
-      targetProfile = await db.prepare(
-        'SELECT id FROM profiles WHERE id = ? AND workspace_id = ?'
-      ).get(pid, tenantId);
-    } else {
-      targetProfile = await db.prepare(
-        'SELECT id FROM profiles WHERE workspace_id = ? AND is_default = true'
-      ).get(tenantId);
-    }
+    const targetProfile = await db.prepare(
+      'SELECT id FROM profiles WHERE workspace_id = ? AND is_default = true'
+    ).get(tenantId);
 
     if (!targetProfile) return res.status(404).json({ ok: false, error: 'profile_not_found' });
 
@@ -474,11 +463,8 @@ router.get('/callback', async (req, res) => {
 
     // Check if this is a reconnect (connection already exists for this account_key)
     const existingConn = await db.prepare(
-      `SELECT id, profile_id FROM linkedin_connections WHERE workspace_id = ? AND account_key = ?`
+      `SELECT id FROM linkedin_connections WHERE workspace_id = ? AND account_key = ?`
     ).get(tenantId, accountKey);
-
-    let personProfileId;
-    let newProfileId = null; // set only when a brand-new profile is created
 
     if (existingConn) {
       // Reconnect: update tokens on existing connection
@@ -492,71 +478,45 @@ router.get('/callback', async (req, res) => {
             updated_at        = now()
         WHERE workspace_id = ? AND account_key = ?
       `).run(accessTokenEnc, refreshTokenEnc, expiresAt, linkedin_name, linkedin_photo, tenantId, accountKey);
-      personProfileId = existingConn.profile_id;
       console.log(`[linkedin/callback] Reconnected user=${userId} connection=${existingConn.id} (${linkedin_name})`);
     } else {
-      // New connection: enforce plan limit (reconnects skip this — they hit the existingConn branch above)
-      const connectPlan = await getUserPlan(userId);
-      if (!planHasFeature(connectPlan, 'multiple_linkedin_accounts')) {
-        const existingPersonal = await db.prepare(
-          "SELECT id FROM linkedin_connections WHERE workspace_id = ? AND account_type = 'personal' LIMIT 1"
-        ).get(tenantId);
-        if (existingPersonal) {
-          return res.redirect(`${errBase}?linkedin_error=upgrade_required`);
-        }
-      }
-
-      // New connection: create a person profile + linkedin_connections row
-      const profileResult = await db.prepare(`
-        INSERT INTO profiles (workspace_id, profile_type, display_name, avatar_url, is_default)
-        VALUES (?, 'person', ?, ?, false)
-        RETURNING id
-      `).run(tenantId, linkedin_name || 'LinkedIn User', linkedin_photo);
-      personProfileId = profileResult.lastInsertRowid;
-      newProfileId    = personProfileId;
-
-      // Is this the first personal connection in this workspace? If so, mark as default.
+      // New connection: enforce 1-personal-per-workspace limit
       const existingPersonal = await db.prepare(
-        `SELECT id FROM linkedin_connections WHERE workspace_id = ? AND account_type = 'personal' LIMIT 1`
+        "SELECT id FROM linkedin_connections WHERE workspace_id = ? AND account_type = 'personal' LIMIT 1"
       ).get(tenantId);
-      const isDefault = !existingPersonal;
+      if (existingPersonal) {
+        return res.redirect(`${errBase}?linkedin_error=personal_account_limit`);
+      }
 
       await db.prepare(`
         INSERT INTO linkedin_connections
-          (workspace_id, profile_id, authorized_by, account_type, account_key,
+          (workspace_id, authorized_by, account_type, account_key,
            display_name, avatar_url, linkedin_member_id,
            access_token_enc, refresh_token_enc, expires_at, is_default)
-        VALUES (?, ?, ?, 'personal', ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, 'personal', ?, ?, ?, ?, ?, ?, ?, true)
       `).run(
-        tenantId, personProfileId, userId, accountKey,
+        tenantId, userId, accountKey,
         linkedin_name, linkedin_photo, linkedin_member_id,
-        accessTokenEnc, refreshTokenEnc, expiresAt, isDefault
+        accessTokenEnc, refreshTokenEnc, expiresAt
       );
-      console.log(`[linkedin/callback] Connected user=${userId} as ${linkedin_name} (${linkedin_member_id}), profile=${personProfileId}, default=${isDefault}`);
+      console.log(`[linkedin/callback] Connected user=${userId} as ${linkedin_name} (${linkedin_member_id})`);
     }
 
     // Fire-and-forget: discover org pages the user administers
-    const brandProfile = await db.prepare(
+    discoverOrgPages(tokens.access_token, userId, tenantId, expiresAt)
+      .catch(e => console.warn('[linkedin/callback] discoverOrgPages failed (non-fatal):', e.message));
+
+    // Fire-and-forget: extract voice DNA from LinkedIn activity into workspace profile
+    const wsProfile = await db.prepare(
       'SELECT id FROM profiles WHERE workspace_id = ? AND is_default = true'
     ).get(tenantId);
-    if (brandProfile?.id) {
-      discoverOrgPages(tokens.access_token, userId, tenantId, brandProfile.id, expiresAt)
-        .catch(e => console.warn('[linkedin/callback] discoverOrgPages failed (non-fatal):', e.message));
+    if (wsProfile?.id) {
+      extractVoiceDNAFromLinkedIn(wsProfile.id).catch(e =>
+        console.warn('[linkedin/callback] extractVoiceDNAFromLinkedIn failed (non-fatal):', e.message)
+      );
     }
 
-    // Fire-and-forget: extract voice DNA from LinkedIn activity for the person profile
-    extractVoiceDNAFromLinkedIn(personProfileId).catch(e =>
-      console.warn('[linkedin/callback] extractVoiceDNAFromLinkedIn failed (non-fatal):', e.message)
-    );
-
-    // Append profile_id to returnTo so frontend can open mini-onboarding modal
-    let redirectTarget = stateData.returnTo || '/account.html?linkedin_connected=true';
-    if (newProfileId) {
-      const sep = redirectTarget.includes('?') ? '&' : '?';
-      redirectTarget += `${sep}new_profile_id=${newProfileId}`;
-    }
-
-    res.redirect(redirectTarget);
+    res.redirect(stateData.returnTo || '/account.html?linkedin_connected=true');
 
   } catch (err) {
     console.error('[linkedin/callback] Error:', err.message);
@@ -573,50 +533,15 @@ router.get('/connections', async (req, res) => {
   if (!tenantId) return res.status(400).json({ ok: false, error: 'missing_tenant' });
 
   try {
-    const rows = await db.prepare(`
-      SELECT
-        lc.id, lc.profile_id, lc.account_type, lc.account_key, lc.display_name,
-        lc.avatar_url, lc.linkedin_member_id, lc.organization_id,
-        lc.expires_at, lc.is_default, lc.authorized_by,
-        p.profile_type, p.display_name AS profile_display_name, p.avatar_url AS profile_avatar_url,
-        p.content_niche, p.audience_role, p.content_pillars, p.voice_profile_completion_pct
-      FROM linkedin_connections lc
-      JOIN profiles p ON p.id = lc.profile_id
-      WHERE lc.workspace_id = ?
-      ORDER BY p.profile_type DESC, lc.account_type ASC, lc.created_at ASC
+    const connections = await db.prepare(`
+      SELECT id, account_type, account_key, display_name, avatar_url,
+             linkedin_member_id, organization_id, expires_at, is_default, authorized_by
+      FROM linkedin_connections
+      WHERE workspace_id = ?
+      ORDER BY account_type ASC, created_at ASC
     `).all(tenantId);
 
-    // Group by profile
-    const profileMap = new Map();
-    for (const row of rows) {
-      if (!profileMap.has(row.profile_id)) {
-        profileMap.set(row.profile_id, {
-          id:                          row.profile_id,
-          profile_type:                row.profile_type,
-          display_name:                row.profile_display_name,
-          avatar_url:                  row.profile_avatar_url,
-          content_niche:               row.content_niche               || null,
-          audience_role:               row.audience_role               || null,
-          content_pillars:             row.content_pillars             || null,
-          voice_profile_completion_pct: row.voice_profile_completion_pct || 0,
-          connections:                 [],
-        });
-      }
-      profileMap.get(row.profile_id).connections.push({
-        id:                 row.id,
-        account_type:       row.account_type,
-        account_key:        row.account_key,
-        display_name:       row.display_name,
-        avatar_url:         row.avatar_url,
-        linkedin_member_id: row.linkedin_member_id,
-        organization_id:    row.organization_id,
-        expires_at:         row.expires_at,
-        is_default:         row.is_default,
-        authorized_by:      row.authorized_by,
-      });
-    }
-
-    return res.json({ ok: true, profiles: [...profileMap.values()] });
+    return res.json({ ok: true, connections });
   } catch (err) {
     console.error('[linkedin/connections] Error:', err.message);
     return res.status(500).json({ ok: false, error: err.message });
@@ -639,36 +564,33 @@ router.delete('/connections/:id', async (req, res) => {
   try {
     const conn = await db.prepare(
       `SELECT id, workspace_id, authorized_by, account_type, account_key,
-              linkedin_member_id, access_token_enc, profile_id
+              linkedin_member_id, access_token_enc
        FROM linkedin_connections WHERE id = ? AND workspace_id = ?`
     ).get(id, tenantId);
 
     if (!conn) return res.status(404).json({ ok: false, error: 'not_found' });
 
-    // Cancel only scheduled posts tied to this connection's profile.
-    // Also cancel legacy posts (profile_id IS NULL) created by the connection owner.
-    const profilePosts = conn.profile_id ? await db.prepare(`
-      SELECT id, post_id FROM scheduled_posts
-      WHERE tenant_id = ? AND profile_id = ? AND status IN ('pending', 'processing')
-    `).all(tenantId, conn.profile_id) : [];
+    // When disconnecting a personal account, cancel all pending scheduled posts
+    // in the workspace (they can't publish without a LinkedIn connection).
+    if (conn.account_type === 'personal') {
+      const pendingPosts = await db.prepare(`
+        SELECT id, post_id FROM scheduled_posts
+        WHERE tenant_id = ? AND status IN ('pending', 'processing')
+      `).all(tenantId);
 
-    const nullProfilePosts = await db.prepare(`
-      SELECT id, post_id FROM scheduled_posts
-      WHERE tenant_id = ? AND profile_id IS NULL AND user_id = ? AND status IN ('pending', 'processing')
-    `).all(tenantId, conn.authorized_by);
-
-    for (const row of [...profilePosts, ...nullProfilePosts]) {
-      await db.prepare(`
-        UPDATE scheduled_posts SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP
-        WHERE id = ? AND tenant_id = ?
-      `).run(row.id, tenantId);
-      if (row.post_id) {
+      for (const row of pendingPosts) {
         await db.prepare(`
-          UPDATE generated_posts SET status = 'draft'
-          WHERE id = ? AND tenant_id = ? AND status = 'scheduled'
-        `).run(row.post_id, tenantId);
+          UPDATE scheduled_posts SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP
+          WHERE id = ? AND tenant_id = ?
+        `).run(row.id, tenantId);
+        if (row.post_id) {
+          await db.prepare(`
+            UPDATE generated_posts SET status = 'draft'
+            WHERE id = ? AND tenant_id = ? AND status = 'scheduled'
+          `).run(row.post_id, tenantId);
+        }
+        removeScheduledJob(Number(row.id)).catch(() => {});
       }
-      removeScheduledJob(Number(row.id)).catch(() => {});
     }
 
     // Revoke token only if no other connection (in any workspace) shares the same member_id
@@ -682,16 +604,6 @@ router.delete('/connections/:id', async (req, res) => {
     }
 
     await db.prepare('DELETE FROM linkedin_connections WHERE id = ? AND workspace_id = ?').run(id, tenantId);
-
-    // Clean up the associated person profile if it has no remaining connections
-    if (conn.profile_id) {
-      const remaining = await db.prepare(
-        `SELECT id FROM linkedin_connections WHERE profile_id = ? LIMIT 1`
-      ).get(conn.profile_id);
-      if (!remaining) {
-        await db.prepare('DELETE FROM profiles WHERE id = ? AND workspace_id = ? AND profile_type = ?').run(conn.profile_id, tenantId, 'person');
-      }
-    }
 
     return res.json({ ok: true });
   } catch (err) {
@@ -713,15 +625,15 @@ router.post('/connections/:id/set-default', async (req, res) => {
 
   try {
     const conn = await db.prepare(
-      `SELECT id, profile_id FROM linkedin_connections WHERE id = ? AND workspace_id = ?`
+      `SELECT id, account_type FROM linkedin_connections WHERE id = ? AND workspace_id = ?`
     ).get(id, tenantId);
 
     if (!conn) return res.status(404).json({ ok: false, error: 'not_found' });
 
     await db.transaction(async tx => {
       await tx.prepare(
-        `UPDATE linkedin_connections SET is_default = false WHERE profile_id = ?`
-      ).run(conn.profile_id);
+        `UPDATE linkedin_connections SET is_default = false WHERE workspace_id = ? AND account_type = ?`
+      ).run(tenantId, conn.account_type);
       await tx.prepare(
         `UPDATE linkedin_connections SET is_default = true WHERE id = ? AND workspace_id = ?`
       ).run(id, tenantId);
@@ -924,19 +836,18 @@ router.post('/schedule', async (req, res) => {
     }
   }
 
-  // Look up the workspace's default LinkedIn connection to record profile_id on the post.
-  const defConn = await db.prepare(
-    "SELECT profile_id FROM linkedin_connections WHERE workspace_id = ? AND account_type = 'personal' AND is_default = true"
+  // Record the workspace's Voice DNA profile on the scheduled post for archetype tracking.
+  const wsProfile = await db.prepare(
+    'SELECT id FROM profiles WHERE workspace_id = ? AND is_default = true'
   ).get(tenantId);
-  let schedProfileId = defConn?.profile_id ?? null;
+  const schedProfileId = wsProfile?.id ?? null;
 
-  // If the caller specified a connection, use that connection's profile_id instead.
+  // Validate the selected connection if provided.
   if (connectionId) {
     const selectedConn = await db.prepare(
-      'SELECT profile_id FROM linkedin_connections WHERE id = ? AND workspace_id = ?'
+      'SELECT id FROM linkedin_connections WHERE id = ? AND workspace_id = ?'
     ).get(Number(connectionId), tenantId);
     if (!selectedConn) return res.status(400).json({ ok: false, error: 'connection_not_found' });
-    schedProfileId = selectedConn.profile_id;
   }
 
   try {
@@ -1317,57 +1228,31 @@ router.post('/disconnect', (req, res) => {
     // Fetch the personal connections to be removed.
     const conns = await db.prepare(
       isOwner
-        ? `SELECT id, linkedin_member_id, access_token_enc, profile_id, authorized_by
+        ? `SELECT id, linkedin_member_id, access_token_enc
            FROM linkedin_connections
            WHERE workspace_id = ? AND account_type = 'personal'`
-        : `SELECT id, linkedin_member_id, access_token_enc, profile_id, authorized_by
+        : `SELECT id, linkedin_member_id, access_token_enc
            FROM linkedin_connections
            WHERE workspace_id = ? AND authorized_by = ? AND account_type = 'personal'`
     ).all(...(isOwner ? [tenantId] : [tenantId, userId]));
 
     if (!conns.length) return res.json({ ok: true });
 
-    // Cancel only scheduled posts tied to these connections' profiles (scoped cancellation).
-    // Also cancel legacy posts (profile_id IS NULL) created by each connection's owner.
-    const seenNullOwners = new Set();
-    for (const conn of conns) {
-      if (conn.profile_id) {
-        const profilePosts = await db.prepare(`
-          SELECT id, post_id FROM scheduled_posts
-          WHERE tenant_id = ? AND profile_id = ? AND status IN ('pending', 'processing')
-        `).all(tenantId, conn.profile_id);
-        for (const row of profilePosts) {
-          await db.prepare(
-            `UPDATE scheduled_posts SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ?`
-          ).run(row.id, tenantId);
-          if (row.post_id) {
-            await db.prepare(
-              `UPDATE generated_posts SET status = 'draft' WHERE id = ? AND tenant_id = ? AND status = 'scheduled'`
-            ).run(row.post_id, tenantId);
-          }
-          removeScheduledJob(Number(row.id)).catch(() => {});
-        }
+    // Cancel all pending scheduled posts in the workspace (can't publish without a connection).
+    const pendingPosts = await db.prepare(`
+      SELECT id, post_id FROM scheduled_posts
+      WHERE tenant_id = ? AND status IN ('pending', 'processing')
+    `).all(tenantId);
+    for (const row of pendingPosts) {
+      await db.prepare(
+        `UPDATE scheduled_posts SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ?`
+      ).run(row.id, tenantId);
+      if (row.post_id) {
+        await db.prepare(
+          `UPDATE generated_posts SET status = 'draft' WHERE id = ? AND tenant_id = ? AND status = 'scheduled'`
+        ).run(row.post_id, tenantId);
       }
-
-      // Legacy: cancel NULL-profile posts created by this connection's authorizing user.
-      if (!seenNullOwners.has(conn.authorized_by)) {
-        seenNullOwners.add(conn.authorized_by);
-        const nullPosts = await db.prepare(`
-          SELECT id, post_id FROM scheduled_posts
-          WHERE tenant_id = ? AND profile_id IS NULL AND user_id = ? AND status IN ('pending', 'processing')
-        `).all(tenantId, conn.authorized_by);
-        for (const row of nullPosts) {
-          await db.prepare(
-            `UPDATE scheduled_posts SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ?`
-          ).run(row.id, tenantId);
-          if (row.post_id) {
-            await db.prepare(
-              `UPDATE generated_posts SET status = 'draft' WHERE id = ? AND tenant_id = ? AND status = 'scheduled'`
-            ).run(row.post_id, tenantId);
-          }
-          removeScheduledJob(Number(row.id)).catch(() => {});
-        }
-      }
+      removeScheduledJob(Number(row.id)).catch(() => {});
     }
 
     // Revoke tokens only when no other workspace still has the same linkedin_member_id connected.

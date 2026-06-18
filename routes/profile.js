@@ -20,7 +20,7 @@ router.get('/:user_id?', async (req, res) => {
 
   const profileQuery = requestedProfileId
     ? db.prepare(`
-        SELECT id, profile_type, display_name, avatar_url,
+        SELECT id, display_name, avatar_url,
                audience_role, audience_pain, content_niche, contrarian_view,
                voice_fingerprint, writing_samples, onboarding_complete,
                business_positioning, website_url, website_summary,
@@ -32,7 +32,7 @@ router.get('/:user_id?', async (req, res) => {
         FROM profiles WHERE id = ? AND workspace_id = ?
       `).get(requestedProfileId, tenantId)
     : db.prepare(`
-        SELECT id, profile_type, display_name, avatar_url,
+        SELECT id, display_name, avatar_url,
                audience_role, audience_pain, content_niche, contrarian_view,
                voice_fingerprint, writing_samples, onboarding_complete,
                business_positioning, website_url, website_summary,
@@ -64,7 +64,6 @@ router.get('/:user_id?', async (req, res) => {
     ok: true,
     profile: {
       id:                           profileRow.id,
-      profile_type:                 profileRow.profile_type   || 'brand',
       display_name:                 profileRow.display_name   || null,
       avatar_url:                   profileRow.avatar_url     || null,
       audience_role:                profileRow.audience_role,
@@ -612,9 +611,8 @@ router.put('/person/:id', async (req, res) => {
   if (!Number.isFinite(profileId))        return res.status(400).json({ ok: false, error: 'invalid_id' });
 
   try {
-    // Verify the profile exists in this workspace and is a person profile
     const existing = await db.prepare(
-      `SELECT id FROM profiles WHERE id = ? AND workspace_id = ? AND profile_type = 'person'`
+      `SELECT id FROM profiles WHERE id = ? AND workspace_id = ?`
     ).get(profileId, tenantId);
     if (!existing) return res.status(404).json({ ok: false, error: 'not_found' });
 

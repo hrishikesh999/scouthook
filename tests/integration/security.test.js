@@ -129,7 +129,7 @@ describe('Security — LinkedIn token leak', () => {
 
 describe('Security — XSS stored content', () => {
   test('workspace name containing HTML is returned as-is in JSON (not stripped or executed)', async () => {
-    const db = global.__scouthookDb || require('../../db').db;
+    const db = process.__scouthookDb || require('../../db').db;
     const user = await createUser();
     const ag   = await loginAs(user);
 

@@ -30,8 +30,8 @@ async function createPersonalWorkspaceForUser(userId, displayName) {
     'INSERT INTO workspace_members (workspace_id, user_id, role, joined_at) VALUES (?, ?, ?, now())'
   ).run(workspaceId, userId, 'owner');
   await db.prepare(
-    'INSERT INTO profiles (workspace_id, profile_type, display_name, is_default, onboarding_complete) VALUES (?, ?, ?, true, false)'
-  ).run(workspaceId, 'brand', displayName);
+    'INSERT INTO profiles (workspace_id, display_name, is_default, onboarding_complete) VALUES (?, ?, true, false)'
+  ).run(workspaceId, displayName);
   return workspaceId;
 }
 
@@ -179,7 +179,7 @@ router.get('/verify-email', async (req, res) => {
     // Check onboarding state
     const brandProfile = await db.prepare(`
       SELECT onboarding_complete FROM profiles
-      WHERE workspace_id = ? AND profile_type = 'brand' AND is_default = true
+      WHERE workspace_id = ? AND is_default = true
       LIMIT 1
     `).get(workspaceId);
 

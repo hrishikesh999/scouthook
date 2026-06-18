@@ -113,8 +113,8 @@ router.post('/', requireAuth, async (req, res) => {
     ).run(workspaceId, req.userId, 'owner');
 
     await db.prepare(
-      'INSERT INTO profiles (workspace_id, profile_type, display_name, is_default, onboarding_complete) VALUES (?, ?, ?, true, false)'
-    ).run(workspaceId, 'brand', name.trim());
+      'INSERT INTO profiles (workspace_id, display_name, is_default, onboarding_complete) VALUES (?, ?, true, false)'
+    ).run(workspaceId, name.trim());
 
     return res.json({ ok: true, workspaceId, redirect: '/workspace-setup.html' });
   } catch (err) {
@@ -364,9 +364,8 @@ router.get('/profiles', requireAuth, async (req, res) => {
   if (!tenantId) return res.status(401).json({ ok: false, error: 'no_workspace' });
   try {
     const profiles = await db.prepare(`
-      SELECT p.id, p.profile_type, p.display_name, p.is_default, p.avatar_url,
-             p.voice_profile_completion_pct,
-             (SELECT COUNT(*) FROM linkedin_connections lc WHERE lc.profile_id = p.id) AS connection_count
+      SELECT p.id, p.display_name, p.is_default, p.avatar_url,
+             p.voice_profile_completion_pct
       FROM profiles p
       WHERE p.workspace_id = ?
       ORDER BY p.is_default DESC, p.created_at ASC

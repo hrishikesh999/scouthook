@@ -9,7 +9,6 @@ const REQUIRED_PLAN = {
   vault:                       'solo',
   carousel:                    'pro',
   company_pages:               'pro',
-  multiple_linkedin_accounts:  'pro',
   team_members:                'pro',
   extra_workspaces:            'pro',
 };

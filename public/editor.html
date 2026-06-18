@@ -780,10 +780,8 @@ async function checkLinkedInStatus() {
     // Populate connections array for the account selector
     if (connRes.ok) {
       const connData = await connRes.json();
-      if (connData.ok && connData.profiles) {
-        linkedinConnections = connData.profiles.flatMap(p =>
-          p.connections.map(c => ({ ...c, profile_display_name: p.display_name }))
-        );
+      if (connData.ok && connData.connections) {
+        linkedinConnections = connData.connections;
         const def = linkedinConnections.find(c => c.is_default);
         selectedConnectionId = def?.id ?? linkedinConnections[0]?.id ?? null;
       }

@@ -147,7 +147,7 @@ router.get('/workspaces/:workspaceId', requireAdminPassword, (req, res) => {
         WHERE wm.workspace_id = ?
       `).all(workspaceId),
       db.prepare(`
-        SELECT id, profile_type, display_name, is_default,
+        SELECT id, display_name, is_default,
                onboarding_complete, voice_profile_completion_pct
         FROM profiles WHERE workspace_id = ?
       `).all(workspaceId),

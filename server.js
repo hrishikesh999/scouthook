@@ -13,6 +13,7 @@ const connectPgSimple = require('connect-pg-simple');
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const { db } = require('./db');
+const { pool: dbPool } = require('./db/pg');
 const { sendEmail } = require('./emails');
 const { seedTrialSubscription } = require('./services/subscription');
 
@@ -105,9 +106,10 @@ app.use(session({
   resave: false,
   saveUninitialized: false,
   store: new PgSession({
-    conString: process.env.DATABASE_URL,
+    pool: dbPool,
     tableName: 'session',
-    pruneSessionInterval: 60 * 15, // prune expired sessions every 15 min
+    // Disable pruning in tests — the timer keeps the event loop alive past --forceExit.
+    pruneSessionInterval: process.env.NODE_ENV === 'test' ? false : 60 * 15,
   }),
   cookie: {
     httpOnly: true,

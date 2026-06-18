@@ -17,7 +17,7 @@
     '/billing.html':    null,
     '/post.html':       '/js/post.js',
     '/help.html':       null,
-    '/linkedin.html':   null,
+    '/linkedin.html':   null, // redirects to /account.html
     '/voice-dna.html':  null,
   };
 

@@ -64,13 +64,7 @@ async function resolveConnection(tenantId, options = {}) {
     ).get(options.connectionId, tenantId);
   }
 
-  if (options.profileId) {
-    return db.prepare(
-      'SELECT * FROM linkedin_connections WHERE profile_id = ? AND workspace_id = ? AND is_default = true'
-    ).get(options.profileId, tenantId);
-  }
-
-  // Fallback: workspace default personal connection (matches status endpoint logic)
+  // Workspace default personal connection
   return db.prepare(
     "SELECT * FROM linkedin_connections WHERE workspace_id = ? AND account_type = 'personal' AND is_default = true"
   ).get(tenantId);
@@ -695,11 +689,6 @@ async function publishScheduledPost(scheduledPostId, { attemptsMade = 0, maxAtte
     } else if (row.asset_type === 'image' && row.asset_url) {
       publishOpts.image_url = row.asset_url;
     }
-    // Pass the profile that generated the post so the correct LinkedIn connection is used.
-    if (row.profile_id) {
-      publishOpts.profileId = row.profile_id;
-    }
-
     // Idempotency guard: skip the API call if a linkedin_post_id was already
     // persisted by a previous attempt that failed after the API call.
     let linkedin_post_id = row.linkedin_post_id || null;
@@ -919,9 +908,7 @@ async function publishFirstComment(scheduledPostId) {
   // Already resolved on a previous attempt — skip to avoid spamming LinkedIn API on retries.
   if (row.first_comment_status === 'posted' || row.first_comment_status === 'failed') return;
 
-  // Resolve the connection: prefer the profile that generated the post, then
-  // fall back to the workspace default.
-  const conn = await resolveConnection(row.tenant_id, { profileId: row.profile_id });
+  const conn = await resolveConnection(row.tenant_id);
   if (!conn) {
     await db.prepare(
       "UPDATE scheduled_posts SET first_comment_status = 'failed', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ?"

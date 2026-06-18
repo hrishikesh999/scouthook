@@ -86,6 +86,14 @@ function assertProfileId(profileId, fnName) {
   }
 }
 
+async function isLinkedInConnected(profileId) {
+  const p = await db.prepare('SELECT workspace_id FROM profiles WHERE id = ?').get(profileId);
+  if (!p?.workspace_id) return false;
+  return !!(await db.prepare(
+    "SELECT 1 FROM linkedin_connections WHERE workspace_id = ? AND account_type = 'personal' LIMIT 1"
+  ).get(p.workspace_id));
+}
+
 /* ── 1. extractVoiceDNAFromQA ───────────────────────────────────────────
    Fire-and-forget. Called after onboarding Q3 submit. Never blocks generation.
    Reads fresh from DB (profiles table), merges into voice_fingerprint, writes
@@ -199,10 +207,7 @@ async function extractVoiceDNAFromQA(profileId, options = {}) {
     ];
 
     // Check LinkedIn connection for completion pct
-    const linkedInRow = await db.prepare(
-      'SELECT 1 FROM linkedin_connections WHERE profile_id = ? AND is_default = true'
-    ).get(profileId);
-    const hasLinkedIn = !!linkedInRow;
+    const hasLinkedIn = await isLinkedInConnected(profileId);
 
     // Build updated profile object for completion calc; merge user_role from opts
     const updatedProfile = {
@@ -437,7 +442,7 @@ function buildVoiceDNABlock(userProfile) {
 
 /* ── 3. calculateCompletionPct ──────────────────────────────────────────
    Server-side scoring. hasLinkedIn is a boolean passed by the caller.
-   Caller must query: SELECT 1 FROM linkedin_connections WHERE profile_id=? AND is_default=true
+   Uses isLinkedInConnected(profileId) to check workspace's personal connection.
    user_role is personal (lives on user_profiles) — callers should merge it into the
    profile object before calling if they want it scored.
    ──────────────────────────────────────────────────────────────────────── */
@@ -538,12 +543,9 @@ Example: "Prefers shorter sentences — never more than 15 words in a row."`,
     const profile = await db.prepare(
       'SELECT * FROM profiles WHERE id = ?'
     ).get(profileId);
-    const linkedInRow = await db.prepare(
-      'SELECT 1 FROM linkedin_connections WHERE profile_id = ? AND is_default = true'
-    ).get(profileId);
     const completionPct = calculateCompletionPct(
       { ...profile, voice_refinements: JSON.stringify(refinements) },
-      !!linkedInRow
+      await isLinkedInConnected(profileId)
     );
 
     await db.prepare(
@@ -573,10 +575,11 @@ Example: "Prefers shorter sentences — never more than 15 words in a row."`,
 async function extractVoiceDNAFromLinkedIn(profileId) {
   assertProfileId(profileId, 'extractVoiceDNAFromLinkedIn');
   try {
-    // Read LinkedIn connection data for this profile
-    const liRow = await db.prepare(
-      'SELECT display_name FROM linkedin_connections WHERE profile_id = ? AND account_type = ? ORDER BY is_default DESC LIMIT 1'
-    ).get(profileId, 'personal');
+    // Look up the workspace's default personal connection via the profile's workspace_id
+    const profileMeta = await db.prepare('SELECT workspace_id FROM profiles WHERE id = ?').get(profileId);
+    const liRow = profileMeta?.workspace_id ? await db.prepare(
+      "SELECT display_name FROM linkedin_connections WHERE workspace_id = ? AND account_type = 'personal' AND is_default = true"
+    ).get(profileMeta.workspace_id) : null;
 
     if (!liRow?.display_name) {
       console.log('[voiceExtraction] extractVoiceDNAFromLinkedIn: no connection data, skipping', { profileId });
@@ -654,11 +657,8 @@ Return valid JSON only, no commentary:
     }
 
     // Recalculate completion pct
-    const linkedInRow = await db.prepare(
-      'SELECT 1 FROM linkedin_connections WHERE profile_id = ? AND is_default = true'
-    ).get(profileId);
     const updatedProfile = { ...profile, ...updates };
-    const completionPct = calculateCompletionPct(updatedProfile, !!linkedInRow);
+    const completionPct = calculateCompletionPct(updatedProfile, await isLinkedInConnected(profileId));
     updates.voice_profile_completion_pct = completionPct;
 
     const keys = Object.keys(updates);

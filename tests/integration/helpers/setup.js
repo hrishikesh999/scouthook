@@ -10,19 +10,29 @@ const bcrypt  = require('bcryptjs');
 // Use process (not global) to share a single server + db instance across Jest's
 // per-file VM contexts. Jest gives each test file its own VM sandbox, so `global`
 // is NOT shared between files — but `process` is the real Node.js process object,
-// identical across all VM contexts. Without this, each test file creates its own
-// pg.Pool (max 30 connections), and 4+ concurrent pools exhaust Postgres's limit.
-function getDb() {
-  if (!process.__scouthookDb) {
-    process.__scouthookDb = require('../../../db').db;
+// identical across all VM contexts.
+//
+// IMPORTANT: db and app MUST be initialised together from the same VM require()
+// call. If getDb() creates a pool in VM-B while getApp() already loaded server.js
+// (and db.js) in VM-A, we end up with two pg.Pool instances. Both point to the
+// same database so data is consistent, but two pools × 14 test files easily
+// exceeds Neon's connection limit, causing timeouts and FK-violation cascades.
+function initShared() {
+  if (!process.__scouthookApp) {
+    // Load server (and transitively db.js) all in the current VM.
+    // Store both immediately so any subsequent test file reuses them.
+    process.__scouthookApp = require('../../../server').app;
+    process.__scouthookDb  = require('../../../db').db;
   }
+}
+
+function getDb() {
+  initShared();
   return process.__scouthookDb;
 }
 
 function getApp() {
-  if (!process.__scouthookApp) {
-    process.__scouthookApp = require('../../../server').app;
-  }
+  initShared();
   return process.__scouthookApp;
 }
 
@@ -34,39 +44,46 @@ function agent() {
 // Create a test user + workspace + profile, return ids + credentials
 // ---------------------------------------------------------------------------
 async function createUser(overrides = {}) {
-  const email       = overrides.email       || `test_${Date.now()}_${Math.random().toString(36).slice(2)}@example.com`;
-  const displayName = overrides.displayName || 'Test User';
-  const password    = overrides.password    || 'TestPass123!';
-  const userId      = `user_${crypto.randomUUID()}`;
-
-  const db = getDb();
-
-  await db.prepare(`
-    INSERT INTO user_profiles (user_id, email, display_name)
-    VALUES (?, ?, ?)
-  `).run(userId, email, displayName);
-
+  const email          = overrides.email       || `test_${Date.now()}_${Math.random().toString(36).slice(2)}@example.com`;
+  const displayName    = overrides.displayName || 'Test User';
+  const password       = overrides.password    || 'TestPass123!';
+  const userId         = `user_${crypto.randomUUID()}`;
+  const wsId           = crypto.randomUUID();
+  // Hash outside the transaction — it's CPU-bound, not DB-bound
   const credentialHash = await bcrypt.hash(password, 8);
-  await db.prepare(`
-    INSERT INTO auth_providers (user_id, provider, provider_id, credential_hash, verified_at)
-    VALUES (?, 'email', ?, ?, NOW())
-  `).run(userId, email, credentialHash);
 
-  const wsId = crypto.randomUUID();
-  await db.prepare(`
-    INSERT INTO workspaces (id, name, created_by, created_at)
-    VALUES (?, ?, ?, NOW())
-  `).run(wsId, `${displayName}'s Workspace`, userId);
+  // Wrap all INSERTs in one transaction so they share a single Neon compute
+  // connection and are committed atomically. Without this, Neon's serverless
+  // pgBouncer (transaction mode) can route each autocommit query to a different
+  // compute instance whose buffer cache doesn't yet reflect earlier writes,
+  // making rows invisible to subsequent queries even though the INSERT succeeded.
+  const db = getDb();
+  await db.transaction(async tx => {
+    await tx.prepare(`
+      INSERT INTO user_profiles (user_id, email, display_name)
+      VALUES (?, ?, ?)
+    `).run(userId, email, displayName);
 
-  await db.prepare(`
-    INSERT INTO workspace_members (workspace_id, user_id, role, joined_at)
-    VALUES (?, ?, 'owner', NOW())
-  `).run(wsId, userId);
+    await tx.prepare(`
+      INSERT INTO auth_providers (user_id, provider, provider_id, credential_hash, verified_at)
+      VALUES (?, 'email', ?, ?, NOW())
+    `).run(userId, email, credentialHash);
 
-  await db.prepare(`
-    INSERT INTO profiles (workspace_id, profile_type, display_name, is_default, created_at, updated_at)
-    VALUES (?, 'brand', ?, true, NOW(), NOW())
-  `).run(wsId, displayName);
+    await tx.prepare(`
+      INSERT INTO workspaces (id, name, created_by, created_at)
+      VALUES (?, ?, ?, NOW())
+    `).run(wsId, `${displayName}'s Workspace`, userId);
+
+    await tx.prepare(`
+      INSERT INTO workspace_members (workspace_id, user_id, role, joined_at)
+      VALUES (?, ?, 'owner', NOW())
+    `).run(wsId, userId);
+
+    await tx.prepare(`
+      INSERT INTO profiles (workspace_id, display_name, is_default, created_at, updated_at)
+      VALUES (?, ?, true, NOW(), NOW())
+    `).run(wsId, displayName);
+  });
 
   return { userId, workspaceId: wsId, email, password, displayName };
 }

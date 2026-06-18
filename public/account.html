@@ -21,7 +21,6 @@
         <a href="/settings.html" class="account-tab">Brand voice</a>
         <a href="/account.html" class="account-tab active" aria-current="page">My account</a>
         <a href="/brand.html" class="account-tab">Brand settings</a>
-        <a href="/linkedin.html" class="account-tab">LinkedIn</a>
         <a href="/settings.html#members" class="account-tab">Members</a>
         <a href="/billing.html" class="account-tab">Subscription</a>
       </nav>
@@ -48,6 +47,16 @@
               </div>
             </div>
           </div>
+        </div>
+      </div>
+
+      <!-- LinkedIn connections card -->
+      <div class="profile-card" id="linkedin-card">
+        <div class="profile-field" style="margin-bottom:0">
+          <label class="field-label">LinkedIn</label>
+          <p class="field-helper" style="margin:6px 0 16px">Connect your LinkedIn account for publishing. Your workspace Voice DNA is shared across all content.</p>
+          <div id="linkedin-conn-list" style="margin-bottom:12px"></div>
+          <button type="button" id="linkedin-connect-btn" class="btn-outlined" style="font-size:13px;height:32px;padding:0 14px;display:none">Connect LinkedIn</button>
         </div>
       </div>
 
@@ -129,6 +138,57 @@
       }
 
       window.setTimeout(() => { banner.style.display = 'none'; }, 7000);
+    })();
+
+    // LinkedIn connections
+    (async () => {
+      const listEl      = document.getElementById('linkedin-conn-list');
+      const connectBtn  = document.getElementById('linkedin-connect-btn');
+
+      function escapeHtml(s) {
+        return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+      }
+
+      async function loadConnections() {
+        try {
+          const r = await fetch('/api/linkedin/connections', { credentials: 'same-origin' });
+          const d = await r.json();
+          const personal = (d.connections || []).filter(c => c.account_type === 'personal');
+          if (personal.length === 0) {
+            listEl.innerHTML = '<p style="font-size:13px;color:var(--text-muted);margin:0">No LinkedIn account connected.</p>';
+            connectBtn.style.display = '';
+          } else {
+            listEl.innerHTML = personal.map(c => {
+              const expired = c.expires_at && new Date(c.expires_at) < new Date();
+              return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+                ${c.avatar_url ? `<img src="${escapeHtml(c.avatar_url)}" style="width:32px;height:32px;border-radius:50%;object-fit:cover" alt="" />` : ''}
+                <div style="flex:1;min-width:0">
+                  <div style="font-size:13px;font-weight:600;color:var(--text)">${escapeHtml(c.display_name || c.account_key)}</div>
+                  ${expired ? '<div style="font-size:11px;color:var(--text-danger)">Token expired — reconnect</div>' : '<div style="font-size:11px;color:var(--text-muted)">Connected</div>'}
+                </div>
+                <button data-disconnect="${c.id}" type="button" style="font-size:12px;padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--text-danger);cursor:pointer">Disconnect</button>
+              </div>`;
+            }).join('');
+            connectBtn.style.display = 'none';
+            listEl.querySelectorAll('[data-disconnect]').forEach(btn => {
+              btn.addEventListener('click', async () => {
+                if (!confirm('Disconnect this LinkedIn account? Any pending scheduled posts will be cancelled.')) return;
+                const r2 = await fetch(`/api/linkedin/connections/${btn.dataset.disconnect}`, { method: 'DELETE', credentials: 'same-origin' });
+                const d2 = await r2.json();
+                if (d2.ok) loadConnections(); else alert(d2.error || 'Failed to disconnect.');
+              });
+            });
+          }
+        } catch {
+          listEl.innerHTML = '<p style="font-size:13px;color:var(--text-muted);margin:0">Unable to load LinkedIn status.</p>';
+        }
+      }
+
+      connectBtn.addEventListener('click', () => {
+        window.location.href = '/api/linkedin/connect?from=account';
+      });
+
+      loadConnections();
     })();
 
     // Google sign-in card

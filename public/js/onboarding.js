@@ -600,7 +600,7 @@ const Onboarding = (() => {
     if (!hasLinkedIn) {
       suggestions.push({
         label: 'Connect LinkedIn to post directly without copy-pasting',
-        href:  '/linkedin.html',
+        href:  '/account.html',
       });
     }
 

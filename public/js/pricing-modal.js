@@ -27,7 +27,6 @@
     vault:                      'Content Vault',
     team_members:               'Team members',
     company_pages:              'Company pages',
-    multiple_linkedin_accounts: 'Multiple LinkedIn accounts',
     carousel:                   'Carousel visuals',
     extra_workspaces:           'Additional workspaces',
   };
@@ -320,10 +319,6 @@
           <div class="pm-feature-grid-item">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
             Content Vault
-          </div>
-          <div class="pm-feature-grid-item">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
-            Multiple LinkedIn accounts
           </div>
           <div class="pm-feature-grid-item">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>

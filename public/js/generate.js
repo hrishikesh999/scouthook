@@ -2114,6 +2114,8 @@ async function triggerGenerate(opts = {}) {
       showChatError("You've hit the hourly generation limit. Wait a few minutes and try again.");
     } else if (err.message === 'high_demand') {
       showChatError('ScoutHook is under high demand right now. Wait 30 seconds and try again.');
+    } else if (err.message === 'profile_load_failed') {
+      showChatError('Could not load your voice profile. Please refresh and try again.');
     } else if (err.message === 'anthropic_api_key not configured') {
       showChatError('AI service is not configured. Set ANTHROPIC_API_KEY in the admin settings.');
     } else if (err.message === 'missing_substance') {
@@ -2131,7 +2133,8 @@ async function triggerGenerate(opts = {}) {
         chatSubstanceWarn.appendChild(bypassBtn);
       }
     } else {
-      showChatError('Something went wrong. <a href="#">Try again →</a>');
+      console.error('[generate] unexpected error:', err.message, err);
+      showChatError(`Something went wrong (${err.message || 'unknown'}). <a href="#">Try again →</a>`);
     }
   }
 }

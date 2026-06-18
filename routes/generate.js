@@ -177,7 +177,13 @@ router.post('/', async (req, res) => {
 
   if (!genPath) return res.status(400).json({ ok: false, error: 'missing_path' });
 
-  let profile = await resolveProfile(tenantId, req.body.profileId);
+  let profile;
+  try {
+    profile = await resolveProfile(tenantId, req.body.profileId);
+  } catch (err) {
+    console.error('[generate] resolveProfile error:', err);
+    return res.status(500).json({ ok: false, error: 'profile_load_failed', detail: err.message });
+  }
 
   if (!profile) {
     return res.status(400).json({ ok: false, error: 'complete_profile_first' });

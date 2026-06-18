@@ -117,7 +117,7 @@ const Onboarding = (() => {
         if (connectBtn) {
           const uid = getUserId();
           const tid = localStorage.getItem('scouthook_tid') || '';
-          connectBtn.href = `/api/linkedin/connect?_uid=${encodeURIComponent(uid)}&_tid=${encodeURIComponent(tid)}`;
+          connectBtn.href = `/api/linkedin/connect?from=onboarding&_uid=${encodeURIComponent(uid)}&_tid=${encodeURIComponent(tid)}`;
         }
         connectedEl.hidden    = true;
         disconnectedEl.hidden = false;
@@ -424,12 +424,13 @@ const Onboarding = (() => {
   }
 
   /* ── LinkedIn OAuth return ──────────────────────────────── */
+  // Called after initS*() so all screens are wired. Shows step 2 with the
+  // connected card — user sees confirmation then clicks Next to continue.
   function checkLinkedInReturn() {
     const params = new URLSearchParams(window.location.search);
     if (params.get('linkedin') !== 'connected') return false;
-    // Jump to step 3 (website), already authenticated
-    markOnboardingComplete().catch(() => {});
-    showScreen('s3');
+    showScreen('s2');
+    initLinkedInScreen(); // re-fetches status and renders connected card
     return true;
   }
 
@@ -479,9 +480,6 @@ const Onboarding = (() => {
       }
     } catch { /* non-fatal */ }
 
-    // Handle LinkedIn OAuth callback (returns ?linkedin=connected)
-    if (checkLinkedInReturn()) return;
-
     // Wire up all steps
     initS1();
     initS2();
@@ -492,6 +490,10 @@ const Onboarding = (() => {
     initS7();
     initS8();
     initS9();
+
+    // Handle LinkedIn OAuth callback (returns ?linkedin=connected).
+    // Must run after initS*() so screens and buttons are wired.
+    if (checkLinkedInReturn()) return;
 
     showScreen('s1');
   }

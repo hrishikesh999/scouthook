@@ -5,6 +5,7 @@ const router = express.Router();
 const { db, getSetting } = require('../db');
 const { runQualityGate } = require('../services/qualityGate');
 const { ideaToPost, vaultSeedToPost } = require('../services/ideaPath');
+const { generateAuthorityPost } = require('../services/authorityExpertisePath');
 const { classifyContent } = require('../services/funnelClassifier');
 const { canGeneratePost } = require('../services/subscription');
 const { sendEmailToUser } = require('../emails');
@@ -151,7 +152,7 @@ router.post('/', async (req, res) => {
 
   const { path: genPath, vault_idea_id, skip_substance_check, interview_answers, funnel_type: bodyFunnelType,
           archetype_override, source, post_type, convert_cta_intent,
-          tension_statement } = req.body;
+          tension_statement, length_preference, cta_intent } = req.body;
   let { raw_idea } = req.body;
 
   // Interview path: format Q&A answers into a structured raw_idea string.
@@ -267,6 +268,69 @@ router.post('/', async (req, res) => {
       };
 
       try {
+        // ── Authority/Expertise path (trust post type) ─────────────────────
+        if (post_type === 'trust') {
+          sseWrite('step', { step: 'analyzing', label: 'Crafting your post...' });
+
+          const authorityResult = await generateAuthorityPost(raw_idea, profile, {
+            lengthPreference: length_preference || 'Medium',
+            ctaIntent:        cta_intent || '',
+          });
+
+          sseWrite('step', { step: 'saving', label: 'Final quality check...' });
+
+          const primaryGate = runQualityGate(authorityResult.post, {
+            ...gateOptions(
+              { format_slug: IDEA_SLUG, content: authorityResult.post },
+              profile, 'idea', null, 'trust'
+            ),
+            postType: 'trust',
+          });
+
+          const runResult = await db.prepare(`
+            INSERT INTO generation_runs (user_id, tenant_id, path, input_data, synthesis)
+            VALUES (?, ?, ?, ?, ?)
+            RETURNING id
+          `).run(userId, tenantId, genPath, JSON.stringify({ raw_idea }), JSON.stringify(authorityResult.synthesis));
+          const runId = runResult.lastInsertRowid;
+
+          const primaryInsert = await db.prepare(`
+            INSERT INTO generated_posts
+              (run_id, user_id, tenant_id, profile_id, format_slug, content, ai_content, quality_score, quality_flags, passed_gate,
+               funnel_type, vault_source_ref, idea_input, archetype_used, source,
+               post_type, quality_verdict)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            RETURNING id
+          `).run(
+            runId, userId, tenantId, profile.id, IDEA_SLUG,
+            authorityResult.post, authorityResult.post,
+            primaryGate.score, JSON.stringify(primaryGate.flags), primaryGate.passed_gate ? 1 : 0,
+            'trust', null,
+            raw_idea || null,
+            null,
+            source || null,
+            'trust',
+            primaryGate.verdict || null
+          );
+          const primaryId = primaryInsert.lastInsertRowid;
+
+          const primaryQuality = buildQualityPayload(primaryGate, 1, true);
+
+          sseWrite('done', {
+            post_id:          primaryId,
+            run_id:           runId,
+            post:             authorityResult.post,
+            quality:          { ...primaryQuality, verdict: primaryGate.verdict },
+            archetypeUsed:    null,
+            funnel_type:      'trust',
+            post_type:        'trust',
+            stage1Blueprint:  null,
+            content_feedback: null,
+          });
+          return res.end();
+        }
+
+        // ── Standard path (Reach / Convert) ───────────────────────────────
         sseWrite('step', { step: 'analyzing', label: 'Analyzing your idea...' });
 
         const ideaRaw = await ideaToPost(raw_idea, profile, {
@@ -345,10 +409,28 @@ router.post('/', async (req, res) => {
       }
     }
 
-    if (vaultIdea) {
+    // ── Authority/Expertise path (non-streaming, trust post type) ────────────
+    if (post_type === 'trust' && !vaultIdea) {
+      const authorityResult = await generateAuthorityPost(raw_idea, profile, {
+        lengthPreference: length_preference || 'Medium',
+        ctaIntent:        cta_intent || '',
+      });
+      const primaryGate = runQualityGate(authorityResult.post, {
+        ...gateOptions(
+          { format_slug: IDEA_SLUG, content: authorityResult.post },
+          profile, 'idea', null, 'trust'
+        ),
+        postType: 'trust',
+      });
+      ideaResult = {
+        synthesis:       authorityResult.synthesis,
+        post:            authorityResult.post,
+        archetypeUsed:   null,
+        primaryGate,
+        contentFeedback: null,
+      };
+    } else if (vaultIdea) {
       // ── Vault path ────────────────────────────────────────────────────────
-      // Purpose-built generation: expert source framing, full chunk + neighbor
-      // context, stored archetype, substance check bypassed (vault = grounded).
       const vaultResult = await vaultSeedToPost(vaultIdea, vaultChunkText, profile, {
         rawIdea:            raw_idea,
         neighborContext:    vaultNeighborContext || null,
@@ -379,11 +461,6 @@ router.post('/', async (req, res) => {
       };
     } else {
       // ── Standard path: full two-stage pipeline (Haiku blueprint → Sonnet) ───
-      // ideaToPost() runs buildStructureBlueprint() first —
-      // Haiku derives archetype + tension + narrative arc + hook_draft — then
-      // Sonnet writes with that precise structural scaffold. Same pipeline as
-      // the from-doc/vault path. No extra token cost vs the old approach (same
-      // two model calls: Haiku then Sonnet).
       const ideaRaw = await ideaToPost(raw_idea, profile, {
         skipSubstanceCheck:  !!skip_substance_check,
         archetypeOverride:   archetype_override || null,

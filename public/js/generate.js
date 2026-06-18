@@ -59,6 +59,9 @@ let _shownVaultIds      = new Set(); // vault idea IDs shown this session — ro
 let _shownAITopics      = [];        // AI topic titles shown this session — passed as exclusion list
 let _shownIdeaHooks     = [];        // idea engine hook lines shown — passed as exclude_hooks
 let _currentPostTypeFilter = null;   // active filter chip in the idea engine
+let _authorityLengthPreference = 'Medium'; // length choice for Authority/Expertise posts (set via chat)
+let _authorityCtaIntent        = '';       // CTA intent for Authority/Expertise posts
+let _authorityIdeaBrief        = '';       // stores the user's idea while waiting for length selection
 let _prefetchedIdeas    = null;      // prefetched result from /api/vault/generate-ideas
 let _allFreshIdeas      = [];        // all fetched fresh ideas — filters applied client-side
 let _lastIcpSummary     = '';        // icp_summary from last fetch
@@ -93,36 +96,9 @@ let voiceCtrl             = null;
 
 /* ── Per-type chat configs ───────────────────────────────────── */
 const CHAT_CONFIGS = {
-  reach: {
-    label:     '📣 Reach post',
-    chatTitle: 'You are creating a Reach post',
-    chatDesc:  'Reach posts grow your audience. Share a story, contradiction, or moment that makes a stranger stop scrolling and feel understood.',
-    steps: [{
-      question:    "What's the story, moment, or observation you want to build from?",
-      placeholder: "A lesson learned, a result you got, something that surprised you…",
-      multiline:   true,
-    }],
-  },
-  trust: {
-    label:     '🎯 Authority post',
-    chatTitle: 'You are creating an Authority post',
-    chatDesc:  'Authority posts build your reputation as an expert. Lead with a non-obvious insight, a contrarian view, or a framework only you could have written.',
-    steps: [{
-      question:    "What's the insight, opinion, or expertise you want to lead with?",
-      placeholder: "A contrarian view, a framework you use, a mistake you see others making…",
-      multiline:   true,
-    }],
-  },
-  convert: {
-    label:     '💬 Conversation post',
-    chatTitle: 'You are creating a Conversation post',
-    chatDesc:  'Conversation posts drive immediate action. Anchor the post in a real result or client win, then make a direct ask that moves readers toward a reply or DM.',
-    steps: [{
-      question:    "What result, outcome, or proof point should this post anchor in?",
-      placeholder: "A client win, a specific result, a before/after…",
-      multiline:   true,
-    }],
-  },
+  reach:   { label: '📣 Reach post' },
+  trust:   { label: '✏️ Authority/Expertise' },
+  convert: { label: '💬 Conversation post' },
 };
 
 /* ── Extraction questions (reach / trust / convert) ──────────── */
@@ -157,29 +133,13 @@ const EXTRACTION_QUESTIONS = {
   ],
   trust: [
     {
-      key:         'contrarian',
-      label:       '1 of 3',
-      question:    'What does everyone in your field believe that your experience has shown to be wrong — or at least incomplete?',
-      placeholder: "e.g. Everyone says hire slow, fire fast. In practice I've found the opposite — the hiring decision is rarely the real problem.",
+      key:         'teaching',
+      question:    'What do you want to teach or clarify?',
+      helpText:    'Share the idea, insight, or belief you want to explain. This should be one clear point you want your audience to understand better.',
+      placeholder: 'One idea, belief, or insight you understand well — explained clearly for your audience…',
       required:    true,
-      minChars:    60,
-      errorMsg:    'State your position directly — a belief you hold that contradicts the conventional view.',
-    },
-    {
-      key:         'proof',
-      label:       '2 of 3',
-      question:    'What specific moment or result convinced you of this? Numbers if you have them.',
-      placeholder: 'e.g. A client doubled close rate in 8 weeks by firing their bottom 20% of prospects. No one acted on that advice before seeing proof.',
-      required:    false,
-      nudge:       'The evidence is what turns an opinion into a post people save and share.',
-    },
-    {
-      key:         'audience',
-      label:       '3 of 3',
-      question:    'Who needs to hear this most? Describe the exact person.',
-      placeholder: 'e.g. A founder at $2–5M ARR who keeps saying yes to any client that shows up.',
-      required:    false,
-      nudge:       'Naming the person makes the post feel written for them — that\'s what drives comments.',
+      minChars:    20,
+      errorMsg:    'Share the idea you want to explain — even a rough first draft is enough.',
     },
   ],
   convert: [
@@ -239,6 +199,20 @@ function selectType(type) {
   hideChatError();
   hideSubstanceWarning();
   hideSpecificityNudge();
+
+  // Authority/Expertise enters a focused mode: hide the header and pills so the
+  // user can concentrate on the two-question chat flow.
+  const genHeader    = document.querySelector('.gen-header');
+  const startingPills = document.getElementById('starting-pills');
+  const pillQ        = document.getElementById('pill-question');
+  if (type === 'trust') {
+    if (genHeader)     genHeader.style.display     = 'none';
+    if (startingPills) startingPills.style.display = 'none';
+    if (pillQ)        { pillQ.textContent = ''; pillQ.classList.remove('visible'); }
+  } else {
+    if (genHeader)     genHeader.style.display     = '';
+    if (startingPills) startingPills.style.display = '';
+  }
 
   chat.init(type);
   applyNichePlaceholder();
@@ -618,6 +592,41 @@ const chat = (() => {
     return wrap;
   }
 
+  // Authority/Expertise step 2: render length-choice bot bubble with label + help text + chips
+  function showAuthorityLengthQuestion() {
+    const bubble = addQuestionBubble(
+      'Post length',
+      'Choose how deep you want to go. Short = one sharp idea. Medium = explained clearly. Long = detailed breakdown.'
+    );
+
+    const chips = document.createElement('div');
+    chips.className = 'authority-length-chips';
+
+    const lengths = [
+      { value: 'Short',  label: 'Short',  hint: '≤100 words'   },
+      { value: 'Medium', label: 'Medium', hint: '120-250 words' },
+      { value: 'Long',   label: 'Long',   hint: '300-500 words' },
+    ];
+
+    lengths.forEach(({ value, label, hint }) => {
+      const btn = document.createElement('button');
+      btn.className = 'length-chip';
+      btn.type      = 'button';
+      btn.innerHTML = `${label} <span class="length-chip-hint">${hint}</span>`;
+      btn.addEventListener('click', () => {
+        _authorityLengthPreference = value;
+        chips.querySelectorAll('.length-chip').forEach(c => c.classList.remove('active'));
+        btn.classList.add('active');
+        addUser(label);
+        triggerGenerate({ enrichedIdea: _authorityIdeaBrief });
+      });
+      chips.appendChild(btn);
+    });
+
+    bubble.appendChild(chips);
+    chatThread.scrollTop = chatThread.scrollHeight;
+  }
+
   const ARROW_SVG = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>`;
 
   function updateSendBtn() {
@@ -651,13 +660,26 @@ const chat = (() => {
     const prevType = _type;
     _type          = type;
     _tensionResult = null;
-    selectedVaultIdeaId = null;
+    selectedVaultIdeaId    = null;
+    _authorityIdeaBrief    = '';
+    _authorityLengthPreference = 'Medium';
+    _authorityCtaIntent    = '';
     _coach = { active: false, originalBrief: '', history: [], exchangeCount: 0, awaitingSkip: false, pendingQ: null, intakeInFlight: false, seq: (_coach.seq ?? 0) + 1 };
 
     chatThread.innerHTML = '';
-    chatThread.style.display = 'none';
     const q0 = EXTRACTION_QUESTIONS[type][0];
-    chatInput.placeholder     = q0.placeholder;
+
+    if (type === 'trust') {
+      // Show the first question immediately as a labelled bot bubble so the user
+      // can focus on answering — no pills, no header, just the question.
+      chatThread.style.display = '';
+      addQuestionBubble(q0.question, q0.helpText);
+      chatInput.placeholder    = q0.placeholder;
+    } else {
+      chatThread.style.display = 'none';
+      chatInput.placeholder    = q0.placeholder;
+    }
+
     chatInput.rows             = 4;
     chatInput.style.minHeight  = '100px';
     chatInput.classList.remove('error');
@@ -669,7 +691,30 @@ const chat = (() => {
       chatInput.style.height = chatInput.scrollHeight + 'px';
     }
     updateSendBtn();
+
     chatInput.focus();
+  }
+
+  // Renders a labelled question bubble (label + optional help text) as a bot message.
+  function addQuestionBubble(label, helpText) {
+    const div = document.createElement('div');
+    div.className = 'chat-bubble-bot';
+
+    const labelEl = document.createElement('div');
+    labelEl.className   = 'chat-bubble-main chat-q-label';
+    labelEl.textContent = label;
+    div.appendChild(labelEl);
+
+    if (helpText) {
+      const helpEl = document.createElement('p');
+      helpEl.className   = 'chat-q-help';
+      helpEl.textContent = helpText;
+      div.appendChild(helpEl);
+    }
+
+    chatThread.appendChild(div);
+    chatThread.scrollTop = chatThread.scrollHeight;
+    return div;
   }
 
   function advance() {
@@ -698,6 +743,19 @@ const chat = (() => {
     }
 
     // Not in coach yet — this is the initial brief submission
+
+    // Authority/Expertise: two-step chat flow.
+    // Step 1 — user submits their idea; show the length question as a bot bubble.
+    if (selectedType === 'trust') {
+      _authorityIdeaBrief = val;
+      addUser(val);
+      chatThread.style.display = '';
+      chatInput.value       = '';
+      chatInput.style.height = '';
+      showAuthorityLengthQuestion();
+      return;
+    }
+
     // Show it in the chat thread and call intake
     _coach.originalBrief = val;
     addUser(val);
@@ -853,6 +911,19 @@ document.querySelectorAll('.start-pill[data-prompt]').forEach(pill => {
   });
 });
 
+// Post-type pills (e.g. Authority/Expertise) — select type on click
+document.querySelectorAll('.start-pill[data-type]').forEach(pill => {
+  pill.addEventListener('click', () => {
+    document.querySelectorAll('.start-pill').forEach(p => p.classList.remove('active'));
+    pill.classList.add('active');
+    const pillQ = document.getElementById('pill-question');
+    if (pillQ) { pillQ.textContent = ''; pillQ.classList.remove('visible'); }
+    const vaultPanel = document.getElementById('vault-panel');
+    if (vaultPanel) vaultPanel.style.display = 'none';
+    selectType(pill.dataset.type);
+  });
+});
+
 /* ── Chat input wiring ───────────────────────────────────────── */
 chatSendBtn.addEventListener('click', () => { voiceCtrl?.stop(); chat.advance(); });
 
@@ -931,6 +1002,11 @@ async function triggerGenerate(opts = {}) {
     if (selectedVaultIdeaId)                            body.vault_idea_id        = selectedVaultIdeaId;
     if (opts.enrichedIdea || opts.skipSubstanceCheck)   body.skip_substance_check = true;
     if (shouldStream)                                   body.streaming            = true;
+    // Authority/Expertise-specific params
+    if (selectedType === 'trust') {
+      body.length_preference = _authorityLengthPreference || 'Medium';
+      body.cta_intent        = _authorityCtaIntent || '';
+    }
 
     const res = await fetch('/api/generate', {
       method: 'POST', headers: apiHeaders(), body: JSON.stringify(body), signal: controller.signal,
@@ -1408,6 +1484,7 @@ async function init() {
     chatInput.style.height = chatInput.scrollHeight + 'px';
   }
 }
+
 
 window.__pageInit = init;
 window.__pageCleanup = function () {

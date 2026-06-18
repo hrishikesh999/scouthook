@@ -1098,4 +1098,4 @@ Any number, percentage, named company, role, timeframe, or measurable outcome st
 ${AI_TELLS_PROHIBITION}`;
 }
 
-module.exports = { ideaToPost, vaultSeedToPost, buildRefineSystemPrompt, buildImproveSystemPrompt };
+module.exports = { ideaToPost, vaultSeedToPost, buildRefineSystemPrompt, buildImproveSystemPrompt, fetchPublishedExamples };

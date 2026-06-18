@@ -62,6 +62,11 @@ let _currentPostTypeFilter = null;   // active filter chip in the idea engine
 let _authorityLengthPreference = 'Medium'; // length choice for Authority/Expertise posts (set via chat)
 let _authorityCtaIntent        = '';       // CTA intent for Authority/Expertise posts
 let _authorityIdeaBrief        = '';       // stores the user's idea while waiting for length selection
+let _storyChatStep          = 0;           // 0=event, 1=shift, 2=details, 3=length
+let _storyEvent             = '';
+let _storyShift             = '';
+let _storySupportingDetails = '';
+let _storyLengthPreference  = 'Medium';
 let _prefetchedIdeas    = null;      // prefetched result from /api/vault/generate-ideas
 let _allFreshIdeas      = [];        // all fetched fresh ideas — filters applied client-side
 let _lastIcpSummary     = '';        // icp_summary from last fetch
@@ -98,6 +103,7 @@ let voiceCtrl             = null;
 const CHAT_CONFIGS = {
   reach:   { label: '📣 Reach post' },
   trust:   { label: '✏️ Authority/Expertise' },
+  story:   { label: '📖 Story/Personal Experience' },
   convert: { label: '💬 Conversation post' },
 };
 
@@ -140,6 +146,17 @@ const EXTRACTION_QUESTIONS = {
       required:    true,
       minChars:    20,
       errorMsg:    'Share the idea you want to explain — even a rough first draft is enough.',
+    },
+  ],
+  story: [
+    {
+      key:         'story_event',
+      question:    'Describe the real event or moment that happened.',
+      helpText:    'Be specific and honest. What happened, what was the situation, what did you go through?',
+      placeholder: 'The moment, the situation, the experience — in your own words…',
+      required:    true,
+      minChars:    40,
+      errorMsg:    'Share the event or moment — even a rough draft is enough.',
     },
   ],
   convert: [
@@ -205,7 +222,7 @@ function selectType(type) {
   const genHeader    = document.querySelector('.gen-header');
   const startingPills = document.getElementById('starting-pills');
   const pillQ        = document.getElementById('pill-question');
-  if (type === 'trust') {
+  if (type === 'trust' || type === 'story') {
     if (genHeader)     genHeader.style.display     = 'none';
     if (startingPills) startingPills.style.display = 'none';
     if (pillQ)        { pillQ.textContent = ''; pillQ.classList.remove('visible'); }
@@ -627,6 +644,83 @@ const chat = (() => {
     chatThread.scrollTop = chatThread.scrollHeight;
   }
 
+  // ── Story / Personal Experience step renderers ──────────────────────────
+
+  function showStoryShiftQuestion() {
+    addQuestionBubble(
+      'Story Shift / Realization',
+      'The key realization, lesson, or perspective change that came from this experience.'
+    );
+    chatInput.placeholder = 'What clicked, what changed, what did you learn from this…';
+    chatInput.focus();
+    chatThread.scrollTop = chatThread.scrollHeight;
+  }
+
+  function showStorySupportingDetailsQuestion() {
+    const bubble = addQuestionBubble(
+      'Supporting Details',
+      'Any additional struggle, emotion, context, or outcome worth mentioning. If left blank, ScoutHook will infer this naturally.'
+    );
+    const skipBtn = document.createElement('button');
+    skipBtn.type      = 'button';
+    skipBtn.className = 'story-skip-btn';
+    skipBtn.textContent = 'Skip →';
+    skipBtn.addEventListener('click', () => {
+      _storySupportingDetails = '';
+      _storyChatStep = 3;
+      addUser('(skipped)');
+      chatInput.value       = '';
+      chatInput.style.height = '';
+      showStoryLengthQuestion();
+    });
+    bubble.appendChild(skipBtn);
+    chatInput.placeholder = 'Any extra context, emotion, or outcome — or skip this step…';
+    chatInput.focus();
+    chatThread.scrollTop = chatThread.scrollHeight;
+  }
+
+  function showStoryLengthQuestion() {
+    const bubble = addQuestionBubble(
+      'Post length',
+      'Choose how deep you want to go. Short = one sharp beat. Medium = full arc. Long = detailed breakdown.'
+    );
+    const chips = document.createElement('div');
+    chips.className = 'authority-length-chips';
+
+    [
+      { value: 'Short',  label: 'Short',  hint: '8–12 lines'  },
+      { value: 'Medium', label: 'Medium', hint: '12–18 lines' },
+      { value: 'Long',   label: 'Long',   hint: '18–30 lines' },
+    ].forEach(({ value, label, hint }) => {
+      const btn = document.createElement('button');
+      btn.className = 'length-chip';
+      btn.type      = 'button';
+      btn.innerHTML = `${label} <span class="length-chip-hint">${hint}</span>`;
+      btn.addEventListener('click', () => {
+        _storyLengthPreference = value;
+        chips.querySelectorAll('.length-chip').forEach(c => c.classList.remove('active'));
+        btn.classList.add('active');
+        addUser(label);
+        triggerGenerate({ enrichedIdea: _buildStoryPrompt() });
+      });
+      chips.appendChild(btn);
+    });
+
+    bubble.appendChild(chips);
+    chatThread.scrollTop = chatThread.scrollHeight;
+  }
+
+  function _buildStoryPrompt() {
+    const parts = [
+      `STORY EVENT:\n${_storyEvent}`,
+      `STORY SHIFT / REALIZATION:\n${_storyShift}`,
+    ];
+    if (_storySupportingDetails.trim()) {
+      parts.push(`SUPPORTING DETAILS:\n${_storySupportingDetails}`);
+    }
+    return parts.join('\n\n');
+  }
+
   const ARROW_SVG = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>`;
 
   function updateSendBtn() {
@@ -664,12 +758,17 @@ const chat = (() => {
     _authorityIdeaBrief    = '';
     _authorityLengthPreference = 'Medium';
     _authorityCtaIntent    = '';
+    _storyChatStep          = 0;
+    _storyEvent             = '';
+    _storyShift             = '';
+    _storySupportingDetails = '';
+    _storyLengthPreference  = 'Medium';
     _coach = { active: false, originalBrief: '', history: [], exchangeCount: 0, awaitingSkip: false, pendingQ: null, intakeInFlight: false, seq: (_coach.seq ?? 0) + 1 };
 
     chatThread.innerHTML = '';
     const q0 = EXTRACTION_QUESTIONS[type][0];
 
-    if (type === 'trust') {
+    if (type === 'trust' || type === 'story') {
       // Show the first question immediately as a labelled bot bubble so the user
       // can focus on answering — no pills, no header, just the question.
       chatThread.style.display = '';
@@ -753,6 +852,34 @@ const chat = (() => {
       chatInput.value       = '';
       chatInput.style.height = '';
       showAuthorityLengthQuestion();
+      return;
+    }
+
+    // Story / Personal Experience: four-step chat flow.
+    if (selectedType === 'story') {
+      if (_storyChatStep === 0) {
+        _storyEvent = val;
+        _storyChatStep = 1;
+        addUser(val);
+        chatThread.style.display = '';
+        chatInput.value       = '';
+        chatInput.style.height = '';
+        showStoryShiftQuestion();
+      } else if (_storyChatStep === 1) {
+        _storyShift = val;
+        _storyChatStep = 2;
+        addUser(val);
+        chatInput.value       = '';
+        chatInput.style.height = '';
+        showStorySupportingDetailsQuestion();
+      } else if (_storyChatStep === 2) {
+        _storySupportingDetails = val;
+        _storyChatStep = 3;
+        addUser(val);
+        chatInput.value       = '';
+        chatInput.style.height = '';
+        showStoryLengthQuestion();
+      }
       return;
     }
 
@@ -1006,6 +1133,11 @@ async function triggerGenerate(opts = {}) {
     if (selectedType === 'trust') {
       body.length_preference = _authorityLengthPreference || 'Medium';
       body.cta_intent        = _authorityCtaIntent || '';
+    }
+    // Story/Personal Experience-specific params
+    if (selectedType === 'story') {
+      body.length_preference = _storyLengthPreference || 'Medium';
+      body.cta_intent        = '';
     }
 
     const res = await fetch('/api/generate', {

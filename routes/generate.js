@@ -6,6 +6,7 @@ const { db, getSetting } = require('../db');
 const { runQualityGate } = require('../services/qualityGate');
 const { ideaToPost, vaultSeedToPost } = require('../services/ideaPath');
 const { generateAuthorityPost } = require('../services/authorityExpertisePath');
+const { generateStoryPost }     = require('../services/storyPersonalExperiencePath');
 const { classifyContent } = require('../services/funnelClassifier');
 const { canGeneratePost } = require('../services/subscription');
 const { sendEmailToUser } = require('../emails');
@@ -330,6 +331,65 @@ router.post('/', async (req, res) => {
           return res.end();
         }
 
+        // ── Story / Personal Experience path ──────────────────────────────
+        if (post_type === 'story') {
+          sseWrite('step', { step: 'analyzing', label: 'Crafting your story...' });
+
+          const storyResult = await generateStoryPost(raw_idea, profile, {
+            lengthPreference: length_preference || 'Medium',
+            ctaIntent:        cta_intent || '',
+          });
+
+          sseWrite('step', { step: 'saving', label: 'Final quality check...' });
+
+          const storyGate = runQualityGate(storyResult.post, {
+            ...gateOptions(
+              { format_slug: IDEA_SLUG, content: storyResult.post },
+              profile, 'idea', null, 'story'
+            ),
+            postType: 'story',
+          });
+
+          const storyRunResult = await db.prepare(`
+            INSERT INTO generation_runs (user_id, tenant_id, path, input_data, synthesis)
+            VALUES (?, ?, ?, ?, ?)
+            RETURNING id
+          `).run(userId, tenantId, genPath, JSON.stringify({ raw_idea }), JSON.stringify(storyResult.synthesis));
+          const storyRunId = storyRunResult.lastInsertRowid;
+
+          const storyInsert = await db.prepare(`
+            INSERT INTO generated_posts
+              (run_id, user_id, tenant_id, profile_id, format_slug, content, ai_content, quality_score, quality_flags, passed_gate,
+               funnel_type, vault_source_ref, idea_input, archetype_used, source,
+               post_type, quality_verdict)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            RETURNING id
+          `).run(
+            storyRunId, userId, tenantId, profile.id, IDEA_SLUG,
+            storyResult.post, storyResult.post,
+            storyGate.score, JSON.stringify(storyGate.flags), storyGate.passed_gate ? 1 : 0,
+            'story', null,
+            raw_idea || null, null, source || null,
+            'story', storyGate.verdict || null
+          );
+          const storyId = storyInsert.lastInsertRowid;
+
+          const storyQuality = buildQualityPayload(storyGate, 1, true);
+
+          sseWrite('done', {
+            post_id:          storyId,
+            run_id:           storyRunId,
+            post:             storyResult.post,
+            quality:          { ...storyQuality, verdict: storyGate.verdict },
+            archetypeUsed:    null,
+            funnel_type:      'story',
+            post_type:        'story',
+            stage1Blueprint:  null,
+            content_feedback: null,
+          });
+          return res.end();
+        }
+
         // ── Standard path (Reach / Convert) ───────────────────────────────
         sseWrite('step', { step: 'analyzing', label: 'Analyzing your idea...' });
 
@@ -427,6 +487,26 @@ router.post('/', async (req, res) => {
         post:            authorityResult.post,
         archetypeUsed:   null,
         primaryGate,
+        contentFeedback: null,
+      };
+    } else if (post_type === 'story' && !vaultIdea) {
+      // ── Story / Personal Experience path (non-streaming) ─────────────────
+      const storyResult = await generateStoryPost(raw_idea, profile, {
+        lengthPreference: length_preference || 'Medium',
+        ctaIntent:        cta_intent || '',
+      });
+      const storyGate = runQualityGate(storyResult.post, {
+        ...gateOptions(
+          { format_slug: IDEA_SLUG, content: storyResult.post },
+          profile, 'idea', null, 'story'
+        ),
+        postType: 'story',
+      });
+      ideaResult = {
+        synthesis:       storyResult.synthesis,
+        post:            storyResult.post,
+        archetypeUsed:   null,
+        primaryGate:     storyGate,
         contentFeedback: null,
       };
     } else if (vaultIdea) {

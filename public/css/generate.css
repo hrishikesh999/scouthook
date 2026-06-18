@@ -1034,6 +1034,24 @@
       border-color: var(--accent);
     }
 
+    /* ── Story skip button ───────────────────────────────────────── */
+    .story-skip-btn {
+      display: inline-block;
+      margin-top: 12px;
+      padding: 6px 14px;
+      border-radius: 8px;
+      border: 1.5px solid var(--border);
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 0.8125rem;
+      cursor: pointer;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .story-skip-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
     /* ── Chat question label + help text ────────────────────────── */
     .chat-q-label {
       font-weight: 700;

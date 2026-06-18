@@ -11,6 +11,7 @@ const { generateBtsPost }          = require('../services/behindTheScenesPath');
 const { generateContrarianPost }   = require('../services/contrarianHotTakePath');
 const { generateFrameworkPost }    = require('../services/frameworkHowToPath');
 const { generateAnnouncementPost } = require('../services/announcementPath');
+const { generateLeadGenPost }      = require('../services/leadGenOfferPath');
 const { classifyContent } = require('../services/funnelClassifier');
 const { canGeneratePost } = require('../services/subscription');
 const { sendEmailToUser } = require('../emails');
@@ -627,6 +628,64 @@ router.post('/', async (req, res) => {
           return res.end();
         }
 
+        // ── Lead Gen / Offer path ─────────────────────────────────────────
+        if (post_type === 'lead_gen') {
+          sseWrite('step', { step: 'analyzing', label: 'Crafting your offer post...' });
+
+          const leadGenResult = await generateLeadGenPost(raw_idea, profile, {
+            lengthPreference: length_preference || 'Medium',
+          });
+
+          sseWrite('step', { step: 'saving', label: 'Final quality check...' });
+
+          const leadGenGate = runQualityGate(leadGenResult.post, {
+            ...gateOptions(
+              { format_slug: IDEA_SLUG, content: leadGenResult.post },
+              profile, 'idea', null, 'lead_gen'
+            ),
+            postType: 'lead_gen',
+          });
+
+          const leadGenRunResult = await db.prepare(`
+            INSERT INTO generation_runs (user_id, tenant_id, path, input_data, synthesis)
+            VALUES (?, ?, ?, ?, ?)
+            RETURNING id
+          `).run(userId, tenantId, genPath, JSON.stringify({ raw_idea }), JSON.stringify(leadGenResult.synthesis));
+          const leadGenRunId = leadGenRunResult.lastInsertRowid;
+
+          const leadGenInsert = await db.prepare(`
+            INSERT INTO generated_posts
+              (run_id, user_id, tenant_id, profile_id, format_slug, content, ai_content, quality_score, quality_flags, passed_gate,
+               funnel_type, vault_source_ref, idea_input, archetype_used, source,
+               post_type, quality_verdict)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            RETURNING id
+          `).run(
+            leadGenRunId, userId, tenantId, profile.id, IDEA_SLUG,
+            leadGenResult.post, leadGenResult.post,
+            leadGenGate.score, JSON.stringify(leadGenGate.flags), leadGenGate.passed_gate ? 1 : 0,
+            'lead_gen', null,
+            raw_idea || null, null, source || null,
+            'lead_gen', leadGenGate.verdict || null
+          );
+          const leadGenId = leadGenInsert.lastInsertRowid;
+
+          const leadGenQuality = buildQualityPayload(leadGenGate, 1, true);
+
+          sseWrite('done', {
+            post_id:          leadGenId,
+            run_id:           leadGenRunId,
+            post:             leadGenResult.post,
+            quality:          { ...leadGenQuality, verdict: leadGenGate.verdict },
+            archetypeUsed:    null,
+            funnel_type:      'lead_gen',
+            post_type:        'lead_gen',
+            stage1Blueprint:  null,
+            content_feedback: null,
+          });
+          return res.end();
+        }
+
         // ── Standard path (Reach / Convert) ───────────────────────────────
         sseWrite('step', { step: 'analyzing', label: 'Analyzing your idea...' });
 
@@ -822,6 +881,25 @@ router.post('/', async (req, res) => {
         post:            annResult.post,
         archetypeUsed:   null,
         primaryGate:     annGate,
+        contentFeedback: null,
+      };
+    } else if (post_type === 'lead_gen' && !vaultIdea) {
+      // ── Lead Gen / Offer path (non-streaming) ────────────────────────────
+      const leadGenResult = await generateLeadGenPost(raw_idea, profile, {
+        lengthPreference: length_preference || 'Medium',
+      });
+      const leadGenGate = runQualityGate(leadGenResult.post, {
+        ...gateOptions(
+          { format_slug: IDEA_SLUG, content: leadGenResult.post },
+          profile, 'idea', null, 'lead_gen'
+        ),
+        postType: 'lead_gen',
+      });
+      ideaResult = {
+        synthesis:       leadGenResult.synthesis,
+        post:            leadGenResult.post,
+        archetypeUsed:   null,
+        primaryGate:     leadGenGate,
         contentFeedback: null,
       };
     } else if (vaultIdea) {

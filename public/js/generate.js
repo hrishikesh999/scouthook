@@ -84,6 +84,12 @@ let _frameworkLengthPreference = 'Medium';
 let _announcementChatStep      = 0;        // 0=occasion, 1=length
 let _announcementOccasion      = '';
 let _announcementLengthPreference = 'Medium';
+let _leadGenChatStep         = 0;          // 0=problem, 1=desired_outcome, 2=offer, 3=cta, 4=length
+let _leadGenCoreProblem      = '';
+let _leadGenDesiredOutcome   = '';
+let _leadGenOfferDesc        = '';
+let _leadGenCtaText          = '';
+let _leadGenLengthPreference = 'Medium';
 let _prefetchedIdeas    = null;      // prefetched result from /api/vault/generate-ideas
 let _allFreshIdeas      = [];        // all fetched fresh ideas — filters applied client-side
 let _lastIcpSummary     = '';        // icp_summary from last fetch
@@ -125,6 +131,7 @@ const CHAT_CONFIGS = {
   contrarian:   { label: '🔥 Contrarian / Hot Take' },
   framework:    { label: '📚 Framework / How-To' },
   announcement: { label: '🎉 Announcement' },
+  lead_gen:     { label: '🎯 Lead Gen / Offer' },
   convert:      { label: '💬 Conversation post' },
 };
 
@@ -224,6 +231,17 @@ const EXTRACTION_QUESTIONS = {
       errorMsg:    'Describe the occasion or message — even a few words are enough.',
     },
   ],
+  lead_gen: [
+    {
+      key:         'core_problem',
+      question:    'What problem or pain does your offer solve?',
+      helpText:    'The main frustration your audience faces that your product or offer helps with. Be specific and relatable.',
+      placeholder: 'e.g. Most coaches charge $5k upfront and never give you real access after the sale…',
+      required:    true,
+      minChars:    20,
+      errorMsg:    'Describe the problem you\'re solving — even a rough first draft is fine.',
+    },
+  ],
   convert: [
     {
       key:         'result',
@@ -287,7 +305,7 @@ function selectType(type) {
   const genHeader    = document.querySelector('.gen-header');
   const startingPills = document.getElementById('starting-pills');
   const pillQ        = document.getElementById('pill-question');
-  if (type === 'trust' || type === 'story' || type === 'announcement' || type === 'contrarian' || type === 'framework') {
+  if (type === 'trust' || type === 'story' || type === 'announcement' || type === 'contrarian' || type === 'framework' || type === 'lead_gen') {
     if (genHeader)     genHeader.style.display     = 'none';
     if (startingPills) startingPills.style.display = 'none';
     if (pillQ)        { pillQ.textContent = ''; pillQ.classList.remove('visible'); }
@@ -1039,6 +1057,107 @@ const chat = (() => {
     return `Occasion / Message:\n${_announcementOccasion}`;
   }
 
+  // ── Lead Gen / Offer step renderers ──────────────────────────────────────
+
+  function showLeadGenDesiredOutcomeQuestion() {
+    const bubble = addQuestionBubble(
+      'Desired Outcome',
+      'What does your audience want to achieve or feel after using your offer? If left blank, ScoutHook will infer it from your brand and audience context.'
+    );
+    const skipBtn = document.createElement('button');
+    skipBtn.type      = 'button';
+    skipBtn.className = 'story-skip-btn';
+    skipBtn.textContent = 'Skip →';
+    skipBtn.addEventListener('click', () => {
+      _leadGenDesiredOutcome = '';
+      _leadGenChatStep = 2;
+      addUser('(skipped)');
+      chatInput.value       = '';
+      chatInput.style.height = '';
+      showLeadGenOfferDescQuestion();
+    });
+    bubble.appendChild(skipBtn);
+    chatInput.placeholder = 'e.g. They want to land their first $5k month without burning out…';
+    chatInput.focus();
+    chatThread.scrollTop = chatThread.scrollHeight;
+  }
+
+  function showLeadGenOfferDescQuestion() {
+    addQuestionBubble(
+      'Offer Description',
+      'Describe the product, service, or lead magnet you\'re promoting. The more detail you give, the more specific and compelling the soft invite will be.'
+    );
+    chatInput.placeholder = 'e.g. A 6-week group coaching programme for freelancers who want to hit $10k/month…';
+    chatInput.focus();
+    chatThread.scrollTop = chatThread.scrollHeight;
+  }
+
+  function showLeadGenCtaTextQuestion() {
+    const bubble = addQuestionBubble(
+      'CTA Text',
+      'How would you like people to respond? If left blank, ScoutHook will write a natural soft CTA that fits the post.'
+    );
+    const skipBtn = document.createElement('button');
+    skipBtn.type      = 'button';
+    skipBtn.className = 'story-skip-btn';
+    skipBtn.textContent = 'Skip →';
+    skipBtn.addEventListener('click', () => {
+      _leadGenCtaText = '';
+      _leadGenChatStep = 4;
+      addUser('(skipped)');
+      chatInput.value       = '';
+      chatInput.style.height = '';
+      showLeadGenLengthQuestion();
+    });
+    bubble.appendChild(skipBtn);
+    chatInput.placeholder = 'e.g. Type OFFER in the comments, DM me the word READY…';
+    chatInput.focus();
+    chatThread.scrollTop = chatThread.scrollHeight;
+  }
+
+  function showLeadGenLengthQuestion() {
+    const bubble = addQuestionBubble(
+      'Post length',
+      'Short = hook + pain + one insight + soft invite. Medium = full structure. Long = fuller treatment with desire arc.'
+    );
+    const chips = document.createElement('div');
+    chips.className = 'authority-length-chips';
+
+    [
+      { value: 'Short',  label: 'Short',  hint: '6–10 lines'  },
+      { value: 'Medium', label: 'Medium', hint: '10–15 lines' },
+      { value: 'Long',   label: 'Long',   hint: '15–22 lines' },
+    ].forEach(({ value, label, hint }) => {
+      const btn = document.createElement('button');
+      btn.className = 'length-chip';
+      btn.type      = 'button';
+      btn.innerHTML = `${label} <span class="length-chip-hint">${hint}</span>`;
+      btn.addEventListener('click', () => {
+        _leadGenLengthPreference = value;
+        chips.querySelectorAll('.length-chip').forEach(c => c.classList.remove('active'));
+        btn.classList.add('active');
+        addUser(label);
+        triggerGenerate({ enrichedIdea: _buildLeadGenPrompt() });
+      });
+      chips.appendChild(btn);
+    });
+
+    bubble.appendChild(chips);
+    chatThread.scrollTop = chatThread.scrollHeight;
+  }
+
+  function _buildLeadGenPrompt() {
+    const parts = [`CORE PROBLEM OR PAIN:\n${_leadGenCoreProblem}`];
+    if (_leadGenDesiredOutcome.trim()) {
+      parts.push(`DESIRED OUTCOME:\n${_leadGenDesiredOutcome}`);
+    }
+    parts.push(`OFFER DESCRIPTION:\n${_leadGenOfferDesc}`);
+    if (_leadGenCtaText.trim()) {
+      parts.push(`CTA TEXT:\n${_leadGenCtaText}`);
+    }
+    return parts.join('\n\n');
+  }
+
   const ARROW_SVG = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>`;
 
   function updateSendBtn() {
@@ -1098,12 +1217,18 @@ const chat = (() => {
     _announcementChatStep      = 0;
     _announcementOccasion      = '';
     _announcementLengthPreference = 'Medium';
+    _leadGenChatStep         = 0;
+    _leadGenCoreProblem      = '';
+    _leadGenDesiredOutcome   = '';
+    _leadGenOfferDesc        = '';
+    _leadGenCtaText          = '';
+    _leadGenLengthPreference = 'Medium';
     _coach = { active: false, originalBrief: '', history: [], exchangeCount: 0, awaitingSkip: false, pendingQ: null, intakeInFlight: false, seq: (_coach.seq ?? 0) + 1 };
 
     chatThread.innerHTML = '';
     const q0 = EXTRACTION_QUESTIONS[type][0];
 
-    if (type === 'trust' || type === 'story' || type === 'bts' || type === 'contrarian' || type === 'announcement' || type === 'framework') {
+    if (type === 'trust' || type === 'story' || type === 'bts' || type === 'contrarian' || type === 'announcement' || type === 'framework' || type === 'lead_gen') {
       // Show the first question immediately as a labelled bot bubble so the user
       // can focus on answering — no pills, no header, just the question.
       chatThread.style.display = '';
@@ -1305,6 +1430,41 @@ const chat = (() => {
         chatInput.value       = '';
         chatInput.style.height = '';
         showFrameworkLengthQuestion();
+      }
+      return;
+    }
+
+    // Lead Gen / Offer: five-step chat flow.
+    if (selectedType === 'lead_gen') {
+      if (_leadGenChatStep === 0) {
+        _leadGenCoreProblem = val;
+        _leadGenChatStep = 1;
+        addUser(val);
+        chatThread.style.display = '';
+        chatInput.value       = '';
+        chatInput.style.height = '';
+        showLeadGenDesiredOutcomeQuestion();
+      } else if (_leadGenChatStep === 1) {
+        _leadGenDesiredOutcome = val;
+        _leadGenChatStep = 2;
+        addUser(val);
+        chatInput.value       = '';
+        chatInput.style.height = '';
+        showLeadGenOfferDescQuestion();
+      } else if (_leadGenChatStep === 2) {
+        _leadGenOfferDesc = val;
+        _leadGenChatStep = 3;
+        addUser(val);
+        chatInput.value       = '';
+        chatInput.style.height = '';
+        showLeadGenCtaTextQuestion();
+      } else if (_leadGenChatStep === 3) {
+        _leadGenCtaText = val;
+        _leadGenChatStep = 4;
+        addUser(val);
+        chatInput.value       = '';
+        chatInput.style.height = '';
+        showLeadGenLengthQuestion();
       }
       return;
     }
@@ -1581,6 +1741,10 @@ async function triggerGenerate(opts = {}) {
     // Announcement-specific params
     if (selectedType === 'announcement') {
       body.length_preference = _announcementLengthPreference || 'Medium';
+    }
+    // Lead Gen / Offer-specific params
+    if (selectedType === 'lead_gen') {
+      body.length_preference = _leadGenLengthPreference || 'Medium';
     }
 
     const res = await fetch('/api/generate', {

@@ -316,7 +316,7 @@ router.get('/connect', async (req, res) => {
     ? '/editor.html?linkedin=connected'
     : from === 'settings'
     ? '/settings.html?linkedin_connected=true#voice-stage-6'
-    : '/account.html?linkedin_connected=true';
+    : '/account.html';
   await setOAuthState(state, { userId, tenantId, returnTo });
 
   const params = new URLSearchParams({
@@ -346,7 +346,7 @@ router.get('/callback', async (req, res) => {
   }
 
   if (!stateData) {
-    return res.redirect('/account.html?linkedin_error=invalid_state');
+    return res.redirect('/account.html');
   }
   await deleteOAuthState(state);
 
@@ -516,7 +516,7 @@ router.get('/callback', async (req, res) => {
       );
     }
 
-    res.redirect(stateData.returnTo || '/account.html?linkedin_connected=true');
+    res.redirect(stateData.returnTo || '/account.html');
 
   } catch (err) {
     console.error('[linkedin/callback] Error:', err.message);

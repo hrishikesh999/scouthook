@@ -103,43 +103,6 @@
   <script src="/js/account-bar.js"></script>
   <script src="/js/app-router.js"></script>
   <script>
-    // Post-OAuth banner (linkedin_connected / linkedin_error)
-    (() => {
-      const banner = document.getElementById('account-banner');
-      if (!banner) return;
-
-      const params = new URLSearchParams(window.location.search);
-      const connected = params.get('linkedin_connected');
-      const err = params.get('linkedin_error');
-
-      if (connected === 'true') {
-        banner.textContent = 'LinkedIn connected successfully.';
-        banner.style.borderColor = 'rgba(16, 185, 129, 0.35)';
-        banner.style.background = 'var(--bg-pill-pass)';
-        banner.style.color = 'var(--score-pass)';
-        banner.style.display = '';
-        if (window.toast && typeof window.toast.success === 'function') {
-          window.toast.success('LinkedIn connected successfully.');
-        }
-      } else if (err) {
-        const errMsg = err === 'linkedin_already_connected'
-          ? 'This LinkedIn account is already connected to another ScoutHook profile. Disconnect it there first.'
-          : `LinkedIn connection failed: ${err}`;
-        banner.textContent = errMsg;
-        banner.style.borderColor = 'rgba(220, 38, 38, 0.35)';
-        banner.style.background = 'var(--bg-pill-fail)';
-        banner.style.color = 'var(--score-fail)';
-        banner.style.display = '';
-        if (window.toast && typeof window.toast.error === 'function') {
-          window.toast.error('LinkedIn connection failed. Please try again.');
-        }
-      } else {
-        return;
-      }
-
-      window.setTimeout(() => { banner.style.display = 'none'; }, 7000);
-    })();
-
     // LinkedIn connections
     (async () => {
       const listEl      = document.getElementById('linkedin-conn-list');
@@ -185,7 +148,7 @@
       }
 
       connectBtn.addEventListener('click', () => {
-        window.location.href = '/api/linkedin/connect?from=account';
+        window.location.href = '/api/linkedin/connect';
       });
 
       loadConnections();

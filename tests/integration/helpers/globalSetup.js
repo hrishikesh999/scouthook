@@ -15,20 +15,20 @@ module.exports = async function globalSetup() {
     connectionString: process.env.DATABASE_URL,
     ssl: { rejectUnauthorized: false },
     max: 1,
+    connectionTimeoutMillis: 20_000,
   });
 
-  let lastErr;
-  for (let attempt = 1; attempt <= 5; attempt++) {
-    try {
-      await pool.query('SELECT 1');
-      break;
-    } catch (err) {
-      lastErr = err;
-      await new Promise(r => setTimeout(r, 3000 * attempt));
+  try {
+    for (let attempt = 1; attempt <= 5; attempt++) {
+      try {
+        await pool.query('SELECT 1');
+        break;
+      } catch (err) {
+        if (attempt === 5) throw err;
+        await new Promise(r => setTimeout(r, 2000 * attempt));
+      }
     }
-  }
-  await pool.end();
-  if (lastErr && !(await pool.query('SELECT 1').catch(() => null))) {
-    throw new Error(`[globalSetup] Cannot connect to test DB: ${lastErr.message}`);
+  } finally {
+    await pool.end();
   }
 };

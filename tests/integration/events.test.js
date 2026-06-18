@@ -10,7 +10,7 @@ describe('Events — POST /copy', () => {
     const ag   = await loginAs(user);
     const res  = await ag.post('/api/events/copy').send({
       post_id: 1,
-      run_id: 'test-run',
+      run_id: null,
       path: 'idea',
       format_slug: 'short',
     });

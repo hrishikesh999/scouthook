@@ -14,7 +14,8 @@
   },
   "jest": {
     "testEnvironment": "node",
-    "testTimeout": 30000
+    "testTimeout": 30000,
+    "globalSetup": "./tests/integration/helpers/globalSetup.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",

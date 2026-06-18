@@ -1,18 +1,18 @@
 'use strict';
 
-const STEPS = ['s1','s2','s3','s4','se','s5','s6','s7','s8','sw','s9'];
+// Flow: LinkedIn → Website → What you do + Industry → Results & method →
+//       Brand personality → Target audience → Writing sample → Celebration
+const STEPS = ['s2','s3','s4','se','s6','s7','sw','s9'];
 
 const state = {
-  role: null,
   linkedinConnected: false,
   websiteUrl: null,
   brandDescription: '',
+  brandIndustry: '',
   audienceExtracted: '',
   elevatorResultExtracted: '',
-  brandIndustry: '',
   brandPersonalityTraits: [],
-  audiencePrimary: '',
-  audienceDetail: '',
+  audienceDescription: '',
   elevatorResult: '',
   elevatorMechanism: '',
   writingSample: '',
@@ -66,29 +66,9 @@ function fireConfetti() {
   });
 }
 
-// ── Step 1: Role ──────────────────────────────────────────────────────────────
-
-function initS1() {
-  document.querySelectorAll('.ob-role-card').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      document.querySelectorAll('.ob-role-card').forEach(b => {
-        b.classList.remove('ob-role-card--selected');
-        b.setAttribute('aria-pressed', 'false');
-      });
-      btn.classList.add('ob-role-card--selected');
-      btn.setAttribute('aria-pressed', 'true');
-      state.role = btn.dataset.role;
-      try { await apiPost('/api/profile', { role: state.role }); } catch (_) {}
-      showScreen('s2');
-      initLinkedInScreen();
-    });
-  });
-}
-
-// ── Step 2: LinkedIn ──────────────────────────────────────────────────────────
+// ── Step 1: LinkedIn ──────────────────────────────────────────────────────────
 
 function initS2() {
-  document.getElementById('ob-s2-back').addEventListener('click', () => showScreen('s1'));
   document.getElementById('ob-s2-skip').addEventListener('click', () => showScreen('s3'));
   document.getElementById('ob-s2-next').addEventListener('click', () => showScreen('s3'));
 }
@@ -113,8 +93,7 @@ async function initLinkedInScreen() {
       document.getElementById('ob-s2-next').hidden = false;
       document.getElementById('ob-s2-skip').hidden = true;
     } else {
-      const btn = document.getElementById('ob-li-connect-btn');
-      btn.href = '/api/linkedin/connect?from=onboarding';
+      document.getElementById('ob-li-connect-btn').href = '/api/linkedin/connect?from=onboarding';
     }
   } catch (_) {}
 }
@@ -130,7 +109,7 @@ function checkLinkedInReturn() {
   return false;
 }
 
-// ── Step 3: Website URL ───────────────────────────────────────────────────────
+// ── Step 2: Website URL ───────────────────────────────────────────────────────
 
 function initS3() {
   document.getElementById('ob-s3-back').addEventListener('click', () => showScreen('s2'));
@@ -165,14 +144,13 @@ async function submitWebsite() {
 
   try {
     const data = await apiPost('/api/profile/extract-website', { url });
-    if (data.brand_description)    state.brandDescription        = data.brand_description;
-    if (data.audience_description) state.audienceExtracted        = data.audience_description;
-    if (data.elevator_main_result) state.elevatorResultExtracted  = data.elevator_main_result;
+    if (data.brand_description)    state.brandDescription       = data.brand_description;
+    if (data.audience_description) state.audienceExtracted       = data.audience_description;
+    if (data.elevator_main_result) state.elevatorResultExtracted = data.elevator_main_result;
 
-    // Pre-fill step 4 textarea immediately
-    const ta = document.getElementById('ob-brand-description');
+    // Pre-fill step 3 (s4) textarea immediately
     if (state.brandDescription) {
-      ta.value = state.brandDescription;
+      document.getElementById('ob-brand-description').value = state.brandDescription;
       document.getElementById('ob-brand-prefill-hint').hidden = false;
     }
   } catch (_) {}
@@ -183,19 +161,20 @@ async function submitWebsite() {
   showScreen('s4');
 }
 
-// ── Step 4: What do you do? ───────────────────────────────────────────────────
+// ── Step 3: What do you do? + Industry ───────────────────────────────────────
 
 function initS4() {
   document.getElementById('ob-s4-back').addEventListener('click', () => showScreen('s3'));
 
   document.getElementById('ob-s4-next').addEventListener('click', () => {
     state.brandDescription = document.getElementById('ob-brand-description').value.trim();
+    state.brandIndustry    = document.getElementById('ob-brand-industry').value;
     showScreen('se');
     initSeScreen();
   });
 }
 
-// ── Step 5 (new): Elevator — results & method ─────────────────────────────────
+// ── Step 4: Results & method ──────────────────────────────────────────────────
 
 function initSe() {
   document.getElementById('ob-se-back').addEventListener('click', () => showScreen('s4'));
@@ -203,41 +182,29 @@ function initSe() {
   document.getElementById('ob-se-next').addEventListener('click', () => {
     state.elevatorResult    = document.getElementById('ob-elevator-result').value.trim();
     state.elevatorMechanism = document.getElementById('ob-elevator-mechanism').value.trim();
-    showScreen('s5');
+    showScreen('s6');
   });
 
   document.getElementById('ob-se-skip').addEventListener('click', () => {
     state.elevatorResult    = '';
     state.elevatorMechanism = '';
-    showScreen('s5');
+    showScreen('s6');
   });
 }
 
 function initSeScreen() {
   const resultInput = document.getElementById('ob-elevator-result');
   const hint        = document.getElementById('ob-elevator-prefill-hint');
-
   if (state.elevatorResultExtracted && !resultInput.value.trim()) {
     resultInput.value = state.elevatorResultExtracted;
     hint.hidden = false;
   }
 }
 
-// ── Step 6: Industry ──────────────────────────────────────────────────────────
-
-function initS5() {
-  document.getElementById('ob-s5-back').addEventListener('click', () => showScreen('se'));
-
-  document.getElementById('ob-s5-next').addEventListener('click', () => {
-    state.brandIndustry = document.getElementById('ob-brand-industry').value;
-    showScreen('s6');
-  });
-}
-
-// ── Step 7: Brand personality ─────────────────────────────────────────────────
+// ── Step 5: Brand personality ─────────────────────────────────────────────────
 
 function initS6() {
-  document.getElementById('ob-s6-back').addEventListener('click', () => showScreen('s5'));
+  document.getElementById('ob-s6-back').addEventListener('click', () => showScreen('se'));
 
   const countEl = document.getElementById('ob-trait-count');
   document.querySelectorAll('.ob-trait-chip').forEach(chip => {
@@ -301,19 +268,19 @@ async function runBrandVoiceExtraction() {
   initS7Prefill();
 }
 
-// ── Step 8: Target audience ───────────────────────────────────────────────────
+// ── Step 6: Target audience ───────────────────────────────────────────────────
 
 function initS7() {
   document.getElementById('ob-s7-back').addEventListener('click', () => showScreen('s6'));
 
-  document.getElementById('ob-s7-next').addEventListener('click', () => {
-    state.audiencePrimary = document.getElementById('ob-audience-primary').value.trim();
-    showScreen('s8');
+  document.getElementById('ob-s7-next').addEventListener('click', async () => {
+    state.audienceDescription = document.getElementById('ob-audience-description').value.trim();
+    await runAudienceExtraction();
   });
 }
 
 function initS7Prefill() {
-  const ta   = document.getElementById('ob-audience-primary');
+  const ta   = document.getElementById('ob-audience-description');
   const hint = document.getElementById('ob-audience-prefill-hint');
   if (state.audienceExtracted && !ta.value.trim()) {
     ta.value = state.audienceExtracted;
@@ -321,54 +288,40 @@ function initS7Prefill() {
   }
 }
 
-// ── Step 9: Demographics ──────────────────────────────────────────────────────
-
-function initS8() {
-  document.getElementById('ob-s8-back').addEventListener('click', () => showScreen('s7'));
-
-  document.getElementById('ob-s8-next').addEventListener('click', async () => {
-    state.audienceDetail = document.getElementById('ob-audience-detail').value.trim();
-    await runAudienceExtraction();
-  });
-}
-
 async function runAudienceExtraction() {
   const spinner = document.getElementById('ob-aud-generating');
-  const nextBtn = document.getElementById('ob-s8-next');
+  const nextBtn = document.getElementById('ob-s7-next');
 
   spinner.hidden = false;
   nextBtn.disabled = true;
 
   try {
-    const combined = [state.audiencePrimary, state.audienceDetail].filter(Boolean).join('. ');
-    await apiPost('/api/profile', { audience_description: combined });
+    await apiPost('/api/profile', { audience_description: state.audienceDescription });
 
     const result = await apiPost('/api/profile/audience/generate', { mode: 'prefill' });
 
     if (result.prefill) {
       const p    = result.prefill;
       const save = {};
-      if (p.audience_goals?.length)              save.audience_goals                = JSON.stringify(p.audience_goals);
-      if (p.audience_obstacles?.length)          save.audience_obstacles             = JSON.stringify(p.audience_obstacles);
-      if (p.audience_core_beliefs_market?.length) save.audience_core_beliefs_market  = JSON.stringify(p.audience_core_beliefs_market);
-      if (p.audience_buying_stage)               save.audience_buying_stage          = p.audience_buying_stage;
-      if (p.audience_market_sophistication)      save.audience_market_sophistication = p.audience_market_sophistication;
-      if (p.audience_profile_json)               save.audience_profile_json          = p.audience_profile_json;
+      if (p.audience_goals?.length)               save.audience_goals                = JSON.stringify(p.audience_goals);
+      if (p.audience_obstacles?.length)           save.audience_obstacles             = JSON.stringify(p.audience_obstacles);
+      if (p.audience_core_beliefs_market?.length) save.audience_core_beliefs_market   = JSON.stringify(p.audience_core_beliefs_market);
+      if (p.audience_buying_stage)                save.audience_buying_stage          = p.audience_buying_stage;
+      if (p.audience_market_sophistication)       save.audience_market_sophistication = p.audience_market_sophistication;
+      if (p.audience_profile_json)                save.audience_profile_json          = p.audience_profile_json;
       if (Object.keys(save).length) await apiPost('/api/profile', save);
     }
   } catch (_) {}
 
   spinner.hidden = true;
   nextBtn.disabled = false;
-
-  // Advance to writing sample — not celebration yet
   showScreen('sw');
 }
 
-// ── Step 10 (new): Writing sample ────────────────────────────────────────────
+// ── Step 7: Writing sample ────────────────────────────────────────────────────
 
 function initSw() {
-  document.getElementById('ob-sw-back').addEventListener('click', () => showScreen('s8'));
+  document.getElementById('ob-sw-back').addEventListener('click', () => showScreen('s7'));
 
   const ta        = document.getElementById('ob-writing-sample');
   const charCount = document.getElementById('ob-writing-char-count');
@@ -397,7 +350,7 @@ async function saveAndFinish() {
 
   try {
     const payload = {
-      onboarding_complete:    1,
+      onboarding_complete:     1,
       onboarding_completed_at: new Date().toISOString(),
     };
     if (state.writingSample) payload.writing_samples = state.writingSample;
@@ -411,7 +364,7 @@ async function saveAndFinish() {
   setTimeout(fireConfetti, 120);
 }
 
-// ── Step 11: Celebration ──────────────────────────────────────────────────────
+// ── Celebration ───────────────────────────────────────────────────────────────
 
 function initS9() {
   document.getElementById('ob-write-first-post').addEventListener('click', () => {
@@ -433,22 +386,20 @@ async function init() {
 
   document.querySelectorAll('.ob-screen').forEach(s => s.hidden = true);
 
-  initS1();
   initS2();
   initS3();
   initS4();
   initSe();
-  initS5();
   initS6();
   initS7();
-  initS8();
   initSw();
   initS9();
 
   // Must come after all init calls so DOM is wired
   if (checkLinkedInReturn()) return;
 
-  showScreen('s1');
+  showScreen('s2');
+  initLinkedInScreen();
 }
 
 init();

@@ -21,48 +21,12 @@
       <span class="ob-dot" data-step="5"></span>
       <span class="ob-dot" data-step="6"></span>
       <span class="ob-dot" data-step="7"></span>
-      <span class="ob-dot" data-step="8"></span>
-      <span class="ob-dot" data-step="9"></span>
-      <span class="ob-dot" data-step="10"></span>
-      <span class="ob-dot" data-step="11"></span>
     </div>
   </header>
 
-  <!-- ── Step 1: Role ────────────────────────────────────── -->
-  <section id="ob-s1" class="ob-screen ob-screen--center" aria-label="Step 1: Your role">
+  <!-- ── Step 1: Connect LinkedIn ───────────────────────── -->
+  <section id="ob-s2" class="ob-screen ob-screen--center" aria-label="Step 1: Connect LinkedIn">
     <div class="ob-content ob-content--narrow">
-      <h1 class="ob-headline">What best describes what you do?</h1>
-      <p class="ob-subheadline">This shapes the language and examples we use throughout.</p>
-
-      <div class="ob-role-grid" role="list">
-        <button class="ob-role-card" data-role="consultant" type="button" role="listitem" aria-pressed="false">
-          <span class="ob-role-icon">🎯</span>
-          <span class="ob-role-label">Consultant</span>
-        </button>
-        <button class="ob-role-card" data-role="coach" type="button" role="listitem" aria-pressed="false">
-          <span class="ob-role-icon">🧭</span>
-          <span class="ob-role-label">Coach</span>
-        </button>
-        <button class="ob-role-card" data-role="freelancer" type="button" role="listitem" aria-pressed="false">
-          <span class="ob-role-icon">💼</span>
-          <span class="ob-role-label">Freelancer</span>
-        </button>
-        <button class="ob-role-card" data-role="founder" type="button" role="listitem" aria-pressed="false">
-          <span class="ob-role-icon">🚀</span>
-          <span class="ob-role-label">Founder</span>
-        </button>
-        <button class="ob-role-card" data-role="other" type="button" role="listitem" aria-pressed="false">
-          <span class="ob-role-icon">✦</span>
-          <span class="ob-role-label">Something else</span>
-        </button>
-      </div>
-    </div>
-  </section>
-
-  <!-- ── Step 2: Connect LinkedIn ───────────────────────── -->
-  <section id="ob-s2" class="ob-screen ob-screen--center" aria-label="Step 2: Connect LinkedIn">
-    <div class="ob-content ob-content--narrow">
-      <button class="ob-back-btn" id="ob-s2-back" type="button">← Back</button>
 
       <div class="ob-linkedin-icon-wrap" aria-hidden="true">
         <div class="ob-linkedin-icon-circle">in</div>
@@ -97,8 +61,8 @@
     </div>
   </section>
 
-  <!-- ── Step 3: Website URL ─────────────────────────────── -->
-  <section id="ob-s3" class="ob-screen ob-screen--center" aria-label="Step 3: Website">
+  <!-- ── Step 2: Website URL ─────────────────────────────── -->
+  <section id="ob-s3" class="ob-screen ob-screen--center" aria-label="Step 2: Website">
     <div class="ob-content ob-content--narrow">
       <button class="ob-back-btn" id="ob-s3-back" type="button">← Back</button>
 
@@ -124,8 +88,8 @@
     </div>
   </section>
 
-  <!-- ── Step 4: What do you do? ────────────────────────── -->
-  <section id="ob-s4" class="ob-screen ob-screen--center" aria-label="Step 4: What you do">
+  <!-- ── Step 3: What do you do? + Industry ────────────── -->
+  <section id="ob-s4" class="ob-screen ob-screen--center" aria-label="Step 3: What you do">
     <div class="ob-content ob-content--narrow">
       <button class="ob-back-btn" id="ob-s4-back" type="button">← Back</button>
 
@@ -138,14 +102,35 @@
         ✦ Suggested from your website — feel free to edit
       </p>
 
-      <div class="ob-interview-actions" style="margin-top:16px">
+      <div class="ob-field-group" style="margin-top:24px">
+        <label class="ob-label" for="ob-brand-industry">Industry</label>
+        <select id="ob-brand-industry" class="ob-field ob-select" style="width:100%; height:44px; margin-top:6px">
+          <option value="">— Select your industry —</option>
+          <option value="Education, Coaching &amp; Info-Products">Education, Coaching &amp; Info-Products</option>
+          <option value="Business, Consulting &amp; B2B Services">Business, Consulting &amp; B2B Services</option>
+          <option value="Finance, Investing &amp; Wealth">Finance, Investing &amp; Wealth</option>
+          <option value="Health, Wellness &amp; Lifestyle">Health, Wellness &amp; Lifestyle</option>
+          <option value="Home, Living &amp; Real Estate">Home, Living &amp; Real Estate</option>
+          <option value="E-Commerce, D2C &amp; Retail">E-Commerce, D2C &amp; Retail</option>
+          <option value="Technology, SaaS &amp; Digital Products">Technology, SaaS &amp; Digital Products</option>
+          <option value="Manufacturing, Industrial &amp; B2B Tech">Manufacturing, Industrial &amp; B2B Tech</option>
+          <option value="Travel, Hospitality &amp; Events">Travel, Hospitality &amp; Events</option>
+          <option value="Media, Arts &amp; Entertainment">Media, Arts &amp; Entertainment</option>
+          <option value="Startups, Innovation &amp; Venture">Startups, Innovation &amp; Venture</option>
+          <option value="Non-Profit, CSR &amp; Social Impact">Non-Profit, CSR &amp; Social Impact</option>
+          <option value="Government, Public Sector &amp; Institutions">Government, Public Sector &amp; Institutions</option>
+          <option value="Others">Others</option>
+        </select>
+      </div>
+
+      <div class="ob-interview-actions" style="margin-top:24px">
         <button id="ob-s4-next" class="ob-btn-primary" type="button">Next →</button>
       </div>
     </div>
   </section>
 
-  <!-- ── Step 5 (new): Results & method ─────────────────── -->
-  <section id="ob-se" class="ob-screen ob-screen--center" aria-label="Step 5: Results and method">
+  <!-- ── Step 4: Results & method ───────────────────────── -->
+  <section id="ob-se" class="ob-screen ob-screen--center" aria-label="Step 4: Results and method">
     <div class="ob-content ob-content--narrow">
       <button class="ob-back-btn" id="ob-se-back" type="button">← Back</button>
 
@@ -154,7 +139,7 @@
 
       <div class="ob-field-group">
         <label class="ob-label" for="ob-elevator-result">The main result your clients achieve</label>
-        <input id="ob-elevator-result" class="ob-field" type="text"
+        <input id="ob-elevator-result" class="ob-field" type="text" style="margin-top:6px"
                placeholder="e.g. Go from zero inbound to 4 qualified calls a month in 6 weeks" />
         <p id="ob-elevator-prefill-hint" class="ob-prefill-hint" hidden>
           ✦ Suggested from your website — feel free to edit
@@ -163,7 +148,7 @@
 
       <div class="ob-field-group" style="margin-top:20px">
         <label class="ob-label" for="ob-elevator-mechanism">Your method or approach <span class="ob-optional">(optional)</span></label>
-        <input id="ob-elevator-mechanism" class="ob-field" type="text"
+        <input id="ob-elevator-mechanism" class="ob-field" type="text" style="margin-top:6px"
                placeholder="e.g. A structured 6-week outbound system built around your ICP" />
       </div>
 
@@ -174,40 +159,8 @@
     </div>
   </section>
 
-  <!-- ── Step 6: Industry ────────────────────────────────── -->
-  <section id="ob-s5" class="ob-screen ob-screen--center" aria-label="Step 6: Industry">
-    <div class="ob-content ob-content--narrow">
-      <button class="ob-back-btn" id="ob-s5-back" type="button">← Back</button>
-
-      <h1 class="ob-headline">What industry are you in?</h1>
-      <p class="ob-subheadline">This helps us match your post style to your market context.</p>
-
-      <select id="ob-brand-industry" class="ob-field ob-select" style="width:100%; height:44px">
-        <option value="">— Select your industry —</option>
-        <option value="Education, Coaching &amp; Info-Products">Education, Coaching &amp; Info-Products</option>
-        <option value="Business, Consulting &amp; B2B Services">Business, Consulting &amp; B2B Services</option>
-        <option value="Finance, Investing &amp; Wealth">Finance, Investing &amp; Wealth</option>
-        <option value="Health, Wellness &amp; Lifestyle">Health, Wellness &amp; Lifestyle</option>
-        <option value="Home, Living &amp; Real Estate">Home, Living &amp; Real Estate</option>
-        <option value="E-Commerce, D2C &amp; Retail">E-Commerce, D2C &amp; Retail</option>
-        <option value="Technology, SaaS &amp; Digital Products">Technology, SaaS &amp; Digital Products</option>
-        <option value="Manufacturing, Industrial &amp; B2B Tech">Manufacturing, Industrial &amp; B2B Tech</option>
-        <option value="Travel, Hospitality &amp; Events">Travel, Hospitality &amp; Events</option>
-        <option value="Media, Arts &amp; Entertainment">Media, Arts &amp; Entertainment</option>
-        <option value="Startups, Innovation &amp; Venture">Startups, Innovation &amp; Venture</option>
-        <option value="Non-Profit, CSR &amp; Social Impact">Non-Profit, CSR &amp; Social Impact</option>
-        <option value="Government, Public Sector &amp; Institutions">Government, Public Sector &amp; Institutions</option>
-        <option value="Others">Others</option>
-      </select>
-
-      <div class="ob-interview-actions" style="margin-top:20px">
-        <button id="ob-s5-next" class="ob-btn-primary" type="button">Next →</button>
-      </div>
-    </div>
-  </section>
-
-  <!-- ── Step 7: Brand personality ──────────────────────── -->
-  <section id="ob-s6" class="ob-screen ob-screen--center" aria-label="Step 7: Brand personality">
+  <!-- ── Step 5: Brand personality ──────────────────────── -->
+  <section id="ob-s6" class="ob-screen ob-screen--center" aria-label="Step 5: Brand personality">
     <div class="ob-content ob-content--narrow">
       <button class="ob-back-btn" id="ob-s6-back" type="button">← Back</button>
 
@@ -250,36 +203,19 @@
     </div>
   </section>
 
-  <!-- ── Step 8: Target audience ────────────────────────── -->
-  <section id="ob-s7" class="ob-screen ob-screen--center" aria-label="Step 8: Target audience">
+  <!-- ── Step 6: Target audience ────────────────────────── -->
+  <section id="ob-s7" class="ob-screen ob-screen--center" aria-label="Step 6: Target audience">
     <div class="ob-content ob-content--narrow">
       <button class="ob-back-btn" id="ob-s7-back" type="button">← Back</button>
 
-      <h1 class="ob-headline">Tell us about your target audience</h1>
-      <p class="ob-subheadline">Who are the people you most want to reach and influence?</p>
+      <h1 class="ob-headline">Who is your target audience?</h1>
+      <p class="ob-subheadline">Describe who they are — role, industry, company size, experience level, age range, or life stage. The more detail, the sharper your posts.</p>
 
-      <textarea id="ob-audience-primary" class="ob-textarea ob-textarea--interview" rows="4"
-                placeholder="e.g. B2B SaaS founders scaling past $1M ARR who are stuck trying to build a predictable outbound engine."></textarea>
+      <textarea id="ob-audience-description" class="ob-textarea ob-textarea--interview" rows="6"
+                placeholder="e.g. B2B SaaS founders scaling past $1M ARR, typically 30–45, US/UK markets, Series A–B stage. Stuck building a predictable outbound engine after exhausting referrals."></textarea>
       <p id="ob-audience-prefill-hint" class="ob-prefill-hint" hidden>
         ✦ Suggested from your website — feel free to edit
       </p>
-
-      <div class="ob-interview-actions" style="margin-top:16px">
-        <button id="ob-s7-next" class="ob-btn-primary" type="button">Next →</button>
-      </div>
-    </div>
-  </section>
-
-  <!-- ── Step 9: Demographics ───────────────────────────── -->
-  <section id="ob-s8" class="ob-screen ob-screen--center" aria-label="Step 9: Demographics">
-    <div class="ob-content ob-content--narrow">
-      <button class="ob-back-btn" id="ob-s8-back" type="button">← Back</button>
-
-      <h1 class="ob-headline">What is the general age range, demographics, or customer type?</h1>
-      <p class="ob-subheadline">Any detail about who they are — role, company size, experience level, or life stage.</p>
-
-      <textarea id="ob-audience-detail" class="ob-textarea ob-textarea--interview" rows="4"
-                placeholder="e.g. Typically 30–45, B2B tech background, series A–B stage companies, mostly US/UK markets."></textarea>
 
       <div id="ob-aud-generating" class="ob-generating-state" hidden>
         <span class="ob-spinner"></span>
@@ -287,13 +223,13 @@
       </div>
 
       <div class="ob-interview-actions" style="margin-top:16px">
-        <button id="ob-s8-next" class="ob-btn-primary" type="button">Next →</button>
+        <button id="ob-s7-next" class="ob-btn-primary" type="button">Next →</button>
       </div>
     </div>
   </section>
 
-  <!-- ── Step 10 (new): Writing sample ──────────────────── -->
-  <section id="ob-sw" class="ob-screen ob-screen--center" aria-label="Step 10: Writing sample">
+  <!-- ── Step 7: Writing sample ──────────────────────────── -->
+  <section id="ob-sw" class="ob-screen ob-screen--center" aria-label="Step 7: Writing sample">
     <div class="ob-content ob-content--narrow">
       <button class="ob-back-btn" id="ob-sw-back" type="button">← Back</button>
 
@@ -304,7 +240,7 @@
                 rows="8" maxlength="1200"
                 placeholder="e.g. The best pipeline review I ever ran had nothing to do with the pipeline. We spent 90 minutes on the one deal that had been 'almost closed' for six months. Turns out the champion had left the company three weeks earlier. Nobody had told us. That's not a sales problem — that's a listening problem."></textarea>
       <p class="ob-char-count" id="ob-writing-char-count" aria-live="polite"></p>
-      <p class="ob-skip-cost" id="ob-writing-skip-cost">Without this, voice matching relies only on your answers — adding a real sample sharpens it significantly.</p>
+      <p class="ob-skip-cost">Without this, voice matching relies only on your answers — adding a real sample sharpens it significantly.</p>
 
       <div class="ob-interview-actions" style="margin-top:16px">
         <button id="ob-sw-next" class="ob-btn-primary" type="button">Finish setup →</button>
@@ -313,8 +249,8 @@
     </div>
   </section>
 
-  <!-- ── Step 11: Celebration ───────────────────────────── -->
-  <section id="ob-s9" class="ob-screen ob-screen--center ob-screen--celebration" aria-label="Step 11: You're all set">
+  <!-- ── Celebration ─────────────────────────────────────── -->
+  <section id="ob-s9" class="ob-screen ob-screen--center ob-screen--celebration" aria-label="You're all set">
     <div class="ob-content ob-content--narrow ob-content--center">
       <div class="ob-celebration-emoji" aria-hidden="true">🎉</div>
       <h1 class="ob-headline">Your profile is live!</h1>

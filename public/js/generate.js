@@ -2116,6 +2116,9 @@ async function triggerGenerate(opts = {}) {
       showChatError('ScoutHook is under high demand right now. Wait 30 seconds and try again.');
     } else if (err.message === 'profile_load_failed') {
       showChatError('Could not load your voice profile. Please refresh and try again.');
+    } else if (err.message === 'workspace_not_found' || err.message === 'not_authenticated' || err.message === 'no_workspace_context') {
+      fetch('/auth/logout', { method: 'POST', credentials: 'same-origin' }).catch(() => {});
+      window.location.href = '/login.html';
     } else if (err.message === 'anthropic_api_key not configured') {
       showChatError('AI service is not configured. Set ANTHROPIC_API_KEY in the admin settings.');
     } else if (err.message === 'missing_substance') {

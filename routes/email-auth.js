@@ -154,9 +154,12 @@ router.get('/verify-email', async (req, res) => {
       WHERE user_id = ? AND provider = 'email'
     `).run(row.user_id);
 
-    // Resolve or create workspace
+    // Resolve or create workspace — filter out deleted workspaces
     const membership = await db.prepare(
-      'SELECT workspace_id FROM workspace_members WHERE user_id = ? ORDER BY created_at ASC LIMIT 1'
+      `SELECT wm.workspace_id FROM workspace_members wm
+       JOIN workspaces w ON w.id = wm.workspace_id
+       WHERE wm.user_id = ? AND w.deleted_at IS NULL
+       ORDER BY wm.created_at ASC LIMIT 1`
     ).get(row.user_id);
 
     let workspaceId;

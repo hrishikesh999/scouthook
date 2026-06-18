@@ -256,7 +256,12 @@ async function requireWorkspaceMember(req, res, next) {
     const ws = await db.prepare(
       'SELECT deleted_at FROM workspaces WHERE id = ?'
     ).get(req.tenantId);
-    if (!ws || ws.deleted_at) return res.status(403).json({ ok: false, error: 'workspace_not_found' });
+    if (!ws || ws.deleted_at) {
+      // Stale session — workspace no longer valid. Force re-auth so the user
+      // gets a fresh session pointing to a valid workspace.
+      req.session?.destroy?.(() => {});
+      return res.status(401).json({ ok: false, error: 'workspace_not_found' });
+    }
 
     const member = await db.prepare(
       'SELECT role FROM workspace_members WHERE workspace_id = ? AND user_id = ?'

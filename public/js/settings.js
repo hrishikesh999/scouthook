@@ -498,6 +498,25 @@ async function init() {
     || audBeliefs.length > 0;
   if (audStep2HasContent && qs('aud-step-2')) qs('aud-step-2').hidden = false;
 
+  function updateAudStepIndicator(activeStep) {
+    const stp1      = qs('aud-stp-1');
+    const stp2      = qs('aud-stp-2');
+    const connector = qs('aud-stp-connector');
+    const circle1   = qs('aud-stp-1-circle');
+    if (activeStep === 2) {
+      stp1.className      = 'bv-stp bv-stp--done';
+      if (circle1) circle1.textContent = '✓';
+      if (connector) connector.classList.add('bv-stp-connector--done');
+      stp2.className      = 'bv-stp bv-stp--active';
+    } else {
+      stp1.className      = 'bv-stp bv-stp--active';
+      if (circle1) circle1.textContent = '1';
+      if (connector) connector.classList.remove('bv-stp-connector--done');
+      stp2.className      = 'bv-stp bv-stp--pending';
+    }
+  }
+  updateAudStepIndicator(audStep2HasContent ? 2 : 1);
+
   qs('aud-generate-btn')?.addEventListener('click', async () => {
     const btn = qs('aud-generate-btn');
     const statusEl = qs('aud-generate-status');
@@ -527,6 +546,7 @@ async function init() {
           qs('aud-step-2').hidden = false;
           qs('aud-step-2').scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
+        updateAudStepIndicator(2);
         showStatus(statusEl, 'Step 2 ready — review and save');
       } else {
         showStatus(statusEl, 'Generation failed — try again', true);
@@ -534,7 +554,7 @@ async function init() {
     } catch {
       showStatus(statusEl, 'Generation failed — try again', true);
     }
-    btn.textContent = 'Generate Step 2 →'; btn.disabled = false;
+    btn.textContent = 'Save & Next →'; btn.disabled = false;
   });
 
   qs('aud-save-btn')?.addEventListener('click', async () => {

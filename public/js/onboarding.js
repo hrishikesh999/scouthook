@@ -588,7 +588,7 @@ const Onboarding = (() => {
     if (!state.writingSample) {
       suggestions.push({
         label: 'Add a writing sample — the biggest lever on post quality',
-        href:  '/settings.html?step=7',
+        href:  '/settings.html?step=8',
       });
     }
 

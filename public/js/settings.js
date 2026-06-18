@@ -193,32 +193,22 @@ async function init() {
   }
 
   // Check which stages have content and mark them
-  function updateStageChecks(basics, pillars, statements, ctas, principles, hasLinkedIn, samples) {
-    if (basics)                  { const el = qs('vw-check-1'); if (el) el.hidden = false; }
-    if (pillars.length > 0)      { const el = qs('vw-check-2'); if (el) el.hidden = false; }
-    if (statements.length > 0)   { const el = qs('vw-check-3'); if (el) el.hidden = false; }
-    if (ctas.length > 0)         { const el = qs('vw-check-4'); if (el) el.hidden = false; }
-    if (principles.length > 0)   { const el = qs('vw-check-5'); if (el) el.hidden = false; }
-    if (hasLinkedIn)              { const el = qs('vw-check-6'); if (el) el.hidden = false; }
-    if (samples)                  { const el = qs('vw-check-7'); if (el) el.hidden = false; }
+  function updateStageChecks(bv, audience, pillars, statements, ctas, principles, hasLinkedIn, samples) {
+    if (bv)                      { const el = qs('vw-check-1'); if (el) el.hidden = false; }
+    if (audience)                { const el = qs('vw-check-2'); if (el) el.hidden = false; }
+    if (pillars.length > 0)      { const el = qs('vw-check-3'); if (el) el.hidden = false; }
+    if (statements.length > 0)   { const el = qs('vw-check-4'); if (el) el.hidden = false; }
+    if (ctas.length > 0)         { const el = qs('vw-check-5'); if (el) el.hidden = false; }
+    if (principles.length > 0)   { const el = qs('vw-check-6'); if (el) el.hidden = false; }
+    if (hasLinkedIn)             { const el = qs('vw-check-7'); if (el) el.hidden = false; }
+    if (samples)                 { const el = qs('vw-check-8'); if (el) el.hidden = false; }
   }
 
-  /* ── Stage 1: Voice Profile — Brand Voice + Target Audience ── */
+  /* ── Stage 1: Brand Voice ────────────────────────────────── */
 
-  // Website URL (shared field, stays on profiles table)
+  // Website URL (stays on profiles table)
   const websiteEl = qs('profile-website');
   if (websiteEl && profile.website_url) websiteEl.value = profile.website_url;
-
-  // ── Sub-tab switching ──────────────────────────────────────────
-  function switchVoiceTab(tab) {
-    const isBV = tab === 'bv';
-    qs('bv-panel').hidden  = !isBV;
-    qs('aud-panel').hidden = isBV;
-    qs('bv-tab-btn').classList.toggle('vw-subtab-btn--active', isBV);
-    qs('aud-tab-btn').classList.toggle('vw-subtab-btn--active', !isBV);
-  }
-  qs('bv-tab-btn')?.addEventListener('click',  () => switchVoiceTab('bv'));
-  qs('aud-tab-btn')?.addEventListener('click', () => switchVoiceTab('aud'));
 
   // ── Brand Voice — chip lists ───────────────────────────────────
   let bvTraits  = safeParseJSON(profile.brand_personality_traits, []);
@@ -358,7 +348,8 @@ async function init() {
     btn.textContent = 'Save brand voice →'; btn.disabled = false;
   });
 
-  // ── Audience — chip lists ─────────────────────────────────────
+  /* ── Stage 2: Target Audience ───────────────────────────── */
+
   let audGoals     = safeParseJSON(profile.audience_goals, []);
   let audObstacles = safeParseJSON(profile.audience_obstacles, []);
   let audBeliefs   = safeParseJSON(profile.audience_core_beliefs_market, []);
@@ -370,19 +361,14 @@ async function init() {
   wireAddChip('aud-obstacles-input', 'aud-obstacles-add', audObstacles, renderAudObstacles);
   wireAddChip('aud-beliefs-input',   'aud-beliefs-add',   audBeliefs,   renderAudBeliefs);
 
-  // ── Audience — populate Step 1 fields ─────────────────────────
   if (qs('aud-description') && profile.audience_description) qs('aud-description').value = profile.audience_description;
+  if (qs('aud-buying-stage')   && profile.audience_buying_stage)          qs('aud-buying-stage').value   = profile.audience_buying_stage;
+  if (qs('aud-sophistication') && profile.audience_market_sophistication) qs('aud-sophistication').value = profile.audience_market_sophistication;
 
-  // ── Audience — populate Step 2 fields ─────────────────────────
-  if (qs('aud-buying-stage')    && profile.audience_buying_stage)          qs('aud-buying-stage').value    = profile.audience_buying_stage;
-  if (qs('aud-sophistication')  && profile.audience_market_sophistication) qs('aud-sophistication').value  = profile.audience_market_sophistication;
-
-  // Show Audience Step 2 immediately if already populated
   const audStep2HasContent = profile.audience_buying_stage || profile.audience_market_sophistication
     || audBeliefs.length > 0;
   if (audStep2HasContent && qs('aud-step-2')) qs('aud-step-2').hidden = false;
 
-  // ── Audience — Generate Step 2 ────────────────────────────────
   qs('aud-generate-btn')?.addEventListener('click', async () => {
     const btn = qs('aud-generate-btn');
     const statusEl = qs('aud-generate-status');
@@ -422,7 +408,6 @@ async function init() {
     btn.textContent = 'Generate Step 2 →'; btn.disabled = false;
   });
 
-  // ── Audience — Save ───────────────────────────────────────────
   qs('aud-save-btn')?.addEventListener('click', async () => {
     const btn = qs('aud-save-btn');
     const statusEl = qs('aud-save-status');
@@ -443,7 +428,7 @@ async function init() {
           body: JSON.stringify({ mode: 'final' }),
         }).catch(() => {});
         showStatus(statusEl, 'Audience profile saved ✓');
-        const check = qs('vw-check-1');
+        const check = qs('vw-check-2');
         if (check) check.hidden = false;
       } else {
         showStatus(statusEl, 'Save failed', true);
@@ -454,7 +439,7 @@ async function init() {
     btn.textContent = 'Save audience profile →'; btn.disabled = false;
   });
 
-  /* ── Stage 2: Content Pillars ───────────────────────────── */
+  /* ── Stage 3: Content Pillars ───────────────────────────── */
   // Migration shim: if content_pillars is empty but content_themes has data, seed from themes
   let rawPillars = profile.content_pillars;
   if (!rawPillars || rawPillars === '[]') {
@@ -502,7 +487,7 @@ async function init() {
       const d = await saveProfile({ content_pillars: JSON.stringify(pillars) });
       if (d.ok) {
         showStatus(qs('vw-pillars-status'), 'Saved ✓');
-        if (pillars.length > 0) { const el = qs('vw-check-2'); if (el) el.hidden = false; }
+        if (pillars.length > 0) { const el = qs('vw-check-3'); if (el) el.hidden = false; }
       } else {
         showStatus(qs('vw-pillars-status'), 'Save failed', true);
       }
@@ -513,7 +498,7 @@ async function init() {
     btn.disabled = false;
   });
 
-  /* ── Stage 3: Authority Statements ─────────────────────── */
+  /* ── Stage 4: Authority Statements ─────────────────────── */
   let statements = safeParseJSON(profile.authority_statements, []);
 
   const renderStatements = makeChipList('vw-authority-chips', statements, () => {});
@@ -527,7 +512,7 @@ async function init() {
       const d = await saveProfile({ authority_statements: JSON.stringify(statements) });
       if (d.ok) {
         showStatus(qs('vw-authority-status'), 'Saved ✓');
-        if (statements.length > 0) { const el = qs('vw-check-3'); if (el) el.hidden = false; }
+        if (statements.length > 0) { const el = qs('vw-check-4'); if (el) el.hidden = false; }
       } else {
         showStatus(qs('vw-authority-status'), 'Save failed', true);
       }
@@ -538,7 +523,7 @@ async function init() {
     btn.disabled = false;
   });
 
-  /* ── Stage 4: CTA Library ──────────────────────────────── */
+  /* ── Stage 5: CTA Library ──────────────────────────────── */
   let ctas = safeParseJSON(profile.cta_library, []);
 
   const renderCTAs = makeChipList('vw-cta-chips', ctas, () => {});
@@ -565,7 +550,7 @@ async function init() {
       const d = await saveProfile({ cta_library: JSON.stringify(ctas) });
       if (d.ok) {
         showStatus(qs('vw-cta-status'), 'Saved ✓');
-        if (ctas.length > 0) { const el = qs('vw-check-4'); if (el) el.hidden = false; }
+        if (ctas.length > 0) { const el = qs('vw-check-5'); if (el) el.hidden = false; }
       } else {
         showStatus(qs('vw-cta-status'), 'Save failed', true);
       }
@@ -576,7 +561,7 @@ async function init() {
     btn.disabled = false;
   });
 
-  /* ── Stage 5: Content Principles ───────────────────────── */
+  /* ── Stage 6: Content Principles ───────────────────────── */
   let principles = safeParseJSON(profile.content_principles, []);
 
   const renderPrinciples = makeChipList('vw-principles-chips', principles, () => {});
@@ -590,7 +575,7 @@ async function init() {
       const d = await saveProfile({ content_principles: JSON.stringify(principles) });
       if (d.ok) {
         showStatus(qs('vw-principles-status'), 'Saved ✓');
-        if (principles.length > 0) { const el = qs('vw-check-5'); if (el) el.hidden = false; }
+        if (principles.length > 0) { const el = qs('vw-check-6'); if (el) el.hidden = false; }
       } else {
         showStatus(qs('vw-principles-status'), 'Save failed', true);
       }
@@ -601,7 +586,7 @@ async function init() {
     btn.disabled = false;
   });
 
-  /* ── Stage 6: LinkedIn ──────────────────────────────────── */
+  /* ── Stage 7: LinkedIn ──────────────────────────────────── */
 
   // Show LinkedIn profile data in the connected card
   function renderLinkedInProfile(data) {
@@ -629,7 +614,7 @@ async function init() {
       qs('vw-linkedin-connected')?.removeAttribute('hidden');
       qs('vw-linkedin-connect')?.setAttribute('hidden', '');
       renderLinkedInProfile(d);
-      const el = qs('vw-check-6');
+      const el = qs('vw-check-7');
       if (el) el.hidden = false;
 
       // If redirected back after connect, show a success flash
@@ -747,7 +732,7 @@ async function init() {
     }
   }
 
-  /* ── Stage 7: Writing Samples (individual cards) ─────────── */
+  /* ── Stage 8: Writing Samples (individual cards) ─────────── */
   let samplesData = [];
 
   function renderSampleCards() {
@@ -785,7 +770,7 @@ async function init() {
     samplesData.splice(idx, 1);
     renderSampleCards();
     if (samplesData.every(s => !s.trim())) {
-      const checkEl = qs('vw-check-7');
+      const checkEl = qs('vw-check-8');
       if (checkEl) checkEl.hidden = true;
     }
   });
@@ -823,7 +808,7 @@ async function init() {
       const d = await saveProfile({ writing_samples: val });
       if (d.ok) {
         showStatus(qs('vw-samples-status'), 'Saved ✓');
-        if (val) { const el = qs('vw-check-7'); if (el) el.hidden = false; }
+        if (val) { const el = qs('vw-check-8'); if (el) el.hidden = false; }
       } else {
         showStatus(qs('vw-samples-status'), 'Save failed', true);
       }
@@ -835,19 +820,17 @@ async function init() {
   });
 
   /* ── Stage check marks (initial state) ─────────────────── */
-  const basicsPopulated = Object.keys(basicsFields).some(elId => {
-    const el = qs(elId);
-    return el && el.value.trim().length > 0;
-  });
+  const bvPopulated       = !!(profile.brand_description || profile.brand_industry || profile.elevator_main_result);
+  const audiencePopulated = !!(profile.audience_description || profile.audience_buying_stage);
   const hasLinkedIn = !qs('vw-linkedin-connect') || qs('vw-linkedin-connect').hasAttribute('hidden');
   const hasSamples  = samplesData.some(s => s.trim());
-  updateStageChecks(basicsPopulated, pillars, statements, ctas, principles, hasLinkedIn, hasSamples);
+  updateStageChecks(bvPopulated, audiencePopulated, pillars, statements, ctas, principles, hasLinkedIn, hasSamples);
 
   /* ── Step navigation ────────────────────────────────────── */
   let currentStep = 1;
 
   function switchToStep(n) {
-    if (n < 1 || n > 7) return;
+    if (n < 1 || n > 8) return;
 
     document.querySelectorAll('.vw-stage-panel').forEach(p => {
       p.classList.remove('vw-stage-panel--active');
@@ -864,7 +847,7 @@ async function init() {
   }
 
   function firstIncompleteStep() {
-    for (let i = 1; i <= 7; i++) {
+    for (let i = 1; i <= 8; i++) {
       const check = qs('vw-check-' + i);
       if (!check || check.hidden) return i;
     }
@@ -892,7 +875,7 @@ async function init() {
   // Wire "Update writing sample" link in voice summary panel
   qs('vw-voice-edit-link')?.addEventListener('click', e => {
     e.preventDefault();
-    switchToStep(7);
+    switchToStep(8);
   });
 
   // Initial step: honour explicit ?step= param (e.g. from onboarding next-steps links),
@@ -900,13 +883,13 @@ async function init() {
   const stepParam = new URLSearchParams(window.location.search).get('step');
   if (stepParam) {
     const n = parseInt(stepParam, 10);
-    if (n >= 1 && n <= 7) {
+    if (n >= 1 && n <= 8) {
       switchToStep(n);
     } else {
       switchToStep(firstIncompleteStep());
     }
   } else if (window.location.search.includes('linkedin_connected=true')) {
-    switchToStep(6);
+    switchToStep(7);
   } else {
     switchToStep(firstIncompleteStep());
   }

@@ -315,7 +315,7 @@ router.get('/connect', async (req, res) => {
     : from === 'preview'
     ? '/editor.html?linkedin=connected'
     : from === 'settings'
-    ? '/settings.html?linkedin_connected=true#voice-stage-6'
+    ? '/settings.html?linkedin_connected=true#voice-stage-7'
     : '/account.html';
   await setOAuthState(state, { userId, tenantId, returnTo });
 

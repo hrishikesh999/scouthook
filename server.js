@@ -486,7 +486,6 @@ app.get([
   '/account.html',
   '/settings.html',
   '/billing.html',
-  '/linkedin.html',
   '/vault.html',
   '/ideas.html',
 ], requireLoginHtml);

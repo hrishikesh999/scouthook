@@ -14,6 +14,10 @@ function createPool() {
     max: Number(process.env.PGPOOL_MAX || 30),
     idleTimeoutMillis: Number(process.env.PGPOOL_IDLE_MS || 30_000),
     connectionTimeoutMillis: Number(process.env.PGPOOL_CONN_TIMEOUT_MS || 10_000),
+    // Send TCP keepalive packets to prevent idle connections from being dropped
+    // by Neon's serverless infrastructure or intervening NAT/firewalls.
+    keepAlive: true,
+    keepAliveInitialDelayMillis: 10_000,
   });
 }
 

@@ -17,7 +17,6 @@
     '/billing.html':    null,
     '/post.html':       '/js/post.js',
     '/help.html':       null,
-    '/linkedin.html':   null, // redirects to /account.html
     '/voice-dna.html':  null,
   };
 
@@ -60,7 +59,6 @@
     '/account.html':   '/settings.html',
     '/billing.html':   '/settings.html',
     '/brand.html':     '/settings.html',
-    '/linkedin.html':  '/settings.html',
     '/voice-dna.html': '/settings.html',
     '/schedule.html':  '/drafts.html',
     '/Published.html': '/drafts.html',

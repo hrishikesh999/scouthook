@@ -2341,10 +2341,13 @@ async function checkProfileGate() {
     const profile = data.profile || {};
     _nicheProfile = profile;
 
-    const hasNiche = !!profile.content_niche?.trim();
-    const hasVoice = !!profile.voice_fingerprint || !!profile.onboarding_q2?.trim();
+    // Accept either the old content_niche field or the new brand_description
+    // set by the v2 onboarding wizard.
+    const hasNiche = !!profile.content_niche?.trim() || !!profile.brand_description?.trim();
+    const hasVoice = !!profile.voice_fingerprint || !!profile.onboarding_q2?.trim()
+                     || !!profile.brand_voice_profile_json?.trim();
 
-    if (!hasNiche) {
+    if (!hasNiche && !hasVoice) {
       showProfileNudge('empty');
     } else if (!hasVoice) {
       showProfileNudge('voice');
@@ -2360,9 +2363,9 @@ function showProfileNudge(tier = 'empty') {
   nudge.id        = 'profile-gate-nudge';
   nudge.className = 'profile-gate-nudge';
   if (tier === 'voice') {
-    nudge.innerHTML = '<strong>Your voice hasn\'t been set up yet.</strong> Answer 3 quick questions and every post will sound like you — not generic AI. <a href="/settings.html#voice">Complete voice setup →</a>';
+    nudge.innerHTML = 'Your post will generate — and it\'ll get sharper once your voice profile is complete. <a href="/settings.html#voice">Finish voice setup →</a>';
   } else {
-    nudge.innerHTML = '<strong>Your voice profile is empty.</strong> Posts will be generic until you tell ScoutHook your niche and audience. <a href="/settings.html#voice">Set it up now →</a>';
+    nudge.innerHTML = 'Your post will generate, but completing your brand profile helps posts sound more like you. <a href="/settings.html#voice">Complete your profile →</a>';
   }
   guidedChat.insertAdjacentElement('beforebegin', nudge);
 }

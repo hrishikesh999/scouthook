@@ -425,19 +425,25 @@ const Onboarding = (() => {
 
   /* ── Confetti ───────────────────────────────────────────── */
   function fireConfetti() {
-    if (typeof confetti !== 'function') return;
-    confetti({ particleCount: 400, startVelocity: 55, spread: 100, origin: { x: 0.5, y: 0.6 }, ticks: 180, zIndex: 9999 });
-    setTimeout(() => {
-      confetti({ particleCount: 250, startVelocity: 65, spread: 60, angle: 60,  origin: { x: 0,   y: 0.65 }, ticks: 160, zIndex: 9999 });
-      confetti({ particleCount: 250, startVelocity: 65, spread: 60, angle: 120, origin: { x: 1,   y: 0.65 }, ticks: 160, zIndex: 9999 });
-    }, 150);
-    setTimeout(() => {
-      confetti({ particleCount: 200, startVelocity: 40, spread: 120, origin: { x: 0.3, y: 0.5 }, ticks: 140, zIndex: 9999 });
-      confetti({ particleCount: 200, startVelocity: 40, spread: 120, origin: { x: 0.7, y: 0.5 }, ticks: 140, zIndex: 9999 });
-    }, 400);
-    setTimeout(() => {
-      confetti({ particleCount: 150, startVelocity: 20, spread: 140, origin: { x: 0.5, y: 0.4 }, gravity: 0.5, ticks: 200, zIndex: 9999 });
-    }, 700);
+    // canvas-confetti sets window.confetti; wait one rAF so the s9 screen has
+    // painted before the canvas fires (avoids the burst rendering behind a
+    // display:none screen that hasn't transitioned yet).
+    const fn = window.confetti;
+    if (typeof fn !== 'function') return;
+    requestAnimationFrame(() => {
+      fn({ particleCount: 400, startVelocity: 55, spread: 100, origin: { x: 0.5, y: 0.6 }, ticks: 180, zIndex: 9999 });
+      setTimeout(() => {
+        fn({ particleCount: 250, startVelocity: 65, spread: 60, angle: 60,  origin: { x: 0,   y: 0.65 }, ticks: 160, zIndex: 9999 });
+        fn({ particleCount: 250, startVelocity: 65, spread: 60, angle: 120, origin: { x: 1,   y: 0.65 }, ticks: 160, zIndex: 9999 });
+      }, 150);
+      setTimeout(() => {
+        fn({ particleCount: 200, startVelocity: 40, spread: 120, origin: { x: 0.3, y: 0.5 }, ticks: 140, zIndex: 9999 });
+        fn({ particleCount: 200, startVelocity: 40, spread: 120, origin: { x: 0.7, y: 0.5 }, ticks: 140, zIndex: 9999 });
+      }, 400);
+      setTimeout(() => {
+        fn({ particleCount: 150, startVelocity: 20, spread: 140, origin: { x: 0.5, y: 0.4 }, gravity: 0.5, ticks: 200, zIndex: 9999 });
+      }, 700);
+    });
   }
 
   /* ── LinkedIn OAuth return ──────────────────────────────── */

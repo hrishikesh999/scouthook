@@ -77,6 +77,10 @@ let _contrarianBelief           = '';
 let _contrarianPov              = '';
 let _contrarianSupportingReason = '';
 let _contrarianLengthPreference = 'Medium';
+let _frameworkChatStep         = 0;        // 0=topic, 1=context, 2=length
+let _frameworkTopic            = '';
+let _frameworkContext          = '';
+let _frameworkLengthPreference = 'Medium';
 let _announcementChatStep      = 0;        // 0=occasion, 1=length
 let _announcementOccasion      = '';
 let _announcementLengthPreference = 'Medium';
@@ -119,6 +123,7 @@ const CHAT_CONFIGS = {
   story:   { label: '📖 Story/Personal Experience' },
   bts:          { label: '🎬 Behind the Scenes' },
   contrarian:   { label: '🔥 Contrarian / Hot Take' },
+  framework:    { label: '📚 Framework / How-To' },
   announcement: { label: '🎉 Announcement' },
   convert:      { label: '💬 Conversation post' },
 };
@@ -197,6 +202,17 @@ const EXTRACTION_QUESTIONS = {
       errorMsg:    'Share the belief you\'re challenging — even a rough first draft is enough.',
     },
   ],
+  framework: [
+    {
+      key:         'framework_topic',
+      question:    'What do you want to teach or explain?',
+      helpText:    'The skill, method, or concept you\'re breaking down. Be specific — one clear topic works best.',
+      placeholder: 'e.g. How to write a cold email that gets replies, the 3-step process I use to prioritise tasks…',
+      required:    true,
+      minChars:    20,
+      errorMsg:    'Share the topic you want to teach — even a rough first draft is enough.',
+    },
+  ],
   announcement: [
     {
       key:         'occasion',
@@ -271,7 +287,7 @@ function selectType(type) {
   const genHeader    = document.querySelector('.gen-header');
   const startingPills = document.getElementById('starting-pills');
   const pillQ        = document.getElementById('pill-question');
-  if (type === 'trust' || type === 'story' || type === 'announcement' || type === 'contrarian') {
+  if (type === 'trust' || type === 'story' || type === 'announcement' || type === 'contrarian' || type === 'framework') {
     if (genHeader)     genHeader.style.display     = 'none';
     if (startingPills) startingPills.style.display = 'none';
     if (pillQ)        { pillQ.textContent = ''; pillQ.classList.remove('visible'); }
@@ -924,6 +940,70 @@ const chat = (() => {
     return parts.join('\n\n');
   }
 
+  // ── Framework / How-To step renderers ────────────────────────────────────
+
+  function showFrameworkContextQuestion() {
+    const bubble = addQuestionBubble(
+      'Core Context or Hints (Optional)',
+      'Any context, examples, or hints about why this matters or how the framework should be structured. If you skip, ScoutHook will infer a clear framework automatically.'
+    );
+    const skipBtn = document.createElement('button');
+    skipBtn.type      = 'button';
+    skipBtn.className = 'story-skip-btn';
+    skipBtn.textContent = 'Skip →';
+    skipBtn.addEventListener('click', () => {
+      _frameworkContext  = '';
+      _frameworkChatStep = 2;
+      addUser('(skipped)');
+      chatInput.value       = '';
+      chatInput.style.height = '';
+      showFrameworkLengthQuestion();
+    });
+    bubble.appendChild(skipBtn);
+    chatInput.placeholder = 'Context, key steps, or why this matters — or skip and let ScoutHook decide…';
+    chatInput.focus();
+    chatThread.scrollTop = chatThread.scrollHeight;
+  }
+
+  function showFrameworkLengthQuestion() {
+    const bubble = addQuestionBubble(
+      'Post length',
+      'Short = tight punchy lesson. Medium = full framework with steps. Long = detailed breakdown with examples.'
+    );
+    const chips = document.createElement('div');
+    chips.className = 'authority-length-chips';
+
+    [
+      { value: 'Short',  label: 'Short',  hint: '6–10 lines'  },
+      { value: 'Medium', label: 'Medium', hint: '10–15 lines' },
+      { value: 'Long',   label: 'Long',   hint: '15–25 lines' },
+    ].forEach(({ value, label, hint }) => {
+      const btn = document.createElement('button');
+      btn.className = 'length-chip';
+      btn.type      = 'button';
+      btn.innerHTML = `${label} <span class="length-chip-hint">${hint}</span>`;
+      btn.addEventListener('click', () => {
+        _frameworkLengthPreference = value;
+        chips.querySelectorAll('.length-chip').forEach(c => c.classList.remove('active'));
+        btn.classList.add('active');
+        addUser(label);
+        triggerGenerate({ enrichedIdea: _buildFrameworkPrompt() });
+      });
+      chips.appendChild(btn);
+    });
+
+    bubble.appendChild(chips);
+    chatThread.scrollTop = chatThread.scrollHeight;
+  }
+
+  function _buildFrameworkPrompt() {
+    const parts = [`TOPIC OR SKILL TO TEACH:\n${_frameworkTopic}`];
+    if (_frameworkContext.trim()) {
+      parts.push(`CORE CONTEXT / HINTS:\n${_frameworkContext}`);
+    }
+    return parts.join('\n\n');
+  }
+
   function showAnnouncementLengthQuestion() {
     const bubble = addQuestionBubble(
       'Post length',
@@ -1011,6 +1091,10 @@ const chat = (() => {
     _contrarianPov              = '';
     _contrarianSupportingReason = '';
     _contrarianLengthPreference = 'Medium';
+    _frameworkChatStep         = 0;
+    _frameworkTopic            = '';
+    _frameworkContext          = '';
+    _frameworkLengthPreference = 'Medium';
     _announcementChatStep      = 0;
     _announcementOccasion      = '';
     _announcementLengthPreference = 'Medium';
@@ -1019,7 +1103,7 @@ const chat = (() => {
     chatThread.innerHTML = '';
     const q0 = EXTRACTION_QUESTIONS[type][0];
 
-    if (type === 'trust' || type === 'story' || type === 'bts' || type === 'contrarian' || type === 'announcement') {
+    if (type === 'trust' || type === 'story' || type === 'bts' || type === 'contrarian' || type === 'announcement' || type === 'framework') {
       // Show the first question immediately as a labelled bot bubble so the user
       // can focus on answering — no pills, no header, just the question.
       chatThread.style.display = '';
@@ -1200,6 +1284,27 @@ const chat = (() => {
         chatInput.value       = '';
         chatInput.style.height = '';
         showContrarianLengthQuestion();
+      }
+      return;
+    }
+
+    // Framework / How-To: two-step chat flow + length.
+    if (selectedType === 'framework') {
+      if (_frameworkChatStep === 0) {
+        _frameworkTopic    = val;
+        _frameworkChatStep = 1;
+        addUser(val);
+        chatThread.style.display = '';
+        chatInput.value       = '';
+        chatInput.style.height = '';
+        showFrameworkContextQuestion();
+      } else if (_frameworkChatStep === 1) {
+        _frameworkContext  = val;
+        _frameworkChatStep = 2;
+        addUser(val);
+        chatInput.value       = '';
+        chatInput.style.height = '';
+        showFrameworkLengthQuestion();
       }
       return;
     }
@@ -1468,6 +1573,10 @@ async function triggerGenerate(opts = {}) {
     // Contrarian / Hot Take-specific params
     if (selectedType === 'contrarian') {
       body.length_preference = _contrarianLengthPreference || 'Medium';
+    }
+    // Framework / How-To-specific params
+    if (selectedType === 'framework') {
+      body.length_preference = _frameworkLengthPreference || 'Medium';
     }
     // Announcement-specific params
     if (selectedType === 'announcement') {

@@ -9,6 +9,7 @@ const { generateAuthorityPost } = require('../services/authorityExpertisePath');
 const { generateStoryPost }     = require('../services/storyPersonalExperiencePath');
 const { generateBtsPost }          = require('../services/behindTheScenesPath');
 const { generateContrarianPost }   = require('../services/contrarianHotTakePath');
+const { generateFrameworkPost }    = require('../services/frameworkHowToPath');
 const { generateAnnouncementPost } = require('../services/announcementPath');
 const { classifyContent } = require('../services/funnelClassifier');
 const { canGeneratePost } = require('../services/subscription');
@@ -510,6 +511,64 @@ router.post('/', async (req, res) => {
           return res.end();
         }
 
+        // ── Framework / How-To path ───────────────────────────────────────
+        if (post_type === 'framework') {
+          sseWrite('step', { step: 'analyzing', label: 'Building your framework...' });
+
+          const frameworkResult = await generateFrameworkPost(raw_idea, profile, {
+            lengthPreference: length_preference || 'Medium',
+          });
+
+          sseWrite('step', { step: 'saving', label: 'Final quality check...' });
+
+          const frameworkGate = runQualityGate(frameworkResult.post, {
+            ...gateOptions(
+              { format_slug: IDEA_SLUG, content: frameworkResult.post },
+              profile, 'idea', null, 'framework'
+            ),
+            postType: 'framework',
+          });
+
+          const frameworkRunResult = await db.prepare(`
+            INSERT INTO generation_runs (user_id, tenant_id, path, input_data, synthesis)
+            VALUES (?, ?, ?, ?, ?)
+            RETURNING id
+          `).run(userId, tenantId, genPath, JSON.stringify({ raw_idea }), JSON.stringify(frameworkResult.synthesis));
+          const frameworkRunId = frameworkRunResult.lastInsertRowid;
+
+          const frameworkInsert = await db.prepare(`
+            INSERT INTO generated_posts
+              (run_id, user_id, tenant_id, profile_id, format_slug, content, ai_content, quality_score, quality_flags, passed_gate,
+               funnel_type, vault_source_ref, idea_input, archetype_used, source,
+               post_type, quality_verdict)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            RETURNING id
+          `).run(
+            frameworkRunId, userId, tenantId, profile.id, IDEA_SLUG,
+            frameworkResult.post, frameworkResult.post,
+            frameworkGate.score, JSON.stringify(frameworkGate.flags), frameworkGate.passed_gate ? 1 : 0,
+            'framework', null,
+            raw_idea || null, null, source || null,
+            'framework', frameworkGate.verdict || null
+          );
+          const frameworkId = frameworkInsert.lastInsertRowid;
+
+          const frameworkQuality = buildQualityPayload(frameworkGate, 1, true);
+
+          sseWrite('done', {
+            post_id:          frameworkId,
+            run_id:           frameworkRunId,
+            post:             frameworkResult.post,
+            quality:          { ...frameworkQuality, verdict: frameworkGate.verdict },
+            archetypeUsed:    null,
+            funnel_type:      'framework',
+            post_type:        'framework',
+            stage1Blueprint:  null,
+            content_feedback: null,
+          });
+          return res.end();
+        }
+
         // ── Announcement path ─────────────────────────────────────────────
         if (post_type === 'announcement') {
           sseWrite('step', { step: 'analyzing', label: 'Writing your announcement...' });
@@ -725,6 +784,25 @@ router.post('/', async (req, res) => {
         post:            contrarianResult.post,
         archetypeUsed:   null,
         primaryGate:     contrarianGate,
+        contentFeedback: null,
+      };
+    } else if (post_type === 'framework' && !vaultIdea) {
+      // ── Framework / How-To path (non-streaming) ───────────────────────
+      const frameworkResult = await generateFrameworkPost(raw_idea, profile, {
+        lengthPreference: length_preference || 'Medium',
+      });
+      const frameworkGate = runQualityGate(frameworkResult.post, {
+        ...gateOptions(
+          { format_slug: IDEA_SLUG, content: frameworkResult.post },
+          profile, 'idea', null, 'framework'
+        ),
+        postType: 'framework',
+      });
+      ideaResult = {
+        synthesis:       frameworkResult.synthesis,
+        post:            frameworkResult.post,
+        archetypeUsed:   null,
+        primaryGate:     frameworkGate,
         contentFeedback: null,
       };
     } else if (post_type === 'announcement' && !vaultIdea) {

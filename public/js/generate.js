@@ -72,6 +72,9 @@ let _btsTopic               = '';
 let _btsTurningPoint        = '';
 let _btsSupportingContext   = '';
 let _btsLengthPreference    = 'Medium';
+let _announcementChatStep      = 0;        // 0=occasion, 1=length
+let _announcementOccasion      = '';
+let _announcementLengthPreference = 'Medium';
 let _prefetchedIdeas    = null;      // prefetched result from /api/vault/generate-ideas
 let _allFreshIdeas      = [];        // all fetched fresh ideas — filters applied client-side
 let _lastIcpSummary     = '';        // icp_summary from last fetch
@@ -109,8 +112,9 @@ const CHAT_CONFIGS = {
   reach:   { label: '📣 Reach post' },
   trust:   { label: '✏️ Authority/Expertise' },
   story:   { label: '📖 Story/Personal Experience' },
-  bts:     { label: '🎬 Behind the Scenes' },
-  convert: { label: '💬 Conversation post' },
+  bts:          { label: '🎬 Behind the Scenes' },
+  announcement: { label: '🎉 Announcement' },
+  convert:      { label: '💬 Conversation post' },
 };
 
 /* ── Extraction questions (reach / trust / convert) ──────────── */
@@ -176,6 +180,17 @@ const EXTRACTION_QUESTIONS = {
       errorMsg:    'Share the process or moment you\'re revealing — even a rough description is enough.',
     },
   ],
+  announcement: [
+    {
+      key:         'occasion',
+      question:    'What\'s the occasion or message?',
+      helpText:    'Briefly describe the wish, thank-you, greeting, or appreciation you want to post. Example: \'Thanking our community for 10k followers\' or \'Wishing everyone a happy Christmas\'',
+      placeholder: 'e.g. Thanking our community for 10k followers, wishing everyone a happy Diwali…',
+      required:    true,
+      minChars:    15,
+      errorMsg:    'Describe the occasion or message — even a few words are enough.',
+    },
+  ],
   convert: [
     {
       key:         'result',
@@ -239,7 +254,7 @@ function selectType(type) {
   const genHeader    = document.querySelector('.gen-header');
   const startingPills = document.getElementById('starting-pills');
   const pillQ        = document.getElementById('pill-question');
-  if (type === 'trust' || type === 'story') {
+  if (type === 'trust' || type === 'story' || type === 'announcement') {
     if (genHeader)     genHeader.style.display     = 'none';
     if (startingPills) startingPills.style.display = 'none';
     if (pillQ)        { pillQ.textContent = ''; pillQ.classList.remove('visible'); }
@@ -815,6 +830,41 @@ const chat = (() => {
     return parts.join('\n\n');
   }
 
+  function showAnnouncementLengthQuestion() {
+    const bubble = addQuestionBubble(
+      'Post length',
+      'Short for a quick warm note, Medium for a fuller message.'
+    );
+    const chips = document.createElement('div');
+    chips.className = 'authority-length-chips';
+
+    [
+      { value: 'Short',  label: 'Short',  hint: '≤100 words'   },
+      { value: 'Medium', label: 'Medium', hint: '60–120 words'  },
+      { value: 'Long',   label: 'Long',   hint: '150–200 words' },
+    ].forEach(({ value, label, hint }) => {
+      const btn = document.createElement('button');
+      btn.className = 'length-chip';
+      btn.type      = 'button';
+      btn.innerHTML = `${label} <span class="length-chip-hint">${hint}</span>`;
+      btn.addEventListener('click', () => {
+        _announcementLengthPreference = value;
+        chips.querySelectorAll('.length-chip').forEach(c => c.classList.remove('active'));
+        btn.classList.add('active');
+        addUser(label);
+        triggerGenerate({ enrichedIdea: _buildAnnouncementPrompt() });
+      });
+      chips.appendChild(btn);
+    });
+
+    bubble.appendChild(chips);
+    chatThread.scrollTop = chatThread.scrollHeight;
+  }
+
+  function _buildAnnouncementPrompt() {
+    return `Occasion / Message:\n${_announcementOccasion}`;
+  }
+
   const ARROW_SVG = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>`;
 
   function updateSendBtn() {
@@ -862,12 +912,15 @@ const chat = (() => {
     _btsTurningPoint        = '';
     _btsSupportingContext   = '';
     _btsLengthPreference    = 'Medium';
+    _announcementChatStep      = 0;
+    _announcementOccasion      = '';
+    _announcementLengthPreference = 'Medium';
     _coach = { active: false, originalBrief: '', history: [], exchangeCount: 0, awaitingSkip: false, pendingQ: null, intakeInFlight: false, seq: (_coach.seq ?? 0) + 1 };
 
     chatThread.innerHTML = '';
     const q0 = EXTRACTION_QUESTIONS[type][0];
 
-    if (type === 'trust' || type === 'story' || type === 'bts') {
+    if (type === 'trust' || type === 'story' || type === 'bts' || type === 'announcement') {
       // Show the first question immediately as a labelled bot bubble so the user
       // can focus on answering — no pills, no header, just the question.
       chatThread.style.display = '';
@@ -978,6 +1031,20 @@ const chat = (() => {
         chatInput.value       = '';
         chatInput.style.height = '';
         showStoryLengthQuestion();
+      }
+      return;
+    }
+
+    // Announcement: two-step chat flow.
+    if (selectedType === 'announcement') {
+      if (_announcementChatStep === 0) {
+        _announcementOccasion = val;
+        _announcementChatStep = 1;
+        addUser(val);
+        chatThread.style.display = '';
+        chatInput.value       = '';
+        chatInput.style.height = '';
+        showAnnouncementLengthQuestion();
       }
       return;
     }
@@ -1270,6 +1337,10 @@ async function triggerGenerate(opts = {}) {
     if (selectedType === 'bts') {
       body.length_preference = _btsLengthPreference || 'Medium';
       body.cta_intent        = '';
+    }
+    // Announcement-specific params
+    if (selectedType === 'announcement') {
+      body.length_preference = _announcementLengthPreference || 'Medium';
     }
 
     const res = await fetch('/api/generate', {

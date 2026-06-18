@@ -7,7 +7,8 @@ const { runQualityGate } = require('../services/qualityGate');
 const { ideaToPost, vaultSeedToPost } = require('../services/ideaPath');
 const { generateAuthorityPost } = require('../services/authorityExpertisePath');
 const { generateStoryPost }     = require('../services/storyPersonalExperiencePath');
-const { generateBtsPost }       = require('../services/behindTheScenesPath');
+const { generateBtsPost }          = require('../services/behindTheScenesPath');
+const { generateAnnouncementPost } = require('../services/announcementPath');
 const { classifyContent } = require('../services/funnelClassifier');
 const { canGeneratePost } = require('../services/subscription');
 const { sendEmailToUser } = require('../emails');
@@ -450,6 +451,64 @@ router.post('/', async (req, res) => {
           return res.end();
         }
 
+        // ── Announcement path ─────────────────────────────────────────────
+        if (post_type === 'announcement') {
+          sseWrite('step', { step: 'analyzing', label: 'Writing your announcement...' });
+
+          const annResult = await generateAnnouncementPost(raw_idea, profile, {
+            lengthPreference: length_preference || 'Medium',
+          });
+
+          sseWrite('step', { step: 'saving', label: 'Final quality check...' });
+
+          const annGate = runQualityGate(annResult.post, {
+            ...gateOptions(
+              { format_slug: IDEA_SLUG, content: annResult.post },
+              profile, 'idea', null, 'announcement'
+            ),
+            postType: 'announcement',
+          });
+
+          const annRunResult = await db.prepare(`
+            INSERT INTO generation_runs (user_id, tenant_id, path, input_data, synthesis)
+            VALUES (?, ?, ?, ?, ?)
+            RETURNING id
+          `).run(userId, tenantId, genPath, JSON.stringify({ raw_idea }), JSON.stringify(annResult.synthesis));
+          const annRunId = annRunResult.lastInsertRowid;
+
+          const annInsert = await db.prepare(`
+            INSERT INTO generated_posts
+              (run_id, user_id, tenant_id, profile_id, format_slug, content, ai_content, quality_score, quality_flags, passed_gate,
+               funnel_type, vault_source_ref, idea_input, archetype_used, source,
+               post_type, quality_verdict)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            RETURNING id
+          `).run(
+            annRunId, userId, tenantId, profile.id, IDEA_SLUG,
+            annResult.post, annResult.post,
+            annGate.score, JSON.stringify(annGate.flags), annGate.passed_gate ? 1 : 0,
+            'announcement', null,
+            raw_idea || null, null, source || null,
+            'announcement', annGate.verdict || null
+          );
+          const annId = annInsert.lastInsertRowid;
+
+          const annQuality = buildQualityPayload(annGate, 1, true);
+
+          sseWrite('done', {
+            post_id:          annId,
+            run_id:           annRunId,
+            post:             annResult.post,
+            quality:          { ...annQuality, verdict: annGate.verdict },
+            archetypeUsed:    null,
+            funnel_type:      'announcement',
+            post_type:        'announcement',
+            stage1Blueprint:  null,
+            content_feedback: null,
+          });
+          return res.end();
+        }
+
         // ── Standard path (Reach / Convert) ───────────────────────────────
         sseWrite('step', { step: 'analyzing', label: 'Analyzing your idea...' });
 
@@ -587,6 +646,25 @@ router.post('/', async (req, res) => {
         post:            btsResult.post,
         archetypeUsed:   null,
         primaryGate:     btsGate,
+        contentFeedback: null,
+      };
+    } else if (post_type === 'announcement' && !vaultIdea) {
+      // ── Announcement path (non-streaming) ────────────────────────────────
+      const annResult = await generateAnnouncementPost(raw_idea, profile, {
+        lengthPreference: length_preference || 'Medium',
+      });
+      const annGate = runQualityGate(annResult.post, {
+        ...gateOptions(
+          { format_slug: IDEA_SLUG, content: annResult.post },
+          profile, 'idea', null, 'announcement'
+        ),
+        postType: 'announcement',
+      });
+      ideaResult = {
+        synthesis:       annResult.synthesis,
+        post:            annResult.post,
+        archetypeUsed:   null,
+        primaryGate:     annGate,
         contentFeedback: null,
       };
     } else if (vaultIdea) {

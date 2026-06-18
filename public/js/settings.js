@@ -327,15 +327,15 @@ async function init() {
   wireAddChip('bv-phrases-input', 'bv-phrases-add', bvPhrases, renderBvPhrases);
 
   // ── Brand Voice — populate Step 1 fields ──────────────────────
-  if (qs('bv-description') && profile.brand_description)  qs('bv-description').value = profile.brand_description;
-  if (qs('bv-industry')    && profile.brand_industry)     qs('bv-industry').value    = profile.brand_industry;
-  if (qs('bv-tone')        && profile.brand_emotional_tone) qs('bv-tone').value      = profile.brand_emotional_tone;
+  if (qs('bv-description') && profile.brand_description) qs('bv-description').value = profile.brand_description;
+  if (qs('bv-industry')    && profile.brand_industry)    qs('bv-industry').value    = profile.brand_industry;
 
   // ── Brand Voice — populate Step 2 fields ──────────────────────
-  if (qs('bv-elevator')  && profile.elevator_main_result) qs('bv-elevator').value  = profile.elevator_main_result;
-  if (qs('bv-mechanism') && profile.elevator_mechanism)   qs('bv-mechanism').value = profile.elevator_mechanism;
-  if (qs('bv-archetype') && profile.brand_archetype)      qs('bv-archetype').value = profile.brand_archetype;
-  if (qs('bv-origin')    && profile.brand_story_origin)   qs('bv-origin').value    = profile.brand_story_origin;
+  if (qs('bv-elevator')  && profile.elevator_main_result)  qs('bv-elevator').value  = profile.elevator_main_result;
+  if (qs('bv-mechanism') && profile.elevator_mechanism)    qs('bv-mechanism').value = profile.elevator_mechanism;
+  if (qs('bv-archetype') && profile.brand_archetype)       qs('bv-archetype').value = profile.brand_archetype;
+  if (qs('bv-tone')      && profile.brand_emotional_tone)  qs('bv-tone').value      = profile.brand_emotional_tone;
+  if (qs('bv-origin')    && profile.brand_story_origin)    qs('bv-origin').value    = profile.brand_story_origin;
   if (qs('bv-beliefs') && profile.brand_core_beliefs) {
     const arr = safeParseJSON(profile.brand_core_beliefs, []);
     qs('bv-beliefs').value = arr.join('\n');
@@ -343,8 +343,8 @@ async function init() {
 
   // Show Step 2 immediately if already populated (returning user)
   const bvStep2HasContent = profile.elevator_main_result || profile.elevator_mechanism
-    || profile.brand_archetype || profile.brand_core_beliefs || profile.brand_story_origin
-    || bvPhrases.length > 0;
+    || profile.brand_archetype || profile.brand_emotional_tone || profile.brand_core_beliefs
+    || profile.brand_story_origin || bvPhrases.length > 0;
   if (bvStep2HasContent && qs('bv-step-2')) qs('bv-step-2').hidden = false;
 
   // ── Brand Voice — Generate Step 2 ─────────────────────────────
@@ -359,7 +359,6 @@ async function init() {
       brand_description:        qs('bv-description')?.value.trim() || null,
       brand_industry:           qs('bv-industry')?.value.trim()    || null,
       brand_personality_traits: bvTraits.length > 0 ? JSON.stringify(bvTraits) : null,
-      brand_emotional_tone:     qs('bv-tone')?.value               || null,
     };
     try {
       await saveProfile(step1Payload);
@@ -374,6 +373,7 @@ async function init() {
         if (qs('bv-elevator')  && p.elevator_main_result) qs('bv-elevator').value  = p.elevator_main_result;
         if (qs('bv-mechanism') && p.elevator_mechanism)   qs('bv-mechanism').value = p.elevator_mechanism;
         if (qs('bv-archetype') && p.brand_archetype)      qs('bv-archetype').value = p.brand_archetype;
+        if (qs('bv-tone')      && p.brand_emotional_tone) qs('bv-tone').value      = p.brand_emotional_tone;
         if (qs('bv-origin')    && p.brand_story_origin)   qs('bv-origin').value    = p.brand_story_origin;
         if (qs('bv-beliefs') && Array.isArray(p.brand_core_beliefs) && p.brand_core_beliefs.length) {
           qs('bv-beliefs').value = p.brand_core_beliefs.join('\n');

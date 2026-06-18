@@ -12,6 +12,7 @@ const { generateContrarianPost }   = require('../services/contrarianHotTakePath'
 const { generateFrameworkPost }    = require('../services/frameworkHowToPath');
 const { generateAnnouncementPost } = require('../services/announcementPath');
 const { generateLeadGenPost }      = require('../services/leadGenOfferPath');
+const { generateLessonsLearnedPost } = require('../services/lessonsLearnedPath');
 const { classifyContent } = require('../services/funnelClassifier');
 const { canGeneratePost } = require('../services/subscription');
 const { sendEmailToUser } = require('../emails');
@@ -389,6 +390,65 @@ router.post('/', async (req, res) => {
             archetypeUsed:    null,
             funnel_type:      'story',
             post_type:        'story',
+            stage1Blueprint:  null,
+            content_feedback: null,
+          });
+          return res.end();
+        }
+
+        // ── Lessons Learned path ──────────────────────────────────────────
+        if (post_type === 'lessons_learned') {
+          sseWrite('step', { step: 'analyzing', label: 'Crafting your lessons learned post...' });
+
+          const lessonsResult = await generateLessonsLearnedPost(raw_idea, profile, {
+            lengthPreference: length_preference || 'Medium',
+            ctaIntent:        cta_intent || '',
+          });
+
+          sseWrite('step', { step: 'saving', label: 'Final quality check...' });
+
+          const lessonsGate = runQualityGate(lessonsResult.post, {
+            ...gateOptions(
+              { format_slug: IDEA_SLUG, content: lessonsResult.post },
+              profile, 'idea', null, 'lessons_learned'
+            ),
+            postType: 'lessons_learned',
+          });
+
+          const lessonsRunResult = await db.prepare(`
+            INSERT INTO generation_runs (user_id, tenant_id, path, input_data, synthesis)
+            VALUES (?, ?, ?, ?, ?)
+            RETURNING id
+          `).run(userId, tenantId, genPath, JSON.stringify({ raw_idea }), JSON.stringify(lessonsResult.synthesis));
+          const lessonsRunId = lessonsRunResult.lastInsertRowid;
+
+          const lessonsInsert = await db.prepare(`
+            INSERT INTO generated_posts
+              (run_id, user_id, tenant_id, profile_id, format_slug, content, ai_content, quality_score, quality_flags, passed_gate,
+               funnel_type, vault_source_ref, idea_input, archetype_used, source,
+               post_type, quality_verdict)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            RETURNING id
+          `).run(
+            lessonsRunId, userId, tenantId, profile.id, IDEA_SLUG,
+            lessonsResult.post, lessonsResult.post,
+            lessonsGate.score, JSON.stringify(lessonsGate.flags), lessonsGate.passed_gate ? 1 : 0,
+            'lessons_learned', null,
+            raw_idea || null, null, source || null,
+            'lessons_learned', lessonsGate.verdict || null
+          );
+          const lessonsId = lessonsInsert.lastInsertRowid;
+
+          const lessonsQuality = buildQualityPayload(lessonsGate, 1, true);
+
+          sseWrite('done', {
+            post_id:          lessonsId,
+            run_id:           lessonsRunId,
+            post:             lessonsResult.post,
+            quality:          { ...lessonsQuality, verdict: lessonsGate.verdict },
+            archetypeUsed:    null,
+            funnel_type:      'lessons_learned',
+            post_type:        'lessons_learned',
             stage1Blueprint:  null,
             content_feedback: null,
           });
@@ -804,6 +864,26 @@ router.post('/', async (req, res) => {
         post:            storyResult.post,
         archetypeUsed:   null,
         primaryGate:     storyGate,
+        contentFeedback: null,
+      };
+    } else if (post_type === 'lessons_learned' && !vaultIdea) {
+      // ── Lessons Learned path (non-streaming) ─────────────────────────────
+      const lessonsResult = await generateLessonsLearnedPost(raw_idea, profile, {
+        lengthPreference: length_preference || 'Medium',
+        ctaIntent:        cta_intent || '',
+      });
+      const lessonsGate = runQualityGate(lessonsResult.post, {
+        ...gateOptions(
+          { format_slug: IDEA_SLUG, content: lessonsResult.post },
+          profile, 'idea', null, 'lessons_learned'
+        ),
+        postType: 'lessons_learned',
+      });
+      ideaResult = {
+        synthesis:       lessonsResult.synthesis,
+        post:            lessonsResult.post,
+        archetypeUsed:   null,
+        primaryGate:     lessonsGate,
         contentFeedback: null,
       };
     } else if (post_type === 'bts' && !vaultIdea) {

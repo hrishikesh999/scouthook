@@ -90,6 +90,12 @@ let _leadGenDesiredOutcome   = '';
 let _leadGenOfferDesc        = '';
 let _leadGenCtaText          = '';
 let _leadGenLengthPreference = 'Medium';
+let _lessonsChatStep          = 0;         // 0=event, 1=obstacle, 2=key_lesson, 3=changed_you, 4=length
+let _lessonsEvent             = '';
+let _lessonsObstacle          = '';
+let _lessonsKeyLesson         = '';
+let _lessonsChangedYou        = '';
+let _lessonsLengthPreference  = 'Medium';
 let _prefetchedIdeas    = null;      // prefetched result from /api/vault/generate-ideas
 let _allFreshIdeas      = [];        // all fetched fresh ideas — filters applied client-side
 let _lastIcpSummary     = '';        // icp_summary from last fetch
@@ -131,8 +137,9 @@ const CHAT_CONFIGS = {
   contrarian:   { label: '🔥 Contrarian / Hot Take' },
   framework:    { label: '📚 Framework / How-To' },
   announcement: { label: '🎉 Announcement' },
-  lead_gen:     { label: '🎯 Lead Gen / Offer' },
-  convert:      { label: '💬 Conversation post' },
+  lead_gen:        { label: '🎯 Lead Gen / Offer' },
+  lessons_learned: { label: '📝 Lessons Learned' },
+  convert:         { label: '💬 Conversation post' },
 };
 
 /* ── Extraction questions (reach / trust / convert) ──────────── */
@@ -242,6 +249,17 @@ const EXTRACTION_QUESTIONS = {
       errorMsg:    'Describe the problem you\'re solving — even a rough first draft is fine.',
     },
   ],
+  lessons_learned: [
+    {
+      key:         'lesson_event',
+      question:    'What happened? Describe the event or situation.',
+      helpText:    'The project, decision, client situation, or experience that taught you something. Be specific and real.',
+      placeholder: 'e.g. I launched a product I was proud of — and nobody bought it. Here\'s what I learned…',
+      required:    true,
+      minChars:    30,
+      errorMsg:    'Describe what happened — even a rough draft is enough.',
+    },
+  ],
   convert: [
     {
       key:         'result',
@@ -305,7 +323,7 @@ function selectType(type) {
   const genHeader    = document.querySelector('.gen-header');
   const startingPills = document.getElementById('starting-pills');
   const pillQ        = document.getElementById('pill-question');
-  if (type === 'trust' || type === 'story' || type === 'announcement' || type === 'contrarian' || type === 'framework' || type === 'lead_gen') {
+  if (type === 'trust' || type === 'story' || type === 'announcement' || type === 'contrarian' || type === 'framework' || type === 'lead_gen' || type === 'lessons_learned') {
     if (genHeader)     genHeader.style.display     = 'none';
     if (startingPills) startingPills.style.display = 'none';
     if (pillQ)        { pillQ.textContent = ''; pillQ.classList.remove('visible'); }
@@ -804,6 +822,103 @@ const chat = (() => {
     return parts.join('\n\n');
   }
 
+  // ── Lessons Learned step renderers ─────────────────────────────────────────
+
+  function showLessonsObstacleQuestion() {
+    const bubble = addQuestionBubble(
+      'What Went Wrong / The Obstacle',
+      'What made this hard, what broke, what you underestimated. Leave blank if the lesson came without a clear obstacle.'
+    );
+    const skipBtn = document.createElement('button');
+    skipBtn.type        = 'button';
+    skipBtn.className   = 'story-skip-btn';
+    skipBtn.textContent = 'Skip →';
+    skipBtn.addEventListener('click', () => {
+      _lessonsObstacle = '';
+      _lessonsChatStep = 2;
+      addUser('(skipped)');
+      chatInput.value        = '';
+      chatInput.style.height = '';
+      showLessonsKeyLessonQuestion();
+    });
+    bubble.appendChild(skipBtn);
+    chatInput.placeholder = 'What went wrong, what you underestimated, what blocked you — or skip…';
+    chatInput.focus();
+    chatThread.scrollTop = chatThread.scrollHeight;
+  }
+
+  function showLessonsKeyLessonQuestion() {
+    addQuestionBubble(
+      'The Key Lesson',
+      'The core insight, belief shift, or realization you took away. One clear, honest lesson.'
+    );
+    chatInput.placeholder = 'What you now know, believe, or do differently…';
+    chatInput.focus();
+    chatThread.scrollTop = chatThread.scrollHeight;
+  }
+
+  function showLessonsChangedYouQuestion() {
+    const bubble = addQuestionBubble(
+      'How It Changed You / Your Strategy',
+      'What shifted in how you work, think, or decide. Leave blank if the post ends at the lesson.'
+    );
+    const skipBtn = document.createElement('button');
+    skipBtn.type        = 'button';
+    skipBtn.className   = 'story-skip-btn';
+    skipBtn.textContent = 'Skip →';
+    skipBtn.addEventListener('click', () => {
+      _lessonsChangedYou = '';
+      _lessonsChatStep   = 4;
+      addUser('(skipped)');
+      chatInput.value        = '';
+      chatInput.style.height = '';
+      showLessonsLengthQuestion();
+    });
+    bubble.appendChild(skipBtn);
+    chatInput.placeholder = 'How you think, work, or decide differently now — or skip…';
+    chatInput.focus();
+    chatThread.scrollTop = chatThread.scrollHeight;
+  }
+
+  function showLessonsLengthQuestion() {
+    const bubble = addQuestionBubble(
+      'Post length',
+      'Choose how deep you want to go. Short = one sharp lesson. Medium = full arc. Long = detailed reflection.'
+    );
+    const chips = document.createElement('div');
+    chips.className = 'authority-length-chips';
+
+    [
+      { value: 'Short',  label: 'Short',  hint: '8–12 lines'  },
+      { value: 'Medium', label: 'Medium', hint: '12–18 lines' },
+      { value: 'Long',   label: 'Long',   hint: '18–28 lines' },
+    ].forEach(({ value, label, hint }) => {
+      const btn = document.createElement('button');
+      btn.className = 'length-chip';
+      btn.type      = 'button';
+      btn.innerHTML = `${label} <span class="length-chip-hint">${hint}</span>`;
+      btn.addEventListener('click', () => {
+        _lessonsLengthPreference = value;
+        chips.querySelectorAll('.length-chip').forEach(c => c.classList.remove('active'));
+        btn.classList.add('active');
+        addUser(label);
+        triggerGenerate({ enrichedIdea: _buildLessonsPrompt() });
+      });
+      chips.appendChild(btn);
+    });
+
+    bubble.appendChild(chips);
+    chatThread.scrollTop = chatThread.scrollHeight;
+  }
+
+  function _buildLessonsPrompt() {
+    const parts = [`LESSON EVENT:\n${_lessonsEvent}`];
+    if (_lessonsObstacle.trim())  parts.push(`WHAT WENT WRONG / OBSTACLE:\n${_lessonsObstacle}`);
+    parts.push(`KEY LESSON:\n${_lessonsKeyLesson}`);
+    if (_lessonsChangedYou.trim()) parts.push(`HOW IT CHANGED YOU / YOUR STRATEGY:\n${_lessonsChangedYou}`);
+    return parts.join('\n\n');
+  }
+
   // ── Behind the Scenes step renderers ───────────────────────────────────────
 
   function showBtsTurningPointQuestion() {
@@ -1223,12 +1338,18 @@ const chat = (() => {
     _leadGenOfferDesc        = '';
     _leadGenCtaText          = '';
     _leadGenLengthPreference = 'Medium';
+    _lessonsChatStep          = 0;
+    _lessonsEvent             = '';
+    _lessonsObstacle          = '';
+    _lessonsKeyLesson         = '';
+    _lessonsChangedYou        = '';
+    _lessonsLengthPreference  = 'Medium';
     _coach = { active: false, originalBrief: '', history: [], exchangeCount: 0, awaitingSkip: false, pendingQ: null, intakeInFlight: false, seq: (_coach.seq ?? 0) + 1 };
 
     chatThread.innerHTML = '';
     const q0 = EXTRACTION_QUESTIONS[type][0];
 
-    if (type === 'trust' || type === 'story' || type === 'bts' || type === 'contrarian' || type === 'announcement' || type === 'framework' || type === 'lead_gen') {
+    if (type === 'trust' || type === 'story' || type === 'bts' || type === 'contrarian' || type === 'announcement' || type === 'framework' || type === 'lead_gen' || type === 'lessons_learned') {
       // Show the first question immediately as a labelled bot bubble so the user
       // can focus on answering — no pills, no header, just the question.
       chatThread.style.display = '';
@@ -1465,6 +1586,41 @@ const chat = (() => {
         chatInput.value       = '';
         chatInput.style.height = '';
         showLeadGenLengthQuestion();
+      }
+      return;
+    }
+
+    // Lessons Learned: four-step chat flow + length.
+    if (selectedType === 'lessons_learned') {
+      if (_lessonsChatStep === 0) {
+        _lessonsEvent = val;
+        _lessonsChatStep = 1;
+        addUser(val);
+        chatThread.style.display = '';
+        chatInput.value       = '';
+        chatInput.style.height = '';
+        showLessonsObstacleQuestion();
+      } else if (_lessonsChatStep === 1) {
+        _lessonsObstacle = val;
+        _lessonsChatStep = 2;
+        addUser(val);
+        chatInput.value       = '';
+        chatInput.style.height = '';
+        showLessonsKeyLessonQuestion();
+      } else if (_lessonsChatStep === 2) {
+        _lessonsKeyLesson = val;
+        _lessonsChatStep = 3;
+        addUser(val);
+        chatInput.value       = '';
+        chatInput.style.height = '';
+        showLessonsChangedYouQuestion();
+      } else if (_lessonsChatStep === 3) {
+        _lessonsChangedYou = val;
+        _lessonsChatStep = 4;
+        addUser(val);
+        chatInput.value       = '';
+        chatInput.style.height = '';
+        showLessonsLengthQuestion();
       }
       return;
     }

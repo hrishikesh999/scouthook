@@ -1,26 +1,29 @@
 'use strict';
 
-require('dotenv').config();
+// Load .env.test so tests always hit the dedicated test database, never production.
+require('dotenv').config({ path: '.env.test', override: true });
 
 const request = require('supertest');
 const crypto  = require('crypto');
 const bcrypt  = require('bcryptjs');
 
-// Use global to share a single server + db instance across Jest's per-file module
-// registries. Without this, each test file creates a new server + connection pool,
-// exhausting PostgreSQL connections after ~10 files.
+// Use process (not global) to share a single server + db instance across Jest's
+// per-file VM contexts. Jest gives each test file its own VM sandbox, so `global`
+// is NOT shared between files — but `process` is the real Node.js process object,
+// identical across all VM contexts. Without this, each test file creates its own
+// pg.Pool (max 30 connections), and 4+ concurrent pools exhaust Postgres's limit.
 function getDb() {
-  if (!global.__scouthookDb) {
-    global.__scouthookDb = require('../../../db').db;
+  if (!process.__scouthookDb) {
+    process.__scouthookDb = require('../../../db').db;
   }
-  return global.__scouthookDb;
+  return process.__scouthookDb;
 }
 
 function getApp() {
-  if (!global.__scouthookApp) {
-    global.__scouthookApp = require('../../../server').app;
+  if (!process.__scouthookApp) {
+    process.__scouthookApp = require('../../../server').app;
   }
-  return global.__scouthookApp;
+  return process.__scouthookApp;
 }
 
 function agent() {
@@ -87,6 +90,18 @@ async function loginAs(user) {
 // Truncate all user-data tables between tests
 // ---------------------------------------------------------------------------
 async function truncateAll() {
+  // Hard safety guard — refuse to wipe data if DATABASE_URL looks like production.
+  // The test Neon branch host contains 'withered-lab' (a known safe pattern).
+  // TEST_DB_ALLOWED=true in .env.test is the explicit opt-in.
+  const dbUrl = process.env.DATABASE_URL || '';
+  const safe = /withered-lab|test|dev|local/i.test(dbUrl) || process.env.TEST_DB_ALLOWED === 'true';
+  if (!safe) {
+    throw new Error(
+      '[truncateAll] REFUSED: DATABASE_URL does not look like a test database.\n' +
+      'Point DATABASE_URL at the test Neon branch and set TEST_DB_ALLOWED=true in .env.test.'
+    );
+  }
+
   const db = getDb();
   await db.prepare(`
     TRUNCATE workspace_members, workspace_invites,

@@ -577,7 +577,9 @@ if (storage.getBackend() === 'local') {
       }
     } catch (e) { /* non-fatal */ }
   }
-  setInterval(cleanGeneratedFiles, 60 * 60 * 1000);
+  if (process.env.NODE_ENV !== 'test') {
+    setInterval(cleanGeneratedFiles, 60 * 60 * 1000);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -599,8 +601,10 @@ async function metricsRetentionCleanup() {
   }
 }
 // Run once on startup, then daily
-metricsRetentionCleanup();
-setInterval(metricsRetentionCleanup, 24 * 60 * 60 * 1000);
+if (process.env.NODE_ENV !== 'test') {
+  metricsRetentionCleanup();
+  setInterval(metricsRetentionCleanup, 24 * 60 * 60 * 1000);
+}
 
 // ---------------------------------------------------------------------------
 // Email: expiring-soon — warn cancelled Pro users 3 days before access ends.
@@ -629,10 +633,12 @@ async function sendExpiringSoonEmails() {
   }
 }
 // Stagger slightly from metrics cleanup — run daily at a random offset from startup.
-setTimeout(() => {
-  sendExpiringSoonEmails();
-  setInterval(sendExpiringSoonEmails, 24 * 60 * 60 * 1000);
-}, 5 * 60 * 1000); // first run 5 minutes after startup
+if (process.env.NODE_ENV !== 'test') {
+  setTimeout(() => {
+    sendExpiringSoonEmails();
+    setInterval(sendExpiringSoonEmails, 24 * 60 * 60 * 1000);
+  }, 5 * 60 * 1000); // first run 5 minutes after startup
+}
 
 // ---------------------------------------------------------------------------
 // Email: weekly digest — sent on Sunday evenings to active users.
@@ -679,7 +685,9 @@ async function sendWeeklyDigestEmails() {
   }
 }
 // Check once every 6 hours — the Sunday guard inside ensures it only sends on Sunday.
-setInterval(sendWeeklyDigestEmails, 6 * 60 * 60 * 1000);
+if (process.env.NODE_ENV !== 'test') {
+  setInterval(sendWeeklyDigestEmails, 6 * 60 * 60 * 1000);
+}
 
 // ---------------------------------------------------------------------------
 // Billing: daily subscription re-sync for expired/stale subscriptions.
@@ -718,10 +726,12 @@ async function syncExpiredSubscriptions() {
   }
 }
 // Run 15 minutes after startup so Paddle SDK is warmed up, then daily.
-setTimeout(() => {
-  syncExpiredSubscriptions();
-  setInterval(syncExpiredSubscriptions, 24 * 60 * 60 * 1000);
-}, 15 * 60 * 1000);
+if (process.env.NODE_ENV !== 'test') {
+  setTimeout(() => {
+    syncExpiredSubscriptions();
+    setInterval(syncExpiredSubscriptions, 24 * 60 * 60 * 1000);
+  }, 15 * 60 * 1000);
+}
 
 // ---------------------------------------------------------------------------
 // Email: trial expiry — warn trialing users 3 days before trial ends.
@@ -749,10 +759,12 @@ async function sendTrialExpiryEmails() {
   }
 }
 // Runs daily — offset from other crons via immediate + interval pattern.
-setTimeout(() => {
-  sendTrialExpiryEmails();
-  setInterval(sendTrialExpiryEmails, 24 * 60 * 60 * 1000);
-}, 20 * 60 * 1000);
+if (process.env.NODE_ENV !== 'test') {
+  setTimeout(() => {
+    sendTrialExpiryEmails();
+    setInterval(sendTrialExpiryEmails, 24 * 60 * 60 * 1000);
+  }, 20 * 60 * 1000);
+}
 
 // ---------------------------------------------------------------------------
 // Email: LinkedIn token expiry — warn workspace members 7 days before expiry.
@@ -781,19 +793,23 @@ async function sendLinkedInTokenExpiryWarnings() {
   }
 }
 // Runs daily — offset 30 min from startup to stagger with other crons.
-setTimeout(() => {
-  sendLinkedInTokenExpiryWarnings();
-  setInterval(sendLinkedInTokenExpiryWarnings, 24 * 60 * 60 * 1000);
-}, 30 * 60 * 1000);
+if (process.env.NODE_ENV !== 'test') {
+  setTimeout(() => {
+    sendLinkedInTokenExpiryWarnings();
+    setInterval(sendLinkedInTokenExpiryWarnings, 24 * 60 * 60 * 1000);
+  }, 30 * 60 * 1000);
+}
 
 // ---------------------------------------------------------------------------
 // Workspace purge — hard-delete workspaces whose 30-day grace period expired.
 // ---------------------------------------------------------------------------
 const { purgeExpiredWorkspaces } = require('./workers/workspacePurge');
-setTimeout(() => {
-  purgeExpiredWorkspaces();
-  setInterval(purgeExpiredWorkspaces, 24 * 60 * 60 * 1000);
-}, 25 * 60 * 1000);
+if (process.env.NODE_ENV !== 'test') {
+  setTimeout(() => {
+    purgeExpiredWorkspaces();
+    setInterval(purgeExpiredWorkspaces, 24 * 60 * 60 * 1000);
+  }, 25 * 60 * 1000);
+}
 
 // ---------------------------------------------------------------------------
 // Scheduler (BullMQ worker — only starts if Redis is configured)

@@ -347,12 +347,33 @@ async function init() {
     || profile.brand_story_origin || bvPhrases.length > 0;
   if (bvStep2HasContent && qs('bv-step-2')) qs('bv-step-2').hidden = false;
 
+  function updateBvStepIndicator(activeStep) {
+    const stp1      = qs('bv-stp-1');
+    const stp2      = qs('bv-stp-2');
+    const connector = qs('bv-stp-connector');
+    const circle1   = qs('bv-stp-1-circle');
+    if (!stp1 || !stp2) return;
+    if (activeStep === 2) {
+      stp1.className      = 'bv-stp bv-stp--done';
+      if (circle1) circle1.textContent = '✓';
+      if (connector) connector.classList.add('bv-stp-connector--done');
+      stp2.className      = 'bv-stp bv-stp--active';
+    } else {
+      stp1.className      = 'bv-stp bv-stp--active';
+      if (circle1) circle1.textContent = '1';
+      if (connector) connector.classList.remove('bv-stp-connector--done');
+      stp2.className      = 'bv-stp bv-stp--pending';
+    }
+  }
+
+  updateBvStepIndicator(bvStep2HasContent ? 2 : 1);
+
   // ── Brand Voice — Generate Step 2 ─────────────────────────────
   qs('bv-generate-btn')?.addEventListener('click', async () => {
     const btn = qs('bv-generate-btn');
     const statusEl = qs('bv-generate-status');
     btn.disabled = true;
-    btn.textContent = 'Generating…';
+    btn.textContent = 'Saving…';
 
     // Save Step 1 first so AI reads from DB
     const step1Payload = {
@@ -386,6 +407,7 @@ async function init() {
           qs('bv-step-2').hidden = false;
           qs('bv-step-2').scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
+        updateBvStepIndicator(2);
         showStatus(statusEl, 'Step 2 ready — review and save');
       } else {
         showStatus(statusEl, 'Generation failed — try again', true);
@@ -393,7 +415,7 @@ async function init() {
     } catch {
       showStatus(statusEl, 'Generation failed — try again', true);
     }
-    btn.textContent = 'Generate Step 2 →';
+    btn.textContent = 'Save & Next →';
     btn.disabled = false;
   });
 

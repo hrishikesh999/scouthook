@@ -158,6 +158,25 @@
                    placeholder="https://yourwebsite.com" autocomplete="url" style="width:100%" />
           </div>
 
+          <!-- Step progress indicator -->
+          <div class="bv-steps-indicator">
+            <div class="bv-stp bv-stp--active" id="bv-stp-1">
+              <div class="bv-stp-circle" id="bv-stp-1-circle">1</div>
+              <div class="bv-stp-body">
+                <span class="bv-stp-name">Quick capture</span>
+                <span class="bv-stp-desc">Your basics</span>
+              </div>
+            </div>
+            <div class="bv-stp-connector" id="bv-stp-connector"></div>
+            <div class="bv-stp bv-stp--pending" id="bv-stp-2">
+              <div class="bv-stp-circle">2</div>
+              <div class="bv-stp-body">
+                <span class="bv-stp-name">Enrichment</span>
+                <span class="bv-stp-desc">AI-drafted, review &amp; edit</span>
+              </div>
+            </div>
+          </div>
+
           <!-- Step 1 -->
           <div id="bv-step-1">
             <p class="vw-step-label">Step 1 — Quick capture</p>
@@ -209,7 +228,7 @@
             </div>
 
             <div class="vw-stage-actions">
-              <button id="bv-generate-btn" class="vw-save-btn" type="button">Generate Step 2 →</button>
+              <button id="bv-generate-btn" class="vw-save-btn" type="button">Save &amp; Next →</button>
               <span class="vw-save-status" id="bv-generate-status" hidden></span>
             </div>
           </div><!-- /bv-step-1 -->

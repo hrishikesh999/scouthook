@@ -23,6 +23,8 @@
       <span class="ob-dot" data-step="7"></span>
       <span class="ob-dot" data-step="8"></span>
       <span class="ob-dot" data-step="9"></span>
+      <span class="ob-dot" data-step="10"></span>
+      <span class="ob-dot" data-step="11"></span>
     </div>
   </header>
 
@@ -69,7 +71,7 @@
       <h1 class="ob-headline">Connect LinkedIn</h1>
       <p class="ob-subheadline">Connect once and publish directly from Scouthook — no copy-pasting.</p>
 
-      <!-- Connected state (shown when LinkedIn is already linked) -->
+      <!-- Connected state -->
       <div id="ob-li-connected" class="ob-li-connected-card" hidden>
         <img id="ob-li-photo" class="ob-li-avatar" src="" alt="" />
         <div class="ob-li-info">
@@ -110,7 +112,6 @@
       </div>
       <p id="ob-website-error" class="ob-field-error" hidden>Please enter a valid website address.</p>
 
-      <!-- Extraction progress -->
       <div id="ob-website-extracting" class="ob-extracting-state" hidden>
         <span class="ob-spinner"></span>
         <span>Reading your website…</span>
@@ -143,8 +144,38 @@
     </div>
   </section>
 
-  <!-- ── Step 5: Industry ────────────────────────────────── -->
-  <section id="ob-s5" class="ob-screen ob-screen--center" aria-label="Step 5: Industry">
+  <!-- ── Step 5 (new): Results & method ─────────────────── -->
+  <section id="ob-se" class="ob-screen ob-screen--center" aria-label="Step 5: Results and method">
+    <div class="ob-content ob-content--narrow">
+      <button class="ob-back-btn" id="ob-se-back" type="button">← Back</button>
+
+      <h1 class="ob-headline">What results do you deliver?</h1>
+      <p class="ob-subheadline">These two answers are the highest-impact inputs for your brand voice — they power the hooks in every post.</p>
+
+      <div class="ob-field-group">
+        <label class="ob-label" for="ob-elevator-result">The main result your clients achieve</label>
+        <input id="ob-elevator-result" class="ob-field" type="text"
+               placeholder="e.g. Go from zero inbound to 4 qualified calls a month in 6 weeks" />
+        <p id="ob-elevator-prefill-hint" class="ob-prefill-hint" hidden>
+          ✦ Suggested from your website — feel free to edit
+        </p>
+      </div>
+
+      <div class="ob-field-group" style="margin-top:20px">
+        <label class="ob-label" for="ob-elevator-mechanism">Your method or approach <span class="ob-optional">(optional)</span></label>
+        <input id="ob-elevator-mechanism" class="ob-field" type="text"
+               placeholder="e.g. A structured 6-week outbound system built around your ICP" />
+      </div>
+
+      <div class="ob-interview-actions" style="margin-top:24px">
+        <button id="ob-se-next" class="ob-btn-primary" type="button">Next →</button>
+        <button id="ob-se-skip" class="ob-skip-link" type="button">Skip for now</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Step 6: Industry ────────────────────────────────── -->
+  <section id="ob-s5" class="ob-screen ob-screen--center" aria-label="Step 6: Industry">
     <div class="ob-content ob-content--narrow">
       <button class="ob-back-btn" id="ob-s5-back" type="button">← Back</button>
 
@@ -175,8 +206,8 @@
     </div>
   </section>
 
-  <!-- ── Step 6: Brand personality ──────────────────────── -->
-  <section id="ob-s6" class="ob-screen ob-screen--center" aria-label="Step 6: Brand personality">
+  <!-- ── Step 7: Brand personality ──────────────────────── -->
+  <section id="ob-s6" class="ob-screen ob-screen--center" aria-label="Step 7: Brand personality">
     <div class="ob-content ob-content--narrow">
       <button class="ob-back-btn" id="ob-s6-back" type="button">← Back</button>
 
@@ -208,7 +239,6 @@
         <button class="ob-trait-chip" data-trait="Warm" type="button" aria-pressed="false">Warm</button>
       </div>
 
-      <!-- Brand voice generation spinner (shown between step 6 → 7) -->
       <div id="ob-bv-generating" class="ob-generating-state" hidden>
         <span class="ob-spinner"></span>
         <span>Building your brand voice profile…</span>
@@ -220,8 +250,8 @@
     </div>
   </section>
 
-  <!-- ── Step 7: Target audience ────────────────────────── -->
-  <section id="ob-s7" class="ob-screen ob-screen--center" aria-label="Step 7: Target audience">
+  <!-- ── Step 8: Target audience ────────────────────────── -->
+  <section id="ob-s7" class="ob-screen ob-screen--center" aria-label="Step 8: Target audience">
     <div class="ob-content ob-content--narrow">
       <button class="ob-back-btn" id="ob-s7-back" type="button">← Back</button>
 
@@ -240,8 +270,8 @@
     </div>
   </section>
 
-  <!-- ── Step 8: Demographics ───────────────────────────── -->
-  <section id="ob-s8" class="ob-screen ob-screen--center" aria-label="Step 8: Demographics">
+  <!-- ── Step 9: Demographics ───────────────────────────── -->
+  <section id="ob-s8" class="ob-screen ob-screen--center" aria-label="Step 9: Demographics">
     <div class="ob-content ob-content--narrow">
       <button class="ob-back-btn" id="ob-s8-back" type="button">← Back</button>
 
@@ -251,20 +281,40 @@
       <textarea id="ob-audience-detail" class="ob-textarea ob-textarea--interview" rows="4"
                 placeholder="e.g. Typically 30–45, B2B tech background, series A–B stage companies, mostly US/UK markets."></textarea>
 
-      <!-- Audience generation spinner (shown between step 8 → 9) -->
       <div id="ob-aud-generating" class="ob-generating-state" hidden>
         <span class="ob-spinner"></span>
         <span>Building your audience profile…</span>
       </div>
 
       <div class="ob-interview-actions" style="margin-top:16px">
-        <button id="ob-s8-next" class="ob-btn-primary" type="button">Finish setup →</button>
+        <button id="ob-s8-next" class="ob-btn-primary" type="button">Next →</button>
       </div>
     </div>
   </section>
 
-  <!-- ── Step 9: Celebration ────────────────────────────── -->
-  <section id="ob-s9" class="ob-screen ob-screen--center ob-screen--celebration" aria-label="Step 9: You're all set">
+  <!-- ── Step 10 (new): Writing sample ──────────────────── -->
+  <section id="ob-sw" class="ob-screen ob-screen--center" aria-label="Step 10: Writing sample">
+    <div class="ob-content ob-content--narrow">
+      <button class="ob-back-btn" id="ob-sw-back" type="button">← Back</button>
+
+      <h1 class="ob-headline">Paste something you've written</h1>
+      <p class="ob-subheadline">A LinkedIn post, email, or message — anything that sounds like you. This is the single biggest signal for matching your voice and rhythm.</p>
+
+      <textarea id="ob-writing-sample" class="ob-textarea ob-textarea--interview ob-textarea--writing"
+                rows="8" maxlength="1200"
+                placeholder="e.g. The best pipeline review I ever ran had nothing to do with the pipeline. We spent 90 minutes on the one deal that had been 'almost closed' for six months. Turns out the champion had left the company three weeks earlier. Nobody had told us. That's not a sales problem — that's a listening problem."></textarea>
+      <p class="ob-char-count" id="ob-writing-char-count" aria-live="polite"></p>
+      <p class="ob-skip-cost" id="ob-writing-skip-cost">Without this, voice matching relies only on your answers — adding a real sample sharpens it significantly.</p>
+
+      <div class="ob-interview-actions" style="margin-top:16px">
+        <button id="ob-sw-next" class="ob-btn-primary" type="button">Finish setup →</button>
+        <button id="ob-sw-skip" class="ob-skip-link" type="button">Skip for now</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Step 11: Celebration ───────────────────────────── -->
+  <section id="ob-s9" class="ob-screen ob-screen--center ob-screen--celebration" aria-label="Step 11: You're all set">
     <div class="ob-content ob-content--narrow ob-content--center">
       <div class="ob-celebration-emoji" aria-hidden="true">🎉</div>
       <h1 class="ob-headline">Your profile is live!</h1>

@@ -1026,32 +1026,30 @@ details[open] .vw-advanced-label::before { transform: rotate(90deg); }
   font-weight: 600;
 }
 
-/* ── Brand Voice two-step indicator ─────────────────────── */
+/* ── Two-step indicator (brand voice + audience) ─────────── */
 .bv-steps-indicator {
   display: flex;
   align-items: center;
-  margin-bottom: 24px;
-  padding: 14px 18px;
-  background: var(--bg-subtle);
-  border: 1px solid var(--border);
-  border-radius: 10px;
+  margin-bottom: 28px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border);
 }
 
 .bv-stp {
   display: flex;
   align-items: center;
-  gap: 10px;
-  flex: 1;
-  min-width: 0;
+  gap: 8px;
+}
+
+.bv-stp--done {
+  cursor: pointer;
 }
 
 .bv-stp-connector {
-  width: 40px;
-  height: 2px;
+  flex: 1;
+  height: 1px;
   background: var(--border);
-  flex-shrink: 0;
   margin: 0 12px;
-  border-radius: 1px;
   transition: background 0.25s;
 }
 
@@ -1060,16 +1058,16 @@ details[open] .vw-advanced-label::before { transform: rotate(90deg); }
 }
 
 .bv-stp-circle {
-  width: 30px;
-  height: 30px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   flex-shrink: 0;
-  transition: background 0.2s, color 0.2s, border-color 0.2s;
+  transition: background 0.2s, color 0.2s;
 }
 
 .bv-stp--active .bv-stp-circle {
@@ -1083,29 +1081,25 @@ details[open] .vw-advanced-label::before { transform: rotate(90deg); }
 }
 
 .bv-stp--pending .bv-stp-circle {
-  background: var(--border);
+  background: var(--bg-pill, #F4F4F5);
   color: var(--text-muted);
+  border: 1px solid var(--border);
 }
 
 .bv-stp-name {
-  display: block;
   font-size: 13px;
   font-weight: 600;
   color: var(--text-heading);
-  line-height: 1.3;
-}
-
-.bv-stp-desc {
-  display: block;
-  font-size: 11px;
-  color: var(--text-muted);
-  line-height: 1.4;
-  margin-top: 1px;
+  white-space: nowrap;
 }
 
 .bv-stp--pending .bv-stp-name {
   color: var(--text-muted);
-  font-weight: 500;
+  font-weight: 400;
+}
+
+.bv-stp-desc {
+  display: none;
 }
 
 /* ── (legacy step labels inside step divs) ───────────────── */

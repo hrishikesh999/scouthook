@@ -352,21 +352,31 @@ async function init() {
     const stp2      = qs('bv-stp-2');
     const connector = qs('bv-stp-connector');
     const circle1   = qs('bv-stp-1-circle');
+    const step1div  = qs('bv-step-1');
+    const step2div  = qs('bv-step-2');
     if (!stp1 || !stp2) return;
     if (activeStep === 2) {
       stp1.className      = 'bv-stp bv-stp--done';
       if (circle1) circle1.textContent = '✓';
       if (connector) connector.classList.add('bv-stp-connector--done');
       stp2.className      = 'bv-stp bv-stp--active';
+      if (step1div) step1div.hidden = true;
+      if (step2div) step2div.hidden = false;
     } else {
       stp1.className      = 'bv-stp bv-stp--active';
       if (circle1) circle1.textContent = '1';
       if (connector) connector.classList.remove('bv-stp-connector--done');
       stp2.className      = 'bv-stp bv-stp--pending';
+      if (step1div) step1div.hidden = false;
+      if (step2div) step2div.hidden = true;
     }
   }
 
   updateBvStepIndicator(bvStep2HasContent ? 2 : 1);
+
+  qs('bv-stp-1')?.addEventListener('click', () => {
+    if (qs('bv-stp-1')?.classList.contains('bv-stp--done')) updateBvStepIndicator(1);
+  });
 
   // ── Brand Voice — Generate Step 2 ─────────────────────────────
   qs('bv-generate-btn')?.addEventListener('click', async () => {
@@ -403,11 +413,8 @@ async function init() {
           p.brand_phrases_to_use.forEach(ph => { if (!bvPhrases.includes(ph)) bvPhrases.push(ph); });
           renderBvPhrases(bvPhrases);
         }
-        if (qs('bv-step-2')) {
-          qs('bv-step-2').hidden = false;
-          qs('bv-step-2').scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
         updateBvStepIndicator(2);
+        qs('bv-step-2')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         showStatus(statusEl, 'Step 2 ready — review and save');
       } else {
         showStatus(statusEl, 'Generation failed — try again', true);
@@ -496,26 +503,36 @@ async function init() {
 
   const audStep2HasContent = profile.audience_buying_stage || profile.audience_market_sophistication
     || audBeliefs.length > 0;
-  if (audStep2HasContent && qs('aud-step-2')) qs('aud-step-2').hidden = false;
 
   function updateAudStepIndicator(activeStep) {
     const stp1      = qs('aud-stp-1');
     const stp2      = qs('aud-stp-2');
     const connector = qs('aud-stp-connector');
     const circle1   = qs('aud-stp-1-circle');
+    const step1div  = qs('aud-step-1');
+    const step2div  = qs('aud-step-2');
+    if (!stp1 || !stp2) return;
     if (activeStep === 2) {
       stp1.className      = 'bv-stp bv-stp--done';
       if (circle1) circle1.textContent = '✓';
       if (connector) connector.classList.add('bv-stp-connector--done');
       stp2.className      = 'bv-stp bv-stp--active';
+      if (step1div) step1div.hidden = true;
+      if (step2div) step2div.hidden = false;
     } else {
       stp1.className      = 'bv-stp bv-stp--active';
       if (circle1) circle1.textContent = '1';
       if (connector) connector.classList.remove('bv-stp-connector--done');
       stp2.className      = 'bv-stp bv-stp--pending';
+      if (step1div) step1div.hidden = false;
+      if (step2div) step2div.hidden = true;
     }
   }
   updateAudStepIndicator(audStep2HasContent ? 2 : 1);
+
+  qs('aud-stp-1')?.addEventListener('click', () => {
+    if (qs('aud-stp-1')?.classList.contains('bv-stp--done')) updateAudStepIndicator(1);
+  });
 
   qs('aud-generate-btn')?.addEventListener('click', async () => {
     const btn = qs('aud-generate-btn');
@@ -542,11 +559,8 @@ async function init() {
           p.audience_core_beliefs_market.forEach(b => { if (!audBeliefs.includes(b)) audBeliefs.push(b); });
           renderAudBeliefs(audBeliefs);
         }
-        if (qs('aud-step-2')) {
-          qs('aud-step-2').hidden = false;
-          qs('aud-step-2').scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
         updateAudStepIndicator(2);
+        qs('aud-step-2')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         showStatus(statusEl, 'Step 2 ready — review and save');
       } else {
         showStatus(statusEl, 'Generation failed — try again', true);

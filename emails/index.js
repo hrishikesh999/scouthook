@@ -27,6 +27,7 @@ function getResend() {
  * Variables are replaced as {{variable_name}} tokens.
  */
 async function sendEmail(templateName, to, vars = {}) {
+  if (process.env.NODE_ENV === 'test') return;
   if (!process.env.RESEND_API_KEY) {
     console.warn(`[email] RESEND_API_KEY not set — skipping send of '${templateName}' to ${to}`);
     return;
@@ -138,6 +139,7 @@ async function logEmailSent(userId, template, dedupKey = null) {
  * Pass dedupKey: false to skip deduplication entirely (e.g. post-published).
  */
 async function sendEmailToUser(userId, templateName, vars = {}, { dedupKey = null, withinHours = 24 } = {}) {
+  if (process.env.NODE_ENV === 'test') return;
   const user = await getUserEmailInfo(userId);
   if (!user) return;
 

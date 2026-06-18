@@ -81,6 +81,11 @@ async function recoverStuckPosts() {
  * Called from server.js on startup — failure is non-fatal (logged as warning).
  */
 async function initScheduler() {
+  if (process.env.NODE_ENV === 'test') {
+    console.warn('[scheduler] NODE_ENV=test — scheduler disabled for test isolation');
+    schedulingEnabledCache = false;
+    return;
+  }
   const schedulingEnabled = String((await getSetting('scheduling_enabled')) ?? '1').trim();
   if (schedulingEnabled === '0' || schedulingEnabled.toLowerCase() === 'false') {
     console.warn('[scheduler] scheduling_enabled=0 — scheduler disabled by kill-switch');

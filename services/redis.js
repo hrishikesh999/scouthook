@@ -21,6 +21,8 @@ async function initRedis() {
   if (initialized) return;
   initialized = true;
 
+  if (process.env.NODE_ENV === 'test') return; // Redis not needed in test environment
+
   const redisUrl = (process.env.REDIS_URL || '').trim() || (await getSetting('redis_url'));
   if (!redisUrl) return; // Redis not configured — all callers fall back to in-memory
 

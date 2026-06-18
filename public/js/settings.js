@@ -205,18 +205,24 @@ async function init() {
 
   /* ── Stage 1: Profile Basics ────────────────────────────── */
   const basicsFields = {
-    'profile-positioning': 'business_positioning',
+    'profile-description': 'brand_description',
     'profile-website':     'website_url',
-    'profile-niche':       'content_niche',
-    'profile-audience':    'audience_role',
-    'profile-pain':        'audience_pain',
-    'profile-contrarian':  'contrarian_view',
+    'profile-audience':    'audience_description',
+    'profile-elevator':    'elevator_main_result',
+    'profile-beliefs':     'brand_core_beliefs',
   };
 
   // Populate basics fields from profile
   Object.entries(basicsFields).forEach(([elId, key]) => {
     const el = qs(elId);
-    if (el && profile[key]) el.value = profile[key];
+    if (!el) return;
+    if (key === 'brand_core_beliefs') {
+      // Stored as JSON array — display one belief per line
+      const arr = safeParseJSON(profile[key], []);
+      el.value = arr.join('\n');
+    } else if (profile[key]) {
+      el.value = profile[key];
+    }
   });
 
   // Determine if basics has meaningful content
@@ -234,7 +240,14 @@ async function init() {
     const payload = {};
     Object.entries(basicsFields).forEach(([elId, key]) => {
       const el = qs(elId);
-      if (el) payload[key] = el.value.trim() || null;
+      if (!el) return;
+      if (key === 'brand_core_beliefs') {
+        // Split textarea lines into a JSON array; filter blank lines
+        const lines = el.value.split('\n').map(l => l.trim()).filter(Boolean);
+        payload[key] = lines.length > 0 ? JSON.stringify(lines) : null;
+      } else {
+        payload[key] = el.value.trim() || null;
+      }
     });
     try {
       const d = await saveProfile(payload);
@@ -251,18 +264,17 @@ async function init() {
     btn.disabled = false;
   });
 
-  /* ── Generate positioning statement ────────────────────── */
+  /* ── Generate #1 result from description + audience ────── */
   qs('vw-generate-positioning')?.addEventListener('click', async () => {
     const btn = qs('vw-generate-positioning');
-    const posEl = qs('profile-positioning');
-    if (!btn || !posEl) return;
+    const elevatorEl = qs('profile-elevator');
+    if (!btn || !elevatorEl) return;
 
-    const content_niche  = qs('profile-niche')?.value.trim()    || '';
-    const audience_role  = qs('profile-audience')?.value.trim() || '';
-    const audience_pain  = qs('profile-pain')?.value.trim()     || '';
+    const brand_description   = qs('profile-description')?.value.trim() || '';
+    const audience_description = qs('profile-audience')?.value.trim()   || '';
 
-    if (!content_niche && !audience_role) {
-      showStatus(qs('vw-basics-status'), 'Add your niche or audience first', true);
+    if (!brand_description && !audience_description) {
+      showStatus(qs('vw-basics-status'), 'Add your description or audience first', true);
       return;
     }
 
@@ -272,11 +284,11 @@ async function init() {
       const r = await fetch('/api/profile/generate-positioning', {
         method: 'POST',
         headers: apiHeaders(),
-        body: JSON.stringify({ content_niche, audience_role, audience_pain }),
+        body: JSON.stringify({ brand_description, audience_description }),
       });
       const d = await r.json();
-      if (d.ok && d.business_positioning) {
-        posEl.value = d.business_positioning;
+      if (d.ok && d.elevator_main_result) {
+        elevatorEl.value = d.elevator_main_result;
       } else {
         showStatus(qs('vw-basics-status'), 'Generation failed — try again', true);
       }
@@ -497,9 +509,9 @@ async function init() {
         // these fields, so we always update them (not just when blank).
         if (d.profile) {
           const fieldMap = {
-            'profile-niche':       d.profile.content_niche,
-            'profile-audience':    d.profile.audience_role,
-            'profile-positioning': d.profile.business_positioning,
+            'profile-description': d.profile.brand_description,
+            'profile-audience':    d.profile.audience_description,
+            'profile-elevator':    d.profile.elevator_main_result,
           };
           let updatedCount = 0;
           Object.entries(fieldMap).forEach(([elId, val]) => {

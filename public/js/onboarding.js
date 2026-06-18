@@ -170,9 +170,8 @@ const Onboarding = (() => {
         method:  'POST',
         headers: apiHeaders(),
         body:    JSON.stringify({
-          content_niche: val,
-          audience_role: val,
-          audience_pain: val,
+          brand_description: val,
+          audience_description: val,
         }),
       }).catch(() => {});
     }
@@ -306,7 +305,7 @@ const Onboarding = (() => {
     .then(data => {
       if (!data.ok) return;
       const fields = {};
-      ['content_niche', 'audience_role', 'audience_pain', 'contrarian_view', 'business_positioning']
+      ['brand_description', 'elevator_main_result', 'audience_description', 'brand_core_beliefs']
         .forEach(k => { if (data[k]) fields[k] = data[k]; });
       if (Object.keys(fields).length === 0) return;
       fetch('/api/profile', {
@@ -450,11 +449,9 @@ const Onboarding = (() => {
     if (state.writingSample) {
       qPayload.writing_samples = state.writingSample;
     }
-    // Hot take (optional contrarian view) — saves to both columns so either
-    // prompt builder path can read it without a join.
+    // Hot take (optional contrarian view) — saved as first entry in brand_core_beliefs array.
     if (state.hotTake) {
-      qPayload.onboarding_q1   = state.hotTake;
-      qPayload.contrarian_view = state.hotTake;
+      qPayload.brand_core_beliefs = JSON.stringify([state.hotTake]);
     }
     // Seed starter CTAs so the generation engine never has to invent them.
     // buildVoiceDNABlock() has a hard rule: "never invent a CTA" — this satisfies it
@@ -568,7 +565,7 @@ const Onboarding = (() => {
     if (voiceBadgeEl) {
       const fp   = safeParseJSON(freshProfile.voice_fingerprint, {});
       const tone = fp.tone
-        || freshProfile.content_niche
+        || freshProfile.brand_description
         || (state.role && state.role !== 'other' ? ROLE_LABELS[state.role] : null)
         || 'your voice';
       voiceBadgeEl.textContent = `Voice: ${tone}`;

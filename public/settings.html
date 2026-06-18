@@ -142,43 +142,37 @@
             <p class="vw-stage-subtitle">Start with your niche and audience — then generate a one-sentence positioning statement. Used in every post Scouthook generates.</p>
           </div>
 
-          <div class="vw-field-grid">
-            <div class="profile-field">
-              <label class="field-label" for="profile-niche">Your niche</label>
-              <input type="text" id="profile-niche" class="field-input"
-                     placeholder="e.g. B2B SaaS, executive coaching, DTC brands" style="width:100%" />
-              <p class="field-helper">One broad category label. Stage 2 captures the specific angles within it.</p>
-            </div>
-            <div class="profile-field">
-              <label class="field-label" for="profile-audience">Who you write for</label>
-              <input type="text" id="profile-audience" class="field-input"
-                     placeholder="e.g. B2B founders doing $1M–$10M ARR" style="width:100%" />
-              <p class="field-helper">The specific role or profile of your ideal reader.</p>
-            </div>
+          <div class="profile-field">
+            <label class="field-label" for="profile-description">What you do and who you serve</label>
+            <input type="text" id="profile-description" class="field-input"
+                   placeholder='e.g. "I help B2B SaaS founders build repeatable revenue systems"'
+                   style="width:100%" />
+            <p class="field-helper">One sentence covering what you do and who you help.</p>
           </div>
 
           <div class="profile-field">
-            <label class="field-label" for="profile-pain">What keeps your audience up at night?</label>
-            <textarea id="profile-pain" class="field-textarea profile-textarea-sm"
-                      placeholder="e.g. Revenue feels unpredictable and dependent on them showing up"></textarea>
+            <label class="field-label" for="profile-audience">Your audience</label>
+            <textarea id="profile-audience" class="field-textarea profile-textarea-sm"
+                      placeholder="e.g. Series A SaaS founders who have product-market fit but haven't built a repeatable sales motion yet. They're doing $1M–$3M ARR and closing deals through founder-led sales."></textarea>
+            <p class="field-helper">2–4 sentences: who they are, their role, situation, and context.</p>
           </div>
 
           <div class="profile-field">
             <div class="vw-field-label-row">
-              <label class="field-label" for="profile-positioning">Your positioning statement</label>
+              <label class="field-label" for="profile-elevator">Your #1 result</label>
               <button id="vw-generate-positioning" class="vw-generate-btn" type="button">✦ Generate</button>
             </div>
-            <input type="text" id="profile-positioning" class="field-input"
-                   placeholder='e.g. "I help B2B founders close enterprise contracts without a sales team"'
+            <input type="text" id="profile-elevator" class="field-input"
+                   placeholder='e.g. "Help founders close enterprise deals without a sales team"'
                    style="width:100%" />
-            <p class="field-helper">How you help your clients — in one sentence. Auto-generate from the fields above, or type your own.</p>
+            <p class="field-helper">The #1 transformation you deliver — in one sentence. Auto-generate from the fields above, or type your own.</p>
           </div>
 
           <div class="profile-field">
-            <label class="field-label" for="profile-contrarian">Your contrarian view</label>
-            <textarea id="profile-contrarian" class="field-textarea profile-textarea-sm"
-                      placeholder="e.g. Most founders don't have a sales problem — they have a positioning problem"></textarea>
-            <p class="field-helper">Your hot take. Used to generate Contrarian archetype posts.</p>
+            <label class="field-label" for="profile-beliefs">Your core beliefs</label>
+            <textarea id="profile-beliefs" class="field-textarea profile-textarea-sm"
+                      placeholder="One belief per line. e.g.&#10;Most founders don't have a sales problem — they have a positioning problem&#10;Consistency beats virality every time"></textarea>
+            <p class="field-helper">Your contrarian takes and hot opinions. One per line. Used to generate Contrarian and Myth-busting posts.</p>
           </div>
 
           <div class="profile-field">

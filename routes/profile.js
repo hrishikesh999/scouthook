@@ -18,31 +18,28 @@ router.get('/:user_id?', async (req, res) => {
   // Used by voice-dna.html to display a personal LinkedIn profile's extracted DNA.
   const requestedProfileId = req.query.profile_id ? Number(req.query.profile_id) : null;
 
+  const PROFILE_SELECT = `
+    SELECT id, display_name, avatar_url,
+           brand_description, brand_industry, brand_personality_traits, brand_emotional_tone,
+           elevator_main_result, elevator_mechanism, brand_archetype, brand_core_beliefs,
+           brand_phrases_to_use, brand_story_origin, brand_voice_profile_json,
+           audience_description, audience_goals, audience_obstacles,
+           audience_core_beliefs_market, audience_buying_stage, audience_market_sophistication,
+           audience_profile_json,
+           voice_fingerprint, writing_samples, onboarding_complete,
+           website_url, website_summary,
+           onboarding_q2, onboarding_q3,
+           authority_statements, cta_library, content_principles, content_themes,
+           voice_extraction_quality, voice_profile_completion_pct,
+           input_examples, voice_refinements, content_pillars,
+           user_archetype_preference
+  `;
+
   const profileQuery = requestedProfileId
-    ? db.prepare(`
-        SELECT id, display_name, avatar_url,
-               audience_role, audience_pain, content_niche, contrarian_view,
-               voice_fingerprint, writing_samples, onboarding_complete,
-               business_positioning, website_url, website_summary,
-               onboarding_q1, onboarding_q2, onboarding_q3,
-               authority_statements, cta_library, content_principles, content_themes,
-               voice_extraction_quality, voice_profile_completion_pct,
-               input_examples, voice_refinements, content_pillars,
-               user_archetype_preference
-        FROM profiles WHERE id = ? AND workspace_id = ?
-      `).get(requestedProfileId, tenantId)
-    : db.prepare(`
-        SELECT id, display_name, avatar_url,
-               audience_role, audience_pain, content_niche, contrarian_view,
-               voice_fingerprint, writing_samples, onboarding_complete,
-               business_positioning, website_url, website_summary,
-               onboarding_q1, onboarding_q2, onboarding_q3,
-               authority_statements, cta_library, content_principles, content_themes,
-               voice_extraction_quality, voice_profile_completion_pct,
-               input_examples, voice_refinements, content_pillars,
-               user_archetype_preference
-        FROM profiles WHERE workspace_id = ? AND is_default = true
-      `).get(tenantId);
+    ? db.prepare(`${PROFILE_SELECT} FROM profiles WHERE id = ? AND workspace_id = ?`)
+        .get(requestedProfileId, tenantId)
+    : db.prepare(`${PROFILE_SELECT} FROM profiles WHERE workspace_id = ? AND is_default = true`)
+        .get(tenantId);
 
   let userRow, wsRow, profileRow;
   try {
@@ -66,10 +63,27 @@ router.get('/:user_id?', async (req, res) => {
       id:                           profileRow.id,
       display_name:                 profileRow.display_name   || null,
       avatar_url:                   profileRow.avatar_url     || null,
-      audience_role:                profileRow.audience_role,
-      audience_pain:                profileRow.audience_pain,
-      content_niche:                profileRow.content_niche,
-      contrarian_view:              profileRow.contrarian_view,
+      // Brand Voice
+      brand_description:            profileRow.brand_description        || null,
+      brand_industry:               profileRow.brand_industry           || null,
+      brand_personality_traits:     profileRow.brand_personality_traits || null,
+      brand_emotional_tone:         profileRow.brand_emotional_tone     || null,
+      elevator_main_result:         profileRow.elevator_main_result     || null,
+      elevator_mechanism:           profileRow.elevator_mechanism       || null,
+      brand_archetype:              profileRow.brand_archetype          || null,
+      brand_core_beliefs:           profileRow.brand_core_beliefs       || null,
+      brand_phrases_to_use:         profileRow.brand_phrases_to_use     || null,
+      brand_story_origin:           profileRow.brand_story_origin       || null,
+      brand_voice_profile_json:     profileRow.brand_voice_profile_json || null,
+      // Audience
+      audience_description:         profileRow.audience_description         || null,
+      audience_goals:               profileRow.audience_goals               || null,
+      audience_obstacles:           profileRow.audience_obstacles           || null,
+      audience_core_beliefs_market: profileRow.audience_core_beliefs_market || null,
+      audience_buying_stage:        profileRow.audience_buying_stage        || null,
+      audience_market_sophistication: profileRow.audience_market_sophistication || null,
+      audience_profile_json:        profileRow.audience_profile_json        || null,
+      // Voice DNA
       writing_samples:              profileRow.writing_samples   || null,
       has_fingerprint:              !!profileRow.voice_fingerprint,
       voice_fingerprint:            profileRow.voice_fingerprint || null,
@@ -80,10 +94,8 @@ router.get('/:user_id?', async (req, res) => {
       brand_logo:                   wsRow?.brand_logo   || null,
       user_role:                    userRow?.user_role  || null,
       onboarding_complete:          !!profileRow.onboarding_complete,
-      business_positioning:         profileRow.business_positioning || null,
       website_url:                  profileRow.website_url          || null,
       website_summary:              profileRow.website_summary      || null,
-      onboarding_q1:                profileRow.onboarding_q1        || null,
       onboarding_q2:                profileRow.onboarding_q2        || null,
       onboarding_q3:                profileRow.onboarding_q3        || null,
       authority_statements:         profileRow.authority_statements || null,
@@ -112,29 +124,43 @@ router.post('/', async (req, res) => {
   const tenantId = req.tenantId;
 
   const {
-    writing_samples, contrarian_view, audience_role, audience_pain, content_niche,
+    writing_samples,
+    brand_description, brand_industry, brand_personality_traits, brand_emotional_tone,
+    elevator_main_result, elevator_mechanism, brand_archetype, brand_core_beliefs,
+    brand_phrases_to_use, brand_story_origin, brand_voice_profile_json,
+    audience_description, audience_goals, audience_obstacles,
+    audience_core_beliefs_market, audience_buying_stage, audience_market_sophistication,
+    audience_profile_json,
     brand_bg, brand_accent, brand_text, brand_name, brand_logo,
-    user_role, onboarding_complete, business_positioning, website_url, goal,
+    user_role, onboarding_complete, website_url,
     website_summary, website_extracted_at,
-    onboarding_q1, onboarding_q2, onboarding_q3, onboarding_q_completed_at,
+    onboarding_q2, onboarding_q3, onboarding_q_completed_at,
     onboarding_completed_at,
     authority_statements, cta_library, content_principles, content_themes,
     content_pillars,
   } = req.body;
 
-  const hasVoiceDNAField = website_summary || onboarding_q1 || onboarding_q2 || onboarding_q3
+  const hasVoiceDNAField = website_summary || onboarding_q2 || onboarding_q3
     || authority_statements || cta_library || content_principles || content_themes;
 
-  if (!audience_role && !audience_pain && !content_niche && !writing_samples && !contrarian_view
+  const hasBrandVoiceField = brand_description || brand_industry || brand_personality_traits
+    || brand_emotional_tone || elevator_main_result || elevator_mechanism || brand_archetype
+    || brand_core_beliefs || brand_phrases_to_use || brand_story_origin || brand_voice_profile_json;
+
+  const hasAudienceField = audience_description || audience_goals || audience_obstacles
+    || audience_core_beliefs_market || audience_buying_stage || audience_market_sophistication
+    || audience_profile_json;
+
+  if (!writing_samples && !hasBrandVoiceField && !hasAudienceField
       && !brand_bg && !brand_accent && !brand_text && !brand_name && brand_logo === undefined
-      && user_role === undefined && onboarding_complete === undefined && !business_positioning
-      && !website_url && !goal && !hasVoiceDNAField && !content_pillars) {
+      && user_role === undefined && onboarding_complete === undefined
+      && !website_url && !hasVoiceDNAField && !content_pillars) {
     return res.status(400).json({ ok: false, error: 'no_fields_provided' });
   }
 
   // Fetch brand profile — needed for change detection and profileId routing
   const brandProfile = await db.prepare(
-    'SELECT id, writing_samples, business_positioning, onboarding_complete FROM profiles WHERE workspace_id = ? AND is_default = true'
+    'SELECT id, writing_samples, onboarding_complete FROM profiles WHERE workspace_id = ? AND is_default = true'
   ).get(tenantId);
 
   if (!brandProfile) {
@@ -175,37 +201,54 @@ router.post('/', async (req, res) => {
     );
   }
 
-  // 3. Voice DNA + positioning → profiles (COALESCE preserves fields not in this request)
+  // 3. Voice DNA + Brand Voice + Audience → profiles (COALESCE preserves fields not in this request)
   await db.prepare(`
     UPDATE profiles SET
-      writing_samples           = COALESCE(?, writing_samples),
-      contrarian_view           = COALESCE(?, contrarian_view),
-      audience_role             = COALESCE(?, audience_role),
-      audience_pain             = COALESCE(?, audience_pain),
-      content_niche             = COALESCE(?, content_niche),
-      business_positioning      = COALESCE(?, business_positioning),
-      website_url               = COALESCE(?, website_url),
-      goal                      = COALESCE(?, goal),
-      website_summary           = COALESCE(?, website_summary),
-      website_extracted_at      = COALESCE(?, website_extracted_at),
-      onboarding_q1             = COALESCE(?, onboarding_q1),
-      onboarding_q2             = COALESCE(?, onboarding_q2),
-      onboarding_q3             = COALESCE(?, onboarding_q3),
-      onboarding_q_completed_at = COALESCE(?, onboarding_q_completed_at),
-      onboarding_completed_at   = COALESCE(?, onboarding_completed_at),
-      authority_statements      = COALESCE(?, authority_statements),
-      cta_library               = COALESCE(?, cta_library),
-      content_principles        = COALESCE(?, content_principles),
-      content_themes            = COALESCE(?, content_themes),
-      content_pillars           = COALESCE(?, content_pillars),
-      onboarding_complete       = COALESCE(?, onboarding_complete),
-      updated_at                = CURRENT_TIMESTAMP
+      writing_samples                = COALESCE(?, writing_samples),
+      brand_description              = COALESCE(?, brand_description),
+      brand_industry                 = COALESCE(?, brand_industry),
+      brand_personality_traits       = COALESCE(?, brand_personality_traits),
+      brand_emotional_tone           = COALESCE(?, brand_emotional_tone),
+      elevator_main_result           = COALESCE(?, elevator_main_result),
+      elevator_mechanism             = COALESCE(?, elevator_mechanism),
+      brand_archetype                = COALESCE(?, brand_archetype),
+      brand_core_beliefs             = COALESCE(?, brand_core_beliefs),
+      brand_phrases_to_use           = COALESCE(?, brand_phrases_to_use),
+      brand_story_origin             = COALESCE(?, brand_story_origin),
+      brand_voice_profile_json       = COALESCE(?, brand_voice_profile_json),
+      audience_description           = COALESCE(?, audience_description),
+      audience_goals                 = COALESCE(?, audience_goals),
+      audience_obstacles             = COALESCE(?, audience_obstacles),
+      audience_core_beliefs_market   = COALESCE(?, audience_core_beliefs_market),
+      audience_buying_stage          = COALESCE(?, audience_buying_stage),
+      audience_market_sophistication = COALESCE(?, audience_market_sophistication),
+      audience_profile_json          = COALESCE(?, audience_profile_json),
+      website_url                    = COALESCE(?, website_url),
+      website_summary                = COALESCE(?, website_summary),
+      website_extracted_at           = COALESCE(?, website_extracted_at),
+      onboarding_q2                  = COALESCE(?, onboarding_q2),
+      onboarding_q3                  = COALESCE(?, onboarding_q3),
+      onboarding_q_completed_at      = COALESCE(?, onboarding_q_completed_at),
+      onboarding_completed_at        = COALESCE(?, onboarding_completed_at),
+      authority_statements           = COALESCE(?, authority_statements),
+      cta_library                    = COALESCE(?, cta_library),
+      content_principles             = COALESCE(?, content_principles),
+      content_themes                 = COALESCE(?, content_themes),
+      content_pillars                = COALESCE(?, content_pillars),
+      onboarding_complete            = COALESCE(?, onboarding_complete),
+      updated_at                     = CURRENT_TIMESTAMP
     WHERE id = ?
   `).run(
-    writing_samples || null, contrarian_view || null, audience_role || null, audience_pain || null,
-    content_niche || null, business_positioning || null, website_url || null, goal || null,
-    website_summary || null, website_extracted_at || null,
-    onboarding_q1 || null, onboarding_q2 || null, onboarding_q3 || null,
+    writing_samples || null,
+    brand_description || null, brand_industry || null, brand_personality_traits || null,
+    brand_emotional_tone || null, elevator_main_result || null, elevator_mechanism || null,
+    brand_archetype || null, brand_core_beliefs || null, brand_phrases_to_use || null,
+    brand_story_origin || null, brand_voice_profile_json || null,
+    audience_description || null, audience_goals || null, audience_obstacles || null,
+    audience_core_beliefs_market || null, audience_buying_stage || null,
+    audience_market_sophistication || null, audience_profile_json || null,
+    website_url || null, website_summary || null, website_extracted_at || null,
+    onboarding_q2 || null, onboarding_q3 || null,
     onboarding_q_completed_at || null, onboarding_completed_at || null,
     authority_statements || null, cta_library || null, content_principles || null,
     content_themes || null, content_pillars || null,
@@ -248,7 +291,7 @@ router.post('/', async (req, res) => {
   } else if (hasVoiceDNAField) {
     // 4b. Voice DNA extraction when Q&A answers arrive (fire-and-forget)
     const { extractVoiceDNAFromQA, calculateCompletionPct } = require('../services/voiceExtraction');
-    const hasNewQA = onboarding_q1 || onboarding_q2 || onboarding_q3;
+    const hasNewQA = onboarding_q2 || onboarding_q3;
     if (hasNewQA) {
       extractVoiceDNAFromQA(profileId).catch(err =>
         console.error('[profile] extractVoiceDNAFromQA failed (non-fatal):', err.message)
@@ -330,11 +373,10 @@ Website content:
 ${truncated}
 
 Return a JSON object with these fields (concise):
-- content_niche: What this person/business writes or talks about professionally. 2-4 word label. E.g. "B2B SaaS growth" or "executive leadership coaching"
-- audience_role: Who their ideal client is. E.g. "Founders and sales leaders at growing startups"
-- audience_pain: The main problem their audience faces (only if clearly inferable)
-- contrarian_view: A strong opinion or unconventional stance visible on the site (only if clearly inferable)
-- business_positioning: A single sentence — what this person does and for whom. E.g. "I help DTC founders scale from $1M to $10M revenue without hiring a big agency." (only if clearly inferable from the site)
+- brand_description: One sentence — what this person/business does and who they serve. E.g. "I help DTC founders scale from $1M to $10M revenue without hiring a big agency."
+- elevator_main_result: The #1 transformation or outcome they deliver (only if clearly inferable). E.g. "Add $1M ARR in 12 months"
+- audience_description: 1-2 sentences describing their ideal client — who they are, their role, situation. E.g. "B2B SaaS founders at Series A who need to build repeatable sales processes."
+- brand_core_beliefs: A JSON array of 1-2 strong opinions or contrarian stances visible on the site (only if clearly inferable). E.g. ["Most agencies overpromise and underdeliver", "Consistency beats virality every time"]
 
 Return null for any field you cannot confidently infer. Return only the JSON object, no other text.`,
       }],
@@ -349,10 +391,14 @@ Return null for any field you cannot confidently infer. Return only the JSON obj
       // Malformed JSON — return empty (client falls back silently)
     }
 
+    // Ensure brand_core_beliefs is stored as a JSON string
+    if (Array.isArray(extracted.brand_core_beliefs)) {
+      extracted.brand_core_beliefs = JSON.stringify(extracted.brand_core_beliefs);
+    }
+
     const summaryParts = [];
-    if (extracted.content_niche) summaryParts.push(extracted.content_niche);
-    if (extracted.audience_pain) summaryParts.push(`Their audience struggles with: ${extracted.audience_pain}`);
-    if (extracted.contrarian_view) summaryParts.push(extracted.contrarian_view);
+    if (extracted.brand_description)    summaryParts.push(extracted.brand_description);
+    if (extracted.audience_description) summaryParts.push(`Audience: ${extracted.audience_description}`);
     const website_summary = summaryParts.join(' ') || null;
 
     // Persist website_summary to workspace's default profile (fire-and-forget)
@@ -393,19 +439,26 @@ router.post('/suggest-themes', async (req, res) => {
 
   try {
     const profile = await db.prepare(`
-      SELECT content_niche, website_summary, onboarding_q1, onboarding_q2, onboarding_q3, audience_role
+      SELECT brand_description, website_summary, brand_core_beliefs,
+             audience_description, onboarding_q2, onboarding_q3
       FROM profiles WHERE workspace_id = ? AND is_default = true
     `).get(req.tenantId);
 
     if (!profile) return res.json({ ok: true, themes: [] });
 
+    let beliefsText = '';
+    try {
+      const beliefs = JSON.parse(profile.brand_core_beliefs || '[]');
+      if (beliefs.length) beliefsText = beliefs[0];
+    } catch { /* ignore */ }
+
     const context = [
-      profile.content_niche   && `Niche: ${profile.content_niche}`,
-      profile.website_summary && `Website summary: ${profile.website_summary}`,
-      profile.audience_role   && `Audience: ${profile.audience_role}`,
-      profile.onboarding_q1  && `POV (Q1): ${profile.onboarding_q1}`,
-      profile.onboarding_q2  && `Voice (Q2): ${profile.onboarding_q2}`,
-      profile.onboarding_q3  && `Proof (Q3): ${profile.onboarding_q3}`,
+      profile.brand_description    && `What they do: ${profile.brand_description}`,
+      profile.website_summary      && `Website summary: ${profile.website_summary}`,
+      profile.audience_description && `Audience: ${profile.audience_description}`,
+      beliefsText                  && `POV: ${beliefsText}`,
+      profile.onboarding_q2        && `Voice (Q2): ${profile.onboarding_q2}`,
+      profile.onboarding_q3        && `Proof (Q3): ${profile.onboarding_q3}`,
     ].filter(Boolean).join('\n');
 
     if (!context.trim()) return res.json({ ok: true, themes: [] });
@@ -455,9 +508,9 @@ Return ONLY a JSON array of strings:
 // Returns the suggestion — does NOT save to DB. Client saves via POST /api/profile.
 // ---------------------------------------------------------------------------
 router.post('/generate-positioning', async (req, res) => {
-  const { content_niche, audience_role, audience_pain } = req.body;
-  if (!content_niche && !audience_role) {
-    return res.status(400).json({ ok: false, error: 'missing_fields', message: 'Provide at least content_niche or audience_role' });
+  const { brand_description, audience_description } = req.body;
+  if (!brand_description && !audience_description) {
+    return res.status(400).json({ ok: false, error: 'missing_fields', message: 'Provide at least brand_description or audience_description' });
   }
 
   const Anthropic = require('@anthropic-ai/sdk');
@@ -473,19 +526,18 @@ router.post('/generate-positioning', async (req, res) => {
       max_tokens: 100,
       messages: [{
         role: 'user',
-        content: `Generate a one-sentence LinkedIn positioning statement.
+        content: `Generate a one-sentence elevator pitch describing the #1 result this person delivers.
 
-Niche: ${content_niche || 'not specified'}
-Audience: ${audience_role || 'not specified'}
-Their pain: ${audience_pain || 'not specified'}
+What they do: ${brand_description || 'not specified'}
+Their audience: ${audience_description || 'not specified'}
 
 Format: "I help [specific audience] [achieve specific result] [without/by doing X]."
-Be concrete — use the exact audience and niche provided. No preamble, no quotes around the sentence.`,
+Be concrete and specific. No preamble, no quotes around the sentence.`,
       }],
     });
 
-    const positioning = (message.content[0]?.text || '').trim();
-    return res.json({ ok: true, business_positioning: positioning });
+    const result = (message.content[0]?.text || '').trim();
+    return res.json({ ok: true, elevator_main_result: result });
   } catch (err) {
     console.error('[profile] generate-positioning error:', err.message);
     return res.status(500).json({ ok: false, error: 'generation_failed' });
@@ -554,8 +606,8 @@ router.post('/:id/voice-setup', async (req, res) => {
     return res.status(400).json({ ok: false, error: 'invalid_profile_id' });
   }
 
-  const { writingSamples, q1, q2 } = req.body;
-  if (!writingSamples && !q1 && !q2) {
+  const { writingSamples, q2 } = req.body;
+  if (!writingSamples && !q2) {
     return res.status(400).json({ ok: false, error: 'no_fields_provided' });
   }
 
@@ -571,11 +623,10 @@ router.post('/:id/voice-setup', async (req, res) => {
     await db.prepare(`
       UPDATE profiles SET
         writing_samples = COALESCE(?, writing_samples),
-        onboarding_q1   = COALESCE(?, onboarding_q1),
         onboarding_q2   = COALESCE(?, onboarding_q2),
         updated_at      = CURRENT_TIMESTAMP
       WHERE id = ?
-    `).run(writingSamples || null, q1 || null, q2 || null, profileId);
+    `).run(writingSamples || null, q2 || null, profileId);
 
     const { extractVoiceDNAFromQA } = require('../services/voiceExtraction');
     const { generateContentPillars, generateInputExamples } = require('../services/inputCoach');
@@ -617,8 +668,12 @@ router.put('/person/:id', async (req, res) => {
     if (!existing) return res.status(404).json({ ok: false, error: 'not_found' });
 
     const allowed = [
-      'content_niche', 'audience_role', 'audience_pain',
-      'contrarian_view', 'content_pillars', 'content_themes',
+      'brand_description', 'brand_industry', 'brand_personality_traits', 'brand_emotional_tone',
+      'elevator_main_result', 'elevator_mechanism', 'brand_archetype', 'brand_core_beliefs',
+      'brand_phrases_to_use', 'brand_story_origin',
+      'audience_description', 'audience_goals', 'audience_obstacles',
+      'audience_core_beliefs_market', 'audience_buying_stage', 'audience_market_sophistication',
+      'content_pillars', 'content_themes',
     ];
 
     const updates = {};
@@ -643,6 +698,70 @@ router.put('/person/:id', async (req, res) => {
   } catch (err) {
     console.error('[profile/person/put] Error:', err.message);
     return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/profile/brand-voice/generate
+// Runs the Brand Voice AI prompt against current profile fields.
+// mode=prefill: returns AI-drafted Step 2 suggestions (does not save).
+// mode=final: returns full brand_voice_profile JSON and saves to DB.
+// ---------------------------------------------------------------------------
+router.post('/brand-voice/generate', async (req, res) => {
+  const { tenantId } = req;
+  const { mode = 'prefill' } = req.body;
+
+  try {
+    const profile = await db.prepare(
+      'SELECT * FROM profiles WHERE workspace_id = ? AND is_default = true'
+    ).get(tenantId);
+    if (!profile) return res.status(404).json({ ok: false, error: 'no_profile' });
+
+    const { generateBrandVoiceProfile } = require('../lib/prompts/brandVoicePrompt');
+    const result = await generateBrandVoiceProfile(profile, mode);
+
+    if (mode === 'final' && result?.brand_voice_profile_json) {
+      await db.prepare(
+        'UPDATE profiles SET brand_voice_profile_json = ?, updated_at = CURRENT_TIMESTAMP WHERE workspace_id = ? AND is_default = true'
+      ).run(result.brand_voice_profile_json, tenantId);
+    }
+
+    return res.json({ ok: true, ...result });
+  } catch (err) {
+    console.error('[profile/brand-voice/generate] error:', err.message);
+    return res.status(500).json({ ok: false, error: 'generation_failed' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/profile/audience/generate
+// Runs the Audience AI prompt against current profile fields.
+// mode=prefill: returns AI-drafted Step 2 suggestions (does not save).
+// mode=final: returns full audience profile JSON and saves to DB.
+// ---------------------------------------------------------------------------
+router.post('/audience/generate', async (req, res) => {
+  const { tenantId } = req;
+  const { mode = 'prefill' } = req.body;
+
+  try {
+    const profile = await db.prepare(
+      'SELECT * FROM profiles WHERE workspace_id = ? AND is_default = true'
+    ).get(tenantId);
+    if (!profile) return res.status(404).json({ ok: false, error: 'no_profile' });
+
+    const { generateAudienceProfile } = require('../lib/prompts/audiencePrompt');
+    const result = await generateAudienceProfile(profile, mode);
+
+    if (mode === 'final' && result?.audience_profile_json) {
+      await db.prepare(
+        'UPDATE profiles SET audience_profile_json = ?, updated_at = CURRENT_TIMESTAMP WHERE workspace_id = ? AND is_default = true'
+      ).run(result.audience_profile_json, tenantId);
+    }
+
+    return res.json({ ok: true, ...result });
+  } catch (err) {
+    console.error('[profile/audience/generate] error:', err.message);
+    return res.status(500).json({ ok: false, error: 'generation_failed' });
   }
 });
 

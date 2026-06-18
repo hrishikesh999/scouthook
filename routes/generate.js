@@ -924,14 +924,23 @@ router.post('/chat-intake', async (req, res) => {
 
   try {
     const profile = await db.prepare(`
-      SELECT content_niche, audience_role, audience_pain, contrarian_view,
-             authority_statements, voice_fingerprint, onboarding_q2
+      SELECT brand_description, audience_description, audience_obstacles,
+             brand_core_beliefs, authority_statements, voice_fingerprint, onboarding_q2
       FROM   profiles WHERE workspace_id = ? AND is_default = true
     `).get(tenantId);
 
-    const niche    = profile?.content_niche || '';
-    const audience = profile?.audience_role || '';
-    const pain     = profile?.audience_pain || '';
+    const brandDesc  = profile?.brand_description || '';
+    const audience   = profile?.audience_description || '';
+    let   pain       = '';
+    try {
+      const obstacles = JSON.parse(profile?.audience_obstacles || '[]');
+      pain = obstacles[0] || '';
+    } catch {}
+    let contrarianTake = '';
+    try {
+      const beliefs = JSON.parse(profile?.brand_core_beliefs || '[]');
+      contrarianTake = beliefs[0] || '';
+    } catch {}
     const q2voice  = profile?.onboarding_q2 || '';
     let authStatements = [];
     try { authStatements = JSON.parse(profile?.authority_statements || '[]').slice(0, 2); } catch {}
@@ -953,16 +962,17 @@ router.post('/chat-intake', async (req, res) => {
       : '';
 
     const profileCtx = [
-      niche    && `Creator niche: ${niche}`,
-      audience && `Their audience: ${audience}`,
-      pain     && `Audience pain: ${pain}`,
+      brandDesc      && `What they do: ${brandDesc}`,
+      audience       && `Their audience: ${audience}`,
+      pain           && `Audience challenge: ${pain}`,
+      contrarianTake && `Their POV: ${contrarianTake}`,
       pos.stands_for && `Stands for: ${pos.stands_for}`,
       pos.outcome    && `Outcome they deliver: ${pos.outcome}`,
       authStatements.length && `Proof points: ${authStatements.join('; ')}`,
       q2voice  && `Their natural voice (from an interview): "${q2voice.slice(0, 200)}"`,
     ].filter(Boolean).join('\n');
 
-    const prompt = `You are a world-class LinkedIn editor coaching a ${niche || 'professional'} creator to write a top 1% post.
+    const prompt = `You are a world-class LinkedIn editor coaching a ${brandDesc || 'professional'} creator to write a top 1% post.
 
 CREATOR PROFILE:
 ${profileCtx}

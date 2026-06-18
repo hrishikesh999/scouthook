@@ -106,9 +106,9 @@ async function extractVoiceDNAFromQA(profileId, options = {}) {
   try {
     const profile = await db.prepare(
       `SELECT website_summary, website_articles_text,
-              onboarding_q1, onboarding_q2, onboarding_q3,
+              onboarding_q2, onboarding_q3,
               voice_fingerprint, authority_statements, banned_patterns,
-              business_positioning, writing_samples
+              brand_core_beliefs, elevator_main_result, writing_samples
        FROM profiles WHERE id = ?`
     ).get(profileId);
 
@@ -117,10 +117,10 @@ async function extractVoiceDNAFromQA(profileId, options = {}) {
       return;
     }
 
-    const { onboarding_q1, onboarding_q2, onboarding_q3 } = profile;
+    const { onboarding_q2, onboarding_q3 } = profile;
 
     // If all Q&A fields are empty, nothing to extract
-    if (!onboarding_q1 && !onboarding_q2 && !onboarding_q3) {
+    if (!onboarding_q2 && !onboarding_q3) {
       await db.prepare(
         `UPDATE profiles SET voice_extraction_source = 'none' WHERE id = ?`
       ).run(profileId);
@@ -156,9 +156,6 @@ async function extractVoiceDNAFromQA(profileId, options = {}) {
     }
 
     if (!extracted || typeof extracted !== 'object') return;
-
-    // Business positioning — derive from positioning.outcome if currently blank
-    const positioningOutcome = (extracted.positioning?.outcome || '').trim() || null;
 
     // Merge into existing voice_fingerprint (preserve existing fields, add new ones)
     const existingFp = safeParseJSON(profile.voice_fingerprint, {});
@@ -216,7 +213,6 @@ async function extractVoiceDNAFromQA(profileId, options = {}) {
       voice_fingerprint: JSON.stringify(mergedFp),
       authority_statements: JSON.stringify(mergedStatements),
       banned_patterns: JSON.stringify(mergedBanned),
-      business_positioning: profile.business_positioning || positioningOutcome,
     };
     const completionPct = calculateCompletionPct(updatedProfile, hasLinkedIn);
 
@@ -227,7 +223,6 @@ async function extractVoiceDNAFromQA(profileId, options = {}) {
          voice_fingerprint            = ?,
          authority_statements         = ?,
          banned_patterns              = ?,
-         business_positioning         = COALESCE(business_positioning, ?),
          voice_extraction_source      = ?,
          voice_extraction_quality     = ?,
          voice_profile_completion_pct = ?,
@@ -237,7 +232,6 @@ async function extractVoiceDNAFromQA(profileId, options = {}) {
       JSON.stringify(mergedFp),
       JSON.stringify(mergedStatements),
       JSON.stringify(mergedBanned),
-      positioningOutcome,
       extractionSource,
       extractionQuality,
       completionPct,
@@ -258,8 +252,15 @@ async function extractVoiceDNAFromQA(profileId, options = {}) {
 function buildQAExtractionPrompt(profile) {
   const {
     user_role, website_summary, website_articles_text,
-    onboarding_q1, onboarding_q2, onboarding_q3, writing_samples,
+    brand_core_beliefs, onboarding_q2, onboarding_q3, writing_samples,
   } = profile;
+
+  // Extract first contrarian belief for the prompt
+  let contrarianTake = null;
+  try {
+    const beliefs = JSON.parse(brand_core_beliefs || '[]');
+    contrarianTake = beliefs[0] || null;
+  } catch { /* ignore */ }
 
   // Build writing signal section — use real writing if available, fall back to Q&A
   const writingSignal = [];
@@ -283,7 +284,7 @@ SIGNAL QUALITY NOTE: ${hasRealWriting
 INPUTS:
 - Role: ${user_role || 'not specified'}
 - Website summary: ${website_summary || 'not provided'}
-- Q1 (their contrarian POV — what their field gets wrong): ${onboarding_q1 || 'skipped'}
+- Contrarian POV (what they believe that others get wrong): ${contrarianTake || 'skipped'}
 - Q2 (their voice — how they'd describe their work to a friend, unguarded): ${onboarding_q2 || 'skipped'}
 - Q3 (a specific result they produced — credibility): ${onboarding_q3 || 'skipped'}
 ${writingSignal.length ? '\n' + writingSignal.join('\n\n') : ''}
@@ -366,10 +367,10 @@ function buildVoiceDNABlock(userProfile) {
   const posLines = [];
   if (pos?.stands_for)          posLines.push(`Stands for: ${pos.stands_for}`);
   if (pos?.pushes_back_against) posLines.push(`Pushes back against: ${pos.pushes_back_against}`);
-  // Only inject pos.audience when audience_role isn't already surfaced separately in the
+  // Only inject pos.audience when audience_description isn't already surfaced separately in the
   // system prompt's AUDIENCE block — avoids two audience descriptions that can contradict.
-  if (pos?.audience && !userProfile.audience_role) posLines.push(`Audience: ${pos.audience}`);
-  else if (!pos?.audience && userProfile.business_positioning) posLines.push(`What they do: ${userProfile.business_positioning}`);
+  if (pos?.audience && !userProfile.audience_description) posLines.push(`Audience: ${pos.audience}`);
+  else if (!pos?.audience && userProfile.elevator_main_result) posLines.push(`What they deliver: ${userProfile.elevator_main_result}`);
   if (pos?.outcome)             posLines.push(`Outcome they deliver: ${pos.outcome}`);
   if (posLines.length)          parts.push(`POSITIONING:\n${posLines.join('\n')}`);
 
@@ -450,14 +451,14 @@ function buildVoiceDNABlock(userProfile) {
 function calculateCompletionPct(userProfile, hasLinkedIn = false) {
   let score = 0;
 
-  if (userProfile.user_role)            score += 5;
-  if (userProfile.website_url)          score += 5;
-  if (userProfile.contrarian_view)      score += 5;
-  if (userProfile.onboarding_q2)        score += 5;
-  if (userProfile.onboarding_q3)        score += 5;
-  if (userProfile.voice_fingerprint)    score += 5;
-  if (userProfile.business_positioning) score += 3;
-  if (userProfile.content_niche)        score += 2;
+  if (userProfile.user_role)              score += 5;
+  if (userProfile.website_url)            score += 5;
+  if (userProfile.brand_core_beliefs)     score += 5;
+  if (userProfile.onboarding_q2)          score += 5;
+  if (userProfile.onboarding_q3)          score += 5;
+  if (userProfile.voice_fingerprint)      score += 5;
+  if (userProfile.elevator_main_result)   score += 3;
+  if (userProfile.brand_description)      score += 2;
 
   // Credit based on character length: 200+ chars = baseline, 600+ chars = richer sample.
   const samplesStr = parseSamplesText(userProfile.writing_samples).trim();
@@ -564,7 +565,7 @@ Example: "Prefers shorter sentences — never more than 15 words in a row."`,
 
 /* ── 5. extractVoiceDNAFromLinkedIn ────────────────────────────────────
    Uses the LinkedIn connection display_name to auto-populate empty profile
-   fields: content_niche, audience_role, business_positioning, content_pillars.
+   fields: brand_description, audience_description, elevator_main_result, content_pillars.
    Only fills fields that are currently blank — never overwrites user data.
    Fire-and-forget safe. Called after OAuth callback and on manual refresh.
    Note: linkedin_headline is not stored in linkedin_connections; this function
@@ -588,10 +589,10 @@ async function extractVoiceDNAFromLinkedIn(profileId) {
 
     // Read current profile
     const profile = await db.prepare(
-      `SELECT content_niche, audience_role, business_positioning, content_pillars,
+      `SELECT brand_description, audience_description, elevator_main_result, content_pillars,
               voice_fingerprint, authority_statements, banned_patterns, writing_samples,
               cta_library, content_principles, website_url,
-              onboarding_q1, onboarding_q2, onboarding_q3, voice_refinements
+              onboarding_q2, onboarding_q3, voice_refinements
        FROM profiles WHERE id = ?`
     ).get(profileId);
 
@@ -607,9 +608,9 @@ Extract the following. Be specific and grounded — do not invent. If you cannot
 
 Return valid JSON only, no commentary:
 {
-  "content_niche": "2-4 word niche label if inferable (e.g. 'B2B SaaS growth', 'executive leadership coaching'), or null",
-  "audience_role": "who they help if inferable, 5-10 words, or null",
-  "business_positioning": "one sentence: what they do and for whom if inferable, or null",
+  "brand_description": "one sentence: what they do and who they serve if inferable, or null",
+  "audience_description": "1-2 sentences describing their ideal audience if inferable, or null",
+  "elevator_main_result": "the #1 result or transformation they deliver if inferable (one sentence), or null",
   "suggested_themes": ["2-3 content themes if inferable — short phrases, or empty array"]
 }`;
 
@@ -632,13 +633,13 @@ Return valid JSON only, no commentary:
 
     const updates = {};
 
-    // Only fill currently blank persona fields
-    if (extracted.content_niche && !profile.content_niche)
-      updates.content_niche = extracted.content_niche;
-    if (extracted.audience_role && !profile.audience_role)
-      updates.audience_role = extracted.audience_role;
-    if (extracted.business_positioning && !profile.business_positioning)
-      updates.business_positioning = extracted.business_positioning;
+    // Only fill currently blank fields
+    if (extracted.brand_description && !profile.brand_description)
+      updates.brand_description = extracted.brand_description;
+    if (extracted.audience_description && !profile.audience_description)
+      updates.audience_description = extracted.audience_description;
+    if (extracted.elevator_main_result && !profile.elevator_main_result)
+      updates.elevator_main_result = extracted.elevator_main_result;
 
     // Content pillars — always additive
     const existingPillars = safeParseJSON(profile.content_pillars, []);

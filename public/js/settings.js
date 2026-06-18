@@ -96,6 +96,106 @@ async function init() {
     });
   }
 
+  /* ── Multi-select dropdown ──────────────────────────────── */
+  function wireMultiSelect(triggerId, menuId, chipsId, items, options, maxSelections) {
+    const trigger        = qs(triggerId);
+    const menu           = qs(menuId);
+    const chipsContainer = qs(chipsId);
+    if (!trigger || !menu || !chipsContainer) return;
+
+    const optionsDiv = menu.querySelector('.vw-multiselect-options');
+
+    // Build checkbox options
+    options.forEach(opt => {
+      const label = document.createElement('label');
+      label.className = 'vw-multiselect-option';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.value = opt;
+      label.appendChild(cb);
+      label.appendChild(document.createTextNode(' ' + opt));
+      optionsDiv.appendChild(label);
+    });
+
+    function updateDisplay() {
+      // Update trigger label
+      const placeholder = trigger.querySelector('.vw-multiselect-placeholder, .vw-multiselect-count');
+      if (items.length === 0) {
+        placeholder.className = 'vw-multiselect-placeholder';
+        placeholder.textContent = 'Select traits…';
+      } else {
+        placeholder.className = 'vw-multiselect-count';
+        placeholder.textContent = items.length + ' selected';
+      }
+
+      // Sync checkbox checked/disabled states
+      optionsDiv.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+        cb.checked = items.includes(cb.value);
+        const lbl = cb.closest('.vw-multiselect-option');
+        const atLimit = items.length >= maxSelections && !cb.checked;
+        lbl.classList.toggle('vw-multiselect-option--disabled', atLimit);
+        cb.disabled = atLimit;
+      });
+
+      // Render chips
+      chipsContainer.innerHTML = '';
+      if (items.length === 0) {
+        const empty = document.createElement('p');
+        empty.className = 'vw-chips-empty';
+        empty.textContent = 'None selected.';
+        chipsContainer.appendChild(empty);
+        return;
+      }
+      items.forEach((item, i) => {
+        const chip = document.createElement('span');
+        chip.className = 'vw-chip';
+        chip.innerHTML = `<span class="vw-chip-text">${escapeHtml(item)}</span>
+          <button class="vw-chip-remove" aria-label="Remove ${escapeHtml(item)}" data-index="${i}" type="button">×</button>`;
+        chipsContainer.appendChild(chip);
+      });
+    }
+
+    // Toggle dropdown open/close
+    trigger.addEventListener('click', () => {
+      const isOpen = !menu.hidden;
+      menu.hidden = isOpen;
+      trigger.setAttribute('aria-expanded', String(!isOpen));
+    });
+
+    // Close when clicking outside
+    document.addEventListener('click', e => {
+      if (!trigger.closest('.vw-multiselect').contains(e.target)) {
+        menu.hidden = true;
+        trigger.setAttribute('aria-expanded', 'false');
+      }
+    });
+
+    // Checkbox change
+    optionsDiv.addEventListener('change', e => {
+      const cb = e.target;
+      if (cb.type !== 'checkbox') return;
+      if (cb.checked) {
+        if (items.length >= maxSelections) { cb.checked = false; return; }
+        items.push(cb.value);
+      } else {
+        const idx = items.indexOf(cb.value);
+        if (idx > -1) items.splice(idx, 1);
+      }
+      updateDisplay();
+    });
+
+    // Chip remove button
+    chipsContainer.addEventListener('click', e => {
+      const btn = e.target.closest('.vw-chip-remove');
+      if (!btn) return;
+      const idx = Number(btn.dataset.index);
+      items.splice(idx, 1);
+      updateDisplay();
+    });
+
+    updateDisplay();
+  }
+
   /* ── Profile save helper ────────────────────────────────── */
   async function saveProfile(payload) {
     const res = await fetch('/api/profile', {
@@ -214,9 +314,16 @@ async function init() {
   let bvTraits  = safeParseJSON(profile.brand_personality_traits, []);
   let bvPhrases = safeParseJSON(profile.brand_phrases_to_use, []);
 
-  const renderBvTraits  = makeChipList('bv-traits-chips',  bvTraits,  () => {});
+  const PERSONALITY_TRAITS = [
+    'Authoritative','Bold','Calm','Caring','Confident','Creative',
+    'Direct','Empathetic','Energetic','Friendly','Fun','Helpful',
+    'Honest','Inspirational','Playful','Professional','Quirky',
+    'Rebellious','Reliable','Sophisticated','Warm',
+  ];
+
+  wireMultiSelect('bv-traits-trigger', 'bv-traits-menu', 'bv-traits-chips', bvTraits, PERSONALITY_TRAITS, 5);
+
   const renderBvPhrases = makeChipList('bv-phrases-chips', bvPhrases, () => {});
-  wireAddChip('bv-traits-input',  'bv-traits-add',  bvTraits,  renderBvTraits);
   wireAddChip('bv-phrases-input', 'bv-phrases-add', bvPhrases, renderBvPhrases);
 
   // ── Brand Voice — populate Step 1 fields ──────────────────────

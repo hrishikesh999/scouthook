@@ -153,9 +153,9 @@
           <!-- Website (feeds extraction) -->
           <div class="profile-field">
             <label class="field-label" for="profile-website">Your website</label>
+            <p class="field-helper">We'll extract your brand info automatically.</p>
             <input type="url" id="profile-website" class="field-input"
                    placeholder="https://yourwebsite.com" autocomplete="url" style="width:100%" />
-            <p class="field-helper">We'll extract your brand info automatically.</p>
           </div>
 
           <!-- Step 1 -->
@@ -163,45 +163,68 @@
             <p class="vw-step-label">Step 1 — Quick capture</p>
 
             <div class="profile-field">
-              <label class="field-label" for="bv-description">What you do and who you serve</label>
+              <label class="field-label" for="bv-description">What do you do?</label>
+              <p class="field-helper">A brief description of what the business does and who it serves.</p>
               <input type="text" id="bv-description" class="field-input"
                      placeholder='e.g. "I help B2B SaaS founders build repeatable revenue systems"'
                      style="width:100%" />
-              <p class="field-helper">One sentence covering what you do and who you help.</p>
             </div>
 
             <div class="profile-field">
-              <label class="field-label" for="bv-industry">Your industry</label>
-              <input type="text" id="bv-industry" class="field-input"
-                     placeholder="e.g. B2B SaaS, Executive Coaching, DTC eCommerce"
-                     style="width:100%" />
+              <label class="field-label" for="bv-industry">What industry are you in?</label>
+              <p class="field-helper">Your primary market or business category.</p>
+              <select id="bv-industry" class="field-input" style="width:100%">
+                <option value="">— Select your industry —</option>
+                <option value="Education, Coaching & Info-Products">Education, Coaching &amp; Info-Products</option>
+                <option value="Business, Consulting & B2B Services">Business, Consulting &amp; B2B Services</option>
+                <option value="Finance, Investing & Wealth">Finance, Investing &amp; Wealth</option>
+                <option value="Health, Wellness & Lifestyle">Health, Wellness &amp; Lifestyle</option>
+                <option value="Home, Living & Real Estate">Home, Living &amp; Real Estate</option>
+                <option value="E-Commerce, D2C & Retail">E-Commerce, D2C &amp; Retail</option>
+                <option value="Technology, SaaS & Digital Products">Technology, SaaS &amp; Digital Products</option>
+                <option value="Manufacturing, Industrial & B2B Tech">Manufacturing, Industrial &amp; B2B Tech</option>
+                <option value="Travel, Hospitality & Events">Travel, Hospitality &amp; Events</option>
+                <option value="Media, Arts & Entertainment">Media, Arts &amp; Entertainment</option>
+                <option value="Startups, Innovation & Venture">Startups, Innovation &amp; Venture</option>
+                <option value="Non-Profit, CSR & Social Impact">Non-Profit, CSR &amp; Social Impact</option>
+                <option value="Government, Public Sector & Institutions">Government, Public Sector &amp; Institutions</option>
+                <option value="Others">Others</option>
+              </select>
             </div>
 
             <div class="profile-field">
-              <label class="field-label">Personality traits <span class="field-optional">(up to 5)</span></label>
-              <div class="vw-chips-area" id="bv-traits-chips" role="group" aria-label="Personality traits"></div>
-              <div class="vw-add-row">
-                <input id="bv-traits-input" class="vw-add-input" type="text"
-                       placeholder="e.g. Bold, Empathetic, Direct…" autocomplete="off" />
-                <button id="bv-traits-add" class="vw-add-btn" type="button">Add</button>
+              <label class="field-label">What's your brand personality like?</label>
+              <p class="field-helper">Select up to 5 traits that best reflect your brand's personality. These control diction, pacing, and style.</p>
+              <div class="vw-multiselect" id="bv-traits-wrap">
+                <button class="vw-multiselect-trigger" type="button" id="bv-traits-trigger" aria-haspopup="listbox" aria-expanded="false">
+                  <span class="vw-multiselect-placeholder" id="bv-traits-placeholder">Select traits…</span>
+                  <svg class="vw-multiselect-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+                </button>
+                <div class="vw-multiselect-menu" id="bv-traits-menu" hidden>
+                  <div class="vw-multiselect-options" role="listbox" aria-multiselectable="true"></div>
+                  <p class="vw-multiselect-limit">Select up to 5 traits</p>
+                </div>
               </div>
-              <p class="field-helper">How your writing sounds and feels to the reader.</p>
+              <div class="vw-chips-area" id="bv-traits-chips" role="group" aria-label="Selected personality traits"></div>
             </div>
 
             <div class="profile-field">
-              <label class="field-label" for="bv-tone">Emotional tone</label>
+              <label class="field-label" for="bv-tone">Target Emotional Tone</label>
+              <p class="field-helper">Choose the overall emotional flavor across channels. This sets the global mood for copy.</p>
               <select id="bv-tone" class="field-input">
                 <option value="">— Select tone —</option>
-                <option value="Empowering">Empowering</option>
-                <option value="Inspirational">Inspirational</option>
-                <option value="Educational">Educational</option>
-                <option value="Analytical">Analytical</option>
-                <option value="Conversational">Conversational</option>
-                <option value="Bold">Bold</option>
                 <option value="Calm">Calm</option>
+                <option value="Confident">Confident</option>
+                <option value="Empathetic">Empathetic</option>
+                <option value="Energetic">Energetic</option>
+                <option value="Inspirational">Inspirational</option>
+                <option value="Playful">Playful</option>
+                <option value="Professional">Professional</option>
+                <option value="Reassuring">Reassuring</option>
+                <option value="Serious">Serious</option>
                 <option value="Urgent">Urgent</option>
+                <option value="Luxury/Elevated">Luxury/Elevated</option>
               </select>
-              <p class="field-helper">The overarching mood of your content.</p>
             </div>
 
             <div class="vw-stage-actions">
@@ -216,66 +239,66 @@
 
             <div class="profile-field">
               <div class="vw-field-label-row">
-                <label class="field-label" for="bv-elevator">Your #1 result</label>
+                <label class="field-label" for="bv-elevator">Elevator Pitch – Main Result / Transformation</label>
                 <button id="bv-elevator-generate" class="vw-generate-btn" type="button">✦ Regenerate</button>
               </div>
+              <p class="field-helper">The #1 transformation your brand delivers (e.g., "Launch high-converting funnels in days, not weeks"). Keep to one sentence.</p>
               <input type="text" id="bv-elevator" class="field-input"
                      placeholder='e.g. "Help founders close enterprise deals without a sales team"'
                      style="width:100%" />
-              <p class="field-helper">The #1 transformation you deliver — in one sentence.</p>
             </div>
 
             <div class="profile-field">
-              <label class="field-label" for="bv-mechanism">How you deliver it</label>
+              <label class="field-label" for="bv-mechanism">Elevator Pitch – Mechanism / Method</label>
+              <p class="field-helper">The proprietary process/system/approach that enables the main result (e.g., "via our AI-assisted layout engine"). Keep to one sentence.</p>
               <input type="text" id="bv-mechanism" class="field-input"
                      placeholder='e.g. "A 90-day positioning sprint using my 3-step Sales Clarity Framework"'
                      style="width:100%" />
-              <p class="field-helper">Your method, framework, or unique process.</p>
             </div>
 
             <div class="profile-field">
-              <label class="field-label" for="bv-archetype">Brand archetype</label>
+              <label class="field-label" for="bv-archetype">Brand Archetype</label>
+              <p class="field-helper">Pick the primary Jungian archetype that fits your brand narrative/voice.</p>
               <select id="bv-archetype" class="field-input">
                 <option value="">— Select archetype —</option>
-                <option value="Hero">Hero</option>
-                <option value="Sage">Sage</option>
-                <option value="Explorer">Explorer</option>
-                <option value="Rebel">Rebel</option>
-                <option value="Creator">Creator</option>
-                <option value="Caregiver">Caregiver</option>
-                <option value="Ruler">Ruler</option>
-                <option value="Magician">Magician</option>
-                <option value="Lover">Lover</option>
-                <option value="Jester">Jester</option>
-                <option value="Everyman">Everyman</option>
                 <option value="Innocent">Innocent</option>
+                <option value="Everyman">Everyman</option>
+                <option value="Hero">Hero</option>
+                <option value="Caregiver">Caregiver</option>
+                <option value="Explorer">Explorer</option>
+                <option value="Rebel/Outlaw">Rebel/Outlaw</option>
+                <option value="Lover">Lover</option>
+                <option value="Creator">Creator</option>
+                <option value="Jester">Jester</option>
+                <option value="Sage">Sage</option>
+                <option value="Magician">Magician</option>
+                <option value="Ruler">Ruler</option>
               </select>
-              <p class="field-helper">The narrative persona that shapes your content angle.</p>
             </div>
 
             <div class="profile-field">
-              <label class="field-label" for="bv-beliefs">Core beliefs</label>
+              <label class="field-label" for="bv-beliefs">Core Beliefs</label>
+              <p class="field-helper">Your contrarian takes, market beliefs, and unpopular truths. One per line. Used for myth-busting and contrarian posts.</p>
               <textarea id="bv-beliefs" class="field-textarea profile-textarea-sm"
                         placeholder="One belief per line. e.g.&#10;Most founders don't have a sales problem — they have a positioning problem&#10;Consistency beats virality every time"></textarea>
-              <p class="field-helper">Your contrarian takes. One per line. Used for Contrarian and Myth-busting posts.</p>
             </div>
 
             <div class="profile-field">
-              <label class="field-label">Signature phrases</label>
+              <label class="field-label">Phrases to Always Use</label>
+              <p class="field-helper">Signature phrases/slogans/lines to sprinkle into your content. One per line or comma-separated.</p>
               <div class="vw-chips-area" id="bv-phrases-chips" role="group" aria-label="Signature phrases"></div>
               <div class="vw-add-row">
                 <input id="bv-phrases-input" class="vw-add-input" type="text"
                        placeholder="e.g. 'Revenue clarity', 'Sales without selling'…" autocomplete="off" />
                 <button id="bv-phrases-add" class="vw-add-btn" type="button">Add</button>
               </div>
-              <p class="field-helper">Words, phrases, or taglines you consistently use.</p>
             </div>
 
             <div class="profile-field">
-              <label class="field-label" for="bv-origin">Origin story <span class="field-optional">(optional)</span></label>
+              <label class="field-label" for="bv-origin">Brand Story / Origin <span class="field-optional">(optional)</span></label>
+              <p class="field-helper">Short origin story — why you founded it, the pivotal moment. 3–6 sentences max.</p>
               <textarea id="bv-origin" class="field-textarea profile-textarea-sm"
                         placeholder="e.g. I spent 10 years in enterprise sales before realising the system was broken for founders…"></textarea>
-              <p class="field-helper">The 'why behind the work'. Adds depth to personal story posts.</p>
             </div>
 
             <div class="vw-stage-actions">
@@ -294,7 +317,7 @@
         <section id="voice-stage-2" class="vw-stage-panel" data-step="2">
           <div class="vw-stage-header">
             <h2 class="vw-stage-title">Target audience</h2>
-            <p class="vw-stage-subtitle">Describe who you're writing for so every post speaks directly to them. The AI drafts Step 2 from your Step 1 answers.</p>
+            <p class="vw-stage-subtitle">Tell us about your ideal customer. The AI uses Step 1 to auto-draft Step 2 — review and refine before saving.</p>
           </div>
 
           <!-- Step 1 -->
@@ -302,32 +325,32 @@
             <p class="vw-step-label">Step 1 — Quick capture</p>
 
             <div class="profile-field">
-              <label class="field-label" for="aud-description">Who your audience is</label>
+              <label class="field-label" for="aud-description">What is the general age range, demographics, or customer type?</label>
+              <p class="field-helper">4–8 sentences describing their lifestyle, role, situation, and context.</p>
               <textarea id="aud-description" class="field-textarea"
                         placeholder="e.g. Series A SaaS founders who have product-market fit but haven't built a repeatable sales motion yet. They're doing $1M–$3M ARR and closing deals through founder-led sales."></textarea>
-              <p class="field-helper">2–4 sentences: who they are, their role, situation, and context.</p>
             </div>
 
             <div class="profile-field">
-              <label class="field-label">Their goals</label>
+              <label class="field-label">Their Goals</label>
+              <p class="field-helper">What they're ultimately trying to achieve. Add their primary goal first.</p>
               <div class="vw-chips-area" id="aud-goals-chips" role="group" aria-label="Audience goals"></div>
               <div class="vw-add-row">
                 <input id="aud-goals-input" class="vw-add-input" type="text"
                        placeholder="e.g. Build a repeatable sales process…" autocomplete="off" />
                 <button id="aud-goals-add" class="vw-add-btn" type="button">Add</button>
               </div>
-              <p class="field-helper">What they're trying to achieve.</p>
             </div>
 
             <div class="profile-field">
-              <label class="field-label">What holds them back</label>
+              <label class="field-label">Obstacles to Goal Achievement</label>
+              <p class="field-helper">Specific internal/external factors blocking goal achievement.</p>
               <div class="vw-chips-area" id="aud-obstacles-chips" role="group" aria-label="Audience obstacles"></div>
               <div class="vw-add-row">
                 <input id="aud-obstacles-input" class="vw-add-input" type="text"
                        placeholder="e.g. No repeatable outbound process…" autocomplete="off" />
                 <button id="aud-obstacles-add" class="vw-add-btn" type="button">Add</button>
               </div>
-              <p class="field-helper">The specific blockers — internal fears, external constraints.</p>
             </div>
 
             <div class="vw-stage-actions">
@@ -341,40 +364,40 @@
             <p class="vw-step-label">Step 2 — Enrichment <span class="vw-step-sublabel">AI-drafted, review and edit</span></p>
 
             <div class="profile-field">
-              <label class="field-label">What they believe about the market</label>
+              <label class="field-label">Core Beliefs About Market / Category</label>
+              <p class="field-helper">What they believe to be true (or false) about your industry or category.</p>
               <div class="vw-chips-area" id="aud-beliefs-chips" role="group" aria-label="Audience market beliefs"></div>
               <div class="vw-add-row">
                 <input id="aud-beliefs-input" class="vw-add-input" type="text"
                        placeholder="e.g. Cold outreach doesn't work anymore…" autocomplete="off" />
                 <button id="aud-beliefs-add" class="vw-add-btn" type="button">Add</button>
               </div>
-              <p class="field-helper">Their existing beliefs about solutions in your space.</p>
             </div>
 
             <div class="profile-field">
-              <label class="field-label" for="aud-buying-stage">Buying stage</label>
+              <label class="field-label" for="aud-buying-stage">Stage of Awareness</label>
+              <p class="field-helper">Select the awareness level that best describes most of your audience.</p>
               <select id="aud-buying-stage" class="field-input">
                 <option value="">— Select stage —</option>
-                <option value="Unaware">Unaware — they don't know they have a problem</option>
-                <option value="Problem Aware">Problem Aware — they know the pain but not the solution</option>
-                <option value="Solution Aware">Solution Aware — they know solutions exist</option>
-                <option value="Product Aware">Product Aware — they know you but haven't bought</option>
-                <option value="Most Aware">Most Aware — they're ready to buy</option>
+                <option value="Unaware">Unaware — doesn't recognize they have a problem</option>
+                <option value="Problem Aware">Problem Aware — feels pain but doesn't know the solution</option>
+                <option value="Solution Aware">Solution Aware — knows solutions exist, not yours</option>
+                <option value="Product Aware">Product Aware — knows your offer but hasn't bought</option>
+                <option value="Most Aware">Most Aware — ready to buy</option>
               </select>
-              <p class="field-helper">Where most of your audience sits in their buying journey.</p>
             </div>
 
             <div class="profile-field">
-              <label class="field-label" for="aud-sophistication">Market sophistication</label>
+              <label class="field-label" for="aud-sophistication">Market Sophistication</label>
+              <p class="field-helper">How saturated your market is with similar offers and claims.</p>
               <select id="aud-sophistication" class="field-input">
                 <option value="">— Select level —</option>
-                <option value="Stage 1">Stage 1 — New to the problem space</option>
-                <option value="Stage 2">Stage 2 — Aware of general solutions</option>
-                <option value="Stage 3">Stage 3 — Savvy, comparing options</option>
-                <option value="Stage 4">Stage 4 — Skeptical, seen many claims</option>
-                <option value="Stage 5">Stage 5 — Exhausted, tuned out</option>
+                <option value="Stage 1">Stage 1 — New market, no strong competitors</option>
+                <option value="Stage 2">Stage 2 — Few competitors, simple claims work</option>
+                <option value="Stage 3">Stage 3 — Many competitors making the same claim</option>
+                <option value="Stage 4">Stage 4 — Market has heard all claims, needs differentiation</option>
+                <option value="Stage 5">Stage 5 — Oversaturated, cynical market</option>
               </select>
-              <p class="field-helper">How saturated they are with similar offers and content.</p>
             </div>
 
             <div class="vw-stage-actions">

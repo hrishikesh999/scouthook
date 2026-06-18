@@ -775,13 +775,14 @@ details[open] .vw-advanced-label::before { transform: rotate(90deg); }
    untouched on other pages. Goal: smaller type, airier spacing.
    ─────────────────────────────────────────────────────────── */
 
-/* Labels — smaller, lighter, more subdued */
+/* Labels — clear, readable, dark */
 .vw-stage-panel .field-label {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text-secondary, #52525B);
-  margin-bottom: 6px;
-  letter-spacing: 0.01em;
+  font-size: 13px;
+  font-weight: 600;
+  color: #18181B;
+  margin-bottom: 3px;
+  letter-spacing: 0;
+  display: block;
 }
 
 /* Inputs — bring font down from 17px to 14px, tighten padding */
@@ -801,11 +802,12 @@ details[open] .vw-advanced-label::before { transform: rotate(90deg); }
   margin-bottom: 24px;
 }
 
-/* Helper text — slightly smaller than label, clearly subordinate */
+/* Helper text — appears below label, before the input */
 .vw-stage-panel .field-helper {
   font-size: 12px;
-  color: var(--text-muted);
-  margin-top: 5px;
+  color: #52525B;
+  margin-top: 2px;
+  margin-bottom: 8px;
   line-height: 1.45;
 }
 
@@ -1047,4 +1049,126 @@ details[open] .vw-advanced-label::before { transform: rotate(90deg); }
   font-weight: 400;
   color: var(--text-muted);
   margin-left: 4px;
+}
+
+/* ── Multi-select dropdown ───────────────────────────────── */
+.vw-multiselect {
+  position: relative;
+  max-width: 480px;
+  margin-bottom: 12px;
+}
+
+.vw-multiselect-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--border, #E4E4E7);
+  border-radius: 8px;
+  background: var(--bg-surface, #fff);
+  color: var(--text-body);
+  font-size: 14px;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+  gap: 8px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.vw-multiselect-trigger:hover {
+  border-color: var(--brand, #0F766E);
+}
+
+.vw-multiselect-trigger[aria-expanded="true"] {
+  border-color: var(--brand, #0F766E);
+  box-shadow: 0 0 0 2px rgba(15,118,110,0.15);
+}
+
+.vw-multiselect-chevron {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  transition: transform 0.2s;
+}
+
+.vw-multiselect-trigger[aria-expanded="true"] .vw-multiselect-chevron {
+  transform: rotate(180deg);
+}
+
+.vw-multiselect-placeholder {
+  color: var(--text-muted);
+  font-size: 14px;
+  flex: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.vw-multiselect-count {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--brand, #0F766E);
+  flex: 1;
+}
+
+.vw-multiselect-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 200;
+  background: var(--bg-surface, #fff);
+  border: 1px solid var(--border, #E4E4E7);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.vw-multiselect-options {
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.vw-multiselect-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--text-body);
+  user-select: none;
+  transition: background 0.1s;
+}
+
+.vw-multiselect-option:hover {
+  background: var(--bg-subtle, #FAFAFA);
+}
+
+.vw-multiselect-option input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--brand, #0F766E);
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.vw-multiselect-option--disabled {
+  opacity: 0.45;
+  cursor: default;
+  pointer-events: none;
+}
+
+.vw-multiselect-limit {
+  padding: 6px 16px 10px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  border-top: 1px solid var(--border, #E4E4E7);
+  margin: 0;
 }

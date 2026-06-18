@@ -1774,3 +1774,173 @@ body.ob-shell {
 .ob-next-steps a:hover {
   text-decoration: underline;
 }
+
+/* ── Select field ────────────────────────────────────────── */
+.ob-select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236B7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 38px;
+  cursor: pointer;
+}
+
+/* ── LinkedIn step ───────────────────────────────────────── */
+.ob-linkedin-icon-wrap {
+  margin-bottom: 20px;
+}
+
+.ob-linkedin-icon-circle {
+  width: 64px;
+  height: 64px;
+  border-radius: 14px;
+  background: #0A66C2;
+  color: #fff;
+  font-size: 22px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
+  letter-spacing: -0.5px;
+}
+
+.ob-li-connected-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 20px;
+  border: 1.5px solid #0A66C2;
+  border-radius: 12px;
+  background: rgba(10, 102, 194, 0.05);
+  margin-bottom: 20px;
+  text-align: left;
+}
+
+.ob-li-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  border: 2px solid rgba(10, 102, 194, 0.2);
+}
+
+.ob-li-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.ob-li-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-heading);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ob-li-badge {
+  font-size: 12px;
+  font-weight: 600;
+  color: #0A66C2;
+}
+
+/* ── Extraction / generation spinners ────────────────────── */
+.ob-extracting-state,
+.ob-generating-state {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  font-size: 14px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.ob-spinner {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--border);
+  border-top-color: var(--brand);
+  border-radius: 50%;
+  animation: ob-spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes ob-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Personality trait chip grid ─────────────────────────── */
+.ob-trait-count {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-align: right;
+  margin-bottom: 10px;
+  letter-spacing: 0.03em;
+}
+
+.ob-trait-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.ob-trait-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 16px;
+  border-radius: 100px;
+  border: 1.5px solid var(--border);
+  background: var(--bg-surface);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-body);
+  cursor: pointer;
+  transition: border-color 150ms ease, background 150ms ease, color 150ms ease, transform 100ms ease;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.ob-trait-chip:hover {
+  border-color: var(--brand);
+  background: rgba(15, 118, 110, 0.04);
+  color: var(--text-heading);
+}
+
+.ob-trait-chip.selected {
+  border-color: var(--brand);
+  background: rgba(15, 118, 110, 0.1);
+  color: var(--brand);
+  font-weight: 600;
+}
+
+.ob-trait-chip.selected:hover {
+  background: rgba(15, 118, 110, 0.15);
+}
+
+/* ── Step 9: Celebration screen ─────────────────────────── */
+.ob-screen--celebration {
+  justify-content: center;
+}
+
+.ob-btn-primary--large {
+  height: 54px;
+  padding: 0 36px;
+  font-size: 16px;
+  border-radius: 12px;
+}
+
+@media (max-width: 560px) {
+  .ob-btn-primary--large {
+    width: 100%;
+  }
+}

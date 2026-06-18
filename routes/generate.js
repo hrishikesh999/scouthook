@@ -7,6 +7,7 @@ const { runQualityGate } = require('../services/qualityGate');
 const { ideaToPost, vaultSeedToPost } = require('../services/ideaPath');
 const { generateAuthorityPost } = require('../services/authorityExpertisePath');
 const { generateStoryPost }     = require('../services/storyPersonalExperiencePath');
+const { generateBtsPost }       = require('../services/behindTheScenesPath');
 const { classifyContent } = require('../services/funnelClassifier');
 const { canGeneratePost } = require('../services/subscription');
 const { sendEmailToUser } = require('../emails');
@@ -390,6 +391,65 @@ router.post('/', async (req, res) => {
           return res.end();
         }
 
+        // ── Behind-the-Scenes path ────────────────────────────────────────
+        if (post_type === 'bts') {
+          sseWrite('step', { step: 'analyzing', label: 'Crafting your BTS post...' });
+
+          const btsResult = await generateBtsPost(raw_idea, profile, {
+            lengthPreference: length_preference || 'Medium',
+            ctaIntent:        cta_intent || '',
+          });
+
+          sseWrite('step', { step: 'saving', label: 'Final quality check...' });
+
+          const btsGate = runQualityGate(btsResult.post, {
+            ...gateOptions(
+              { format_slug: IDEA_SLUG, content: btsResult.post },
+              profile, 'idea', null, 'bts'
+            ),
+            postType: 'bts',
+          });
+
+          const btsRunResult = await db.prepare(`
+            INSERT INTO generation_runs (user_id, tenant_id, path, input_data, synthesis)
+            VALUES (?, ?, ?, ?, ?)
+            RETURNING id
+          `).run(userId, tenantId, genPath, JSON.stringify({ raw_idea }), JSON.stringify(btsResult.synthesis));
+          const btsRunId = btsRunResult.lastInsertRowid;
+
+          const btsInsert = await db.prepare(`
+            INSERT INTO generated_posts
+              (run_id, user_id, tenant_id, profile_id, format_slug, content, ai_content, quality_score, quality_flags, passed_gate,
+               funnel_type, vault_source_ref, idea_input, archetype_used, source,
+               post_type, quality_verdict)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            RETURNING id
+          `).run(
+            btsRunId, userId, tenantId, profile.id, IDEA_SLUG,
+            btsResult.post, btsResult.post,
+            btsGate.score, JSON.stringify(btsGate.flags), btsGate.passed_gate ? 1 : 0,
+            'bts', null,
+            raw_idea || null, null, source || null,
+            'bts', btsGate.verdict || null
+          );
+          const btsId = btsInsert.lastInsertRowid;
+
+          const btsQuality = buildQualityPayload(btsGate, 1, true);
+
+          sseWrite('done', {
+            post_id:          btsId,
+            run_id:           btsRunId,
+            post:             btsResult.post,
+            quality:          { ...btsQuality, verdict: btsGate.verdict },
+            archetypeUsed:    null,
+            funnel_type:      'bts',
+            post_type:        'bts',
+            stage1Blueprint:  null,
+            content_feedback: null,
+          });
+          return res.end();
+        }
+
         // ── Standard path (Reach / Convert) ───────────────────────────────
         sseWrite('step', { step: 'analyzing', label: 'Analyzing your idea...' });
 
@@ -507,6 +567,26 @@ router.post('/', async (req, res) => {
         post:            storyResult.post,
         archetypeUsed:   null,
         primaryGate:     storyGate,
+        contentFeedback: null,
+      };
+    } else if (post_type === 'bts' && !vaultIdea) {
+      // ── Behind-the-Scenes path (non-streaming) ────────────────────────────
+      const btsResult = await generateBtsPost(raw_idea, profile, {
+        lengthPreference: length_preference || 'Medium',
+        ctaIntent:        cta_intent || '',
+      });
+      const btsGate = runQualityGate(btsResult.post, {
+        ...gateOptions(
+          { format_slug: IDEA_SLUG, content: btsResult.post },
+          profile, 'idea', null, 'bts'
+        ),
+        postType: 'bts',
+      });
+      ideaResult = {
+        synthesis:       btsResult.synthesis,
+        post:            btsResult.post,
+        archetypeUsed:   null,
+        primaryGate:     btsGate,
         contentFeedback: null,
       };
     } else if (vaultIdea) {

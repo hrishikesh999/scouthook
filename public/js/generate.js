@@ -67,6 +67,11 @@ let _storyEvent             = '';
 let _storyShift             = '';
 let _storySupportingDetails = '';
 let _storyLengthPreference  = 'Medium';
+let _btsChatStep            = 0;           // 0=topic, 1=turning_point, 2=context, 3=length
+let _btsTopic               = '';
+let _btsTurningPoint        = '';
+let _btsSupportingContext   = '';
+let _btsLengthPreference    = 'Medium';
 let _prefetchedIdeas    = null;      // prefetched result from /api/vault/generate-ideas
 let _allFreshIdeas      = [];        // all fetched fresh ideas — filters applied client-side
 let _lastIcpSummary     = '';        // icp_summary from last fetch
@@ -104,6 +109,7 @@ const CHAT_CONFIGS = {
   reach:   { label: '📣 Reach post' },
   trust:   { label: '✏️ Authority/Expertise' },
   story:   { label: '📖 Story/Personal Experience' },
+  bts:     { label: '🎬 Behind the Scenes' },
   convert: { label: '💬 Conversation post' },
 };
 
@@ -157,6 +163,17 @@ const EXTRACTION_QUESTIONS = {
       required:    true,
       minChars:    40,
       errorMsg:    'Share the event or moment — even a rough draft is enough.',
+    },
+  ],
+  bts: [
+    {
+      key:         'bts_topic',
+      question:    'What are you showing behind the scenes?',
+      helpText:    'The core process, moment, workflow, or internal work you\'re revealing. Be specific and real.',
+      placeholder: 'e.g. How I restructured our onboarding flow, the decision to cut a feature before launch…',
+      required:    true,
+      minChars:    20,
+      errorMsg:    'Share the process or moment you\'re revealing — even a rough description is enough.',
     },
   ],
   convert: [
@@ -721,6 +738,83 @@ const chat = (() => {
     return parts.join('\n\n');
   }
 
+  // ── Behind the Scenes step renderers ───────────────────────────────────────
+
+  function showBtsTurningPointQuestion() {
+    addQuestionBubble(
+      'The Turning Point',
+      'What shifted during the process? A decision you made, an assumption that broke, or something you had to change mid-way.'
+    );
+    chatInput.placeholder = 'What changed, what broke, what you had to reconsider…';
+    chatInput.focus();
+    chatThread.scrollTop = chatThread.scrollHeight;
+  }
+
+  function showBtsSupportingContextQuestion() {
+    const bubble = addQuestionBubble(
+      'Supporting Context',
+      'Any extra context, challenge, or messy detail worth sharing. If left blank, ScoutHook will infer this naturally.'
+    );
+    const skipBtn = document.createElement('button');
+    skipBtn.type      = 'button';
+    skipBtn.className = 'story-skip-btn';
+    skipBtn.textContent = 'Skip →';
+    skipBtn.addEventListener('click', () => {
+      _btsSupportingContext = '';
+      _btsChatStep = 3;
+      addUser('(skipped)');
+      chatInput.value       = '';
+      chatInput.style.height = '';
+      showBtsLengthQuestion();
+    });
+    bubble.appendChild(skipBtn);
+    chatInput.placeholder = 'Any extra context, constraint, or hiccup — or skip this step…';
+    chatInput.focus();
+    chatThread.scrollTop = chatThread.scrollHeight;
+  }
+
+  function showBtsLengthQuestion() {
+    const bubble = addQuestionBubble(
+      'Post length',
+      'Choose how deep you want to go. Short = one sharp observation. Medium = process breakdown. Long = detailed walkthrough.'
+    );
+    const chips = document.createElement('div');
+    chips.className = 'authority-length-chips';
+
+    [
+      { value: 'Short',  label: 'Short',  hint: '≤100 words'   },
+      { value: 'Medium', label: 'Medium', hint: '120-250 words' },
+      { value: 'Long',   label: 'Long',   hint: '300-500 words' },
+    ].forEach(({ value, label, hint }) => {
+      const btn = document.createElement('button');
+      btn.className = 'length-chip';
+      btn.type      = 'button';
+      btn.innerHTML = `${label} <span class="length-chip-hint">${hint}</span>`;
+      btn.addEventListener('click', () => {
+        _btsLengthPreference = value;
+        chips.querySelectorAll('.length-chip').forEach(c => c.classList.remove('active'));
+        btn.classList.add('active');
+        addUser(label);
+        triggerGenerate({ enrichedIdea: _buildBtsPrompt() });
+      });
+      chips.appendChild(btn);
+    });
+
+    bubble.appendChild(chips);
+    chatThread.scrollTop = chatThread.scrollHeight;
+  }
+
+  function _buildBtsPrompt() {
+    const parts = [
+      `BTS TOPIC:\n${_btsTopic}`,
+      `THE TURNING POINT:\n${_btsTurningPoint}`,
+    ];
+    if (_btsSupportingContext.trim()) {
+      parts.push(`SUPPORTING CONTEXT:\n${_btsSupportingContext}`);
+    }
+    return parts.join('\n\n');
+  }
+
   const ARROW_SVG = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>`;
 
   function updateSendBtn() {
@@ -763,12 +857,17 @@ const chat = (() => {
     _storyShift             = '';
     _storySupportingDetails = '';
     _storyLengthPreference  = 'Medium';
+    _btsChatStep            = 0;
+    _btsTopic               = '';
+    _btsTurningPoint        = '';
+    _btsSupportingContext   = '';
+    _btsLengthPreference    = 'Medium';
     _coach = { active: false, originalBrief: '', history: [], exchangeCount: 0, awaitingSkip: false, pendingQ: null, intakeInFlight: false, seq: (_coach.seq ?? 0) + 1 };
 
     chatThread.innerHTML = '';
     const q0 = EXTRACTION_QUESTIONS[type][0];
 
-    if (type === 'trust' || type === 'story') {
+    if (type === 'trust' || type === 'story' || type === 'bts') {
       // Show the first question immediately as a labelled bot bubble so the user
       // can focus on answering — no pills, no header, just the question.
       chatThread.style.display = '';
@@ -879,6 +978,34 @@ const chat = (() => {
         chatInput.value       = '';
         chatInput.style.height = '';
         showStoryLengthQuestion();
+      }
+      return;
+    }
+
+    // Behind the Scenes: four-step chat flow.
+    if (selectedType === 'bts') {
+      if (_btsChatStep === 0) {
+        _btsTopic = val;
+        _btsChatStep = 1;
+        addUser(val);
+        chatThread.style.display = '';
+        chatInput.value       = '';
+        chatInput.style.height = '';
+        showBtsTurningPointQuestion();
+      } else if (_btsChatStep === 1) {
+        _btsTurningPoint = val;
+        _btsChatStep = 2;
+        addUser(val);
+        chatInput.value       = '';
+        chatInput.style.height = '';
+        showBtsSupportingContextQuestion();
+      } else if (_btsChatStep === 2) {
+        _btsSupportingContext = val;
+        _btsChatStep = 3;
+        addUser(val);
+        chatInput.value       = '';
+        chatInput.style.height = '';
+        showBtsLengthQuestion();
       }
       return;
     }
@@ -1137,6 +1264,11 @@ async function triggerGenerate(opts = {}) {
     // Story/Personal Experience-specific params
     if (selectedType === 'story') {
       body.length_preference = _storyLengthPreference || 'Medium';
+      body.cta_intent        = '';
+    }
+    // Behind-the-Scenes-specific params
+    if (selectedType === 'bts') {
+      body.length_preference = _btsLengthPreference || 'Medium';
       body.cta_intent        = '';
     }
 

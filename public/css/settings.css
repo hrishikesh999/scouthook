@@ -991,3 +991,60 @@ details[open] .vw-advanced-label::before { transform: rotate(90deg); }
   color: var(--text-muted);
   font-style: italic;
 }
+
+/* ── Voice Profile sub-tabs (Stage 1) ───────────────────────── */
+.vw-profile-subtabs {
+  display: flex;
+  gap: 4px;
+  margin: 20px 0 24px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0;
+}
+
+.vw-subtab-btn {
+  padding: 8px 20px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.vw-subtab-btn:hover {
+  color: var(--text-body);
+}
+
+.vw-subtab-btn--active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+
+.vw-step-label {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin: 0 0 16px;
+}
+
+.vw-step-sublabel {
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-left: 6px;
+}
+
+.field-optional {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-muted);
+  margin-left: 4px;
+}

@@ -203,100 +203,255 @@ async function init() {
     if (samples)                  { const el = qs('vw-check-7'); if (el) el.hidden = false; }
   }
 
-  /* ── Stage 1: Profile Basics ────────────────────────────── */
-  const basicsFields = {
-    'profile-description': 'brand_description',
-    'profile-website':     'website_url',
-    'profile-audience':    'audience_description',
-    'profile-elevator':    'elevator_main_result',
-    'profile-beliefs':     'brand_core_beliefs',
-  };
+  /* ── Stage 1: Voice Profile — Brand Voice + Target Audience ── */
 
-  // Populate basics fields from profile
-  Object.entries(basicsFields).forEach(([elId, key]) => {
-    const el = qs(elId);
-    if (!el) return;
-    if (key === 'brand_core_beliefs') {
-      // Stored as JSON array — display one belief per line
-      const arr = safeParseJSON(profile[key], []);
-      el.value = arr.join('\n');
-    } else if (profile[key]) {
-      el.value = profile[key];
-    }
-  });
+  // Website URL (shared field, stays on profiles table)
+  const websiteEl = qs('profile-website');
+  if (websiteEl && profile.website_url) websiteEl.value = profile.website_url;
 
-  // Determine if basics has meaningful content
-  function basicsHasContent() {
-    return Object.keys(basicsFields).some(elId => {
-      const el = qs(elId);
-      return el && el.value.trim().length > 0;
-    });
+  // ── Sub-tab switching ──────────────────────────────────────────
+  function switchVoiceTab(tab) {
+    const isBV = tab === 'bv';
+    qs('bv-panel').hidden  = !isBV;
+    qs('aud-panel').hidden = isBV;
+    qs('bv-tab-btn').classList.toggle('vw-subtab-btn--active', isBV);
+    qs('aud-tab-btn').classList.toggle('vw-subtab-btn--active', !isBV);
+  }
+  qs('bv-tab-btn')?.addEventListener('click',  () => switchVoiceTab('bv'));
+  qs('aud-tab-btn')?.addEventListener('click', () => switchVoiceTab('aud'));
+
+  // ── Brand Voice — chip lists ───────────────────────────────────
+  let bvTraits  = safeParseJSON(profile.brand_personality_traits, []);
+  let bvPhrases = safeParseJSON(profile.brand_phrases_to_use, []);
+
+  const renderBvTraits  = makeChipList('bv-traits-chips',  bvTraits,  () => {});
+  const renderBvPhrases = makeChipList('bv-phrases-chips', bvPhrases, () => {});
+  wireAddChip('bv-traits-input',  'bv-traits-add',  bvTraits,  renderBvTraits);
+  wireAddChip('bv-phrases-input', 'bv-phrases-add', bvPhrases, renderBvPhrases);
+
+  // ── Brand Voice — populate Step 1 fields ──────────────────────
+  if (qs('bv-description') && profile.brand_description)  qs('bv-description').value = profile.brand_description;
+  if (qs('bv-industry')    && profile.brand_industry)     qs('bv-industry').value    = profile.brand_industry;
+  if (qs('bv-tone')        && profile.brand_emotional_tone) qs('bv-tone').value      = profile.brand_emotional_tone;
+
+  // ── Brand Voice — populate Step 2 fields ──────────────────────
+  if (qs('bv-elevator')  && profile.elevator_main_result) qs('bv-elevator').value  = profile.elevator_main_result;
+  if (qs('bv-mechanism') && profile.elevator_mechanism)   qs('bv-mechanism').value = profile.elevator_mechanism;
+  if (qs('bv-archetype') && profile.brand_archetype)      qs('bv-archetype').value = profile.brand_archetype;
+  if (qs('bv-origin')    && profile.brand_story_origin)   qs('bv-origin').value    = profile.brand_story_origin;
+  if (qs('bv-beliefs') && profile.brand_core_beliefs) {
+    const arr = safeParseJSON(profile.brand_core_beliefs, []);
+    qs('bv-beliefs').value = arr.join('\n');
   }
 
-  qs('vw-basics-save')?.addEventListener('click', async () => {
-    const btn = qs('vw-basics-save');
+  // Show Step 2 immediately if already populated (returning user)
+  const bvStep2HasContent = profile.elevator_main_result || profile.elevator_mechanism
+    || profile.brand_archetype || profile.brand_core_beliefs || profile.brand_story_origin
+    || bvPhrases.length > 0;
+  if (bvStep2HasContent && qs('bv-step-2')) qs('bv-step-2').hidden = false;
+
+  // ── Brand Voice — Generate Step 2 ─────────────────────────────
+  qs('bv-generate-btn')?.addEventListener('click', async () => {
+    const btn = qs('bv-generate-btn');
+    const statusEl = qs('bv-generate-status');
     btn.disabled = true;
-    btn.textContent = 'Saving…';
-    const payload = {};
-    Object.entries(basicsFields).forEach(([elId, key]) => {
-      const el = qs(elId);
-      if (!el) return;
-      if (key === 'brand_core_beliefs') {
-        // Split textarea lines into a JSON array; filter blank lines
-        const lines = el.value.split('\n').map(l => l.trim()).filter(Boolean);
-        payload[key] = lines.length > 0 ? JSON.stringify(lines) : null;
+    btn.textContent = 'Generating…';
+
+    // Save Step 1 first so AI reads from DB
+    const step1Payload = {
+      brand_description:        qs('bv-description')?.value.trim() || null,
+      brand_industry:           qs('bv-industry')?.value.trim()    || null,
+      brand_personality_traits: bvTraits.length > 0 ? JSON.stringify(bvTraits) : null,
+      brand_emotional_tone:     qs('bv-tone')?.value               || null,
+    };
+    try {
+      await saveProfile(step1Payload);
+      const r = await fetch('/api/profile/brand-voice/generate', {
+        method: 'POST',
+        headers: apiHeaders(),
+        body: JSON.stringify({ mode: 'prefill' }),
+      });
+      const d = await r.json();
+      if (d.ok && d.prefill) {
+        const p = d.prefill;
+        if (qs('bv-elevator')  && p.elevator_main_result) qs('bv-elevator').value  = p.elevator_main_result;
+        if (qs('bv-mechanism') && p.elevator_mechanism)   qs('bv-mechanism').value = p.elevator_mechanism;
+        if (qs('bv-archetype') && p.brand_archetype)      qs('bv-archetype').value = p.brand_archetype;
+        if (qs('bv-origin')    && p.brand_story_origin)   qs('bv-origin').value    = p.brand_story_origin;
+        if (qs('bv-beliefs') && Array.isArray(p.brand_core_beliefs) && p.brand_core_beliefs.length) {
+          qs('bv-beliefs').value = p.brand_core_beliefs.join('\n');
+        }
+        if (Array.isArray(p.brand_phrases_to_use) && p.brand_phrases_to_use.length) {
+          p.brand_phrases_to_use.forEach(ph => { if (!bvPhrases.includes(ph)) bvPhrases.push(ph); });
+          renderBvPhrases(bvPhrases);
+        }
+        if (qs('bv-step-2')) {
+          qs('bv-step-2').hidden = false;
+          qs('bv-step-2').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+        showStatus(statusEl, 'Step 2 ready — review and save');
       } else {
-        payload[key] = el.value.trim() || null;
+        showStatus(statusEl, 'Generation failed — try again', true);
       }
-    });
+    } catch {
+      showStatus(statusEl, 'Generation failed — try again', true);
+    }
+    btn.textContent = 'Generate Step 2 →';
+    btn.disabled = false;
+  });
+
+  // ── Brand Voice — Regenerate elevator pitch ───────────────────
+  qs('bv-elevator-generate')?.addEventListener('click', async () => {
+    const btn = qs('bv-elevator-generate');
+    btn.disabled = true; btn.textContent = '…';
+    try {
+      const r = await fetch('/api/profile/generate-positioning', {
+        method: 'POST', headers: apiHeaders(),
+        body: JSON.stringify({
+          brand_description:   qs('bv-description')?.value.trim() || '',
+          audience_description: qs('aud-description')?.value.trim() || '',
+        }),
+      });
+      const d = await r.json();
+      if (d.ok && d.elevator_main_result && qs('bv-elevator')) {
+        qs('bv-elevator').value = d.elevator_main_result;
+      }
+    } catch { /* silent */ }
+    btn.textContent = '✦ Regenerate'; btn.disabled = false;
+  });
+
+  // ── Brand Voice — Save ────────────────────────────────────────
+  qs('bv-save-btn')?.addEventListener('click', async () => {
+    const btn = qs('bv-save-btn');
+    const statusEl = qs('bv-save-status');
+    btn.disabled = true; btn.textContent = 'Saving…';
+    const beliefsLines = (qs('bv-beliefs')?.value || '').split('\n').map(l => l.trim()).filter(Boolean);
+    const payload = {
+      brand_description:        qs('bv-description')?.value.trim()  || null,
+      brand_industry:           qs('bv-industry')?.value.trim()     || null,
+      brand_personality_traits: bvTraits.length  > 0 ? JSON.stringify(bvTraits)  : null,
+      brand_emotional_tone:     qs('bv-tone')?.value                || null,
+      elevator_main_result:     qs('bv-elevator')?.value.trim()     || null,
+      elevator_mechanism:       qs('bv-mechanism')?.value.trim()    || null,
+      brand_archetype:          qs('bv-archetype')?.value           || null,
+      brand_core_beliefs:       beliefsLines.length > 0 ? JSON.stringify(beliefsLines) : null,
+      brand_phrases_to_use:     bvPhrases.length > 0 ? JSON.stringify(bvPhrases) : null,
+      brand_story_origin:       qs('bv-origin')?.value.trim()       || null,
+    };
     try {
       const d = await saveProfile(payload);
       if (d.ok) {
-        showStatus(qs('vw-basics-status'), 'Saved ✓');
-        if (basicsHasContent()) { const el = qs('vw-check-1'); if (el) el.hidden = false; }
+        // Fire final AI generation to cache brand_voice_profile_json
+        fetch('/api/profile/brand-voice/generate', {
+          method: 'POST', headers: apiHeaders(),
+          body: JSON.stringify({ mode: 'final' }),
+        }).catch(() => {});
+        showStatus(statusEl, 'Brand voice saved ✓');
+        const check = qs('vw-check-1');
+        if (check) check.hidden = false;
       } else {
-        showStatus(qs('vw-basics-status'), 'Save failed', true);
+        showStatus(statusEl, 'Save failed', true);
       }
     } catch {
-      showStatus(qs('vw-basics-status'), 'Save failed', true);
+      showStatus(statusEl, 'Save failed', true);
     }
-    btn.textContent = 'Save basics →';
-    btn.disabled = false;
+    btn.textContent = 'Save brand voice →'; btn.disabled = false;
   });
 
-  /* ── Generate #1 result from description + audience ────── */
-  qs('vw-generate-positioning')?.addEventListener('click', async () => {
-    const btn = qs('vw-generate-positioning');
-    const elevatorEl = qs('profile-elevator');
-    if (!btn || !elevatorEl) return;
+  // ── Audience — chip lists ─────────────────────────────────────
+  let audGoals     = safeParseJSON(profile.audience_goals, []);
+  let audObstacles = safeParseJSON(profile.audience_obstacles, []);
+  let audBeliefs   = safeParseJSON(profile.audience_core_beliefs_market, []);
 
-    const brand_description   = qs('profile-description')?.value.trim() || '';
-    const audience_description = qs('profile-audience')?.value.trim()   || '';
+  const renderAudGoals     = makeChipList('aud-goals-chips',     audGoals,     () => {});
+  const renderAudObstacles = makeChipList('aud-obstacles-chips', audObstacles, () => {});
+  const renderAudBeliefs   = makeChipList('aud-beliefs-chips',   audBeliefs,   () => {});
+  wireAddChip('aud-goals-input',     'aud-goals-add',     audGoals,     renderAudGoals);
+  wireAddChip('aud-obstacles-input', 'aud-obstacles-add', audObstacles, renderAudObstacles);
+  wireAddChip('aud-beliefs-input',   'aud-beliefs-add',   audBeliefs,   renderAudBeliefs);
 
-    if (!brand_description && !audience_description) {
-      showStatus(qs('vw-basics-status'), 'Add your description or audience first', true);
-      return;
-    }
+  // ── Audience — populate Step 1 fields ─────────────────────────
+  if (qs('aud-description') && profile.audience_description) qs('aud-description').value = profile.audience_description;
 
-    btn.disabled = true;
-    btn.textContent = '…';
+  // ── Audience — populate Step 2 fields ─────────────────────────
+  if (qs('aud-buying-stage')    && profile.audience_buying_stage)          qs('aud-buying-stage').value    = profile.audience_buying_stage;
+  if (qs('aud-sophistication')  && profile.audience_market_sophistication) qs('aud-sophistication').value  = profile.audience_market_sophistication;
+
+  // Show Audience Step 2 immediately if already populated
+  const audStep2HasContent = profile.audience_buying_stage || profile.audience_market_sophistication
+    || audBeliefs.length > 0;
+  if (audStep2HasContent && qs('aud-step-2')) qs('aud-step-2').hidden = false;
+
+  // ── Audience — Generate Step 2 ────────────────────────────────
+  qs('aud-generate-btn')?.addEventListener('click', async () => {
+    const btn = qs('aud-generate-btn');
+    const statusEl = qs('aud-generate-status');
+    btn.disabled = true; btn.textContent = 'Generating…';
+
+    const step1Payload = {
+      audience_description: qs('aud-description')?.value.trim() || null,
+      audience_goals:       audGoals.length     > 0 ? JSON.stringify(audGoals)     : null,
+      audience_obstacles:   audObstacles.length > 0 ? JSON.stringify(audObstacles) : null,
+    };
     try {
-      const r = await fetch('/api/profile/generate-positioning', {
-        method: 'POST',
-        headers: apiHeaders(),
-        body: JSON.stringify({ brand_description, audience_description }),
+      await saveProfile(step1Payload);
+      const r = await fetch('/api/profile/audience/generate', {
+        method: 'POST', headers: apiHeaders(),
+        body: JSON.stringify({ mode: 'prefill' }),
       });
       const d = await r.json();
-      if (d.ok && d.elevator_main_result) {
-        elevatorEl.value = d.elevator_main_result;
+      if (d.ok && d.prefill) {
+        const p = d.prefill;
+        if (qs('aud-buying-stage')   && p.audience_buying_stage)          qs('aud-buying-stage').value   = p.audience_buying_stage;
+        if (qs('aud-sophistication') && p.audience_market_sophistication) qs('aud-sophistication').value = p.audience_market_sophistication;
+        if (Array.isArray(p.audience_core_beliefs_market) && p.audience_core_beliefs_market.length) {
+          p.audience_core_beliefs_market.forEach(b => { if (!audBeliefs.includes(b)) audBeliefs.push(b); });
+          renderAudBeliefs(audBeliefs);
+        }
+        if (qs('aud-step-2')) {
+          qs('aud-step-2').hidden = false;
+          qs('aud-step-2').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+        showStatus(statusEl, 'Step 2 ready — review and save');
       } else {
-        showStatus(qs('vw-basics-status'), 'Generation failed — try again', true);
+        showStatus(statusEl, 'Generation failed — try again', true);
       }
     } catch {
-      showStatus(qs('vw-basics-status'), 'Generation failed — try again', true);
+      showStatus(statusEl, 'Generation failed — try again', true);
     }
-    btn.disabled = false;
-    btn.textContent = '✦ Generate';
+    btn.textContent = 'Generate Step 2 →'; btn.disabled = false;
+  });
+
+  // ── Audience — Save ───────────────────────────────────────────
+  qs('aud-save-btn')?.addEventListener('click', async () => {
+    const btn = qs('aud-save-btn');
+    const statusEl = qs('aud-save-status');
+    btn.disabled = true; btn.textContent = 'Saving…';
+    const payload = {
+      audience_description:           qs('aud-description')?.value.trim() || null,
+      audience_goals:                 audGoals.length     > 0 ? JSON.stringify(audGoals)     : null,
+      audience_obstacles:             audObstacles.length > 0 ? JSON.stringify(audObstacles) : null,
+      audience_core_beliefs_market:   audBeliefs.length   > 0 ? JSON.stringify(audBeliefs)   : null,
+      audience_buying_stage:          qs('aud-buying-stage')?.value   || null,
+      audience_market_sophistication: qs('aud-sophistication')?.value || null,
+    };
+    try {
+      const d = await saveProfile(payload);
+      if (d.ok) {
+        fetch('/api/profile/audience/generate', {
+          method: 'POST', headers: apiHeaders(),
+          body: JSON.stringify({ mode: 'final' }),
+        }).catch(() => {});
+        showStatus(statusEl, 'Audience profile saved ✓');
+        const check = qs('vw-check-1');
+        if (check) check.hidden = false;
+      } else {
+        showStatus(statusEl, 'Save failed', true);
+      }
+    } catch {
+      showStatus(statusEl, 'Save failed', true);
+    }
+    btn.textContent = 'Save audience profile →'; btn.disabled = false;
   });
 
   /* ── Stage 2: Content Pillars ───────────────────────────── */
@@ -504,14 +659,12 @@ async function init() {
         const statusD = await statusR.json();
         if (statusD.connected) renderLinkedInProfile(statusD);
 
-        // Update Stage 1 persona fields with LinkedIn-sourced values.
-        // LinkedIn headline is a stronger signal than website extraction for
-        // these fields, so we always update them (not just when blank).
+        // Update Brand Voice + Audience fields with LinkedIn-sourced values.
         if (d.profile) {
           const fieldMap = {
-            'profile-description': d.profile.brand_description,
-            'profile-audience':    d.profile.audience_description,
-            'profile-elevator':    d.profile.elevator_main_result,
+            'bv-description':  d.profile.brand_description,
+            'aud-description': d.profile.audience_description,
+            'bv-elevator':     d.profile.elevator_main_result,
           };
           let updatedCount = 0;
           Object.entries(fieldMap).forEach(([elId, val]) => {

@@ -77,8 +77,8 @@
         <a href="#" class="vw-stage-link" data-stage="1">
           <span class="vw-stage-num">1</span>
           <span class="vw-stage-info">
-            <span class="vw-stage-name">Profile basics</span>
-            <span class="vw-stage-desc">Your niche and positioning</span>
+            <span class="vw-stage-name">Voice profile</span>
+            <span class="vw-stage-desc">Brand voice &amp; target audience</span>
           </span>
           <span class="vw-stage-check" id="vw-check-1" hidden>✓</span>
         </a>
@@ -135,56 +135,248 @@
       <!-- Stage content panels -->
       <div class="vw-content">
 
-        <!-- ── Stage 1: Profile Basics ───────────────────── -->
+        <!-- ── Stage 1: Voice Profile (Brand Voice + Target Audience) ── -->
         <section id="voice-stage-1" class="vw-stage-panel" data-step="1">
           <div class="vw-stage-header">
-            <h2 class="vw-stage-title">Profile basics</h2>
-            <p class="vw-stage-subtitle">Start with your niche and audience — then generate a one-sentence positioning statement. Used in every post Scouthook generates.</p>
+            <h2 class="vw-stage-title">Voice profile</h2>
+            <p class="vw-stage-subtitle">Define your brand voice and target audience. Complete both steps for each tab — the AI drafts Step 2 from your Step 1 answers.</p>
           </div>
 
-          <div class="profile-field">
-            <label class="field-label" for="profile-description">What you do and who you serve</label>
-            <input type="text" id="profile-description" class="field-input"
-                   placeholder='e.g. "I help B2B SaaS founders build repeatable revenue systems"'
-                   style="width:100%" />
-            <p class="field-helper">One sentence covering what you do and who you help.</p>
-          </div>
-
-          <div class="profile-field">
-            <label class="field-label" for="profile-audience">Your audience</label>
-            <textarea id="profile-audience" class="field-textarea profile-textarea-sm"
-                      placeholder="e.g. Series A SaaS founders who have product-market fit but haven't built a repeatable sales motion yet. They're doing $1M–$3M ARR and closing deals through founder-led sales."></textarea>
-            <p class="field-helper">2–4 sentences: who they are, their role, situation, and context.</p>
-          </div>
-
-          <div class="profile-field">
-            <div class="vw-field-label-row">
-              <label class="field-label" for="profile-elevator">Your #1 result</label>
-              <button id="vw-generate-positioning" class="vw-generate-btn" type="button">✦ Generate</button>
-            </div>
-            <input type="text" id="profile-elevator" class="field-input"
-                   placeholder='e.g. "Help founders close enterprise deals without a sales team"'
-                   style="width:100%" />
-            <p class="field-helper">The #1 transformation you deliver — in one sentence. Auto-generate from the fields above, or type your own.</p>
-          </div>
-
-          <div class="profile-field">
-            <label class="field-label" for="profile-beliefs">Your core beliefs</label>
-            <textarea id="profile-beliefs" class="field-textarea profile-textarea-sm"
-                      placeholder="One belief per line. e.g.&#10;Most founders don't have a sales problem — they have a positioning problem&#10;Consistency beats virality every time"></textarea>
-            <p class="field-helper">Your contrarian takes and hot opinions. One per line. Used to generate Contrarian and Myth-busting posts.</p>
-          </div>
-
+          <!-- Website (shared — feeds extraction for both tabs) -->
           <div class="profile-field">
             <label class="field-label" for="profile-website">Your website</label>
             <input type="url" id="profile-website" class="field-input"
                    placeholder="https://yourwebsite.com" autocomplete="url" style="width:100%" />
+            <p class="field-helper">We'll extract your brand and audience info automatically.</p>
           </div>
 
-          <div class="vw-stage-actions">
-            <button id="vw-basics-save" class="vw-save-btn" type="button">Save basics →</button>
-            <span class="vw-save-status" id="vw-basics-status" hidden></span>
+          <!-- Sub-tab nav -->
+          <div class="vw-profile-subtabs">
+            <button id="bv-tab-btn" class="vw-subtab-btn vw-subtab-btn--active" type="button">Brand Voice</button>
+            <button id="aud-tab-btn" class="vw-subtab-btn" type="button">Target Audience</button>
           </div>
+
+          <!-- ── Brand Voice Panel ──────────────────────────── -->
+          <div id="bv-panel">
+
+            <!-- Step 1 -->
+            <div id="bv-step-1">
+              <p class="vw-step-label">Step 1 — Quick capture</p>
+
+              <div class="profile-field">
+                <label class="field-label" for="bv-description">What you do and who you serve</label>
+                <input type="text" id="bv-description" class="field-input"
+                       placeholder='e.g. "I help B2B SaaS founders build repeatable revenue systems"'
+                       style="width:100%" />
+                <p class="field-helper">One sentence covering what you do and who you help.</p>
+              </div>
+
+              <div class="profile-field">
+                <label class="field-label" for="bv-industry">Your industry</label>
+                <input type="text" id="bv-industry" class="field-input"
+                       placeholder="e.g. B2B SaaS, Executive Coaching, DTC eCommerce"
+                       style="width:100%" />
+              </div>
+
+              <div class="profile-field">
+                <label class="field-label">Personality traits <span class="field-optional">(up to 5)</span></label>
+                <div class="vw-chips-area" id="bv-traits-chips" role="group" aria-label="Personality traits"></div>
+                <div class="vw-add-row">
+                  <input id="bv-traits-input" class="vw-add-input" type="text"
+                         placeholder="e.g. Bold, Empathetic, Direct…" autocomplete="off" />
+                  <button id="bv-traits-add" class="vw-add-btn" type="button">Add</button>
+                </div>
+                <p class="field-helper">How your writing sounds and feels to the reader.</p>
+              </div>
+
+              <div class="profile-field">
+                <label class="field-label" for="bv-tone">Emotional tone</label>
+                <select id="bv-tone" class="field-input">
+                  <option value="">— Select tone —</option>
+                  <option value="Empowering">Empowering</option>
+                  <option value="Inspirational">Inspirational</option>
+                  <option value="Educational">Educational</option>
+                  <option value="Analytical">Analytical</option>
+                  <option value="Conversational">Conversational</option>
+                  <option value="Bold">Bold</option>
+                  <option value="Calm">Calm</option>
+                  <option value="Urgent">Urgent</option>
+                </select>
+                <p class="field-helper">The overarching mood of your content.</p>
+              </div>
+
+              <div class="vw-stage-actions">
+                <button id="bv-generate-btn" class="vw-save-btn" type="button">Generate Step 2 →</button>
+                <span class="vw-save-status" id="bv-generate-status" hidden></span>
+              </div>
+            </div><!-- /bv-step-1 -->
+
+            <!-- Step 2 (hidden until generated or previously saved) -->
+            <div id="bv-step-2" hidden>
+              <p class="vw-step-label">Step 2 — Enrichment <span class="vw-step-sublabel">AI-drafted, review and edit</span></p>
+
+              <div class="profile-field">
+                <div class="vw-field-label-row">
+                  <label class="field-label" for="bv-elevator">Your #1 result</label>
+                  <button id="bv-elevator-generate" class="vw-generate-btn" type="button">✦ Regenerate</button>
+                </div>
+                <input type="text" id="bv-elevator" class="field-input"
+                       placeholder='e.g. "Help founders close enterprise deals without a sales team"'
+                       style="width:100%" />
+                <p class="field-helper">The #1 transformation you deliver — in one sentence.</p>
+              </div>
+
+              <div class="profile-field">
+                <label class="field-label" for="bv-mechanism">How you deliver it</label>
+                <input type="text" id="bv-mechanism" class="field-input"
+                       placeholder='e.g. "A 90-day positioning sprint using my 3-step Sales Clarity Framework"'
+                       style="width:100%" />
+                <p class="field-helper">Your method, framework, or unique process.</p>
+              </div>
+
+              <div class="profile-field">
+                <label class="field-label" for="bv-archetype">Brand archetype</label>
+                <select id="bv-archetype" class="field-input">
+                  <option value="">— Select archetype —</option>
+                  <option value="Hero">Hero</option>
+                  <option value="Sage">Sage</option>
+                  <option value="Explorer">Explorer</option>
+                  <option value="Rebel">Rebel</option>
+                  <option value="Creator">Creator</option>
+                  <option value="Caregiver">Caregiver</option>
+                  <option value="Ruler">Ruler</option>
+                  <option value="Magician">Magician</option>
+                  <option value="Lover">Lover</option>
+                  <option value="Jester">Jester</option>
+                  <option value="Everyman">Everyman</option>
+                  <option value="Innocent">Innocent</option>
+                </select>
+                <p class="field-helper">The narrative persona that shapes your content angle.</p>
+              </div>
+
+              <div class="profile-field">
+                <label class="field-label" for="bv-beliefs">Core beliefs</label>
+                <textarea id="bv-beliefs" class="field-textarea profile-textarea-sm"
+                          placeholder="One belief per line. e.g.&#10;Most founders don't have a sales problem — they have a positioning problem&#10;Consistency beats virality every time"></textarea>
+                <p class="field-helper">Your contrarian takes. One per line. Used for Contrarian and Myth-busting posts.</p>
+              </div>
+
+              <div class="profile-field">
+                <label class="field-label">Signature phrases</label>
+                <div class="vw-chips-area" id="bv-phrases-chips" role="group" aria-label="Signature phrases"></div>
+                <div class="vw-add-row">
+                  <input id="bv-phrases-input" class="vw-add-input" type="text"
+                         placeholder="e.g. 'Revenue clarity', 'Sales without selling'…" autocomplete="off" />
+                  <button id="bv-phrases-add" class="vw-add-btn" type="button">Add</button>
+                </div>
+                <p class="field-helper">Words, phrases, or taglines you consistently use.</p>
+              </div>
+
+              <div class="profile-field">
+                <label class="field-label" for="bv-origin">Origin story <span class="field-optional">(optional)</span></label>
+                <textarea id="bv-origin" class="field-textarea profile-textarea-sm"
+                          placeholder="e.g. I spent 10 years in enterprise sales before realising the system was broken for founders…"></textarea>
+                <p class="field-helper">The 'why behind the work'. Adds depth to personal story posts.</p>
+              </div>
+
+              <div class="vw-stage-actions">
+                <button id="bv-save-btn" class="vw-save-btn" type="button">Save brand voice →</button>
+                <span class="vw-save-status" id="bv-save-status" hidden></span>
+              </div>
+            </div><!-- /bv-step-2 -->
+
+          </div><!-- /bv-panel -->
+
+          <!-- ── Target Audience Panel ──────────────────────── -->
+          <div id="aud-panel" hidden>
+
+            <!-- Step 1 -->
+            <div id="aud-step-1">
+              <p class="vw-step-label">Step 1 — Quick capture</p>
+
+              <div class="profile-field">
+                <label class="field-label" for="aud-description">Who your audience is</label>
+                <textarea id="aud-description" class="field-textarea"
+                          placeholder="e.g. Series A SaaS founders who have product-market fit but haven't built a repeatable sales motion yet. They're doing $1M–$3M ARR and closing deals through founder-led sales."></textarea>
+                <p class="field-helper">2–4 sentences: who they are, their role, situation, and context.</p>
+              </div>
+
+              <div class="profile-field">
+                <label class="field-label">Their goals</label>
+                <div class="vw-chips-area" id="aud-goals-chips" role="group" aria-label="Audience goals"></div>
+                <div class="vw-add-row">
+                  <input id="aud-goals-input" class="vw-add-input" type="text"
+                         placeholder="e.g. Build a repeatable sales process…" autocomplete="off" />
+                  <button id="aud-goals-add" class="vw-add-btn" type="button">Add</button>
+                </div>
+                <p class="field-helper">What they're trying to achieve.</p>
+              </div>
+
+              <div class="profile-field">
+                <label class="field-label">What holds them back</label>
+                <div class="vw-chips-area" id="aud-obstacles-chips" role="group" aria-label="Audience obstacles"></div>
+                <div class="vw-add-row">
+                  <input id="aud-obstacles-input" class="vw-add-input" type="text"
+                         placeholder="e.g. No repeatable outbound process…" autocomplete="off" />
+                  <button id="aud-obstacles-add" class="vw-add-btn" type="button">Add</button>
+                </div>
+                <p class="field-helper">The specific blockers — internal fears, external constraints.</p>
+              </div>
+
+              <div class="vw-stage-actions">
+                <button id="aud-generate-btn" class="vw-save-btn" type="button">Generate Step 2 →</button>
+                <span class="vw-save-status" id="aud-generate-status" hidden></span>
+              </div>
+            </div><!-- /aud-step-1 -->
+
+            <!-- Step 2 (hidden until generated or previously saved) -->
+            <div id="aud-step-2" hidden>
+              <p class="vw-step-label">Step 2 — Enrichment <span class="vw-step-sublabel">AI-drafted, review and edit</span></p>
+
+              <div class="profile-field">
+                <label class="field-label">What they believe about the market</label>
+                <div class="vw-chips-area" id="aud-beliefs-chips" role="group" aria-label="Audience market beliefs"></div>
+                <div class="vw-add-row">
+                  <input id="aud-beliefs-input" class="vw-add-input" type="text"
+                         placeholder="e.g. Cold outreach doesn't work anymore…" autocomplete="off" />
+                  <button id="aud-beliefs-add" class="vw-add-btn" type="button">Add</button>
+                </div>
+                <p class="field-helper">Their existing beliefs about solutions in your space.</p>
+              </div>
+
+              <div class="profile-field">
+                <label class="field-label" for="aud-buying-stage">Buying stage</label>
+                <select id="aud-buying-stage" class="field-input">
+                  <option value="">— Select stage —</option>
+                  <option value="Unaware">Unaware — they don't know they have a problem</option>
+                  <option value="Problem Aware">Problem Aware — they know the pain but not the solution</option>
+                  <option value="Solution Aware">Solution Aware — they know solutions exist</option>
+                  <option value="Product Aware">Product Aware — they know you but haven't bought</option>
+                  <option value="Most Aware">Most Aware — they're ready to buy</option>
+                </select>
+                <p class="field-helper">Where most of your audience sits in their buying journey.</p>
+              </div>
+
+              <div class="profile-field">
+                <label class="field-label" for="aud-sophistication">Market sophistication</label>
+                <select id="aud-sophistication" class="field-input">
+                  <option value="">— Select level —</option>
+                  <option value="Stage 1">Stage 1 — New to the problem space</option>
+                  <option value="Stage 2">Stage 2 — Aware of general solutions</option>
+                  <option value="Stage 3">Stage 3 — Savvy, comparing options</option>
+                  <option value="Stage 4">Stage 4 — Skeptical, seen many claims</option>
+                  <option value="Stage 5">Stage 5 — Exhausted, tuned out</option>
+                </select>
+                <p class="field-helper">How saturated they are with similar offers and content.</p>
+              </div>
+
+              <div class="vw-stage-actions">
+                <button id="aud-save-btn" class="vw-save-btn" type="button">Save audience profile →</button>
+                <span class="vw-save-status" id="aud-save-status" hidden></span>
+              </div>
+            </div><!-- /aud-step-2 -->
+
+          </div><!-- /aud-panel -->
 
           <div class="vw-step-nav">
             <span></span>

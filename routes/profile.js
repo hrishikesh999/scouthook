@@ -5,48 +5,86 @@ const router = express.Router();
 const { db } = require('../db');
 
 // ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+// Full profile SELECT — joins brand_voice_profiles and audience_profiles so
+// callers get a flat merged object identical in shape to the old single-table
+// response (no downstream changes needed).
+const FULL_PROFILE_SQL = `
+  SELECT p.id, p.display_name, p.avatar_url,
+         bvp.brand_description, bvp.brand_industry, bvp.brand_personality_traits, bvp.brand_emotional_tone,
+         bvp.elevator_main_result, bvp.elevator_mechanism, bvp.brand_archetype, bvp.brand_core_beliefs,
+         bvp.brand_phrases_to_use, bvp.brand_story_origin, bvp.brand_voice_profile_json,
+         audp.audience_description, audp.audience_goals, audp.audience_obstacles,
+         audp.audience_core_beliefs_market, audp.audience_buying_stage, audp.audience_market_sophistication,
+         audp.audience_profile_json,
+         p.voice_fingerprint, p.writing_samples, p.onboarding_complete,
+         p.website_url, p.website_summary,
+         p.onboarding_q2, p.onboarding_q3,
+         p.authority_statements, p.cta_library, p.content_principles, p.content_themes,
+         p.voice_extraction_quality, p.voice_profile_completion_pct,
+         p.input_examples, p.voice_refinements, p.content_pillars,
+         p.user_archetype_preference
+  FROM profiles p
+  LEFT JOIN brand_voice_profiles bvp ON bvp.profile_id = p.id
+  LEFT JOIN audience_profiles    audp ON audp.profile_id = p.id
+`;
+
+// Fetch full merged profile row by profile id (used internally for completeness checks).
+function getFullProfileById(profileId) {
+  return db.prepare(`${FULL_PROFILE_SQL} WHERE p.id = ?`).get(profileId);
+}
+
+// UPSERT a set of brand voice fields for a given profile.
+// Incoming null values are ignored (COALESCE preserves existing DB value).
+async function upsertBrandVoice(profileId, fields) {
+  const cols = Object.keys(fields).filter(k => fields[k] !== undefined);
+  if (cols.length === 0) return;
+  const placeholders = cols.map(() => '?').join(', ');
+  const setClauses   = cols.map(c => `${c} = COALESCE(EXCLUDED.${c}, brand_voice_profiles.${c})`).join(', ');
+  await db.prepare(`
+    INSERT INTO brand_voice_profiles (profile_id, ${cols.join(', ')})
+    VALUES (?, ${placeholders})
+    ON CONFLICT (profile_id) DO UPDATE SET ${setClauses}, updated_at = CURRENT_TIMESTAMP
+  `).run(profileId, ...cols.map(c => fields[c]));
+}
+
+// UPSERT a set of audience fields for a given profile.
+async function upsertAudienceProfile(profileId, fields) {
+  const cols = Object.keys(fields).filter(k => fields[k] !== undefined);
+  if (cols.length === 0) return;
+  const placeholders = cols.map(() => '?').join(', ');
+  const setClauses   = cols.map(c => `${c} = COALESCE(EXCLUDED.${c}, audience_profiles.${c})`).join(', ');
+  await db.prepare(`
+    INSERT INTO audience_profiles (profile_id, ${cols.join(', ')})
+    VALUES (?, ${placeholders})
+    ON CONFLICT (profile_id) DO UPDATE SET ${setClauses}, updated_at = CURRENT_TIMESTAMP
+  `).run(profileId, ...cols.map(c => fields[c]));
+}
+
+// ---------------------------------------------------------------------------
 // GET /api/profile/:user_id?
-// Assembles profile from three tables: user_profiles (identity), workspaces
-// (brand settings), profiles (voice DNA + positioning). Returns same shape as
-// the old single-table response so the frontend needs no changes.
+// Assembles profile from: user_profiles (identity), workspaces (brand settings),
+// profiles + brand_voice_profiles + audience_profiles (voice DNA). Returns the
+// same flat shape as before — consumers need no changes.
 // ---------------------------------------------------------------------------
 router.get('/:user_id?', async (req, res) => {
   const userId   = req.userId;
   const tenantId = req.tenantId;
 
-  // Optional ?profile_id=N loads a specific profile (must belong to this workspace).
-  // Used by voice-dna.html to display a personal LinkedIn profile's extracted DNA.
   const requestedProfileId = req.query.profile_id ? Number(req.query.profile_id) : null;
 
-  const PROFILE_SELECT = `
-    SELECT id, display_name, avatar_url,
-           brand_description, brand_industry, brand_personality_traits, brand_emotional_tone,
-           elevator_main_result, elevator_mechanism, brand_archetype, brand_core_beliefs,
-           brand_phrases_to_use, brand_story_origin, brand_voice_profile_json,
-           audience_description, audience_goals, audience_obstacles,
-           audience_core_beliefs_market, audience_buying_stage, audience_market_sophistication,
-           audience_profile_json,
-           voice_fingerprint, writing_samples, onboarding_complete,
-           website_url, website_summary,
-           onboarding_q2, onboarding_q3,
-           authority_statements, cta_library, content_principles, content_themes,
-           voice_extraction_quality, voice_profile_completion_pct,
-           input_examples, voice_refinements, content_pillars,
-           user_archetype_preference
-  `;
-
-  const profileQuery = requestedProfileId
-    ? db.prepare(`${PROFILE_SELECT} FROM profiles WHERE id = ? AND workspace_id = ?`)
-        .get(requestedProfileId, tenantId)
-    : db.prepare(`${PROFILE_SELECT} FROM profiles WHERE workspace_id = ? AND is_default = true`)
-        .get(tenantId);
+  const profileQueryPromise = requestedProfileId
+    ? db.prepare(`${FULL_PROFILE_SQL} WHERE p.id = ? AND p.workspace_id = ?`).get(requestedProfileId, tenantId)
+    : db.prepare(`${FULL_PROFILE_SQL} WHERE p.workspace_id = ? AND p.is_default = true`).get(tenantId);
 
   let userRow, wsRow, profileRow;
   try {
     [userRow, wsRow, profileRow] = await Promise.all([
       db.prepare('SELECT user_role, email, display_name FROM user_profiles WHERE user_id = ?').get(userId),
       db.prepare('SELECT brand_name, brand_bg, brand_accent, brand_text, brand_logo FROM workspaces WHERE id = ?').get(tenantId),
-      profileQuery,
+      profileQueryPromise,
     ]);
   } catch (err) {
     console.error('[profile/get] DB error:', err.message);
@@ -115,9 +153,11 @@ router.get('/:user_id?', async (req, res) => {
 // ---------------------------------------------------------------------------
 // POST /api/profile
 // Routes each field to the correct table:
-//   user_role              → user_profiles  (identity — per person, not per workspace)
-//   brand_name/bg/accent/… → workspaces     (brand settings)
-//   everything else        → profiles       (voice DNA + positioning)
+//   user_role              → user_profiles
+//   brand_name/bg/…        → workspaces
+//   brand_*/elevator_*     → brand_voice_profiles (UPSERT)
+//   audience_*             → audience_profiles    (UPSERT)
+//   everything else        → profiles
 // ---------------------------------------------------------------------------
 router.post('/', async (req, res) => {
   const userId   = req.userId;
@@ -158,7 +198,6 @@ router.post('/', async (req, res) => {
     return res.status(400).json({ ok: false, error: 'no_fields_provided' });
   }
 
-  // Fetch brand profile — needed for change detection and profileId routing
   const brandProfile = await db.prepare(
     'SELECT id, writing_samples, onboarding_complete FROM profiles WHERE workspace_id = ? AND is_default = true'
   ).get(tenantId);
@@ -170,11 +209,10 @@ router.post('/', async (req, res) => {
   const profileId      = brandProfile.id;
   const samplesChanged = writing_samples && writing_samples !== brandProfile.writing_samples;
 
-  // Normalise onboarding_complete to boolean (PostgreSQL) or null (preserve existing via COALESCE)
   const obComplete = (onboarding_complete === 1 || onboarding_complete === true
     || onboarding_complete === '1' || onboarding_complete === 'true') ? true : null;
 
-  // 1. Identity → user_profiles (no tenant_id column post-migration)
+  // 1. Identity → user_profiles
   if (user_role !== undefined && user_role !== null) {
     await db.prepare(
       'UPDATE user_profiles SET user_role = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?'
@@ -201,52 +239,27 @@ router.post('/', async (req, res) => {
     );
   }
 
-  // 3. Voice DNA + Brand Voice + Audience → profiles (COALESCE preserves fields not in this request)
+  // 3. Core Voice DNA → profiles
   await db.prepare(`
     UPDATE profiles SET
-      writing_samples                = COALESCE(?, writing_samples),
-      brand_description              = COALESCE(?, brand_description),
-      brand_industry                 = COALESCE(?, brand_industry),
-      brand_personality_traits       = COALESCE(?, brand_personality_traits),
-      brand_emotional_tone           = COALESCE(?, brand_emotional_tone),
-      elevator_main_result           = COALESCE(?, elevator_main_result),
-      elevator_mechanism             = COALESCE(?, elevator_mechanism),
-      brand_archetype                = COALESCE(?, brand_archetype),
-      brand_core_beliefs             = COALESCE(?, brand_core_beliefs),
-      brand_phrases_to_use           = COALESCE(?, brand_phrases_to_use),
-      brand_story_origin             = COALESCE(?, brand_story_origin),
-      brand_voice_profile_json       = COALESCE(?, brand_voice_profile_json),
-      audience_description           = COALESCE(?, audience_description),
-      audience_goals                 = COALESCE(?, audience_goals),
-      audience_obstacles             = COALESCE(?, audience_obstacles),
-      audience_core_beliefs_market   = COALESCE(?, audience_core_beliefs_market),
-      audience_buying_stage          = COALESCE(?, audience_buying_stage),
-      audience_market_sophistication = COALESCE(?, audience_market_sophistication),
-      audience_profile_json          = COALESCE(?, audience_profile_json),
-      website_url                    = COALESCE(?, website_url),
-      website_summary                = COALESCE(?, website_summary),
-      website_extracted_at           = COALESCE(?, website_extracted_at),
-      onboarding_q2                  = COALESCE(?, onboarding_q2),
-      onboarding_q3                  = COALESCE(?, onboarding_q3),
-      onboarding_q_completed_at      = COALESCE(?, onboarding_q_completed_at),
-      onboarding_completed_at        = COALESCE(?, onboarding_completed_at),
-      authority_statements           = COALESCE(?, authority_statements),
-      cta_library                    = COALESCE(?, cta_library),
-      content_principles             = COALESCE(?, content_principles),
-      content_themes                 = COALESCE(?, content_themes),
-      content_pillars                = COALESCE(?, content_pillars),
-      onboarding_complete            = COALESCE(?, onboarding_complete),
-      updated_at                     = CURRENT_TIMESTAMP
+      writing_samples           = COALESCE(?, writing_samples),
+      website_url               = COALESCE(?, website_url),
+      website_summary           = COALESCE(?, website_summary),
+      website_extracted_at      = COALESCE(?, website_extracted_at),
+      onboarding_q2             = COALESCE(?, onboarding_q2),
+      onboarding_q3             = COALESCE(?, onboarding_q3),
+      onboarding_q_completed_at = COALESCE(?, onboarding_q_completed_at),
+      onboarding_completed_at   = COALESCE(?, onboarding_completed_at),
+      authority_statements      = COALESCE(?, authority_statements),
+      cta_library               = COALESCE(?, cta_library),
+      content_principles        = COALESCE(?, content_principles),
+      content_themes            = COALESCE(?, content_themes),
+      content_pillars           = COALESCE(?, content_pillars),
+      onboarding_complete       = COALESCE(?, onboarding_complete),
+      updated_at                = CURRENT_TIMESTAMP
     WHERE id = ?
   `).run(
     writing_samples || null,
-    brand_description || null, brand_industry || null, brand_personality_traits || null,
-    brand_emotional_tone || null, elevator_main_result || null, elevator_mechanism || null,
-    brand_archetype || null, brand_core_beliefs || null, brand_phrases_to_use || null,
-    brand_story_origin || null, brand_voice_profile_json || null,
-    audience_description || null, audience_goals || null, audience_obstacles || null,
-    audience_core_beliefs_market || null, audience_buying_stage || null,
-    audience_market_sophistication || null, audience_profile_json || null,
     website_url || null, website_summary || null, website_extracted_at || null,
     onboarding_q2 || null, onboarding_q3 || null,
     onboarding_q_completed_at || null, onboarding_completed_at || null,
@@ -256,7 +269,37 @@ router.post('/', async (req, res) => {
     profileId,
   );
 
-  // 4a. Fingerprint extraction when writing_samples changes (fire-and-forget)
+  // 4. Brand Voice → brand_voice_profiles (UPSERT)
+  if (hasBrandVoiceField) {
+    await upsertBrandVoice(profileId, {
+      brand_description:        brand_description        || null,
+      brand_industry:           brand_industry           || null,
+      brand_personality_traits: brand_personality_traits || null,
+      brand_emotional_tone:     brand_emotional_tone     || null,
+      elevator_main_result:     elevator_main_result     || null,
+      elevator_mechanism:       elevator_mechanism       || null,
+      brand_archetype:          brand_archetype          || null,
+      brand_core_beliefs:       brand_core_beliefs       || null,
+      brand_phrases_to_use:     brand_phrases_to_use     || null,
+      brand_story_origin:       brand_story_origin       || null,
+      brand_voice_profile_json: brand_voice_profile_json || null,
+    });
+  }
+
+  // 5. Audience → audience_profiles (UPSERT)
+  if (hasAudienceField) {
+    await upsertAudienceProfile(profileId, {
+      audience_description:           audience_description           || null,
+      audience_goals:                 audience_goals                 || null,
+      audience_obstacles:             audience_obstacles             || null,
+      audience_core_beliefs_market:   audience_core_beliefs_market   || null,
+      audience_buying_stage:          audience_buying_stage          || null,
+      audience_market_sophistication: audience_market_sophistication || null,
+      audience_profile_json:          audience_profile_json          || null,
+    });
+  }
+
+  // 6a. Fingerprint extraction when writing_samples changes (fire-and-forget)
   if (samplesChanged) {
     const { seedPhrasesFromWritingSamples } = require('../services/writingSampleSeeder');
     seedPhrasesFromWritingSamples(userId, tenantId, writing_samples)
@@ -277,7 +320,7 @@ router.post('/', async (req, res) => {
           await db.prepare(
             'UPDATE profiles SET voice_fingerprint = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
           ).run(JSON.stringify(fingerprint), profileId);
-          const updatedProfile = await db.prepare('SELECT * FROM profiles WHERE id = ?').get(profileId);
+          const updatedProfile = await getFullProfileById(profileId);
           const liRow = await db.prepare(
             'SELECT 1 FROM linkedin_connections WHERE workspace_id = ? AND is_default = true'
           ).get(tenantId);
@@ -289,7 +332,7 @@ router.post('/', async (req, res) => {
       })
       .catch(err => console.error('[profile] Fingerprint extraction failed (non-fatal):', err.message));
   } else if (hasVoiceDNAField) {
-    // 4b. Voice DNA extraction when Q&A answers arrive (fire-and-forget)
+    // 6b. Voice DNA extraction when Q&A answers arrive (fire-and-forget)
     const { extractVoiceDNAFromQA, calculateCompletionPct } = require('../services/voiceExtraction');
     const hasNewQA = onboarding_q2 || onboarding_q3;
     if (hasNewQA) {
@@ -298,7 +341,7 @@ router.post('/', async (req, res) => {
       );
     }
     Promise.resolve().then(async () => {
-      const updatedProfile = await db.prepare('SELECT * FROM profiles WHERE id = ?').get(profileId);
+      const updatedProfile = await getFullProfileById(profileId);
       const liRow = await db.prepare(
         'SELECT 1 FROM linkedin_connections WHERE workspace_id = ? AND is_default = true'
       ).get(tenantId);
@@ -309,8 +352,7 @@ router.post('/', async (req, res) => {
     }).catch(() => {});
   }
 
-  // 5. Onboarding completion: stamp timestamp + fire voice extraction jobs (fire-and-forget)
-  // Service signatures change to (profileId, opts) in Sprint 2; calls fail silently until then.
+  // 7. Onboarding completion: stamp timestamp + fire extraction jobs
   if (obComplete === true && !brandProfile.onboarding_complete) {
     await db.prepare(
       'UPDATE profiles SET onboarding_completed_at = CURRENT_TIMESTAMP WHERE id = ? AND onboarding_completed_at IS NULL'
@@ -337,8 +379,6 @@ router.post('/', async (req, res) => {
 
 // ---------------------------------------------------------------------------
 // POST /api/profile/extract-website
-// Fetches a user's website and extracts voice profile fields via Claude Haiku.
-// Used during onboarding to auto-fill niche, audience, and positioning fields.
 // ---------------------------------------------------------------------------
 router.post('/extract-website', async (req, res) => {
   const { url } = req.body;
@@ -387,11 +427,8 @@ Return null for any field you cannot confidently infer. Return only the JSON obj
     try {
       const match = raw.match(/\{[\s\S]*\}/);
       extracted = JSON.parse(match ? match[0] : raw);
-    } catch {
-      // Malformed JSON — return empty (client falls back silently)
-    }
+    } catch { /* malformed JSON — client falls back silently */ }
 
-    // Ensure brand_core_beliefs is stored as a JSON string
     if (Array.isArray(extracted.brand_core_beliefs)) {
       extracted.brand_core_beliefs = JSON.stringify(extracted.brand_core_beliefs);
     }
@@ -401,7 +438,6 @@ Return null for any field you cannot confidently infer. Return only the JSON obj
     if (extracted.audience_description) summaryParts.push(`Audience: ${extracted.audience_description}`);
     const website_summary = summaryParts.join(' ') || null;
 
-    // Persist website_summary to workspace's default profile (fire-and-forget)
     if (website_summary) {
       db.prepare(
         `UPDATE profiles SET website_summary = ?, website_extracted_at = CURRENT_TIMESTAMP
@@ -409,7 +445,6 @@ Return null for any field you cannot confidently infer. Return only the JSON obj
       ).run(website_summary, req.tenantId).catch(() => {});
     }
 
-    // Crawl blog articles for richer voice signal (fire-and-forget)
     const { extractBlogPosts } = require('../services/vaultMiner');
     extractBlogPosts(url)
       .then(articlesText => {
@@ -430,8 +465,6 @@ Return null for any field you cannot confidently infer. Return only the JSON obj
 
 // ---------------------------------------------------------------------------
 // POST /api/profile/suggest-themes
-// Uses Haiku to suggest 4-6 content themes from the user's profile data.
-// Used by the Voice Profile Wizard Stage 1 to seed the themes chip picker.
 // ---------------------------------------------------------------------------
 router.post('/suggest-themes', async (req, res) => {
   const Anthropic = require('@anthropic-ai/sdk');
@@ -439,9 +472,13 @@ router.post('/suggest-themes', async (req, res) => {
 
   try {
     const profile = await db.prepare(`
-      SELECT brand_description, website_summary, brand_core_beliefs,
-             audience_description, onboarding_q2, onboarding_q3
-      FROM profiles WHERE workspace_id = ? AND is_default = true
+      SELECT p.website_summary, p.onboarding_q2, p.onboarding_q3,
+             bvp.brand_description, bvp.brand_core_beliefs,
+             audp.audience_description
+      FROM profiles p
+      LEFT JOIN brand_voice_profiles bvp ON bvp.profile_id = p.id
+      LEFT JOIN audience_profiles    audp ON audp.profile_id = p.id
+      WHERE p.workspace_id = ? AND p.is_default = true
     `).get(req.tenantId);
 
     if (!profile) return res.json({ ok: true, themes: [] });
@@ -504,8 +541,6 @@ Return ONLY a JSON array of strings:
 
 // ---------------------------------------------------------------------------
 // POST /api/profile/generate-positioning
-// Generates a one-sentence positioning statement from niche + audience + pain.
-// Returns the suggestion — does NOT save to DB. Client saves via POST /api/profile.
 // ---------------------------------------------------------------------------
 router.post('/generate-positioning', async (req, res) => {
   const { brand_description, audience_description } = req.body;
@@ -546,8 +581,6 @@ Be concrete and specific. No preamble, no quotes around the sentence.`,
 
 // ---------------------------------------------------------------------------
 // POST /api/profile/generate-input-examples
-// Generates niche-specific textarea placeholder examples and stores them.
-// Called manually (e.g. from settings) or auto-triggered at onboarding completion.
 // ---------------------------------------------------------------------------
 router.post('/generate-input-examples', async (req, res) => {
   try {
@@ -570,8 +603,6 @@ router.post('/generate-input-examples', async (req, res) => {
 
 // ---------------------------------------------------------------------------
 // POST /api/profile/generate-content-pillars
-// Generates content pillars from niche + onboarding Q&A and stores them.
-// Called at onboarding completion or manually from settings.
 // ---------------------------------------------------------------------------
 router.post('/generate-content-pillars', async (req, res) => {
   try {
@@ -594,9 +625,7 @@ router.post('/generate-content-pillars', async (req, res) => {
 
 // ---------------------------------------------------------------------------
 // POST /api/profile/:id/voice-setup
-// Saves writing samples + Q&A for a person-type profile and fires voice
-// extraction jobs. Called by the mini-onboarding modal shown immediately
-// after a personal LinkedIn account is connected.
+// Saves writing samples + Q&A for a LinkedIn-linked profile.
 // ---------------------------------------------------------------------------
 router.post('/:id/voice-setup', async (req, res) => {
   const profileId = Number(req.params.id);
@@ -651,8 +680,7 @@ router.post('/:id/voice-setup', async (req, res) => {
 // ---------------------------------------------------------------------------
 // PUT /api/profile/person/:id
 // Update editable voice-DNA fields on a personal (LinkedIn) profile.
-// Only allows fields that make sense for a person profile — brand/workspace
-// fields (brand colours, positioning) are intentionally excluded.
+// Brand voice + audience fields route to their dedicated tables.
 // ---------------------------------------------------------------------------
 router.put('/person/:id', async (req, res) => {
   const tenantId  = req.tenantId;
@@ -667,34 +695,48 @@ router.put('/person/:id', async (req, res) => {
     ).get(profileId, tenantId);
     if (!existing) return res.status(404).json({ ok: false, error: 'not_found' });
 
-    const allowed = [
+    const brandVoiceAllowed = [
       'brand_description', 'brand_industry', 'brand_personality_traits', 'brand_emotional_tone',
       'elevator_main_result', 'elevator_mechanism', 'brand_archetype', 'brand_core_beliefs',
       'brand_phrases_to_use', 'brand_story_origin',
+    ];
+    const audienceAllowed = [
       'audience_description', 'audience_goals', 'audience_obstacles',
       'audience_core_beliefs_market', 'audience_buying_stage', 'audience_market_sophistication',
-      'content_pillars', 'content_themes',
     ];
+    const profileAllowed = ['content_pillars', 'content_themes'];
 
-    const updates = {};
-    for (const field of allowed) {
-      if (req.body[field] !== undefined) {
-        updates[field] = req.body[field] || null;
-      }
+    const bvUpdates  = {};
+    const audUpdates = {};
+    const pUpdates   = {};
+
+    for (const field of brandVoiceAllowed) {
+      if (req.body[field] !== undefined) bvUpdates[field]  = req.body[field] || null;
+    }
+    for (const field of audienceAllowed) {
+      if (req.body[field] !== undefined) audUpdates[field] = req.body[field] || null;
+    }
+    for (const field of profileAllowed) {
+      if (req.body[field] !== undefined) pUpdates[field]   = req.body[field] || null;
     }
 
-    if (Object.keys(updates).length === 0) {
+    if (Object.keys(bvUpdates).length === 0 && Object.keys(audUpdates).length === 0
+        && Object.keys(pUpdates).length === 0) {
       return res.json({ ok: true, updated: [] });
     }
 
-    const setClauses = Object.keys(updates).map(k => `${k} = ?`).join(', ');
-    const values     = [...Object.values(updates), profileId, tenantId];
+    if (Object.keys(bvUpdates).length > 0)  await upsertBrandVoice(profileId, bvUpdates);
+    if (Object.keys(audUpdates).length > 0) await upsertAudienceProfile(profileId, audUpdates);
 
-    await db.prepare(
-      `UPDATE profiles SET ${setClauses}, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND workspace_id = ?`
-    ).run(...values);
+    if (Object.keys(pUpdates).length > 0) {
+      const setClauses = Object.keys(pUpdates).map(k => `${k} = ?`).join(', ');
+      const values     = [...Object.values(pUpdates), profileId, tenantId];
+      await db.prepare(
+        `UPDATE profiles SET ${setClauses}, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND workspace_id = ?`
+      ).run(...values);
+    }
 
-    return res.json({ ok: true, updated: Object.keys(updates) });
+    return res.json({ ok: true, updated: [...Object.keys(bvUpdates), ...Object.keys(audUpdates), ...Object.keys(pUpdates)] });
   } catch (err) {
     console.error('[profile/person/put] Error:', err.message);
     return res.status(500).json({ ok: false, error: err.message });
@@ -703,27 +745,31 @@ router.put('/person/:id', async (req, res) => {
 
 // ---------------------------------------------------------------------------
 // POST /api/profile/brand-voice/generate
-// Runs the Brand Voice AI prompt against current profile fields.
 // mode=prefill: returns AI-drafted Step 2 suggestions (does not save).
-// mode=final: returns full brand_voice_profile JSON and saves to DB.
+// mode=final: returns full brand voice JSON and saves to brand_voice_profiles.
 // ---------------------------------------------------------------------------
 router.post('/brand-voice/generate', async (req, res) => {
   const { tenantId } = req;
   const { mode = 'prefill' } = req.body;
 
   try {
-    const profile = await db.prepare(
-      'SELECT * FROM profiles WHERE workspace_id = ? AND is_default = true'
-    ).get(tenantId);
+    const profile = await db.prepare(`
+      ${FULL_PROFILE_SQL} WHERE p.workspace_id = ? AND p.is_default = true
+    `).get(tenantId);
     if (!profile) return res.status(404).json({ ok: false, error: 'no_profile' });
 
     const { generateBrandVoiceProfile } = require('../lib/prompts/brandVoicePrompt');
     const result = await generateBrandVoiceProfile(profile, mode);
 
     if (mode === 'final' && result?.brand_voice_profile_json) {
-      await db.prepare(
-        'UPDATE profiles SET brand_voice_profile_json = ?, updated_at = CURRENT_TIMESTAMP WHERE workspace_id = ? AND is_default = true'
-      ).run(result.brand_voice_profile_json, tenantId);
+      const profileIdRow = await db.prepare(
+        'SELECT id FROM profiles WHERE workspace_id = ? AND is_default = true'
+      ).get(tenantId);
+      if (profileIdRow) {
+        await upsertBrandVoice(profileIdRow.id, {
+          brand_voice_profile_json: result.brand_voice_profile_json,
+        });
+      }
     }
 
     return res.json({ ok: true, ...result });
@@ -735,27 +781,31 @@ router.post('/brand-voice/generate', async (req, res) => {
 
 // ---------------------------------------------------------------------------
 // POST /api/profile/audience/generate
-// Runs the Audience AI prompt against current profile fields.
 // mode=prefill: returns AI-drafted Step 2 suggestions (does not save).
-// mode=final: returns full audience profile JSON and saves to DB.
+// mode=final: returns full audience JSON and saves to audience_profiles.
 // ---------------------------------------------------------------------------
 router.post('/audience/generate', async (req, res) => {
   const { tenantId } = req;
   const { mode = 'prefill' } = req.body;
 
   try {
-    const profile = await db.prepare(
-      'SELECT * FROM profiles WHERE workspace_id = ? AND is_default = true'
-    ).get(tenantId);
+    const profile = await db.prepare(`
+      ${FULL_PROFILE_SQL} WHERE p.workspace_id = ? AND p.is_default = true
+    `).get(tenantId);
     if (!profile) return res.status(404).json({ ok: false, error: 'no_profile' });
 
     const { generateAudienceProfile } = require('../lib/prompts/audiencePrompt');
     const result = await generateAudienceProfile(profile, mode);
 
     if (mode === 'final' && result?.audience_profile_json) {
-      await db.prepare(
-        'UPDATE profiles SET audience_profile_json = ?, updated_at = CURRENT_TIMESTAMP WHERE workspace_id = ? AND is_default = true'
-      ).run(result.audience_profile_json, tenantId);
+      const profileIdRow = await db.prepare(
+        'SELECT id FROM profiles WHERE workspace_id = ? AND is_default = true'
+      ).get(tenantId);
+      if (profileIdRow) {
+        await upsertAudienceProfile(profileIdRow.id, {
+          audience_profile_json: result.audience_profile_json,
+        });
+      }
     }
 
     return res.json({ ok: true, ...result });

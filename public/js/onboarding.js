@@ -22,6 +22,7 @@ const Onboarding = (() => {
     linkedinConnected:     false,
     websiteUrl:            null,
     brandDescription:      '',
+    audienceExtracted:     '',    // audience_description from website extraction
     brandIndustry:         '',
     brandPersonalityTraits: [],   // string[]
     audiencePrimary:       '',
@@ -187,8 +188,9 @@ const Onboarding = (() => {
         ['brand_description', 'elevator_main_result', 'audience_description', 'brand_core_beliefs']
           .forEach(k => { if (data[k]) fields[k] = data[k]; });
 
-        // Pre-seed state.brandDescription from extraction
-        if (data.brand_description) state.brandDescription = data.brand_description;
+        // Pre-seed state fields from extraction for later pre-fill
+        if (data.brand_description)   state.brandDescription   = data.brand_description;
+        if (data.audience_description) state.audienceExtracted = data.audience_description;
 
         if (Object.keys(fields).length > 0) {
           await fetch('/api/profile', {
@@ -206,8 +208,12 @@ const Onboarding = (() => {
     if (nextBtn) nextBtn.disabled = false;
 
     // Pre-fill step 4 textarea if we got brand_description
-    const descEl = qs('ob-brand-description');
-    if (descEl && state.brandDescription) descEl.value = state.brandDescription;
+    const descEl  = qs('ob-brand-description');
+    const descHint = qs('ob-brand-prefill-hint');
+    if (descEl && state.brandDescription) {
+      descEl.value = state.brandDescription;
+      if (descHint) descHint.hidden = false;
+    }
 
     showScreen('s4');
   }
@@ -329,6 +335,17 @@ const Onboarding = (() => {
     qs('ob-audience-primary')?.addEventListener('keydown', e => {
       if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) qs('ob-s7-next')?.click();
     });
+
+    // Pre-fill from website extraction if available
+    // Done lazily here (not at extraction time) so the textarea exists in the DOM.
+    if (state.audienceExtracted) {
+      const ta  = qs('ob-audience-primary');
+      const hint = qs('ob-audience-prefill-hint');
+      if (ta && !ta.value) {
+        ta.value = state.audienceExtracted;
+        if (hint) hint.hidden = false;
+      }
+    }
   }
 
   /* ── Step 8: Demographics ───────────────────────────────── */

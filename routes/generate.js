@@ -13,6 +13,7 @@ const { generateFrameworkPost }    = require('../services/frameworkHowToPath');
 const { generateAnnouncementPost } = require('../services/announcementPath');
 const { generateLeadGenPost }      = require('../services/leadGenOfferPath');
 const { generateLessonsLearnedPost } = require('../services/lessonsLearnedPath');
+const { generatePisPost }            = require('../services/problemInsightSolutionPath');
 const { classifyContent } = require('../services/funnelClassifier');
 const { canGeneratePost } = require('../services/subscription');
 const { sendEmailToUser } = require('../emails');
@@ -746,6 +747,64 @@ router.post('/', async (req, res) => {
           return res.end();
         }
 
+        // ── Problem-Insight-Solution path ──────────────────────────────────
+        if (post_type === 'pis') {
+          sseWrite('step', { step: 'analyzing', label: 'Crafting your PIS post...' });
+
+          const pisResult = await generatePisPost(raw_idea, profile, {
+            lengthPreference: length_preference || 'Medium',
+          });
+
+          sseWrite('step', { step: 'saving', label: 'Final quality check...' });
+
+          const pisGate = runQualityGate(pisResult.post, {
+            ...gateOptions(
+              { format_slug: IDEA_SLUG, content: pisResult.post },
+              profile, 'idea', null, 'pis'
+            ),
+            postType: 'pis',
+          });
+
+          const pisRunResult = await db.prepare(`
+            INSERT INTO generation_runs (user_id, tenant_id, path, input_data, synthesis)
+            VALUES (?, ?, ?, ?, ?)
+            RETURNING id
+          `).run(userId, tenantId, genPath, JSON.stringify({ raw_idea }), JSON.stringify(pisResult.synthesis));
+          const pisRunId = pisRunResult.lastInsertRowid;
+
+          const pisInsert = await db.prepare(`
+            INSERT INTO generated_posts
+              (run_id, user_id, tenant_id, profile_id, format_slug, content, ai_content, quality_score, quality_flags, passed_gate,
+               funnel_type, vault_source_ref, idea_input, archetype_used, source,
+               post_type, quality_verdict)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            RETURNING id
+          `).run(
+            pisRunId, userId, tenantId, profile.id, IDEA_SLUG,
+            pisResult.post, pisResult.post,
+            pisGate.score, JSON.stringify(pisGate.flags), pisGate.passed_gate ? 1 : 0,
+            'pis', null,
+            raw_idea || null, null, source || null,
+            'pis', pisGate.verdict || null
+          );
+          const pisId = pisInsert.lastInsertRowid;
+
+          const pisQuality = buildQualityPayload(pisGate, 1, true);
+
+          sseWrite('done', {
+            post_id:          pisId,
+            run_id:           pisRunId,
+            post:             pisResult.post,
+            quality:          { ...pisQuality, verdict: pisGate.verdict },
+            archetypeUsed:    null,
+            funnel_type:      'pis',
+            post_type:        'pis',
+            stage1Blueprint:  null,
+            content_feedback: null,
+          });
+          return res.end();
+        }
+
         // ── Standard path (Reach / Convert) ───────────────────────────────
         sseWrite('step', { step: 'analyzing', label: 'Analyzing your idea...' });
 
@@ -980,6 +1039,25 @@ router.post('/', async (req, res) => {
         post:            leadGenResult.post,
         archetypeUsed:   null,
         primaryGate:     leadGenGate,
+        contentFeedback: null,
+      };
+    } else if (post_type === 'pis' && !vaultIdea) {
+      // ── Problem-Insight-Solution path (non-streaming) ────────────────────
+      const pisResult = await generatePisPost(raw_idea, profile, {
+        lengthPreference: length_preference || 'Medium',
+      });
+      const pisGate = runQualityGate(pisResult.post, {
+        ...gateOptions(
+          { format_slug: IDEA_SLUG, content: pisResult.post },
+          profile, 'idea', null, 'pis'
+        ),
+        postType: 'pis',
+      });
+      ideaResult = {
+        synthesis:       pisResult.synthesis,
+        post:            pisResult.post,
+        archetypeUsed:   null,
+        primaryGate:     pisGate,
         contentFeedback: null,
       };
     } else if (vaultIdea) {

@@ -8,6 +8,7 @@ const { ideaToPost, vaultSeedToPost } = require('../services/ideaPath');
 const { generateAuthorityPost } = require('../services/authorityExpertisePath');
 const { generateStoryPost }     = require('../services/storyPersonalExperiencePath');
 const { generateBtsPost }          = require('../services/behindTheScenesPath');
+const { generateContrarianPost }   = require('../services/contrarianHotTakePath');
 const { generateAnnouncementPost } = require('../services/announcementPath');
 const { classifyContent } = require('../services/funnelClassifier');
 const { canGeneratePost } = require('../services/subscription');
@@ -451,6 +452,64 @@ router.post('/', async (req, res) => {
           return res.end();
         }
 
+        // ── Contrarian / Hot Take path ────────────────────────────────────
+        if (post_type === 'contrarian') {
+          sseWrite('step', { step: 'analyzing', label: 'Crafting your hot take...' });
+
+          const contrarianResult = await generateContrarianPost(raw_idea, profile, {
+            lengthPreference: length_preference || 'Medium',
+          });
+
+          sseWrite('step', { step: 'saving', label: 'Final quality check...' });
+
+          const contrarianGate = runQualityGate(contrarianResult.post, {
+            ...gateOptions(
+              { format_slug: IDEA_SLUG, content: contrarianResult.post },
+              profile, 'idea', null, 'contrarian'
+            ),
+            postType: 'contrarian',
+          });
+
+          const contrarianRunResult = await db.prepare(`
+            INSERT INTO generation_runs (user_id, tenant_id, path, input_data, synthesis)
+            VALUES (?, ?, ?, ?, ?)
+            RETURNING id
+          `).run(userId, tenantId, genPath, JSON.stringify({ raw_idea }), JSON.stringify(contrarianResult.synthesis));
+          const contrarianRunId = contrarianRunResult.lastInsertRowid;
+
+          const contrarianInsert = await db.prepare(`
+            INSERT INTO generated_posts
+              (run_id, user_id, tenant_id, profile_id, format_slug, content, ai_content, quality_score, quality_flags, passed_gate,
+               funnel_type, vault_source_ref, idea_input, archetype_used, source,
+               post_type, quality_verdict)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            RETURNING id
+          `).run(
+            contrarianRunId, userId, tenantId, profile.id, IDEA_SLUG,
+            contrarianResult.post, contrarianResult.post,
+            contrarianGate.score, JSON.stringify(contrarianGate.flags), contrarianGate.passed_gate ? 1 : 0,
+            'contrarian', null,
+            raw_idea || null, null, source || null,
+            'contrarian', contrarianGate.verdict || null
+          );
+          const contrarianId = contrarianInsert.lastInsertRowid;
+
+          const contrarianQuality = buildQualityPayload(contrarianGate, 1, true);
+
+          sseWrite('done', {
+            post_id:          contrarianId,
+            run_id:           contrarianRunId,
+            post:             contrarianResult.post,
+            quality:          { ...contrarianQuality, verdict: contrarianGate.verdict },
+            archetypeUsed:    null,
+            funnel_type:      'contrarian',
+            post_type:        'contrarian',
+            stage1Blueprint:  null,
+            content_feedback: null,
+          });
+          return res.end();
+        }
+
         // ── Announcement path ─────────────────────────────────────────────
         if (post_type === 'announcement') {
           sseWrite('step', { step: 'analyzing', label: 'Writing your announcement...' });
@@ -582,6 +641,7 @@ router.post('/', async (req, res) => {
         } else if (sseErr.status === 429 || sseErr.status === 529) {
           sseWrite('error', { error: 'high_demand', retry_after_sec: 30 });
         } else {
+          console.error('[generate/sse] error post_type=%s:', post_type, sseErr);
           sseWrite('error', { error: sseErr.message || 'generation_failed' });
         }
         return res.end();
@@ -646,6 +706,25 @@ router.post('/', async (req, res) => {
         post:            btsResult.post,
         archetypeUsed:   null,
         primaryGate:     btsGate,
+        contentFeedback: null,
+      };
+    } else if (post_type === 'contrarian' && !vaultIdea) {
+      // ── Contrarian / Hot Take path (non-streaming) ────────────────────────
+      const contrarianResult = await generateContrarianPost(raw_idea, profile, {
+        lengthPreference: length_preference || 'Medium',
+      });
+      const contrarianGate = runQualityGate(contrarianResult.post, {
+        ...gateOptions(
+          { format_slug: IDEA_SLUG, content: contrarianResult.post },
+          profile, 'idea', null, 'contrarian'
+        ),
+        postType: 'contrarian',
+      });
+      ideaResult = {
+        synthesis:       contrarianResult.synthesis,
+        post:            contrarianResult.post,
+        archetypeUsed:   null,
+        primaryGate:     contrarianGate,
         contentFeedback: null,
       };
     } else if (post_type === 'announcement' && !vaultIdea) {
@@ -1239,9 +1318,13 @@ router.post('/chat-intake', async (req, res) => {
 
   try {
     const profile = await db.prepare(`
-      SELECT brand_description, audience_description, audience_obstacles,
-             brand_core_beliefs, authority_statements, voice_fingerprint, onboarding_q2
-      FROM   profiles WHERE workspace_id = ? AND is_default = true
+      SELECT p.authority_statements, p.voice_fingerprint, p.onboarding_q2,
+             bvp.brand_description, bvp.brand_core_beliefs,
+             ap.audience_description, ap.audience_obstacles
+      FROM   profiles p
+      LEFT JOIN brand_voice_profiles bvp ON bvp.profile_id = p.id
+      LEFT JOIN audience_profiles ap ON ap.profile_id = p.id
+      WHERE  p.workspace_id = ? AND p.is_default = true
     `).get(tenantId);
 
     const brandDesc  = profile?.brand_description || '';

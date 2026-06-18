@@ -238,8 +238,8 @@ async function createPersonalWorkspace(userId, displayName) {
     'INSERT INTO workspace_members (workspace_id, user_id, role, joined_at) VALUES (?, ?, ?, now())'
   ).run(workspaceId, userId, 'owner');
   await db.prepare(
-    'INSERT INTO profiles (workspace_id, profile_type, display_name, is_default, onboarding_complete) VALUES (?, ?, ?, true, false)'
-  ).run(workspaceId, 'brand', displayName);
+    'INSERT INTO profiles (workspace_id, display_name, is_default, onboarding_complete) VALUES (?, ?, true, false)'
+  ).run(workspaceId, displayName);
   return workspaceId;
 }
 

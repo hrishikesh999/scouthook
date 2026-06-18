@@ -165,7 +165,7 @@ async function buildBtsSystemPrompt(profile) {
 
 async function generateBtsPost(rawIdea, profile, { lengthPreference = 'Medium', ctaIntent = '' } = {}) {
   const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
-  if (!apiKey) throw new Error('no_api_key');
+  if (!apiKey) throw new Error('anthropic_api_key not configured');
 
   const Anthropic = require('@anthropic-ai/sdk');
   const client = new Anthropic({ apiKey });

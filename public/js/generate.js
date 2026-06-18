@@ -72,6 +72,11 @@ let _btsTopic               = '';
 let _btsTurningPoint        = '';
 let _btsSupportingContext   = '';
 let _btsLengthPreference    = 'Medium';
+let _contrarianChatStep         = 0;       // 0=belief, 1=pov, 2=reason, 3=length
+let _contrarianBelief           = '';
+let _contrarianPov              = '';
+let _contrarianSupportingReason = '';
+let _contrarianLengthPreference = 'Medium';
 let _announcementChatStep      = 0;        // 0=occasion, 1=length
 let _announcementOccasion      = '';
 let _announcementLengthPreference = 'Medium';
@@ -113,6 +118,7 @@ const CHAT_CONFIGS = {
   trust:   { label: '✏️ Authority/Expertise' },
   story:   { label: '📖 Story/Personal Experience' },
   bts:          { label: '🎬 Behind the Scenes' },
+  contrarian:   { label: '🔥 Contrarian / Hot Take' },
   announcement: { label: '🎉 Announcement' },
   convert:      { label: '💬 Conversation post' },
 };
@@ -178,6 +184,17 @@ const EXTRACTION_QUESTIONS = {
       required:    true,
       minChars:    20,
       errorMsg:    'Share the process or moment you\'re revealing — even a rough description is enough.',
+    },
+  ],
+  contrarian: [
+    {
+      key:         'contrarian_belief',
+      question:    'What mainstream belief do you want to challenge?',
+      helpText:    'The common assumption, myth, or "conventional wisdom" your audience holds — that you\'re about to push back on.',
+      placeholder: 'The belief most people in your field accept without question…',
+      required:    true,
+      minChars:    20,
+      errorMsg:    'Share the belief you\'re challenging — even a rough first draft is enough.',
     },
   ],
   announcement: [
@@ -254,7 +271,7 @@ function selectType(type) {
   const genHeader    = document.querySelector('.gen-header');
   const startingPills = document.getElementById('starting-pills');
   const pillQ        = document.getElementById('pill-question');
-  if (type === 'trust' || type === 'story' || type === 'announcement') {
+  if (type === 'trust' || type === 'story' || type === 'announcement' || type === 'contrarian') {
     if (genHeader)     genHeader.style.display     = 'none';
     if (startingPills) startingPills.style.display = 'none';
     if (pillQ)        { pillQ.textContent = ''; pillQ.classList.remove('visible'); }
@@ -830,6 +847,83 @@ const chat = (() => {
     return parts.join('\n\n');
   }
 
+  // ── Contrarian / Hot Take step renderers ──────────────────────────────────
+
+  function showContrarianPovQuestion() {
+    addQuestionBubble(
+      'Your POV / Hot Take',
+      'Your contrarian opinion or counter-belief. This is the core of the hot take — state it confidently.'
+    );
+    chatInput.placeholder = 'Your bold counter-belief or hot take…';
+    chatInput.focus();
+    chatThread.scrollTop = chatThread.scrollHeight;
+  }
+
+  function showContrarianSupportingReasonQuestion() {
+    const bubble = addQuestionBubble(
+      'Supporting Reason',
+      'Additional logic, observation, or experience that backs your POV. If left blank, ScoutHook will infer a strong reason from your brand and audience context.'
+    );
+    const skipBtn = document.createElement('button');
+    skipBtn.type      = 'button';
+    skipBtn.className = 'story-skip-btn';
+    skipBtn.textContent = 'Skip →';
+    skipBtn.addEventListener('click', () => {
+      _contrarianSupportingReason = '';
+      _contrarianChatStep = 3;
+      addUser('(skipped)');
+      chatInput.value       = '';
+      chatInput.style.height = '';
+      showContrarianLengthQuestion();
+    });
+    bubble.appendChild(skipBtn);
+    chatInput.placeholder = 'The logic, data, or experience that supports your view — or skip…';
+    chatInput.focus();
+    chatThread.scrollTop = chatThread.scrollHeight;
+  }
+
+  function showContrarianLengthQuestion() {
+    const bubble = addQuestionBubble(
+      'Post length',
+      'Short = a sharp, punchy take. Medium = belief + reasoning. Long = full breakdown with implication.'
+    );
+    const chips = document.createElement('div');
+    chips.className = 'authority-length-chips';
+
+    [
+      { value: 'Short',  label: 'Short',  hint: '6–10 lines'  },
+      { value: 'Medium', label: 'Medium', hint: '10–15 lines' },
+      { value: 'Long',   label: 'Long',   hint: '15–25 lines' },
+    ].forEach(({ value, label, hint }) => {
+      const btn = document.createElement('button');
+      btn.className = 'length-chip';
+      btn.type      = 'button';
+      btn.innerHTML = `${label} <span class="length-chip-hint">${hint}</span>`;
+      btn.addEventListener('click', () => {
+        _contrarianLengthPreference = value;
+        chips.querySelectorAll('.length-chip').forEach(c => c.classList.remove('active'));
+        btn.classList.add('active');
+        addUser(label);
+        triggerGenerate({ enrichedIdea: _buildContrarianPrompt() });
+      });
+      chips.appendChild(btn);
+    });
+
+    bubble.appendChild(chips);
+    chatThread.scrollTop = chatThread.scrollHeight;
+  }
+
+  function _buildContrarianPrompt() {
+    const parts = [
+      `MAINSTREAM BELIEF TO CHALLENGE:\n${_contrarianBelief}`,
+      `YOUR POV / HOT TAKE:\n${_contrarianPov}`,
+    ];
+    if (_contrarianSupportingReason.trim()) {
+      parts.push(`SUPPORTING REASON:\n${_contrarianSupportingReason}`);
+    }
+    return parts.join('\n\n');
+  }
+
   function showAnnouncementLengthQuestion() {
     const bubble = addQuestionBubble(
       'Post length',
@@ -912,6 +1006,11 @@ const chat = (() => {
     _btsTurningPoint        = '';
     _btsSupportingContext   = '';
     _btsLengthPreference    = 'Medium';
+    _contrarianChatStep         = 0;
+    _contrarianBelief           = '';
+    _contrarianPov              = '';
+    _contrarianSupportingReason = '';
+    _contrarianLengthPreference = 'Medium';
     _announcementChatStep      = 0;
     _announcementOccasion      = '';
     _announcementLengthPreference = 'Medium';
@@ -920,7 +1019,7 @@ const chat = (() => {
     chatThread.innerHTML = '';
     const q0 = EXTRACTION_QUESTIONS[type][0];
 
-    if (type === 'trust' || type === 'story' || type === 'bts' || type === 'announcement') {
+    if (type === 'trust' || type === 'story' || type === 'bts' || type === 'contrarian' || type === 'announcement') {
       // Show the first question immediately as a labelled bot bubble so the user
       // can focus on answering — no pills, no header, just the question.
       chatThread.style.display = '';
@@ -1073,6 +1172,34 @@ const chat = (() => {
         chatInput.value       = '';
         chatInput.style.height = '';
         showBtsLengthQuestion();
+      }
+      return;
+    }
+
+    // Contrarian / Hot Take: three-step chat flow + length.
+    if (selectedType === 'contrarian') {
+      if (_contrarianChatStep === 0) {
+        _contrarianBelief = val;
+        _contrarianChatStep = 1;
+        addUser(val);
+        chatThread.style.display = '';
+        chatInput.value       = '';
+        chatInput.style.height = '';
+        showContrarianPovQuestion();
+      } else if (_contrarianChatStep === 1) {
+        _contrarianPov = val;
+        _contrarianChatStep = 2;
+        addUser(val);
+        chatInput.value       = '';
+        chatInput.style.height = '';
+        showContrarianSupportingReasonQuestion();
+      } else if (_contrarianChatStep === 2) {
+        _contrarianSupportingReason = val;
+        _contrarianChatStep = 3;
+        addUser(val);
+        chatInput.value       = '';
+        chatInput.style.height = '';
+        showContrarianLengthQuestion();
       }
       return;
     }
@@ -1337,6 +1464,10 @@ async function triggerGenerate(opts = {}) {
     if (selectedType === 'bts') {
       body.length_preference = _btsLengthPreference || 'Medium';
       body.cta_intent        = '';
+    }
+    // Contrarian / Hot Take-specific params
+    if (selectedType === 'contrarian') {
+      body.length_preference = _contrarianLengthPreference || 'Medium';
     }
     // Announcement-specific params
     if (selectedType === 'announcement') {

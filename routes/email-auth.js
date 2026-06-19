@@ -98,10 +98,10 @@ router.post('/signup', async (req, res) => {
       return res.status(409).json({ ok: false, error: 'email_already_registered' });
     }
 
-    // Hash password + generate verify token
+    // Hash password + generate 6-digit PIN (stored in verify_token column)
     const [credentialHash, verifyToken] = await Promise.all([
       bcrypt.hash(password, 12),
-      Promise.resolve(crypto.randomBytes(32).toString('hex')),
+      Promise.resolve(String(crypto.randomInt(100000, 999999))),
     ]);
     const verifyExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
     const newUserId       = `user_${crypto.randomUUID()}`;
@@ -121,10 +121,10 @@ router.post('/signup', async (req, res) => {
     // Send verification email (fire-and-forget — don't block the response)
     sendEmail('verify-email', normalizedEmail, {
       display_name: displayName,
-      verify_url:   `${APP_URL}/auth/verify-email?token=${verifyToken}`,
+      verify_pin:   verifyToken,
     }).catch(err => console.error('[email-auth] verify email failed:', err.message));
 
-    return res.json({ ok: true, redirect: '/check-email.html?reason=signup' });
+    return res.json({ ok: true, redirect: `/check-email.html?reason=signup&email=${encodeURIComponent(normalizedEmail)}` });
   } catch (err) {
     console.error('[email-auth] signup error:', err.message);
     return res.status(500).json({ ok: false, error: 'signup_failed' });
@@ -132,20 +132,34 @@ router.post('/signup', async (req, res) => {
 });
 
 // ── GET /auth/verify-email ───────────────────────────────────────────────────
-router.get('/verify-email', async (req, res) => {
+// Old link-style verification replaced by 6-digit PIN flow. Redirect to
+// the check-email page so users know to enter their code instead.
+router.get('/verify-email', (req, res) => {
+  res.redirect('/check-email.html?reason=signup&info=use_code');
+});
+
+// ── POST /auth/verify-email ──────────────────────────────────────────────────
+router.post('/verify-email', async (req, res) => {
   try {
-    const { token } = req.query;
-    if (!token) return res.redirect('/login.html?error=invalid_or_expired_token');
+    const { email, pin } = req.body || {};
+    if (!isValidEmail(email) || !pin) {
+      return res.status(400).json({ ok: false, error: 'invalid_request' });
+    }
+    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedPin   = String(pin).trim();
 
     const row = await db.prepare(`
       SELECT ap.*, up.email, up.display_name
       FROM auth_providers ap
       JOIN user_profiles up ON up.user_id = ap.user_id
-      WHERE ap.verify_token = ? AND ap.verify_expires_at > now()
+      WHERE ap.provider = 'email'
+        AND ap.provider_id = ?
+        AND ap.verify_token = ?
+        AND ap.verify_expires_at > now()
       LIMIT 1
-    `).get(token);
+    `).get(normalizedEmail, normalizedPin);
 
-    if (!row) return res.redirect('/login.html?error=invalid_or_expired_token');
+    if (!row) return res.status(400).json({ ok: false, error: 'invalid_or_expired_code' });
 
     // Mark verified
     await db.prepare(`
@@ -168,7 +182,6 @@ router.get('/verify-email', async (req, res) => {
     } else {
       workspaceId = await createPersonalWorkspaceForUser(row.user_id, row.display_name);
       seedTrialSubscription(row.user_id).catch(() => {});
-      // Welcome email
       sendEmail('welcome', row.email, {
         name:    row.display_name.split(' ')[0] || row.display_name,
         app_url: APP_URL,
@@ -176,21 +189,17 @@ router.get('/verify-email', async (req, res) => {
       require('../services/mailerlite').addFreeSubscriber(row.email, row.display_name).catch(() => {});
     }
 
-    // Create session
     await establishSession(req, row.user_id, workspaceId);
 
-    // Check onboarding state
-    const brandProfile = await db.prepare(`
-      SELECT onboarding_complete FROM profiles
-      WHERE workspace_id = ? AND is_default = true
-      LIMIT 1
-    `).get(workspaceId);
+    const brandProfile = await db.prepare(
+      'SELECT onboarding_complete FROM profiles WHERE workspace_id = ? AND is_default = true LIMIT 1'
+    ).get(workspaceId);
 
     const dest = brandProfile?.onboarding_complete ? '/dashboard.html' : '/onboarding.html';
-    return res.redirect(dest);
+    return res.json({ ok: true, redirect: dest });
   } catch (err) {
-    console.error('[email-auth] verify-email error:', err.message);
-    return res.redirect('/login.html?error=verification_failed');
+    console.error('[email-auth] verify-email POST error:', err.message);
+    return res.status(500).json({ ok: false, error: 'verification_failed' });
   }
 });
 
@@ -253,7 +262,11 @@ router.post('/login', loginLimiter, async (req, res) => {
 
     await establishSession(req, row.user_id, workspaceId);
 
-    return res.json({ ok: true, redirect: '/dashboard.html' });
+    const brandProfile = await db.prepare(
+      'SELECT onboarding_complete FROM profiles WHERE workspace_id = ? AND is_default = true LIMIT 1'
+    ).get(workspaceId);
+    const dest = brandProfile?.onboarding_complete ? '/dashboard.html' : '/onboarding.html';
+    return res.json({ ok: true, redirect: dest });
   } catch (err) {
     console.error('[email-auth] login error:', err.message);
     return res.status(500).json({ ok: false, error: 'login_failed' });
@@ -353,7 +366,11 @@ router.post('/reset-password', async (req, res) => {
 
     await establishSession(req, row.user_id, workspaceId);
 
-    return res.json({ ok: true, redirect: '/dashboard.html' });
+    const brandProfile = await db.prepare(
+      'SELECT onboarding_complete FROM profiles WHERE workspace_id = ? AND is_default = true LIMIT 1'
+    ).get(workspaceId);
+    const dest = brandProfile?.onboarding_complete ? '/dashboard.html' : '/onboarding.html';
+    return res.json({ ok: true, redirect: dest });
   } catch (err) {
     console.error('[email-auth] reset-password error:', err.message);
     return res.status(500).json({ ok: false, error: 'reset_failed' });
@@ -377,7 +394,7 @@ router.post('/resend-verification', resendLimiter, async (req, res) => {
       `).get(normalizedEmail);
 
       if (row) {
-        const verifyToken     = crypto.randomBytes(32).toString('hex');
+        const verifyToken     = String(crypto.randomInt(100000, 999999));
         const verifyExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
         await db.prepare(`
@@ -388,7 +405,7 @@ router.post('/resend-verification', resendLimiter, async (req, res) => {
 
         sendEmail('verify-email', normalizedEmail, {
           display_name: row.display_name,
-          verify_url:   `${APP_URL}/auth/verify-email?token=${verifyToken}`,
+          verify_pin:   verifyToken,
         }).catch(() => {});
       }
     }

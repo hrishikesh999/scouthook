@@ -110,6 +110,15 @@
     }
     #back-to-pills:hover { color: var(--text-body); }
 
+    #vault-context-note {
+      font-size: 0.8125rem;
+      color: var(--text-secondary);
+      margin: 0;
+      display: none;
+    }
+    #vault-context-note.visible { display: block; }
+    #vault-context-note strong { color: var(--text-body); font-weight: 600; }
+
     /* ── Chat thread ─────────────────────────────────────────── */
     #chat-thread {
       display: flex;

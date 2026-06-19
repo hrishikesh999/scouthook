@@ -356,6 +356,7 @@ function selectType(type) {
   const genHeader    = document.querySelector('.gen-header');
   const startingPills = document.getElementById('starting-pills');
   const pillQ        = document.getElementById('pill-question');
+  hideVaultContextNote();
   const backBtn = document.getElementById('back-to-pills');
   if (type === 'trust' || type === 'story' || type === 'announcement' || type === 'contrarian' || type === 'framework' || type === 'lead_gen' || type === 'lessons_learned' || type === 'pis' || type === 'results') {
     if (genHeader)     genHeader.style.display     = 'none';
@@ -569,45 +570,58 @@ function renderIdeaEngine(panel, ideas, icpSummary, activeTab, onItemSelected) {
     ${isFreshTab ? `<button class="idea-load-more" type="button" id="idea-load-more-btn">Load more ideas →</button>` : ''}`;
 
   // Card click — expand into rich brief via Haiku, fill textarea, keep panel open
+  const VAULT_TYPE_MAP = {
+    lesson_learned: 'lessons_learned',
+    contrarian:     'contrarian',
+    myth_bust:      'contrarian',
+    outcome_proof:  'results',
+    behind_scenes:  'bts',
+  };
+
   panel.querySelectorAll('.idea-engine-card').forEach((btn, i) => {
     btn.addEventListener('click', async () => {
-      const idea = ideas[i];
+      const idea       = ideas[i];
+      const seedText   = `${idea.hook}\n\n${idea.angle}`;
+      const mappedType = VAULT_TYPE_MAP[idea.tension_type] || null;
 
-      // Immediate fill with hook + angle so textarea isn't empty while expanding
-      const seedText = `${idea.hook}\n\n${idea.angle}`;
-      chatInput.value        = seedText;
-      chatInput.style.height = 'auto';
-      chatInput.style.height = chatInput.scrollHeight + 'px';
-      chatInput.classList.remove('error');
-      hideChatError();
-      chatInput.focus();
+      // Set vault idea id immediately (bug fix — was never set before)
+      selectedVaultIdeaId = idea.id || null;
 
-      // Highlight selected card
-      panel.querySelectorAll('.idea-engine-card').forEach(b => b.classList.remove('selected'));
-      btn.classList.add('selected');
-
-      // Expand into a rich brief if we have an ID
+      // Fetch expanded brief, then route
+      let brief = seedText;
       if (idea.id) {
-        showSpecificityNudge('Expanding idea into a post brief…');
+        showSpecificityNudge('Preparing your idea…');
         try {
           const r = await fetch(`/api/vault/brief-idea?id=${encodeURIComponent(idea.id)}`, { headers: apiHeaders() });
           const d = await r.json();
-          if (d.ok && d.brief && d.brief.trim().length > 40) {
-            // Only replace if the user hasn't started editing
-            if (chatInput.value === seedText) {
-              chatInput.value        = d.brief.trim();
-              chatInput.style.height = 'auto';
-              chatInput.style.height = chatInput.scrollHeight + 'px';
-              chat.fireTensionExtraction(chatInput.value);
-            }
-          }
-        } catch { /* non-fatal — keep hook+angle */ }
+          if (d.ok && d.brief && d.brief.trim().length > 60) brief = d.brief.trim();
+        } catch { /* non-fatal — keep seedText */ }
         hideSpecificityNudge();
-        checkSpecificityNudge(chatInput.value.trim());
-      } else if (seedText.length >= 30) {
-        chat.fireTensionExtraction(seedText);
       }
-      // Panel stays open
+
+      // Close vault panel
+      panel.style.display = 'none';
+      document.getElementById('intent-ideas')?.classList.remove('active');
+
+      if (mappedType) {
+        selectType(mappedType);
+        chatInput.value        = brief;
+        chatInput.style.height = 'auto';
+        chatInput.style.height = chatInput.scrollHeight + 'px';
+        showVaultContextNote(mappedType);
+      } else {
+        // Unmapped tension type — restore pill row, prompt user to pick a type
+        const genHeader     = document.querySelector('.gen-header');
+        const startingPills = document.getElementById('starting-pills');
+        if (genHeader)     genHeader.style.display     = '';
+        if (startingPills) startingPills.style.display = '';
+        chatInput.value        = brief;
+        chatInput.style.height = 'auto';
+        chatInput.style.height = chatInput.scrollHeight + 'px';
+        showVaultContextNote(null);
+      }
+
+      chatInput.focus();
     });
   });
 
@@ -1619,6 +1633,15 @@ const chat = (() => {
 
     // Not in coach yet — this is the initial brief submission
 
+    // Vault idea: brief is already complete — skip all guided questions, generate directly.
+    if (selectedVaultIdeaId) {
+      addUser(val);
+      chatThread.style.display = '';
+      hideVaultContextNote();
+      triggerGenerate({ enrichedIdea: val });
+      return;
+    }
+
     // Authority/Expertise: two-step chat flow.
     // Step 1 — user submits their idea; show the length question as a bot bubble.
     if (selectedType === 'trust') {
@@ -2045,6 +2068,7 @@ document.getElementById('back-to-pills')?.addEventListener('click', () => {
   hideChatError();
   hideSubstanceWarning();
   hideSpecificityNudge();
+  hideVaultContextNote();
 
   chatInput.value        = '';
   chatInput.style.height = '';
@@ -2123,6 +2147,12 @@ chatImproveInput.addEventListener('click', () => {
 async function triggerGenerate(opts = {}) {
   hideChatError();
   hideSubstanceWarning();
+
+  if (!selectedType) {
+    showChatInputError('Choose a post type to continue.');
+    document.getElementById('starting-pills')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    return;
+  }
 
   const idea          = opts.enrichedIdea || chatInput.value.trim();
   const tensionStmt   = opts.tensionStatement !== undefined
@@ -2292,6 +2322,10 @@ async function triggerGenerate(opts = {}) {
       window.location.href = '/login.html';
     } else if (err.message === 'anthropic_api_key not configured') {
       showChatError('AI service is not configured. Set ANTHROPIC_API_KEY in the admin settings.');
+    } else if (err.message === 'post_type_required') {
+      hideProcessingScreen();
+      showChatInputError('Choose a post type to continue.');
+      document.getElementById('starting-pills')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     } else if (err.message === 'missing_substance') {
       showSubstanceWarning(err.substancePrompt || 'Add more detail to generate a stronger post.');
       if (err.substanceTier === 'warn') {
@@ -2471,6 +2505,22 @@ function showSpecificityNudge(msg) {
 function hideSpecificityNudge() {
   specificityNudge.classList.remove('visible');
   clearTimeout(_nudgeDebounce);
+}
+
+function showVaultContextNote(type) {
+  const el = document.getElementById('vault-context-note');
+  if (!el) return;
+  if (type) {
+    const label = POST_TYPE_MAP[type]?.label || type;
+    el.innerHTML = `Writing this as <strong>${label}</strong> — edit or generate when ready.`;
+  } else {
+    el.textContent = 'Choose a post type above to continue.';
+  }
+  el.classList.add('visible');
+}
+function hideVaultContextNote() {
+  const el = document.getElementById('vault-context-note');
+  if (el) el.classList.remove('visible');
 }
 
 /* ── Error helpers ───────────────────────────────────────────── */

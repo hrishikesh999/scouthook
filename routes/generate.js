@@ -261,7 +261,6 @@ router.post('/', async (req, res) => {
   }
 
   try {
-    // ── Standard path (Reach / Trust / Convert / free-write) ────────────────
     let ideaResult;
 
     if (!raw_idea?.trim()) {
@@ -871,71 +870,8 @@ router.post('/', async (req, res) => {
           return res.end();
         }
 
-        // ── Standard path (Reach / Convert) ───────────────────────────────
-        sseWrite('step', { step: 'analyzing', label: 'Analyzing your idea...' });
-
-        const ideaRaw = await ideaToPost(raw_idea, profile, {
-          skipSubstanceCheck:  !!skip_substance_check,
-          postType:            post_type || null,
-          convertCtaIntent:    convert_cta_intent || null,
-          tensionStatement:    tension_statement || null,
-          isInterviewPath,
-          onStep:  (stepData) => sseWrite('step', stepData),
-          onToken: (text)     => sseWrite('token', { text }),
-        });
-
-        sseWrite('step', { step: 'saving', label: 'Final quality check...' });
-
-        const primaryGate = runQualityGate(ideaRaw.post, {
-          ...gateOptions(
-            { format_slug: IDEA_SLUG, content: ideaRaw.post },
-            profile, 'idea', ideaRaw.archetypeUsed, funnelTypeForGate
-          ),
-          postType: post_type || null,
-        });
-
-        const runResult = await db.prepare(`
-          INSERT INTO generation_runs (user_id, tenant_id, path, input_data, synthesis)
-          VALUES (?, ?, ?, ?, ?)
-          RETURNING id
-        `).run(userId, tenantId, genPath, JSON.stringify({ raw_idea }), JSON.stringify(ideaRaw.synthesis));
-        const runId = runResult.lastInsertRowid;
-
-        const funnelType = post_type || (await classifyContent(ideaRaw.post)).funnelType;
-
-        const primaryInsert = await db.prepare(`
-          INSERT INTO generated_posts
-            (run_id, user_id, tenant_id, profile_id, format_slug, content, ai_content, quality_score, quality_flags, passed_gate,
-             funnel_type, vault_source_ref, idea_input, archetype_used, source,
-             post_type, quality_verdict)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          RETURNING id
-        `).run(
-          runId, userId, tenantId, profile.id, IDEA_SLUG,
-          ideaRaw.post, ideaRaw.post,
-          primaryGate.score, JSON.stringify(primaryGate.flags), primaryGate.passed_gate ? 1 : 0,
-          funnelType, null,
-          raw_idea || null,
-          ideaRaw.archetypeUsed || null,
-          source || null,
-          post_type || null,
-          primaryGate.verdict || null
-        );
-        const primaryId = primaryInsert.lastInsertRowid;
-
-        const primaryQuality = buildQualityPayload(primaryGate, 1, true);
-
-        sseWrite('done', {
-          post_id:         primaryId,
-          run_id:          runId,
-          post:            ideaRaw.post,
-          quality:         { ...primaryQuality, verdict: primaryGate.verdict },
-          archetypeUsed:   ideaRaw.archetypeUsed,
-          funnel_type:     funnelType,
-          post_type:       post_type || null,
-          stage1Blueprint: ideaRaw.stage1Blueprint,
-          content_feedback: ideaRaw.contentFeedback || null,
-        });
+        // No matched post_type — all generation requires a guided post type
+        sseWrite('error', { error: 'post_type_required' });
         return res.end();
 
       } catch (sseErr) {
@@ -1177,35 +1113,7 @@ router.post('/', async (req, res) => {
         contentFeedback: null,
       };
     } else {
-      // ── Standard path: full two-stage pipeline (Haiku blueprint → Sonnet) ───
-      const ideaRaw = await ideaToPost(raw_idea, profile, {
-        skipSubstanceCheck:  !!skip_substance_check,
-        archetypeOverride:   archetype_override || null,
-        postType:            post_type || null,
-        convertCtaIntent:    convert_cta_intent || null,
-        tensionStatement:    tension_statement || null,
-        isInterviewPath,
-      });
-      const primaryGate = runQualityGate(
-        ideaRaw.post,
-        {
-          ...gateOptions(
-            { format_slug: IDEA_SLUG, content: ideaRaw.post },
-            profile,
-            'idea',
-            ideaRaw.archetypeUsed,
-            funnelTypeForGate
-          ),
-          postType: post_type || null,
-        }
-      );
-      ideaResult = {
-        synthesis:       ideaRaw.synthesis,
-        post:            ideaRaw.post,
-        archetypeUsed:   ideaRaw.archetypeUsed,
-        primaryGate,
-        contentFeedback: ideaRaw.contentFeedback || null,
-      };
+      throw Object.assign(new Error('post_type_required'), { status: 400 });
     }
 
     {

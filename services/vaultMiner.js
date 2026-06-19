@@ -206,7 +206,7 @@ ${chunkContent}`;
 
   const message = await client.messages.create({
     model:      SONNET_MODEL,
-    max_tokens: 2000,
+    max_tokens: 4000,
     system:     buildMiningSystemPrompt(userProfile),
     messages:   [{ role: 'user', content: userPrompt }],
   });
@@ -274,44 +274,48 @@ async function mineChunks(chunks, documentFilename, userProfile = {}) {
   const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
   if (!apiKey) throw new Error('anthropic_api_key not configured');
 
-  const BATCH_SIZE = 5;  // ~5 × 500 words = ~2500 words per prompt
-  const allSeeds   = [];
+  // Large batches keep the number of API calls low; Sonnet's 200K context
+  // handles 20 × 500-word chunks (~14K tokens) with room to spare.
+  const BATCH_SIZE = 20;
 
+  // Build all batches upfront
+  const batches = [];
   for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
     const batch = chunks.slice(i, i + BATCH_SIZE);
-
-    // Label each chunk numerically so the model can echo it back reliably.
-    // PDFs can have multiple chunks sharing the same page ref ("p. 3"), which
-    // would cause key collisions if we used source_ref as the map key.
     const batchInput = batch.map((c, j) => ({
-      sourceRef: `chunk_${j}`,
+      sourceRef:  `chunk_${j}`,
       displayRef: c.sourceRef || c.source_ref || `chunk ${c.chunk_index ?? j}`,
       content:    c.content,
     }));
-
-    // numeric label → chunkId; guaranteed unique within a batch
     const sourceRefToId = new Map(batch.map((c, j) => [`chunk_${j}`, c.id]));
+    batches.push({ batchInput, sourceRefToId, batch });
+  }
 
-    let seeds;
-    try {
-      seeds = await mineChunkBatch(batchInput, documentFilename, userProfile, apiKey);
-    } catch (err) {
-      console.warn(`[vaultMiner] batch ${i}–${i + BATCH_SIZE - 1} failed:`, err.message);
-      seeds = [];
-    }
+  // Run all batches in parallel — they are independent slices of the same doc
+  const batchResults = await Promise.all(
+    batches.map(({ batchInput, batch }, bi) =>
+      mineChunkBatch(batchInput, documentFilename, userProfile, apiKey)
+        .catch(err => {
+          console.warn(`[vaultMiner] batch ${bi} failed:`, err.message);
+          return [];
+        })
+    )
+  );
 
-    for (const seed of seeds) {
+  const allSeeds = [];
+  for (let bi = 0; bi < batches.length; bi++) {
+    const { batchInput, sourceRefToId, batch } = batches[bi];
+    for (const seed of batchResults[bi]) {
       const chunkId = sourceRefToId.get(seed.source_ref) || batch[0].id;
-      // Resolve the human-readable display ref from the matched chunk
       const matchedJ = seed.source_ref?.match(/^chunk_(\d+)$/)?.[1];
       const displayRef = matchedJ !== undefined
         ? (batchInput[Number(matchedJ)]?.displayRef || seed.source_ref)
         : (batchInput[0]?.displayRef || seed.source_ref);
       allSeeds.push({
         chunkId,
-        seed_text:   seed.seed_text,
-        hook_line:   seed.hook_line || null,
-        source_ref:  displayRef,
+        seed_text:  seed.seed_text,
+        hook_line:  seed.hook_line || null,
+        source_ref: displayRef,
       });
     }
   }

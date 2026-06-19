@@ -352,25 +352,17 @@
             </div>
 
             <div class="profile-field">
-              <label class="field-label">Their Goals</label>
-              <p class="field-helper">What they're ultimately trying to achieve. Add their primary goal first.</p>
-              <div class="vw-chips-area" id="aud-goals-chips" role="group" aria-label="Audience goals"></div>
-              <div class="vw-add-row">
-                <input id="aud-goals-input" class="vw-add-input" type="text"
-                       placeholder="e.g. Build a repeatable sales process…" autocomplete="off" />
-                <button id="aud-goals-add" class="vw-add-btn" type="button">Add</button>
-              </div>
+              <label class="field-label" for="aud-goals">What do they want to achieve?</label>
+              <p class="field-helper">One goal per line.</p>
+              <textarea id="aud-goals" class="field-textarea" rows="4"
+                        placeholder="e.g. Build a repeatable sales process&#10;Hit $5M ARR without hiring a VP Sales"></textarea>
             </div>
 
             <div class="profile-field">
-              <label class="field-label">Obstacles to Goal Achievement</label>
-              <p class="field-helper">Specific internal/external factors blocking goal achievement.</p>
-              <div class="vw-chips-area" id="aud-obstacles-chips" role="group" aria-label="Audience obstacles"></div>
-              <div class="vw-add-row">
-                <input id="aud-obstacles-input" class="vw-add-input" type="text"
-                       placeholder="e.g. No repeatable outbound process…" autocomplete="off" />
-                <button id="aud-obstacles-add" class="vw-add-btn" type="button">Add</button>
-              </div>
+              <label class="field-label" for="aud-obstacles">What's stopping them?</label>
+              <p class="field-helper">One pain or obstacle per line.</p>
+              <textarea id="aud-obstacles" class="field-textarea" rows="4"
+                        placeholder="e.g. No repeatable outbound process&#10;Stuck in reactive firefighting mode"></textarea>
             </div>
 
             <div class="vw-stage-actions">

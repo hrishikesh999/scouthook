@@ -19,6 +19,10 @@ async function init() {
     try { return val ? JSON.parse(val) : fallback; } catch { return fallback; }
   }
 
+  function textareaLines(id) {
+    return (qs(id)?.value || '').split('\n').map(s => s.trim()).filter(Boolean);
+  }
+
   function showStatus(el, msg, isError = false) {
     if (!el) return;
     el.textContent = msg;
@@ -486,16 +490,16 @@ async function init() {
 
   /* ── Stage 2: Target Audience ───────────────────────────── */
 
-  let audGoals     = safeParseJSON(profile.audience_goals, []);
-  let audObstacles = safeParseJSON(profile.audience_obstacles, []);
   let audBeliefs   = safeParseJSON(profile.audience_core_beliefs_market, []);
 
-  const renderAudGoals     = makeChipList('aud-goals-chips',     audGoals,     () => {});
-  const renderAudObstacles = makeChipList('aud-obstacles-chips', audObstacles, () => {});
-  const renderAudBeliefs   = makeChipList('aud-beliefs-chips',   audBeliefs,   () => {});
-  wireAddChip('aud-goals-input',     'aud-goals-add',     audGoals,     renderAudGoals);
-  wireAddChip('aud-obstacles-input', 'aud-obstacles-add', audObstacles, renderAudObstacles);
-  wireAddChip('aud-beliefs-input',   'aud-beliefs-add',   audBeliefs,   renderAudBeliefs);
+  const renderAudBeliefs = makeChipList('aud-beliefs-chips', audBeliefs, () => {});
+  wireAddChip('aud-beliefs-input', 'aud-beliefs-add', audBeliefs, renderAudBeliefs);
+
+  // Populate textarea fields from saved arrays (one item per line)
+  const audGoalsArr     = safeParseJSON(profile.audience_goals, []);
+  const audObstaclesArr = safeParseJSON(profile.audience_obstacles, []);
+  if (qs('aud-goals')     && audGoalsArr.length)     qs('aud-goals').value     = audGoalsArr.join('\n');
+  if (qs('aud-obstacles') && audObstaclesArr.length) qs('aud-obstacles').value = audObstaclesArr.join('\n');
 
   if (qs('aud-description') && profile.audience_description) qs('aud-description').value = profile.audience_description;
   if (qs('aud-buying-stage')   && profile.audience_buying_stage)          qs('aud-buying-stage').value   = profile.audience_buying_stage;
@@ -539,10 +543,12 @@ async function init() {
     const statusEl = qs('aud-generate-status');
     btn.disabled = true; btn.textContent = 'Generating…';
 
+    const _goals = textareaLines('aud-goals');
+    const _obs   = textareaLines('aud-obstacles');
     const step1Payload = {
       audience_description: qs('aud-description')?.value.trim() || null,
-      audience_goals:       audGoals.length     > 0 ? JSON.stringify(audGoals)     : null,
-      audience_obstacles:   audObstacles.length > 0 ? JSON.stringify(audObstacles) : null,
+      audience_goals:       _goals.length > 0 ? JSON.stringify(_goals) : null,
+      audience_obstacles:   _obs.length   > 0 ? JSON.stringify(_obs)   : null,
     };
     try {
       await saveProfile(step1Payload);
@@ -575,10 +581,12 @@ async function init() {
     const btn = qs('aud-save-btn');
     const statusEl = qs('aud-save-status');
     btn.disabled = true; btn.textContent = 'Saving…';
+    const saveGoals = textareaLines('aud-goals');
+    const saveObs   = textareaLines('aud-obstacles');
     const payload = {
       audience_description:           qs('aud-description')?.value.trim() || null,
-      audience_goals:                 audGoals.length     > 0 ? JSON.stringify(audGoals)     : null,
-      audience_obstacles:             audObstacles.length > 0 ? JSON.stringify(audObstacles) : null,
+      audience_goals:                 saveGoals.length > 0 ? JSON.stringify(saveGoals) : null,
+      audience_obstacles:             saveObs.length   > 0 ? JSON.stringify(saveObs)   : null,
       audience_core_beliefs_market:   audBeliefs.length   > 0 ? JSON.stringify(audBeliefs)   : null,
       audience_buying_stage:          qs('aud-buying-stage')?.value   || null,
       audience_market_sophistication: qs('aud-sophistication')?.value || null,

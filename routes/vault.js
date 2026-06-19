@@ -234,19 +234,26 @@ async function mineDocumentById(docId, userId, tenantId) {
 
   const seeds = await mineChunks(unmined, filename, userProfile);
 
-  for (const seed of seeds) {
-    const { funnelType, hookArchetype } = await classifyContent(seed.seed_text);
-    const docFilename = filename.length > 60 ? filename.slice(0, 57) + '…' : filename;
-    const sourceRef   = `From: "${docFilename}" · ${seed.source_ref}`;
-    await db.prepare(`
-      INSERT INTO vault_ideas
-        (user_id, tenant_id, document_id, chunk_id, seed_text, source_ref, funnel_type, hook_archetype, hook_preview)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(userId, tenantId, docId, seed.chunkId, seed.seed_text, sourceRef, funnelType, hookArchetype, seed.hook_line || null);
+  // Classify all seeds in parallel — one Haiku call per seed but all concurrent
+  const docFilename     = filename.length > 60 ? filename.slice(0, 57) + '…' : filename;
+  const classifications = await Promise.all(seeds.map(s => classifyContent(s.seed_text)));
+
+  const insertIdea = db.prepare(`
+    INSERT INTO vault_ideas
+      (user_id, tenant_id, document_id, chunk_id, seed_text, source_ref, funnel_type, hook_archetype, hook_preview)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  for (let i = 0; i < seeds.length; i++) {
+    const seed = seeds[i];
+    const { funnelType, hookArchetype } = classifications[i];
+    const sourceRef = `From: "${docFilename}" · ${seed.source_ref}`;
+    insertIdea.run(userId, tenantId, docId, seed.chunkId, seed.seed_text, sourceRef, funnelType, hookArchetype, seed.hook_line || null);
   }
 
-  for (const chunk of unmined) {
-    await db.prepare('UPDATE vault_chunks SET mined_at = now() WHERE id = ?').run(chunk.id);
+  // Bulk-mark chunks as mined
+  if (unmined.length) {
+    const ids = unmined.map(() => '?').join(',');
+    db.prepare(`UPDATE vault_chunks SET mined_at = now() WHERE id IN (${ids})`).run(...unmined.map(c => c.id));
   }
 
   await db.prepare(`
@@ -343,26 +350,27 @@ router.post('/mine', async (req, res) => {
     try {
       const seeds = await mineChunks(chunks, filename, userProfile);
 
-      for (const seed of seeds) {
-        const { funnelType, hookArchetype } = await classifyContent(seed.seed_text);
+      // Classify all seeds in parallel
+      const docFilename     = filename.length > 60 ? filename.slice(0, 57) + '…' : filename;
+      const classifications = await Promise.all(seeds.map(s => classifyContent(s.seed_text)));
 
-        const docFilename = filename.length > 60 ? filename.slice(0, 57) + '…' : filename;
-        const sourceRef   = `From: "${docFilename}" · ${seed.source_ref}`;
-
-        // hook_line extracted during mining — store directly as hook_preview (no separate Haiku call needed)
-        await db.prepare(`
-          INSERT INTO vault_ideas
-            (user_id, tenant_id, document_id, chunk_id, seed_text, source_ref, funnel_type, hook_archetype, hook_preview)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(userId, tenantId, docId, seed.chunkId, seed.seed_text, sourceRef, funnelType, hookArchetype, seed.hook_line || null);
-
+      const insertIdea = db.prepare(`
+        INSERT INTO vault_ideas
+          (user_id, tenant_id, document_id, chunk_id, seed_text, source_ref, funnel_type, hook_archetype, hook_preview)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      for (let i = 0; i < seeds.length; i++) {
+        const seed = seeds[i];
+        const { funnelType, hookArchetype } = classifications[i];
+        const sourceRef = `From: "${docFilename}" · ${seed.source_ref}`;
+        insertIdea.run(userId, tenantId, docId, seed.chunkId, seed.seed_text, sourceRef, funnelType, hookArchetype, seed.hook_line || null);
         totalSeeds++;
       }
 
-      // Mark all chunks in this doc as mined
-      const chunkIds = chunks.map(c => c.id);
-      for (const cid of chunkIds) {
-        await db.prepare('UPDATE vault_chunks SET mined_at = now() WHERE id = ?').run(cid);
+      // Bulk-mark chunks as mined
+      if (chunks.length) {
+        const ids = chunks.map(() => '?').join(',');
+        db.prepare(`UPDATE vault_chunks SET mined_at = now() WHERE id IN (${ids})`).run(...chunks.map(c => c.id));
       }
 
       // Mark document as ready and record idea count

@@ -18,7 +18,7 @@ const { getSetting } = require('../db');
 const { extractJsonFromResponse } = require('./voiceFingerprint');
 const { ARCHETYPE_KEYS } = require('./hookArchetypes');
 
-const HAIKU_MODEL = 'claude-haiku-4-5';
+const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
 
 const FUNNEL_TYPES  = ['reach', 'trust', 'convert'];
 

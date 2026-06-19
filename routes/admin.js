@@ -371,4 +371,94 @@ router.get('/users/:userId/workspaces', requireAdminPassword, (req, res) => {
   })().catch(err => res.status(500).json({ ok: false, error: err.message }));
 });
 
+// ---------------------------------------------------------------------------
+// Placid Templates — admin CRUD (global, not per-workspace)
+// ---------------------------------------------------------------------------
+
+router.get('/placid-templates', requireAdminPassword, async (req, res) => {
+  try {
+    const rows = await db.prepare(
+      'SELECT * FROM placid_templates ORDER BY sort_order ASC, created_at ASC'
+    ).all();
+    return res.json({ ok: true, templates: rows });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+router.post('/placid-templates', requireAdminPassword, async (req, res) => {
+  const { name, template_uuid, layer_headline = 'headline', layer_subtext = 'subtext', preview_image_url = null } = req.body || {};
+  if (!name || !template_uuid) {
+    return res.status(400).json({ ok: false, error: 'name and template_uuid are required' });
+  }
+  try {
+    const maxRow = await db.prepare('SELECT COALESCE(MAX(sort_order), -1) AS mx FROM placid_templates').get();
+    const sortOrder = (maxRow?.mx ?? -1) + 1;
+    const row = await db.prepare(`
+      INSERT INTO placid_templates (name, template_uuid, layer_headline, layer_subtext, preview_image_url, sort_order)
+      VALUES (?, ?, ?, ?, ?, ?) RETURNING *
+    `).get(name, template_uuid, layer_headline, layer_subtext, preview_image_url, sortOrder);
+    return res.status(201).json({ ok: true, template: row });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+router.put('/placid-templates/:id', requireAdminPassword, async (req, res) => {
+  const { id } = req.params;
+  const { name, template_uuid, layer_headline, layer_subtext, preview_image_url } = req.body || {};
+  if (!name || !template_uuid) {
+    return res.status(400).json({ ok: false, error: 'name and template_uuid are required' });
+  }
+  try {
+    const row = await db.prepare(`
+      UPDATE placid_templates
+      SET name = ?, template_uuid = ?, layer_headline = ?, layer_subtext = ?, preview_image_url = ?
+      WHERE id = ? RETURNING *
+    `).get(name, template_uuid, layer_headline || 'headline', layer_subtext || 'subtext', preview_image_url || null, id);
+    if (!row) return res.status(404).json({ ok: false, error: 'template_not_found' });
+    return res.json({ ok: true, template: row });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+router.delete('/placid-templates/:id', requireAdminPassword, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const row = await db.prepare('DELETE FROM placid_templates WHERE id = ? RETURNING id').get(id);
+    if (!row) return res.status(404).json({ ok: false, error: 'template_not_found' });
+    return res.json({ ok: true });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+router.post('/placid-templates/:id/set-default', requireAdminPassword, async (req, res) => {
+  const { id } = req.params;
+  try {
+    await db.prepare('UPDATE placid_templates SET is_default = FALSE').run();
+    const row = await db.prepare('UPDATE placid_templates SET is_default = TRUE WHERE id = ? RETURNING *').get(id);
+    if (!row) return res.status(404).json({ ok: false, error: 'template_not_found' });
+    return res.json({ ok: true, template: row });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+router.post('/placid-templates/reorder', requireAdminPassword, async (req, res) => {
+  const { ids } = req.body || {};
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({ ok: false, error: 'ids array required' });
+  }
+  try {
+    for (let i = 0; i < ids.length; i++) {
+      await db.prepare('UPDATE placid_templates SET sort_order = ? WHERE id = ?').run(i, ids[i]);
+    }
+    return res.json({ ok: true });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 module.exports = router;

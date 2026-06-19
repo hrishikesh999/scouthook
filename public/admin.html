@@ -88,6 +88,55 @@
           <div class="text-muted" style="font-size:0.8rem; margin-top:0.25rem;">Required for BullMQ post scheduling. Leave blank to disable scheduling.</div>
         </div>
 
+        <!-- ── Placid Templates ──────────────────────────────────────────── -->
+        <h3 style="margin: var(--space-xl) 0 var(--space-md); color: var(--color-text-muted); font-size:0.8rem; text-transform:uppercase; letter-spacing:0.08em;">Placid Templates</h3>
+        <p class="text-muted" style="font-size:0.85rem; margin-bottom: var(--space-md);">Manage the AI image templates available to all users. Templates are global across all workspaces.</p>
+
+        <div id="placid-api-key-field" class="field">
+          <label for="placid_api_key">Placid API key</label>
+          <input type="password" id="placid_api_key" name="placid_api_key" placeholder="From placid.app → API" autocomplete="off" />
+          <div class="text-muted" style="font-size:0.8rem; margin-top:0.25rem;">Required for AI image generation. Saved with the other platform settings above.</div>
+        </div>
+
+        <div id="placid-template-list" style="margin-bottom: var(--space-md);"></div>
+
+        <button id="placid-add-btn" class="btn btn--secondary" type="button" style="margin-bottom: var(--space-xl);">+ Add template</button>
+
+        <!-- Add/Edit form (hidden by default) -->
+        <div id="placid-form" class="hidden" style="background: var(--color-surface-2, #f5f5f5); border-radius:10px; padding: var(--space-lg); margin-bottom: var(--space-xl);">
+          <h4 id="placid-form-title" style="margin:0 0 var(--space-md);">Add template</h4>
+          <input type="hidden" id="placid-form-id">
+          <div class="field">
+            <label for="placid-form-name">Template name</label>
+            <input type="text" id="placid-form-name" placeholder="e.g. Dark Quote Card" maxlength="80">
+          </div>
+          <div class="field">
+            <label for="placid-form-uuid">Placid template UUID</label>
+            <input type="text" id="placid-form-uuid" placeholder="abc123…" maxlength="200">
+            <div class="text-muted" style="font-size:0.8rem; margin-top:0.25rem;">Found in your Placid dashboard under the template settings.</div>
+          </div>
+          <div class="field">
+            <label for="placid-form-headline">Headline layer name</label>
+            <input type="text" id="placid-form-headline" placeholder="headline" maxlength="80">
+            <div class="text-muted" style="font-size:0.8rem; margin-top:0.25rem;">Exact name of the text layer in Placid that receives the post headline.</div>
+          </div>
+          <div class="field">
+            <label for="placid-form-subtext">Subtext layer name</label>
+            <input type="text" id="placid-form-subtext" placeholder="subtext" maxlength="80">
+            <div class="text-muted" style="font-size:0.8rem; margin-top:0.25rem;">Exact name of the text layer that receives the supporting text.</div>
+          </div>
+          <div class="field">
+            <label for="placid-form-preview">Preview image URL <span style="font-weight:400;color:var(--color-text-muted)">(optional)</span></label>
+            <input type="url" id="placid-form-preview" placeholder="https://…">
+            <div class="text-muted" style="font-size:0.8rem; margin-top:0.25rem;">Thumbnail shown to users when picking a template in the editor.</div>
+          </div>
+          <div id="placid-form-error" class="hidden" style="color: var(--color-error); font-size:0.85rem; margin-bottom: var(--space-md);"></div>
+          <div style="display:flex; gap: var(--space-sm);">
+            <button id="placid-form-save" class="btn btn--primary" type="button">Save</button>
+            <button id="placid-form-cancel" class="btn btn--secondary" type="button">Cancel</button>
+          </div>
+        </div>
+
       </div>
     </div>
   </main>
@@ -104,7 +153,7 @@
   <script>
     const SETTING_KEYS = [
       'anthropic_api_key', 'linkedin_client_id', 'linkedin_client_secret',
-      'linkedin_redirect_uri', 'token_encryption_key', 'redis_url',
+      'linkedin_redirect_uri', 'token_encryption_key', 'redis_url', 'placid_api_key',
     ];
 
     let adminPassword = '';
@@ -131,6 +180,7 @@
         document.getElementById('auth-panel').classList.add('hidden');
         document.getElementById('settings-panel').classList.remove('hidden');
         populateSettings(data.settings);
+        loadPlacidTemplates();
       } catch (e) {
         document.getElementById('auth-error').textContent = 'Network error.';
         document.getElementById('auth-error').classList.remove('hidden');
@@ -201,6 +251,121 @@
         btn.disabled = false;
         document.getElementById('save-spinner').classList.add('hidden');
       }
+    });
+
+    // ---------------------------------------------------------------------------
+    // Placid Templates
+    // ---------------------------------------------------------------------------
+    let placidTemplates = [];
+
+    function escHtml(s) {
+      return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    async function adminFetch(path, opts = {}) {
+      return fetch(path, {
+        ...opts,
+        headers: { 'Content-Type': 'application/json', 'X-Admin-Password': adminPassword, ...(opts.headers || {}) },
+      });
+    }
+
+    async function loadPlacidTemplates() {
+      try {
+        const res  = await adminFetch('/admin/placid-templates');
+        const data = await res.json();
+        placidTemplates = data.templates || [];
+        renderPlacidTemplates();
+      } catch { /* non-fatal */ }
+    }
+
+    function renderPlacidTemplates() {
+      const list = document.getElementById('placid-template-list');
+      if (placidTemplates.length === 0) {
+        list.innerHTML = '<p class="text-muted" style="font-size:0.85rem">No templates yet.</p>';
+        return;
+      }
+      list.innerHTML = placidTemplates.map(t => `
+        <div style="display:flex;align-items:center;gap:12px;padding:12px;border:1px solid var(--color-border);border-radius:8px;margin-bottom:8px;">
+          ${t.preview_image_url ? `<img src="${escHtml(t.preview_image_url)}" style="width:48px;height:48px;object-fit:cover;border-radius:6px;flex-shrink:0" alt="">` : `<div style="width:48px;height:48px;background:var(--color-surface-2);border-radius:6px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--color-text-muted)">${escHtml((t.name||'?').slice(0,2).toUpperCase())}</div>`}
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:600;font-size:0.9rem">${escHtml(t.name)} ${t.is_default ? '<span style="font-size:0.7rem;background:var(--color-primary,#0d7a5f);color:#fff;padding:1px 6px;border-radius:4px;margin-left:4px;font-weight:700">DEFAULT</span>' : ''}</div>
+            <div style="font-size:0.75rem;color:var(--color-text-muted);font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(t.template_uuid)}</div>
+            <div style="font-size:0.75rem;color:var(--color-text-muted)">headline → <code>${escHtml(t.layer_headline)}</code> · subtext → <code>${escHtml(t.layer_subtext)}</code></div>
+          </div>
+          <div style="display:flex;gap:6px;flex-shrink:0">
+            <button class="btn btn--secondary" style="font-size:0.75rem;padding:4px 10px" onclick="editPlacidTemplate('${escHtml(t.id)}')">Edit</button>
+            ${!t.is_default ? `<button class="btn btn--secondary" style="font-size:0.75rem;padding:4px 10px" onclick="setPlacidDefault('${escHtml(t.id)}')">Set default</button>` : ''}
+            <button class="btn btn--secondary" style="font-size:0.75rem;padding:4px 10px;color:var(--color-error)" onclick="deletePlacidTemplate('${escHtml(t.id)}')">Delete</button>
+          </div>
+        </div>`).join('');
+    }
+
+    function openPlacidForm(template = null) {
+      document.getElementById('placid-form-title').textContent = template ? 'Edit template' : 'Add template';
+      document.getElementById('placid-form-id').value          = template?.id || '';
+      document.getElementById('placid-form-name').value        = template?.name || '';
+      document.getElementById('placid-form-uuid').value        = template?.template_uuid || '';
+      document.getElementById('placid-form-headline').value    = template?.layer_headline || 'headline';
+      document.getElementById('placid-form-subtext').value     = template?.layer_subtext  || 'subtext';
+      document.getElementById('placid-form-preview').value     = template?.preview_image_url || '';
+      document.getElementById('placid-form-error').classList.add('hidden');
+      document.getElementById('placid-form').classList.remove('hidden');
+      document.getElementById('placid-form-name').focus();
+    }
+
+    function closePlacidForm() {
+      document.getElementById('placid-form').classList.add('hidden');
+    }
+
+    function editPlacidTemplate(id) {
+      openPlacidForm(placidTemplates.find(t => t.id === id));
+    }
+
+    async function setPlacidDefault(id) {
+      const res = await adminFetch(`/admin/placid-templates/${encodeURIComponent(id)}/set-default`, { method: 'POST' });
+      const data = await res.json();
+      if (data.ok) { placidTemplates = placidTemplates.map(t => ({ ...t, is_default: t.id === id })); renderPlacidTemplates(); }
+    }
+
+    async function deletePlacidTemplate(id) {
+      const t = placidTemplates.find(t => t.id === id);
+      if (!t || !confirm(`Delete template "${t.name}"?`)) return;
+      const res = await adminFetch(`/admin/placid-templates/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.ok) { placidTemplates = placidTemplates.filter(t => t.id !== id); renderPlacidTemplates(); }
+    }
+
+    document.getElementById('placid-add-btn').addEventListener('click', () => openPlacidForm());
+    document.getElementById('placid-form-cancel').addEventListener('click', closePlacidForm);
+
+    document.getElementById('placid-form-save').addEventListener('click', async () => {
+      const id      = document.getElementById('placid-form-id').value;
+      const payload = {
+        name:              document.getElementById('placid-form-name').value.trim(),
+        template_uuid:     document.getElementById('placid-form-uuid').value.trim(),
+        layer_headline:    document.getElementById('placid-form-headline').value.trim() || 'headline',
+        layer_subtext:     document.getElementById('placid-form-subtext').value.trim()  || 'subtext',
+        preview_image_url: document.getElementById('placid-form-preview').value.trim() || null,
+      };
+      const errEl = document.getElementById('placid-form-error');
+      if (!payload.name || !payload.template_uuid) {
+        errEl.textContent = 'Name and template UUID are required.';
+        errEl.classList.remove('hidden');
+        return;
+      }
+      const method = id ? 'PUT' : 'POST';
+      const url    = id ? `/admin/placid-templates/${encodeURIComponent(id)}` : '/admin/placid-templates';
+      const res    = await adminFetch(url, { method, body: JSON.stringify(payload) });
+      const data   = await res.json();
+      if (!data.ok) {
+        errEl.textContent = data.error || 'Save failed.';
+        errEl.classList.remove('hidden');
+        return;
+      }
+      if (id) { placidTemplates = placidTemplates.map(t => t.id === id ? data.template : t); }
+      else    { placidTemplates = [...placidTemplates, data.template]; }
+      renderPlacidTemplates();
+      closePlacidForm();
     });
   </script>
 

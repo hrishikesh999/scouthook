@@ -1264,8 +1264,7 @@ async function showTemplatePicker() {
     if (tpls.length === 0) {
       content.innerHTML = `
         <div style="text-align:center;padding:40px 16px;color:var(--text-muted)">
-          <p style="margin:0 0 12px;font-size:14px">No templates configured yet.</p>
-          <a href="/templates.html" target="_blank" style="color:var(--brand);font-weight:600;font-size:14px">Manage Templates →</a>
+          <p style="margin:0 0 12px;font-size:14px">No templates configured yet. Ask your admin to add templates in the admin panel.</p>
         </div>`;
       setSlideOverState('editing');
       return;
@@ -1297,7 +1296,6 @@ async function showTemplatePicker() {
       <div>
         <p style="font-size:13px;color:var(--text-muted);margin:0 0 12px">Choose a template:</p>
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px">${gridHtml}</div>
-        <div style="margin-top:14px;text-align:right"><a href="/templates.html" target="_blank" style="font-size:12px;color:var(--text-muted)">Manage templates →</a></div>
       </div>`;
 
     setSlideOverState('editing');

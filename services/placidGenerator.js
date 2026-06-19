@@ -5,28 +5,26 @@ const { getSetting, db } = require('../db');
 const storage = require('./storage');
 const { getAnthropicMessageText } = require('./voiceFingerprint');
 
-// Resolve Placid config: DB template → workspace default → env vars
-async function getPlacidConfig(templateId, tenantId) {
+// Resolve Placid config: specific template by id → global default → env vars
+async function getPlacidConfig(templateId) {
   const apiKey = (process.env.PLACID_API_KEY || '').trim() || (await getSetting('placid_api_key'));
   if (!apiKey) throw new Error('placid_api_key not configured');
 
-  if (templateId && tenantId) {
+  if (templateId) {
     const row = await db.prepare(
-      'SELECT template_uuid, layer_headline, layer_subtext FROM placid_templates WHERE id = ? AND tenant_id = ?'
-    ).get(templateId, tenantId);
+      'SELECT template_uuid, layer_headline, layer_subtext FROM placid_templates WHERE id = ?'
+    ).get(templateId);
     if (row) return { apiKey, templateUuid: row.template_uuid, headlineLayer: row.layer_headline, subtextLayer: row.layer_subtext };
   }
 
-  if (tenantId) {
-    const def = await db.prepare(
-      'SELECT template_uuid, layer_headline, layer_subtext FROM placid_templates WHERE tenant_id = ? AND is_default = TRUE LIMIT 1'
-    ).get(tenantId);
-    if (def) return { apiKey, templateUuid: def.template_uuid, headlineLayer: def.layer_headline, subtextLayer: def.layer_subtext };
-  }
+  const def = await db.prepare(
+    'SELECT template_uuid, layer_headline, layer_subtext FROM placid_templates WHERE is_default = TRUE LIMIT 1'
+  ).get();
+  if (def) return { apiKey, templateUuid: def.template_uuid, headlineLayer: def.layer_headline, subtextLayer: def.layer_subtext };
 
   // Fallback: env / platform settings
   const templateUuid = (process.env.PLACID_TEMPLATE_ID || '').trim() || (await getSetting('placid_template_id'));
-  if (!templateUuid) throw new Error('No Placid template configured. Add one on the Templates page or set PLACID_TEMPLATE_ID.');
+  if (!templateUuid) throw new Error('No Placid template configured. Add one in Admin → Placid Templates or set PLACID_TEMPLATE_ID.');
   return { apiKey, templateUuid, headlineLayer: 'headline', subtextLayer: 'subtext' };
 }
 
@@ -63,7 +61,7 @@ Return only: {"headline":"...","subtext":"..."}`,
 
 async function renderPlacidImage(post, content, ctx = {}, templateId = null) {
   const { userId, tenantId } = ctx;
-  const { apiKey, templateUuid, headlineLayer, subtextLayer } = await getPlacidConfig(templateId, tenantId);
+  const { apiKey, templateUuid, headlineLayer, subtextLayer } = await getPlacidConfig(templateId);
 
   const layers = {};
   if (content.headline) layers[headlineLayer] = { text: content.headline };

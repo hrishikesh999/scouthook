@@ -181,7 +181,8 @@ router.post('/', async (req, res) => {
   } = req.body;
 
   const hasVoiceDNAField = website_summary || onboarding_q2 || onboarding_q3
-    || authority_statements || cta_library || content_principles || content_themes;
+    || authority_statements || cta_library || content_principles || content_themes
+    || content_pillars;
 
   const hasBrandVoiceField = brand_description || brand_industry || brand_personality_traits
     || brand_emotional_tone || elevator_main_result || elevator_mechanism || brand_archetype
@@ -340,6 +341,19 @@ router.post('/', async (req, res) => {
         console.error('[profile] extractVoiceDNAFromQA failed (non-fatal):', err.message)
       );
     }
+    Promise.resolve().then(async () => {
+      const updatedProfile = await getFullProfileById(profileId);
+      const liRow = await db.prepare(
+        'SELECT 1 FROM linkedin_connections WHERE workspace_id = ? AND is_default = true'
+      ).get(tenantId);
+      const pct = calculateCompletionPct(updatedProfile || {}, !!liRow);
+      await db.prepare(
+        'UPDATE profiles SET voice_profile_completion_pct = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+      ).run(pct, profileId);
+    }).catch(() => {});
+  } else if (hasBrandVoiceField || hasAudienceField) {
+    // 6c. Recalculate score when brand voice or audience fields are saved
+    const { calculateCompletionPct } = require('../services/voiceExtraction');
     Promise.resolve().then(async () => {
       const updatedProfile = await getFullProfileById(profileId);
       const liRow = await db.prepare(

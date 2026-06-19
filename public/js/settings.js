@@ -239,6 +239,38 @@ async function init() {
   }
   updateCompletionBar(profile.voice_profile_completion_pct || 0);
 
+  function calcLocalCompletionPct() {
+    let s = 0;
+    // Stage 1 — Brand Voice
+    if (qs('bv-description')?.value.trim())                                  s += 5;
+    if (bvTraits.length >= 1)                                                s += 5;
+    if (qs('bv-elevator')?.value.trim())                                     s += 5;
+    if (textareaLines('bv-beliefs').length >= 2)                             s += 5;
+    // Stage 2 — Target Audience
+    if (qs('aud-description')?.value.trim())                                 s += 5;
+    if (textareaLines('aud-goals').length >= 1 ||
+        textareaLines('aud-obstacles').length >= 1)                          s += 5;
+    if (qs('aud-buying-stage')?.value)                                       s += 5;
+    // Stage 3 — Content Pillars
+    if (pillars.length >= 2)                                                 s += 5;
+    // Stage 4 — Credibility
+    if (statements.length >= 3)                                              s += 10;
+    // Stage 5 — CTAs
+    if (ctas.length >= 2)                                                    s += 10;
+    // Stage 6 — Rules
+    if (principles.length >= 3)                                              s += 5;
+    // Stage 7 — LinkedIn (detect from sidebar connect button visibility)
+    const liConnect = qs('vw-linkedin-connect');
+    if (!liConnect || liConnect.hasAttribute('hidden'))                      s += 10;
+    // Stage 8 — Writing Samples
+    const samplesText = samplesData.join('\n').trim();
+    if (samplesText.length >= 200)                                           s += 15;
+    if (samplesText.length >= 600)                                           s += 5;
+    // Voice fingerprint
+    if (profile.voice_fingerprint)                                           s += 5;
+    return Math.min(s, 100);
+  }
+
   /* ── Voice summary panel ────────────────────────────────── */
   function renderVoiceSummary(fp) {
     const panel     = qs('vw-voice-summary');
@@ -479,6 +511,7 @@ async function init() {
         showStatus(statusEl, 'Brand voice saved ✓');
         const check = qs('vw-check-1');
         if (check) check.hidden = false;
+        updateCompletionBar(calcLocalCompletionPct());
       } else {
         showStatus(statusEl, 'Save failed', true);
       }
@@ -601,6 +634,7 @@ async function init() {
         showStatus(statusEl, 'Audience profile saved ✓');
         const check = qs('vw-check-2');
         if (check) check.hidden = false;
+        updateCompletionBar(calcLocalCompletionPct());
       } else {
         showStatus(statusEl, 'Save failed', true);
       }
@@ -659,6 +693,7 @@ async function init() {
       if (d.ok) {
         showStatus(qs('vw-pillars-status'), 'Saved ✓');
         if (pillars.length > 0) { const el = qs('vw-check-3'); if (el) el.hidden = false; }
+        updateCompletionBar(calcLocalCompletionPct());
       } else {
         showStatus(qs('vw-pillars-status'), 'Save failed', true);
       }
@@ -684,6 +719,7 @@ async function init() {
       if (d.ok) {
         showStatus(qs('vw-authority-status'), 'Saved ✓');
         if (statements.length > 0) { const el = qs('vw-check-4'); if (el) el.hidden = false; }
+        updateCompletionBar(calcLocalCompletionPct());
       } else {
         showStatus(qs('vw-authority-status'), 'Save failed', true);
       }
@@ -722,6 +758,7 @@ async function init() {
       if (d.ok) {
         showStatus(qs('vw-cta-status'), 'Saved ✓');
         if (ctas.length > 0) { const el = qs('vw-check-5'); if (el) el.hidden = false; }
+        updateCompletionBar(calcLocalCompletionPct());
       } else {
         showStatus(qs('vw-cta-status'), 'Save failed', true);
       }
@@ -747,6 +784,7 @@ async function init() {
       if (d.ok) {
         showStatus(qs('vw-principles-status'), 'Saved ✓');
         if (principles.length > 0) { const el = qs('vw-check-6'); if (el) el.hidden = false; }
+        updateCompletionBar(calcLocalCompletionPct());
       } else {
         showStatus(qs('vw-principles-status'), 'Save failed', true);
       }
@@ -787,6 +825,7 @@ async function init() {
       renderLinkedInProfile(d);
       const el = qs('vw-check-7');
       if (el) el.hidden = false;
+      updateCompletionBar(calcLocalCompletionPct());
 
       // If redirected back after connect, show a success flash
       if (window.location.search.includes('linkedin_connected=true')) {
@@ -980,6 +1019,7 @@ async function init() {
       if (d.ok) {
         showStatus(qs('vw-samples-status'), 'Saved ✓');
         if (val) { const el = qs('vw-check-8'); if (el) el.hidden = false; }
+        updateCompletionBar(calcLocalCompletionPct());
       } else {
         showStatus(qs('vw-samples-status'), 'Save failed', true);
       }

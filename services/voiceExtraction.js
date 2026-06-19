@@ -451,30 +451,41 @@ function buildVoiceDNABlock(userProfile) {
 function calculateCompletionPct(userProfile, hasLinkedIn = false) {
   let score = 0;
 
-  if (userProfile.user_role)              score += 5;
-  if (userProfile.website_url)            score += 5;
-  if (userProfile.brand_core_beliefs)     score += 5;
-  if (userProfile.onboarding_q2)          score += 5;
-  if (userProfile.onboarding_q3)          score += 5;
-  if (userProfile.voice_fingerprint)      score += 5;
-  if (userProfile.elevator_main_result)   score += 3;
-  if (userProfile.brand_description)      score += 2;
+  // Stage 1 — Brand Voice
+  if (userProfile.brand_description)                                        score += 5;
+  if (safeParseJSON(userProfile.brand_personality_traits, []).length >= 1) score += 5;
+  if (userProfile.elevator_main_result)                                     score += 5;
+  if (safeParseJSON(userProfile.brand_core_beliefs, []).length >= 2)       score += 5;
 
-  // Credit based on character length: 200+ chars = baseline, 600+ chars = richer sample.
+  // Stage 2 — Target Audience
+  if (userProfile.audience_description)                                     score += 5;
+  const goals = safeParseJSON(userProfile.audience_goals, []);
+  const obs   = safeParseJSON(userProfile.audience_obstacles, []);
+  if (goals.length >= 1 || obs.length >= 1)                                score += 5;
+  if (userProfile.audience_buying_stage)                                    score += 5;
+
+  // Stage 3 — Content Pillars
+  if (safeParseJSON(userProfile.content_pillars, []).length >= 2)          score += 5;
+
+  // Stage 4 — Credibility
+  if (safeParseJSON(userProfile.authority_statements, []).length >= 3)     score += 10;
+
+  // Stage 5 — CTAs
+  if (safeParseJSON(userProfile.cta_library, []).length >= 2)              score += 10;
+
+  // Stage 6 — Rules
+  if (safeParseJSON(userProfile.content_principles, []).length >= 3)       score += 5;
+
+  // Stage 7 — LinkedIn
+  if (hasLinkedIn)                                                          score += 10;
+
+  // Stage 8 — Writing Samples
   const samplesStr = parseSamplesText(userProfile.writing_samples).trim();
-  if (samplesStr.length >= 200)         score += 15;
-  if (samplesStr.length >= 600)         score += 5;
+  if (samplesStr.length >= 200)                                             score += 15;
+  if (samplesStr.length >= 600)                                             score += 5;
 
-  const statements = safeParseJSON(userProfile.authority_statements, []);
-  if (statements.length >= 3)           score += 10;
-
-  const ctas = safeParseJSON(userProfile.cta_library, []);
-  if (ctas.length >= 2)                 score += 10;
-
-  const principles = safeParseJSON(userProfile.content_principles, []);
-  if (principles.length >= 3)           score += 5;
-
-  if (hasLinkedIn)                      score += 20;
+  // Voice extraction (derived from writing samples)
+  if (userProfile.voice_fingerprint)                                        score += 5;
 
   return Math.min(score, 100);
 }

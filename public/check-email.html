@@ -12,7 +12,7 @@
       display: flex;
       gap: 8px;
       justify-content: center;
-      margin: 20px 0 24px;
+      margin: 20px 0 8px;
     }
     .pin-digit {
       width: 44px;
@@ -28,15 +28,13 @@
       outline: none;
       transition: border-color 0.15s;
     }
-    .pin-digit:focus {
-      border-color: var(--brand);
-    }
+    .pin-digit:focus { border-color: var(--brand); }
+    .pin-digit.is-error { border-color: var(--error, #dc2626); }
     .pin-error {
       color: var(--error, #dc2626);
       font-size: 13px;
       text-align: center;
-      margin: 0 0 12px;
-      display: none;
+      margin: 0 0 16px;
     }
   </style>
 </head>
@@ -45,11 +43,12 @@
     <div class="login-left">
       <div class="login-left-inner">
         <img src="/images/scout-hook-logo.png" alt="ScoutHook" class="login-left-logo" />
-        <h1 class="login-hero-headline" id="left-headline">Check your inbox.</h1>
+        <h1 class="login-hero-headline">Check your inbox.</h1>
       </div>
     </div>
     <div class="login-right">
       <div class="login-right-inner">
+
         <!-- Signup PIN entry card -->
         <section id="card-signup" class="login-card" role="region" aria-label="Enter verification code" style="display:none">
           <div style="text-align:center;margin-bottom:20px;">
@@ -59,24 +58,34 @@
             Check your email
           </h2>
           <p id="pin-desc" style="font-size:14px;color:var(--text-muted);text-align:center;margin:0 0 4px;line-height:1.6"></p>
-          <div id="use-code-notice" style="display:none;font-size:13px;color:var(--text-muted);text-align:center;margin:0 0 8px;background:var(--surface-alt,#f9fafb);border:1px solid var(--border);border-radius:6px;padding:8px 12px;">
+
+          <div id="use-code-notice" style="display:none;font-size:13px;color:var(--text-muted);text-align:center;margin:8px 0;background:var(--surface-alt,#f9fafb);border:1px solid var(--border);border-radius:6px;padding:8px 12px;">
             Verification codes have replaced email links. Enter the 6-digit code from your email below.
           </div>
 
-          <div class="pin-row" id="pinRow">
-            <input class="pin-digit" type="text" inputmode="numeric" maxlength="1" aria-label="Digit 1" />
-            <input class="pin-digit" type="text" inputmode="numeric" maxlength="1" aria-label="Digit 2" />
-            <input class="pin-digit" type="text" inputmode="numeric" maxlength="1" aria-label="Digit 3" />
-            <input class="pin-digit" type="text" inputmode="numeric" maxlength="1" aria-label="Digit 4" />
-            <input class="pin-digit" type="text" inputmode="numeric" maxlength="1" aria-label="Digit 5" />
-            <input class="pin-digit" type="text" inputmode="numeric" maxlength="1" aria-label="Digit 6" />
-          </div>
+          <!--
+            Form submits as a real POST so the session cookie is set via
+            the server's 302 redirect response — avoids fetch cookie timing issues.
+          -->
+          <form id="pinForm" method="POST" action="/auth/verify-email">
+            <input type="hidden" name="email" id="emailInput" value="" />
+            <input type="hidden" name="pin"   id="pinHidden"  value="" />
 
-          <p class="pin-error" id="pinError"></p>
+            <div class="pin-row" id="pinRow" aria-label="Verification code">
+              <input class="pin-digit" type="text" inputmode="numeric" maxlength="1" aria-label="Digit 1" />
+              <input class="pin-digit" type="text" inputmode="numeric" maxlength="1" aria-label="Digit 2" />
+              <input class="pin-digit" type="text" inputmode="numeric" maxlength="1" aria-label="Digit 3" />
+              <input class="pin-digit" type="text" inputmode="numeric" maxlength="1" aria-label="Digit 4" />
+              <input class="pin-digit" type="text" inputmode="numeric" maxlength="1" aria-label="Digit 5" />
+              <input class="pin-digit" type="text" inputmode="numeric" maxlength="1" aria-label="Digit 6" />
+            </div>
 
-          <button id="verifyBtn" class="btn-primary login-continue-btn" style="width:100%;margin-bottom:14px" disabled>
-            Verify
-          </button>
+            <p class="pin-error" id="pinError" style="display:none"></p>
+
+            <button type="submit" id="verifyBtn" class="btn-primary login-continue-btn" style="width:100%;margin-bottom:14px" disabled>
+              Verify
+            </button>
+          </form>
 
           <div style="text-align:center">
             <p style="font-size:13px;color:var(--text-muted);margin:0 0 10px">Didn't get it?</p>
@@ -104,16 +113,18 @@
             <a href="/login.html" style="color:var(--brand)">Back to sign in</a>
           </p>
         </section>
+
       </div>
     </div>
   </div>
 
   <script>
   (function () {
-    const params  = new URLSearchParams(window.location.search);
-    const reason  = params.get('reason');
-    const email   = params.get('email') || '';
-    const info    = params.get('info')  || '';
+    const params = new URLSearchParams(window.location.search);
+    const reason = params.get('reason');
+    const email  = params.get('email') || '';
+    const info   = params.get('info')  || '';
+    const error  = params.get('error') || '';
 
     function escapeHtml(s) {
       return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -121,11 +132,14 @@
 
     if (reason === 'reset') {
       document.getElementById('card-reset').style.display = '';
-      return; // nothing else to do
+      return;
     }
 
-    // ── Signup PIN flow ────────────────────────────────────────────────────────
+    // ── Signup PIN flow ──────────────────────────────────────────────────────
     document.getElementById('card-signup').style.display = '';
+
+    // Pre-fill hidden email field so the form POST includes it
+    document.getElementById('emailInput').value = email;
 
     const desc = document.getElementById('pin-desc');
     desc.innerHTML = email
@@ -136,29 +150,48 @@
       document.getElementById('use-code-notice').style.display = '';
     }
 
-    // ── PIN inputs ─────────────────────────────────────────────────────────────
+    // Show server-returned errors (from failed POST redirect)
+    const pinError = document.getElementById('pinError');
+    if (error) {
+      const msg =
+        error === 'invalid_code'         ? 'Incorrect or expired code — please try again or resend.' :
+        error === 'verification_failed'  ? 'Verification failed. Please try again or resend the code.' :
+        error === 'invalid_request'      ? 'Please enter all 6 digits.' :
+                                           'Something went wrong. Please try again.';
+      pinError.textContent  = msg;
+      pinError.style.display = '';
+      document.querySelectorAll('.pin-digit').forEach(d => d.classList.add('is-error'));
+    }
+
+    // ── PIN digit inputs ─────────────────────────────────────────────────────
     const digits    = Array.from(document.querySelectorAll('.pin-digit'));
     const verifyBtn = document.getElementById('verifyBtn');
-    const pinError  = document.getElementById('pinError');
+    const pinHidden = document.getElementById('pinHidden');
 
     function getPin() { return digits.map(d => d.value).join(''); }
-    function updateBtn() { verifyBtn.disabled = getPin().length < 6; }
-    function showError(msg) { pinError.textContent = msg; pinError.style.display = ''; }
-    function clearError()   { pinError.style.display = 'none'; }
+
+    function syncHiddenAndBtn() {
+      const pin = getPin();
+      pinHidden.value     = pin;
+      verifyBtn.disabled  = pin.length < 6;
+    }
+
+    function clearError() {
+      pinError.style.display = '';
+      pinError.textContent   = '';
+      digits.forEach(d => d.classList.remove('is-error'));
+    }
 
     digits.forEach((input, i) => {
-      input.addEventListener('input', e => {
+      input.addEventListener('input', () => {
         clearError();
-        // Allow only digits; strip non-numeric silently
         input.value = input.value.replace(/\D/g, '').slice(0, 1);
         if (input.value && i < digits.length - 1) digits[i + 1].focus();
-        updateBtn();
+        syncHiddenAndBtn();
       });
 
       input.addEventListener('keydown', e => {
-        if (e.key === 'Backspace' && !input.value && i > 0) {
-          digits[i - 1].focus();
-        }
+        if (e.key === 'Backspace' && !input.value && i > 0) digits[i - 1].focus();
         if (e.key === 'ArrowLeft'  && i > 0)                digits[i - 1].focus();
         if (e.key === 'ArrowRight' && i < digits.length - 1) digits[i + 1].focus();
       });
@@ -174,45 +207,14 @@
         const next = Math.min(i + pasted.length, digits.length - 1);
         digits[next].focus();
         clearError();
-        updateBtn();
+        syncHiddenAndBtn();
       });
     });
 
-    // ── Verify button ──────────────────────────────────────────────────────────
-    verifyBtn.addEventListener('click', async () => {
-      const pin = getPin();
-      if (pin.length < 6) return;
+    // Focus first digit on load (skip if there's an error — user should re-enter)
+    if (!error) digits[0].focus();
 
-      verifyBtn.disabled    = true;
-      verifyBtn.textContent = 'Verifying…';
-      clearError();
-
-      try {
-        const res  = await fetch('/auth/verify-email', {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({ email, pin }),
-        });
-        const data = await res.json();
-        if (data.ok && data.redirect) {
-          window.location.href = data.redirect;
-        } else {
-          const msg =
-            data.error === 'invalid_or_expired_code' ? 'Incorrect or expired code — please try again or resend.' :
-            data.error === 'invalid_request'         ? 'Please enter all 6 digits.' :
-                                                       'Something went wrong. Please try again.';
-          showError(msg);
-          verifyBtn.disabled    = false;
-          verifyBtn.textContent = 'Verify';
-        }
-      } catch {
-        showError('Network error — please try again.');
-        verifyBtn.disabled    = false;
-        verifyBtn.textContent = 'Verify';
-      }
-    });
-
-    // ── Resend button ──────────────────────────────────────────────────────────
+    // ── Resend (still uses fetch — no session needed here) ───────────────────
     const resendBtn    = document.getElementById('resendBtn');
     const resendStatus = document.getElementById('resendStatus');
 
@@ -225,19 +227,16 @@
           headers: { 'Content-Type': 'application/json' },
           body:    JSON.stringify({ email }),
         });
-        resendStatus.textContent = 'Sent! Check your inbox (and spam folder).';
+        resendStatus.textContent   = 'Sent! Check your inbox (and spam folder).';
         resendStatus.style.display = '';
       } catch {
-        resendStatus.textContent = 'Something went wrong. Please try again.';
+        resendStatus.textContent   = 'Something went wrong. Please try again.';
         resendStatus.style.display = '';
       } finally {
         resendBtn.disabled    = false;
         resendBtn.textContent = 'Resend code';
       }
     });
-
-    // Focus first digit on load
-    digits[0].focus();
   })();
   </script>
 </body>

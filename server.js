@@ -57,6 +57,7 @@ if (allowedOrigin) {
 // ---------------------------------------------------------------------------
 
 app.use(express.json({ limit: '30mb' }));
+app.use(express.urlencoded({ extended: false }));
 
 // ---------------------------------------------------------------------------
 // Auth (Google OAuth) + session

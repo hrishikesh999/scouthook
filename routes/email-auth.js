@@ -159,7 +159,10 @@ router.post('/verify-email', async (req, res) => {
       LIMIT 1
     `).get(normalizedEmail, normalizedPin);
 
-    if (!row) return res.status(400).json({ ok: false, error: 'invalid_or_expired_code' });
+    if (!row) {
+      const emailParam = isValidEmail(req.body?.email) ? `&email=${encodeURIComponent(req.body.email.trim().toLowerCase())}` : '';
+      return res.redirect(`/check-email.html?reason=signup${emailParam}&error=invalid_code`);
+    }
 
     // Mark verified
     await db.prepare(`
@@ -196,10 +199,11 @@ router.post('/verify-email', async (req, res) => {
     ).get(workspaceId);
 
     const dest = brandProfile?.onboarding_complete ? '/dashboard.html' : '/onboarding.html';
-    return res.json({ ok: true, redirect: dest });
+    return res.redirect(dest);
   } catch (err) {
     console.error('[email-auth] verify-email POST error:', err.message);
-    return res.status(500).json({ ok: false, error: 'verification_failed' });
+    const emailParam = isValidEmail(req.body?.email) ? `&email=${encodeURIComponent(req.body.email.trim().toLowerCase())}` : '';
+    return res.redirect(`/check-email.html?reason=signup${emailParam}&error=verification_failed`);
   }
 });
 

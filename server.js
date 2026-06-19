@@ -458,7 +458,8 @@ function requireVaultFeatureForWrites(req, res, next) {
 app.use('/api/profile',       requireWorkspaceMember, require('./routes/profile'));
 app.use('/api/recipes',       requireWorkspaceMember, require('./routes/recipes'));
 app.use('/api/generate',      requireWorkspaceMember, requireWorkspaceActive, require('./routes/generate'));
-app.use('/api/visuals',       requireWorkspaceMember, require('./routes/visuals'));
+app.use('/api/visuals',           requireWorkspaceMember, require('./routes/visuals'));
+app.use('/api/placid-templates', requireWorkspaceMember, require('./routes/placidTemplates'));
 // /callback is exempt from workspace auth — identity comes from the state token,
 // so the flow works even when the browser session has expired mid-redirect.
 app.use('/api/linkedin',

@@ -1,16 +1,33 @@
 'use strict';
 
 const Anthropic = require('@anthropic-ai/sdk');
-const { getSetting } = require('../db');
+const { getSetting, db } = require('../db');
 const storage = require('./storage');
 const { getAnthropicMessageText } = require('./voiceFingerprint');
 
-async function getPlacidConfig() {
+// Resolve Placid config: DB template → workspace default → env vars
+async function getPlacidConfig(templateId, tenantId) {
   const apiKey = (process.env.PLACID_API_KEY || '').trim() || (await getSetting('placid_api_key'));
   if (!apiKey) throw new Error('placid_api_key not configured');
-  const templateId = (process.env.PLACID_TEMPLATE_ID || '').trim() || (await getSetting('placid_template_id'));
-  if (!templateId) throw new Error('placid_template_id not configured');
-  return { apiKey, templateId };
+
+  if (templateId && tenantId) {
+    const row = await db.prepare(
+      'SELECT template_uuid, layer_headline, layer_subtext FROM placid_templates WHERE id = ? AND tenant_id = ?'
+    ).get(templateId, tenantId);
+    if (row) return { apiKey, templateUuid: row.template_uuid, headlineLayer: row.layer_headline, subtextLayer: row.layer_subtext };
+  }
+
+  if (tenantId) {
+    const def = await db.prepare(
+      'SELECT template_uuid, layer_headline, layer_subtext FROM placid_templates WHERE tenant_id = ? AND is_default = TRUE LIMIT 1'
+    ).get(tenantId);
+    if (def) return { apiKey, templateUuid: def.template_uuid, headlineLayer: def.layer_headline, subtextLayer: def.layer_subtext };
+  }
+
+  // Fallback: env / platform settings
+  const templateUuid = (process.env.PLACID_TEMPLATE_ID || '').trim() || (await getSetting('placid_template_id'));
+  if (!templateUuid) throw new Error('No Placid template configured. Add one on the Templates page or set PLACID_TEMPLATE_ID.');
+  return { apiKey, templateUuid, headlineLayer: 'headline', subtextLayer: 'subtext' };
 }
 
 async function extractPlacidContent(post) {
@@ -40,32 +57,22 @@ Return only: {"headline":"...","subtext":"..."}`,
       subtext: parsed.subtext || '',
     };
   } catch {
-    return {
-      headline: post.content.split('\n')[0].slice(0, 80),
-      subtext: '',
-    };
+    return { headline: post.content.split('\n')[0].slice(0, 80), subtext: '' };
   }
 }
 
-async function renderPlacidImage(post, content, ctx = {}) {
+async function renderPlacidImage(post, content, ctx = {}, templateId = null) {
   const { userId, tenantId } = ctx;
-  const { apiKey, templateId } = await getPlacidConfig();
-
-  const headlineLayer = (process.env.PLACID_LAYER_HEADLINE || 'headline').trim();
-  const subtextLayer  = (process.env.PLACID_LAYER_SUBTEXT  || 'subtext').trim();
+  const { apiKey, templateUuid, headlineLayer, subtextLayer } = await getPlacidConfig(templateId, tenantId);
 
   const layers = {};
   if (content.headline) layers[headlineLayer] = { text: content.headline };
   if (content.subtext)  layers[subtextLayer]  = { text: content.subtext };
 
-  // Create the image
   const createRes = await fetch('https://api.placid.app/api/rest/images', {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ template_uuid: templateId, layers }),
+    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ template_uuid: templateUuid, layers }),
   });
 
   if (!createRes.ok) {
@@ -75,7 +82,6 @@ async function renderPlacidImage(post, content, ctx = {}) {
 
   let job = await createRes.json();
 
-  // Poll until finished (250 ms intervals, 30 s timeout)
   const deadline = Date.now() + 30_000;
   while (job.status !== 'finished' && job.status !== 'error') {
     if (Date.now() > deadline) throw new Error('Placid image generation timed out');
@@ -89,7 +95,6 @@ async function renderPlacidImage(post, content, ctx = {}) {
 
   if (job.status === 'error') throw new Error('Placid reported an error generating the image');
 
-  // Download and store the result
   const imgRes = await fetch(job.image_url);
   if (!imgRes.ok) throw new Error(`Failed to download Placid image (${imgRes.status})`);
   const buf = Buffer.from(await imgRes.arrayBuffer());
@@ -100,9 +105,9 @@ async function renderPlacidImage(post, content, ctx = {}) {
   return { png_url: `/files/${filename}` };
 }
 
-async function generatePlacidImage(post, ctx = {}) {
+async function generatePlacidImage(post, ctx = {}, templateId = null) {
   const content = await extractPlacidContent(post);
-  return renderPlacidImage(post, content, ctx);
+  return renderPlacidImage(post, content, ctx, templateId);
 }
 
 module.exports = { generatePlacidImage, extractPlacidContent, renderPlacidImage };

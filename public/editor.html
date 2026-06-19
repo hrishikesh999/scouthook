@@ -126,6 +126,9 @@
                 <button class="ptb-btn" id="branded-quote-btn" title="Generate branded quote" aria-label="Generate branded quote">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M12 7l1.5 3.5L17 12l-3.5 1.5L12 17l-1.5-3.5L7 12l3.5-1.5z"/></svg>
                 </button>
+                <button class="ptb-btn" id="ai-image-btn" title="Generate image using AI" aria-label="Generate image using AI">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l2.4 6.6H21l-5.7 4.1 2.2 6.7L12 15.3l-5.5 4.1 2.2-6.7L3 8.6h6.6z"/></svg>
+                </button>
               </div>
             </div>
 
@@ -411,6 +414,7 @@ let currentAssetUrl       = null;
 let currentPreviewUrl     = null;
 let currentSlideCount     = 0;
 let slideOverState        = 'loading';
+let selectedTemplateId    = null;  // set during ai_image template picker step
 
 const visualCache = new Map();
 
@@ -584,7 +588,7 @@ async function loadPost(id) {
       attachedPreviewUrl = p.assetPreviewUrl || (p.assetType !== 'carousel' ? p.assetUrl : null);
       attachedAssetType  = p.assetType || 'media_image';
       attachedSlideCount = p.assetSlideCount || 0;
-      const labelMap = { carousel: 'Carousel', media_pdf: 'PDF', media_image: 'Image', quote_card: 'Quote Card', branded_quote: 'Branded Quote' };
+      const labelMap = { carousel: 'Carousel', media_pdf: 'PDF', media_image: 'Image', quote_card: 'Quote Card', branded_quote: 'Branded Quote', ai_image: 'Generate using AI' };
       const chipLabel = document.getElementById('asset-chip-label');
       const chip      = document.getElementById('asset-chip');
       if (chipLabel) chipLabel.textContent = labelMap[attachedAssetType] || attachedAssetType;
@@ -921,7 +925,7 @@ function applyScheduleLockUi(scheduledFor) {
   const schedBtn = document.getElementById('btn-schedule');
   if (schedBtn) { schedBtn.disabled = true; schedBtn.style.setProperty('display', 'none', 'important'); }
   document.getElementById('post-body').disabled = true;
-  ['quote-card-btn','carousel-btn','branded-quote-btn','media-library-btn','fmt-undo','fmt-bold','fmt-italic','fmt-bullet','fmt-num'].forEach(id => {
+  ['quote-card-btn','carousel-btn','branded-quote-btn','ai-image-btn','media-library-btn','fmt-undo','fmt-bold','fmt-italic','fmt-bullet','fmt-num'].forEach(id => {
     document.getElementById(id)?.classList.add('disabled');
   });
   const chipRemove = document.getElementById('asset-chip-remove');
@@ -942,7 +946,7 @@ function clearScheduleLockUi() {
   const schedBtnRestore = document.getElementById('btn-schedule');
   if (schedBtnRestore) schedBtnRestore.style.removeProperty('display');
   if (linkedinConnected && schedBtnRestore) schedBtnRestore.disabled = false;
-  ['quote-card-btn','carousel-btn','branded-quote-btn','media-library-btn','fmt-undo','fmt-bold','fmt-italic','fmt-bullet','fmt-num'].forEach(id => {
+  ['quote-card-btn','carousel-btn','branded-quote-btn','ai-image-btn','media-library-btn','fmt-undo','fmt-bold','fmt-italic','fmt-bullet','fmt-num'].forEach(id => {
     document.getElementById(id)?.classList.remove('disabled');
   });
   const chipRemove = document.getElementById('asset-chip-remove');
@@ -1182,6 +1186,12 @@ function openSlideOver(type, label) {
     currentRenderedContent = cached.renderedContent || null;
     restoreCachedPreview(type, cached);
     setSlideOverState('preview');
+  } else if (type === 'ai_image') {
+    // Step 1: show template picker before extracting content
+    skel.style.display = '';
+    content.appendChild(skel);
+    setSlideOverState('loading');
+    showTemplatePicker();
   } else if (cached?.extractedContent) {
     extractedContent = cached.extractedContent;
     renderEditorForm(type, extractedContent);
@@ -1199,7 +1209,8 @@ function closeSlideOver() {
   so.classList.remove('open');
   so.setAttribute('aria-hidden', 'true');
   maybeHideOverlay();
-  extractedContent = null;
+  extractedContent    = null;
+  selectedTemplateId  = null;
   const genBtn = document.getElementById('slide-over-generate');
   genBtn.disabled    = false;
   genBtn.textContent = 'Generate';
@@ -1236,7 +1247,75 @@ function visualErrorMessage(code) {
   if (code === 'branded_quote_requires_linkedin') return 'Branded quotes use your LinkedIn profile photo. <a href="/account.html" style="color:var(--brand);font-weight:600">Connect LinkedIn in Account Settings</a> to use this feature.';
   if (code === 'branded_quote_photo_fetch_failed') return 'Could not load your LinkedIn photo. Try reconnecting LinkedIn in Account Settings.';
   if (code === 'post_not_found' || code === 'forbidden') return 'Post not found or access denied. Refresh the page and try again.';
+  if (code === 'feature_not_available') return 'This feature requires a Pro plan. <a href="/billing.html" style="color:var(--brand);font-weight:600">Upgrade to Pro</a> to use AI image generation.';
+  if (code === 'placid_api_key not configured' || code === 'placid_template_id not configured') return 'AI image generation is not configured yet. Contact your admin to set up the integration.';
   return String(code);
+}
+
+async function showTemplatePicker() {
+  const content = document.getElementById('slide-over-content');
+  const skel    = _soSkel;
+  try {
+    const res  = await fetch('/api/placid-templates', { headers: apiHeaders(), credentials: 'include' });
+    const data = await res.json();
+    skel.style.display = 'none';
+    const tpls = data.templates || [];
+
+    if (tpls.length === 0) {
+      content.innerHTML = `
+        <div style="text-align:center;padding:40px 16px;color:var(--text-muted)">
+          <p style="margin:0 0 12px;font-size:14px">No templates configured yet.</p>
+          <a href="/templates.html" target="_blank" style="color:var(--brand);font-weight:600;font-size:14px">Manage Templates →</a>
+        </div>`;
+      setSlideOverState('editing');
+      return;
+    }
+
+    // If only one template, auto-select it
+    if (tpls.length === 1) {
+      selectedTemplateId = tpls[0].id;
+      content.innerHTML = '';
+      skel.style.display = '';
+      content.appendChild(skel);
+      setSlideOverState('loading');
+      extractContent('ai_image');
+      return;
+    }
+
+    const gridHtml = tpls.map(t => {
+      const previewHtml = t.preview_image_url
+        ? `<img src="${escHtml(t.preview_image_url)}" alt="" style="width:100%;height:100%;object-fit:cover;display:block">`
+        : `<span style="font-size:22px;font-weight:700;color:var(--text-muted)">${escHtml((t.name||'?').slice(0,2).toUpperCase())}</span>`;
+      const defBadge = t.is_default ? `<span style="font-size:10px;font-weight:700;text-transform:uppercase;background:var(--brand);color:#fff;padding:2px 5px;border-radius:4px;margin-left:6px">Default</span>` : '';
+      return `<div class="so-tpl-card" data-tpl-id="${escHtml(t.id)}" style="cursor:pointer;border:1px solid var(--border);border-radius:10px;overflow:hidden;background:var(--surface-2)">
+        <div style="aspect-ratio:1;display:flex;align-items:center;justify-content:center;background:var(--surface)">${previewHtml}</div>
+        <div style="padding:10px 12px;font-size:13px;font-weight:600">${escHtml(t.name)}${defBadge}</div>
+      </div>`;
+    }).join('');
+
+    content.innerHTML = `
+      <div>
+        <p style="font-size:13px;color:var(--text-muted);margin:0 0 12px">Choose a template:</p>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px">${gridHtml}</div>
+        <div style="margin-top:14px;text-align:right"><a href="/templates.html" target="_blank" style="font-size:12px;color:var(--text-muted)">Manage templates →</a></div>
+      </div>`;
+
+    setSlideOverState('editing');
+    content.querySelectorAll('.so-tpl-card').forEach(card => {
+      card.addEventListener('click', () => {
+        selectedTemplateId = card.dataset.tplId;
+        content.innerHTML = '';
+        skel.style.display = '';
+        content.appendChild(skel);
+        setSlideOverState('loading');
+        extractContent('ai_image');
+      });
+    });
+  } catch (err) {
+    skel.style.display = 'none';
+    content.innerHTML = `<p style="color:var(--error,#e55);font-size:13px;padding:16px">Failed to load templates: ${escHtml(err.message)}</p>`;
+    setSlideOverState('editing');
+  }
 }
 
 async function extractContent(type) {
@@ -1307,6 +1386,25 @@ function renderEditorForm(type, content) {
       le.textContent = n;
       co.classList.toggle('so-char-counter--full', n >= maxLen);
     });
+
+  } else if (type === 'ai_image') {
+    const h = content.headline || '', s = content.subtext || '';
+    wrap.innerHTML = `
+      <div class="so-editor-form">
+        <p class="so-field-hint">AI-extracted headline and supporting text for your image. Edit before generating.</p>
+        <label class="field-label" for="so-ai-headline-input">Headline</label>
+        <input type="text" id="so-ai-headline-input" class="field-input" maxlength="120" value="${escHtml(h)}"/>
+        <div class="so-char-counter"><span id="so-ai-hl-len">${h.length}</span> / 120</div>
+        <label class="field-label" for="so-ai-subtext-input" style="margin-top:12px">Subtext</label>
+        <textarea id="so-ai-subtext-input" class="field-textarea so-quote-textarea" maxlength="200">${escHtml(s)}</textarea>
+        <div class="so-char-counter"><span id="so-ai-st-len">${s.length}</span> / 200</div>
+      </div>`;
+    const hlInput = document.getElementById('so-ai-headline-input');
+    const hlLen   = document.getElementById('so-ai-hl-len');
+    const stInput = document.getElementById('so-ai-subtext-input');
+    const stLen   = document.getElementById('so-ai-st-len');
+    hlInput.addEventListener('input', () => { hlLen.textContent = hlInput.value.length; });
+    stInput.addEventListener('input', () => { stLen.textContent = stInput.value.length; });
 
   } else if (type === 'carousel') {
     const slides = content.slides || [];
@@ -1384,6 +1482,12 @@ function readEditorContent(type) {
   if (type === 'quote_card' || type === 'branded_quote') {
     return { quote: (document.getElementById('so-quote-input')?.value || '').trim() };
   }
+  if (type === 'ai_image') {
+    return {
+      headline: (document.getElementById('so-ai-headline-input')?.value || '').trim(),
+      subtext:  (document.getElementById('so-ai-subtext-input')?.value || '').trim(),
+    };
+  }
   if (type === 'carousel') {
     const wrap  = document.getElementById('slide-over-content');
     const cards = wrap.querySelectorAll('.so-slide-card');
@@ -1411,7 +1515,7 @@ async function generateFromEditor(type) {
       method: 'POST',
       headers: apiHeaders(),
       credentials: 'include',
-      body: JSON.stringify({ visual_type: type, mode: 'render', content }),
+      body: JSON.stringify({ visual_type: type, mode: 'render', content, ...(type === 'ai_image' && selectedTemplateId ? { template_id: selectedTemplateId } : {}) }),
     });
     let data;
     try { data = await res.json(); } catch { throw new Error('Could not read server response.'); }
@@ -1600,7 +1704,7 @@ function bindEvents() {
       attachedAssetType  = currentAssetType;
       attachedPreviewUrl = currentPreviewUrl;
       attachedSlideCount = currentSlideCount;
-      const labelMap = { quote_card: 'Quote Card', carousel: 'Carousel', branded_quote: 'Branded Quote' };
+      const labelMap = { quote_card: 'Quote Card', carousel: 'Carousel', branded_quote: 'Branded Quote', ai_image: 'Generate using AI' };
       const chipLabel = document.getElementById('asset-chip-label');
       const chip      = document.getElementById('asset-chip');
       if (chipLabel) chipLabel.textContent = labelMap[attachedAssetType] || attachedAssetType;
@@ -1799,6 +1903,7 @@ function wireVisualButtons() {
   document.getElementById('quote-card-btn').addEventListener('click', () => openSlideOver('quote_card', 'QUOTE CARD'));
   document.getElementById('branded-quote-btn').addEventListener('click', () => openSlideOver('branded_quote', 'BRANDED QUOTE'));
   document.getElementById('carousel-btn').addEventListener('click', () => openSlideOver('carousel', 'CAROUSEL'));
+  document.getElementById('ai-image-btn').addEventListener('click', () => openSlideOver('ai_image', 'GENERATE USING AI'));
   document.getElementById('media-library-btn').addEventListener('click', () => {
     if (scheduleEditLocked) return;
     openMediaDrawer();

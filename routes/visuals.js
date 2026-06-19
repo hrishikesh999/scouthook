@@ -18,7 +18,7 @@ const { planHasFeature } = require('../lib/planFeatures');
 // ---------------------------------------------------------------------------
 router.post('/:postId', async (req, res) => {
   const { postId } = req.params;
-  const { visual_type, mode = 'render', content } = req.body;
+  const { visual_type, mode = 'render', content, template_id } = req.body;
   const tenantId = req.tenantId;
   const userId = req.userId;
 
@@ -157,6 +157,13 @@ router.post('/:postId', async (req, res) => {
     if (visual_type === 'quote_card') {
       const renderContent = content || await extractQuoteCardContent(post);
       const result = await renderQuoteCard(post, brand, renderContent, { userId, tenantId });
+      await logVisualGeneration(userId, tenantId, postId, visual_type);
+      return res.json({ ok: true, ...result });
+    }
+
+    if (visual_type === 'ai_image') {
+      const renderContent = content || await extractPlacidContent(post);
+      const result = await renderPlacidImage(post, renderContent, { userId, tenantId }, template_id || null);
       await logVisualGeneration(userId, tenantId, postId, visual_type);
       return res.json({ ok: true, ...result });
     }

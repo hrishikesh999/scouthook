@@ -130,7 +130,7 @@ const chatError           = document.getElementById('chat-error');
 const chatSubstanceWarn   = document.getElementById('chat-substance-warning');
 const chatSubstanceText   = document.getElementById('chat-substance-text');
 const chatImproveInput    = document.getElementById('chat-improve-input');
-const processingScreen    = document.getElementById('processing-screen');
+const procInline          = document.getElementById('proc-inline');
 const procPreview         = document.getElementById('proc-preview');
 const procPreviewText     = document.getElementById('proc-preview-text');
 const specificityNudge    = document.getElementById('specificity-nudge');
@@ -323,12 +323,31 @@ const EXTRACTION_QUESTIONS = {
 };
 
 
+/* ── Guided step dots ────────────────────────────────────────── */
+const GUIDED_STEP_TOTALS = {
+  trust: 2, story: 4, bts: 4, contrarian: 4, framework: 3,
+  announcement: 2, lead_gen: 5, lessons_learned: 5, pis: 3, results: 4,
+};
+
+function renderStepDots(current, total) {
+  const container = document.getElementById('guided-step-dots');
+  const wrapper   = document.getElementById('guided-progress');
+  if (!container || !wrapper || !total) return;
+  container.innerHTML = '';
+  for (let i = 0; i < total; i++) {
+    const dot = document.createElement('span');
+    dot.className = 'step-dot' + (i < current ? ' done' : i === current ? ' active' : '');
+    container.appendChild(dot);
+  }
+  wrapper.style.display = 'flex';
+}
+
 /* ── Type selection ──────────────────────────────────────────── */
 
 // Lead magnet chip
 // Get ideas chip
 document.getElementById('intent-ideas')?.addEventListener('click', () => {
-  document.querySelectorAll('.start-pill[data-prompt]').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.intent-card[data-type]').forEach(p => p.classList.remove('active'));
   const _pq = document.getElementById('pill-question');
   if (_pq) { _pq.textContent = ''; _pq.classList.remove('visible'); }
   document.getElementById('intent-ideas').classList.add('active');
@@ -357,20 +376,30 @@ function selectType(type) {
   const startingPills = document.getElementById('starting-pills');
   const pillQ        = document.getElementById('pill-question');
   hideVaultContextNote();
-  const backBtn = document.getElementById('back-to-pills');
+  const guidedHeaderRow  = document.getElementById('guided-header-row');
+  const selectedTypeLabel = document.getElementById('selected-type-label');
   if (type === 'trust' || type === 'story' || type === 'announcement' || type === 'contrarian' || type === 'framework' || type === 'lead_gen' || type === 'lessons_learned' || type === 'pis' || type === 'results') {
     if (genHeader)     genHeader.style.display     = 'none';
     if (startingPills) startingPills.style.display = 'none';
     if (pillQ)        { pillQ.textContent = ''; pillQ.classList.remove('visible'); }
-    if (backBtn)       backBtn.style.display        = '';
+    if (guidedHeaderRow)   guidedHeaderRow.style.display   = 'flex';
+    if (selectedTypeLabel) selectedTypeLabel.textContent   = CHAT_CONFIGS[type]?.label ?? '';
   } else {
     if (genHeader)     genHeader.style.display     = '';
     if (startingPills) startingPills.style.display = '';
-    if (backBtn)       backBtn.style.display        = 'none';
+    if (guidedHeaderRow)   guidedHeaderRow.style.display   = 'none';
+    if (selectedTypeLabel) selectedTypeLabel.textContent   = '';
   }
 
   chat.init(type);
   applyNichePlaceholder();
+
+  if (GUIDED_STEP_TOTALS[type]) {
+    renderStepDots(0, GUIDED_STEP_TOTALS[type]);
+  } else {
+    const gp = document.getElementById('guided-progress');
+    if (gp) gp.style.display = 'none';
+  }
 }
 
 /* ── Mix recommendation ──────────────────────────────────────── */
@@ -1651,6 +1680,7 @@ const chat = (() => {
       chatInput.value       = '';
       chatInput.style.height = '';
       showAuthorityLengthQuestion();
+      renderStepDots(1, GUIDED_STEP_TOTALS.trust);
       return;
     }
 
@@ -1679,6 +1709,7 @@ const chat = (() => {
         chatInput.style.height = '';
         showStoryLengthQuestion();
       }
+      renderStepDots(_storyChatStep, GUIDED_STEP_TOTALS.story);
       return;
     }
 
@@ -1693,6 +1724,7 @@ const chat = (() => {
         chatInput.style.height = '';
         showAnnouncementLengthQuestion();
       }
+      renderStepDots(_announcementChatStep, GUIDED_STEP_TOTALS.announcement);
       return;
     }
 
@@ -1721,6 +1753,7 @@ const chat = (() => {
         chatInput.style.height = '';
         showBtsLengthQuestion();
       }
+      renderStepDots(_btsChatStep, GUIDED_STEP_TOTALS.bts);
       return;
     }
 
@@ -1749,6 +1782,7 @@ const chat = (() => {
         chatInput.style.height = '';
         showContrarianLengthQuestion();
       }
+      renderStepDots(_contrarianChatStep, GUIDED_STEP_TOTALS.contrarian);
       return;
     }
 
@@ -1770,6 +1804,7 @@ const chat = (() => {
         chatInput.style.height = '';
         showFrameworkLengthQuestion();
       }
+      renderStepDots(_frameworkChatStep, GUIDED_STEP_TOTALS.framework);
       return;
     }
 
@@ -1805,6 +1840,7 @@ const chat = (() => {
         chatInput.style.height = '';
         showLeadGenLengthQuestion();
       }
+      renderStepDots(_leadGenChatStep, GUIDED_STEP_TOTALS.lead_gen);
       return;
     }
 
@@ -1840,6 +1876,7 @@ const chat = (() => {
         chatInput.style.height = '';
         showLessonsLengthQuestion();
       }
+      renderStepDots(_lessonsChatStep, GUIDED_STEP_TOTALS.lessons_learned);
       return;
     }
 
@@ -1861,6 +1898,7 @@ const chat = (() => {
         chatInput.style.height = '';
         showPisLengthQuestion();
       }
+      renderStepDots(_pisChatStep, GUIDED_STEP_TOTALS.pis);
       return;
     }
 
@@ -1889,6 +1927,7 @@ const chat = (() => {
         chatInput.style.height = '';
         showResultsLengthQuestion();
       }
+      renderStepDots(_resultsChatStep, GUIDED_STEP_TOTALS.results);
       return;
     }
 
@@ -2032,20 +2071,7 @@ const chat = (() => {
   return { init, advance, fireTensionExtraction };
 })();
 
-/* ── Starting point pills ───────────────────────────────────── */
-const pillQuestion = document.getElementById('pill-question');
-document.querySelectorAll('.start-pill[data-prompt]').forEach(pill => {
-  pill.addEventListener('click', () => {
-    document.querySelectorAll('.start-pill').forEach(p => p.classList.remove('active'));
-    pill.classList.add('active');
-    pillQuestion.textContent = pill.dataset.prompt;
-    pillQuestion.classList.add('visible');
-    // Close the Get ideas panel if open
-    const vaultPanel = document.getElementById('vault-panel');
-    if (vaultPanel) vaultPanel.style.display = 'none';
-    chatInput.focus();
-  });
-});
+/* ── Post type intent cards ──────────────────────────────────── */
 
 // Back button — return to the post type picker from any guided flow
 document.getElementById('back-to-pills')?.addEventListener('click', () => {
@@ -2053,17 +2079,21 @@ document.getElementById('back-to-pills')?.addEventListener('click', () => {
   chatStep     = 0;
   chatAnswers  = {};
 
-  const genHeader     = document.querySelector('.gen-header');
-  const startingPills = document.getElementById('starting-pills');
-  const backBtn       = document.getElementById('back-to-pills');
-  const chatThread    = document.getElementById('chat-thread');
+  const genHeader       = document.querySelector('.gen-header');
+  const startingPills   = document.getElementById('starting-pills');
+  const guidedHeaderRow = document.getElementById('guided-header-row');
+  const selectedTypeLabel = document.getElementById('selected-type-label');
+  const chatThread      = document.getElementById('chat-thread');
+  const guidedProgress  = document.getElementById('guided-progress');
 
-  if (genHeader)     genHeader.style.display     = '';
-  if (startingPills) startingPills.style.display = '';
-  if (backBtn)       backBtn.style.display        = 'none';
+  if (genHeader)       genHeader.style.display       = '';
+  if (startingPills)   startingPills.style.display   = '';
+  if (guidedHeaderRow) guidedHeaderRow.style.display = 'none';
+  if (selectedTypeLabel) selectedTypeLabel.textContent = '';
   if (chatThread)  { chatThread.innerHTML = ''; chatThread.style.display = 'none'; }
+  if (guidedProgress) guidedProgress.style.display = 'none';
 
-  document.querySelectorAll('.start-pill').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.intent-card').forEach(p => p.classList.remove('active'));
 
   hideChatError();
   hideSubstanceWarning();
@@ -2076,10 +2106,10 @@ document.getElementById('back-to-pills')?.addEventListener('click', () => {
   chatInput.focus();
 });
 
-// Post-type pills (e.g. Authority/Expertise) — select type on click
-document.querySelectorAll('.start-pill[data-type]').forEach(pill => {
+// Post-type intent cards — select type on click
+document.querySelectorAll('.intent-card[data-type]').forEach(pill => {
   pill.addEventListener('click', () => {
-    document.querySelectorAll('.start-pill').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.intent-card').forEach(p => p.classList.remove('active'));
     pill.classList.add('active');
     const pillQ = document.getElementById('pill-question');
     if (pillQ) { pillQ.textContent = ''; pillQ.classList.remove('visible'); }
@@ -2231,24 +2261,27 @@ async function triggerGenerate(opts = {}) {
           if (idx > 0) {
             const prev = document.getElementById(`proc-step-${idx - 1}`);
             if (prev && !prev.classList.contains('done')) {
-              prev.classList.add('visible', 'done');
-              prev.querySelector('.proc-step-icon').innerHTML = '✅';
+              prev.classList.remove('visible');
+              prev.classList.add('done');
             }
           }
           const el = document.getElementById(`proc-step-${idx}`);
           if (!el) return;
-          el.classList.add('visible');
           if (data.label) el.querySelector('.proc-step-text').textContent = data.label;
           if (data.step === 'writing' || data.step === 'saving') {
-            el.querySelector('.proc-step-icon').innerHTML = '<span class="proc-spinner"></span>';
+            // Active step — pulsing dot
+            el.classList.add('visible');
+            el.classList.remove('done');
           } else {
+            // Instant-done step
+            el.classList.remove('visible');
             el.classList.add('done');
-            el.querySelector('.proc-step-icon').innerHTML = '✅';
           }
         },
         onToken(data) {
           if (!procPreview || !procPreviewText) return;
           procPreviewText.textContent += data.text;
+          procPreviewText.classList.add('streaming');
           if (procPreview.style.display === 'none' || !procPreview.style.display) {
             procPreview.style.display = 'block';
           }
@@ -2359,10 +2392,19 @@ function extractAngleLabel(rawIdea) {
 }
 
 function showProcessingScreen(rawIdea, postType, streaming = false) {
-  guidedChat.classList.add('hidden');
-  processingScreen.classList.add('visible');
-  if (procPreview) procPreview.style.display = 'none';
+  // Morph the guided-chat card in place instead of swapping to a separate screen
+  const inputWrapper   = document.querySelector('.gen-input-wrapper');
+  const guidedProgress = document.getElementById('guided-progress');
+  const guidedHeaderRow = document.getElementById('guided-header-row');
+
+  if (inputWrapper)    inputWrapper.classList.add('hidden-generating');
+  hideSpecificityNudge();
+  if (guidedHeaderRow) guidedHeaderRow.style.display = 'none';
+  if (guidedProgress) guidedProgress.style.display = 'none';
+  if (procInline)     procInline.style.display = 'flex';
+  if (procPreview)    procPreview.style.display = 'none';
   if (procPreviewText) procPreviewText.textContent = '';
+  if (procPreviewText) procPreviewText.classList.remove('streaming');
 
   const steps = [
     'Analyzing your idea…',
@@ -2375,21 +2417,17 @@ function showProcessingScreen(rawIdea, postType, streaming = false) {
     const el = document.getElementById(`proc-step-${i}`);
     if (!el) continue;
     el.className = 'proc-step';
-    el.querySelector('.proc-step-icon').innerHTML = '⏳';
     el.querySelector('.proc-step-text').textContent = steps[i];
   }
 
   if (streaming) {
-    // Real SSE events drive step updates — just show step 0 immediately
+    // Real SSE events drive step updates — show step 0 as active immediately
     const el0 = document.getElementById('proc-step-0');
-    if (el0) {
-      el0.classList.add('visible');
-      el0.querySelector('.proc-step-icon').innerHTML = '<span class="proc-spinner"></span>';
-    }
+    if (el0) el0.classList.add('visible');
     return;
   }
 
-  // Fake animation for non-streaming paths (vault)
+  // Fake animation for non-streaming paths (vault ideas)
   const fakeSteps = [
     'Finding the tension…',
     `Angle: ${extractAngleLabel(rawIdea || '')}`,
@@ -2410,9 +2448,6 @@ function showProcessingScreen(rawIdea, postType, streaming = false) {
       el.classList.add('visible');
       if (i < 3) {
         el.classList.add('done');
-        el.querySelector('.proc-step-icon').innerHTML = '✅';
-      } else {
-        el.querySelector('.proc-step-icon').innerHTML = '<span class="proc-spinner"></span>';
       }
     }, d);
     delay += 800;
@@ -2431,22 +2466,24 @@ function finaliseProcessingSteps(data) {
       label = archetype ? `Hook type: ${archetype}` : 'Writing in your voice…';
     }
     step2.querySelector('.proc-step-text').textContent = label;
-    step2.querySelector('.proc-step-icon').innerHTML = '✅';
+    step2.classList.remove('visible');
     step2.classList.add('done');
   }
   const step3 = document.getElementById('proc-step-3');
   if (step3) {
-    step3.querySelector('.proc-step-icon').innerHTML = '✅';
     step3.querySelector('.proc-step-text').textContent = 'Ready.';
-    step3.classList.add('done', 'visible');
+    step3.classList.remove('visible');
+    step3.classList.add('done');
   }
+  if (procPreviewText) procPreviewText.classList.remove('streaming');
 }
 
 function hideProcessingScreen() {
-  processingScreen.classList.remove('visible');
-  guidedChat.classList.remove('hidden');
-  if (procPreview) procPreview.style.display = 'none';
-  if (procPreviewText) procPreviewText.textContent = '';
+  const inputWrapper = document.querySelector('.gen-input-wrapper');
+  if (inputWrapper) inputWrapper.classList.remove('hidden-generating');
+  if (procInline)     procInline.style.display = 'none';
+  if (procPreview)    procPreview.style.display = 'none';
+  if (procPreviewText) { procPreviewText.textContent = ''; procPreviewText.classList.remove('streaming'); }
   checkSpecificityNudge(chatInput.value.trim());
 }
 
@@ -2574,6 +2611,8 @@ async function checkProfileGate() {
       showProfileNudge('voice');
     } else {
       loadNichePlaceholder(profile);
+      const voiceBadge = document.getElementById('voice-badge');
+      if (voiceBadge) voiceBadge.style.display = '';
     }
   } catch { /* gate fails open */ }
 }

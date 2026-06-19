@@ -42,35 +42,12 @@
       display: none;
     }
 
-    /* ── Starting point pills ───────────────────────────────── */
+    /* ── Post type picker (2-column intent card grid) ──────────── */
     #starting-pills {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      justify-content: center;
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
       margin-bottom: 20px;
-    }
-    .start-pill {
-      border: 1.5px solid var(--border);
-      border-radius: 999px;
-      padding: 6px 14px;
-      font-size: 0.8125rem;
-      font-weight: 500;
-      background: var(--bg-surface);
-      color: var(--text);
-      cursor: pointer;
-      font-family: var(--font-sans);
-      transition: border-color 0.12s, background 0.12s, color 0.12s;
-    }
-    .start-pill:hover {
-      border-color: var(--brand);
-      background: color-mix(in srgb, var(--brand) 4%, var(--bg-surface));
-    }
-    .start-pill.active {
-      border-color: var(--brand);
-      background: color-mix(in srgb, var(--brand) 8%, var(--bg-surface));
-      color: var(--brand);
-      font-weight: 600;
     }
     #pill-question {
       text-align: center;
@@ -89,26 +66,47 @@
       gap: 12px;
       background: var(--bg-surface);
       border: 1.5px solid var(--border);
-      border-radius: 18px;
+      border-radius: 20px;
       padding: 18px 18px 16px;
-      box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+      box-shadow: 0 4px 24px rgba(0,0,0,0.08);
     }
     #guided-chat.hidden { display: none; }
 
+    #guided-header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
     #back-to-pills {
       display: inline-flex;
       align-items: center;
       gap: 4px;
-      background: none;
-      border: none;
-      padding: 0;
+      background: var(--bg-surface);
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      padding: 5px 12px;
       font-size: 0.8125rem;
+      font-family: var(--font-sans);
       color: var(--text-secondary);
       cursor: pointer;
-      align-self: flex-start;
-      transition: color 0.12s;
+      flex-shrink: 0;
+      transition: color 0.12s, border-color 0.12s;
     }
-    #back-to-pills:hover { color: var(--text-body); }
+    #back-to-pills:hover { color: var(--brand); border-color: var(--brand); }
+    #selected-type-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--brand);
+      background: color-mix(in srgb, var(--brand) 8%, var(--bg-surface));
+      border: 1px solid color-mix(in srgb, var(--brand) 25%, transparent);
+      border-radius: 999px;
+      padding: 3px 10px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 200px;
+    }
 
     #vault-context-note {
       font-size: 0.8125rem;
@@ -125,6 +123,10 @@
       flex-direction: column;
       gap: 12px;
     }
+    @keyframes chat-bubble-in {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
     .chat-bubble-bot {
       max-width: 90%;
       padding: 12px 16px;
@@ -133,10 +135,12 @@
       font-size: 0.9375rem;
       line-height: 1.5;
       background: var(--bg-subtle);
-      border: 1px solid var(--border);
+      border: 1px solid var(--border-divider);
+      border-left: 3px solid var(--brand);
       color: var(--text-body);
       align-self: flex-start;
       white-space: pre-wrap;
+      animation: chat-bubble-in 0.2s ease;
     }
     .chat-bubble-user {
       max-width: 90%;
@@ -144,11 +148,13 @@
       border-radius: 12px;
       border-top-right-radius: 4px;
       font-size: 0.9375rem;
+      font-weight: 500;
       line-height: 1.5;
       background: var(--brand);
       color: #fff;
       align-self: flex-end;
       white-space: pre-wrap;
+      animation: chat-bubble-in 0.2s ease;
     }
 
     /* ── Vault idea cards ────────────────────────────────────── */
@@ -611,6 +617,9 @@
     }
     #specificity-nudge.visible {
       display: block;
+      border-left: 2px solid var(--brand);
+      padding-left: 10px;
+      color: var(--text-secondary);
       animation: nudge-in 0.18s ease;
     }
     @keyframes nudge-in {
@@ -625,13 +634,20 @@
       display: none;
       line-height: 1.5;
     }
-    #chat-error.visible { display: block; }
+    #chat-error.visible {
+      display: block;
+      background: color-mix(in srgb, #ef4444 6%, transparent);
+      border: 1px solid color-mix(in srgb, #ef4444 25%, transparent);
+      border-radius: 8px;
+      padding: 10px 14px;
+    }
     #chat-error a { color: var(--brand); font-weight: 600; }
 
     #chat-substance-warning {
       display: none;
       background: color-mix(in srgb, #D97706 8%, transparent);
       border: 1px solid color-mix(in srgb, #D97706 30%, transparent);
+      border-left: 3px solid #D97706;
       border-radius: 10px;
       padding: 14px 16px;
       font-size: 0.875rem;
@@ -719,9 +735,10 @@
       display: flex;
       flex-direction: column;
       gap: 8px;
-      padding: 10px 14px;
-      background: var(--bg-pill);
-      border-radius: 10px;
+      padding: 12px 16px;
+      background: var(--bg-surface);
+      border: 1.5px solid var(--border);
+      border-radius: 14px;
       margin-top: 12px;
     }
     .profile-sel-label {
@@ -816,74 +833,123 @@
     }
     .profile-gate-nudge a { color: var(--brand); font-weight: 600; }
 
-    /* ── Processing screen ───────────────────────────────────── */
-    #processing-screen {
-      display: none;
+    /* ── Inline processing (inside #guided-chat) ─────────────── */
+    #proc-inline {
+      border-top: 1px solid var(--border-divider);
+      padding-top: 16px;
       flex-direction: column;
-      gap: var(--space-5);
-      padding: 40px 28px;
-      background: var(--bg-surface);
-      border: 1.5px solid var(--border);
-      border-radius: 18px;
-      box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+      gap: 16px;
     }
-    #processing-screen.visible { display: flex; }
-    .proc-title {
-      font-size: 1rem;
-      font-weight: 700;
-      color: var(--text-heading);
-      margin: 0;
-    }
-    #proc-steps { display: flex; flex-direction: column; gap: 14px; }
+
+    /* Step timeline */
+    #proc-steps { display: flex; flex-direction: column; gap: 18px; }
     .proc-step {
       display: flex;
       align-items: flex-start;
       gap: 10px;
       font-size: 0.9375rem;
       color: var(--text-muted);
+      position: relative;
+      padding-left: 22px;
       opacity: 0;
       transform: translateY(6px);
-      transition: opacity 0.3s ease, transform 0.3s ease;
+      transition: opacity 0.3s ease, transform 0.3s ease, color 0.3s ease;
     }
-    .proc-step.visible { opacity: 1; transform: translateY(0); color: var(--text-body); }
-    .proc-step.done    { color: var(--text-heading); }
-    .proc-step-icon { flex-shrink: 0; width: 20px; text-align: center; line-height: 1.4; }
-    .proc-step-text { flex: 1; line-height: 1.4; }
-    .proc-spinner {
-      display: inline-block;
-      width: 15px;
-      height: 15px;
-      border: 2px solid var(--border);
-      border-top-color: var(--brand);
+    /* Connecting line between steps */
+    .proc-step + .proc-step::after {
+      content: '';
+      position: absolute;
+      left: 4px;
+      top: -14px;
+      width: 2px;
+      height: 14px;
+      background: var(--border-divider);
+    }
+    /* Timeline dot */
+    .proc-step::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 5px;
+      width: 10px;
+      height: 10px;
       border-radius: 50%;
-      animation: proc-spin 0.7s linear infinite;
-      vertical-align: text-bottom;
+      background: var(--border);
+      transition: background 0.3s ease;
     }
-    @keyframes proc-spin { to { transform: rotate(360deg); } }
+    .proc-step.visible {
+      opacity: 1;
+      transform: translateY(0);
+      color: var(--text-body);
+      font-weight: 600;
+    }
+    .proc-step.visible::before {
+      background: var(--brand);
+      animation: proc-dot-pulse 1.2s ease-in-out infinite;
+    }
+    .proc-step.done {
+      opacity: 1;
+      transform: translateY(0);
+      color: var(--text-heading);
+      font-weight: 600;
+    }
+    .proc-step.done::before {
+      background: var(--brand);
+      animation: none;
+    }
+    @keyframes proc-dot-pulse {
+      0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand) 40%, transparent); }
+      50%       { box-shadow: 0 0 0 5px color-mix(in srgb, var(--brand) 0%, transparent); }
+    }
+    /* Hide the icon span — dot is rendered via ::before */
+    .proc-step-icon { display: none; }
+    .proc-step-text { flex: 1; line-height: 1.4; }
 
-    /* ── Live post preview (streaming) ──────────────────────── */
+    /* Live post preview (streaming) */
     #proc-preview {
       display: none;
-      border-top: 1px solid var(--border);
-      padding-top: 16px;
+      background: var(--bg-subtle);
+      border-radius: 10px;
+      padding: 16px 20px;
       margin-top: 4px;
     }
     #proc-preview-label {
-      font-size: 0.75rem;
-      font-weight: 600;
-      color: var(--text-muted);
-      letter-spacing: 0.04em;
+      font-size: 0.6875rem;
+      font-weight: 700;
+      color: var(--brand);
+      letter-spacing: 0.08em;
       text-transform: uppercase;
       margin: 0 0 10px;
     }
     #proc-preview-text {
       margin: 0;
       font-size: 0.875rem;
-      line-height: 1.75;
+      line-height: 1.8;
       color: var(--text-body);
       white-space: pre-line;
       max-height: 320px;
       overflow-y: auto;
+    }
+    #proc-preview-text.streaming::after {
+      content: '|';
+      animation: blink 1s step-end infinite;
+      color: var(--brand);
+    }
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0; }
+    }
+
+    /* Input wrapper fade when generating */
+    .gen-input-wrapper {
+      position: relative;
+      transition: opacity 0.2s ease;
+    }
+    .gen-input-wrapper.hidden-generating {
+      opacity: 0;
+      pointer-events: none;
+      height: 0;
+      overflow: hidden;
     }
 
     /* ── Bubble extras (example toggle, escape hatch) ────────── */
@@ -1094,4 +1160,82 @@
       flex-wrap: wrap;
       gap: 8px;
       margin-top: 14px;
+    }
+
+    /* ── Get ideas CTA (full-width, dashed) ─────────────────────── */
+    .intent-ideas-cta {
+      grid-column: 1 / -1;
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 11px 14px;
+      border: 1.5px dashed var(--border);
+      border-radius: 12px;
+      background: var(--bg-surface);
+      cursor: pointer;
+      text-align: left;
+      font-family: var(--font-sans);
+      transition: border-color 0.12s, background 0.12s, box-shadow 0.12s;
+    }
+    .intent-ideas-cta:hover {
+      border-color: var(--brand);
+      border-style: solid;
+      background: color-mix(in srgb, var(--brand) 4%, var(--bg-surface));
+      box-shadow: 0 2px 8px rgba(15,118,110,0.08);
+    }
+    .intent-ideas-cta.active {
+      border-color: var(--brand);
+      border-style: solid;
+      background: color-mix(in srgb, var(--brand) 6%, var(--bg-surface));
+    }
+
+    /* ── Voice identity badge ────────────────────────────────────── */
+    #voice-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin: 10px auto 0;
+      padding: 4px 12px;
+      border: 1px solid color-mix(in srgb, var(--brand) 30%, transparent);
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--brand) 7%, var(--bg-surface));
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--brand);
+    }
+    .voice-badge-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--brand);
+      flex-shrink: 0;
+      animation: badge-pulse 2.5s ease-in-out infinite;
+    }
+    @keyframes badge-pulse {
+      0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand) 50%, transparent); }
+      50%       { box-shadow: 0 0 0 4px color-mix(in srgb, var(--brand) 0%, transparent); }
+    }
+
+    /* ── Step progress dots ──────────────────────────────────────── */
+    #guided-progress {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      align-self: center;
+    }
+    .step-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--border);
+      transition: background 0.2s ease;
+    }
+    .step-dot.active { background: var(--brand); }
+    .step-dot.done   { background: color-mix(in srgb, var(--brand) 50%, transparent); }
+
+    /* ── Responsive adjustments ──────────────────────────────────── */
+    @media (max-width: 540px) {
+      #starting-pills { grid-template-columns: 1fr; }
     }

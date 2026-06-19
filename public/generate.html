@@ -20,25 +20,96 @@
         <div class="gen-header">
           <p class="gen-question" id="gen-question">What do you want to post about?</p>
           <p class="gen-subtitle">Type your idea — ScoutHook writes it in your voice.</p>
+          <div id="voice-badge" style="display:none">
+            <span class="voice-badge-dot"></span>
+            <span class="voice-badge-text">Writing in your voice</span>
+          </div>
           <p id="mix-nudge"></p>
         </div>
 
-        <!-- ── Starting point pills ─────────────────────────────── -->
+        <!-- ── Post type picker (2-column intent card grid) ─────── -->
         <div id="starting-pills">
-          <button class="start-pill" data-type="trust" type="button">✏️ Authority/Expertise</button>
-          <button class="start-pill" data-type="story" type="button">📖 Story/Personal Experience</button>
-          <button class="start-pill" data-type="bts" type="button">🎬 Behind the Scenes</button>
-          <button class="start-pill" data-type="contrarian" type="button">🔥 Contrarian / Hot Take</button>
-          <button class="start-pill" data-type="framework" type="button">📚 Framework / How-To</button>
-          <button class="start-pill" data-type="announcement" type="button">🎉 Announcement</button>
-          <button class="start-pill" data-type="lead_gen" type="button">🎯 Lead Gen / Offer</button>
-          <button class="start-pill" data-type="lessons_learned" type="button">📝 Lessons Learned</button>
-          <button class="start-pill" data-type="pis" type="button">💡 Problem-Insight-Solution</button>
-          <button class="start-pill" data-type="results" type="button">📊 Results / Case Study</button>
-          <button class="start-pill" id="intent-ideas" type="button">✨ Get ideas</button>
+          <button class="intent-card" data-type="trust" type="button">
+            <span class="intent-card-icon">✏️</span>
+            <div class="intent-card-body">
+              <span class="intent-card-title">Authority/Expertise</span>
+              <span class="intent-card-desc">Teach or clarify a concept</span>
+            </div>
+          </button>
+          <button class="intent-card" data-type="story" type="button">
+            <span class="intent-card-icon">📖</span>
+            <div class="intent-card-body">
+              <span class="intent-card-title">Story/Personal Experience</span>
+              <span class="intent-card-desc">A moment that shaped you</span>
+            </div>
+          </button>
+          <button class="intent-card" data-type="bts" type="button">
+            <span class="intent-card-icon">🎬</span>
+            <div class="intent-card-body">
+              <span class="intent-card-title">Behind the Scenes</span>
+              <span class="intent-card-desc">Show your process or reality</span>
+            </div>
+          </button>
+          <button class="intent-card" data-type="contrarian" type="button">
+            <span class="intent-card-icon">🔥</span>
+            <div class="intent-card-body">
+              <span class="intent-card-title">Contrarian / Hot Take</span>
+              <span class="intent-card-desc">Challenge a common belief</span>
+            </div>
+          </button>
+          <button class="intent-card" data-type="framework" type="button">
+            <span class="intent-card-icon">📚</span>
+            <div class="intent-card-body">
+              <span class="intent-card-title">Framework / How-To</span>
+              <span class="intent-card-desc">Step-by-step guidance</span>
+            </div>
+          </button>
+          <button class="intent-card" data-type="announcement" type="button">
+            <span class="intent-card-icon">🎉</span>
+            <div class="intent-card-body">
+              <span class="intent-card-title">Announcement</span>
+              <span class="intent-card-desc">Share news or a launch</span>
+            </div>
+          </button>
+          <button class="intent-card" data-type="lead_gen" type="button">
+            <span class="intent-card-icon">🎯</span>
+            <div class="intent-card-body">
+              <span class="intent-card-title">Lead Gen / Offer</span>
+              <span class="intent-card-desc">Attract your ideal client</span>
+            </div>
+          </button>
+          <button class="intent-card" data-type="lessons_learned" type="button">
+            <span class="intent-card-icon">📝</span>
+            <div class="intent-card-body">
+              <span class="intent-card-title">Lessons Learned</span>
+              <span class="intent-card-desc">Wisdom from experience</span>
+            </div>
+          </button>
+          <button class="intent-card" data-type="pis" type="button">
+            <span class="intent-card-icon">💡</span>
+            <div class="intent-card-body">
+              <span class="intent-card-title">Problem-Insight-Solution</span>
+              <span class="intent-card-desc">Diagnose a problem, share a fix</span>
+            </div>
+          </button>
+          <button class="intent-card" data-type="results" type="button">
+            <span class="intent-card-icon">📊</span>
+            <div class="intent-card-body">
+              <span class="intent-card-title">Results / Case Study</span>
+              <span class="intent-card-desc">Prove your impact with data</span>
+            </div>
+          </button>
+          <!-- Get ideas — full-width CTA at bottom of grid -->
+          <button class="intent-ideas-cta" id="intent-ideas" type="button">
+            <span class="intent-card-icon">✨</span>
+            <div class="intent-card-body">
+              <span class="intent-card-title">Get ideas from your vault</span>
+              <span class="intent-card-desc">ScoutHook suggests posts based on your content</span>
+            </div>
+          </button>
         </div>
 
-        <!-- Active pill question -->
+        <!-- Active pill question (legacy — kept for reach/convert freeform) -->
         <p id="pill-question"></p>
 
         <!-- ── Main input card ──────────────────────────────────── -->
@@ -50,8 +121,16 @@
           <!-- Vault / suggested ideas (loaded on demand by "Get ideas") -->
           <div id="vault-panel" class="vault-panel" style="display:none"></div>
 
-          <!-- Back to post type picker -->
-          <button id="back-to-pills" type="button" style="display:none">← All post types</button>
+          <!-- Back button + selected type label -->
+          <div id="guided-header-row" style="display:none">
+            <button id="back-to-pills" type="button">← All post types</button>
+            <span id="selected-type-label"></span>
+          </div>
+
+          <!-- Step progress dots (guided flows only) -->
+          <div id="guided-progress" style="display:none">
+            <span id="guided-step-dots"></span>
+          </div>
 
           <!-- Vault idea context note -->
           <p id="vault-context-note"></p>
@@ -88,6 +167,31 @@
           <!-- Specificity nudge -->
           <div id="specificity-nudge" role="status" aria-live="polite"></div>
 
+          <!-- ── Inline processing (replaces separate #processing-screen) ── -->
+          <div id="proc-inline" style="display:none">
+            <div id="proc-steps">
+              <div class="proc-step" id="proc-step-0">
+                <span class="proc-step-icon" aria-hidden="true"></span>
+                <span class="proc-step-text">Analysing your idea…</span>
+              </div>
+              <div class="proc-step" id="proc-step-1">
+                <span class="proc-step-icon" aria-hidden="true"></span>
+                <span class="proc-step-text">Finding the angle…</span>
+              </div>
+              <div class="proc-step" id="proc-step-2">
+                <span class="proc-step-icon" aria-hidden="true"></span>
+                <span class="proc-step-text">Selecting the hook type…</span>
+              </div>
+              <div class="proc-step" id="proc-step-3">
+                <span class="proc-step-icon" aria-hidden="true"></span>
+                <span class="proc-step-text">Final quality check…</span>
+              </div>
+            </div>
+            <div id="proc-preview">
+              <p id="proc-preview-label">Writing your post…</p>
+              <p id="proc-preview-text"></p>
+            </div>
+          </div>
 
         </div><!-- /#guided-chat -->
 
@@ -97,33 +201,6 @@
           <div id="profile-sel-btns" class="profile-sel-btns"></div>
           <!-- Low-completion nudge: shown when selected personal profile has thin voice data -->
           <p id="profile-voice-nudge" class="profile-voice-nudge" hidden></p>
-        </div>
-
-        <!-- ── Processing screen ─────────────────────────────── -->
-        <div id="processing-screen">
-          <p class="proc-title">Writing your post…</p>
-          <div id="proc-steps">
-            <div class="proc-step" id="proc-step-0">
-              <span class="proc-step-icon">⏳</span>
-              <span class="proc-step-text">Analysing your idea…</span>
-            </div>
-            <div class="proc-step" id="proc-step-1">
-              <span class="proc-step-icon">⏳</span>
-              <span class="proc-step-text">Finding the angle…</span>
-            </div>
-            <div class="proc-step" id="proc-step-2">
-              <span class="proc-step-icon">⏳</span>
-              <span class="proc-step-text">Selecting the hook type…</span>
-            </div>
-            <div class="proc-step" id="proc-step-3">
-              <span class="proc-step-icon">⏳</span>
-              <span class="proc-step-text">Final quality check…</span>
-            </div>
-          </div>
-          <div id="proc-preview">
-            <p id="proc-preview-label">Writing your post…</p>
-            <p id="proc-preview-text"></p>
-          </div>
         </div>
 
       </div>

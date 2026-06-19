@@ -551,7 +551,7 @@ function serveStoredFile(type) {
     // Generated files are ephemeral and only accessed in the generating user's session.
     let ownerId = req.userId;
     if (type === 'uploads') {
-      const row = db.prepare(
+      const row = await db.prepare(
         'SELECT user_id FROM media_files WHERE stored_name = ? AND tenant_id = ?'
       ).get(filename, req.tenantId);
       if (!row) return res.status(404).end();

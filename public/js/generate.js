@@ -2547,7 +2547,7 @@ function hideProcessingScreen() {
   const inputWrapper = document.querySelector('.gen-input-wrapper');
   if (inputWrapper) inputWrapper.classList.remove('hidden-generating');
   if (procInline)     procInline.style.display = 'none';
-  if (procPreview)    procPreview.style.display = 'none';
+  if (procPreview)    procPreview.classList.remove('revealed');
   if (procPreviewText) { procPreviewText.textContent = ''; procPreviewText.classList.remove('streaming'); }
   checkSpecificityNudge(chatInput.value.trim());
 }

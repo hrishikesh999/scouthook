@@ -1,22 +1,30 @@
 /* brand.js — Brand Settings page logic */
 
 /* ── DOM refs ─────────────────────────────────────────────────── */
-const brandNameEl       = document.getElementById('brand-name');
-const bgSwatch          = document.getElementById('brand-bg-swatch');
-const bgHex             = document.getElementById('brand-bg-hex');
-const accentSwatch      = document.getElementById('brand-accent-swatch');
-const accentHex         = document.getElementById('brand-accent-hex');
-const textSwatch        = document.getElementById('brand-text-swatch');
-const textHex           = document.getElementById('brand-text-hex');
-const logoUrlInput      = document.getElementById('brand-logo-url');
-const logoThumb         = document.getElementById('brand-logo-thumb');
-const logoPickBtn       = document.getElementById('brand-logo-pick-btn');
-const logoUploadBtn     = document.getElementById('brand-logo-upload-btn');
-const logoFileInput     = document.getElementById('brand-logo-file-input');
-const logoUploading     = document.getElementById('brand-logo-uploading');
-const logoClearBtn      = document.getElementById('brand-logo-clear-btn');
-const saveBtn           = document.getElementById('brand-save-btn');
-const saveStatus        = document.getElementById('brand-save-status');
+const brandNameEl           = document.getElementById('brand-name');
+const bgSwatch              = document.getElementById('brand-bg-swatch');
+const bgHex                 = document.getElementById('brand-bg-hex');
+const accentSwatch          = document.getElementById('brand-accent-swatch');
+const accentHex             = document.getElementById('brand-accent-hex');
+const textSwatch            = document.getElementById('brand-text-swatch');
+const textHex               = document.getElementById('brand-text-hex');
+const secondaryBgSwatch     = document.getElementById('brand-secondary-bg-swatch');
+const secondaryBgHex        = document.getElementById('brand-secondary-bg-hex');
+const secondaryTextSwatch   = document.getElementById('brand-secondary-text-swatch');
+const secondaryTextHex      = document.getElementById('brand-secondary-text-hex');
+const fontHeadingEl         = document.getElementById('brand-font-heading');
+const fontBodyEl            = document.getElementById('brand-font-body');
+const fontHeadingPreview    = document.getElementById('brand-font-heading-preview');
+const fontBodyPreview       = document.getElementById('brand-font-body-preview');
+const logoUrlInput          = document.getElementById('brand-logo-url');
+const logoThumb             = document.getElementById('brand-logo-thumb');
+const logoPickBtn           = document.getElementById('brand-logo-pick-btn');
+const logoUploadBtn         = document.getElementById('brand-logo-upload-btn');
+const logoFileInput         = document.getElementById('brand-logo-file-input');
+const logoUploading         = document.getElementById('brand-logo-uploading');
+const logoClearBtn          = document.getElementById('brand-logo-clear-btn');
+const saveBtn               = document.getElementById('brand-save-btn');
+const saveStatus            = document.getElementById('brand-save-status');
 
 const previewVisual     = document.getElementById('brand-preview-visual');
 const previewAccentBar  = document.getElementById('brand-preview-accent-bar');
@@ -77,8 +85,11 @@ async function loadBrand() {
     setColor('bg',     p.brand_bg     || '#0F1A3C');
     setColor('accent', p.brand_accent || '#0D7A5F');
     setColor('text',   p.brand_text   || '#F0F4FF');
-
+    if (p.brand_secondary_bg)   setOptionalColor('secondary-bg',   p.brand_secondary_bg);
+    if (p.brand_secondary_text) setOptionalColor('secondary-text', p.brand_secondary_text);
     if (p.brand_logo) setLogo(p.brand_logo);
+    if (p.brand_font_heading) { fontHeadingEl.value = p.brand_font_heading; applyFontPreview('heading', p.brand_font_heading); }
+    if (p.brand_font_body)    { fontBodyEl.value    = p.brand_font_body;    applyFontPreview('body',    p.brand_font_body); }
 
     updatePreview();
   } catch { /* leave defaults */ }
@@ -92,9 +103,14 @@ function setColor(key, hex) {
   if (input)  input.value  = hex;
 }
 
+function setOptionalColor(key, hex) {
+  setColor(key, hex);
+}
+
 function wireColorPair(key) {
   const swatch = document.getElementById(`brand-${key}-swatch`);
   const input  = document.getElementById(`brand-${key}-hex`);
+  if (!swatch || !input) return;
 
   swatch.addEventListener('input', () => {
     input.value = swatch.value;
@@ -110,14 +126,14 @@ function wireColorPair(key) {
   });
 
   input.addEventListener('blur', () => {
-    // Normalise: if user typed without #, prepend it
     let val = input.value.trim();
+    if (!val) return; // allow empty for optional fields
     if (/^[0-9A-Fa-f]{6}$/.test(val)) val = '#' + val;
     if (/^#[0-9A-Fa-f]{6}$/.test(val)) {
       input.value  = val;
       swatch.value = val;
     } else {
-      input.value  = swatch.value; // revert to last valid
+      input.value  = swatch.value;
     }
     updatePreview();
   });
@@ -126,8 +142,40 @@ function wireColorPair(key) {
 wireColorPair('bg');
 wireColorPair('accent');
 wireColorPair('text');
+wireColorPair('secondary-bg');
+wireColorPair('secondary-text');
 
 brandNameEl.addEventListener('input', updatePreview);
+
+/* ── Font helpers ─────────────────────────────────────────────── */
+function loadGoogleFont(fontName) {
+  if (!fontName) return;
+  const id = `gfont-${fontName.replace(/\s+/g, '-')}`;
+  if (document.getElementById(id)) return;
+  const link = document.createElement('link');
+  link.id   = id;
+  link.rel  = 'stylesheet';
+  link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(fontName)}:wght@400;700&display=swap`;
+  document.head.appendChild(link);
+}
+
+function applyFontPreview(which, fontName) {
+  const preview = which === 'heading' ? fontHeadingPreview : fontBodyPreview;
+  if (!fontName) { preview.textContent = ''; preview.style.fontFamily = ''; return; }
+  loadGoogleFont(fontName);
+  preview.style.fontFamily = `'${fontName}', sans-serif`;
+  preview.textContent = `${fontName} — The quick brown fox jumps over the lazy dog`;
+}
+
+let _fontHeadingTimer, _fontBodyTimer;
+fontHeadingEl.addEventListener('input', () => {
+  clearTimeout(_fontHeadingTimer);
+  _fontHeadingTimer = setTimeout(() => applyFontPreview('heading', fontHeadingEl.value.trim()), 600);
+});
+fontBodyEl.addEventListener('input', () => {
+  clearTimeout(_fontBodyTimer);
+  _fontBodyTimer = setTimeout(() => applyFontPreview('body', fontBodyEl.value.trim()), 600);
+});
 
 /* ── Live preview ─────────────────────────────────────────────── */
 function updatePreview() {
@@ -286,11 +334,15 @@ saveBtn.addEventListener('click', async () => {
   saveStatus.className   = 'brand-save-status';
 
   const body = {
-    brand_name:   brandNameEl.value.trim()  || null,
-    brand_bg:     bgHex.value               || null,
-    brand_accent: accentHex.value           || null,
-    brand_text:   textHex.value             || null,
-    brand_logo:   logoUrlInput.value        || null,
+    brand_name:           brandNameEl.value.trim()        || null,
+    brand_bg:             bgHex.value                     || null,
+    brand_accent:         accentHex.value                 || null,
+    brand_text:           textHex.value                   || null,
+    brand_logo:           logoUrlInput.value              || null,
+    brand_secondary_bg:   secondaryBgHex.value.trim()     || null,
+    brand_secondary_text: secondaryTextHex.value.trim()   || null,
+    brand_font_heading:   fontHeadingEl.value.trim()      || null,
+    brand_font_body:      fontBodyEl.value.trim()         || null,
   };
 
   const origText = saveBtn.textContent;

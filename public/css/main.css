@@ -2584,6 +2584,17 @@ body.has-trial-banner #main-content {
   text-transform: uppercase;
 }
 
+.brand-font-preview {
+  margin-top: 6px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  min-height: 1.2em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: font-family 0.2s;
+}
+
 /* Logo row */
 .brand-logo-row {
   display: flex;

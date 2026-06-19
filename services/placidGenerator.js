@@ -5,7 +5,7 @@ const { getSetting, db } = require('../db');
 const storage = require('./storage');
 const { getAnthropicMessageText } = require('./voiceFingerprint');
 
-function parseCustomLayers(raw) {
+function parseJsonArray(raw) {
   try { const v = JSON.parse(raw || '[]'); return Array.isArray(v) ? v : []; } catch { return []; }
 }
 
@@ -16,7 +16,7 @@ async function getPlacidConfig(templateId) {
 
   if (templateId) {
     const row = await db.prepare(
-      'SELECT template_uuid, layer_headline, layer_subtext, layer_background, custom_layers FROM placid_templates WHERE id = ?'
+      'SELECT template_uuid, layer_headline, layer_subtext, layer_background, custom_layers, brand_layers FROM placid_templates WHERE id = ?'
     ).get(templateId);
     if (row) return {
       apiKey,
@@ -24,12 +24,13 @@ async function getPlacidConfig(templateId) {
       headlineLayer:   row.layer_headline,
       subtextLayer:    row.layer_subtext,
       backgroundLayer: row.layer_background || null,
-      customLayers:    parseCustomLayers(row.custom_layers),
+      customLayers:    parseJsonArray(row.custom_layers),
+      brandLayers:     parseJsonArray(row.brand_layers),
     };
   }
 
   const def = await db.prepare(
-    'SELECT template_uuid, layer_headline, layer_subtext, layer_background, custom_layers FROM placid_templates WHERE is_default = TRUE LIMIT 1'
+    'SELECT template_uuid, layer_headline, layer_subtext, layer_background, custom_layers, brand_layers FROM placid_templates WHERE is_default = TRUE LIMIT 1'
   ).get();
   if (def) return {
     apiKey,
@@ -37,13 +38,14 @@ async function getPlacidConfig(templateId) {
     headlineLayer:   def.layer_headline,
     subtextLayer:    def.layer_subtext,
     backgroundLayer: def.layer_background || null,
-    customLayers:    parseCustomLayers(def.custom_layers),
+    customLayers:    parseJsonArray(def.custom_layers),
+    brandLayers:     parseJsonArray(def.brand_layers),
   };
 
   // Fallback: env / platform settings
   const templateUuid = (process.env.PLACID_TEMPLATE_ID || '').trim() || (await getSetting('placid_template_id'));
   if (!templateUuid) throw new Error('No Placid template configured. Add one in Admin → Placid Templates or set PLACID_TEMPLATE_ID.');
-  return { apiKey, templateUuid, headlineLayer: 'headline', subtextLayer: 'subtext', backgroundLayer: null, customLayers: [] };
+  return { apiKey, templateUuid, headlineLayer: 'headline', subtextLayer: 'subtext', backgroundLayer: null, customLayers: [], brandLayers: [] };
 }
 
 async function extractPlacidContent(post) {
@@ -78,8 +80,8 @@ Return only: {"headline":"...","subtext":"..."}`,
 }
 
 async function renderPlacidImage(post, content, ctx = {}, templateId = null) {
-  const { userId, tenantId } = ctx;
-  const { apiKey, templateUuid, headlineLayer, subtextLayer, backgroundLayer, customLayers } = await getPlacidConfig(templateId);
+  const { userId, tenantId, brand = {} } = ctx;
+  const { apiKey, templateUuid, headlineLayer, subtextLayer, backgroundLayer, customLayers, brandLayers } = await getPlacidConfig(templateId);
 
   const layers = {};
   if (content.headline)                              layers[headlineLayer]   = { text: content.headline };
@@ -90,8 +92,26 @@ async function renderPlacidImage(post, content, ctx = {}, templateId = null) {
     for (const field of customLayers) {
       const val = content.custom_fields[field.layer_name];
       if (!val) continue;
-      if (field.type === 'text')  layers[field.layer_name] = { text: val };
-      if (field.type === 'image') layers[field.layer_name] = { image_url: val };
+      if (field.type === 'text')  layers[field.layer_name] = { ...(layers[field.layer_name] || {}), text: val };
+      if (field.type === 'image') layers[field.layer_name] = { ...(layers[field.layer_name] || {}), image_url: val };
+    }
+  }
+  if (brandLayers.length > 0) {
+    const brandValues = {
+      brand_bg:             brand.bg,
+      brand_accent:         brand.accent,
+      brand_text:           brand.text,
+      brand_secondary_bg:   brand.secondary_bg,
+      brand_secondary_text: brand.secondary_text,
+      brand_name:           brand.name,
+      brand_logo:           brand.logo_url,
+      brand_font_heading:   brand.font_heading,
+      brand_font_body:      brand.font_body,
+    };
+    for (const mapping of brandLayers) {
+      const val = brandValues[mapping.brand_source];
+      if (!val) continue;
+      layers[mapping.layer_name] = { ...(layers[mapping.layer_name] || {}), [mapping.property]: val };
     }
   }
 

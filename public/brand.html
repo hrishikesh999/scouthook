@@ -66,6 +66,24 @@
           </div>
 
           <div class="brand-field">
+            <label class="field-label">Secondary background <span style="font-weight:400;color:var(--text-muted,#8899aa);font-size:0.85em">(optional)</span></label>
+            <div class="brand-color-row">
+              <input type="color" id="brand-secondary-bg-swatch" class="brand-color-swatch" value="#1a2a4a" />
+              <input type="text"  id="brand-secondary-bg-hex"    class="field-input brand-hex-input" value="" maxlength="7" spellcheck="false" placeholder="#1a2a4a" />
+            </div>
+            <p class="field-helper">Used for card panels, overlays, or inner frames inside the main background.</p>
+          </div>
+
+          <div class="brand-field">
+            <label class="field-label">Secondary text <span style="font-weight:400;color:var(--text-muted,#8899aa);font-size:0.85em">(optional)</span></label>
+            <div class="brand-color-row">
+              <input type="color" id="brand-secondary-text-swatch" class="brand-color-swatch" value="#aabbcc" />
+              <input type="text"  id="brand-secondary-text-hex"    class="field-input brand-hex-input" value="" maxlength="7" spellcheck="false" placeholder="#aabbcc" />
+            </div>
+            <p class="field-helper">Captions, subtext, labels — a softer tone within the main text color.</p>
+          </div>
+
+          <div class="brand-field">
             <label class="field-label">Brand logo</label>
             <div class="brand-logo-row">
               <div class="brand-logo-thumb" id="brand-logo-thumb" aria-hidden="true">
@@ -89,6 +107,20 @@
           </div>
 
           <input type="hidden" id="brand-logo-url" value="" />
+
+          <div class="brand-field">
+            <label class="field-label">Heading font <span style="font-weight:400;color:var(--text-muted,#8899aa);font-size:0.85em">(optional)</span></label>
+            <input type="text" id="brand-font-heading" class="field-input" placeholder="e.g. Playfair Display" style="width:100%" spellcheck="false" />
+            <div class="brand-font-preview" id="brand-font-heading-preview" aria-hidden="true"></div>
+            <p class="field-helper">Any <a href="https://fonts.google.com" target="_blank" rel="noopener">Google Fonts</a> family name. Used for headline layers in AI image templates.</p>
+          </div>
+
+          <div class="brand-field">
+            <label class="field-label">Body font <span style="font-weight:400;color:var(--text-muted,#8899aa);font-size:0.85em">(optional)</span></label>
+            <input type="text" id="brand-font-body" class="field-input" placeholder="e.g. Inter" style="width:100%" spellcheck="false" />
+            <div class="brand-font-preview" id="brand-font-body-preview" aria-hidden="true"></div>
+            <p class="field-helper">Used for subtext and body text layers in AI image templates.</p>
+          </div>
 
           <div class="brand-save-row">
             <button id="brand-save-btn" class="brand-save-btn">Save brand settings</button>

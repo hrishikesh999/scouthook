@@ -83,7 +83,7 @@ router.get('/:user_id?', async (req, res) => {
   try {
     [userRow, wsRow, profileRow] = await Promise.all([
       db.prepare('SELECT user_role, email, display_name FROM user_profiles WHERE user_id = ?').get(userId),
-      db.prepare('SELECT brand_name, brand_bg, brand_accent, brand_text, brand_logo FROM workspaces WHERE id = ?').get(tenantId),
+      db.prepare('SELECT brand_name, brand_bg, brand_accent, brand_text, brand_logo, brand_font_heading, brand_font_body, brand_secondary_bg, brand_secondary_text FROM workspaces WHERE id = ?').get(tenantId),
       profileQueryPromise,
     ]);
   } catch (err) {
@@ -125,11 +125,15 @@ router.get('/:user_id?', async (req, res) => {
       writing_samples:              profileRow.writing_samples   || null,
       has_fingerprint:              !!profileRow.voice_fingerprint,
       voice_fingerprint:            profileRow.voice_fingerprint || null,
-      brand_bg:                     wsRow?.brand_bg     || '#0F1A3C',
-      brand_accent:                 wsRow?.brand_accent || '#0D7A5F',
-      brand_text:                   wsRow?.brand_text   || '#F0F4FF',
-      brand_name:                   wsRow?.brand_name   || null,
-      brand_logo:                   wsRow?.brand_logo   || null,
+      brand_bg:                     wsRow?.brand_bg             || '#0F1A3C',
+      brand_accent:                 wsRow?.brand_accent         || '#0D7A5F',
+      brand_text:                   wsRow?.brand_text           || '#F0F4FF',
+      brand_name:                   wsRow?.brand_name           || null,
+      brand_logo:                   wsRow?.brand_logo           || null,
+      brand_font_heading:           wsRow?.brand_font_heading   || null,
+      brand_font_body:              wsRow?.brand_font_body      || null,
+      brand_secondary_bg:           wsRow?.brand_secondary_bg   || null,
+      brand_secondary_text:         wsRow?.brand_secondary_text || null,
       user_role:                    userRow?.user_role  || null,
       onboarding_complete:          !!profileRow.onboarding_complete,
       website_url:                  profileRow.website_url          || null,
@@ -172,6 +176,7 @@ router.post('/', async (req, res) => {
     audience_core_beliefs_market, audience_buying_stage, audience_market_sophistication,
     audience_profile_json,
     brand_bg, brand_accent, brand_text, brand_name, brand_logo,
+    brand_font_heading, brand_font_body, brand_secondary_bg, brand_secondary_text,
     user_role, onboarding_complete, website_url,
     website_summary, website_extracted_at,
     onboarding_q2, onboarding_q3, onboarding_q_completed_at,
@@ -194,6 +199,8 @@ router.post('/', async (req, res) => {
 
   if (!writing_samples && !hasBrandVoiceField && !hasAudienceField
       && !brand_bg && !brand_accent && !brand_text && !brand_name && brand_logo === undefined
+      && brand_font_heading === undefined && brand_font_body === undefined
+      && brand_secondary_bg === undefined && brand_secondary_text === undefined
       && user_role === undefined && onboarding_complete === undefined
       && !website_url && !hasVoiceDNAField && !content_pillars) {
     return res.status(400).json({ ok: false, error: 'no_fields_provided' });
@@ -222,20 +229,30 @@ router.post('/', async (req, res) => {
 
   // 2. Brand settings → workspaces
   const hasBrandField = brand_name !== undefined || brand_bg || brand_accent || brand_text
-    || brand_logo !== undefined;
+    || brand_logo !== undefined
+    || brand_font_heading !== undefined || brand_font_body !== undefined
+    || brand_secondary_bg !== undefined || brand_secondary_text !== undefined;
   if (hasBrandField) {
     await db.prepare(`
       UPDATE workspaces SET
-        brand_name   = COALESCE(?, brand_name),
-        brand_bg     = COALESCE(?, brand_bg),
-        brand_accent = COALESCE(?, brand_accent),
-        brand_text   = COALESCE(?, brand_text),
-        brand_logo   = COALESCE(?, brand_logo),
-        updated_at   = CURRENT_TIMESTAMP
+        brand_name           = COALESCE(?, brand_name),
+        brand_bg             = COALESCE(?, brand_bg),
+        brand_accent         = COALESCE(?, brand_accent),
+        brand_text           = COALESCE(?, brand_text),
+        brand_logo           = COALESCE(?, brand_logo),
+        brand_font_heading   = COALESCE(?, brand_font_heading),
+        brand_font_body      = COALESCE(?, brand_font_body),
+        brand_secondary_bg   = COALESCE(?, brand_secondary_bg),
+        brand_secondary_text = COALESCE(?, brand_secondary_text),
+        updated_at           = CURRENT_TIMESTAMP
       WHERE id = ?
     `).run(
       brand_name || null, brand_bg || null, brand_accent || null, brand_text || null,
-      brand_logo !== undefined ? (brand_logo || null) : null,
+      brand_logo           !== undefined ? (brand_logo           || null) : null,
+      brand_font_heading   !== undefined ? (brand_font_heading   || null) : null,
+      brand_font_body      !== undefined ? (brand_font_body      || null) : null,
+      brand_secondary_bg   !== undefined ? (brand_secondary_bg   || null) : null,
+      brand_secondary_text !== undefined ? (brand_secondary_text || null) : null,
       tenantId
     );
   }

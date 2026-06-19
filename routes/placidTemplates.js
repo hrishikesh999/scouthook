@@ -14,7 +14,11 @@ router.get('/', async (req, res) => {
     const rows = await db.prepare(
       'SELECT * FROM placid_templates ORDER BY sort_order ASC, created_at ASC'
     ).all();
-    return res.json({ ok: true, templates: rows.map(r => ({ ...r, custom_layers: parseCustomLayers(r.custom_layers) })) });
+    return res.json({ ok: true, templates: rows.map(r => ({
+      ...r,
+      custom_layers: parseCustomLayers(r.custom_layers),
+      brand_layers:  parseCustomLayers(r.brand_layers),
+    })) });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
   }

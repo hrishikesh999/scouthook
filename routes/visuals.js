@@ -64,15 +64,20 @@ router.post('/:postId', async (req, res) => {
 
   // Load brand settings from the workspace (fall back to defaults)
   const profile = await db.prepare(
-    'SELECT brand_bg, brand_accent, brand_text, brand_name, brand_logo FROM workspaces WHERE id = ?'
+    'SELECT brand_bg, brand_accent, brand_text, brand_name, brand_logo, brand_font_heading, brand_font_body, brand_secondary_bg, brand_secondary_text FROM workspaces WHERE id = ?'
   ).get(tenantId);
 
   const brand = {
-    bg:     profile?.brand_bg     || '#0F1A3C',
-    accent: profile?.brand_accent || '#0D7A5F',
-    text:   profile?.brand_text   || '#F0F4FF',
-    name:   profile?.brand_name   || null,
-    logo:   null,
+    bg:             profile?.brand_bg             || '#0F1A3C',
+    accent:         profile?.brand_accent         || '#0D7A5F',
+    text:           profile?.brand_text           || '#F0F4FF',
+    name:           profile?.brand_name           || null,
+    logo:           null,
+    logo_url:       profile?.brand_logo           || null,
+    font_heading:   profile?.brand_font_heading   || null,
+    font_body:      profile?.brand_font_body      || null,
+    secondary_bg:   profile?.brand_secondary_bg   || null,
+    secondary_text: profile?.brand_secondary_text || null,
   };
 
   if (profile?.brand_logo) {
@@ -163,7 +168,7 @@ router.post('/:postId', async (req, res) => {
 
     if (visual_type === 'ai_image') {
       const renderContent = content || await extractPlacidContent(post);
-      const result = await renderPlacidImage(post, renderContent, { userId, tenantId }, template_id || null);
+      const result = await renderPlacidImage(post, renderContent, { userId, tenantId, brand }, template_id || null);
       await logVisualGeneration(userId, tenantId, postId, visual_type);
       return res.json({ ok: true, ...result });
     }

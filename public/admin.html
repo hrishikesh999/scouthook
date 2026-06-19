@@ -141,6 +141,12 @@
             <div id="placid-custom-fields-list"></div>
             <button type="button" id="placid-add-field-btn" class="btn btn--secondary" style="margin-top:8px;font-size:0.85rem">+ Add field</button>
           </div>
+          <div class="field" style="margin-top: var(--space-md);">
+            <label style="font-weight:600;display:block;margin-bottom:6px">Brand mappings <span style="font-weight:400;color:var(--color-text-muted)">(optional)</span></label>
+            <div class="text-muted" style="font-size:0.8rem;margin-bottom:10px">Map workspace brand properties (colors, fonts, logo) to specific Placid layers — applied automatically at render time, no user action needed.</div>
+            <div id="placid-brand-layers-list"></div>
+            <button type="button" id="placid-add-brand-layer-btn" class="btn btn--secondary" style="margin-top:8px;font-size:0.85rem">+ Add mapping</button>
+          </div>
           <div id="placid-form-error" class="hidden" style="color: var(--color-error); font-size:0.85rem; margin-bottom: var(--space-md);"></div>
           <div style="display:flex; gap: var(--space-sm);">
             <button id="placid-form-save" class="btn btn--primary" type="button">Save</button>
@@ -267,8 +273,58 @@
     // ---------------------------------------------------------------------------
     // Placid Templates
     // ---------------------------------------------------------------------------
-    let placidTemplates  = [];
-    let placidCustomFields = []; // [{ layer_name, label, type, max_chars }] for the open form
+    let placidTemplates    = [];
+    let placidCustomFields = []; // [{ layer_name, label, type, max_chars }]
+    let placidBrandLayers  = []; // [{ layer_name, property, brand_source }]
+
+    const BRAND_SOURCE_LABELS = {
+      brand_bg:             'Background color',
+      brand_accent:         'Accent color',
+      brand_text:           'Text color',
+      brand_secondary_bg:   'Secondary background',
+      brand_secondary_text: 'Secondary text',
+      brand_font_heading:   'Heading font',
+      brand_font_body:      'Body font',
+      brand_name:           'Brand name',
+      brand_logo:           'Brand logo (URL)',
+    };
+    const PLACID_PROPERTY_LABELS = {
+      color:            'Text color',
+      background_color: 'Fill / background color',
+      font_family:      'Font family',
+      image_url:        'Image URL',
+    };
+
+    function renderBrandLayerRows() {
+      const list = document.getElementById('placid-brand-layers-list');
+      if (placidBrandLayers.length === 0) {
+        list.innerHTML = '<p style="font-size:0.8rem;color:var(--color-text-muted);margin:0 0 4px">No brand mappings yet.</p>';
+        return;
+      }
+      const cellStyle = 'padding:5px 8px;border:1px solid var(--color-border);border-radius:6px;font-size:0.85rem;width:100%';
+      const propertyOptions = Object.entries(PLACID_PROPERTY_LABELS)
+        .map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
+      const sourceOptions = Object.entries(BRAND_SOURCE_LABELS)
+        .map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
+      list.innerHTML = placidBrandLayers.map((f, i) => `
+        <div class="placid-bl-row" data-idx="${i}" style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:6px;align-items:center;margin-bottom:6px">
+          <input type="text" class="bl-layer-name" value="${escHtml(f.layer_name)}" placeholder="Placid layer name" maxlength="80" style="${cellStyle}" title="Exact layer name in your Placid template">
+          <select class="bl-property" style="${cellStyle}">${propertyOptions}</select>
+          <select class="bl-brand-source" style="${cellStyle}">${sourceOptions}</select>
+          <button type="button" class="bl-remove-btn" data-idx="${i}" style="padding:4px 9px;background:none;border:1px solid var(--color-border);border-radius:6px;cursor:pointer;color:var(--color-error);font-size:0.9rem" title="Remove">✕</button>
+        </div>`).join('');
+      // Set current values
+      list.querySelectorAll('.placid-bl-row').forEach((row, i) => {
+        row.querySelector('.bl-property').value     = placidBrandLayers[i].property     || 'color';
+        row.querySelector('.bl-brand-source').value = placidBrandLayers[i].brand_source || 'brand_bg';
+      });
+      list.querySelectorAll('.bl-remove-btn').forEach(btn => {
+        btn.addEventListener('click', () => { placidBrandLayers.splice(+btn.dataset.idx, 1); renderBrandLayerRows(); });
+      });
+      list.querySelectorAll('.bl-layer-name').forEach((inp, i)    => inp.addEventListener('input', () => { placidBrandLayers[i].layer_name   = inp.value; }));
+      list.querySelectorAll('.bl-property').forEach((sel, i)      => sel.addEventListener('change', () => { placidBrandLayers[i].property     = sel.value; }));
+      list.querySelectorAll('.bl-brand-source').forEach((sel, i)  => sel.addEventListener('change', () => { placidBrandLayers[i].brand_source = sel.value; }));
+    }
 
     function renderCustomFieldRows() {
       const list = document.getElementById('placid-custom-fields-list');
@@ -336,7 +392,7 @@
           <div style="flex:1;min-width:0">
             <div style="font-weight:600;font-size:0.9rem">${escHtml(t.name)} ${t.is_default ? '<span style="font-size:0.7rem;background:var(--color-primary,#0d7a5f);color:#fff;padding:1px 6px;border-radius:4px;margin-left:4px;font-weight:700">DEFAULT</span>' : ''}</div>
             <div style="font-size:0.75rem;color:var(--color-text-muted);font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(t.template_uuid)}</div>
-            <div style="font-size:0.75rem;color:var(--color-text-muted)">headline → <code>${escHtml(t.layer_headline)}</code> · subtext → <code>${escHtml(t.layer_subtext)}</code>${t.layer_background ? ` · background → <code>${escHtml(t.layer_background)}</code>` : ''}${Array.isArray(t.custom_layers) && t.custom_layers.length > 0 ? ` · <span style="color:var(--color-primary,#0d7a5f)">${t.custom_layers.length} custom field${t.custom_layers.length > 1 ? 's' : ''}</span>` : ''}</div>
+            <div style="font-size:0.75rem;color:var(--color-text-muted)">headline → <code>${escHtml(t.layer_headline)}</code> · subtext → <code>${escHtml(t.layer_subtext)}</code>${t.layer_background ? ` · background → <code>${escHtml(t.layer_background)}</code>` : ''}${Array.isArray(t.custom_layers) && t.custom_layers.length > 0 ? ` · <span style="color:var(--color-primary,#0d7a5f)">${t.custom_layers.length} custom field${t.custom_layers.length > 1 ? 's' : ''}</span>` : ''}${Array.isArray(t.brand_layers) && t.brand_layers.length > 0 ? ` · <span style="color:var(--color-primary,#0d7a5f)">${t.brand_layers.length} brand mapping${t.brand_layers.length > 1 ? 's' : ''}</span>` : ''}</div>
           </div>
           <div style="display:flex;gap:6px;flex-shrink:0">
             <button class="btn btn--secondary" style="font-size:0.75rem;padding:4px 10px" onclick="editPlacidTemplate('${escHtml(t.id)}')">Edit</button>
@@ -357,13 +413,16 @@
       document.getElementById('placid-form-preview').value          = template?.preview_image_url || '';
       document.getElementById('placid-form-error').classList.add('hidden');
       placidCustomFields = Array.isArray(template?.custom_layers) ? JSON.parse(JSON.stringify(template.custom_layers)) : [];
+      placidBrandLayers  = Array.isArray(template?.brand_layers)  ? JSON.parse(JSON.stringify(template.brand_layers))  : [];
       renderCustomFieldRows();
+      renderBrandLayerRows();
       document.getElementById('placid-form').classList.remove('hidden');
       document.getElementById('placid-form-name').focus();
     }
 
     function closePlacidForm() {
       placidCustomFields = [];
+      placidBrandLayers  = [];
       document.getElementById('placid-form').classList.add('hidden');
     }
 
@@ -390,14 +449,19 @@
     document.getElementById('placid-add-field-btn').addEventListener('click', () => {
       placidCustomFields.push({ layer_name: '', label: '', type: 'text', max_chars: null });
       renderCustomFieldRows();
-      // focus the new row's layer name input
       const rows = document.querySelectorAll('#placid-custom-fields-list .cf-layer-name');
+      rows[rows.length - 1]?.focus();
+    });
+    document.getElementById('placid-add-brand-layer-btn').addEventListener('click', () => {
+      placidBrandLayers.push({ layer_name: '', property: 'color', brand_source: 'brand_text' });
+      renderBrandLayerRows();
+      const rows = document.querySelectorAll('#placid-brand-layers-list .bl-layer-name');
       rows[rows.length - 1]?.focus();
     });
 
     document.getElementById('placid-form-save').addEventListener('click', async () => {
       const id      = document.getElementById('placid-form-id').value;
-      // Collect current custom field values from DOM (handles fast-typists who didn't blur)
+      // Collect current values from DOM (handles fast typists who didn't blur)
       const cfRows = document.querySelectorAll('#placid-custom-fields-list .placid-cf-row');
       const custom_layers = Array.from(cfRows).map(row => {
         const layer_name = row.querySelector('.cf-layer-name').value.trim();
@@ -406,6 +470,12 @@
         const max_chars  = parseInt(row.querySelector('.cf-max-chars').value) || null;
         return { layer_name, label, type, ...(type === 'text' && max_chars ? { max_chars } : {}) };
       }).filter(f => f.layer_name);
+      const blRows = document.querySelectorAll('#placid-brand-layers-list .placid-bl-row');
+      const brand_layers = Array.from(blRows).map(row => ({
+        layer_name:   row.querySelector('.bl-layer-name').value.trim(),
+        property:     row.querySelector('.bl-property').value,
+        brand_source: row.querySelector('.bl-brand-source').value,
+      })).filter(f => f.layer_name);
       const payload = {
         name:              document.getElementById('placid-form-name').value.trim(),
         template_uuid:     document.getElementById('placid-form-uuid').value.trim(),
@@ -414,6 +484,7 @@
         layer_background:  document.getElementById('placid-form-background').value.trim() || null,
         preview_image_url: document.getElementById('placid-form-preview').value.trim()   || null,
         custom_layers,
+        brand_layers,
       };
       const errEl = document.getElementById('placid-form-error');
       if (!payload.name || !payload.template_uuid) {

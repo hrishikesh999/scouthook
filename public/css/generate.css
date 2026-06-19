@@ -841,77 +841,45 @@
       gap: 16px;
     }
 
-    /* Step timeline */
-    #proc-steps { display: flex; flex-direction: column; gap: 18px; }
+    /* Step timeline — clean text lines, no bullet dots */
+    #proc-steps { display: flex; flex-direction: column; gap: 10px; }
     .proc-step {
-      display: flex;
-      align-items: flex-start;
-      gap: 10px;
       font-size: 0.9375rem;
-      color: var(--text-muted);
-      position: relative;
-      padding-left: 22px;
+      color: transparent;
       opacity: 0;
-      transform: translateY(6px);
-      transition: opacity 0.3s ease, transform 0.3s ease, color 0.3s ease;
-    }
-    /* Connecting line between steps */
-    .proc-step + .proc-step::after {
-      content: '';
-      position: absolute;
-      left: 4px;
-      top: -14px;
-      width: 2px;
-      height: 14px;
-      background: var(--border-divider);
-    }
-    /* Timeline dot */
-    .proc-step::before {
-      content: '';
-      position: absolute;
-      left: 0;
-      top: 5px;
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      background: var(--border);
-      transition: background 0.3s ease;
+      transform: translateY(10px);
+      transition: opacity 0.35s ease, transform 0.35s ease, color 0.25s ease, font-weight 0.25s ease;
     }
     .proc-step.visible {
       opacity: 1;
       transform: translateY(0);
-      color: var(--text-body);
+      color: var(--brand);
       font-weight: 600;
-    }
-    .proc-step.visible::before {
-      background: var(--brand);
-      animation: proc-dot-pulse 1.2s ease-in-out infinite;
     }
     .proc-step.done {
-      opacity: 1;
+      opacity: 0.55;
       transform: translateY(0);
-      color: var(--text-heading);
-      font-weight: 600;
+      color: var(--text-muted);
+      font-weight: 400;
     }
-    .proc-step.done::before {
-      background: var(--brand);
-      animation: none;
-    }
-    @keyframes proc-dot-pulse {
-      0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand) 40%, transparent); }
-      50%       { box-shadow: 0 0 0 5px color-mix(in srgb, var(--brand) 0%, transparent); }
-    }
-    /* Hide the icon span — dot is rendered via ::before */
     .proc-step-icon { display: none; }
-    .proc-step-text { flex: 1; line-height: 1.4; }
+    .proc-step-text { line-height: 1.5; }
 
     /* Live post preview (streaming) */
     #proc-preview {
-      display: none;
       background: var(--bg-subtle);
       border-radius: 10px;
       padding: 16px 20px;
       margin-top: 4px;
+      opacity: 0;
+      transform: translateY(8px);
+      transition: opacity 0.4s ease, transform 0.4s ease;
+      pointer-events: none;
+    }
+    #proc-preview.revealed {
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
     }
     #proc-preview-label {
       font-size: 0.6875rem;

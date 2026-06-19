@@ -137,6 +137,63 @@ const specificityNudge    = document.getElementById('specificity-nudge');
 let _nudgeDebounce        = null;
 let voiceCtrl             = null;
 
+/* ── Scroll helper — keeps the bottom of #guided-chat in view ── */
+function scrollChatToBottom() {
+  requestAnimationFrame(() => {
+    const card = document.getElementById('guided-chat');
+    if (!card) return;
+    const bottom = card.getBoundingClientRect().bottom;
+    const margin = 24;
+    if (bottom > window.innerHeight - margin) {
+      window.scrollBy({ top: bottom - window.innerHeight + margin, behavior: 'smooth' });
+    }
+  });
+}
+
+/* ── Step queue — ensures each status line is shown one-by-one ── */
+const _procStepQueue  = [];
+let   _procStepActive = false;
+const PROC_STEP_MIN_MS = 700;
+
+function queueProcStep(idx, label, markDoneAfter) {
+  _procStepQueue.push({ idx, label, markDoneAfter });
+  if (!_procStepActive) _drainProcStep();
+}
+
+function _drainProcStep() {
+  if (!_procStepQueue.length) { _procStepActive = false; return; }
+  _procStepActive = true;
+  const { idx, label, markDoneAfter } = _procStepQueue.shift();
+
+  if (idx > 0) {
+    const prev = document.getElementById(`proc-step-${idx - 1}`);
+    if (prev && !prev.classList.contains('done')) {
+      prev.classList.remove('visible');
+      prev.classList.add('done');
+    }
+  }
+
+  const el = document.getElementById(`proc-step-${idx}`);
+  if (!el) { setTimeout(_drainProcStep, 0); return; }
+  if (label) el.querySelector('.proc-step-text').textContent = label;
+  el.classList.remove('done');
+  el.classList.add('visible');
+  scrollChatToBottom();
+
+  setTimeout(() => {
+    if (markDoneAfter) {
+      el.classList.remove('visible');
+      el.classList.add('done');
+    }
+    _drainProcStep();
+  }, PROC_STEP_MIN_MS);
+}
+
+function resetProcStepQueue() {
+  _procStepQueue.length = 0;
+  _procStepActive = false;
+}
+
 /* ── Per-type chat configs ───────────────────────────────────── */
 const CHAT_CONFIGS = {
   reach:   { label: '📣 Reach post' },
@@ -351,6 +408,17 @@ document.getElementById('intent-ideas')?.addEventListener('click', () => {
   const _pq = document.getElementById('pill-question');
   if (_pq) { _pq.textContent = ''; _pq.classList.remove('visible'); }
   document.getElementById('intent-ideas').classList.add('active');
+
+  // Mirror selectType() guided-flow pattern: hide header + pills, surface the back button
+  const genHeader         = document.querySelector('.gen-header');
+  const startingPills     = document.getElementById('starting-pills');
+  const guidedHeaderRow   = document.getElementById('guided-header-row');
+  const selectedTypeLabel = document.getElementById('selected-type-label');
+  if (genHeader)         genHeader.style.display         = 'none';
+  if (startingPills)     startingPills.style.display     = 'none';
+  if (guidedHeaderRow)   guidedHeaderRow.style.display   = 'flex';
+  if (selectedTypeLabel) selectedTypeLabel.textContent   = '✨ Get ideas';
+
   loadVaultPanel(null, () => {
     document.getElementById('intent-ideas')?.classList.remove('active');
   }, { reset: true });
@@ -472,14 +540,29 @@ async function loadFreshIdeas(panel, type, onItemSelected) {
     }
 
     const ideas = data.ideas || [];
-    if (!ideas.length && !_allFreshIdeas.length) { panel.style.display = 'none'; panel.innerHTML = ''; return; }
+    if (!ideas.length && !_allFreshIdeas.length) {
+      panel.innerHTML = `
+        ${renderIdeaTabBar('fresh')}
+        <p class="idea-empty-saved">No ideas yet — add documents or notes to your vault and ScoutHook will suggest post ideas from them.</p>`;
+      panel.querySelectorAll('.idea-tab').forEach(tab => {
+        tab.addEventListener('click', () => { _ideaTab = tab.dataset.tab; loadVaultPanel(null, onItemSelected); });
+      });
+      return;
+    }
 
     _shownIdeaHooks.push(...ideas.map(i => i.hook));
     _allFreshIdeas.push(...ideas);
     _lastIcpSummary = data.icp_summary || _lastIcpSummary;
 
     renderFilteredIdeas(panel, onItemSelected);
-  } catch { panel.style.display = 'none'; panel.innerHTML = ''; }
+  } catch {
+    panel.innerHTML = `
+      ${renderIdeaTabBar('fresh')}
+      <p class="idea-empty-saved">Couldn't load ideas right now — try again in a moment.</p>`;
+    panel.querySelectorAll('.idea-tab').forEach(tab => {
+      tab.addEventListener('click', () => { _ideaTab = tab.dataset.tab; loadVaultPanel(null, onItemSelected); });
+    });
+  }
 }
 
 function renderFilteredIdeas(panel, onItemSelected) {
@@ -730,7 +813,7 @@ const chat = (() => {
     }
 
     chatThread.appendChild(div);
-    chatThread.scrollTop = chatThread.scrollHeight;
+    scrollChatToBottom();
     return div;
   }
 
@@ -739,7 +822,7 @@ const chat = (() => {
     div.className = 'chat-bubble-user';
     div.textContent = text;
     chatThread.appendChild(div);
-    chatThread.scrollTop = chatThread.scrollHeight;
+    scrollChatToBottom();
   }
 
   function setInputState(cfg) {
@@ -784,7 +867,7 @@ const chat = (() => {
     wrap.appendChild(btn);
 
     chatThread.appendChild(wrap);
-    chatThread.scrollTop = chatThread.scrollHeight;
+    scrollChatToBottom();
     ta.focus();
     return wrap;
   }
@@ -821,7 +904,7 @@ const chat = (() => {
     });
 
     bubble.appendChild(chips);
-    chatThread.scrollTop = chatThread.scrollHeight;
+    scrollChatToBottom();
   }
 
   // ── Story / Personal Experience step renderers ──────────────────────────
@@ -833,7 +916,7 @@ const chat = (() => {
     );
     chatInput.placeholder = 'What clicked, what changed, what did you learn from this…';
     chatInput.focus();
-    chatThread.scrollTop = chatThread.scrollHeight;
+    scrollChatToBottom();
   }
 
   function showStorySupportingDetailsQuestion() {
@@ -856,7 +939,7 @@ const chat = (() => {
     bubble.appendChild(skipBtn);
     chatInput.placeholder = 'Any extra context, emotion, or outcome — or skip this step…';
     chatInput.focus();
-    chatThread.scrollTop = chatThread.scrollHeight;
+    scrollChatToBottom();
   }
 
   function showStoryLengthQuestion() {
@@ -887,7 +970,7 @@ const chat = (() => {
     });
 
     bubble.appendChild(chips);
-    chatThread.scrollTop = chatThread.scrollHeight;
+    scrollChatToBottom();
   }
 
   function _buildStoryPrompt() {
@@ -923,7 +1006,7 @@ const chat = (() => {
     bubble.appendChild(skipBtn);
     chatInput.placeholder = 'What went wrong, what you underestimated, what blocked you — or skip…';
     chatInput.focus();
-    chatThread.scrollTop = chatThread.scrollHeight;
+    scrollChatToBottom();
   }
 
   function showLessonsKeyLessonQuestion() {
@@ -933,7 +1016,7 @@ const chat = (() => {
     );
     chatInput.placeholder = 'What you now know, believe, or do differently…';
     chatInput.focus();
-    chatThread.scrollTop = chatThread.scrollHeight;
+    scrollChatToBottom();
   }
 
   function showLessonsChangedYouQuestion() {
@@ -956,7 +1039,7 @@ const chat = (() => {
     bubble.appendChild(skipBtn);
     chatInput.placeholder = 'How you think, work, or decide differently now — or skip…';
     chatInput.focus();
-    chatThread.scrollTop = chatThread.scrollHeight;
+    scrollChatToBottom();
   }
 
   function showLessonsLengthQuestion() {
@@ -987,7 +1070,7 @@ const chat = (() => {
     });
 
     bubble.appendChild(chips);
-    chatThread.scrollTop = chatThread.scrollHeight;
+    scrollChatToBottom();
   }
 
   function _buildLessonsPrompt() {
@@ -1020,7 +1103,7 @@ const chat = (() => {
     bubble.appendChild(skipBtn);
     chatInput.placeholder = 'The hidden cause or insight — or skip and ScoutHook will infer it…';
     chatInput.focus();
-    chatThread.scrollTop = chatThread.scrollHeight;
+    scrollChatToBottom();
   }
 
   function showPisLengthQuestion() {
@@ -1051,7 +1134,7 @@ const chat = (() => {
     });
 
     bubble.appendChild(chips);
-    chatThread.scrollTop = chatThread.scrollHeight;
+    scrollChatToBottom();
   }
 
   function _buildPisPrompt() {
@@ -1084,7 +1167,7 @@ const chat = (() => {
     bubble.appendChild(skipBtn);
     chatInput.placeholder = 'e.g. Switched from daily posting to 3x/week with a tighter niche focus…';
     chatInput.focus();
-    chatThread.scrollTop = chatThread.scrollHeight;
+    scrollChatToBottom();
   }
 
   function showResultsWhoForQuestion() {
@@ -1107,7 +1190,7 @@ const chat = (() => {
     bubble.appendChild(skipBtn);
     chatInput.placeholder = 'e.g. A consultant with great expertise but inconsistent LinkedIn presence…';
     chatInput.focus();
-    chatThread.scrollTop = chatThread.scrollHeight;
+    scrollChatToBottom();
   }
 
   function showResultsLengthQuestion() {
@@ -1138,7 +1221,7 @@ const chat = (() => {
     });
 
     bubble.appendChild(chips);
-    chatThread.scrollTop = chatThread.scrollHeight;
+    scrollChatToBottom();
   }
 
   function _buildResultsPrompt() {
@@ -1157,7 +1240,7 @@ const chat = (() => {
     );
     chatInput.placeholder = 'What changed, what broke, what you had to reconsider…';
     chatInput.focus();
-    chatThread.scrollTop = chatThread.scrollHeight;
+    scrollChatToBottom();
   }
 
   function showBtsSupportingContextQuestion() {
@@ -1180,7 +1263,7 @@ const chat = (() => {
     bubble.appendChild(skipBtn);
     chatInput.placeholder = 'Any extra context, constraint, or hiccup — or skip this step…';
     chatInput.focus();
-    chatThread.scrollTop = chatThread.scrollHeight;
+    scrollChatToBottom();
   }
 
   function showBtsLengthQuestion() {
@@ -1211,7 +1294,7 @@ const chat = (() => {
     });
 
     bubble.appendChild(chips);
-    chatThread.scrollTop = chatThread.scrollHeight;
+    scrollChatToBottom();
   }
 
   function _buildBtsPrompt() {
@@ -1234,7 +1317,7 @@ const chat = (() => {
     );
     chatInput.placeholder = 'Your bold counter-belief or hot take…';
     chatInput.focus();
-    chatThread.scrollTop = chatThread.scrollHeight;
+    scrollChatToBottom();
   }
 
   function showContrarianSupportingReasonQuestion() {
@@ -1257,7 +1340,7 @@ const chat = (() => {
     bubble.appendChild(skipBtn);
     chatInput.placeholder = 'The logic, data, or experience that supports your view — or skip…';
     chatInput.focus();
-    chatThread.scrollTop = chatThread.scrollHeight;
+    scrollChatToBottom();
   }
 
   function showContrarianLengthQuestion() {
@@ -1288,7 +1371,7 @@ const chat = (() => {
     });
 
     bubble.appendChild(chips);
-    chatThread.scrollTop = chatThread.scrollHeight;
+    scrollChatToBottom();
   }
 
   function _buildContrarianPrompt() {
@@ -1324,7 +1407,7 @@ const chat = (() => {
     bubble.appendChild(skipBtn);
     chatInput.placeholder = 'Context, key steps, or why this matters — or skip and let ScoutHook decide…';
     chatInput.focus();
-    chatThread.scrollTop = chatThread.scrollHeight;
+    scrollChatToBottom();
   }
 
   function showFrameworkLengthQuestion() {
@@ -1355,7 +1438,7 @@ const chat = (() => {
     });
 
     bubble.appendChild(chips);
-    chatThread.scrollTop = chatThread.scrollHeight;
+    scrollChatToBottom();
   }
 
   function _buildFrameworkPrompt() {
@@ -1394,7 +1477,7 @@ const chat = (() => {
     });
 
     bubble.appendChild(chips);
-    chatThread.scrollTop = chatThread.scrollHeight;
+    scrollChatToBottom();
   }
 
   function _buildAnnouncementPrompt() {
@@ -1423,7 +1506,7 @@ const chat = (() => {
     bubble.appendChild(skipBtn);
     chatInput.placeholder = 'e.g. They want to land their first $5k month without burning out…';
     chatInput.focus();
-    chatThread.scrollTop = chatThread.scrollHeight;
+    scrollChatToBottom();
   }
 
   function showLeadGenOfferDescQuestion() {
@@ -1433,7 +1516,7 @@ const chat = (() => {
     );
     chatInput.placeholder = 'e.g. A 6-week group coaching programme for freelancers who want to hit $10k/month…';
     chatInput.focus();
-    chatThread.scrollTop = chatThread.scrollHeight;
+    scrollChatToBottom();
   }
 
   function showLeadGenCtaTextQuestion() {
@@ -1456,7 +1539,7 @@ const chat = (() => {
     bubble.appendChild(skipBtn);
     chatInput.placeholder = 'e.g. Type OFFER in the comments, DM me the word READY…';
     chatInput.focus();
-    chatThread.scrollTop = chatThread.scrollHeight;
+    scrollChatToBottom();
   }
 
   function showLeadGenLengthQuestion() {
@@ -1487,7 +1570,7 @@ const chat = (() => {
     });
 
     bubble.appendChild(chips);
-    chatThread.scrollTop = chatThread.scrollHeight;
+    scrollChatToBottom();
   }
 
   function _buildLeadGenPrompt() {
@@ -1631,7 +1714,7 @@ const chat = (() => {
     }
 
     chatThread.appendChild(div);
-    chatThread.scrollTop = chatThread.scrollHeight;
+    scrollChatToBottom();
     return div;
   }
 
@@ -2103,6 +2186,11 @@ document.getElementById('back-to-pills')?.addEventListener('click', () => {
   chatInput.value        = '';
   chatInput.style.height = '';
   chatInput.placeholder  = 'What do you want to post about?';
+
+  const vaultPanel = document.getElementById('vault-panel');
+  if (vaultPanel) { vaultPanel.style.display = 'none'; vaultPanel.innerHTML = ''; }
+  document.getElementById('intent-ideas')?.classList.remove('active');
+
   chatInput.focus();
 });
 
@@ -2257,35 +2345,19 @@ async function triggerGenerate(opts = {}) {
         onStep(data) {
           const idx = { analyzing: 0, blueprint_done: 1, writing: 2, saving: 3 }[data.step];
           if (idx === undefined) return;
-          // Finalize the previous step when a new one begins
-          if (idx > 0) {
-            const prev = document.getElementById(`proc-step-${idx - 1}`);
-            if (prev && !prev.classList.contains('done')) {
-              prev.classList.remove('visible');
-              prev.classList.add('done');
-            }
-          }
-          const el = document.getElementById(`proc-step-${idx}`);
-          if (!el) return;
-          if (data.label) el.querySelector('.proc-step-text').textContent = data.label;
-          if (data.step === 'writing' || data.step === 'saving') {
-            // Active step — pulsing dot
-            el.classList.add('visible');
-            el.classList.remove('done');
-          } else {
-            // Instant-done step
-            el.classList.remove('visible');
-            el.classList.add('done');
-          }
+          // analyzing + blueprint_done mark done after display; writing + saving stay visible
+          const markDone = data.step !== 'writing' && data.step !== 'saving';
+          queueProcStep(idx, data.label || null, markDone);
         },
         onToken(data) {
           if (!procPreview || !procPreviewText) return;
           procPreviewText.textContent += data.text;
           procPreviewText.classList.add('streaming');
-          if (procPreview.style.display === 'none' || !procPreview.style.display) {
-            procPreview.style.display = 'block';
+          if (!procPreview.classList.contains('revealed')) {
+            procPreview.classList.add('revealed');
+            scrollChatToBottom();
           }
-          procPreview.scrollTop = procPreview.scrollHeight;
+          procPreviewText.scrollTop = procPreviewText.scrollHeight;
         },
         onDone(data) {
           sseResult = data;
@@ -2310,7 +2382,10 @@ async function triggerGenerate(opts = {}) {
 
       if (!sseResult?.post_id) throw new Error('stream_incomplete');
 
-      await sleep(600);
+      await sleep(400);
+      const card1 = document.getElementById('guided-chat');
+      if (card1) { card1.style.transition = 'opacity 0.35s ease'; card1.style.opacity = '0'; }
+      await sleep(350);
       sessionStorage.setItem('sh_from_gen', '1');
       window.location.href = `/editor/${encodeURIComponent(sseResult.post_id)}`;
       return;
@@ -2328,7 +2403,10 @@ async function triggerGenerate(opts = {}) {
     }
 
     finaliseProcessingSteps(data);
-    await sleep(600);
+    await sleep(400);
+    const card2 = document.getElementById('guided-chat');
+    if (card2) { card2.style.transition = 'opacity 0.35s ease'; card2.style.opacity = '0'; }
+    await sleep(350);
     sessionStorage.setItem('sh_from_gen', '1');
     window.location.href = `/editor/${encodeURIComponent(data.id)}`;
 
@@ -2401,8 +2479,9 @@ function showProcessingScreen(rawIdea, postType, streaming = false) {
   hideSpecificityNudge();
   if (guidedHeaderRow) guidedHeaderRow.style.display = 'none';
   if (guidedProgress) guidedProgress.style.display = 'none';
+  resetProcStepQueue();
   if (procInline)     procInline.style.display = 'flex';
-  if (procPreview)    procPreview.style.display = 'none';
+  if (procPreview)    { procPreview.classList.remove('revealed'); }
   if (procPreviewText) procPreviewText.textContent = '';
   if (procPreviewText) procPreviewText.classList.remove('streaming');
 
@@ -2420,14 +2499,14 @@ function showProcessingScreen(rawIdea, postType, streaming = false) {
     el.querySelector('.proc-step-text').textContent = steps[i];
   }
 
+  scrollChatToBottom();
+
   if (streaming) {
-    // Real SSE events drive step updates — show step 0 as active immediately
-    const el0 = document.getElementById('proc-step-0');
-    if (el0) el0.classList.add('visible');
+    // SSE events drive step reveals via queueProcStep — nothing to pre-show
     return;
   }
 
-  // Fake animation for non-streaming paths (vault ideas)
+  // Fake animation for non-streaming paths (vault ideas) — queue drives reveals
   const fakeSteps = [
     'Finding the tension…',
     `Angle: ${extractAngleLabel(rawIdea || '')}`,
@@ -2435,22 +2514,8 @@ function showProcessingScreen(rawIdea, postType, streaming = false) {
     'Final quality check…',
   ];
   for (let i = 0; i < 4; i++) {
-    const el = document.getElementById(`proc-step-${i}`);
-    if (el) el.querySelector('.proc-step-text').textContent = fakeSteps[i];
-  }
-
-  let delay = 0;
-  for (let i = 0; i < 4; i++) {
-    const d = delay;
-    setTimeout(() => {
-      const el = document.getElementById(`proc-step-${i}`);
-      if (!el) return;
-      el.classList.add('visible');
-      if (i < 3) {
-        el.classList.add('done');
-      }
-    }, d);
-    delay += 800;
+    // steps 0–2 mark done after display; step 3 stays visible until redirect
+    queueProcStep(i, fakeSteps[i], i < 3);
   }
 }
 

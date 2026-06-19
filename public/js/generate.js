@@ -356,13 +356,16 @@ function selectType(type) {
   const genHeader    = document.querySelector('.gen-header');
   const startingPills = document.getElementById('starting-pills');
   const pillQ        = document.getElementById('pill-question');
+  const backBtn = document.getElementById('back-to-pills');
   if (type === 'trust' || type === 'story' || type === 'announcement' || type === 'contrarian' || type === 'framework' || type === 'lead_gen' || type === 'lessons_learned' || type === 'pis' || type === 'results') {
     if (genHeader)     genHeader.style.display     = 'none';
     if (startingPills) startingPills.style.display = 'none';
     if (pillQ)        { pillQ.textContent = ''; pillQ.classList.remove('visible'); }
+    if (backBtn)       backBtn.style.display        = '';
   } else {
     if (genHeader)     genHeader.style.display     = '';
     if (startingPills) startingPills.style.display = '';
+    if (backBtn)       backBtn.style.display        = 'none';
   }
 
   chat.init(type);
@@ -2019,6 +2022,34 @@ document.querySelectorAll('.start-pill[data-prompt]').forEach(pill => {
     if (vaultPanel) vaultPanel.style.display = 'none';
     chatInput.focus();
   });
+});
+
+// Back button — return to the post type picker from any guided flow
+document.getElementById('back-to-pills')?.addEventListener('click', () => {
+  selectedType = null;
+  chatStep     = 0;
+  chatAnswers  = {};
+
+  const genHeader     = document.querySelector('.gen-header');
+  const startingPills = document.getElementById('starting-pills');
+  const backBtn       = document.getElementById('back-to-pills');
+  const chatThread    = document.getElementById('chat-thread');
+
+  if (genHeader)     genHeader.style.display     = '';
+  if (startingPills) startingPills.style.display = '';
+  if (backBtn)       backBtn.style.display        = 'none';
+  if (chatThread)  { chatThread.innerHTML = ''; chatThread.style.display = 'none'; }
+
+  document.querySelectorAll('.start-pill').forEach(p => p.classList.remove('active'));
+
+  hideChatError();
+  hideSubstanceWarning();
+  hideSpecificityNudge();
+
+  chatInput.value        = '';
+  chatInput.style.height = '';
+  chatInput.placeholder  = 'What do you want to post about?';
+  chatInput.focus();
 });
 
 // Post-type pills (e.g. Authority/Expertise) — select type on click

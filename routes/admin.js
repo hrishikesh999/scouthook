@@ -61,6 +61,8 @@ router.post('/settings', requireAdminPassword, (req, res) => {
     'token_encryption_key',
     'redis_url',
     'scheduling_enabled',
+    'placid_api_key',
+    'placid_template_id',
   ];
 
   (async () => {

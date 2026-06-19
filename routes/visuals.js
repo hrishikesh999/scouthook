@@ -7,7 +7,9 @@ const storage = require('../services/storage');
 const { generateQuoteCard, extractQuoteCardContent, renderQuoteCard } = require('../services/quoteCardGenerator');
 const { generateCarousel, extractCarouselContent, renderCarousel } = require('../services/carouselGenerator');
 const { generateBrandedQuote, extractBrandedQuoteContent, renderBrandedQuote } = require('../services/brandedQuoteGenerator');
-const { canGenerateVisual, logVisualGeneration } = require('../services/subscription');
+const { extractPlacidContent, renderPlacidImage } = require('../services/placidGenerator');
+const { canGenerateVisual, logVisualGeneration, getUserPlan } = require('../services/subscription');
+const { planHasFeature } = require('../lib/planFeatures');
 
 // ---------------------------------------------------------------------------
 // POST /api/visuals/:postId
@@ -24,8 +26,16 @@ router.post('/:postId', async (req, res) => {
     return res.status(401).json({ ok: false, error: 'unauthenticated' });
   }
 
-  if (!['quote_card', 'carousel', 'branded_quote'].includes(visual_type)) {
+  if (!['quote_card', 'carousel', 'branded_quote', 'ai_image'].includes(visual_type)) {
     return res.status(400).json({ ok: false, error: 'invalid_visual_type' });
+  }
+
+  // ai_image is Pro-only
+  if (visual_type === 'ai_image') {
+    const plan = await getUserPlan(userId);
+    if (!planHasFeature(plan, 'ai_image')) {
+      return res.status(403).json({ ok: false, error: 'feature_not_available', feature: 'ai_image', requiredPlan: 'pro' });
+    }
   }
 
   // Check visual generation limit only for render calls (extract produces no image)
@@ -99,6 +109,10 @@ router.post('/:postId', async (req, res) => {
       }
       if (visual_type === 'branded_quote') {
         const extracted = await extractBrandedQuoteContent(post);
+        return res.json({ ok: true, mode: 'extract', visual_type, content: extracted });
+      }
+      if (visual_type === 'ai_image') {
+        const extracted = await extractPlacidContent(post);
         return res.json({ ok: true, mode: 'extract', visual_type, content: extracted });
       }
       // carousel

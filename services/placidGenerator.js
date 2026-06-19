@@ -5,6 +5,10 @@ const { getSetting, db } = require('../db');
 const storage = require('./storage');
 const { getAnthropicMessageText } = require('./voiceFingerprint');
 
+function parseCustomLayers(raw) {
+  try { const v = JSON.parse(raw || '[]'); return Array.isArray(v) ? v : []; } catch { return []; }
+}
+
 // Resolve Placid config: specific template by id → global default → env vars
 async function getPlacidConfig(templateId) {
   const apiKey = (process.env.PLACID_API_KEY || '').trim() || (await getSetting('placid_api_key'));
@@ -12,20 +16,34 @@ async function getPlacidConfig(templateId) {
 
   if (templateId) {
     const row = await db.prepare(
-      'SELECT template_uuid, layer_headline, layer_subtext, layer_background FROM placid_templates WHERE id = ?'
+      'SELECT template_uuid, layer_headline, layer_subtext, layer_background, custom_layers FROM placid_templates WHERE id = ?'
     ).get(templateId);
-    if (row) return { apiKey, templateUuid: row.template_uuid, headlineLayer: row.layer_headline, subtextLayer: row.layer_subtext, backgroundLayer: row.layer_background || null };
+    if (row) return {
+      apiKey,
+      templateUuid:    row.template_uuid,
+      headlineLayer:   row.layer_headline,
+      subtextLayer:    row.layer_subtext,
+      backgroundLayer: row.layer_background || null,
+      customLayers:    parseCustomLayers(row.custom_layers),
+    };
   }
 
   const def = await db.prepare(
-    'SELECT template_uuid, layer_headline, layer_subtext, layer_background FROM placid_templates WHERE is_default = TRUE LIMIT 1'
+    'SELECT template_uuid, layer_headline, layer_subtext, layer_background, custom_layers FROM placid_templates WHERE is_default = TRUE LIMIT 1'
   ).get();
-  if (def) return { apiKey, templateUuid: def.template_uuid, headlineLayer: def.layer_headline, subtextLayer: def.layer_subtext, backgroundLayer: def.layer_background || null };
+  if (def) return {
+    apiKey,
+    templateUuid:    def.template_uuid,
+    headlineLayer:   def.layer_headline,
+    subtextLayer:    def.layer_subtext,
+    backgroundLayer: def.layer_background || null,
+    customLayers:    parseCustomLayers(def.custom_layers),
+  };
 
   // Fallback: env / platform settings
   const templateUuid = (process.env.PLACID_TEMPLATE_ID || '').trim() || (await getSetting('placid_template_id'));
   if (!templateUuid) throw new Error('No Placid template configured. Add one in Admin → Placid Templates or set PLACID_TEMPLATE_ID.');
-  return { apiKey, templateUuid, headlineLayer: 'headline', subtextLayer: 'subtext', backgroundLayer: null };
+  return { apiKey, templateUuid, headlineLayer: 'headline', subtextLayer: 'subtext', backgroundLayer: null, customLayers: [] };
 }
 
 async function extractPlacidContent(post) {
@@ -61,13 +79,21 @@ Return only: {"headline":"...","subtext":"..."}`,
 
 async function renderPlacidImage(post, content, ctx = {}, templateId = null) {
   const { userId, tenantId } = ctx;
-  const { apiKey, templateUuid, headlineLayer, subtextLayer } = await getPlacidConfig(templateId);
+  const { apiKey, templateUuid, headlineLayer, subtextLayer, backgroundLayer, customLayers } = await getPlacidConfig(templateId);
 
   const layers = {};
-  if (content.headline)           layers[headlineLayer]   = { text: content.headline };
-  if (content.subtext)            layers[subtextLayer]    = { text: content.subtext };
+  if (content.headline)                              layers[headlineLayer]   = { text: content.headline };
+  if (content.subtext)                               layers[subtextLayer]    = { text: content.subtext };
   if (content.background_image_url && backgroundLayer)
-                                  layers[backgroundLayer] = { image_url: content.background_image_url };
+                                                     layers[backgroundLayer] = { image_url: content.background_image_url };
+  if (content.custom_fields && customLayers.length > 0) {
+    for (const field of customLayers) {
+      const val = content.custom_fields[field.layer_name];
+      if (!val) continue;
+      if (field.type === 'text')  layers[field.layer_name] = { text: val };
+      if (field.type === 'image') layers[field.layer_name] = { image_url: val };
+    }
+  }
 
   const createRes = await fetch('https://api.placid.app/api/rest/images', {
     method: 'POST',

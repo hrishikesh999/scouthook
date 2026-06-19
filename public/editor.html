@@ -417,7 +417,8 @@ let slideOverState        = 'loading';
 let selectedTemplateId    = null;  // set during ai_image template picker step
 let selectedTemplate      = null;  // full template object (needed to check layer_background)
 let selectedBackgroundUrl = null;  // background image URL chosen by user
-let _mediaDrawerMode      = 'attach'; // 'attach' | 'background'
+let selectedCustomImages  = {};    // layer_name → URL for image-type custom fields
+let _mediaDrawerMode      = 'attach'; // 'attach' | 'background' | 'custom_image:{layer_name}'
 
 const visualCache = new Map();
 
@@ -1217,6 +1218,19 @@ function openSlideOver(type, label) {
   }
 }
 
+// Hides the slide-over visually WITHOUT resetting ai_image state, so the
+// media picker can return and re-open the form with all edits preserved.
+function _hideSlideOverForMediaPicker() {
+  if (currentAssetType === 'ai_image') {
+    const current = readEditorContent('ai_image');
+    if (current) extractedContent = current;
+  }
+  const so = document.getElementById('slide-over');
+  so.classList.remove('open');
+  so.setAttribute('aria-hidden', 'true');
+  maybeHideOverlay();
+}
+
 function closeSlideOver() {
   const so = document.getElementById('slide-over');
   so.classList.remove('open');
@@ -1226,6 +1240,7 @@ function closeSlideOver() {
   selectedTemplateId    = null;
   selectedTemplate      = null;
   selectedBackgroundUrl = null;
+  selectedCustomImages  = {};
   _mediaDrawerMode      = 'attach';
   const genBtn = document.getElementById('slide-over-generate');
   genBtn.disabled    = false;
@@ -1405,7 +1420,10 @@ function renderEditorForm(type, content) {
 
   } else if (type === 'ai_image') {
     const h = content.headline || '', s = content.subtext || '';
-    const hasBgLayer = !!(selectedTemplate?.layer_background);
+    const hasBgLayer    = !!(selectedTemplate?.layer_background);
+    const customLayers  = Array.isArray(selectedTemplate?.custom_layers) ? selectedTemplate.custom_layers : [];
+    const existingCF    = content.custom_fields || {};
+
     const bgPreviewHtml = hasBgLayer ? `
       <div style="margin-top:14px">
         <span class="field-label">Background image</span>
@@ -1416,6 +1434,32 @@ function renderEditorForm(type, content) {
         </div>
         <button type="button" id="so-ai-bg-btn" class="btn-template-action" style="width:100%;margin-top:6px">Choose from Media Library</button>
       </div>` : '';
+
+    const customFieldsHtml = customLayers.map(field => {
+      const safeName = field.layer_name.replace(/[^a-zA-Z0-9]/g, '_');
+      if (field.type === 'image') {
+        const imgUrl = selectedCustomImages[field.layer_name] || '';
+        return `
+          <div style="margin-top:14px">
+            <span class="field-label">${escHtml(field.label || field.layer_name)}</span>
+            <div style="margin-top:6px;width:100%;aspect-ratio:1.91/1;background:var(--surface-2);border:1px dashed var(--border);border-radius:8px;display:flex;align-items:center;justify-content:center;overflow:hidden">
+              ${imgUrl ? `<img src="${escHtml(imgUrl)}" style="width:100%;height:100%;object-fit:cover">` : `<span style="font-size:12px;color:var(--text-muted)">No image selected</span>`}
+            </div>
+            <button type="button" class="btn-template-action so-custom-img-btn" data-layer-name="${escHtml(field.layer_name)}" style="width:100%;margin-top:6px">Choose from Media Library</button>
+          </div>`;
+      }
+      const maxChars  = field.max_chars || 200;
+      const existing  = escHtml(existingCF[field.layer_name] || '');
+      const existLen  = (existingCF[field.layer_name] || '').length;
+      return `
+        <div style="margin-top:12px">
+          <label class="field-label" for="so-custom-${safeName}-input">${escHtml(field.label || field.layer_name)}</label>
+          <input type="text" id="so-custom-${safeName}-input" class="field-input so-custom-text-input"
+            data-layer-name="${escHtml(field.layer_name)}" maxlength="${maxChars}" value="${existing}"/>
+          <div class="so-char-counter"><span id="so-custom-${safeName}-len">${existLen}</span> / ${maxChars}</div>
+        </div>`;
+    }).join('');
+
     wrap.innerHTML = `
       <div class="so-editor-form">
         <p class="so-field-hint">AI-extracted headline and supporting text for your image. Edit before generating.</p>
@@ -1426,6 +1470,7 @@ function renderEditorForm(type, content) {
         <textarea id="so-ai-subtext-input" class="field-textarea so-quote-textarea" maxlength="200">${escHtml(s)}</textarea>
         <div class="so-char-counter"><span id="so-ai-st-len">${s.length}</span> / 200</div>
         ${bgPreviewHtml}
+        ${customFieldsHtml}
       </div>`;
     const hlInput = document.getElementById('so-ai-headline-input');
     const hlLen   = document.getElementById('so-ai-hl-len');
@@ -1434,13 +1479,24 @@ function renderEditorForm(type, content) {
     hlInput.addEventListener('input', () => { hlLen.textContent = hlInput.value.length; });
     stInput.addEventListener('input', () => { stLen.textContent = stInput.value.length; });
     if (hasBgLayer) {
-      const bgBtn = document.getElementById('so-ai-bg-btn');
-      bgBtn.addEventListener('click', () => {
+      document.getElementById('so-ai-bg-btn').addEventListener('click', () => {
         _mediaDrawerMode = 'background';
-        closeSlideOver();
+        _hideSlideOverForMediaPicker();
         openMediaDrawer();
       });
     }
+    wrap.querySelectorAll('.so-custom-text-input').forEach(inp => {
+      const safeName = inp.dataset.layerName.replace(/[^a-zA-Z0-9]/g, '_');
+      const lenEl = document.getElementById(`so-custom-${safeName}-len`);
+      if (lenEl) inp.addEventListener('input', () => { lenEl.textContent = inp.value.length; });
+    });
+    wrap.querySelectorAll('.so-custom-img-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        _mediaDrawerMode = `custom_image:${btn.dataset.layerName}`;
+        _hideSlideOverForMediaPicker();
+        openMediaDrawer();
+      });
+    });
 
   } else if (type === 'carousel') {
     const slides = content.slides || [];
@@ -1519,10 +1575,17 @@ function readEditorContent(type) {
     return { quote: (document.getElementById('so-quote-input')?.value || '').trim() };
   }
   if (type === 'ai_image') {
+    const custom_fields = {};
+    document.querySelectorAll('#slide-over-content .so-custom-text-input[data-layer-name]').forEach(inp => {
+      const val = inp.value.trim();
+      if (val) custom_fields[inp.dataset.layerName] = val;
+    });
+    Object.entries(selectedCustomImages).forEach(([k, v]) => { if (v) custom_fields[k] = v; });
     return {
       headline:             (document.getElementById('so-ai-headline-input')?.value || '').trim(),
       subtext:              (document.getElementById('so-ai-subtext-input')?.value  || '').trim(),
       background_image_url: selectedBackgroundUrl || undefined,
+      ...(Object.keys(custom_fields).length > 0 ? { custom_fields } : {}),
     };
   }
   if (type === 'carousel') {
@@ -1662,7 +1725,14 @@ function buildDrawerCard(file) {
       selectedBackgroundUrl = file.url;
       _mediaDrawerMode = 'attach';
       closeMediaDrawer();
-      // Re-open slide-over at the editing step with the background already set
+      openSlideOver('ai_image', 'GENERATE USING AI');
+      return;
+    }
+    if (_mediaDrawerMode.startsWith('custom_image:')) {
+      const layerName = _mediaDrawerMode.slice('custom_image:'.length);
+      selectedCustomImages[layerName] = file.url;
+      _mediaDrawerMode = 'attach';
+      closeMediaDrawer();
       openSlideOver('ai_image', 'GENERATE USING AI');
       return;
     }

@@ -135,6 +135,12 @@
             <input type="url" id="placid-form-preview" placeholder="https://…">
             <div class="text-muted" style="font-size:0.8rem; margin-top:0.25rem;">Thumbnail shown to users when picking a template in the editor.</div>
           </div>
+          <div class="field" style="margin-top: var(--space-md);">
+            <label style="font-weight:600;display:block;margin-bottom:6px">Custom fields <span style="font-weight:400;color:var(--color-text-muted)">(optional)</span></label>
+            <div class="text-muted" style="font-size:0.8rem;margin-bottom:10px">Extra Placid layers beyond headline, subtext, and background — shown as editable inputs in the editor.</div>
+            <div id="placid-custom-fields-list"></div>
+            <button type="button" id="placid-add-field-btn" class="btn btn--secondary" style="margin-top:8px;font-size:0.85rem">+ Add field</button>
+          </div>
           <div id="placid-form-error" class="hidden" style="color: var(--color-error); font-size:0.85rem; margin-bottom: var(--space-md);"></div>
           <div style="display:flex; gap: var(--space-sm);">
             <button id="placid-form-save" class="btn btn--primary" type="button">Save</button>
@@ -261,7 +267,42 @@
     // ---------------------------------------------------------------------------
     // Placid Templates
     // ---------------------------------------------------------------------------
-    let placidTemplates = [];
+    let placidTemplates  = [];
+    let placidCustomFields = []; // [{ layer_name, label, type, max_chars }] for the open form
+
+    function renderCustomFieldRows() {
+      const list = document.getElementById('placid-custom-fields-list');
+      if (placidCustomFields.length === 0) {
+        list.innerHTML = '<p style="font-size:0.8rem;color:var(--color-text-muted);margin:0 0 4px">No custom fields yet.</p>';
+        return;
+      }
+      const cellStyle = 'padding:5px 8px;border:1px solid var(--color-border);border-radius:6px;font-size:0.85rem;width:100%';
+      list.innerHTML = placidCustomFields.map((f, i) => `
+        <div class="placid-cf-row" data-idx="${i}" style="display:grid;grid-template-columns:1fr 1fr 80px 64px auto;gap:6px;align-items:center;margin-bottom:6px">
+          <input type="text" class="cf-layer-name" value="${escHtml(f.layer_name)}" placeholder="Layer name" maxlength="80" style="${cellStyle}" title="Exact layer name in Placid">
+          <input type="text" class="cf-label" value="${escHtml(f.label)}" placeholder="Editor label" maxlength="80" style="${cellStyle}" title="Label shown to users in the editor">
+          <select class="cf-type" style="${cellStyle}">
+            <option value="text" ${f.type === 'text' ? 'selected' : ''}>Text</option>
+            <option value="image" ${f.type === 'image' ? 'selected' : ''}>Image</option>
+          </select>
+          <input type="number" class="cf-max-chars" value="${f.max_chars || ''}" placeholder="Max" min="1" max="2000" style="${cellStyle}${f.type === 'image' ? ';opacity:0.35' : ''}" ${f.type === 'image' ? 'disabled' : ''} title="Max characters (text only)">
+          <button type="button" class="cf-remove-btn" data-idx="${i}" style="padding:4px 9px;background:none;border:1px solid var(--color-border);border-radius:6px;cursor:pointer;color:var(--color-error);font-size:0.9rem" title="Remove">✕</button>
+        </div>`).join('');
+      list.querySelectorAll('.cf-remove-btn').forEach(btn => {
+        btn.addEventListener('click', () => { placidCustomFields.splice(+btn.dataset.idx, 1); renderCustomFieldRows(); });
+      });
+      list.querySelectorAll('.cf-type').forEach((sel, i) => {
+        sel.addEventListener('change', () => {
+          placidCustomFields[i].type = sel.value;
+          const mc = sel.closest('.placid-cf-row').querySelector('.cf-max-chars');
+          mc.disabled = sel.value === 'image';
+          mc.style.opacity = sel.value === 'image' ? '0.35' : '';
+        });
+      });
+      list.querySelectorAll('.cf-layer-name').forEach((inp, i) => inp.addEventListener('input', () => { placidCustomFields[i].layer_name = inp.value; }));
+      list.querySelectorAll('.cf-label').forEach((inp, i) => inp.addEventListener('input', () => { placidCustomFields[i].label = inp.value; }));
+      list.querySelectorAll('.cf-max-chars').forEach((inp, i) => inp.addEventListener('input', () => { placidCustomFields[i].max_chars = parseInt(inp.value) || null; }));
+    }
 
     function escHtml(s) {
       return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -295,7 +336,7 @@
           <div style="flex:1;min-width:0">
             <div style="font-weight:600;font-size:0.9rem">${escHtml(t.name)} ${t.is_default ? '<span style="font-size:0.7rem;background:var(--color-primary,#0d7a5f);color:#fff;padding:1px 6px;border-radius:4px;margin-left:4px;font-weight:700">DEFAULT</span>' : ''}</div>
             <div style="font-size:0.75rem;color:var(--color-text-muted);font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(t.template_uuid)}</div>
-            <div style="font-size:0.75rem;color:var(--color-text-muted)">headline → <code>${escHtml(t.layer_headline)}</code> · subtext → <code>${escHtml(t.layer_subtext)}</code>${t.layer_background ? ` · background → <code>${escHtml(t.layer_background)}</code>` : ''}</div>
+            <div style="font-size:0.75rem;color:var(--color-text-muted)">headline → <code>${escHtml(t.layer_headline)}</code> · subtext → <code>${escHtml(t.layer_subtext)}</code>${t.layer_background ? ` · background → <code>${escHtml(t.layer_background)}</code>` : ''}${Array.isArray(t.custom_layers) && t.custom_layers.length > 0 ? ` · <span style="color:var(--color-primary,#0d7a5f)">${t.custom_layers.length} custom field${t.custom_layers.length > 1 ? 's' : ''}</span>` : ''}</div>
           </div>
           <div style="display:flex;gap:6px;flex-shrink:0">
             <button class="btn btn--secondary" style="font-size:0.75rem;padding:4px 10px" onclick="editPlacidTemplate('${escHtml(t.id)}')">Edit</button>
@@ -315,11 +356,14 @@
       document.getElementById('placid-form-background').value       = template?.layer_background || '';
       document.getElementById('placid-form-preview').value          = template?.preview_image_url || '';
       document.getElementById('placid-form-error').classList.add('hidden');
+      placidCustomFields = Array.isArray(template?.custom_layers) ? JSON.parse(JSON.stringify(template.custom_layers)) : [];
+      renderCustomFieldRows();
       document.getElementById('placid-form').classList.remove('hidden');
       document.getElementById('placid-form-name').focus();
     }
 
     function closePlacidForm() {
+      placidCustomFields = [];
       document.getElementById('placid-form').classList.add('hidden');
     }
 
@@ -343,9 +387,25 @@
 
     document.getElementById('placid-add-btn').addEventListener('click', () => openPlacidForm());
     document.getElementById('placid-form-cancel').addEventListener('click', closePlacidForm);
+    document.getElementById('placid-add-field-btn').addEventListener('click', () => {
+      placidCustomFields.push({ layer_name: '', label: '', type: 'text', max_chars: null });
+      renderCustomFieldRows();
+      // focus the new row's layer name input
+      const rows = document.querySelectorAll('#placid-custom-fields-list .cf-layer-name');
+      rows[rows.length - 1]?.focus();
+    });
 
     document.getElementById('placid-form-save').addEventListener('click', async () => {
       const id      = document.getElementById('placid-form-id').value;
+      // Collect current custom field values from DOM (handles fast-typists who didn't blur)
+      const cfRows = document.querySelectorAll('#placid-custom-fields-list .placid-cf-row');
+      const custom_layers = Array.from(cfRows).map(row => {
+        const layer_name = row.querySelector('.cf-layer-name').value.trim();
+        const label      = row.querySelector('.cf-label').value.trim();
+        const type       = row.querySelector('.cf-type').value;
+        const max_chars  = parseInt(row.querySelector('.cf-max-chars').value) || null;
+        return { layer_name, label, type, ...(type === 'text' && max_chars ? { max_chars } : {}) };
+      }).filter(f => f.layer_name);
       const payload = {
         name:              document.getElementById('placid-form-name').value.trim(),
         template_uuid:     document.getElementById('placid-form-uuid').value.trim(),
@@ -353,6 +413,7 @@
         layer_subtext:     document.getElementById('placid-form-subtext').value.trim()    || 'subtext',
         layer_background:  document.getElementById('placid-form-background').value.trim() || null,
         preview_image_url: document.getElementById('placid-form-preview').value.trim()   || null,
+        custom_layers,
       };
       const errEl = document.getElementById('placid-form-error');
       if (!payload.name || !payload.template_uuid) {

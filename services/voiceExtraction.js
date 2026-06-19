@@ -203,9 +203,6 @@ async function extractVoiceDNAFromQA(profileId, options = {}) {
       ...userSpecificBanned.filter(p => !UNIVERSAL_BANNED_PATTERNS.includes(p)),
     ];
 
-    // Check LinkedIn connection for completion pct
-    const hasLinkedIn = await isLinkedInConnected(profileId);
-
     // Build updated profile object for completion calc; merge user_role from opts
     const updatedProfile = {
       ...profile,
@@ -214,7 +211,7 @@ async function extractVoiceDNAFromQA(profileId, options = {}) {
       authority_statements: JSON.stringify(mergedStatements),
       banned_patterns: JSON.stringify(mergedBanned),
     };
-    const completionPct = calculateCompletionPct(updatedProfile, hasLinkedIn);
+    const completionPct = calculateCompletionPct(updatedProfile);
 
     const extractionQuality = (hasWritingSamples || hasBlogArticles) ? 'partial' : 'baseline';
 
@@ -442,13 +439,10 @@ function buildVoiceDNABlock(userProfile) {
 }
 
 /* ── 3. calculateCompletionPct ──────────────────────────────────────────
-   Server-side scoring. hasLinkedIn is a boolean passed by the caller.
-   Uses isLinkedInConnected(profileId) to check workspace's personal connection.
-   user_role is personal (lives on user_profiles) — callers should merge it into the
-   profile object before calling if they want it scored.
+   Server-side scoring across all 7 wizard stages.
    ──────────────────────────────────────────────────────────────────────── */
 
-function calculateCompletionPct(userProfile, hasLinkedIn = false) {
+function calculateCompletionPct(userProfile) {
   let score = 0;
 
   // Stage 1 — Brand Voice
@@ -476,16 +470,13 @@ function calculateCompletionPct(userProfile, hasLinkedIn = false) {
   // Stage 6 — Rules
   if (safeParseJSON(userProfile.content_principles, []).length >= 3)       score += 5;
 
-  // Stage 7 — LinkedIn
-  if (hasLinkedIn)                                                          score += 10;
-
-  // Stage 8 — Writing Samples
+  // Stage 7 — Writing Samples
   const samplesStr = parseSamplesText(userProfile.writing_samples).trim();
-  if (samplesStr.length >= 200)                                             score += 15;
+  if (samplesStr.length >= 200)                                             score += 20;
   if (samplesStr.length >= 600)                                             score += 5;
 
   // Voice extraction (derived from writing samples)
-  if (userProfile.voice_fingerprint)                                        score += 5;
+  if (userProfile.voice_fingerprint)                                        score += 10;
 
   return Math.min(score, 100);
 }
@@ -556,8 +547,7 @@ Example: "Prefers shorter sentences — never more than 15 words in a row."`,
       'SELECT * FROM profiles WHERE id = ?'
     ).get(profileId);
     const completionPct = calculateCompletionPct(
-      { ...profile, voice_refinements: JSON.stringify(refinements) },
-      await isLinkedInConnected(profileId)
+      { ...profile, voice_refinements: JSON.stringify(refinements) }
     );
 
     await db.prepare(
@@ -670,7 +660,7 @@ Return valid JSON only, no commentary:
 
     // Recalculate completion pct
     const updatedProfile = { ...profile, ...updates };
-    const completionPct = calculateCompletionPct(updatedProfile, await isLinkedInConnected(profileId));
+    const completionPct = calculateCompletionPct(updatedProfile);
     updates.voice_profile_completion_pct = completionPct;
 
     const keys = Object.keys(updates);

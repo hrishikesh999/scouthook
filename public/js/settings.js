@@ -259,15 +259,12 @@ async function init() {
     if (ctas.length >= 2)                                                    s += 10;
     // Stage 6 — Rules
     if (principles.length >= 3)                                              s += 5;
-    // Stage 7 — LinkedIn (detect from sidebar connect button visibility)
-    const liConnect = qs('vw-linkedin-connect');
-    if (!liConnect || liConnect.hasAttribute('hidden'))                      s += 10;
-    // Stage 8 — Writing Samples
+    // Stage 7 — Writing Samples
     const samplesText = samplesData.join('\n').trim();
-    if (samplesText.length >= 200)                                           s += 15;
+    if (samplesText.length >= 200)                                           s += 20;
     if (samplesText.length >= 600)                                           s += 5;
     // Voice fingerprint
-    if (profile.voice_fingerprint)                                           s += 5;
+    if (profile.voice_fingerprint)                                           s += 10;
     return Math.min(s, 100);
   }
 
@@ -329,15 +326,14 @@ async function init() {
   }
 
   // Check which stages have content and mark them
-  function updateStageChecks(bv, audience, pillars, statements, ctas, principles, hasLinkedIn, samples) {
+  function updateStageChecks(bv, audience, pillars, statements, ctas, principles, samples) {
     if (bv)                      { const el = qs('vw-check-1'); if (el) el.hidden = false; }
     if (audience)                { const el = qs('vw-check-2'); if (el) el.hidden = false; }
     if (pillars.length > 0)      { const el = qs('vw-check-3'); if (el) el.hidden = false; }
     if (statements.length > 0)   { const el = qs('vw-check-4'); if (el) el.hidden = false; }
     if (ctas.length > 0)         { const el = qs('vw-check-5'); if (el) el.hidden = false; }
     if (principles.length > 0)   { const el = qs('vw-check-6'); if (el) el.hidden = false; }
-    if (hasLinkedIn)             { const el = qs('vw-check-7'); if (el) el.hidden = false; }
-    if (samples)                 { const el = qs('vw-check-8'); if (el) el.hidden = false; }
+    if (samples)                 { const el = qs('vw-check-7'); if (el) el.hidden = false; }
   }
 
   /* ── Stage 1: Brand Voice ────────────────────────────────── */
@@ -795,106 +791,7 @@ async function init() {
     btn.disabled = false;
   });
 
-  /* ── Stage 7: LinkedIn ──────────────────────────────────── */
-
-  // Show LinkedIn profile data in the connected card
-  function renderLinkedInProfile(data) {
-    const card = qs('vw-linkedin-profile-card');
-    if (!card) return;
-    const photo    = qs('vw-linkedin-photo');
-    const nameEl   = qs('vw-linkedin-name');
-    const headlineEl = qs('vw-linkedin-headline');
-    if (data.photo_url && photo) {
-      photo.src = data.photo_url;
-      photo.hidden = false;
-    }
-    if (data.name && nameEl)       nameEl.textContent = data.name;
-    if (data.headline && headlineEl) headlineEl.textContent = data.headline;
-    if ((data.name || data.headline) && card) card.hidden = false;
-  }
-
-  // Check LinkedIn connection status
-  let linkedInData = null;
-  try {
-    const r = await fetch('/api/linkedin/status', { headers: apiHeaders() });
-    const d = await r.json();
-    if (d.connected) {
-      linkedInData = d;
-      qs('vw-linkedin-connected')?.removeAttribute('hidden');
-      qs('vw-linkedin-connect')?.setAttribute('hidden', '');
-      renderLinkedInProfile(d);
-      const el = qs('vw-check-7');
-      if (el) el.hidden = false;
-      updateCompletionBar(calcLocalCompletionPct());
-
-      // If redirected back after connect, show a success flash
-      if (window.location.search.includes('linkedin_connected=true')) {
-        showStatus(qs('vw-linkedin-refresh-status'), 'LinkedIn connected ✓');
-        // Clean up the URL param
-        const url = new URL(window.location.href);
-        url.searchParams.delete('linkedin_connected');
-        window.history.replaceState({}, '', url.toString());
-      }
-    }
-  } catch { /* non-fatal — show connect button */ }
-
-  // Refresh profile data button — calls /extract-profile to auto-populate empty fields,
-  // then refreshes the LinkedIn profile card display and any Stage 1 fields that changed.
-  qs('vw-linkedin-refresh')?.addEventListener('click', async () => {
-    const btn = qs('vw-linkedin-refresh');
-    btn.disabled = true;
-    btn.querySelector('svg')?.classList.add('spin');
-    const statusEl = qs('vw-linkedin-refresh-status');
-    try {
-      const r = await fetch('/api/linkedin/extract-profile', { method: 'POST', headers: apiHeaders() });
-      const d = await r.json();
-      if (d.ok) {
-        // Refresh profile card display
-        const statusR = await fetch('/api/linkedin/status', { headers: apiHeaders() });
-        const statusD = await statusR.json();
-        if (statusD.connected) renderLinkedInProfile(statusD);
-
-        // Update Brand Voice + Audience fields with LinkedIn-sourced values.
-        if (d.profile) {
-          const fieldMap = {
-            'bv-description':  d.profile.brand_description,
-            'aud-description': d.profile.audience_description,
-            'bv-elevator':     d.profile.elevator_main_result,
-          };
-          let updatedCount = 0;
-          Object.entries(fieldMap).forEach(([elId, val]) => {
-            const el = qs(elId);
-            if (el && val) {
-              const changed = el.value.trim() !== val;
-              el.value = val;
-              if (changed) updatedCount++;
-            }
-          });
-
-          // Merge new pillars into the chip list (additive — never remove existing)
-          if (d.profile.content_pillars) {
-            let incoming = [];
-            try { incoming = JSON.parse(d.profile.content_pillars); } catch { /* ignore */ }
-            incoming.forEach(p => { if (!pillars.includes(p)) pillars.push(p); });
-            renderPillars(pillars);
-          }
-
-          const msg = d.updated?.length > 0
-            ? `LinkedIn profile synced ✓${updatedCount > 0 ? ` — ${updatedCount} field${updatedCount > 1 ? 's' : ''} updated` : ''}`
-            : 'LinkedIn profile already up to date ✓';
-          showStatus(statusEl, msg);
-        } else {
-          showStatus(statusEl, 'LinkedIn profile synced ✓');
-        }
-      } else {
-        showStatus(statusEl, 'Refresh failed', true);
-      }
-    } catch {
-      showStatus(statusEl, 'Refresh failed', true);
-    }
-    btn.disabled = false;
-    btn.querySelector('svg')?.classList.remove('spin');
-  });
+  /* ── Stage 7: Writing Samples ──────────────────────────── */
 
   /* ── Archetype coaching panel ───────────────────────────── */
   const archetypePanel    = qs('vw-archetype-panel');
@@ -980,7 +877,7 @@ async function init() {
     samplesData.splice(idx, 1);
     renderSampleCards();
     if (samplesData.every(s => !s.trim())) {
-      const checkEl = qs('vw-check-8');
+      const checkEl = qs('vw-check-7');
       if (checkEl) checkEl.hidden = true;
     }
   });
@@ -1018,7 +915,7 @@ async function init() {
       const d = await saveProfile({ writing_samples: val });
       if (d.ok) {
         showStatus(qs('vw-samples-status'), 'Saved ✓');
-        if (val) { const el = qs('vw-check-8'); if (el) el.hidden = false; }
+        if (val) { const el = qs('vw-check-7'); if (el) el.hidden = false; }
         updateCompletionBar(calcLocalCompletionPct());
       } else {
         showStatus(qs('vw-samples-status'), 'Save failed', true);
@@ -1033,15 +930,14 @@ async function init() {
   /* ── Stage check marks (initial state) ─────────────────── */
   const bvPopulated       = !!(profile.brand_description || profile.brand_industry || profile.elevator_main_result);
   const audiencePopulated = !!(profile.audience_description || profile.audience_buying_stage);
-  const hasLinkedIn = !qs('vw-linkedin-connect') || qs('vw-linkedin-connect').hasAttribute('hidden');
   const hasSamples  = samplesData.some(s => s.trim());
-  updateStageChecks(bvPopulated, audiencePopulated, pillars, statements, ctas, principles, hasLinkedIn, hasSamples);
+  updateStageChecks(bvPopulated, audiencePopulated, pillars, statements, ctas, principles, hasSamples);
 
   /* ── Step navigation ────────────────────────────────────── */
   let currentStep = 1;
 
   function switchToStep(n) {
-    if (n < 1 || n > 8) return;
+    if (n < 1 || n > 7) return;
 
     document.querySelectorAll('.vw-stage-panel').forEach(p => {
       p.classList.remove('vw-stage-panel--active');
@@ -1076,21 +972,18 @@ async function init() {
   // Wire "Update writing sample" link in voice summary panel
   qs('vw-voice-edit-link')?.addEventListener('click', e => {
     e.preventDefault();
-    switchToStep(8);
+    switchToStep(7);
   });
 
-  // Initial step: honour explicit ?step= param (e.g. from onboarding next-steps links),
-  // then linkedin_connected redirect, then first incomplete step
+  // Initial step: honour explicit ?step= param (e.g. from onboarding next-steps links)
   const stepParam = new URLSearchParams(window.location.search).get('step');
   if (stepParam) {
     const n = parseInt(stepParam, 10);
-    if (n >= 1 && n <= 8) {
+    if (n >= 1 && n <= 7) {
       switchToStep(n);
     } else {
       switchToStep(firstIncompleteStep());
     }
-  } else if (window.location.search.includes('linkedin_connected=true')) {
-    switchToStep(7);
   } else {
     switchToStep(firstIncompleteStep());
   }

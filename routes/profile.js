@@ -322,10 +322,7 @@ router.post('/', async (req, res) => {
             'UPDATE profiles SET voice_fingerprint = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
           ).run(JSON.stringify(fingerprint), profileId);
           const updatedProfile = await getFullProfileById(profileId);
-          const liRow = await db.prepare(
-            'SELECT 1 FROM linkedin_connections WHERE workspace_id = ? AND is_default = true'
-          ).get(tenantId);
-          const pct = calculateCompletionPct(updatedProfile || {}, !!liRow);
+          const pct = calculateCompletionPct(updatedProfile || {});
           await db.prepare(
             'UPDATE profiles SET voice_profile_completion_pct = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
           ).run(pct, profileId);
@@ -343,10 +340,7 @@ router.post('/', async (req, res) => {
     }
     Promise.resolve().then(async () => {
       const updatedProfile = await getFullProfileById(profileId);
-      const liRow = await db.prepare(
-        'SELECT 1 FROM linkedin_connections WHERE workspace_id = ? AND is_default = true'
-      ).get(tenantId);
-      const pct = calculateCompletionPct(updatedProfile || {}, !!liRow);
+      const pct = calculateCompletionPct(updatedProfile || {});
       await db.prepare(
         'UPDATE profiles SET voice_profile_completion_pct = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
       ).run(pct, profileId);
@@ -356,10 +350,7 @@ router.post('/', async (req, res) => {
     const { calculateCompletionPct } = require('../services/voiceExtraction');
     Promise.resolve().then(async () => {
       const updatedProfile = await getFullProfileById(profileId);
-      const liRow = await db.prepare(
-        'SELECT 1 FROM linkedin_connections WHERE workspace_id = ? AND is_default = true'
-      ).get(tenantId);
-      const pct = calculateCompletionPct(updatedProfile || {}, !!liRow);
+      const pct = calculateCompletionPct(updatedProfile || {});
       await db.prepare(
         'UPDATE profiles SET voice_profile_completion_pct = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
       ).run(pct, profileId);

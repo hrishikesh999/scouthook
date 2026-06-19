@@ -446,7 +446,7 @@ function selectType(type) {
   hideVaultContextNote();
   const guidedHeaderRow  = document.getElementById('guided-header-row');
   const selectedTypeLabel = document.getElementById('selected-type-label');
-  if (type === 'trust' || type === 'story' || type === 'announcement' || type === 'contrarian' || type === 'framework' || type === 'lead_gen' || type === 'lessons_learned' || type === 'pis' || type === 'results') {
+  if (type === 'trust' || type === 'story' || type === 'bts' || type === 'announcement' || type === 'contrarian' || type === 'framework' || type === 'lead_gen' || type === 'lessons_learned' || type === 'pis' || type === 'results') {
     if (genHeader)     genHeader.style.display     = 'none';
     if (startingPills) startingPills.style.display = 'none';
     if (pillQ)        { pillQ.textContent = ''; pillQ.classList.remove('visible'); }

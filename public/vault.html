@@ -332,6 +332,8 @@
   //   error            → stop
   function pollDocumentStatus(docId) {
     let miningTriggered = false;
+    let miningStartAt   = 0;
+    const MINING_TIMEOUT_MS = 120_000; // 2 min — stop waiting if AI mining stalls
 
     const interval = setInterval(async () => {
       try {
@@ -352,7 +354,13 @@
         if (updated.status === 'ready' && !updated.ideas_mined) {
           if (!miningTriggered) {
             miningTriggered = true;
+            miningStartAt   = Date.now();
             triggerMining();
+          }
+          // Give up after timeout so the interval doesn't spin forever
+          if (Date.now() - miningStartAt > MINING_TIMEOUT_MS) {
+            clearInterval(interval);
+            clearUploadStatus();
           }
           return;
         }

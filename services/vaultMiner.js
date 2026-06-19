@@ -16,7 +16,7 @@ const Anthropic  = require('@anthropic-ai/sdk');
 const { getSetting } = require('../db');
 const { extractJsonFromResponse } = require('./voiceFingerprint');
 
-const SONNET_MODEL = 'claude-sonnet-4-5';
+const SONNET_MODEL = 'claude-sonnet-4-6';
 
 // ── Text extraction ──────────────────────────────────────────────────────────
 

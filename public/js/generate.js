@@ -2654,11 +2654,14 @@ async function checkVaultEmptyState() {
     const data = await res.json();
     if (!data.ok || (data.documents || []).length > 0) return;
     const banner = document.getElementById('vault-quality-banner');
-    if (!banner) return;
-    banner.innerHTML =
-      '<p class="vqb-text">Posts grounded in your real work are far more specific than anything generated from scratch.</p>' +
-      '<a class="vqb-cta" href="/vault.html">Upload a case study →</a>';
-    banner.style.display = '';
+    if (banner) {
+      banner.innerHTML =
+        '<p class="vqb-text">Posts grounded in your real work are far more specific than anything generated from scratch.</p>' +
+        '<a class="vqb-cta" href="/vault.html">Upload a case study →</a>';
+      banner.style.display = '';
+    }
+    const ideasBtn = document.getElementById('intent-ideas');
+    if (ideasBtn) ideasBtn.style.display = 'none';
   } catch { /* non-fatal */ }
 }
 
@@ -2737,6 +2740,7 @@ async function init() {
 
   loadMixRecommendation();    // fire-and-forget — updates active btn if mix recommends a type
   checkProfileGate();         // fire-and-forget — nudge appears if profile is empty
+  checkVaultEmptyState();     // fire-and-forget — hides "Get ideas" if vault has no documents
   prefetchIdeas();            // fire-and-forget — warms idea cache for instant vault panel
   loadProfileSelector();      // fire-and-forget — shows "Creating for" selector if >1 profile
 

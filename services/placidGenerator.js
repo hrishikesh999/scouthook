@@ -12,20 +12,20 @@ async function getPlacidConfig(templateId) {
 
   if (templateId) {
     const row = await db.prepare(
-      'SELECT template_uuid, layer_headline, layer_subtext FROM placid_templates WHERE id = ?'
+      'SELECT template_uuid, layer_headline, layer_subtext, layer_background FROM placid_templates WHERE id = ?'
     ).get(templateId);
-    if (row) return { apiKey, templateUuid: row.template_uuid, headlineLayer: row.layer_headline, subtextLayer: row.layer_subtext };
+    if (row) return { apiKey, templateUuid: row.template_uuid, headlineLayer: row.layer_headline, subtextLayer: row.layer_subtext, backgroundLayer: row.layer_background || null };
   }
 
   const def = await db.prepare(
-    'SELECT template_uuid, layer_headline, layer_subtext FROM placid_templates WHERE is_default = TRUE LIMIT 1'
+    'SELECT template_uuid, layer_headline, layer_subtext, layer_background FROM placid_templates WHERE is_default = TRUE LIMIT 1'
   ).get();
-  if (def) return { apiKey, templateUuid: def.template_uuid, headlineLayer: def.layer_headline, subtextLayer: def.layer_subtext };
+  if (def) return { apiKey, templateUuid: def.template_uuid, headlineLayer: def.layer_headline, subtextLayer: def.layer_subtext, backgroundLayer: def.layer_background || null };
 
   // Fallback: env / platform settings
   const templateUuid = (process.env.PLACID_TEMPLATE_ID || '').trim() || (await getSetting('placid_template_id'));
   if (!templateUuid) throw new Error('No Placid template configured. Add one in Admin → Placid Templates or set PLACID_TEMPLATE_ID.');
-  return { apiKey, templateUuid, headlineLayer: 'headline', subtextLayer: 'subtext' };
+  return { apiKey, templateUuid, headlineLayer: 'headline', subtextLayer: 'subtext', backgroundLayer: null };
 }
 
 async function extractPlacidContent(post) {
@@ -64,8 +64,10 @@ async function renderPlacidImage(post, content, ctx = {}, templateId = null) {
   const { apiKey, templateUuid, headlineLayer, subtextLayer } = await getPlacidConfig(templateId);
 
   const layers = {};
-  if (content.headline) layers[headlineLayer] = { text: content.headline };
-  if (content.subtext)  layers[subtextLayer]  = { text: content.subtext };
+  if (content.headline)           layers[headlineLayer]   = { text: content.headline };
+  if (content.subtext)            layers[subtextLayer]    = { text: content.subtext };
+  if (content.background_image_url && backgroundLayer)
+                                  layers[backgroundLayer] = { image_url: content.background_image_url };
 
   const createRes = await fetch('https://api.placid.app/api/rest/images', {
     method: 'POST',

@@ -126,6 +126,11 @@
             <div class="text-muted" style="font-size:0.8rem; margin-top:0.25rem;">Exact name of the text layer that receives the supporting text.</div>
           </div>
           <div class="field">
+            <label for="placid-form-background">Background image layer name <span style="font-weight:400;color:var(--color-text-muted)">(optional)</span></label>
+            <input type="text" id="placid-form-background" placeholder="background" maxlength="80">
+            <div class="text-muted" style="font-size:0.8rem; margin-top:0.25rem;">Name of the image layer users can swap with their own photo. Leave blank if this template has no swappable background.</div>
+          </div>
+          <div class="field">
             <label for="placid-form-preview">Preview image URL <span style="font-weight:400;color:var(--color-text-muted)">(optional)</span></label>
             <input type="url" id="placid-form-preview" placeholder="https://…">
             <div class="text-muted" style="font-size:0.8rem; margin-top:0.25rem;">Thumbnail shown to users when picking a template in the editor.</div>
@@ -290,7 +295,7 @@
           <div style="flex:1;min-width:0">
             <div style="font-weight:600;font-size:0.9rem">${escHtml(t.name)} ${t.is_default ? '<span style="font-size:0.7rem;background:var(--color-primary,#0d7a5f);color:#fff;padding:1px 6px;border-radius:4px;margin-left:4px;font-weight:700">DEFAULT</span>' : ''}</div>
             <div style="font-size:0.75rem;color:var(--color-text-muted);font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(t.template_uuid)}</div>
-            <div style="font-size:0.75rem;color:var(--color-text-muted)">headline → <code>${escHtml(t.layer_headline)}</code> · subtext → <code>${escHtml(t.layer_subtext)}</code></div>
+            <div style="font-size:0.75rem;color:var(--color-text-muted)">headline → <code>${escHtml(t.layer_headline)}</code> · subtext → <code>${escHtml(t.layer_subtext)}</code>${t.layer_background ? ` · background → <code>${escHtml(t.layer_background)}</code>` : ''}</div>
           </div>
           <div style="display:flex;gap:6px;flex-shrink:0">
             <button class="btn btn--secondary" style="font-size:0.75rem;padding:4px 10px" onclick="editPlacidTemplate('${escHtml(t.id)}')">Edit</button>
@@ -301,13 +306,14 @@
     }
 
     function openPlacidForm(template = null) {
-      document.getElementById('placid-form-title').textContent = template ? 'Edit template' : 'Add template';
-      document.getElementById('placid-form-id').value          = template?.id || '';
-      document.getElementById('placid-form-name').value        = template?.name || '';
-      document.getElementById('placid-form-uuid').value        = template?.template_uuid || '';
-      document.getElementById('placid-form-headline').value    = template?.layer_headline || 'headline';
-      document.getElementById('placid-form-subtext').value     = template?.layer_subtext  || 'subtext';
-      document.getElementById('placid-form-preview').value     = template?.preview_image_url || '';
+      document.getElementById('placid-form-title').textContent      = template ? 'Edit template' : 'Add template';
+      document.getElementById('placid-form-id').value               = template?.id || '';
+      document.getElementById('placid-form-name').value             = template?.name || '';
+      document.getElementById('placid-form-uuid').value             = template?.template_uuid || '';
+      document.getElementById('placid-form-headline').value         = template?.layer_headline || 'headline';
+      document.getElementById('placid-form-subtext').value          = template?.layer_subtext  || 'subtext';
+      document.getElementById('placid-form-background').value       = template?.layer_background || '';
+      document.getElementById('placid-form-preview').value          = template?.preview_image_url || '';
       document.getElementById('placid-form-error').classList.add('hidden');
       document.getElementById('placid-form').classList.remove('hidden');
       document.getElementById('placid-form-name').focus();
@@ -343,9 +349,10 @@
       const payload = {
         name:              document.getElementById('placid-form-name').value.trim(),
         template_uuid:     document.getElementById('placid-form-uuid').value.trim(),
-        layer_headline:    document.getElementById('placid-form-headline').value.trim() || 'headline',
-        layer_subtext:     document.getElementById('placid-form-subtext').value.trim()  || 'subtext',
-        preview_image_url: document.getElementById('placid-form-preview').value.trim() || null,
+        layer_headline:    document.getElementById('placid-form-headline').value.trim()   || 'headline',
+        layer_subtext:     document.getElementById('placid-form-subtext').value.trim()    || 'subtext',
+        layer_background:  document.getElementById('placid-form-background').value.trim() || null,
+        preview_image_url: document.getElementById('placid-form-preview').value.trim()   || null,
       };
       const errEl = document.getElementById('placid-form-error');
       if (!payload.name || !payload.template_uuid) {

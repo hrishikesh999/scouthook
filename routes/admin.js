@@ -387,7 +387,7 @@ router.get('/placid-templates', requireAdminPassword, async (req, res) => {
 });
 
 router.post('/placid-templates', requireAdminPassword, async (req, res) => {
-  const { name, template_uuid, layer_headline = 'headline', layer_subtext = 'subtext', preview_image_url = null } = req.body || {};
+  const { name, template_uuid, layer_headline = 'headline', layer_subtext = 'subtext', layer_background = null, preview_image_url = null } = req.body || {};
   if (!name || !template_uuid) {
     return res.status(400).json({ ok: false, error: 'name and template_uuid are required' });
   }
@@ -395,9 +395,9 @@ router.post('/placid-templates', requireAdminPassword, async (req, res) => {
     const maxRow = await db.prepare('SELECT COALESCE(MAX(sort_order), -1) AS mx FROM placid_templates').get();
     const sortOrder = (maxRow?.mx ?? -1) + 1;
     const row = await db.prepare(`
-      INSERT INTO placid_templates (name, template_uuid, layer_headline, layer_subtext, preview_image_url, sort_order)
-      VALUES (?, ?, ?, ?, ?, ?) RETURNING *
-    `).get(name, template_uuid, layer_headline, layer_subtext, preview_image_url, sortOrder);
+      INSERT INTO placid_templates (name, template_uuid, layer_headline, layer_subtext, layer_background, preview_image_url, sort_order)
+      VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING *
+    `).get(name, template_uuid, layer_headline, layer_subtext, layer_background || null, preview_image_url, sortOrder);
     return res.status(201).json({ ok: true, template: row });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
@@ -406,16 +406,16 @@ router.post('/placid-templates', requireAdminPassword, async (req, res) => {
 
 router.put('/placid-templates/:id', requireAdminPassword, async (req, res) => {
   const { id } = req.params;
-  const { name, template_uuid, layer_headline, layer_subtext, preview_image_url } = req.body || {};
+  const { name, template_uuid, layer_headline, layer_subtext, layer_background, preview_image_url } = req.body || {};
   if (!name || !template_uuid) {
     return res.status(400).json({ ok: false, error: 'name and template_uuid are required' });
   }
   try {
     const row = await db.prepare(`
       UPDATE placid_templates
-      SET name = ?, template_uuid = ?, layer_headline = ?, layer_subtext = ?, preview_image_url = ?
+      SET name = ?, template_uuid = ?, layer_headline = ?, layer_subtext = ?, layer_background = ?, preview_image_url = ?
       WHERE id = ? RETURNING *
-    `).get(name, template_uuid, layer_headline || 'headline', layer_subtext || 'subtext', preview_image_url || null, id);
+    `).get(name, template_uuid, layer_headline || 'headline', layer_subtext || 'subtext', layer_background || null, preview_image_url || null, id);
     if (!row) return res.status(404).json({ ok: false, error: 'template_not_found' });
     return res.json({ ok: true, template: row });
   } catch (err) {

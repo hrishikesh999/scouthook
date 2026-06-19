@@ -45,7 +45,7 @@
     /* ── Post type picker (2-column intent card grid) ──────────── */
     #starting-pills {
       display: grid;
-      grid-template-columns: repeat(2, 1fr);
+      grid-template-columns: repeat(3, 1fr);
       gap: 10px;
       margin-bottom: 20px;
     }
@@ -1205,5 +1205,8 @@
 
     /* ── Responsive adjustments ──────────────────────────────────── */
     @media (max-width: 540px) {
+      #starting-pills { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 360px) {
       #starting-pills { grid-template-columns: 1fr; }
     }

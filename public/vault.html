@@ -223,10 +223,12 @@
       documents = data.documents || [];
       renderDocuments();
       for (const doc of documents) {
-        if (doc.status === 'indexing' || doc.status === 'pending') {
+        if (doc.status === 'indexing' || doc.status === 'pending' || doc.status === 'mining') {
+          // Server is handling extraction/mining — just poll for status updates
           pollDocumentStatus(doc.id);
         } else if (doc.status === 'ready' && !doc.ideas_mined) {
-          // Indexing already done but mining didn't finish (e.g. server restart)
+          // Legacy doc: reached 'ready' without going through auto-mining
+          // (e.g. server restart before this fix, or pre-fix upload)
           triggerMining();
           pollDocumentStatus(doc.id);
         }
@@ -347,8 +349,8 @@
         const idx = documents.findIndex(d => d.id === docId);
         if (idx !== -1) { documents[idx] = updated; renderDocuments(); }
 
-        // Still indexing — keep waiting
-        if (updated.status === 'indexing' || updated.status === 'pending') return;
+        // Server is still working (extracting or mining) — keep polling
+        if (updated.status === 'indexing' || updated.status === 'pending' || updated.status === 'mining') return;
 
         // Indexing done, mining not yet complete — trigger once and keep polling
         if (updated.status === 'ready' && !updated.ideas_mined) {

@@ -150,6 +150,14 @@ async function processFile(docId, buffer, sourceType, filename, userId, tenantId
     await db.prepare(`
       UPDATE vault_documents SET status = 'error', error_message = ?, updated_at = now() WHERE id = ?
     `).run(err.message.slice(0, 500), docId);
+    return;
+  }
+  // Mine immediately after extraction — no frontend poll needed
+  try {
+    await mineDocumentById(docId, userId, tenantId);
+  } catch (err) {
+    console.error(`[vault] auto-mining failed doc=${docId}:`, err.message);
+    // Doc stays in 'mining' state — recoverable via POST /api/vault/mine
   }
 }
 
@@ -163,11 +171,16 @@ async function processUrl(docId, url, filename, userId, tenantId) {
     await db.prepare(`
       UPDATE vault_documents SET status = 'error', error_message = ?, updated_at = now() WHERE id = ?
     `).run(err.message.slice(0, 500), docId);
+    return;
+  }
+  try {
+    await mineDocumentById(docId, userId, tenantId);
+  } catch (err) {
+    console.error(`[vault] auto-mining failed doc=${docId}:`, err.message);
   }
 }
 
-
-// ── Save chunks to DB and mark document ready ─────────────────────────────────
+// ── Save chunks to DB and transition to 'mining' ──────────────────────────────
 async function saveChunks(docId, chunks, userId, tenantId) {
   if (!chunks || chunks.length === 0) {
     await db.prepare(`
@@ -185,11 +198,62 @@ async function saveChunks(docId, chunks, userId, tenantId) {
     await insertChunk.run(docId, userId, tenantId, chunk.chunkIndex, chunk.content, chunk.sourceRef);
   }
 
+  // 'mining' signals that extraction is done and AI mining is about to start.
+  // The document only transitions to 'ready' after mineDocumentById completes.
   await db.prepare(`
-    UPDATE vault_documents SET status = 'ready', chunk_count = ?, updated_at = now() WHERE id = ?
+    UPDATE vault_documents SET status = 'mining', chunk_count = ?, updated_at = now() WHERE id = ?
   `).run(chunks.length, docId);
 
-  console.log(`[vault] doc=${docId} indexed ${chunks.length} chunks`);
+  console.log(`[vault] doc=${docId} indexed ${chunks.length} chunks — starting mining`);
+}
+
+// ── Server-side mining for a single document ──────────────────────────────────
+// Called automatically after extraction so mining runs regardless of whether
+// the user stays on the vault page. The frontend only needs to poll for status.
+async function mineDocumentById(docId, userId, tenantId) {
+  const unmined = await db.prepare(`
+    SELECT vc.id, vc.document_id, vc.chunk_index, vc.content, vc.source_ref,
+           vd.filename
+    FROM   vault_chunks vc
+    JOIN   vault_documents vd ON vd.id = vc.document_id
+    WHERE  vc.document_id = ?
+      AND  vc.tenant_id   = ?
+      AND  vc.mined_at IS NULL
+    ORDER  BY vc.chunk_index
+  `).all(docId, tenantId);
+
+  if (unmined.length === 0) {
+    await db.prepare(`UPDATE vault_documents SET status = 'ready', updated_at = now() WHERE id = ?`).run(docId);
+    return;
+  }
+
+  const filename    = unmined[0].filename;
+  const userProfile = await db.prepare(
+    'SELECT content_niche, audience_role, audience_pain, contrarian_view FROM profiles WHERE workspace_id = ? AND is_default = true'
+  ).get(tenantId) || {};
+
+  const seeds = await mineChunks(unmined, filename, userProfile);
+
+  for (const seed of seeds) {
+    const { funnelType, hookArchetype } = await classifyContent(seed.seed_text);
+    const docFilename = filename.length > 60 ? filename.slice(0, 57) + '…' : filename;
+    const sourceRef   = `From: "${docFilename}" · ${seed.source_ref}`;
+    await db.prepare(`
+      INSERT INTO vault_ideas
+        (user_id, tenant_id, document_id, chunk_id, seed_text, source_ref, funnel_type, hook_archetype, hook_preview)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(userId, tenantId, docId, seed.chunkId, seed.seed_text, sourceRef, funnelType, hookArchetype, seed.hook_line || null);
+  }
+
+  for (const chunk of unmined) {
+    await db.prepare('UPDATE vault_chunks SET mined_at = now() WHERE id = ?').run(chunk.id);
+  }
+
+  await db.prepare(`
+    UPDATE vault_documents SET status = 'ready', ideas_mined = ideas_mined + ?, updated_at = now() WHERE id = ?
+  `).run(seeds.length, docId);
+
+  console.log(`[vault] doc=${docId} auto-mined ${seeds.length} seeds`);
 }
 
 // ---------------------------------------------------------------------------
@@ -241,7 +305,8 @@ router.post('/mine', async (req, res) => {
   const { userId, tenantId } = req;
   if (!requireUser(req, res)) return;
 
-  // Find all unmined chunks for this user's ready documents
+  // Find all unmined chunks for ready/mining documents.
+  // 'mining' status = server auto-mine may have crashed; this endpoint recovers them.
   const unmined = await db.prepare(`
     SELECT vc.id, vc.document_id, vc.chunk_index, vc.content, vc.source_ref,
            vd.filename
@@ -249,7 +314,7 @@ router.post('/mine', async (req, res) => {
     JOIN   vault_documents vd ON vd.id = vc.document_id
     WHERE  vc.tenant_id = ?
       AND  vc.mined_at IS NULL
-      AND  vd.status = 'ready'
+      AND  vd.status IN ('ready', 'mining')
     ORDER  BY vc.document_id, vc.chunk_index
   `).all(tenantId);
 
@@ -300,9 +365,9 @@ router.post('/mine', async (req, res) => {
         await db.prepare('UPDATE vault_chunks SET mined_at = now() WHERE id = ?').run(cid);
       }
 
-      // Update ideas_mined count on document
+      // Mark document as ready and record idea count
       await db.prepare(`
-        UPDATE vault_documents SET ideas_mined = ideas_mined + ?, updated_at = now() WHERE id = ?
+        UPDATE vault_documents SET status = 'ready', ideas_mined = ideas_mined + ?, updated_at = now() WHERE id = ?
       `).run(seeds.length, docId);
 
     } catch (err) {

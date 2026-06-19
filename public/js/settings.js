@@ -1025,16 +1025,6 @@ async function init() {
     });
   });
 
-  // Wire Next buttons
-  document.querySelectorAll('.vw-step-next-btn').forEach(btn => {
-    btn.addEventListener('click', () => switchToStep(currentStep + 1));
-  });
-
-  // Wire Back buttons
-  document.querySelectorAll('.vw-step-back-btn').forEach(btn => {
-    btn.addEventListener('click', () => switchToStep(currentStep - 1));
-  });
-
   // Wire "Update writing sample" link in voice summary panel
   qs('vw-voice-edit-link')?.addEventListener('click', e => {
     e.preventDefault();

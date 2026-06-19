@@ -6740,3 +6740,116 @@ html[data-nav-dir="back"] #main-content.spa-entering {
   from { opacity: 0; transform: translateX(-50%) translateY(4px); }
   to   { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
+
+/* ── AI Image Modal (Choose Template) ───────────────────────────────── */
+.ai-image-overlay {
+  position: fixed; inset: 0; z-index: 400;
+  background: rgba(9,9,11,0.65); backdrop-filter: blur(4px);
+  display: flex; align-items: center; justify-content: center;
+}
+.ai-image-overlay[aria-hidden="true"] { display: none; }
+
+.ai-image-modal {
+  width: min(980px, calc(100vw - 40px));
+  height: min(680px, calc(100vh - 60px));
+  background: var(--bg-card); border-radius: var(--radius-lg);
+  box-shadow: 0 16px 60px rgba(0,0,0,0.24);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.ai-image-modal-header {
+  height: 56px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 var(--space-6); border-bottom: 1px solid var(--border);
+}
+.ai-image-modal-title {
+  font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;
+}
+.ai-image-modal-body { display: flex; flex: 1; min-height: 0; }
+
+.ai-image-preview-pane {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  background: var(--surface-2); border-right: 1px solid var(--border);
+  position: relative; overflow: hidden; padding: var(--space-5);
+}
+.ai-image-modal-body.is-picker .ai-image-preview-pane {
+  border-right: none; align-items: flex-start; overflow-y: auto; padding: 0;
+}
+.ai-image-preview-pane > img {
+  max-width: 100%; max-height: 100%; object-fit: contain; border-radius: var(--radius-md);
+}
+
+.ai-annotation-strip {
+  position: absolute; bottom: var(--space-4); left: 50%; transform: translateX(-50%);
+  display: flex; gap: var(--space-2); flex-wrap: wrap; justify-content: center;
+  pointer-events: auto; z-index: 2;
+}
+.ai-chip {
+  background: rgba(9,9,11,0.68); color: #fff; border: none; cursor: pointer;
+  font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 20px;
+  transition: background 0.15s; white-space: nowrap;
+}
+.ai-chip:hover  { background: rgba(9,9,11,0.88); }
+.ai-chip.active { background: var(--brand); }
+
+.ai-image-form-pane {
+  width: 340px; flex-shrink: 0;
+  overflow-y: auto; padding: var(--space-5) var(--space-6);
+  display: flex; flex-direction: column;
+}
+.ai-image-form-pane[hidden] { display: none; }
+
+.ai-image-modal-footer {
+  height: 64px; flex-shrink: 0;
+  display: flex; align-items: center; gap: var(--space-3);
+  padding: 0 var(--space-6); border-top: 1px solid var(--border);
+}
+
+.aim-img-zone  { margin-top: 8px; }
+.aim-img-preview {
+  width: 100%; aspect-ratio: 1.91/1; border: 1px dashed var(--border);
+  border-radius: var(--radius-md); display: flex; align-items: center;
+  justify-content: center; overflow: hidden; background: var(--surface-2); cursor: default;
+}
+.aim-img-preview > img { width: 100%; height: 100%; object-fit: cover; }
+.aim-img-actions { display: flex; gap: var(--space-3); margin-top: 6px; align-items: center; }
+.aim-upload-label {
+  cursor: pointer; font-size: 12px; font-weight: 600;
+  padding: 5px 12px; border: 1px solid var(--border); border-radius: var(--radius-md);
+  background: var(--surface-2); color: var(--text-primary); user-select: none;
+}
+.aim-upload-label input[type=file] { display: none; }
+.aim-upload-label.uploading { opacity: 0.55; pointer-events: none; }
+.aim-library-link {
+  font-size: 12px; color: var(--brand); background: none; border: none;
+  cursor: pointer; padding: 0; font-weight: 500;
+}
+.aim-library-link:hover { text-decoration: underline; }
+
+.ai-tpl-picker { padding: var(--space-6); width: 100%; box-sizing: border-box; }
+.ai-tpl-picker-heading {
+  font-size: 14px; font-weight: 600; color: var(--text-primary);
+  margin: 0 0 var(--space-4);
+}
+.ai-tpl-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: var(--space-3);
+}
+.ai-tpl-card {
+  cursor: pointer; border: 2px solid var(--border); border-radius: 10px;
+  overflow: hidden; background: var(--surface-2); transition: border-color 0.15s, transform 0.1s;
+}
+.ai-tpl-card:hover { border-color: var(--brand); transform: translateY(-1px); }
+
+@media (max-width: 768px) {
+  .ai-image-modal {
+    width: 100vw; height: 92vh;
+    border-radius: 16px 16px 0 0; align-self: flex-end;
+  }
+  .ai-image-modal-body { flex-direction: column; }
+  .ai-image-preview-pane {
+    border-right: none; border-bottom: 1px solid var(--border);
+    height: 200px; flex: none;
+  }
+  .ai-image-form-pane { width: 100%; }
+  .ai-image-overlay { align-items: flex-end; }
+}

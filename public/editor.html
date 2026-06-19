@@ -126,7 +126,7 @@
                 <button class="ptb-btn" id="branded-quote-btn" title="Generate branded quote" aria-label="Generate branded quote">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M12 7l1.5 3.5L17 12l-3.5 1.5L12 17l-1.5-3.5L7 12l3.5-1.5z"/></svg>
                 </button>
-                <button class="ptb-btn" id="ai-image-btn" title="Generate image using AI" aria-label="Generate image using AI">
+                <button class="ptb-btn" id="ai-image-btn" title="Choose Template" aria-label="Choose Template">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l2.4 6.6H21l-5.7 4.1 2.2 6.7L12 15.3l-5.5 4.1 2.2-6.7L3 8.6h6.6z"/></svg>
                 </button>
               </div>
@@ -296,6 +296,27 @@
     </div>
   </div>
 
+  <!-- AI Image Modal (Choose Template) -->
+  <div id="ai-image-overlay" class="ai-image-overlay" role="dialog" aria-modal="true" aria-label="Choose Template" aria-hidden="true">
+    <div class="ai-image-modal">
+      <div class="ai-image-modal-header">
+        <span class="ai-image-modal-title">Choose Template</span>
+        <button class="slide-over-close" id="ai-image-modal-close" aria-label="Close">✕</button>
+      </div>
+      <div class="ai-image-modal-body" id="ai-image-modal-body">
+        <div class="ai-image-preview-pane" id="ai-image-preview-pane"></div>
+        <div class="ai-image-form-pane"    id="ai-image-form-pane"    hidden></div>
+      </div>
+      <div class="ai-image-modal-footer">
+        <button id="ai-image-back-btn"     class="btn-text"         hidden>← Change template</button>
+        <div style="flex:1"></div>
+        <button id="ai-image-cancel-btn"   class="slide-over-discard">Cancel</button>
+        <button id="ai-image-generate-btn" class="btn-teal-filled"  hidden>Generate</button>
+        <button id="ai-image-add-btn"      class="btn-outlined-teal" hidden>Add to post</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Schedule modal -->
   <div id="schedule-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="schedule-modal-heading" aria-hidden="true">
 
@@ -419,6 +440,7 @@ let selectedTemplate      = null;  // full template object (needed to check laye
 let selectedBackgroundUrl = null;  // background image URL chosen by user
 let selectedCustomImages  = {};    // layer_name → URL for image-type custom fields
 let _mediaDrawerMode      = 'attach'; // 'attach' | 'background' | 'custom_image:{layer_name}'
+let _aiModalState         = 'picker'; // 'picker' | 'editing' | 'generating' | 'preview'
 
 const visualCache = new Map();
 
@@ -592,7 +614,7 @@ async function loadPost(id) {
       attachedPreviewUrl = p.assetPreviewUrl || (p.assetType !== 'carousel' ? p.assetUrl : null);
       attachedAssetType  = p.assetType || 'media_image';
       attachedSlideCount = p.assetSlideCount || 0;
-      const labelMap = { carousel: 'Carousel', media_pdf: 'PDF', media_image: 'Image', quote_card: 'Quote Card', branded_quote: 'Branded Quote', ai_image: 'Generate using AI' };
+      const labelMap = { carousel: 'Carousel', media_pdf: 'PDF', media_image: 'Image', quote_card: 'Quote Card', branded_quote: 'Branded Quote', ai_image: 'AI Image' };
       const chipLabel = document.getElementById('asset-chip-label');
       const chip      = document.getElementById('asset-chip');
       if (chipLabel) chipLabel.textContent = labelMap[attachedAssetType] || attachedAssetType;
@@ -1164,6 +1186,9 @@ function openSlideOver(type, label) {
   if (!currentPostId) return;
   if (userPlan === 'free') { window.PricingModal?.open({ feature: 'scheduling' }); return; }
 
+  // ai_image uses its own fullscreen modal
+  if (type === 'ai_image') { openAiImageModal(); return; }
+
   currentAssetType       = type;
   currentAssetUrl        = null;
   extractedContent       = null;
@@ -1190,22 +1215,6 @@ function openSlideOver(type, label) {
     currentRenderedContent = cached.renderedContent || null;
     restoreCachedPreview(type, cached);
     setSlideOverState('preview');
-  } else if (type === 'ai_image' && !selectedTemplateId) {
-    // Step 1: show template picker before extracting content
-    skel.style.display = '';
-    content.appendChild(skel);
-    setSlideOverState('loading');
-    showTemplatePicker();
-  } else if (type === 'ai_image' && selectedTemplateId && !extractedContent) {
-    // Template already chosen (e.g. returning from background picker) — go straight to extract
-    skel.style.display = '';
-    content.appendChild(skel);
-    setSlideOverState('loading');
-    extractContent('ai_image');
-  } else if (type === 'ai_image' && selectedTemplateId && extractedContent) {
-    // Template chosen and content extracted — go straight to edit form (background image was just set)
-    renderEditorForm('ai_image', extractedContent);
-    setSlideOverState('editing');
   } else if (cached?.extractedContent) {
     extractedContent = cached.extractedContent;
     renderEditorForm(type, extractedContent);
@@ -1218,13 +1227,7 @@ function openSlideOver(type, label) {
   }
 }
 
-// Hides the slide-over visually WITHOUT resetting ai_image state, so the
-// media picker can return and re-open the form with all edits preserved.
 function _hideSlideOverForMediaPicker() {
-  if (currentAssetType === 'ai_image') {
-    const current = readEditorContent('ai_image');
-    if (current) extractedContent = current;
-  }
   const so = document.getElementById('slide-over');
   so.classList.remove('open');
   so.setAttribute('aria-hidden', 'true');
@@ -1283,32 +1286,110 @@ function visualErrorMessage(code) {
   return String(code);
 }
 
-async function showTemplatePicker() {
-  const content = document.getElementById('slide-over-content');
-  const skel    = _soSkel;
+/* ════════════════════════════════════════════════════════════════════════
+   AI IMAGE MODAL — Choose Template
+════════════════════════════════════════════════════════════════════════ */
+
+function openAiImageModal() {
+  if (scheduleEditLocked) return;
+  if (!currentPostId) return;
+  if (userPlan === 'free') { window.PricingModal?.open({ feature: 'scheduling' }); return; }
+
+  currentAssetType = 'ai_image';
+
+  const overlay = document.getElementById('ai-image-overlay');
+  overlay.removeAttribute('aria-hidden');
+
+  const cached = visualCache.get(`${currentPostId}:ai_image`);
+  if (cached?.assetUrl) {
+    currentAssetUrl   = cached.assetUrl;
+    currentPreviewUrl = cached.previewUrl || null;
+    extractedContent  = cached.extractedContent || null;
+    _setAiModalState('preview');
+    _renderAiPreviewImage(cached.assetUrl);
+    if (extractedContent) renderAiImageFormInModal(extractedContent);
+    return;
+  }
+
+  if (!selectedTemplateId) {
+    currentAssetUrl        = null;
+    extractedContent       = null;
+    currentRenderedContent = null;
+    _setAiModalState('picker');
+    loadAiTemplatePicker();
+  } else if (selectedTemplateId && !extractedContent) {
+    _setAiModalState('editing');
+    _renderAiTemplatePreview();
+    _showAiFormSkeleton();
+    extractContent('ai_image');
+  } else {
+    _setAiModalState('editing');
+    _renderAiTemplatePreview();
+    renderAiImageFormInModal(extractedContent);
+  }
+}
+
+function closeAiImageModal() {
+  const overlay = document.getElementById('ai-image-overlay');
+  overlay.setAttribute('aria-hidden', 'true');
+  extractedContent       = null;
+  currentRenderedContent = null;
+  selectedTemplateId     = null;
+  selectedTemplate       = null;
+  selectedBackgroundUrl  = null;
+  selectedCustomImages   = {};
+  _mediaDrawerMode       = 'attach';
+  _aiModalState          = 'picker';
+  currentAssetType       = null;
+  document.getElementById('ai-image-generate-btn').disabled = false;
+  document.getElementById('ai-image-generate-btn').textContent = 'Generate';
+}
+
+function _setAiModalState(state) {
+  _aiModalState = state;
+  const body     = document.getElementById('ai-image-modal-body');
+  const formPane = document.getElementById('ai-image-form-pane');
+  const backBtn  = document.getElementById('ai-image-back-btn');
+  const genBtn   = document.getElementById('ai-image-generate-btn');
+  const addBtn   = document.getElementById('ai-image-add-btn');
+
+  body.classList.toggle('is-picker', state === 'picker');
+  formPane.hidden = (state === 'picker');
+  backBtn.hidden  = (state === 'picker');
+  addBtn.hidden   = (state !== 'preview');
+
+  if (state === 'preview') {
+    genBtn.hidden = false; genBtn.disabled = false; genBtn.textContent = 'Regenerate';
+  } else if (state === 'editing') {
+    genBtn.hidden = false; genBtn.disabled = false; genBtn.textContent = 'Generate';
+  } else if (state === 'generating') {
+    genBtn.hidden = false; genBtn.disabled = true;  genBtn.textContent = 'Generating…';
+  } else {
+    genBtn.hidden = true;
+  }
+}
+
+async function loadAiTemplatePicker() {
+  const previewPane = document.getElementById('ai-image-preview-pane');
+  previewPane.innerHTML = `<div class="slide-over-skeleton" style="width:80%;max-width:500px;height:300px;border-radius:8px"></div>`;
+
   try {
     const res  = await fetch('/api/placid-templates', { headers: apiHeaders(), credentials: 'include' });
     const data = await res.json();
-    skel.style.display = 'none';
     const tpls = data.templates || [];
 
     if (tpls.length === 0) {
-      content.innerHTML = `
-        <div style="text-align:center;padding:40px 16px;color:var(--text-muted)">
-          <p style="margin:0 0 12px;font-size:14px">No templates configured yet. Ask your admin to add templates in the admin panel.</p>
-        </div>`;
-      setSlideOverState('editing');
+      previewPane.innerHTML = `<div style="text-align:center;padding:40px 24px;color:var(--text-muted)">
+        <p style="margin:0;font-size:14px">No templates configured yet. Ask your admin to add templates.</p></div>`;
       return;
     }
 
-    // If only one template, auto-select it
     if (tpls.length === 1) {
       selectedTemplate   = tpls[0];
-      selectedTemplateId = tpls[0].id;
-      content.innerHTML = '';
-      skel.style.display = '';
-      content.appendChild(skel);
-      setSlideOverState('loading');
+      selectedTemplateId = String(tpls[0].id);
+      _setAiModalState('editing');
+      _renderAiTemplatePreview();
+      _showAiFormSkeleton();
       extractContent('ai_image');
       return;
     }
@@ -1316,40 +1397,351 @@ async function showTemplatePicker() {
     const gridHtml = tpls.map(t => {
       const previewHtml = t.preview_image_url
         ? `<img src="${escHtml(t.preview_image_url)}" alt="" style="width:100%;height:100%;object-fit:cover;display:block">`
-        : `<span style="font-size:22px;font-weight:700;color:var(--text-muted)">${escHtml((t.name||'?').slice(0,2).toUpperCase())}</span>`;
+        : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center"><span style="font-size:22px;font-weight:700;color:var(--text-muted)">${escHtml((t.name||'?').slice(0,2).toUpperCase())}</span></div>`;
       const defBadge = t.is_default ? `<span style="font-size:10px;font-weight:700;text-transform:uppercase;background:var(--brand);color:#fff;padding:2px 5px;border-radius:4px;margin-left:6px">Default</span>` : '';
-      return `<div class="so-tpl-card" data-tpl-id="${escHtml(t.id)}" style="cursor:pointer;border:1px solid var(--border);border-radius:10px;overflow:hidden;background:var(--surface-2)">
-        <div style="aspect-ratio:1;display:flex;align-items:center;justify-content:center;background:var(--surface)">${previewHtml}</div>
+      return `<div class="ai-tpl-card" data-tpl-id="${escHtml(String(t.id))}">
+        <div style="aspect-ratio:4/3;overflow:hidden;background:var(--surface)">${previewHtml}</div>
         <div style="padding:10px 12px;font-size:13px;font-weight:600">${escHtml(t.name)}${defBadge}</div>
       </div>`;
     }).join('');
 
-    content.innerHTML = `
-      <div>
-        <p style="font-size:13px;color:var(--text-muted);margin:0 0 12px">Choose a template:</p>
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px">${gridHtml}</div>
-      </div>`;
+    previewPane.innerHTML = `<div class="ai-tpl-picker">
+      <p class="ai-tpl-picker-heading">Choose a template to get started</p>
+      <div class="ai-tpl-grid">${gridHtml}</div>
+    </div>`;
 
-    setSlideOverState('editing');
-    content.querySelectorAll('.so-tpl-card').forEach(card => {
+    previewPane.querySelectorAll('.ai-tpl-card').forEach(card => {
       card.addEventListener('click', () => {
-        selectedTemplate   = tpls.find(t => t.id === card.dataset.tplId) || null;
+        selectedTemplate   = tpls.find(t => String(t.id) === card.dataset.tplId) || null;
         selectedTemplateId = card.dataset.tplId;
-        content.innerHTML = '';
-        skel.style.display = '';
-        content.appendChild(skel);
-        setSlideOverState('loading');
+        _setAiModalState('editing');
+        _renderAiTemplatePreview();
+        _showAiFormSkeleton();
         extractContent('ai_image');
       });
     });
   } catch (err) {
-    skel.style.display = 'none';
-    content.innerHTML = `<p style="color:var(--error,#e55);font-size:13px;padding:16px">Failed to load templates: ${escHtml(err.message)}</p>`;
-    setSlideOverState('editing');
+    previewPane.innerHTML = `<p style="color:var(--error,#e55);font-size:13px;padding:24px">Failed to load templates: ${escHtml(err.message)}</p>`;
+  }
+}
+
+function _renderAiTemplatePreview() {
+  const previewPane = document.getElementById('ai-image-preview-pane');
+  if (selectedTemplate?.preview_image_url) {
+    previewPane.innerHTML = `<img src="${escHtml(selectedTemplate.preview_image_url)}" alt="Template preview">`;
+  } else {
+    previewPane.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;gap:10px;color:var(--text-muted)">
+      <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+      <span style="font-size:13px">No preview available</span>
+    </div>`;
+  }
+}
+
+function _renderAiPreviewImage(url) {
+  const previewPane = document.getElementById('ai-image-preview-pane');
+  previewPane.innerHTML = `<img src="${escHtml(url)}" alt="Generated image">`;
+}
+
+function _showAiFormSkeleton() {
+  const formPane = document.getElementById('ai-image-form-pane');
+  formPane.innerHTML = `<div class="slide-over-skeleton" style="width:100%;border-radius:8px;min-height:220px"></div>`;
+}
+
+function _showAiPreviewPaneLoading() {
+  const previewPane = document.getElementById('ai-image-preview-pane');
+  previewPane.innerHTML = `<div class="slide-over-skeleton" style="width:80%;max-width:460px;aspect-ratio:1;border-radius:8px"></div>`;
+  previewPane.querySelector('.ai-annotation-strip')?.remove();
+}
+
+function renderAiImageFormInModal(content) {
+  const formPane = document.getElementById('ai-image-form-pane');
+  if (!content) {
+    formPane.innerHTML = '<p class="so-extract-error">Could not load suggestions — try again.</p>';
+    return;
+  }
+
+  const h            = content.headline || '';
+  const s            = content.subtext  || '';
+  const hasBgLayer   = !!(selectedTemplate?.layer_background);
+  const customLayers = Array.isArray(selectedTemplate?.custom_layers) ? selectedTemplate.custom_layers : [];
+  const existingCF   = content.custom_fields || {};
+
+  const bgZoneHtml = hasBgLayer ? `
+    <div style="margin-top:14px">
+      <span class="field-label">Background image</span>
+      <div class="aim-img-zone" id="aim-bg-zone" tabindex="-1">
+        <div class="aim-img-preview" id="aim-bg-preview">
+          ${selectedBackgroundUrl
+            ? `<img src="${escHtml(selectedBackgroundUrl)}" alt="Background">`
+            : `<span style="font-size:12px;color:var(--text-muted)">No background selected</span>`}
+        </div>
+        <div class="aim-img-actions">
+          <label class="aim-upload-label" id="aim-bg-upload-label">
+            <input type="file" accept="image/*" class="aim-file-input" data-field="background">
+            Upload
+          </label>
+          <button type="button" class="aim-library-link" data-field="background">Choose from library</button>
+        </div>
+      </div>
+    </div>` : '';
+
+  const customFieldsHtml = customLayers.map(field => {
+    const safeName = field.layer_name.replace(/[^a-zA-Z0-9]/g, '_');
+    const fieldId  = `aim-custom-${safeName}`;
+    if (field.type === 'image') {
+      const imgUrl = selectedCustomImages[field.layer_name] || '';
+      return `
+        <div style="margin-top:14px">
+          <span class="field-label">${escHtml(field.label || field.layer_name)}</span>
+          <div class="aim-img-zone" id="${escHtml(fieldId)}" tabindex="-1">
+            <div class="aim-img-preview" id="${escHtml(fieldId)}-preview">
+              ${imgUrl ? `<img src="${escHtml(imgUrl)}" alt="${escHtml(field.label || field.layer_name)}">` : `<span style="font-size:12px;color:var(--text-muted)">No image selected</span>`}
+            </div>
+            <div class="aim-img-actions">
+              <label class="aim-upload-label" id="${escHtml(fieldId)}-upload-label">
+                <input type="file" accept="image/*" class="aim-file-input" data-field="custom_image" data-layer-name="${escHtml(field.layer_name)}">
+                Upload
+              </label>
+              <button type="button" class="aim-library-link" data-field="custom_image" data-layer-name="${escHtml(field.layer_name)}">Choose from library</button>
+            </div>
+          </div>
+        </div>`;
+    }
+    const maxChars = field.max_chars || 200;
+    const existing = existingCF[field.layer_name] || '';
+    return `
+      <div style="margin-top:12px">
+        <label class="field-label" for="${escHtml(fieldId)}-input">${escHtml(field.label || field.layer_name)}</label>
+        <input type="text" id="${escHtml(fieldId)}-input" class="field-input aim-custom-text-input"
+          data-layer-name="${escHtml(field.layer_name)}" maxlength="${maxChars}" value="${escHtml(existing)}"/>
+        <div class="so-char-counter"><span id="${escHtml(fieldId)}-len">${existing.length}</span> / ${maxChars}</div>
+      </div>`;
+  }).join('');
+
+  formPane.innerHTML = `
+    <div class="so-editor-form">
+      <p class="so-field-hint">AI-extracted text for your image. Edit before generating.</p>
+      <label class="field-label" for="aim-headline-input">Headline</label>
+      <input type="text" id="aim-headline-input" class="field-input" maxlength="120" value="${escHtml(h)}"/>
+      <div class="so-char-counter"><span id="aim-hl-len">${h.length}</span> / 120</div>
+      <label class="field-label" for="aim-subtext-input" style="margin-top:12px">Subtext</label>
+      <textarea id="aim-subtext-input" class="field-textarea so-quote-textarea" maxlength="200">${escHtml(s)}</textarea>
+      <div class="so-char-counter"><span id="aim-st-len">${s.length}</span> / 200</div>
+      ${bgZoneHtml}
+      ${customFieldsHtml}
+    </div>`;
+
+  const hlInput = document.getElementById('aim-headline-input');
+  const hlLen   = document.getElementById('aim-hl-len');
+  const stInput = document.getElementById('aim-subtext-input');
+  const stLen   = document.getElementById('aim-st-len');
+  if (hlInput) hlInput.addEventListener('input', () => { hlLen.textContent = hlInput.value.length; });
+  if (stInput) stInput.addEventListener('input', () => { stLen.textContent = stInput.value.length; });
+
+  formPane.querySelectorAll('.aim-custom-text-input').forEach(inp => {
+    const safeName = inp.dataset.layerName.replace(/[^a-zA-Z0-9]/g, '_');
+    const lenEl = document.getElementById(`aim-custom-${safeName}-len`);
+    if (lenEl) inp.addEventListener('input', () => { lenEl.textContent = inp.value.length; });
+  });
+
+  formPane.querySelectorAll('.aim-file-input').forEach(input => {
+    input.addEventListener('change', () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      const field     = input.dataset.field;
+      const layerName = input.dataset.layerName;
+      const labelEl   = input.closest('.aim-upload-label');
+      if (labelEl) labelEl.classList.add('uploading');
+      _uploadInlineMediaFile(file, url => {
+        if (labelEl) labelEl.classList.remove('uploading');
+        if (field === 'background') {
+          selectedBackgroundUrl = url;
+          const preview = document.getElementById('aim-bg-preview');
+          if (preview) preview.innerHTML = `<img src="${escHtml(url)}" alt="Background">`;
+        } else if (field === 'custom_image' && layerName) {
+          selectedCustomImages[layerName] = url;
+          const safeName = layerName.replace(/[^a-zA-Z0-9]/g, '_');
+          const preview  = document.getElementById(`aim-custom-${safeName}-preview`);
+          if (preview) preview.innerHTML = `<img src="${escHtml(url)}" alt="">`;
+        }
+      });
+    });
+  });
+
+  formPane.querySelectorAll('.aim-library-link').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const field     = btn.dataset.field;
+      const layerName = btn.dataset.layerName;
+      _mediaDrawerMode = (field === 'background') ? 'background' : `custom_image:${layerName}`;
+      _hideAiModalForMediaPicker();
+      openMediaDrawer();
+    });
+  });
+
+  _renderAnnotationChips();
+
+  formPane.querySelectorAll('input[id^="aim-"], textarea[id^="aim-"], .aim-img-zone').forEach(el => {
+    el.addEventListener('focus', () => {
+      document.querySelectorAll('.ai-chip').forEach(chip => {
+        chip.classList.toggle('active', chip.dataset.targetId === el.id);
+      });
+    });
+    el.addEventListener('blur', () => {
+      document.querySelectorAll('.ai-chip').forEach(chip => chip.classList.remove('active'));
+    });
+  });
+}
+
+function _renderAnnotationChips() {
+  const previewPane = document.getElementById('ai-image-preview-pane');
+  previewPane.querySelector('.ai-annotation-strip')?.remove();
+
+  const hasBgLayer   = !!(selectedTemplate?.layer_background);
+  const customLayers = Array.isArray(selectedTemplate?.custom_layers) ? selectedTemplate.custom_layers : [];
+
+  const chips = [
+    { label: '✎ Headline', targetId: 'aim-headline-input' },
+    { label: '✎ Subtext',  targetId: 'aim-subtext-input' },
+    ...(hasBgLayer ? [{ label: '🖼 Background', targetId: 'aim-bg-zone' }] : []),
+    ...customLayers.map(field => ({
+      label:    `✎ ${field.label || field.layer_name}`,
+      targetId: field.type === 'image'
+        ? `aim-custom-${field.layer_name.replace(/[^a-zA-Z0-9]/g, '_')}`
+        : `aim-custom-${field.layer_name.replace(/[^a-zA-Z0-9]/g, '_')}-input`,
+    })),
+  ];
+
+  const strip = document.createElement('div');
+  strip.className = 'ai-annotation-strip';
+  chips.forEach(({ label, targetId }) => {
+    const btn = document.createElement('button');
+    btn.type = 'button'; btn.className = 'ai-chip';
+    btn.textContent = label; btn.dataset.targetId = targetId;
+    btn.addEventListener('click', () => {
+      const el = document.getElementById(targetId);
+      if (!el) return;
+      el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      setTimeout(() => el.focus?.(), 150);
+    });
+    strip.appendChild(btn);
+  });
+  previewPane.appendChild(strip);
+}
+
+function readEditorContentFromModal() {
+  const formPane    = document.getElementById('ai-image-form-pane');
+  const custom_fields = {};
+  formPane.querySelectorAll('.aim-custom-text-input[data-layer-name]').forEach(inp => {
+    const val = inp.value.trim();
+    if (val) custom_fields[inp.dataset.layerName] = val;
+  });
+  Object.entries(selectedCustomImages).forEach(([k, v]) => { if (v) custom_fields[k] = v; });
+  return {
+    headline:             (document.getElementById('aim-headline-input')?.value || '').trim(),
+    subtext:              (document.getElementById('aim-subtext-input')?.value  || '').trim(),
+    background_image_url: selectedBackgroundUrl || undefined,
+    ...(Object.keys(custom_fields).length > 0 ? { custom_fields } : {}),
+  };
+}
+
+async function generateAiImageInModal() {
+  _setAiModalState('generating');
+  _showAiPreviewPaneLoading();
+
+  const content = readEditorContentFromModal();
+  extractedContent = content;
+
+  try {
+    const res = await fetch(`/api/visuals/${encodeURIComponent(String(currentPostId))}`, {
+      method: 'POST', headers: apiHeaders(), credentials: 'include',
+      body: JSON.stringify({ visual_type: 'ai_image', mode: 'render', content, template_id: selectedTemplateId }),
+    });
+    let data;
+    try { data = await res.json(); } catch { throw new Error('Could not read server response.'); }
+    if (!res.ok || !data.ok) throw new Error(visualErrorMessage(data.error));
+
+    currentAssetUrl   = data.png_url;
+    currentPreviewUrl = data.png_url;
+    currentSlideCount = 0;
+    visualCache.set(`${currentPostId}:ai_image`, { extractedContent, assetUrl: data.png_url, previewUrl: data.png_url, slideCount: 0 });
+
+    _renderAiPreviewImage(data.png_url);
+    renderAiImageFormInModal(extractedContent);
+    _setAiModalState('preview');
+  } catch (e) {
+    _renderAiTemplatePreview();
+    renderAiImageFormInModal(extractedContent);
+    _setAiModalState('editing');
+    const formPane = document.getElementById('ai-image-form-pane');
+    const err = document.createElement('p');
+    err.className = 'so-extract-error';
+    err.innerHTML = (e instanceof Error && e.message) ? e.message : 'Could not generate image. Try again.';
+    formPane.insertBefore(err, formPane.firstChild);
+  }
+}
+
+async function _uploadInlineMediaFile(file, onSuccess) {
+  const headers = {
+    ...apiHeaders(),
+    'Content-Type': file.type || 'application/octet-stream',
+    'X-Filename':   encodeURIComponent(file.name),
+  };
+  try {
+    const res  = await fetch('/api/media/upload', { method: 'POST', credentials: 'include', headers, body: file });
+    let data;
+    try { data = await res.json(); } catch { throw new Error('Upload failed.'); }
+    if (!res.ok || !data.url) throw new Error(data.error || 'Upload failed.');
+    onSuccess(data.url);
+  } catch (err) {
+    alert(`Upload failed: ${err.message}`);
+  }
+}
+
+function _hideAiModalForMediaPicker() {
+  const current = readEditorContentFromModal();
+  if (current) extractedContent = current;
+  document.getElementById('ai-image-overlay').setAttribute('aria-hidden', 'true');
+}
+
+function _reopenAiImageModal() {
+  document.getElementById('ai-image-overlay').removeAttribute('aria-hidden');
+  _setAiModalState('editing');
+  _renderAiTemplatePreview();
+  if (extractedContent) {
+    renderAiImageFormInModal(extractedContent);
+  } else {
+    _showAiFormSkeleton();
+    extractContent('ai_image');
   }
 }
 
 async function extractContent(type) {
+  // ai_image uses the dedicated modal DOM — not the slide-over
+  if (type === 'ai_image') {
+    try {
+      const res = await fetch(`/api/visuals/${encodeURIComponent(String(currentPostId))}`, {
+        method: 'POST', headers: apiHeaders(), credentials: 'include',
+        body: JSON.stringify({ visual_type: 'ai_image', mode: 'extract' }),
+      });
+      let data;
+      try { data = await res.json(); } catch { throw new Error('Could not read server response.'); }
+      if (!res.ok || !data.ok) throw new Error(visualErrorMessage(data.error));
+      extractedContent = data.content;
+      visualCache.set(`${currentPostId}:ai_image`, { extractedContent });
+      renderAiImageFormInModal(extractedContent);
+    } catch (e) {
+      const formPane = document.getElementById('ai-image-form-pane');
+      if (formPane) {
+        formPane.innerHTML = '';
+        const err = document.createElement('p');
+        err.className = 'so-extract-error';
+        err.innerHTML = (e instanceof Error && e.message) ? e.message : 'Could not load suggestions. Try again.';
+        formPane.appendChild(err);
+      }
+    }
+    return;
+  }
+
   const content = document.getElementById('slide-over-content');
   const skel    = _soSkel;
   try {
@@ -1416,86 +1808,6 @@ function renderEditorForm(type, content) {
       const n = ta.value.length;
       le.textContent = n;
       co.classList.toggle('so-char-counter--full', n >= maxLen);
-    });
-
-  } else if (type === 'ai_image') {
-    const h = content.headline || '', s = content.subtext || '';
-    const hasBgLayer    = !!(selectedTemplate?.layer_background);
-    const customLayers  = Array.isArray(selectedTemplate?.custom_layers) ? selectedTemplate.custom_layers : [];
-    const existingCF    = content.custom_fields || {};
-
-    const bgPreviewHtml = hasBgLayer ? `
-      <div style="margin-top:14px">
-        <span class="field-label">Background image</span>
-        <div id="so-ai-bg-preview" style="margin-top:6px;width:100%;aspect-ratio:1.91/1;background:var(--surface-2);border:1px dashed var(--border);border-radius:8px;display:flex;align-items:center;justify-content:center;overflow:hidden;cursor:pointer" title="Choose background">
-          ${selectedBackgroundUrl
-            ? `<img src="${escHtml(selectedBackgroundUrl)}" style="width:100%;height:100%;object-fit:cover">`
-            : `<span style="font-size:12px;color:var(--text-muted)">No background selected</span>`}
-        </div>
-        <button type="button" id="so-ai-bg-btn" class="btn-template-action" style="width:100%;margin-top:6px">Choose from Media Library</button>
-      </div>` : '';
-
-    const customFieldsHtml = customLayers.map(field => {
-      const safeName = field.layer_name.replace(/[^a-zA-Z0-9]/g, '_');
-      if (field.type === 'image') {
-        const imgUrl = selectedCustomImages[field.layer_name] || '';
-        return `
-          <div style="margin-top:14px">
-            <span class="field-label">${escHtml(field.label || field.layer_name)}</span>
-            <div style="margin-top:6px;width:100%;aspect-ratio:1.91/1;background:var(--surface-2);border:1px dashed var(--border);border-radius:8px;display:flex;align-items:center;justify-content:center;overflow:hidden">
-              ${imgUrl ? `<img src="${escHtml(imgUrl)}" style="width:100%;height:100%;object-fit:cover">` : `<span style="font-size:12px;color:var(--text-muted)">No image selected</span>`}
-            </div>
-            <button type="button" class="btn-template-action so-custom-img-btn" data-layer-name="${escHtml(field.layer_name)}" style="width:100%;margin-top:6px">Choose from Media Library</button>
-          </div>`;
-      }
-      const maxChars  = field.max_chars || 200;
-      const existing  = escHtml(existingCF[field.layer_name] || '');
-      const existLen  = (existingCF[field.layer_name] || '').length;
-      return `
-        <div style="margin-top:12px">
-          <label class="field-label" for="so-custom-${safeName}-input">${escHtml(field.label || field.layer_name)}</label>
-          <input type="text" id="so-custom-${safeName}-input" class="field-input so-custom-text-input"
-            data-layer-name="${escHtml(field.layer_name)}" maxlength="${maxChars}" value="${existing}"/>
-          <div class="so-char-counter"><span id="so-custom-${safeName}-len">${existLen}</span> / ${maxChars}</div>
-        </div>`;
-    }).join('');
-
-    wrap.innerHTML = `
-      <div class="so-editor-form">
-        <p class="so-field-hint">AI-extracted headline and supporting text for your image. Edit before generating.</p>
-        <label class="field-label" for="so-ai-headline-input">Headline</label>
-        <input type="text" id="so-ai-headline-input" class="field-input" maxlength="120" value="${escHtml(h)}"/>
-        <div class="so-char-counter"><span id="so-ai-hl-len">${h.length}</span> / 120</div>
-        <label class="field-label" for="so-ai-subtext-input" style="margin-top:12px">Subtext</label>
-        <textarea id="so-ai-subtext-input" class="field-textarea so-quote-textarea" maxlength="200">${escHtml(s)}</textarea>
-        <div class="so-char-counter"><span id="so-ai-st-len">${s.length}</span> / 200</div>
-        ${bgPreviewHtml}
-        ${customFieldsHtml}
-      </div>`;
-    const hlInput = document.getElementById('so-ai-headline-input');
-    const hlLen   = document.getElementById('so-ai-hl-len');
-    const stInput = document.getElementById('so-ai-subtext-input');
-    const stLen   = document.getElementById('so-ai-st-len');
-    hlInput.addEventListener('input', () => { hlLen.textContent = hlInput.value.length; });
-    stInput.addEventListener('input', () => { stLen.textContent = stInput.value.length; });
-    if (hasBgLayer) {
-      document.getElementById('so-ai-bg-btn').addEventListener('click', () => {
-        _mediaDrawerMode = 'background';
-        _hideSlideOverForMediaPicker();
-        openMediaDrawer();
-      });
-    }
-    wrap.querySelectorAll('.so-custom-text-input').forEach(inp => {
-      const safeName = inp.dataset.layerName.replace(/[^a-zA-Z0-9]/g, '_');
-      const lenEl = document.getElementById(`so-custom-${safeName}-len`);
-      if (lenEl) inp.addEventListener('input', () => { lenEl.textContent = inp.value.length; });
-    });
-    wrap.querySelectorAll('.so-custom-img-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        _mediaDrawerMode = `custom_image:${btn.dataset.layerName}`;
-        _hideSlideOverForMediaPicker();
-        openMediaDrawer();
-      });
     });
 
   } else if (type === 'carousel') {
@@ -1573,20 +1885,6 @@ function renderEditorForm(type, content) {
 function readEditorContent(type) {
   if (type === 'quote_card' || type === 'branded_quote') {
     return { quote: (document.getElementById('so-quote-input')?.value || '').trim() };
-  }
-  if (type === 'ai_image') {
-    const custom_fields = {};
-    document.querySelectorAll('#slide-over-content .so-custom-text-input[data-layer-name]').forEach(inp => {
-      const val = inp.value.trim();
-      if (val) custom_fields[inp.dataset.layerName] = val;
-    });
-    Object.entries(selectedCustomImages).forEach(([k, v]) => { if (v) custom_fields[k] = v; });
-    return {
-      headline:             (document.getElementById('so-ai-headline-input')?.value || '').trim(),
-      subtext:              (document.getElementById('so-ai-subtext-input')?.value  || '').trim(),
-      background_image_url: selectedBackgroundUrl || undefined,
-      ...(Object.keys(custom_fields).length > 0 ? { custom_fields } : {}),
-    };
   }
   if (type === 'carousel') {
     const wrap  = document.getElementById('slide-over-content');
@@ -1725,7 +2023,7 @@ function buildDrawerCard(file) {
       selectedBackgroundUrl = file.url;
       _mediaDrawerMode = 'attach';
       closeMediaDrawer();
-      openSlideOver('ai_image', 'GENERATE USING AI');
+      _reopenAiImageModal();
       return;
     }
     if (_mediaDrawerMode.startsWith('custom_image:')) {
@@ -1733,7 +2031,7 @@ function buildDrawerCard(file) {
       selectedCustomImages[layerName] = file.url;
       _mediaDrawerMode = 'attach';
       closeMediaDrawer();
-      openSlideOver('ai_image', 'GENERATE USING AI');
+      _reopenAiImageModal();
       return;
     }
     attachedAssetUrl   = file.url;
@@ -1819,7 +2117,7 @@ function bindEvents() {
       attachedAssetType  = currentAssetType;
       attachedPreviewUrl = currentPreviewUrl;
       attachedSlideCount = currentSlideCount;
-      const labelMap = { quote_card: 'Quote Card', carousel: 'Carousel', branded_quote: 'Branded Quote', ai_image: 'Generate using AI' };
+      const labelMap = { quote_card: 'Quote Card', carousel: 'Carousel', branded_quote: 'Branded Quote', ai_image: 'AI Image' };
       const chipLabel = document.getElementById('asset-chip-label');
       const chip      = document.getElementById('asset-chip');
       if (chipLabel) chipLabel.textContent = labelMap[attachedAssetType] || attachedAssetType;
@@ -2018,10 +2316,39 @@ function wireVisualButtons() {
   document.getElementById('quote-card-btn').addEventListener('click', () => openSlideOver('quote_card', 'QUOTE CARD'));
   document.getElementById('branded-quote-btn').addEventListener('click', () => openSlideOver('branded_quote', 'BRANDED QUOTE'));
   document.getElementById('carousel-btn').addEventListener('click', () => openSlideOver('carousel', 'CAROUSEL'));
-  document.getElementById('ai-image-btn').addEventListener('click', () => openSlideOver('ai_image', 'GENERATE USING AI'));
+  document.getElementById('ai-image-btn').addEventListener('click', () => openAiImageModal());
   document.getElementById('media-library-btn').addEventListener('click', () => {
     if (scheduleEditLocked) return;
     openMediaDrawer();
+  });
+
+  // AI Image Modal buttons
+  document.getElementById('ai-image-modal-close').addEventListener('click', closeAiImageModal);
+  document.getElementById('ai-image-cancel-btn').addEventListener('click', closeAiImageModal);
+  document.getElementById('ai-image-generate-btn').addEventListener('click', generateAiImageInModal);
+  document.getElementById('ai-image-add-btn').addEventListener('click', () => {
+    if (currentAssetUrl) {
+      attachedAssetUrl   = currentAssetUrl;
+      attachedAssetType  = 'ai_image';
+      attachedPreviewUrl = currentPreviewUrl;
+      attachedSlideCount = 0;
+      const chipLabel = document.getElementById('asset-chip-label');
+      const chip      = document.getElementById('asset-chip');
+      if (chipLabel) chipLabel.textContent = 'AI Image';
+      if (chip) chip.classList.remove('hidden');
+      renderPreviewAsset();
+    }
+    closeAiImageModal();
+  });
+  document.getElementById('ai-image-back-btn').addEventListener('click', () => {
+    selectedTemplate   = null;
+    selectedTemplateId = null;
+    extractedContent   = null;
+    _setAiModalState('picker');
+    loadAiTemplatePicker();
+  });
+  document.getElementById('ai-image-overlay').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) closeAiImageModal();
   });
 }
 

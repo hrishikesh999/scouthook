@@ -404,10 +404,29 @@ app.get('/api/auth/me', (req, res) => {
 });
 
 
-function requireLoginHtml(req, res, next) {
-  if (req.isAuthenticated?.()) return next();
-  const returnTo = encodeURIComponent(req.originalUrl || '/dashboard.html');
-  return res.redirect(`/login.html?returnTo=${returnTo}`);
+async function requireLoginHtml(req, res, next) {
+  if (!req.isAuthenticated?.()) {
+    const returnTo = encodeURIComponent(req.originalUrl || '/dashboard.html');
+    return res.redirect(`/login.html?returnTo=${returnTo}`);
+  }
+
+  // Onboarding page itself is always reachable for authenticated users.
+  // Workspace-setup is also exempt (it's its own flow).
+  const exemptPaths = new Set(['/onboarding.html', '/workspace-setup.html']);
+  if (exemptPaths.has(req.path)) return next();
+
+  // Block every other protected page until onboarding is done.
+  // req.tenantId is set by the passport middleware from the session.
+  if (req.tenantId) {
+    const profile = await db.prepare(
+      'SELECT onboarding_complete FROM profiles WHERE workspace_id = ? AND is_default = true LIMIT 1'
+    ).get(req.tenantId);
+    if (!profile?.onboarding_complete) {
+      return res.redirect('/onboarding.html');
+    }
+  }
+
+  return next();
 }
 
 // ---------------------------------------------------------------------------

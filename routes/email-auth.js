@@ -36,18 +36,21 @@ async function createPersonalWorkspaceForUser(userId, displayName) {
 }
 
 async function establishSession(req, userId, workspaceId) {
-  await new Promise((resolve, reject) =>
-    req.session.regenerate(err => err ? reject(err) : resolve())
-  );
-  req.session.passport = {
-    user: {
-      provider:    'email',
-      user_id:     userId,
-      tenant_id:   workspaceId,
-      displayName: '',
-      email:       '',
-    },
+  const user = {
+    provider:    'email',
+    user_id:     userId,
+    tenant_id:   workspaceId,
+    displayName: '',
+    email:       '',
   };
+  // Use Passport's own logIn — same code path as Google OAuth callback.
+  // req.session.regenerate() looked right but swaps the session ID mid-request,
+  // causing a timing window where express-session's cookie hook fires against the
+  // old ID, so the browser never receives the updated cookie. logIn() modifies
+  // the existing session in-place, which express-session tracks reliably.
+  await new Promise((resolve, reject) =>
+    req.logIn(user, err => err ? reject(err) : resolve())
+  );
   await new Promise((resolve, reject) =>
     req.session.save(err => err ? reject(err) : resolve())
   );

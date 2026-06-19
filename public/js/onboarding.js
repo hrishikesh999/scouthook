@@ -21,9 +21,9 @@ const state = {
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function showScreen(id) {
-  document.querySelectorAll('.ob-screen').forEach(s => s.hidden = true);
+  document.querySelectorAll('.ob-screen').forEach(s => s.classList.remove('active'));
   const el = document.getElementById('ob-' + id);
-  if (el) el.hidden = false;
+  if (el) el.classList.add('active');
 
   const dots = document.getElementById('ob-step-dots');
   const idx = STEPS.indexOf(id);
@@ -383,8 +383,6 @@ async function init() {
     window.location.href = '/login.html';
     return;
   }
-
-  document.querySelectorAll('.ob-screen').forEach(s => s.hidden = true);
 
   initS2();
   initS3();

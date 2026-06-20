@@ -375,6 +375,17 @@ router.get('/users/:userId/workspaces', requireAdminPassword, (req, res) => {
 // Placid Templates — admin CRUD (global, not per-workspace)
 // ---------------------------------------------------------------------------
 
+async function fetchPlacidThumbnail(apiKey, templateUuid) {
+  try {
+    const r = await fetch('https://api.placid.app/api/rest/templates', {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+    if (!r.ok) return null;
+    const { data } = await r.json();
+    return (Array.isArray(data) ? data : []).find(t => t.uuid === templateUuid)?.thumbnail || null;
+  } catch { return null; }
+}
+
 function parsePlacidJsonArray(raw) {
   try { const v = JSON.parse(raw || '[]'); return Array.isArray(v) ? v : []; } catch { return []; }
 }
@@ -398,19 +409,23 @@ router.get('/placid-templates', requireAdminPassword, async (req, res) => {
 });
 
 router.post('/placid-templates', requireAdminPassword, async (req, res) => {
-  const { name, template_uuid, layer_headline = 'headline', layer_subtext = 'subtext', layer_background = null, preview_image_url = null, custom_layers = [], brand_layers = [] } = req.body || {};
+  const { name, template_uuid, layer_headline = 'headline', layer_subtext = 'subtext', layer_background = null, custom_layers = [], brand_layers = [] } = req.body || {};
   if (!name || !template_uuid) {
     return res.status(400).json({ ok: false, error: 'name and template_uuid are required' });
   }
   const customLayersJson = JSON.stringify(Array.isArray(custom_layers) ? custom_layers : []);
   const brandLayersJson  = JSON.stringify(Array.isArray(brand_layers)  ? brand_layers  : []);
   try {
+    const keySetting = await db.prepare("SELECT value FROM admin_settings WHERE key = 'placid_api_key'").get();
+    const apiKey     = keySetting?.value || process.env.PLACID_API_KEY;
+    const previewUrl = apiKey ? await fetchPlacidThumbnail(apiKey, template_uuid) : null;
+
     const maxRow = await db.prepare('SELECT COALESCE(MAX(sort_order), -1) AS mx FROM placid_templates').get();
     const sortOrder = (maxRow?.mx ?? -1) + 1;
     const row = await db.prepare(`
       INSERT INTO placid_templates (name, template_uuid, layer_headline, layer_subtext, layer_background, preview_image_url, sort_order, custom_layers, brand_layers)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *
-    `).get(name, template_uuid, layer_headline, layer_subtext, layer_background || null, preview_image_url, sortOrder, customLayersJson, brandLayersJson);
+    `).get(name, template_uuid, layer_headline, layer_subtext, layer_background || null, previewUrl, sortOrder, customLayersJson, brandLayersJson);
     return res.status(201).json({ ok: true, template: normalisePlacidRow(row) });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
@@ -419,18 +434,22 @@ router.post('/placid-templates', requireAdminPassword, async (req, res) => {
 
 router.put('/placid-templates/:id', requireAdminPassword, async (req, res) => {
   const { id } = req.params;
-  const { name, template_uuid, layer_headline, layer_subtext, layer_background, preview_image_url, custom_layers = [], brand_layers = [] } = req.body || {};
+  const { name, template_uuid, layer_headline, layer_subtext, layer_background, custom_layers = [], brand_layers = [] } = req.body || {};
   if (!name || !template_uuid) {
     return res.status(400).json({ ok: false, error: 'name and template_uuid are required' });
   }
   const customLayersJson = JSON.stringify(Array.isArray(custom_layers) ? custom_layers : []);
   const brandLayersJson  = JSON.stringify(Array.isArray(brand_layers)  ? brand_layers  : []);
   try {
+    const keySetting = await db.prepare("SELECT value FROM admin_settings WHERE key = 'placid_api_key'").get();
+    const apiKey     = keySetting?.value || process.env.PLACID_API_KEY;
+    const previewUrl = apiKey ? await fetchPlacidThumbnail(apiKey, template_uuid) : null;
+
     const row = await db.prepare(`
       UPDATE placid_templates
       SET name = ?, template_uuid = ?, layer_headline = ?, layer_subtext = ?, layer_background = ?, preview_image_url = ?, custom_layers = ?, brand_layers = ?
       WHERE id = ? RETURNING *
-    `).get(name, template_uuid, layer_headline || 'headline', layer_subtext || 'subtext', layer_background || null, preview_image_url || null, customLayersJson, brandLayersJson, id);
+    `).get(name, template_uuid, layer_headline || 'headline', layer_subtext || 'subtext', layer_background || null, previewUrl, customLayersJson, brandLayersJson, id);
     if (!row) return res.status(404).json({ ok: false, error: 'template_not_found' });
     return res.json({ ok: true, template: normalisePlacidRow(row) });
   } catch (err) {

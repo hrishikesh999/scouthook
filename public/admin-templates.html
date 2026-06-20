@@ -79,11 +79,6 @@
             <label for="placid-form-background">Background image layer name <span class="label-optional">(optional)</span></label>
             <input type="text" id="placid-form-background" placeholder="background" maxlength="80">
           </div>
-          <div class="field">
-            <label for="placid-form-preview">Preview image URL <span class="label-optional">(optional)</span></label>
-            <input type="url" id="placid-form-preview" placeholder="https://…">
-          </div>
-
           <!-- Custom fields -->
           <div class="field field--top-gap">
             <label class="label-block">Custom fields <span class="label-optional">(optional)</span></label>
@@ -205,7 +200,6 @@
       document.getElementById('placid-form-headline').value       = template?.layer_headline || 'headline';
       document.getElementById('placid-form-subtext').value        = template?.layer_subtext  || 'subtext';
       document.getElementById('placid-form-background').value     = template?.layer_background || '';
-      document.getElementById('placid-form-preview').value        = template?.preview_image_url || '';
       document.getElementById('placid-form-error').classList.add('hidden');
       placidCustomFields = template?.custom_layers ? JSON.parse(JSON.stringify(template.custom_layers)) : [];
       placidBrandLayers  = template?.brand_layers  ? JSON.parse(JSON.stringify(template.brand_layers))  : [];
@@ -319,7 +313,6 @@
         layer_headline:    document.getElementById('placid-form-headline').value.trim() || 'headline',
         layer_subtext:     document.getElementById('placid-form-subtext').value.trim()  || 'subtext',
         layer_background:  document.getElementById('placid-form-background').value.trim() || null,
-        preview_image_url: document.getElementById('placid-form-preview').value.trim() || null,
         custom_layers, brand_layers,
       };
 

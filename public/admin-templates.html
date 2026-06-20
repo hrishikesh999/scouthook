@@ -45,18 +45,6 @@
           <button id="placid-add-btn" class="btn btn--primary">+ Add template</button>
         </div>
 
-        <!-- Placid API key -->
-        <div class="card card--section">
-          <div class="card-row-flex">
-            <div class="field field--flex">
-              <label for="placid_api_key">Placid API key</label>
-              <input type="password" id="placid_api_key" name="placid_api_key" placeholder="From placid.app → API" autocomplete="off" />
-            </div>
-            <button id="save-api-key-btn" class="btn btn--secondary">Save key</button>
-          </div>
-          <div id="api-key-msg" class="api-key-msg"></div>
-        </div>
-
         <!-- Template list -->
         <div class="card card--section" id="placid-template-list">
           <div class="loading-text--padded">Loading…</div>
@@ -155,12 +143,6 @@
     async function showMain() {
       document.getElementById('auth-screen').classList.add('hidden');
       document.getElementById('main').classList.remove('hidden');
-      try {
-        const r = await adminFetch('/admin/settings');
-        const data = await r.json();
-        const placidKey = data.settings?.find(s => s.key === 'placid_api_key');
-        if (placidKey?.is_set) document.getElementById('placid_api_key').placeholder = 'Already set — enter new value to change';
-      } catch {}
       loadPlacidTemplates();
     }
 
@@ -170,18 +152,6 @@
         headers: { 'Content-Type': 'application/json', 'X-Admin-Password': adminPw, ...(opts.headers || {}) },
       });
     }
-
-    document.getElementById('save-api-key-btn').addEventListener('click', async () => {
-      const val = document.getElementById('placid_api_key').value.trim();
-      const msg = document.getElementById('api-key-msg');
-      if (!val) { msg.style.display='block'; msg.style.color='var(--color-error)'; msg.textContent='Enter a key first.'; return; }
-      const r = await adminFetch('/admin/settings', { method: 'POST', body: JSON.stringify({ settings: { placid_api_key: val } }) });
-      const data = await r.json();
-      msg.style.display = 'block';
-      msg.style.color = data.ok ? 'var(--color-success,#0FA87F)' : 'var(--color-error)';
-      msg.textContent = data.ok ? 'API key saved.' : (data.error || 'Failed.');
-      if (data.ok) document.getElementById('placid_api_key').value = '';
-    });
 
     async function loadPlacidTemplates() {
       const r = await adminFetch('/admin/placid-templates');

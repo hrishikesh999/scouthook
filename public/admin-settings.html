@@ -88,6 +88,16 @@
           </div>
         </div>
 
+        <!-- Placid section -->
+        <div class="card card--section">
+          <h3 class="section-heading">Placid</h3>
+          <div class="field">
+            <label for="placid_api_key">Placid API key</label>
+            <input type="password" id="placid_api_key" name="placid_api_key" placeholder="From placid.app → API" autocomplete="off" />
+            <div class="text-muted field-hint">Used for AI image generation (quote cards, carousels).</div>
+          </div>
+        </div>
+
         <!-- Infrastructure section -->
         <div class="card card--section">
           <h3 class="section-heading">Infrastructure</h3>
@@ -105,7 +115,7 @@
   <script>
     const SETTING_KEYS = [
       'anthropic_api_key', 'linkedin_client_id', 'linkedin_client_secret',
-      'linkedin_redirect_uri', 'token_encryption_key', 'redis_url',
+      'linkedin_redirect_uri', 'token_encryption_key', 'redis_url', 'placid_api_key',
     ];
     let adminPw = '';
 

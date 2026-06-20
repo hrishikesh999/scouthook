@@ -379,7 +379,9 @@
   }
 
   async function ensurePaddle(clientToken, env) {
-    if (paddleInitialized) return;
+    // Check both the local flag and the shared global — workspace-modal may have
+    // initialized Paddle first on pages where it loaded before pricing-modal.
+    if (paddleInitialized || window._paddleInitialized) return;
     if (paddleInitPromise) { await paddleInitPromise; return; }
     paddleInitPromise = (async () => {
       await loadPaddleScript();
@@ -412,6 +414,7 @@
         },
       });
       paddleInitialized = true;
+      window._paddleInitialized = true; // shared flag so workspace-modal skips re-init
     })();
     await paddleInitPromise;
   }

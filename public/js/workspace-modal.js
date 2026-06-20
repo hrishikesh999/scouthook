@@ -13,6 +13,11 @@
   if (window.WorkspaceModal) return;
 
   const PENDING_NAME_KEY = 'wm_pending_name';
+  const PENDING_TID_KEY  = 'wm_pending_tid';
+
+  // Module-level guard — prevents registering duplicate bus handlers if
+  // startAddonCheckout() is called more than once (double-click, retry, etc.)
+  let busHandlerRegistered = false;
 
   // ── Inject styles ──────────────────────────────────────────────────────────
   const style = document.createElement('style');
@@ -333,24 +338,33 @@
 
       // Register our event handler on the shared bus BEFORE initialising Paddle,
       // so we claim checkout.completed events that belong to this flow.
+      // The handler ONLY stores the transactionId and returns true (claims the event).
+      // Actual workspace creation happens in handlePageLoadReturn() via the successUrl
+      // redirect — keeping the async work in one place and eliminating the race where
+      // both the eventCallback navigation and the successUrl redirect fire simultaneously.
       window._paddleEventBus = window._paddleEventBus || [];
-      let handlerAdded = false;
-      const handler = function (data) {
-        if (data.name !== 'checkout.completed') return false;
-        const pendingName = (() => { try { return sessionStorage.getItem(PENDING_NAME_KEY); } catch { return null; } })();
-        if (!pendingName) return false;
-        // We own this event — handle sync + create + redirect
-        const tid = (data.data && (data.data.transaction_id || data.data.transactionId)) || null;
-        handlePostCheckout(tid, pendingName);
-        return true;
-      };
-      if (!handlerAdded) {
-        window._paddleEventBus.unshift(handler); // highest priority
-        handlerAdded = true;
+      if (!busHandlerRegistered) {
+        window._paddleEventBus.unshift(function claimAddonCheckout(data) {
+          if (data.name !== 'checkout.completed') return false;
+          let pendingName;
+          try { pendingName = sessionStorage.getItem(PENDING_NAME_KEY); } catch { return false; }
+          if (!pendingName) return false;
+          // Persist the transaction ID so handlePageLoadReturn can send it to /api/billing/sync
+          const tid = (data.data && (data.data.transaction_id || data.data.transactionId)) || null;
+          try { if (tid) sessionStorage.setItem(PENDING_TID_KEY, tid); } catch {}
+          return true; // claimed — prevents pricing-modal from redirecting to /billing.html
+        });
+        busHandlerRegistered = true;
       }
 
-      // Initialise Paddle if not already done by pricing-modal.
-      if (!window._wmPaddleReady) {
+      // Initialise Paddle only if no other module has done so yet.
+      // window._paddleInitialized is a shared flag set by whichever module (pricing-modal
+      // or this one) calls Paddle.Initialize() first. Calling Initialize() twice throws,
+      // and the second eventCallback would silently overwrite the first.
+      if (!window._paddleInitialized) {
+        if (!configRes.clientToken) {
+          throw new Error('checkout_not_configured');
+        }
         try {
           if (configRes.env !== 'production') window.Paddle.Environment.set('sandbox');
           window.Paddle.Initialize({
@@ -360,7 +374,7 @@
                 try { return h(data) === true; } catch { return false; }
               });
               if (claimed) return;
-              // Fallback: standard sync (pricing-modal not loaded)
+              // Fallback: standard sync (pricing-modal not loaded on this page)
               if (data.name !== 'checkout.completed') return;
               const tid = (data.data && (data.data.transaction_id || data.data.transactionId)) || null;
               if (tid) {
@@ -372,10 +386,11 @@
               }
             },
           });
-          window._wmPaddleReady = true;
-        } catch (e) {
-          // Paddle was already initialised by pricing-modal — our bus handler is still registered
-          window._wmPaddleReady = true;
+          window._paddleInitialized = true;
+        } catch {
+          // Paddle was already initialized by pricing-modal — their eventCallback
+          // dispatches to _paddleEventBus, so our bus handler is still active.
+          window._paddleInitialized = true;
         }
       }
 
@@ -391,11 +406,11 @@
       });
 
     } catch (err) {
-      const msg = err.message === 'price_not_configured' || err.message === 'pro_required'
-        ? err.message === 'pro_required'
+      const msg = err.message === 'checkout_not_configured'
+        ? 'Checkout not yet configured. Please contact support.'
+        : err.message === 'pro_required'
           ? 'This add-on requires an active Pro plan.'
-          : 'Checkout not yet configured. Please contact support.'
-        : (err.message || 'Unable to start checkout. Please try again.');
+          : (err.message || 'Unable to start checkout. Please try again.');
       setError(addonError, msg);
       setBtn(btn, false);
     }
@@ -403,7 +418,10 @@
 
   // ── Post-checkout: sync billing then create workspace ──────────────────────
   async function handlePostCheckout(transactionId, pendingName) {
-    try { sessionStorage.removeItem(PENDING_NAME_KEY); } catch { /* no-op */ }
+    try {
+      sessionStorage.removeItem(PENDING_NAME_KEY);
+      sessionStorage.removeItem(PENDING_TID_KEY);
+    } catch { /* no-op */ }
 
     // Sync subscription (increments extra_workspaces)
     await fetch('/api/billing/sync', {
@@ -446,11 +464,17 @@
     if (!params.has('wm_checkout')) return;
     history.replaceState({}, '', window.location.pathname);
 
-    let pendingName;
-    try { pendingName = sessionStorage.getItem(PENDING_NAME_KEY); } catch { return; }
+    let pendingName, transactionId;
+    try {
+      pendingName    = sessionStorage.getItem(PENDING_NAME_KEY);
+      transactionId  = sessionStorage.getItem(PENDING_TID_KEY);
+    } catch { return; }
     if (!pendingName) return;
 
-    await handlePostCheckout(null, pendingName);
+    // transactionId was stored by the bus handler in the eventCallback; may be null
+    // if the event didn't fire (e.g. page refreshed mid-checkout) — sync will fall
+    // back to customer ID lookup in that case.
+    await handlePostCheckout(transactionId, pendingName);
   }
 
   // ── Event listeners ────────────────────────────────────────────────────────

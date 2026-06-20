@@ -387,6 +387,13 @@
       window.Paddle.Initialize({
         token: clientToken,
         eventCallback: function (data) {
+          // Allow other modules (e.g. workspace-modal) to claim this event first.
+          // A handler returns true to signal it owns the event; default behaviour is skipped.
+          const claimed = (window._paddleEventBus || []).some(function (h) {
+            try { return h(data) === true; } catch { return false; }
+          });
+          if (claimed) return;
+
           if (data.name !== 'checkout.completed') return;
           const tid = checkoutCompletedTransactionId(data);
           try { if (tid) sessionStorage.setItem(PENDING_PADDLE_TXN_KEY, tid); } catch { /* private mode */ }

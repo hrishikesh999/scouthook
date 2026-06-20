@@ -1,6 +1,12 @@
 /* account-bar.js — sidebar signed-in user + logout + global topbar */
 
 (function () {
+  // Ensure workspace-modal.js is loaded on every page that has the sidebar.
+  if (!window.WorkspaceModal) {
+    const s = document.createElement('script');
+    s.src = '/js/workspace-modal.js';
+    document.head.appendChild(s);
+  }
   function initials(name, email) {
     const s = (name || email || '?').trim();
     const parts = s.split(/\s+/).filter(Boolean);
@@ -127,32 +133,14 @@
       });
     });
 
-    slot.querySelector('#ws-sw-new').addEventListener('click', async e => {
+    slot.querySelector('#ws-sw-new').addEventListener('click', e => {
       e.stopPropagation();
       closeMenu();
-      const name = window.prompt('New workspace name:');
-      if (!name?.trim()) {
-        if (name !== null) window.alert('Please enter a workspace name.');
-        return;
-      }
-      try {
-        const resp = await fetch('/api/workspaces', {
-          method: 'POST', credentials: 'same-origin',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: name.trim() }),
-        });
-        const data = await resp.json();
-        if (data.ok && data.redirect) {
-          window.location.href = data.redirect;
-        } else {
-          const friendlyErrors = {
-            workspace_limit_reached: `You've reached your workspace limit on the ${data.plan || 'current'} plan.${data.canUpgrade ? ' Upgrade to Pro to create more.' : ''}`,
-            name_required: 'Please enter a workspace name.',
-          };
-          window.alert(friendlyErrors[data.error] || 'Failed to create workspace. Please try again.');
-        }
-      } catch {
-        window.alert('Network error. Please check your connection and try again.');
+      if (window.WorkspaceModal) {
+        window.WorkspaceModal.open();
+      } else {
+        // workspace-modal.js still loading — wait briefly then try again
+        setTimeout(() => window.WorkspaceModal?.open(), 300);
       }
     });
   }

@@ -231,17 +231,19 @@ app.use((req, res, next) => {
 // Helper: create personal workspace + brand profile on first signup
 // ---------------------------------------------------------------------------
 async function createPersonalWorkspace(userId, displayName) {
-  const wsRow = await db.prepare(
-    'INSERT INTO workspaces (name, created_by) VALUES (?, ?) RETURNING id'
-  ).get(`${displayName}'s Workspace`, userId);
-  const workspaceId = wsRow.id;
-  await db.prepare(
-    'INSERT INTO workspace_members (workspace_id, user_id, role, joined_at) VALUES (?, ?, ?, now())'
-  ).run(workspaceId, userId, 'owner');
-  await db.prepare(
-    'INSERT INTO profiles (workspace_id, display_name, is_default, onboarding_complete) VALUES (?, ?, true, false)'
-  ).run(workspaceId, displayName);
-  return workspaceId;
+  return db.transaction(async (tx) => {
+    const wsRow = await tx.prepare(
+      'INSERT INTO workspaces (name, created_by) VALUES (?, ?) RETURNING id'
+    ).get(`${displayName}'s Workspace`, userId);
+    const workspaceId = wsRow.id;
+    await tx.prepare(
+      'INSERT INTO workspace_members (workspace_id, user_id, role, joined_at) VALUES (?, ?, ?, now())'
+    ).run(workspaceId, userId, 'owner');
+    await tx.prepare(
+      'INSERT INTO profiles (workspace_id, display_name, is_default, onboarding_complete) VALUES (?, ?, true, false)'
+    ).run(workspaceId, displayName);
+    return workspaceId;
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -261,6 +263,7 @@ async function requireWorkspaceMember(req, res, next) {
       // Stale session — workspace no longer valid. Force re-auth so the user
       // gets a fresh session pointing to a valid workspace.
       req.session?.destroy?.(() => {});
+      res.clearCookie('scouthook.sid');
       return res.status(401).json({ ok: false, error: 'workspace_not_found' });
     }
 

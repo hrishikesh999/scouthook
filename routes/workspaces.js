@@ -117,6 +117,12 @@ router.post('/', requireAuth, async (req, res) => {
       return id;
     });
 
+    // Switch the session to the new workspace server-side so the client doesn't
+    // need a separate /switch call — eliminates a race where a crash between
+    // creation and switch leaves the session pointing at the old workspace.
+    req.user.tenant_id = workspaceId;
+    await new Promise((resolve, reject) => req.session.save(e => e ? reject(e) : resolve()));
+
     return res.json({ ok: true, workspaceId, redirect: '/workspace-setup.html' });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });

@@ -365,19 +365,55 @@ app.get('/auth/google/callback',
 
     // Route new users to the onboarding wizard; returning users go straight to dashboard.
     try {
-      const brandProfile = await db.prepare(
-        'SELECT id, onboarding_complete FROM profiles WHERE workspace_id = ? AND is_default = true'
-      ).get(req.user.tenant_id);
-      console.log(`[auth/google/callback] userId=${req.user.user_id} workspaceId=${req.user.tenant_id} onboarding_complete=${brandProfile?.onboarding_complete}`);
-      if (!brandProfile?.onboarding_complete) {
-        // Safety check: workspace has existing posts → user is returning, mark complete.
-        const postCount = await db.prepare(
-          'SELECT COUNT(*) AS cnt FROM generated_posts WHERE tenant_id = ?'
+      const userId = req.user.user_id;
+      const userRow = await db.prepare(
+        'SELECT onboarding_completed_at FROM user_profiles WHERE user_id = ?'
+      ).get(userId);
+      const hasCompletedOnboarding = !!userRow?.onboarding_completed_at;
+      console.log(`[auth/google/callback] userId=${userId} workspaceId=${req.user.tenant_id} hasCompletedOnboarding=${hasCompletedOnboarding}`);
+
+      if (!hasCompletedOnboarding) {
+        // First-time user. Check the active workspace profile.
+        const brandProfile = await db.prepare(
+          'SELECT id, onboarding_complete FROM profiles WHERE workspace_id = ? AND is_default = true'
         ).get(req.user.tenant_id);
-        if ((postCount?.cnt || 0) > 0 && brandProfile?.id) {
-          await db.prepare('UPDATE profiles SET onboarding_complete = true WHERE id = ?').run(brandProfile.id);
-        } else {
-          return res.redirect('/onboarding.html');
+        if (!brandProfile?.onboarding_complete) {
+          // Legacy safety: if they have posts they're a returning user whose flag was
+          // never backfilled — mark both complete so they're not blocked again.
+          const postCount = await db.prepare(
+            'SELECT COUNT(*) AS cnt FROM generated_posts WHERE tenant_id = ?'
+          ).get(req.user.tenant_id);
+          if ((postCount?.cnt || 0) > 0 && brandProfile?.id) {
+            await db.prepare('UPDATE profiles SET onboarding_complete = true WHERE id = ?').run(brandProfile.id);
+            await db.prepare(
+              'UPDATE user_profiles SET onboarding_completed_at = now() WHERE user_id = ? AND onboarding_completed_at IS NULL'
+            ).run(userId);
+          } else {
+            return res.redirect('/onboarding.html');
+          }
+        }
+      } else {
+        // Returning user. If their active workspace isn't set up yet (e.g. they just
+        // created a new workspace and logged in fresh), switch them to their best
+        // complete workspace so they aren't blocked.
+        const wsProfile = await db.prepare(
+          'SELECT onboarding_complete FROM profiles WHERE workspace_id = ? AND is_default = true'
+        ).get(req.user.tenant_id);
+        if (!wsProfile?.onboarding_complete) {
+          const bestWs = await db.prepare(`
+            SELECT wm.workspace_id FROM workspace_members wm
+            JOIN workspaces w ON w.id = wm.workspace_id
+            JOIN profiles p ON p.workspace_id = w.id
+            WHERE wm.user_id = ? AND p.is_default = true AND p.onboarding_complete = true
+              AND w.deleted_at IS NULL
+            ORDER BY wm.created_at ASC LIMIT 1
+          `).get(userId);
+          if (bestWs) {
+            req.user.tenant_id = bestWs.workspace_id;
+            db.prepare(
+              'UPDATE user_profiles SET last_active_workspace_id = ? WHERE user_id = ?'
+            ).run(bestWs.workspace_id, userId).catch(() => {});
+          }
         }
       }
     } catch (err) {
@@ -431,14 +467,21 @@ async function requireLoginHtml(req, res, next) {
   const exemptPaths = new Set(['/onboarding.html', '/workspace-setup.html']);
   if (exemptPaths.has(req.path)) return next();
 
-  // Block every other protected page until onboarding is done.
-  // req.tenantId is set by the passport middleware from the session.
-  if (req.tenantId) {
-    const profile = await db.prepare(
-      'SELECT onboarding_complete FROM profiles WHERE workspace_id = ? AND is_default = true LIMIT 1'
-    ).get(req.tenantId);
-    if (!profile?.onboarding_complete) {
-      return res.redirect('/onboarding.html');
+  // Only block the app for users who have never completed first-time onboarding.
+  // Returning users who create additional workspaces (onboarding_complete = false
+  // on the new workspace) are never blocked — workspace-setup.html handles their
+  // new workspace setup without gating the rest of the app.
+  if (req.tenantId && req.userId) {
+    const userRow = await db.prepare(
+      'SELECT onboarding_completed_at FROM user_profiles WHERE user_id = ?'
+    ).get(req.userId);
+    if (!userRow?.onboarding_completed_at) {
+      const profile = await db.prepare(
+        'SELECT onboarding_complete FROM profiles WHERE workspace_id = ? AND is_default = true LIMIT 1'
+      ).get(req.tenantId);
+      if (!profile?.onboarding_complete) {
+        return res.redirect('/onboarding.html');
+      }
     }
   }
 

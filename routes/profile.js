@@ -380,6 +380,12 @@ router.post('/', async (req, res) => {
       'UPDATE profiles SET onboarding_completed_at = CURRENT_TIMESTAMP WHERE id = ? AND onboarding_completed_at IS NULL'
     ).run(profileId);
 
+    // Mark user-level first-time onboarding as complete so that future workspaces
+    // this user creates never trigger the 7-step wizard again.
+    db.prepare(
+      'UPDATE user_profiles SET onboarding_completed_at = now() WHERE user_id = ? AND onboarding_completed_at IS NULL'
+    ).run(userId).catch(() => {});
+
     const { extractVoiceDNAFromQA } = require('../services/voiceExtraction');
     const { generateInputExamples, generateContentPillars } = require('../services/inputCoach');
     const userRow = await db.prepare('SELECT user_role FROM user_profiles WHERE user_id = ?').get(userId);

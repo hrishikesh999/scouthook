@@ -102,19 +102,20 @@ router.post('/', requireAuth, async (req, res) => {
       });
     }
 
-    // Create workspace + owner member + blank brand profile
-    const wsRow = await db.prepare(
-      'INSERT INTO workspaces (name, created_by) VALUES (?, ?) RETURNING id'
-    ).get(name.trim(), req.userId);
-    const workspaceId = wsRow.id;
-
-    await db.prepare(
-      'INSERT INTO workspace_members (workspace_id, user_id, role, joined_at) VALUES (?, ?, ?, now())'
-    ).run(workspaceId, req.userId, 'owner');
-
-    await db.prepare(
-      'INSERT INTO profiles (workspace_id, display_name, is_default, onboarding_complete) VALUES (?, ?, true, false)'
-    ).run(workspaceId, name.trim());
+    // Create workspace + owner member + blank brand profile atomically
+    const workspaceId = await db.transaction(async (tx) => {
+      const wsRow = await tx.prepare(
+        'INSERT INTO workspaces (name, created_by) VALUES (?, ?) RETURNING id'
+      ).get(name.trim(), req.userId);
+      const id = wsRow.id;
+      await tx.prepare(
+        'INSERT INTO workspace_members (workspace_id, user_id, role, joined_at) VALUES (?, ?, ?, now())'
+      ).run(id, req.userId, 'owner');
+      await tx.prepare(
+        'INSERT INTO profiles (workspace_id, display_name, is_default, onboarding_complete) VALUES (?, ?, true, false)'
+      ).run(id, name.trim());
+      return id;
+    });
 
     return res.json({ ok: true, workspaceId, redirect: '/workspace-setup.html' });
   } catch (err) {

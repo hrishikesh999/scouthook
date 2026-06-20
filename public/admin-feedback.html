@@ -154,29 +154,31 @@
     }
 
     // ── Slide-over ────────────────────────────────────────────────────────────
-    function openPanel(id) {
-      const f = allFeedback.find(x => x.id === id);
-      if (!f) return;
+    async function openPanel(id) {
+      document.getElementById('slide-over').classList.add('slide-over--open');
+      document.getElementById('overlay').classList.add('overlay--visible');
+      document.getElementById('so-body').innerHTML = '<div class="loading-text loading-text--padded">Loading…</div>';
 
+      const r = await fetch(`/admin/feedback/${id}`, { headers: { 'X-Admin-Password': adminPw } });
+      const data = await r.json();
+      if (!data.ok) { document.getElementById('so-body').innerHTML = `<p class="save-error-msg">Failed to load.</p>`; return; }
+
+      renderPanel(data.feedback);
+    }
+
+    function renderPanel(f) {
       document.getElementById('so-name').textContent  = f.display_name || '—';
       document.getElementById('so-email').textContent = f.email || '—';
 
+      const savedFrom = sessionStorage.getItem('feedbackFromEmail') || '';
+
       document.getElementById('so-body').innerHTML = `
         <div class="slide-over__section">
-          <div class="slide-over__section-title">Category &amp; Rating</div>
-          <div class="detail-row">
-            <span class="detail-row__label">Category</span>
-            <span>${catBadge(f.category)}</span>
-          </div>
-          <div class="detail-row">
-            <span class="detail-row__label">Rating</span>
-            <span>${stars(f.rating) || '—'}</span>
-          </div>
+          <div class="slide-over__section-title">Feedback Details</div>
+          <div class="detail-row"><span class="detail-row__label">Category</span><span>${catBadge(f.category)}</span></div>
+          <div class="detail-row"><span class="detail-row__label">Rating</span><span>${stars(f.rating) || '—'}</span></div>
           ${f.page_url ? `<div class="detail-row"><span class="detail-row__label">Page</span><span class="text-xs-muted">${esc(f.page_url)}</span></div>` : ''}
-          <div class="detail-row">
-            <span class="detail-row__label">Submitted</span>
-            <span>${f.created_at ? new Date(f.created_at).toLocaleDateString() : '—'}</span>
-          </div>
+          <div class="detail-row"><span class="detail-row__label">Submitted</span><span>${f.created_at ? new Date(f.created_at).toLocaleDateString() : '—'}</span></div>
         </div>
 
         <div class="slide-over__section">
@@ -185,7 +187,11 @@
         </div>
 
         <div class="slide-over__section">
-          <div class="slide-over__section-title">Reply to user</div>
+          <div class="slide-over__section-title">Reply to User</div>
+          <div class="field field--mb-sm">
+            <label for="reply-from">From email (Reply-To)</label>
+            <input type="email" id="reply-from" placeholder="admin@example.com" value="${esc(savedFrom)}" />
+          </div>
           <div class="field field--mb-sm">
             <textarea id="reply-body" rows="5" placeholder="Type your reply…" class="reply-textarea"></textarea>
           </div>
@@ -197,14 +203,16 @@
       `;
 
       document.getElementById('send-reply-btn').addEventListener('click', async () => {
-        const msg   = document.getElementById('reply-body').value.trim();
-        const msgEl = document.getElementById('reply-msg');
+        const msg       = document.getElementById('reply-body').value.trim();
+        const fromEmail = document.getElementById('reply-from').value.trim();
+        const msgEl     = document.getElementById('reply-msg');
         if (!msg) { msgEl.style.color = 'var(--color-error)'; msgEl.textContent = 'Reply cannot be empty.'; return; }
         msgEl.style.color = '#6B7280'; msgEl.textContent = 'Sending…';
-        const r = await fetch(`/admin/feedback/${id}/reply`, {
+        if (fromEmail) sessionStorage.setItem('feedbackFromEmail', fromEmail);
+        const r = await fetch(`/admin/feedback/${f.id}/reply`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-Admin-Password': adminPw },
-          body: JSON.stringify({ message: msg }),
+          body: JSON.stringify({ message: msg, fromEmail: fromEmail || undefined }),
         });
         const data = await r.json();
         if (data.ok) {
@@ -216,9 +224,6 @@
           msgEl.textContent = data.error || 'Failed to send.';
         }
       });
-
-      document.getElementById('slide-over').classList.add('slide-over--open');
-      document.getElementById('overlay').classList.add('overlay--visible');
     }
 
     function closePanel() {

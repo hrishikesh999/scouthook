@@ -736,6 +736,27 @@ router.get('/feedback', requireAdminPassword, (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// GET /admin/feedback/:id  — full feedback detail
+// ---------------------------------------------------------------------------
+router.get('/feedback/:id', requireAdminPassword, (req, res) => {
+  (async () => {
+    const feedbackId = parseInt(req.params.id);
+    if (!Number.isFinite(feedbackId)) return res.status(400).json({ ok: false, error: 'invalid id' });
+
+    const row = await db.prepare(`
+      SELECT f.id, f.message, f.rating, f.category, f.page_url, f.created_at,
+             up.email, up.display_name
+      FROM feedback f
+      JOIN user_profiles up ON up.user_id = f.user_id
+      WHERE f.id = ?
+    `).get(feedbackId);
+    if (!row) return res.status(404).json({ ok: false, error: 'feedback_not_found' });
+
+    return res.json({ ok: true, feedback: row });
+  })().catch(err => res.status(500).json({ ok: false, error: err.message }));
+});
+
+// ---------------------------------------------------------------------------
 // GET /admin/support?status=new|open|resolved
 // ---------------------------------------------------------------------------
 router.get('/support', requireAdminPassword, (req, res) => {
@@ -876,7 +897,7 @@ router.post('/feedback/:id/reply', requireAdminPassword, (req, res) => {
     const feedbackId = parseInt(req.params.id);
     if (!Number.isFinite(feedbackId)) return res.status(400).json({ ok: false, error: 'invalid id' });
 
-    const { message } = req.body || {};
+    const { message, fromEmail } = req.body || {};
     if (!message || !message.trim()) return res.status(400).json({ ok: false, error: 'message required' });
 
     const row = await db.prepare(`
@@ -894,7 +915,7 @@ router.post('/feedback/:id/reply', requireAdminPassword, (req, res) => {
       admin_message: message.trim(),
       original_message: row.message || '',
       category: row.category || '',
-    });
+    }, { replyTo: fromEmail || undefined });
 
     return res.json({ ok: true });
   })().catch(err => res.status(500).json({ ok: false, error: err.message }));

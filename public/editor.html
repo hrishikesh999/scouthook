@@ -865,6 +865,12 @@ function switchTab(tab) {
   document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
   document.getElementById('edit-view').hidden        = tab !== 'edit';
   document.getElementById('linkedin-preview').hidden = tab !== 'preview';
+  if (tab === 'edit') {
+    // Re-run autosize now that #edit-view is visible — if loadPost ran while
+    // the edit tab was hidden (fresh-from-gen preview flow), scrollHeight was
+    // 0 and the textarea never expanded to fit its content.
+    autosizeTextarea(document.getElementById('post-body'));
+  }
   if (tab === 'preview') {
     const plainText = getPostContent();
     const liBodyText = document.getElementById('li-body-text');

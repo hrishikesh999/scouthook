@@ -434,7 +434,7 @@
     }
     .vqb-cta:hover { text-decoration: underline; }
 
-    /* ── Input wrapper (textarea + embedded send btn) ────────── */
+    /* ── Input wrapper (textarea + action row below) ────────── */
     .gen-input-wrapper {
       position: relative;
     }
@@ -443,7 +443,7 @@
       font-family: var(--font-sans);
       font-size: 1rem;
       line-height: 1.55;
-      padding: 14px 16px 62px;
+      padding: 14px 16px;
       border: 1.5px solid #D1D5DB;
       border-radius: 12px;
       background: var(--bg-surface);
@@ -463,11 +463,17 @@
     #chat-input.error { border-color: var(--red, #ef4444); }
     #chat-input::placeholder { color: #A1A1AA; }
 
-    /* Mic button — sits to the left of the send button */
+    /* Action row — sits below the textarea */
+    .gen-input-actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      padding-top: 8px;
+    }
+
+    /* Mic button */
     #mic-btn {
-      position: absolute;
-      right: 62px;
-      bottom: 10px;
       width: 40px;
       height: 40px;
       border-radius: 50%;
@@ -479,6 +485,7 @@
       align-items: center;
       justify-content: center;
       transition: background 0.15s, color 0.15s, border-color 0.15s;
+      flex-shrink: 0;
     }
     #mic-btn:hover:not(:disabled) {
       background: #F3F4F6;
@@ -492,19 +499,15 @@
       animation: mic-pulse 1.2s ease-in-out infinite;
     }
     #mic-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-    /* In coach/text-mode the send button sits at right:12px and may be wide.
-       Shift the mic to the left side so the two buttons never overlap. */
-    #mic-btn.coach-mode { right: auto; left: 12px; bottom: 12px; }
+    /* In coach/text-mode the send button is wide; push mic to the left */
+    #mic-btn.coach-mode { margin-right: auto; }
     @keyframes mic-pulse {
       0%, 100% { box-shadow: 0 0 0 0 rgba(220,38,38,0.3); }
       50%       { box-shadow: 0 0 0 6px rgba(220,38,38,0); }
     }
 
-    /* The embedded send button */
+    /* Send button */
     #chat-send-btn {
-      position: absolute;
-      right: 10px;
-      bottom: 10px;
       width: 44px;
       height: 44px;
       border-radius: 50%;

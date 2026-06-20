@@ -22,17 +22,19 @@ function isValidPassword(str) {
 }
 
 async function createPersonalWorkspaceForUser(userId, displayName) {
-  const wsRow = await db.prepare(
-    'INSERT INTO workspaces (name, created_by) VALUES (?, ?) RETURNING id'
-  ).get(`${displayName}'s Workspace`, userId);
-  const workspaceId = wsRow.id;
-  await db.prepare(
-    'INSERT INTO workspace_members (workspace_id, user_id, role, joined_at) VALUES (?, ?, ?, now())'
-  ).run(workspaceId, userId, 'owner');
-  await db.prepare(
-    'INSERT INTO profiles (workspace_id, display_name, is_default, onboarding_complete) VALUES (?, ?, true, false)'
-  ).run(workspaceId, displayName);
-  return workspaceId;
+  return db.transaction(async (tx) => {
+    const wsRow = await tx.prepare(
+      'INSERT INTO workspaces (name, created_by) VALUES (?, ?) RETURNING id'
+    ).get(`${displayName}'s Workspace`, userId);
+    const workspaceId = wsRow.id;
+    await tx.prepare(
+      'INSERT INTO workspace_members (workspace_id, user_id, role, joined_at) VALUES (?, ?, ?, now())'
+    ).run(workspaceId, userId, 'owner');
+    await tx.prepare(
+      'INSERT INTO profiles (workspace_id, display_name, is_default, onboarding_complete) VALUES (?, ?, true, false)'
+    ).run(workspaceId, displayName);
+    return workspaceId;
+  });
 }
 
 async function establishSession(req, userId, workspaceId) {

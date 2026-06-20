@@ -354,8 +354,15 @@ async function saveAndFinish() {
       onboarding_completed_at: new Date().toISOString(),
     };
     if (state.writingSample) payload.writing_samples = state.writingSample;
-    await apiPost('/api/profile', payload);
-  } catch (_) {}
+    const result = await apiPost('/api/profile', payload);
+    if (!result?.ok) throw new Error(result?.error || 'save_failed');
+  } catch (err) {
+    nextBtn.disabled = false;
+    skipBtn.disabled = false;
+    alert('Something went wrong saving your profile. Please try again.');
+    console.error('[onboarding] saveAndFinish failed:', err?.message);
+    return;
+  }
 
   nextBtn.disabled = false;
   skipBtn.disabled = false;
@@ -380,8 +387,8 @@ async function init() {
     if (!me?.user?.user_id) { window.location.href = '/login.html'; return; }
     // Skip wizard if the current workspace has already been set up — handles the
     // case where a user navigates here manually on an already-configured workspace.
-    const profile = await fetch('/api/profile').then(r => r.json());
-    if (profile?.onboarding_complete) { window.location.href = '/dashboard.html'; return; }
+    const profileRes = await fetch('/api/profile').then(r => r.json());
+    if (profileRes?.profile?.onboarding_complete) { window.location.href = '/dashboard.html'; return; }
   } catch {
     window.location.href = '/login.html';
     return;

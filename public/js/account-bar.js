@@ -131,7 +131,10 @@
       e.stopPropagation();
       closeMenu();
       const name = window.prompt('New workspace name:');
-      if (!name || !name.trim()) return;
+      if (!name?.trim()) {
+        if (name !== null) window.alert('Please enter a workspace name.');
+        return;
+      }
       try {
         const resp = await fetch('/api/workspaces', {
           method: 'POST', credentials: 'same-origin',
@@ -139,12 +142,18 @@
           body: JSON.stringify({ name: name.trim() }),
         });
         const data = await resp.json();
-        if (data.ok && data.workspaceId) {
-          window.location.href = data.redirect || '/dashboard.html';
+        if (data.ok && data.redirect) {
+          window.location.href = data.redirect;
         } else {
-          window.alert(data.error || 'Failed to create workspace');
+          const friendlyErrors = {
+            workspace_limit_reached: `You've reached your workspace limit on the ${data.plan || 'current'} plan.${data.canUpgrade ? ' Upgrade to Pro to create more.' : ''}`,
+            name_required: 'Please enter a workspace name.',
+          };
+          window.alert(friendlyErrors[data.error] || 'Failed to create workspace. Please try again.');
         }
-      } catch { /* ignore */ }
+      } catch {
+        window.alert('Network error. Please check your connection and try again.');
+      }
     });
   }
 

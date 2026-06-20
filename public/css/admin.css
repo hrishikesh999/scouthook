@@ -95,6 +95,7 @@ label, .field label { color: #111111; }
 .badge--pro       { background: #D1FAE5; color: #065F46; }
 .badge--trialing  { background: #FEF3C7; color: #92400E; }
 .badge--canceled, .badge--pastdue { background: #FEE2E2; color: #991B1B; }
+.badge--new       { background: #DBEAFE; color: #1E40AF; }
 .badge--open      { background: #FEF3C7; color: #92400E; }
 .badge--resolved  { background: #D1FAE5; color: #065F46; }
 .badge--feature   { background: #CCFBF1; color: #0F766E; }
@@ -348,6 +349,32 @@ label, .field label { color: #111111; }
 
 /* ── Stars (admin-feedback) ────────────────────────────────────────────── */
 .stars { color: #f59e0b; font-size: 0.9rem; letter-spacing: 1px; }
+
+/* ── Support status row (admin-support slide-over) ─────────────────────── */
+.support-status-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+}
+.support-status-btns { display: flex; gap: var(--space-xs); }
+
+/* ── Reply history cards (admin-support slide-over) ─────────────────────── */
+.support-reply-card {
+  border: 1px solid #E5E7EB;
+  border-radius: var(--radius-md);
+  padding: var(--space-sm) var(--space-md);
+  margin-bottom: var(--space-sm);
+}
+.support-reply-card__meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.75rem;
+  color: #6B7280;
+  margin-bottom: var(--space-xs);
+}
+.support-reply-card__body { font-size: 0.875rem; white-space: pre-wrap; line-height: 1.5; }
 
 /* ── Ticket detail (admin-support) ────────────────────────────────────── */
 .ticket-detail {

@@ -26,7 +26,7 @@ function getResend() {
  * The subject is read from the first HTML comment: <!-- subject: ... -->
  * Variables are replaced as {{variable_name}} tokens.
  */
-async function sendEmail(templateName, to, vars = {}) {
+async function sendEmail(templateName, to, vars = {}, options = {}) {
   if (process.env.NODE_ENV === 'test') return;
   if (!process.env.RESEND_API_KEY) {
     console.warn(`[email] RESEND_API_KEY not set — skipping send of '${templateName}' to ${to}`);
@@ -57,7 +57,10 @@ async function sendEmail(templateName, to, vars = {}) {
   }
 
   try {
-    const { error } = await getResend().emails.send({ from: FROM, to, subject, html });
+    const { error } = await getResend().emails.send({
+      from: FROM, to, subject, html,
+      ...(options.replyTo ? { reply_to: options.replyTo } : {}),
+    });
     if (error) {
       console.error(`[email] Resend error for '${templateName}' to ${to}:`, error);
     } else {

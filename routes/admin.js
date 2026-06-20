@@ -736,12 +736,12 @@ router.get('/feedback', requireAdminPassword, (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
-// GET /admin/support?status=open|resolved
+// GET /admin/support?status=new|open|resolved
 // ---------------------------------------------------------------------------
 router.get('/support', requireAdminPassword, (req, res) => {
   (async () => {
     const { status } = req.query;
-    const VALID_STATUSES = ['open', 'resolved'];
+    const VALID_STATUSES = ['new', 'open', 'resolved'];
 
     let rows;
     if (status && VALID_STATUSES.includes(status)) {
@@ -770,21 +770,44 @@ router.get('/support', requireAdminPassword, (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// GET /admin/support/:id  — full ticket detail with reply history
+// ---------------------------------------------------------------------------
+router.get('/support/:id', requireAdminPassword, (req, res) => {
+  (async () => {
+    const ticketId = parseInt(req.params.id);
+    if (!Number.isFinite(ticketId)) return res.status(400).json({ ok: false, error: 'invalid id' });
+
+    const row = await db.prepare(`
+      SELECT sr.id, sr.topic, sr.message, sr.status, sr.admin_note, sr.replies, sr.created_at,
+             up.email, up.display_name, us.plan, us.status AS sub_status
+      FROM support_requests sr
+      JOIN user_profiles up ON up.user_id = sr.user_id
+      LEFT JOIN user_subscriptions us ON us.user_id = sr.user_id
+      WHERE sr.id = ?
+    `).get(ticketId);
+    if (!row) return res.status(404).json({ ok: false, error: 'ticket_not_found' });
+
+    row.replies = typeof row.replies === 'string' ? JSON.parse(row.replies) : (row.replies || []);
+    return res.json({ ok: true, ticket: row });
+  })().catch(err => res.status(500).json({ ok: false, error: err.message }));
+});
+
+// ---------------------------------------------------------------------------
 // POST /admin/support/:id/reply
-// Body: { message: "..." }
+// Body: { message: "...", fromEmail: "admin@example.com" }
 // ---------------------------------------------------------------------------
 router.post('/support/:id/reply', requireAdminPassword, (req, res) => {
   (async () => {
     const ticketId = parseInt(req.params.id);
     if (!Number.isFinite(ticketId)) return res.status(400).json({ ok: false, error: 'invalid id' });
 
-    const { message } = req.body || {};
+    const { message, fromEmail } = req.body || {};
     if (!message || typeof message !== 'string' || !message.trim()) {
       return res.status(400).json({ ok: false, error: 'message is required' });
     }
 
     const ticket = await db.prepare(`
-      SELECT sr.id, sr.topic, sr.message AS original_message, sr.user_id,
+      SELECT sr.id, sr.topic, sr.message AS original_message, sr.status, sr.user_id,
              up.email, up.display_name
       FROM support_requests sr
       JOIN user_profiles up ON up.user_id = sr.user_id
@@ -800,19 +823,30 @@ router.post('/support/:id/reply', requireAdminPassword, (req, res) => {
       admin_message:    message.trim(),
       original_message: ticket.original_message || '',
       app_url:          appUrl,
+    }, { replyTo: fromEmail || undefined });
+
+    const replyEntry = JSON.stringify({
+      message:    message.trim(),
+      from_email: fromEmail || null,
+      sent_at:    new Date().toISOString(),
     });
 
-    await db.prepare(`
-      UPDATE support_requests SET status = 'resolved', admin_note = ? WHERE id = ?
-    `).run(message.trim(), ticketId);
+    // Auto-advance from 'new' → 'open' on first reply; leave open/resolved unchanged
+    const newStatus = ticket.status === 'new' ? 'open' : ticket.status;
 
-    return res.json({ ok: true });
+    await db.prepare(`
+      UPDATE support_requests
+      SET replies = replies || ?::jsonb, admin_note = ?, status = ?
+      WHERE id = ?
+    `).run(replyEntry, message.trim(), newStatus, ticketId);
+
+    return res.json({ ok: true, status: newStatus });
   })().catch(err => res.status(500).json({ ok: false, error: err.message }));
 });
 
 // ---------------------------------------------------------------------------
 // POST /admin/support/:id/status
-// Body: { status: 'open'|'resolved' }
+// Body: { status: 'new'|'open'|'resolved' }
 // ---------------------------------------------------------------------------
 router.post('/support/:id/status', requireAdminPassword, (req, res) => {
   (async () => {
@@ -820,8 +854,8 @@ router.post('/support/:id/status', requireAdminPassword, (req, res) => {
     if (!Number.isFinite(ticketId)) return res.status(400).json({ ok: false, error: 'invalid id' });
 
     const { status } = req.body || {};
-    if (!['open', 'resolved'].includes(status)) {
-      return res.status(400).json({ ok: false, error: 'status must be open or resolved' });
+    if (!['new', 'open', 'resolved'].includes(status)) {
+      return res.status(400).json({ ok: false, error: 'status must be new, open, or resolved' });
     }
 
     const row = await db.prepare(

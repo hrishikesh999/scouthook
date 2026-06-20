@@ -39,6 +39,7 @@
 
       <div class="filter-bar">
         <button class="btn btn--secondary btn--active" data-status="">All</button>
+        <button class="btn btn--secondary" data-status="new">New</button>
         <button class="btn btn--secondary" data-status="open">Open</button>
         <button class="btn btn--secondary" data-status="resolved">Resolved</button>
         <span id="count-label" class="filter-bar__count"></span>
@@ -62,16 +63,29 @@
           </tbody>
         </table>
       </div>
-
-      <!-- Inline ticket detail -->
-      <div id="ticket-detail" class="hidden"></div>
     </main>
+  </div>
+
+  <!-- Overlay -->
+  <div class="overlay" id="overlay"></div>
+
+  <!-- Slide-over panel -->
+  <div class="slide-over" id="slide-over">
+    <div class="slide-over__header">
+      <div>
+        <div id="so-name" class="slide-over__user-name"></div>
+        <div id="so-email" class="slide-over__user-email"></div>
+      </div>
+      <button id="close-panel" class="btn btn--secondary btn--sm slide-over__close">✕ Close</button>
+    </div>
+    <div class="slide-over__body" id="so-body">
+      <div class="loading-text">Loading…</div>
+    </div>
   </div>
 
   <script>
     let adminPw = '';
     let tickets = [];
-    let expandedId = null;
 
     function init() {
       const saved = sessionStorage.getItem('adminPw');
@@ -94,8 +108,16 @@
 
     function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
-    function planBadge(plan, status) {
-      if (status === 'active' && plan === 'pro') return `<span class="badge badge--pro">Pro</span>`;
+    function statusBadge(status) {
+      const s = status || 'new';
+      if (s === 'new')      return `<span class="badge badge--new">New</span>`;
+      if (s === 'open')     return `<span class="badge badge--open">Open</span>`;
+      if (s === 'resolved') return `<span class="badge badge--resolved">Resolved</span>`;
+      return `<span class="badge badge--free">${esc(s)}</span>`;
+    }
+
+    function planBadge(plan, subStatus) {
+      if (subStatus === 'active' && plan === 'pro') return `<span class="badge badge--pro">Pro</span>`;
       return `<span class="badge badge--free">${esc(plan || 'Free')}</span>`;
     }
 
@@ -105,8 +127,6 @@
       const data = await r.json();
       tickets = data.tickets || [];
       document.getElementById('count-label').textContent = `Count: ${tickets.length}`;
-      expandedId = null;
-      document.getElementById('ticket-detail').classList.add('hidden');
       renderTickets();
     }
 
@@ -117,119 +137,180 @@
         return;
       }
       tbody.innerHTML = tickets.map(t => `
-        <tr class="clickable${expandedId === t.id ? ' selected' : ''}" data-id="${t.id}">
+        <tr class="clickable" data-id="${t.id}">
           <td>${esc(t.display_name || '—')}</td>
           <td>${esc(t.email || '—')}</td>
-          <td>${planBadge(t.plan, t.status)}</td>
+          <td>${planBadge(t.plan, t.sub_status)}</td>
           <td class="td-bold">${esc(t.topic || '—')}</td>
           <td class="td-truncate td-muted">${esc((t.message||'').slice(0,80))}${(t.message||'').length>80?'…':''}</td>
-          <td><span class="badge badge--${t.status === 'resolved' ? 'resolved' : 'open'}">${esc(t.status || 'open')}</span></td>
+          <td id="row-status-${t.id}">${statusBadge(t.status)}</td>
           <td class="td-nowrap">${t.created_at ? new Date(t.created_at).toLocaleDateString() : '—'}</td>
         </tr>`).join('');
       tbody.querySelectorAll('tr.clickable').forEach(tr => {
-        tr.addEventListener('click', () => {
-          const id = parseInt(tr.dataset.id);
-          if (expandedId === id) {
-            expandedId = null;
-            document.getElementById('ticket-detail').classList.add('hidden');
-          } else {
-            expandedId = id;
-            renderDetail(tickets.find(t => t.id === id));
-          }
-        });
+        tr.addEventListener('click', () => openPanel(parseInt(tr.dataset.id)));
       });
     }
 
-    function renderDetail(ticket) {
-      if (!ticket) return;
-      const el = document.getElementById('ticket-detail');
-      el.classList.remove('hidden');
-      el.innerHTML = `
-        <div class="ticket-detail">
-          <div class="ticket-detail__top-row">
-            <div>
-              <div class="ticket-detail__header">Support Request #${ticket.id} — ${esc(ticket.topic || '—')}</div>
-              <div class="ticket-detail__meta">From: ${esc(ticket.display_name || '—')} (${esc(ticket.email || '—')}) · ${planBadge(ticket.plan, ticket.status_sub)} · ${ticket.created_at ? new Date(ticket.created_at).toLocaleDateString() : '—'}</div>
-            </div>
-            <div class="ticket-detail__status-row">
-              <span class="badge badge--${ticket.status === 'resolved' ? 'resolved' : 'open'}" id="detail-badge">${esc(ticket.status || 'open')}</span>
-              ${ticket.status !== 'resolved' ? `<button class="btn btn--secondary btn--sm" id="mark-resolved-btn" data-id="${ticket.id}">Mark Resolved</button>` : `<button class="btn btn--secondary btn--sm" id="mark-open-btn" data-id="${ticket.id}">Reopen</button>`}
+    // ── Slide-over ────────────────────────────────────────────────────────────
+    async function openPanel(id) {
+      document.getElementById('slide-over').classList.add('slide-over--open');
+      document.getElementById('overlay').classList.add('overlay--visible');
+      document.getElementById('so-body').innerHTML = '<div class="loading-text loading-text--padded">Loading…</div>';
+
+      const r = await fetch(`/admin/support/${id}`, { headers: { 'X-Admin-Password': adminPw } });
+      const data = await r.json();
+      if (!data.ok) { document.getElementById('so-body').innerHTML = `<p class="save-error-msg">Failed to load.</p>`; return; }
+
+      renderPanel(data.ticket);
+    }
+
+    function renderPanel(ticket) {
+      document.getElementById('so-name').textContent  = ticket.display_name || '—';
+      document.getElementById('so-email').textContent = ticket.email || '—';
+
+      const replies = Array.isArray(ticket.replies) ? ticket.replies : [];
+      const savedFrom = sessionStorage.getItem('supportFromEmail') || '';
+
+      document.getElementById('so-body').innerHTML = `
+        <!-- Meta -->
+        <div class="slide-over__section">
+          <div class="slide-over__section-title">Ticket Details</div>
+          <div class="detail-row"><span class="detail-row__label">Topic</span><span class="td-bold">${esc(ticket.topic || '—')}</span></div>
+          <div class="detail-row"><span class="detail-row__label">Plan</span><span>${planBadge(ticket.plan, ticket.sub_status)}</span></div>
+          <div class="detail-row"><span class="detail-row__label">Submitted</span><span>${ticket.created_at ? new Date(ticket.created_at).toLocaleDateString() : '—'}</span></div>
+        </div>
+
+        <!-- Status -->
+        <div class="slide-over__section">
+          <div class="slide-over__section-title">Status</div>
+          <div class="support-status-row">
+            <span id="so-status-badge">${statusBadge(ticket.status)}</span>
+            <div class="support-status-btns">
+              <button class="btn btn--secondary btn--sm" data-set-status="new"  data-id="${ticket.id}">New</button>
+              <button class="btn btn--secondary btn--sm" data-set-status="open" data-id="${ticket.id}">Open</button>
+              <button class="btn btn--secondary btn--sm" data-set-status="resolved" data-id="${ticket.id}">Resolved</button>
             </div>
           </div>
+          <div id="status-msg" class="reply-msg" style="margin-top:var(--space-xs)"></div>
+        </div>
 
-          <div class="ticket-detail__section">
-            <div class="ticket-detail__label">Message</div>
-            <div class="ticket-detail__message">${esc(ticket.message || '')}</div>
+        <!-- Original message -->
+        <div class="slide-over__section">
+          <div class="slide-over__section-title">Message</div>
+          <div class="expand-body">${esc(ticket.message || '')}</div>
+        </div>
+
+        <!-- Reply history -->
+        <div class="slide-over__section">
+          <div class="slide-over__section-title">Reply History</div>
+          <div id="reply-history">
+            ${replies.length ? replies.map(rep => `
+              <div class="support-reply-card">
+                <div class="support-reply-card__meta">
+                  ${rep.from_email ? `<span>${esc(rep.from_email)}</span>` : ''}
+                  <span class="text-xs-muted">${rep.sent_at ? new Date(rep.sent_at).toLocaleString() : ''}</span>
+                </div>
+                <div class="support-reply-card__body">${esc(rep.message)}</div>
+              </div>`).join('') : '<p class="empty-section-text">No replies yet.</p>'}
           </div>
+        </div>
 
-          ${ticket.admin_note ? `
-          <div class="ticket-detail__section">
-            <div class="ticket-detail__label">Previous Admin Note</div>
-            <div class="ticket-detail__message ticket-detail__message--muted">${esc(ticket.admin_note)}</div>
-          </div>` : ''}
-
-          <div class="ticket-detail__section">
-            <div class="ticket-detail__label">Reply to user</div>
-            <div class="field field--mb-sm">
-              <textarea id="reply-body" rows="5" placeholder="Type your reply…" class="reply-textarea"></textarea>
-            </div>
-            <div class="ticket-detail__reply-actions">
-              <span id="reply-msg" class="reply-msg"></span>
-              <button class="btn btn--primary" id="send-reply-btn" data-id="${ticket.id}">Send Reply &amp; Resolve</button>
-            </div>
+        <!-- Reply form -->
+        <div class="slide-over__section">
+          <div class="slide-over__section-title">Reply to User</div>
+          <div class="field field--mb-sm">
+            <label for="reply-from">From email (Reply-To)</label>
+            <input type="email" id="reply-from" placeholder="admin@example.com" value="${esc(savedFrom)}" />
+          </div>
+          <div class="field field--mb-sm">
+            <textarea id="reply-body" rows="5" placeholder="Type your reply…" class="reply-textarea"></textarea>
+          </div>
+          <div class="ticket-detail__reply-actions">
+            <span id="reply-msg" class="reply-msg"></span>
+            <button class="btn btn--primary" id="send-reply-btn" data-id="${ticket.id}">Send Reply</button>
           </div>
         </div>
       `;
 
-      document.getElementById('send-reply-btn')?.addEventListener('click', async () => {
-        const id  = parseInt(document.getElementById('send-reply-btn').dataset.id);
-        const msg = document.getElementById('reply-body').value.trim();
-        const msgEl = document.getElementById('reply-msg');
+      // Status buttons
+      document.querySelectorAll('[data-set-status]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const newStatus = btn.dataset.setStatus;
+          const id = parseInt(btn.dataset.id);
+          const msgEl = document.getElementById('status-msg');
+          msgEl.style.color = '#6B7280'; msgEl.textContent = 'Updating…';
+          const r = await fetch(`/admin/support/${id}/status`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Admin-Password': adminPw },
+            body: JSON.stringify({ status: newStatus }),
+          });
+          const data = await r.json();
+          if (data.ok) {
+            document.getElementById('so-status-badge').innerHTML = statusBadge(newStatus);
+            const rowBadge = document.getElementById(`row-status-${id}`);
+            if (rowBadge) rowBadge.innerHTML = statusBadge(newStatus);
+            const t = tickets.find(x => x.id === id);
+            if (t) t.status = newStatus;
+            msgEl.style.color = 'var(--color-success, #0FA87F)'; msgEl.textContent = 'Status updated.';
+            setTimeout(() => { msgEl.textContent = ''; }, 2000);
+          } else {
+            msgEl.style.color = 'var(--color-error)'; msgEl.textContent = data.error || 'Failed.';
+          }
+        });
+      });
+
+      // Send reply
+      document.getElementById('send-reply-btn').addEventListener('click', async () => {
+        const id       = parseInt(document.getElementById('send-reply-btn').dataset.id);
+        const msg      = document.getElementById('reply-body').value.trim();
+        const fromEmail = document.getElementById('reply-from').value.trim();
+        const msgEl    = document.getElementById('reply-msg');
         if (!msg) { msgEl.style.color = 'var(--color-error)'; msgEl.textContent = 'Reply cannot be empty.'; return; }
         msgEl.style.color = '#6B7280'; msgEl.textContent = 'Sending…';
+        if (fromEmail) sessionStorage.setItem('supportFromEmail', fromEmail);
+
         const r = await fetch(`/admin/support/${id}/reply`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-Admin-Password': adminPw },
-          body: JSON.stringify({ message: msg }),
+          body: JSON.stringify({ message: msg, fromEmail: fromEmail || undefined }),
         });
         const data = await r.json();
         if (data.ok) {
-          msgEl.style.color = 'var(--color-success, #0FA87F)';
-          msgEl.textContent = 'Reply sent & ticket resolved.';
-          const t = tickets.find(t => t.id === id);
-          if (t) { t.status = 'resolved'; t.admin_note = msg; }
-          renderTickets();
-          renderDetail(tickets.find(t => t.id === id));
+          msgEl.style.color = 'var(--color-success, #0FA87F)'; msgEl.textContent = 'Reply sent.';
+          document.getElementById('reply-body').value = '';
+          // Append reply to history in-place
+          const historyEl = document.getElementById('reply-history');
+          const newCard = document.createElement('div');
+          newCard.className = 'support-reply-card';
+          newCard.innerHTML = `
+            <div class="support-reply-card__meta">
+              ${fromEmail ? `<span>${esc(fromEmail)}</span>` : ''}
+              <span class="text-xs-muted">${new Date().toLocaleString()}</span>
+            </div>
+            <div class="support-reply-card__body">${esc(msg)}</div>`;
+          const empty = historyEl.querySelector('.empty-section-text');
+          if (empty) empty.remove();
+          historyEl.appendChild(newCard);
+          // Update status if it auto-advanced
+          if (data.status) {
+            document.getElementById('so-status-badge').innerHTML = statusBadge(data.status);
+            const rowBadge = document.getElementById(`row-status-${id}`);
+            if (rowBadge) rowBadge.innerHTML = statusBadge(data.status);
+            const t = tickets.find(x => x.id === id);
+            if (t) t.status = data.status;
+          }
         } else {
-          msgEl.style.color = 'var(--color-error)';
-          msgEl.textContent = data.error || 'Failed to send.';
+          msgEl.style.color = 'var(--color-error)'; msgEl.textContent = data.error || 'Failed to send.';
         }
       });
-
-      const markResolvedBtn = document.getElementById('mark-resolved-btn');
-      const markOpenBtn     = document.getElementById('mark-open-btn');
-      if (markResolvedBtn) {
-        markResolvedBtn.addEventListener('click', () => toggleStatus(ticket.id, 'resolved'));
-      }
-      if (markOpenBtn) {
-        markOpenBtn.addEventListener('click', () => toggleStatus(ticket.id, 'open'));
-      }
     }
 
-    async function toggleStatus(id, status) {
-      const r = await fetch(`/admin/support/${id}/status`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Admin-Password': adminPw },
-        body: JSON.stringify({ status }),
-      });
-      const data = await r.json();
-      if (data.ok) {
-        const t = tickets.find(t => t.id === id);
-        if (t) t.status = status;
-        renderTickets();
-        renderDetail(tickets.find(t => t.id === id));
-      }
+    function closePanel() {
+      document.getElementById('slide-over').classList.remove('slide-over--open');
+      document.getElementById('overlay').classList.remove('overlay--visible');
     }
+    document.getElementById('close-panel').addEventListener('click', closePanel);
+    document.getElementById('overlay').addEventListener('click', closePanel);
 
     document.querySelectorAll('[data-status]').forEach(btn => {
       btn.addEventListener('click', () => {

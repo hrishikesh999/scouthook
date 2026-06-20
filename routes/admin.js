@@ -385,7 +385,7 @@ async function fetchPlacidThumbnail(apiKey, templateUuid) {
     console.log('[placid] templates response keys:', Object.keys(body), '| first item keys:', JSON.stringify(Object.keys((body.data||body)[0] || {})));
     const list = Array.isArray(body.data) ? body.data : Array.isArray(body) ? body : [];
     const tpl  = list.find(t => t.uuid === templateUuid);
-    console.log('[placid] matched template:', tpl ? JSON.stringify(Object.keys(tpl)) : 'none');
+    console.log('[placid] matched template thumbnail:', tpl?.thumbnail);
     return tpl?.thumbnail || tpl?.image_url || tpl?.preview_image_url || null;
   } catch (e) { console.error('[placid] fetchPlacidThumbnail error', e.message); return null; }
 }

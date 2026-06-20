@@ -10,10 +10,10 @@
   <style>
     .admin-nav { background: var(--color-surface); border-bottom: 1px solid var(--color-border); padding: 0 var(--space-xl); display: flex; align-items: center; gap: var(--space-xl); height: 52px; }
     .admin-nav__brand { font-weight: 700; font-size: 1rem; color: var(--color-text); text-decoration: none; margin-right: var(--space-md); white-space: nowrap; }
-    .admin-nav__brand span { color: rgba(255,255,255,0.45); font-weight: 400; font-size: 0.75rem; margin-left: 4px; }
+    .admin-nav__brand span { color: #6B7280; font-weight: 400; font-size: 0.75rem; margin-left: 4px; }
     .admin-nav__links { display: flex; align-items: center; gap: 2px; flex: 1; }
-    .admin-nav__link { color: rgba(255,255,255,0.55); text-decoration: none; font-size: 0.875rem; padding: var(--space-xs) var(--space-sm); border-radius: var(--radius-sm); border-bottom: 2px solid transparent; transition: color .15s; }
-    .admin-nav__link:hover { color: rgba(255,255,255,0.9); }
+    .admin-nav__link { color: #374151; text-decoration: none; font-size: 0.875rem; padding: var(--space-xs) var(--space-sm); border-radius: var(--radius-sm); border-bottom: 2px solid transparent; transition: color .15s; }
+    .admin-nav__link:hover { color: #111111; }
     .admin-nav__link--active { color: var(--color-accent-light, #0FA87F); border-bottom-color: var(--color-accent-light, #0FA87F); }
     .admin-nav__sep { width: 1px; height: 20px; background: var(--color-border); margin: 0 var(--space-sm); }
     .admin-auth { display: flex; align-items: center; justify-content: center; min-height: 60vh; }
@@ -21,11 +21,11 @@
     .template-row { display: flex; align-items: center; gap: var(--space-md); padding: var(--space-md); border-bottom: 1px solid var(--color-border); }
     .template-row:last-child { border-bottom: none; }
     .template-row__thumb { width: 48px; height: 48px; border-radius: var(--radius-sm); object-fit: cover; flex-shrink: 0; }
-    .template-row__placeholder { width: 48px; height: 48px; background: var(--color-surface-2, rgba(255,255,255,.06)); border-radius: var(--radius-sm); flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-weight: 700; color: rgba(255,255,255,0.5); font-size: 0.85rem; }
+    .template-row__placeholder { width: 48px; height: 48px; background: var(--color-surface-2, #F3F4F6); border-radius: var(--radius-sm); flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-weight: 700; color: #6B7280; font-size: 0.85rem; }
     .template-row__info { flex: 1; min-width: 0; }
     .template-row__name { font-weight: 600; font-size: 0.9rem; }
-    .template-row__uuid { font-size: 0.75rem; color: rgba(255,255,255,0.5); font-family: var(--font-mono, monospace); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .template-row__meta { font-size: 0.75rem; color: rgba(255,255,255,0.5); }
+    .template-row__uuid { font-size: 0.75rem; color: #6B7280; font-family: var(--font-mono, monospace); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .template-row__meta { font-size: 0.75rem; color: #6B7280; }
     .template-row__actions { display: flex; gap: var(--space-xs); flex-shrink: 0; }
     .default-badge { display: inline-block; background: var(--color-primary, #0D7A5F); color: #fff; padding: 1px 6px; border-radius: var(--radius-sm, 4px); font-size: 0.7rem; font-weight: 700; margin-left: var(--space-xs); }
     .cell-input { padding: 5px 8px; border: 1px solid var(--color-border); border-radius: var(--radius-sm, 6px); font-size: 0.85rem; width: 100%; background: var(--color-surface); color: var(--color-text); }
@@ -33,6 +33,60 @@
     .layer-grid { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: var(--space-xs); align-items: center; margin-bottom: var(--space-xs); }
     .cf-grid   { display: grid; grid-template-columns: 1fr 1fr 80px 64px auto; gap: var(--space-xs); align-items: center; margin-bottom: var(--space-xs); }
     .remove-btn { padding: 4px 9px; background: none; border: 1px solid var(--color-border); border-radius: var(--radius-sm, 6px); cursor: pointer; color: var(--color-error); font-size: 0.9rem; }
+
+    /* ── Light theme override ── */
+    body { background: #F8FAFC; color: #111111; }
+    body { --color-bg: #F8FAFC; --color-bg-card: #ffffff; --color-surface: #ffffff; --color-surface-2: #F3F4F6; --color-text: #111111; --color-text-muted: #6B7280; --color-border: #E5E7EB; }
+    h1, h2, h3, h4, h5 { color: #111111; }
+    .card { background: #ffffff; border-color: #E5E7EB; }
+    .admin-nav { background: #ffffff; border-bottom-color: #E5E7EB; }
+    .admin-nav__brand { color: #111111; }
+    .admin-nav__brand span { color: #6B7280; }
+    .admin-nav__link { color: #374151; }
+    .admin-nav__link:hover { color: #111111; }
+    .admin-nav__link--active { color: #0D7A5F; border-bottom-color: #0D7A5F; }
+    .admin-nav__sep { background: #E5E7EB; }
+    input, textarea, select { background: #ffffff; color: #111111; border-color: #D1D5DB; }
+    input::placeholder, textarea::placeholder { color: #9CA3AF; }
+    label, .field label { color: #111111; }
+    .text-muted { color: #6B7280; }
+    .metric-card__label { color: #6B7280; }
+    .chart-card__title { color: #6B7280; }
+    .empty-state { color: #9CA3AF; }
+    .filter-bar__custom input[type="date"] { background: #ffffff; border-color: #D1D5DB; color: #111111; }
+    .data-table th { color: #6B7280; border-bottom-color: #E5E7EB; }
+    .data-table td { border-bottom-color: #E5E7EB; color: #111111; }
+    .data-table tr:hover td, .data-table tr.clickable:hover td { background: #F3F4F6; }
+    .detail-row-expanded td { background: #F9FAFB !important; }
+    .badge--free     { background: #F3F4F6; color: #374151; }
+    .badge--pro      { background: #D1FAE5; color: #065F46; }
+    .badge--trialing { background: #FEF3C7; color: #92400E; }
+    .badge--canceled, .badge--pastdue { background: #FEE2E2; color: #991B1B; }
+    .badge--open     { background: #FEF3C7; color: #92400E; }
+    .badge--resolved { background: #D1FAE5; color: #065F46; }
+    .badge--feature  { background: #CCFBF1; color: #0F766E; }
+    .badge--bug      { background: #FEE2E2; color: #991B1B; }
+    .badge--improve  { background: #FEF3C7; color: #92400E; }
+    .btn--active     { background: #0D7A5F; color: #ffffff; border-color: #0D7A5F; }
+    .slide-over { background: #ffffff; border-left-color: #E5E7EB; }
+    .slide-over__header { border-bottom-color: #E5E7EB; }
+    .slide-over__section { border-top-color: #E5E7EB; }
+    .slide-over__section-title { color: #6B7280; }
+    .detail-row__label { color: #6B7280; }
+    .mini-post { border-bottom-color: #E5E7EB; }
+    .mini-post__content { color: #6B7280; }
+    .ticket-detail { background: #F9FAFB; border-color: #E5E7EB; }
+    .ticket-detail__meta { color: #6B7280; }
+    .ticket-detail__label { color: #6B7280; }
+    .section-heading { color: #6B7280; }
+    .template-row { border-bottom-color: #E5E7EB; }
+    .template-row__placeholder { background: #F3F4F6; color: #9CA3AF; }
+    .template-row__uuid { color: #6B7280; }
+    .template-row__meta { color: #6B7280; }
+    .cell-input, .cell-select { background: #ffffff; color: #111111; border-color: #D1D5DB; }
+    .remove-btn { border-color: #D1D5DB; }
+    .default-badge { background: #0D7A5F; }
+    .admin-auth__card { background: #ffffff; }
   </style>
 </head>
 <body>
@@ -85,7 +139,7 @@
 
         <!-- Template list -->
         <div class="card" id="placid-template-list" style="margin-bottom:var(--space-lg);">
-          <div style="color:rgba(255,255,255,0.45);font-size:0.875rem;padding:var(--space-lg);">Loading…</div>
+          <div style="color:#6B7280;font-size:0.875rem;padding:var(--space-lg);">Loading…</div>
         </div>
 
         <!-- Add/Edit form -->
@@ -111,17 +165,17 @@
             <input type="text" id="placid-form-subtext" placeholder="subtext" maxlength="80">
           </div>
           <div class="field">
-            <label for="placid-form-background">Background image layer name <span style="font-weight:400;color:rgba(255,255,255,0.5)">(optional)</span></label>
+            <label for="placid-form-background">Background image layer name <span style="font-weight:400;color:#6B7280">(optional)</span></label>
             <input type="text" id="placid-form-background" placeholder="background" maxlength="80">
           </div>
           <div class="field">
-            <label for="placid-form-preview">Preview image URL <span style="font-weight:400;color:rgba(255,255,255,0.5)">(optional)</span></label>
+            <label for="placid-form-preview">Preview image URL <span style="font-weight:400;color:#6B7280">(optional)</span></label>
             <input type="url" id="placid-form-preview" placeholder="https://…">
           </div>
 
           <!-- Custom fields -->
           <div class="field" style="margin-top:var(--space-md);">
-            <label style="font-weight:600;display:block;margin-bottom:6px">Custom fields <span style="font-weight:400;color:rgba(255,255,255,0.5)">(optional)</span></label>
+            <label style="font-weight:600;display:block;margin-bottom:6px">Custom fields <span style="font-weight:400;color:#6B7280">(optional)</span></label>
             <div class="text-muted" style="font-size:0.8rem;margin-bottom:10px">Extra Placid layers shown as editable inputs in the editor.</div>
             <div id="placid-custom-fields-list"></div>
             <button type="button" id="placid-add-field-btn" class="btn btn--secondary btn--sm" style="margin-top:var(--space-sm)">+ Add field</button>
@@ -129,7 +183,7 @@
 
           <!-- Brand mappings -->
           <div class="field" style="margin-top:var(--space-md);">
-            <label style="font-weight:600;display:block;margin-bottom:6px">Brand mappings <span style="font-weight:400;color:rgba(255,255,255,0.5)">(optional)</span></label>
+            <label style="font-weight:600;display:block;margin-bottom:6px">Brand mappings <span style="font-weight:400;color:#6B7280">(optional)</span></label>
             <div class="text-muted" style="font-size:0.8rem;margin-bottom:10px">Map workspace brand properties to Placid layers — applied automatically at render time.</div>
             <div id="placid-brand-layers-list"></div>
             <button type="button" id="placid-add-brand-layer-btn" class="btn btn--secondary btn--sm" style="margin-top:var(--space-sm)">+ Add mapping</button>
@@ -293,7 +347,7 @@
 
     function renderCustomFieldRows() {
       const list = document.getElementById('placid-custom-fields-list');
-      if (!placidCustomFields.length) { list.innerHTML = '<p style="font-size:0.8rem;color:rgba(255,255,255,0.45);margin:0 0 4px">No custom fields yet.</p>'; return; }
+      if (!placidCustomFields.length) { list.innerHTML = '<p style="font-size:0.8rem;color:#6B7280;margin:0 0 4px">No custom fields yet.</p>'; return; }
       list.innerHTML = placidCustomFields.map((f, i) => `
         <div class="cf-grid placid-cf-row" data-idx="${i}">
           <input type="text" class="cf-layer-name cell-input" value="${esc(f.layer_name)}" placeholder="Layer name" maxlength="80">
@@ -318,7 +372,7 @@
 
     function renderBrandLayerRows() {
       const list = document.getElementById('placid-brand-layers-list');
-      if (!placidBrandLayers.length) { list.innerHTML = '<p style="font-size:0.8rem;color:rgba(255,255,255,0.45);margin:0 0 4px">No brand mappings yet.</p>'; return; }
+      if (!placidBrandLayers.length) { list.innerHTML = '<p style="font-size:0.8rem;color:#6B7280;margin:0 0 4px">No brand mappings yet.</p>'; return; }
       const propOpts  = Object.entries(PLACID_PROPERTY_LABELS).map(([v,l]) => `<option value="${v}">${l}</option>`).join('');
       const srcOpts   = Object.entries(BRAND_SOURCE_LABELS).map(([v,l]) => `<option value="${v}">${l}</option>`).join('');
       list.innerHTML = placidBrandLayers.map((f,i) => `

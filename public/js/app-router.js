@@ -15,6 +15,7 @@
     '/settings.html':   '/js/settings.js',
     '/account.html':    null,
     '/billing.html':    null,
+    '/members.html':    null,
     '/post.html':       '/js/post.js',
     '/help.html':       null,
     '/voice-dna.html':  null,

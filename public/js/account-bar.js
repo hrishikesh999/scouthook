@@ -11,6 +11,13 @@
     s.src = '/js/workspace-modal.js';
     document.head.appendChild(s);
   }
+  // Ensure settings-nav is available on every page so SPA navigation
+  // to settings pages always gets the nav re-injected via spa:navigated.
+  if (!window._settingsNavLoaded) {
+    const sn = document.createElement('script');
+    sn.src = '/js/settings-nav.js';
+    document.head.appendChild(sn);
+  }
   function initials(name, email) {
     const s = (name || email || '?').trim();
     const parts = s.split(/\s+/).filter(Boolean);

@@ -63,8 +63,10 @@ label, .field label { color: #111111; }
   border-top: 1px solid #E5E7EB;
 }
 .admin-nav__logout {
+  display: block;
   width: 100%;
   text-align: left;
+  text-decoration: none;
   background: none;
   border: none;
   cursor: pointer;

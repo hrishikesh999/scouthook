@@ -7,99 +7,16 @@
   <title>Support — ScoutHook Admin</title>
   <link rel="stylesheet" href="/css/scouthook.css" />
   <link rel="stylesheet" href="/css/main.css" />
-  <style>
-    .admin-nav { background: var(--color-surface); border-bottom: 1px solid var(--color-border); padding: 0 var(--space-xl); display: flex; align-items: center; gap: var(--space-xl); height: 52px; }
-    .admin-nav__brand { font-weight: 700; font-size: 1rem; color: var(--color-text); text-decoration: none; margin-right: var(--space-md); white-space: nowrap; }
-    .admin-nav__brand span { color: #6B7280; font-weight: 400; font-size: 0.75rem; margin-left: 4px; }
-    .admin-nav__links { display: flex; align-items: center; gap: 2px; flex: 1; }
-    .admin-nav__link { color: #374151; text-decoration: none; font-size: 0.875rem; padding: var(--space-xs) var(--space-sm); border-radius: var(--radius-sm); border-bottom: 2px solid transparent; transition: color .15s; }
-    .admin-nav__link:hover { color: #111111; }
-    .admin-nav__link--active { color: var(--color-accent-light, #0FA87F); border-bottom-color: var(--color-accent-light, #0FA87F); }
-    .admin-nav__sep { width: 1px; height: 20px; background: var(--color-border); margin: 0 var(--space-sm); }
-    .admin-auth { display: flex; align-items: center; justify-content: center; min-height: 60vh; }
-    .admin-auth__card { width: 100%; max-width: 380px; }
-    .data-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
-    .data-table th { text-align: left; font-size: 0.72rem; text-transform: uppercase; letter-spacing: .06em; color: #6B7280; padding: var(--space-sm) var(--space-md); border-bottom: 1px solid var(--color-border); font-weight: 600; }
-    .data-table td { padding: var(--space-sm) var(--space-md); border-bottom: 1px solid var(--color-border); vertical-align: middle; }
-    .data-table tr.clickable:hover td { background: var(--color-surface-2, #F9FAFB); cursor: pointer; }
-    .badge { display: inline-block; border-radius: var(--radius-sm, 4px); padding: 2px 8px; font-size: 0.78rem; font-weight: 700; }
-    .badge--open     { background: rgba(245,158,11,.18); color: #f59e0b; }
-    .badge--resolved { background: rgba(13,122,95,.18); color: #0FA87F; }
-    .badge--pro      { background: rgba(13,122,95,.18); color: #0FA87F; }
-    .badge--free     { background: #F3F4F6; color: #374151; }
-    .filter-bar { display: flex; align-items: center; gap: var(--space-sm); margin-bottom: var(--space-lg); flex-wrap: wrap; }
-    .filter-bar .btn { font-size: 0.8rem; padding: 5px 12px; }
-    .btn--active { background: var(--color-primary, #0D7A5F); color: #fff; border-color: var(--color-primary, #0D7A5F); }
-    .ticket-detail { background: var(--color-surface-2, #F9FAFB); border: 1px solid var(--color-border); border-radius: var(--radius-md, 8px); padding: var(--space-lg); margin-top: var(--space-md); }
-    .ticket-detail__header { font-weight: 700; font-size: 1rem; margin-bottom: var(--space-xs); }
-    .ticket-detail__meta { font-size: 0.82rem; color: #6B7280; margin-bottom: var(--space-lg); }
-    .ticket-detail__section { border-top: 1px solid var(--color-border); padding-top: var(--space-md); margin-top: var(--space-md); }
-    .ticket-detail__label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: .06em; color: #6B7280; font-weight: 600; margin-bottom: var(--space-sm); }
-    .ticket-detail__message { font-size: 0.9rem; line-height: 1.6; white-space: pre-wrap; }
-
-    /* ── Light theme override ── */
-    body { background: #F8FAFC; color: #111111; }
-    body { --color-bg: #F8FAFC; --color-bg-card: #ffffff; --color-surface: #ffffff; --color-surface-2: #F3F4F6; --color-text: #111111; --color-text-muted: #6B7280; --color-border: #E5E7EB; }
-    h1, h2, h3, h4, h5 { color: #111111; }
-    .card { background: #ffffff; border-color: #E5E7EB; }
-    .admin-nav { background: #ffffff; border-bottom-color: #E5E7EB; }
-    .admin-nav__brand { color: #111111; }
-    .admin-nav__brand span { color: #6B7280; }
-    .admin-nav__link { color: #374151; }
-    .admin-nav__link:hover { color: #111111; }
-    .admin-nav__link--active { color: #0D7A5F; border-bottom-color: #0D7A5F; }
-    .admin-nav__sep { background: #E5E7EB; }
-    input, textarea, select { background: #ffffff; color: #111111; border-color: #D1D5DB; }
-    input::placeholder, textarea::placeholder { color: #9CA3AF; }
-    label, .field label { color: #111111; }
-    .text-muted { color: #6B7280; }
-    .metric-card__label { color: #6B7280; }
-    .chart-card__title { color: #6B7280; }
-    .empty-state { color: #9CA3AF; }
-    .filter-bar__custom input[type="date"] { background: #ffffff; border-color: #D1D5DB; color: #111111; }
-    .data-table th { color: #6B7280; border-bottom-color: #E5E7EB; }
-    .data-table td { border-bottom-color: #E5E7EB; color: #111111; }
-    .data-table tr:hover td, .data-table tr.clickable:hover td { background: #F3F4F6; }
-    .detail-row-expanded td { background: #F9FAFB !important; }
-    .badge--free     { background: #F3F4F6; color: #374151; }
-    .badge--pro      { background: #D1FAE5; color: #065F46; }
-    .badge--trialing { background: #FEF3C7; color: #92400E; }
-    .badge--canceled, .badge--pastdue { background: #FEE2E2; color: #991B1B; }
-    .badge--open     { background: #FEF3C7; color: #92400E; }
-    .badge--resolved { background: #D1FAE5; color: #065F46; }
-    .badge--feature  { background: #CCFBF1; color: #0F766E; }
-    .badge--bug      { background: #FEE2E2; color: #991B1B; }
-    .badge--improve  { background: #FEF3C7; color: #92400E; }
-    .btn--active     { background: #0D7A5F; color: #ffffff; border-color: #0D7A5F; }
-    .slide-over { background: #ffffff; border-left-color: #E5E7EB; }
-    .slide-over__header { border-bottom-color: #E5E7EB; }
-    .slide-over__section { border-top-color: #E5E7EB; }
-    .slide-over__section-title { color: #6B7280; }
-    .detail-row__label { color: #6B7280; }
-    .mini-post { border-bottom-color: #E5E7EB; }
-    .mini-post__content { color: #6B7280; }
-    .ticket-detail { background: #F9FAFB; border-color: #E5E7EB; }
-    .ticket-detail__meta { color: #6B7280; }
-    .ticket-detail__label { color: #6B7280; }
-    .section-heading { color: #6B7280; }
-    .template-row { border-bottom-color: #E5E7EB; }
-    .template-row__placeholder { background: #F3F4F6; color: #9CA3AF; }
-    .template-row__uuid { color: #6B7280; }
-    .template-row__meta { color: #6B7280; }
-    .cell-input, .cell-select { background: #ffffff; color: #111111; border-color: #D1D5DB; }
-    .remove-btn { border-color: #D1D5DB; }
-    .default-badge { background: #0D7A5F; }
-    .admin-auth__card { background: #ffffff; }
-  </style>
+  <link rel="stylesheet" href="/css/admin.css" />
 </head>
 <body>
 
   <div id="auth-screen" class="admin-auth">
     <div class="admin-auth__card card">
-      <h2 style="margin-bottom: var(--space-md);">ScoutHook Admin</h2>
+      <h2 class="admin-auth__title">ScoutHook Admin</h2>
       <div class="field"><label for="pw-input">Admin password</label><input type="password" id="pw-input" placeholder="ADMIN_PASSWORD" /></div>
-      <div id="pw-error" class="hidden" style="color: var(--color-error); font-size: 0.85rem; margin-bottom: var(--space-md);"></div>
-      <button id="pw-btn" class="btn btn--primary" style="width:100%">Unlock</button>
+      <div id="pw-error" class="admin-error-msg hidden"></div>
+      <button id="pw-btn" class="btn btn--primary">Unlock</button>
     </div>
   </div>
 
@@ -117,17 +34,17 @@
       </div>
     </nav>
 
-    <main class="container--wide" style="padding: var(--space-xl);">
-      <h1 style="margin-bottom: var(--space-lg);">Support Tickets</h1>
+    <main class="container--wide admin-main">
+      <h1 class="admin-page-title">Support Tickets</h1>
 
       <div class="filter-bar">
         <button class="btn btn--secondary btn--active" data-status="">All</button>
         <button class="btn btn--secondary" data-status="open">Open</button>
         <button class="btn btn--secondary" data-status="resolved">Resolved</button>
-        <span id="count-label" style="margin-left:auto;font-size:0.8rem;color:#6B7280;"></span>
+        <span id="count-label" class="filter-bar__count"></span>
       </div>
 
-      <div class="card" style="overflow-x: auto;">
+      <div class="card card--scrollable">
         <table class="data-table">
           <thead>
             <tr>
@@ -141,7 +58,7 @@
             </tr>
           </thead>
           <tbody id="tickets-tbody">
-            <tr><td colspan="7" style="text-align:center;color:#6B7280;padding:var(--space-xl);">Loading…</td></tr>
+            <tr><td colspan="7" class="td-empty">Loading…</td></tr>
           </tbody>
         </table>
       </div>
@@ -196,7 +113,7 @@
     function renderTickets() {
       const tbody = document.getElementById('tickets-tbody');
       if (!tickets.length) {
-        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:#6B7280;padding:var(--space-xl);">No tickets found.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" class="td-empty">No tickets found.</td></tr>`;
         return;
       }
       tbody.innerHTML = tickets.map(t => `
@@ -204,10 +121,10 @@
           <td>${esc(t.display_name || '—')}</td>
           <td>${esc(t.email || '—')}</td>
           <td>${planBadge(t.plan, t.status)}</td>
-          <td style="font-weight:600">${esc(t.topic || '—')}</td>
-          <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#6B7280">${esc((t.message||'').slice(0,80))}${(t.message||'').length>80?'…':''}</td>
+          <td class="td-bold">${esc(t.topic || '—')}</td>
+          <td class="td-truncate td-muted">${esc((t.message||'').slice(0,80))}${(t.message||'').length>80?'…':''}</td>
           <td><span class="badge badge--${t.status === 'resolved' ? 'resolved' : 'open'}">${esc(t.status || 'open')}</span></td>
-          <td style="white-space:nowrap">${t.created_at ? new Date(t.created_at).toLocaleDateString() : '—'}</td>
+          <td class="td-nowrap">${t.created_at ? new Date(t.created_at).toLocaleDateString() : '—'}</td>
         </tr>`).join('');
       tbody.querySelectorAll('tr.clickable').forEach(tr => {
         tr.addEventListener('click', () => {
@@ -229,12 +146,12 @@
       el.classList.remove('hidden');
       el.innerHTML = `
         <div class="ticket-detail">
-          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:var(--space-md);flex-wrap:wrap;">
+          <div class="ticket-detail__top-row">
             <div>
               <div class="ticket-detail__header">Support Request #${ticket.id} — ${esc(ticket.topic || '—')}</div>
               <div class="ticket-detail__meta">From: ${esc(ticket.display_name || '—')} (${esc(ticket.email || '—')}) · ${planBadge(ticket.plan, ticket.status_sub)} · ${ticket.created_at ? new Date(ticket.created_at).toLocaleDateString() : '—'}</div>
             </div>
-            <div style="display:flex;align-items:center;gap:var(--space-sm);">
+            <div class="ticket-detail__status-row">
               <span class="badge badge--${ticket.status === 'resolved' ? 'resolved' : 'open'}" id="detail-badge">${esc(ticket.status || 'open')}</span>
               ${ticket.status !== 'resolved' ? `<button class="btn btn--secondary btn--sm" id="mark-resolved-btn" data-id="${ticket.id}">Mark Resolved</button>` : `<button class="btn btn--secondary btn--sm" id="mark-open-btn" data-id="${ticket.id}">Reopen</button>`}
             </div>
@@ -248,16 +165,16 @@
           ${ticket.admin_note ? `
           <div class="ticket-detail__section">
             <div class="ticket-detail__label">Previous Admin Note</div>
-            <div class="ticket-detail__message" style="color:#6B7280">${esc(ticket.admin_note)}</div>
+            <div class="ticket-detail__message ticket-detail__message--muted">${esc(ticket.admin_note)}</div>
           </div>` : ''}
 
           <div class="ticket-detail__section">
             <div class="ticket-detail__label">Reply to user</div>
-            <div class="field" style="margin-bottom:var(--space-sm)">
-              <textarea id="reply-body" rows="5" placeholder="Type your reply…" style="width:100%;resize:vertical;"></textarea>
+            <div class="field field--mb-sm">
+              <textarea id="reply-body" rows="5" placeholder="Type your reply…" class="reply-textarea"></textarea>
             </div>
-            <div style="display:flex;justify-content:flex-end;gap:var(--space-sm);align-items:center;">
-              <span id="reply-msg" style="font-size:0.82rem;"></span>
+            <div class="ticket-detail__reply-actions">
+              <span id="reply-msg" class="reply-msg"></span>
               <button class="btn btn--primary" id="send-reply-btn" data-id="${ticket.id}">Send Reply &amp; Resolve</button>
             </div>
           </div>

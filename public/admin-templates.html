@@ -7,96 +7,16 @@
   <title>Templates — ScoutHook Admin</title>
   <link rel="stylesheet" href="/css/scouthook.css" />
   <link rel="stylesheet" href="/css/main.css" />
-  <style>
-    .admin-nav { background: var(--color-surface); border-bottom: 1px solid var(--color-border); padding: 0 var(--space-xl); display: flex; align-items: center; gap: var(--space-xl); height: 52px; }
-    .admin-nav__brand { font-weight: 700; font-size: 1rem; color: var(--color-text); text-decoration: none; margin-right: var(--space-md); white-space: nowrap; }
-    .admin-nav__brand span { color: #6B7280; font-weight: 400; font-size: 0.75rem; margin-left: 4px; }
-    .admin-nav__links { display: flex; align-items: center; gap: 2px; flex: 1; }
-    .admin-nav__link { color: #374151; text-decoration: none; font-size: 0.875rem; padding: var(--space-xs) var(--space-sm); border-radius: var(--radius-sm); border-bottom: 2px solid transparent; transition: color .15s; }
-    .admin-nav__link:hover { color: #111111; }
-    .admin-nav__link--active { color: var(--color-accent-light, #0FA87F); border-bottom-color: var(--color-accent-light, #0FA87F); }
-    .admin-nav__sep { width: 1px; height: 20px; background: var(--color-border); margin: 0 var(--space-sm); }
-    .admin-auth { display: flex; align-items: center; justify-content: center; min-height: 60vh; }
-    .admin-auth__card { width: 100%; max-width: 380px; }
-    .template-row { display: flex; align-items: center; gap: var(--space-md); padding: var(--space-md); border-bottom: 1px solid var(--color-border); }
-    .template-row:last-child { border-bottom: none; }
-    .template-row__thumb { width: 48px; height: 48px; border-radius: var(--radius-sm); object-fit: cover; flex-shrink: 0; }
-    .template-row__placeholder { width: 48px; height: 48px; background: var(--color-surface-2, #F3F4F6); border-radius: var(--radius-sm); flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-weight: 700; color: #6B7280; font-size: 0.85rem; }
-    .template-row__info { flex: 1; min-width: 0; }
-    .template-row__name { font-weight: 600; font-size: 0.9rem; }
-    .template-row__uuid { font-size: 0.75rem; color: #6B7280; font-family: var(--font-mono, monospace); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .template-row__meta { font-size: 0.75rem; color: #6B7280; }
-    .template-row__actions { display: flex; gap: var(--space-xs); flex-shrink: 0; }
-    .default-badge { display: inline-block; background: var(--color-primary, #0D7A5F); color: #fff; padding: 1px 6px; border-radius: var(--radius-sm, 4px); font-size: 0.7rem; font-weight: 700; margin-left: var(--space-xs); }
-    .cell-input { padding: 5px 8px; border: 1px solid var(--color-border); border-radius: var(--radius-sm, 6px); font-size: 0.85rem; width: 100%; background: var(--color-surface); color: var(--color-text); }
-    .cell-select { padding: 5px 8px; border: 1px solid var(--color-border); border-radius: var(--radius-sm, 6px); font-size: 0.85rem; width: 100%; background: var(--color-surface); color: var(--color-text); }
-    .layer-grid { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: var(--space-xs); align-items: center; margin-bottom: var(--space-xs); }
-    .cf-grid   { display: grid; grid-template-columns: 1fr 1fr 80px 64px auto; gap: var(--space-xs); align-items: center; margin-bottom: var(--space-xs); }
-    .remove-btn { padding: 4px 9px; background: none; border: 1px solid var(--color-border); border-radius: var(--radius-sm, 6px); cursor: pointer; color: var(--color-error); font-size: 0.9rem; }
-
-    /* ── Light theme override ── */
-    body { background: #F8FAFC; color: #111111; }
-    body { --color-bg: #F8FAFC; --color-bg-card: #ffffff; --color-surface: #ffffff; --color-surface-2: #F3F4F6; --color-text: #111111; --color-text-muted: #6B7280; --color-border: #E5E7EB; }
-    h1, h2, h3, h4, h5 { color: #111111; }
-    .card { background: #ffffff; border-color: #E5E7EB; }
-    .admin-nav { background: #ffffff; border-bottom-color: #E5E7EB; }
-    .admin-nav__brand { color: #111111; }
-    .admin-nav__brand span { color: #6B7280; }
-    .admin-nav__link { color: #374151; }
-    .admin-nav__link:hover { color: #111111; }
-    .admin-nav__link--active { color: #0D7A5F; border-bottom-color: #0D7A5F; }
-    .admin-nav__sep { background: #E5E7EB; }
-    input, textarea, select { background: #ffffff; color: #111111; border-color: #D1D5DB; }
-    input::placeholder, textarea::placeholder { color: #9CA3AF; }
-    label, .field label { color: #111111; }
-    .text-muted { color: #6B7280; }
-    .metric-card__label { color: #6B7280; }
-    .chart-card__title { color: #6B7280; }
-    .empty-state { color: #9CA3AF; }
-    .filter-bar__custom input[type="date"] { background: #ffffff; border-color: #D1D5DB; color: #111111; }
-    .data-table th { color: #6B7280; border-bottom-color: #E5E7EB; }
-    .data-table td { border-bottom-color: #E5E7EB; color: #111111; }
-    .data-table tr:hover td, .data-table tr.clickable:hover td { background: #F3F4F6; }
-    .detail-row-expanded td { background: #F9FAFB !important; }
-    .badge--free     { background: #F3F4F6; color: #374151; }
-    .badge--pro      { background: #D1FAE5; color: #065F46; }
-    .badge--trialing { background: #FEF3C7; color: #92400E; }
-    .badge--canceled, .badge--pastdue { background: #FEE2E2; color: #991B1B; }
-    .badge--open     { background: #FEF3C7; color: #92400E; }
-    .badge--resolved { background: #D1FAE5; color: #065F46; }
-    .badge--feature  { background: #CCFBF1; color: #0F766E; }
-    .badge--bug      { background: #FEE2E2; color: #991B1B; }
-    .badge--improve  { background: #FEF3C7; color: #92400E; }
-    .btn--active     { background: #0D7A5F; color: #ffffff; border-color: #0D7A5F; }
-    .slide-over { background: #ffffff; border-left-color: #E5E7EB; }
-    .slide-over__header { border-bottom-color: #E5E7EB; }
-    .slide-over__section { border-top-color: #E5E7EB; }
-    .slide-over__section-title { color: #6B7280; }
-    .detail-row__label { color: #6B7280; }
-    .mini-post { border-bottom-color: #E5E7EB; }
-    .mini-post__content { color: #6B7280; }
-    .ticket-detail { background: #F9FAFB; border-color: #E5E7EB; }
-    .ticket-detail__meta { color: #6B7280; }
-    .ticket-detail__label { color: #6B7280; }
-    .section-heading { color: #6B7280; }
-    .template-row { border-bottom-color: #E5E7EB; }
-    .template-row__placeholder { background: #F3F4F6; color: #9CA3AF; }
-    .template-row__uuid { color: #6B7280; }
-    .template-row__meta { color: #6B7280; }
-    .cell-input, .cell-select { background: #ffffff; color: #111111; border-color: #D1D5DB; }
-    .remove-btn { border-color: #D1D5DB; }
-    .default-badge { background: #0D7A5F; }
-    .admin-auth__card { background: #ffffff; }
-  </style>
+  <link rel="stylesheet" href="/css/admin.css" />
 </head>
 <body>
 
   <div id="auth-screen" class="admin-auth">
     <div class="admin-auth__card card">
-      <h2 style="margin-bottom: var(--space-md);">ScoutHook Admin</h2>
+      <h2 class="admin-auth__title">ScoutHook Admin</h2>
       <div class="field"><label for="pw-input">Admin password</label><input type="password" id="pw-input" placeholder="ADMIN_PASSWORD" /></div>
-      <div id="pw-error" class="hidden" style="color: var(--color-error); font-size: 0.85rem; margin-bottom: var(--space-md);"></div>
-      <button id="pw-btn" class="btn btn--primary" style="width:100%">Unlock</button>
+      <div id="pw-error" class="admin-error-msg hidden"></div>
+      <button id="pw-btn" class="btn btn--primary">Unlock</button>
     </div>
   </div>
 
@@ -114,37 +34,37 @@
       </div>
     </nav>
 
-    <main style="padding: var(--space-xl);">
-      <div style="max-width: 760px; margin: 0 auto;">
+    <main class="admin-main">
+      <div class="admin-templates-body">
 
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--space-lg);">
+        <div class="admin-page-header">
           <div>
-            <h1 style="margin:0;">Placid Templates</h1>
-            <p class="text-muted" style="font-size:0.85rem;margin-top:var(--space-xs);">Global templates available to all users for AI image generation.</p>
+            <h1>Placid Templates</h1>
+            <p class="text-muted admin-page-subtitle">Global templates available to all users for AI image generation.</p>
           </div>
           <button id="placid-add-btn" class="btn btn--primary">+ Add template</button>
         </div>
 
         <!-- Placid API key -->
-        <div class="card" style="margin-bottom:var(--space-lg);">
-          <div style="display:flex;align-items:flex-end;gap:var(--space-md);">
-            <div class="field" style="flex:1;margin:0;">
+        <div class="card card--section">
+          <div class="card-row-flex">
+            <div class="field field--flex">
               <label for="placid_api_key">Placid API key</label>
               <input type="password" id="placid_api_key" name="placid_api_key" placeholder="From placid.app → API" autocomplete="off" />
             </div>
             <button id="save-api-key-btn" class="btn btn--secondary">Save key</button>
           </div>
-          <div id="api-key-msg" style="font-size:0.8rem;margin-top:var(--space-sm);display:none;"></div>
+          <div id="api-key-msg" class="api-key-msg"></div>
         </div>
 
         <!-- Template list -->
-        <div class="card" id="placid-template-list" style="margin-bottom:var(--space-lg);">
-          <div style="color:#6B7280;font-size:0.875rem;padding:var(--space-lg);">Loading…</div>
+        <div class="card card--section" id="placid-template-list">
+          <div class="loading-text--padded">Loading…</div>
         </div>
 
         <!-- Add/Edit form -->
-        <div id="placid-form" class="hidden card" style="margin-bottom:var(--space-xl);">
-          <h3 id="placid-form-title" style="margin:0 0 var(--space-lg);">Add template</h3>
+        <div id="placid-form" class="hidden card card--section-xl">
+          <h3 id="placid-form-title" class="form-section-title">Add template</h3>
           <input type="hidden" id="placid-form-id">
 
           <div class="field">
@@ -154,7 +74,7 @@
           <div class="field">
             <label for="placid-form-uuid">Placid template UUID</label>
             <input type="text" id="placid-form-uuid" placeholder="abc123…" maxlength="200">
-            <div class="text-muted" style="font-size:0.8rem;margin-top:0.25rem;">Found in your Placid dashboard under the template settings.</div>
+            <div class="text-muted field-hint">Found in your Placid dashboard under the template settings.</div>
           </div>
           <div class="field">
             <label for="placid-form-headline">Headline layer name</label>
@@ -165,32 +85,32 @@
             <input type="text" id="placid-form-subtext" placeholder="subtext" maxlength="80">
           </div>
           <div class="field">
-            <label for="placid-form-background">Background image layer name <span style="font-weight:400;color:#6B7280">(optional)</span></label>
+            <label for="placid-form-background">Background image layer name <span class="label-optional">(optional)</span></label>
             <input type="text" id="placid-form-background" placeholder="background" maxlength="80">
           </div>
           <div class="field">
-            <label for="placid-form-preview">Preview image URL <span style="font-weight:400;color:#6B7280">(optional)</span></label>
+            <label for="placid-form-preview">Preview image URL <span class="label-optional">(optional)</span></label>
             <input type="url" id="placid-form-preview" placeholder="https://…">
           </div>
 
           <!-- Custom fields -->
-          <div class="field" style="margin-top:var(--space-md);">
-            <label style="font-weight:600;display:block;margin-bottom:6px">Custom fields <span style="font-weight:400;color:#6B7280">(optional)</span></label>
-            <div class="text-muted" style="font-size:0.8rem;margin-bottom:10px">Extra Placid layers shown as editable inputs in the editor.</div>
+          <div class="field field--top-gap">
+            <label class="label-block">Custom fields <span class="label-optional">(optional)</span></label>
+            <div class="text-muted field-hint field-hint--mb">Extra Placid layers shown as editable inputs in the editor.</div>
             <div id="placid-custom-fields-list"></div>
-            <button type="button" id="placid-add-field-btn" class="btn btn--secondary btn--sm" style="margin-top:var(--space-sm)">+ Add field</button>
+            <button type="button" id="placid-add-field-btn" class="btn btn--secondary btn--sm btn--top-gap">+ Add field</button>
           </div>
 
           <!-- Brand mappings -->
-          <div class="field" style="margin-top:var(--space-md);">
-            <label style="font-weight:600;display:block;margin-bottom:6px">Brand mappings <span style="font-weight:400;color:#6B7280">(optional)</span></label>
-            <div class="text-muted" style="font-size:0.8rem;margin-bottom:10px">Map workspace brand properties to Placid layers — applied automatically at render time.</div>
+          <div class="field field--top-gap">
+            <label class="label-block">Brand mappings <span class="label-optional">(optional)</span></label>
+            <div class="text-muted field-hint field-hint--mb">Map workspace brand properties to Placid layers — applied automatically at render time.</div>
             <div id="placid-brand-layers-list"></div>
-            <button type="button" id="placid-add-brand-layer-btn" class="btn btn--secondary btn--sm" style="margin-top:var(--space-sm)">+ Add mapping</button>
+            <button type="button" id="placid-add-brand-layer-btn" class="btn btn--secondary btn--sm btn--top-gap">+ Add mapping</button>
           </div>
 
-          <div id="placid-form-error" class="hidden" style="color:var(--color-error);font-size:0.85rem;margin-bottom:var(--space-md);"></div>
-          <div style="display:flex;gap:var(--space-sm);padding-top:var(--space-md);border-top:1px solid var(--color-border);margin-top:var(--space-md);">
+          <div id="placid-form-error" class="form-error hidden"></div>
+          <div class="form-actions">
             <button id="placid-form-save" class="btn btn--primary" type="button">Save template</button>
             <button id="placid-form-cancel" class="btn btn--secondary" type="button">Cancel</button>
           </div>
@@ -235,7 +155,6 @@
     async function showMain() {
       document.getElementById('auth-screen').classList.add('hidden');
       document.getElementById('main').classList.remove('hidden');
-      // Populate Placid API key placeholder
       try {
         const r = await adminFetch('/admin/settings');
         const data = await r.json();
@@ -278,7 +197,7 @@
     function renderPlacidTemplates() {
       const list = document.getElementById('placid-template-list');
       if (!placidTemplates.length) {
-        list.innerHTML = '<p class="text-muted" style="padding:var(--space-lg);font-size:0.875rem;">No templates yet. Add one above.</p>';
+        list.innerHTML = '<p class="text-muted loading-text--padded">No templates yet. Add one above.</p>';
         return;
       }
       list.innerHTML = placidTemplates.map(t => `
@@ -289,12 +208,12 @@
           <div class="template-row__info">
             <div class="template-row__name">${esc(t.name)}${t.is_default ? '<span class="default-badge">DEFAULT</span>' : ''}</div>
             <div class="template-row__uuid">${esc(t.template_uuid)}</div>
-            <div class="template-row__meta">headline→<code>${esc(t.layer_headline)}</code> · subtext→<code>${esc(t.layer_subtext)}</code>${t.layer_background?` · bg→<code>${esc(t.layer_background)}</code>`:''}${t.custom_layers.length?` · <span style="color:var(--color-primary,#0d7a5f)">${t.custom_layers.length} custom</span>`:''}${t.brand_layers.length?` · <span style="color:var(--color-primary,#0d7a5f)">${t.brand_layers.length} brand</span>`:''}</div>
+            <div class="template-row__meta">headline→<code>${esc(t.layer_headline)}</code> · subtext→<code>${esc(t.layer_subtext)}</code>${t.layer_background?` · bg→<code>${esc(t.layer_background)}</code>`:''}${t.custom_layers.length?` · <span class="text-primary">${t.custom_layers.length} custom</span>`:''}${t.brand_layers.length?` · <span class="text-primary">${t.brand_layers.length} brand</span>`:''}</div>
           </div>
           <div class="template-row__actions">
             <button class="btn btn--secondary btn--sm tpl-edit-btn">Edit</button>
             ${!t.is_default ? `<button class="btn btn--secondary btn--sm tpl-default-btn">Set default</button>` : ''}
-            <button class="btn btn--secondary btn--sm tpl-delete-btn" style="color:var(--color-error)">Delete</button>
+            <button class="btn btn--secondary btn--sm btn--danger tpl-delete-btn">Delete</button>
           </div>
         </div>`).join('');
       list.querySelectorAll('[data-template-id]').forEach(row => {
@@ -347,7 +266,7 @@
 
     function renderCustomFieldRows() {
       const list = document.getElementById('placid-custom-fields-list');
-      if (!placidCustomFields.length) { list.innerHTML = '<p style="font-size:0.8rem;color:#6B7280;margin:0 0 4px">No custom fields yet.</p>'; return; }
+      if (!placidCustomFields.length) { list.innerHTML = '<p class="empty-section-text">No custom fields yet.</p>'; return; }
       list.innerHTML = placidCustomFields.map((f, i) => `
         <div class="cf-grid placid-cf-row" data-idx="${i}">
           <input type="text" class="cf-layer-name cell-input" value="${esc(f.layer_name)}" placeholder="Layer name" maxlength="80">
@@ -356,14 +275,14 @@
             <option value="text" ${f.type==='text'?'selected':''}>Text</option>
             <option value="image" ${f.type==='image'?'selected':''}>Image</option>
           </select>
-          <input type="number" class="cf-max-chars cell-input" value="${f.max_chars||''}" placeholder="Max" min="1" max="2000" ${f.type==='image'?'disabled style="opacity:.35"':''}>
+          <input type="number" class="cf-max-chars cell-input${f.type==='image'?' cell-input--disabled':''}" value="${f.max_chars||''}" placeholder="Max" min="1" max="2000" ${f.type==='image'?'disabled':''}>
           <button type="button" class="remove-btn cf-remove-btn" data-idx="${i}">✕</button>
         </div>`).join('');
       list.querySelectorAll('.cf-remove-btn').forEach(b => b.addEventListener('click', () => { placidCustomFields.splice(+b.dataset.idx,1); renderCustomFieldRows(); }));
       list.querySelectorAll('.cf-type').forEach((sel,i) => sel.addEventListener('change', () => {
         placidCustomFields[i].type = sel.value;
         const mc = sel.closest('.placid-cf-row').querySelector('.cf-max-chars');
-        mc.disabled = sel.value === 'image'; mc.style.opacity = sel.value === 'image' ? '0.35' : '';
+        mc.disabled = sel.value === 'image'; mc.classList.toggle('cell-input--disabled', sel.value === 'image');
       }));
       list.querySelectorAll('.cf-layer-name').forEach((el,i) => el.addEventListener('input', () => { placidCustomFields[i].layer_name = el.value; }));
       list.querySelectorAll('.cf-label').forEach((el,i)      => el.addEventListener('input', () => { placidCustomFields[i].label = el.value; }));
@@ -372,7 +291,7 @@
 
     function renderBrandLayerRows() {
       const list = document.getElementById('placid-brand-layers-list');
-      if (!placidBrandLayers.length) { list.innerHTML = '<p style="font-size:0.8rem;color:#6B7280;margin:0 0 4px">No brand mappings yet.</p>'; return; }
+      if (!placidBrandLayers.length) { list.innerHTML = '<p class="empty-section-text">No brand mappings yet.</p>'; return; }
       const propOpts  = Object.entries(PLACID_PROPERTY_LABELS).map(([v,l]) => `<option value="${v}">${l}</option>`).join('');
       const srcOpts   = Object.entries(BRAND_SOURCE_LABELS).map(([v,l]) => `<option value="${v}">${l}</option>`).join('');
       list.innerHTML = placidBrandLayers.map((f,i) => `

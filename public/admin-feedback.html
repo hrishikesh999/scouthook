@@ -66,10 +66,26 @@
     </main>
   </div>
 
+  <!-- Overlay -->
+  <div class="overlay" id="overlay"></div>
+
+  <!-- Slide-over panel -->
+  <div class="slide-over" id="slide-over">
+    <div class="slide-over__header">
+      <div>
+        <div id="so-name" class="slide-over__user-name"></div>
+        <div id="so-email" class="slide-over__user-email"></div>
+      </div>
+      <button id="close-panel" class="btn btn--secondary btn--sm slide-over__close">✕ Close</button>
+    </div>
+    <div class="slide-over__body" id="so-body">
+      <div class="loading-text">Loading…</div>
+    </div>
+  </div>
+
   <script>
     let adminPw = '';
     let allFeedback = [];
-    let expandedId = null;
 
     function init() {
       const saved = sessionStorage.getItem('adminPw');
@@ -110,7 +126,6 @@
       const data = await r.json();
       allFeedback = data.feedback || [];
       document.getElementById('count-label').textContent = `Count: ${allFeedback.length}`;
-      expandedId = null;
       renderFeedback();
     }
 
@@ -120,10 +135,8 @@
         tbody.innerHTML = `<tr><td colspan="7" class="td-empty">No feedback found.</td></tr>`;
         return;
       }
-      let html = '';
-      for (const f of allFeedback) {
-        const isExpanded = expandedId === f.id;
-        html += `<tr class="clickable" data-id="${f.id}">
+      tbody.innerHTML = allFeedback.map(f => `
+        <tr class="clickable" data-id="${f.id}">
           <td>${esc(f.display_name || '—')}</td>
           <td>${esc(f.email || '—')}</td>
           <td>${catBadge(f.category)}</td>
@@ -131,24 +144,86 @@
           <td class="td-truncate">${esc((f.message||'').slice(0,80))}${(f.message||'').length > 80 ? '…' : ''}</td>
           <td class="td-truncate-sm">${esc(f.page_url || '—')}</td>
           <td class="td-nowrap">${f.created_at ? new Date(f.created_at).toLocaleDateString() : '—'}</td>
-        </tr>`;
-        if (isExpanded) {
-          html += `<tr class="detail-row-expanded"><td colspan="7">
-            <div class="expand-label">Full Message</div>
-            <div class="expand-body">${esc(f.message || '')}</div>
-            ${f.page_url ? `<div class="expand-footer">Page: ${esc(f.page_url)}</div>` : ''}
-          </td></tr>`;
-        }
-      }
-      tbody.innerHTML = html;
+        </tr>`).join('');
       tbody.querySelectorAll('tr.clickable').forEach(tr => {
-        tr.addEventListener('click', () => {
-          const id = parseInt(tr.dataset.id);
-          expandedId = expandedId === id ? null : id;
-          renderFeedback();
-        });
+        tr.addEventListener('click', () => openPanel(parseInt(tr.dataset.id)));
       });
     }
+
+    // ── Slide-over ────────────────────────────────────────────────────────────
+    function openPanel(id) {
+      const f = allFeedback.find(x => x.id === id);
+      if (!f) return;
+
+      document.getElementById('so-name').textContent  = f.display_name || '—';
+      document.getElementById('so-email').textContent = f.email || '—';
+
+      document.getElementById('so-body').innerHTML = `
+        <div class="slide-over__section">
+          <div class="slide-over__section-title">Category &amp; Rating</div>
+          <div class="detail-row">
+            <span class="detail-row__label">Category</span>
+            <span>${catBadge(f.category)}</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-row__label">Rating</span>
+            <span>${stars(f.rating) || '—'}</span>
+          </div>
+          ${f.page_url ? `<div class="detail-row"><span class="detail-row__label">Page</span><span class="text-xs-muted">${esc(f.page_url)}</span></div>` : ''}
+          <div class="detail-row">
+            <span class="detail-row__label">Submitted</span>
+            <span>${f.created_at ? new Date(f.created_at).toLocaleDateString() : '—'}</span>
+          </div>
+        </div>
+
+        <div class="slide-over__section">
+          <div class="slide-over__section-title">Message</div>
+          <div class="expand-body">${esc(f.message || '')}</div>
+        </div>
+
+        <div class="slide-over__section">
+          <div class="slide-over__section-title">Reply to user</div>
+          <div class="field field--mb-sm">
+            <textarea id="reply-body" rows="5" placeholder="Type your reply…" class="reply-textarea"></textarea>
+          </div>
+          <div class="ticket-detail__reply-actions">
+            <span id="reply-msg" class="reply-msg"></span>
+            <button class="btn btn--primary" id="send-reply-btn" data-id="${f.id}">Send Reply</button>
+          </div>
+        </div>
+      `;
+
+      document.getElementById('send-reply-btn').addEventListener('click', async () => {
+        const msg   = document.getElementById('reply-body').value.trim();
+        const msgEl = document.getElementById('reply-msg');
+        if (!msg) { msgEl.style.color = 'var(--color-error)'; msgEl.textContent = 'Reply cannot be empty.'; return; }
+        msgEl.style.color = '#6B7280'; msgEl.textContent = 'Sending…';
+        const r = await fetch(`/admin/feedback/${id}/reply`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Admin-Password': adminPw },
+          body: JSON.stringify({ message: msg }),
+        });
+        const data = await r.json();
+        if (data.ok) {
+          msgEl.style.color = 'var(--color-success, #0FA87F)';
+          msgEl.textContent = 'Reply sent.';
+          document.getElementById('reply-body').value = '';
+        } else {
+          msgEl.style.color = 'var(--color-error)';
+          msgEl.textContent = data.error || 'Failed to send.';
+        }
+      });
+
+      document.getElementById('slide-over').classList.add('slide-over--open');
+      document.getElementById('overlay').classList.add('overlay--visible');
+    }
+
+    function closePanel() {
+      document.getElementById('slide-over').classList.remove('slide-over--open');
+      document.getElementById('overlay').classList.remove('overlay--visible');
+    }
+    document.getElementById('close-panel').addEventListener('click', closePanel);
+    document.getElementById('overlay').addEventListener('click', closePanel);
 
     document.querySelectorAll('[data-cat]').forEach(btn => {
       btn.addEventListener('click', () => {

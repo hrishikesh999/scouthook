@@ -833,4 +833,37 @@ router.post('/support/:id/status', requireAdminPassword, (req, res) => {
   })().catch(err => res.status(500).json({ ok: false, error: err.message }));
 });
 
+// ---------------------------------------------------------------------------
+// POST /admin/feedback/:id/reply
+// Body: { message: "..." }
+// ---------------------------------------------------------------------------
+router.post('/feedback/:id/reply', requireAdminPassword, (req, res) => {
+  (async () => {
+    const feedbackId = parseInt(req.params.id);
+    if (!Number.isFinite(feedbackId)) return res.status(400).json({ ok: false, error: 'invalid id' });
+
+    const { message } = req.body || {};
+    if (!message || !message.trim()) return res.status(400).json({ ok: false, error: 'message required' });
+
+    const row = await db.prepare(`
+      SELECT f.id, f.message, f.category, f.page_url,
+             up.email, up.display_name
+      FROM feedback f
+      JOIN user_profiles up ON up.user_id = f.user_id
+      WHERE f.id = ?
+    `).get(feedbackId);
+    if (!row) return res.status(404).json({ ok: false, error: 'feedback_not_found' });
+
+    const { sendEmail } = require('../emails');
+    await sendEmail('feedback-reply', row.email, {
+      name: row.display_name || row.email,
+      admin_message: message.trim(),
+      original_message: row.message || '',
+      category: row.category || '',
+    });
+
+    return res.json({ ok: true });
+  })().catch(err => res.status(500).json({ ok: false, error: err.message }));
+});
+
 module.exports = router;

@@ -60,6 +60,24 @@ label, .field label { color: #111111; }
 .admin-nav__link:hover { color: #111111; background: #F3F4F6; }
 .admin-nav__link--active { color: #0D7A5F; border-left-color: #0D7A5F; }
 .admin-nav__sep { height: 1px; background: #E5E7EB; margin: var(--space-sm) var(--space-md); }
+.admin-nav__bottom {
+  margin-top: auto;
+  padding: var(--space-sm);
+  border-top: 1px solid #E5E7EB;
+}
+.admin-nav__logout {
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.875rem;
+  color: #6B7280;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+}
+.admin-nav__logout:hover { color: var(--color-error); background: #FEF2F2; }
 
 /* ── Auth screen ───────────────────────────────────────────────────────── */
 .admin-auth {

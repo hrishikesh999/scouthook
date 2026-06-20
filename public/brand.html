@@ -109,15 +109,27 @@
           <input type="hidden" id="brand-logo-url" value="" />
 
           <div class="brand-field">
-            <label class="field-label">Heading font <span style="font-weight:400;color:var(--text-muted,#8899aa);font-size:0.85em">(optional)</span></label>
-            <input type="text" id="brand-font-heading" class="field-input" placeholder="e.g. Playfair Display" style="width:100%" spellcheck="false" />
+            <label class="field-label" for="brand-font-heading">Heading font <span style="font-weight:400;color:var(--text-muted,#8899aa);font-size:0.85em">(optional)</span></label>
+            <div class="font-combobox" id="brand-font-heading-combo">
+              <input type="text" id="brand-font-heading" class="field-input font-combobox-input"
+                     placeholder="Search Google Fonts…" autocomplete="off" spellcheck="false"
+                     role="combobox" aria-expanded="false" aria-haspopup="listbox"
+                     aria-autocomplete="list" aria-controls="brand-font-heading-list" />
+              <ul class="font-combobox-list" id="brand-font-heading-list" role="listbox" aria-label="Heading font options"></ul>
+            </div>
             <div class="brand-font-preview" id="brand-font-heading-preview" aria-hidden="true"></div>
-            <p class="field-helper">Any <a href="https://fonts.google.com" target="_blank" rel="noopener">Google Fonts</a> family name. Used for headline layers in AI image templates.</p>
+            <p class="field-helper">Used for headline layers in AI image templates.</p>
           </div>
 
           <div class="brand-field">
-            <label class="field-label">Body font <span style="font-weight:400;color:var(--text-muted,#8899aa);font-size:0.85em">(optional)</span></label>
-            <input type="text" id="brand-font-body" class="field-input" placeholder="e.g. Inter" style="width:100%" spellcheck="false" />
+            <label class="field-label" for="brand-font-body">Body font <span style="font-weight:400;color:var(--text-muted,#8899aa);font-size:0.85em">(optional)</span></label>
+            <div class="font-combobox" id="brand-font-body-combo">
+              <input type="text" id="brand-font-body" class="field-input font-combobox-input"
+                     placeholder="Search Google Fonts…" autocomplete="off" spellcheck="false"
+                     role="combobox" aria-expanded="false" aria-haspopup="listbox"
+                     aria-autocomplete="list" aria-controls="brand-font-body-list" />
+              <ul class="font-combobox-list" id="brand-font-body-list" role="listbox" aria-label="Body font options"></ul>
+            </div>
             <div class="brand-font-preview" id="brand-font-body-preview" aria-hidden="true"></div>
             <p class="field-helper">Used for subtext and body text layers in AI image templates.</p>
           </div>
@@ -131,19 +143,81 @@
 
         <!-- ── Live Preview ─────────────────────────────────────── -->
         <div class="brand-preview-card">
-          <p class="brand-preview-label">Preview</p>
-          <div class="brand-preview-visual" id="brand-preview-visual">
-            <div class="brand-preview-accent-bar" id="brand-preview-accent-bar"></div>
-            <div class="brand-preview-quote" id="brand-preview-quote">
-              "Your brand voice, expressed with visual consistency across every post."
+
+          <div class="brand-preview-header">
+            <p class="brand-preview-label">Preview</p>
+            <div class="brand-preview-tabs" role="tablist">
+              <button class="brand-ptab active" data-tab="quote" role="tab" aria-selected="true">Quote</button>
+              <button class="brand-ptab" data-tab="branded" role="tab" aria-selected="false">Branded Quote</button>
+              <button class="brand-ptab" data-tab="carousel" role="tab" aria-selected="false">Carousel</button>
             </div>
-            <div class="brand-preview-footer" id="brand-preview-footer">
-              <div class="brand-preview-logo-area" id="brand-preview-logo-area">
-                <!-- logo or brand name injected by JS -->
+          </div>
+
+          <!-- Quote -->
+          <div class="brand-preview-panel" id="bpp-quote" role="tabpanel">
+            <div class="brand-preview-visual" id="bpv-quote">
+              <div>
+                <div class="bpv-accent-bar" id="bpv-accent-bar"></div>
+                <div class="bpv-quote-text" id="bpv-quote-text">
+                  "Your brand voice, expressed with visual consistency across every post."
+                </div>
+              </div>
+              <div class="bpv-footer" id="bpv-quote-footer">
+                <div class="bpv-logo-area" id="bpv-quote-logo"></div>
               </div>
             </div>
           </div>
-        </div>
+
+          <!-- Branded Quote -->
+          <div class="brand-preview-panel" id="bpp-branded" role="tabpanel" hidden>
+            <div class="brand-preview-visual" id="bpv-branded">
+              <div class="bpv-inner-card" id="bpv-bq-card">
+                <div class="bpv-bq-bar" id="bpv-bq-bar"></div>
+                <div class="bpv-quote-text bpv-bq-quote" id="bpv-bq-quote">
+                  "Consistency in brand voice builds trust and recognition that compounds over time."
+                </div>
+                <div class="bpv-bq-attribution" id="bpv-bq-attribution">— Your Name &nbsp;·&nbsp; Your Title</div>
+              </div>
+              <div class="bpv-footer" id="bpv-branded-footer">
+                <div class="bpv-logo-area" id="bpv-branded-logo"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Carousel -->
+          <div class="brand-preview-panel" id="bpp-carousel" role="tabpanel" hidden>
+            <div class="brand-preview-visual brand-preview-carousel-wrap" id="bpv-carousel">
+              <!-- Slide 1: Title -->
+              <div class="bpv-carousel-slide active" id="bpv-cs-1">
+                <div>
+                  <div class="bpv-cs-eyebrow" id="bpv-cs-eyebrow">Thread</div>
+                  <div class="bpv-quote-text bpv-cs-title" id="bpv-cs-title">5 Ways to Build Your Brand Authority on LinkedIn</div>
+                </div>
+                <div class="bpv-cs-swipe" id="bpv-cs-swipe">Swipe to read →</div>
+              </div>
+              <!-- Slide 2: Content -->
+              <div class="bpv-carousel-slide" id="bpv-cs-2">
+                <div>
+                  <div class="bpv-cs-num" id="bpv-cs-num">01</div>
+                  <div class="bpv-cs-body" id="bpv-cs-body">Consistency in voice builds trust over time. Your audience recognises you before they see your name.</div>
+                </div>
+              </div>
+              <!-- Slide 3: Outro -->
+              <div class="bpv-carousel-slide" id="bpv-cs-3">
+                <div class="bpv-cs-outro" id="bpv-cs-outro">Follow for more insights on building your brand authority.</div>
+                <div class="bpv-logo-area bpv-cs-logo" id="bpv-cs-logo"></div>
+              </div>
+            </div>
+            <div class="bpv-carousel-nav">
+              <div class="bpv-carousel-dots">
+                <button class="bpv-dot active" data-slide="0" aria-label="Slide 1"></button>
+                <button class="bpv-dot" data-slide="1" aria-label="Slide 2"></button>
+                <button class="bpv-dot" data-slide="2" aria-label="Slide 3"></button>
+              </div>
+            </div>
+          </div>
+
+        </div><!-- /brand-preview-card -->
 
       </div><!-- /brand-layout -->
     </div><!-- /brand-page -->

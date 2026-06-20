@@ -101,7 +101,20 @@
       const pending = data.pending_invites || [];
 
       if (members.length === 0) {
-        list.innerHTML = '<p class="vw-chips-empty">No members yet.</p>';
+        list.innerHTML = `
+          <div style="text-align:center;padding:40px 24px">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--border)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="display:block;margin:0 auto 16px" aria-hidden="true">
+              <circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/>
+              <path d="M16 3.13a4 4 0 0 1 0 7.75"/><path d="M21 21v-2a4 4 0 0 0-3-3.85"/>
+            </svg>
+            <p style="margin:0 0 6px;font-size:15px;font-weight:600;color:var(--text-heading)">No members yet</p>
+            <p style="margin:0 0 20px;font-size:13px;color:var(--text-muted)">Invite teammates to collaborate on content in this workspace.</p>
+            <button id="empty-invite-btn" class="vw-save-btn" type="button">Invite someone</button>
+          </div>`;
+        document.getElementById('empty-invite-btn').addEventListener('click', () => {
+          inviteEmail.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          inviteEmail.focus();
+        });
       } else {
         list.innerHTML = members.map(m => {
           const isMe      = m.user_id === currentUserId;

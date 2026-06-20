@@ -416,8 +416,7 @@ router.post('/placid-templates', requireAdminPassword, async (req, res) => {
   const customLayersJson = JSON.stringify(Array.isArray(custom_layers) ? custom_layers : []);
   const brandLayersJson  = JSON.stringify(Array.isArray(brand_layers)  ? brand_layers  : []);
   try {
-    const keySetting = await db.prepare("SELECT value FROM admin_settings WHERE key = 'placid_api_key'").get();
-    const apiKey     = keySetting?.value || process.env.PLACID_API_KEY;
+    const apiKey     = process.env.PLACID_API_KEY || await getSetting('placid_api_key') || null;
     const previewUrl = apiKey ? await fetchPlacidThumbnail(apiKey, template_uuid) : null;
 
     const maxRow = await db.prepare('SELECT COALESCE(MAX(sort_order), -1) AS mx FROM placid_templates').get();
@@ -441,8 +440,7 @@ router.put('/placid-templates/:id', requireAdminPassword, async (req, res) => {
   const customLayersJson = JSON.stringify(Array.isArray(custom_layers) ? custom_layers : []);
   const brandLayersJson  = JSON.stringify(Array.isArray(brand_layers)  ? brand_layers  : []);
   try {
-    const keySetting = await db.prepare("SELECT value FROM admin_settings WHERE key = 'placid_api_key'").get();
-    const apiKey     = keySetting?.value || process.env.PLACID_API_KEY;
+    const apiKey     = process.env.PLACID_API_KEY || await getSetting('placid_api_key') || null;
     const previewUrl = apiKey ? await fetchPlacidThumbnail(apiKey, template_uuid) : null;
 
     const row = await db.prepare(`

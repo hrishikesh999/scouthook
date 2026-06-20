@@ -380,10 +380,14 @@ async function fetchPlacidThumbnail(apiKey, templateUuid) {
     const r = await fetch('https://api.placid.app/api/rest/templates', {
       headers: { Authorization: `Bearer ${apiKey}` },
     });
-    if (!r.ok) return null;
-    const { data } = await r.json();
-    return (Array.isArray(data) ? data : []).find(t => t.uuid === templateUuid)?.thumbnail || null;
-  } catch { return null; }
+    if (!r.ok) { console.error('[placid] templates API error', r.status); return null; }
+    const body = await r.json();
+    console.log('[placid] templates response keys:', Object.keys(body), '| first item keys:', JSON.stringify(Object.keys((body.data||body)[0] || {})));
+    const list = Array.isArray(body.data) ? body.data : Array.isArray(body) ? body : [];
+    const tpl  = list.find(t => t.uuid === templateUuid);
+    console.log('[placid] matched template:', tpl ? JSON.stringify(Object.keys(tpl)) : 'none');
+    return tpl?.thumbnail || tpl?.image_url || tpl?.preview_image_url || null;
+  } catch (e) { console.error('[placid] fetchPlacidThumbnail error', e.message); return null; }
 }
 
 function parsePlacidJsonArray(raw) {

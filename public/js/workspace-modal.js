@@ -242,8 +242,8 @@
   }
 
   function setError(el, msg) {
-    el.textContent    = msg || '';
-    el.style.display  = msg ? '' : 'none';
+    el.textContent   = msg || '';
+    el.style.display = msg ? 'block' : 'none';
   }
 
   function setBtn(btn, busy, busyLabel) {

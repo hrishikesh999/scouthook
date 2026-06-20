@@ -35,17 +35,14 @@ label, .field label { color: #111111; }
   overflow-y: auto;
 }
 .admin-nav__brand {
-  font-weight: 700;
-  font-size: 0.95rem;
-  color: #111111;
   text-decoration: none;
   padding: var(--space-lg) var(--space-lg) var(--space-md);
   display: block;
   border-bottom: 1px solid #E5E7EB;
   margin-bottom: var(--space-sm);
-  white-space: nowrap;
 }
-.admin-nav__brand span { color: #6B7280; font-weight: 400; font-size: 0.72rem; display: block; margin-top: 2px; }
+.admin-nav__logo { width: 120px; height: auto; display: block; }
+.admin-nav__brand span { color: #6B7280; font-weight: 400; font-size: 0.72rem; display: block; margin-top: 4px; }
 .admin-nav__links { display: flex; flex-direction: column; gap: 1px; padding: var(--space-sm); }
 .admin-nav__link {
   color: #374151;

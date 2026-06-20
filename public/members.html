@@ -229,7 +229,11 @@
         currentWorkspaceId = user.tenant_id;
         currentUserId      = user.user_id;
       }
-      if (!currentWorkspaceId) return;
+      if (!currentWorkspaceId) {
+        document.getElementById('members-list').innerHTML =
+          '<p class="vw-chips-empty">No workspace found. Please refresh or sign in again.</p>';
+        return;
+      }
 
       fetch(`/api/workspaces/${currentWorkspaceId}/members`, { credentials: 'same-origin' })
         .then(r => r.json())
@@ -240,11 +244,16 @@
           }
           renderMembers(d);
         })
-        .catch(() => {
+        .catch(err => {
+          console.error('[members] fetch failed', err);
           document.getElementById('members-list').innerHTML =
-            '<p class="vw-chips-empty">Unable to load members.</p>';
+            '<p class="vw-chips-empty">Unable to load members. Please refresh.</p>';
         });
-    }).catch(() => {});
+    }).catch(err => {
+      console.error('[members] auth failed', err);
+      document.getElementById('members-list').innerHTML =
+        '<p class="vw-chips-empty">Unable to load members. Please refresh.</p>';
+    });
 
   })();
   </script>

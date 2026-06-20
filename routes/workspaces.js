@@ -208,9 +208,10 @@ router.get('/:id/members', requireAuth, requireMemberOf, async (req, res) => {
   try {
     const [members, pending_invites] = await Promise.all([
       db.prepare(`
-        SELECT wm.user_id, wm.role, wm.joined_at, up.email, up.display_name
+        SELECT wm.user_id, wm.role, wm.joined_at,
+               up.email, up.display_name
         FROM   workspace_members wm
-        JOIN   user_profiles up ON up.user_id = wm.user_id
+        LEFT JOIN user_profiles up ON up.user_id = wm.user_id
         WHERE  wm.workspace_id = ?
         ORDER  BY wm.created_at ASC
       `).all(req.params.id),

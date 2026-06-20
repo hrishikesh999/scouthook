@@ -175,13 +175,6 @@ function renderPostRows(container, posts, type) {
       dateStr = formatDate(dateField, type === 'scheduled');
     }
 
-    // Score
-    const score = post.quality_score !== undefined && post.quality_score !== null
-      ? Math.round(post.quality_score)
-      : null;
-    const badgeClass = score !== null ? scoreClass(score) : 'none';
-    const badgeText  = score !== null ? String(score) : '—';
-
     // Status
     const status     = post.status || (type === 'scheduled' ? 'scheduled' : 'draft');
     const statusLabel = status.charAt(0).toUpperCase() + status.slice(1);
@@ -192,7 +185,6 @@ function renderPostRows(container, posts, type) {
         <div class="post-row-date">${escHtml(dateStr)}</div>
       </div>
       <div class="post-row-right">
-        <span class="score-badge ${badgeClass}" aria-label="Quality score: ${badgeText}">${badgeText}</span>
         <span class="status-pill ${status.toLowerCase()}">${escHtml(statusLabel)}</span>
       </div>`;
 
@@ -201,12 +193,6 @@ function renderPostRows(container, posts, type) {
 }
 
 /* ── Helpers ─────────────────────────────────────────────────── */
-function scoreClass(score) {
-  if (score >= 75) return 'pass';
-  if (score >= 50) return 'borderline';
-  return 'fail';
-}
-
 function formatDate(isoString, includeTime) {
   try {
     const d = new Date(isoString);

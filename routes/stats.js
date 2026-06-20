@@ -91,13 +91,6 @@ router.get('/stats', async (req, res) => {
       WHERE tenant_id = ? AND created_at >= ?
     `).get(req.tenantId, monthStartIso);
 
-    // Average quality score across all posts
-    const avgScore = await db.prepare(`
-      SELECT AVG(quality_score) AS avg
-      FROM generated_posts
-      WHERE tenant_id = ?
-    `).get(req.tenantId);
-
     // Count of pending scheduled posts
     const scheduledCount = await db.prepare(`
       SELECT COUNT(*) AS cnt
@@ -108,7 +101,6 @@ router.get('/stats', async (req, res) => {
     return res.json({
       ok: true,
       posts_this_month: postsThisMonth.cnt,
-      avg_quality_score: avgScore.avg !== null ? Math.round(avgScore.avg) : null,
       scheduled_count: scheduledCount.cnt
     });
   } catch (err) {
@@ -128,7 +120,7 @@ router.get('/posts/recent', async (req, res) => {
 
   try {
     const posts = await db.prepare(`
-      SELECT id, content, quality_score, passed_gate, created_at, status,
+      SELECT id, content, passed_gate, created_at, status,
              archetype_used, published_at, performance_tag
       FROM generated_posts
       WHERE tenant_id = ? AND status != 'scheduled'
@@ -139,7 +131,6 @@ router.get('/posts/recent', async (req, res) => {
     const mapped = posts.map(p => ({
       id:              p.id,
       content:         p.content,
-      quality_score:   p.quality_score,
       passed_gate:     p.passed_gate,
       created_at:      p.created_at,
       status:          p.status || 'draft',
@@ -179,7 +170,6 @@ router.get('/posts/scheduled', async (req, res) => {
       id:            p.id,
       content:       p.content,
       scheduled_for: p.scheduled_for,
-      quality_score: null,
       status:        'scheduled'
     }));
 

@@ -140,8 +140,7 @@
         });
         const data = await resp.json();
         if (data.ok && data.workspaceId) {
-          await fetch(`/api/workspaces/${data.workspaceId}/switch`, { method: 'POST', credentials: 'same-origin' });
-          window.location.href = '/dashboard.html';
+          window.location.href = data.redirect || '/dashboard.html';
         } else {
           window.alert(data.error || 'Failed to create workspace');
         }

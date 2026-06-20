@@ -6,10 +6,21 @@
 
 require('dotenv').config({ path: '.env.test', override: true });
 
+const { execSync } = require('child_process');
+const path = require('path');
 const { Pool } = require('pg');
 
 module.exports = async function globalSetup() {
   if (process.env.NODE_ENV !== 'test') return;
+
+  // Run migrations against the test branch before any tests execute.
+  // process.env already has the test DATABASE_URL (loaded above), so the child
+  // process inherits it. dotenv inside migrate.js won't override existing vars.
+  execSync('node scripts/migrate.js', {
+    cwd: path.join(__dirname, '../../..'),
+    env: { ...process.env },
+    stdio: 'inherit',
+  });
 
   const pool = new Pool({
     connectionString: process.env.DATABASE_URL,

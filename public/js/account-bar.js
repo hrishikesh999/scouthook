@@ -2,8 +2,12 @@
 
 (function () {
   // Ensure workspace-modal.js is loaded on every page that has the sidebar.
-  if (!window.WorkspaceModal) {
+  // _wmScriptLoading guards against a double-inject race where account-bar re-runs
+  // before the first script has finished loading (WorkspaceModal not yet set).
+  if (!window.WorkspaceModal && !window._wmScriptLoading) {
+    window._wmScriptLoading = true;
     const s = document.createElement('script');
+    s.async = true; // explicit async — also guards against document.body being null
     s.src = '/js/workspace-modal.js';
     document.head.appendChild(s);
   }

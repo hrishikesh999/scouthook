@@ -398,6 +398,9 @@
 
       window.Paddle.Checkout.open({
         items: [{ priceId: addonRes.priceId, quantity: 1 }],
+        // customData is returned by /api/billing/add-workspace and contains userId +
+        // type + quantity for webhook attribution and fraud detection.
+        customData: addonRes.customData || undefined,
         settings: {
           displayMode: 'overlay',
           // successUrl is a fallback if eventCallback redirect doesn't fire
@@ -430,27 +433,30 @@
       keepalive: true,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ transactionId: transactionId || '' }),
-    }).catch(() => {});
+    }).catch(e => console.warn('[workspace-modal] billing sync failed:', e?.message));
 
-    // Brief pause to let the sync propagate
-    await new Promise(r => setTimeout(r, 1200));
+    // Retry workspace creation up to 3 times with increasing delays.
+    // The billing sync may need a moment to propagate extra_workspaces to the DB.
+    // Only retry on workspace_limit_reached; any other error is a genuine failure.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (attempt > 0) await new Promise(r => setTimeout(r, attempt * 1000)); // 1s, 2s
+      try {
+        const resp = await fetch('/api/workspaces', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: pendingName }),
+        });
+        const data = await resp.json();
+        if (data.ok && data.redirect) {
+          window.location.href = data.redirect;
+          return;
+        }
+        if (data.error !== 'workspace_limit_reached') break; // real error — stop retrying
+      } catch { break; }
+    }
 
-    // Create workspace and redirect to onboarding
-    try {
-      const resp = await fetch('/api/workspaces', {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: pendingName }),
-      });
-      const data = await resp.json();
-      if (data.ok && data.redirect) {
-        window.location.href = data.redirect;
-        return;
-      }
-    } catch { /* fall through to recovery */ }
-
-    // If creation still fails, open modal with name pre-filled
+    // All attempts failed — open modal with name pre-filled so user can retry manually
     nameInput.value = pendingName;
     setError(errorEl, 'Purchase succeeded but workspace creation failed — your slot is ready. Try again.');
     showState('create');

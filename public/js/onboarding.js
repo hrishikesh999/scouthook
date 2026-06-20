@@ -377,8 +377,11 @@ function initS9() {
 async function init() {
   try {
     const me = await fetch('/api/auth/me').then(r => r.json());
-    if (!me || !me.id) { window.location.href = '/login.html'; return; }
-    if (me.onboarding_complete) { window.location.href = '/dashboard.html'; return; }
+    if (!me?.user?.user_id) { window.location.href = '/login.html'; return; }
+    // Skip wizard if the current workspace has already been set up — handles the
+    // case where a user navigates here manually on an already-configured workspace.
+    const profile = await fetch('/api/profile').then(r => r.json());
+    if (profile?.onboarding_complete) { window.location.href = '/dashboard.html'; return; }
   } catch {
     window.location.href = '/login.html';
     return;

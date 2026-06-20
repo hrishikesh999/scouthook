@@ -123,7 +123,7 @@ router.post('/', requireAuth, async (req, res) => {
     req.user.tenant_id = workspaceId;
     await new Promise((resolve, reject) => req.session.save(e => e ? reject(e) : resolve()));
 
-    return res.json({ ok: true, workspaceId, redirect: '/workspace-setup.html' });
+    return res.json({ ok: true, workspaceId, redirect: '/onboarding.html' });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
   }

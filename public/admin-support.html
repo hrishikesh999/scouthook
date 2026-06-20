@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Support — ScoutHook Admin</title>
+  <link rel="stylesheet" href="/css/scouthook.css" />
+  <link rel="stylesheet" href="/css/main.css" />
+  <style>
+    .admin-nav { background: var(--color-surface); border-bottom: 1px solid var(--color-border); padding: 0 var(--space-xl); display: flex; align-items: center; gap: var(--space-xl); height: 52px; }
+    .admin-nav__brand { font-weight: 700; font-size: 1rem; color: var(--color-text); text-decoration: none; margin-right: var(--space-md); white-space: nowrap; }
+    .admin-nav__brand span { color: var(--color-text-muted); font-weight: 400; font-size: 0.75rem; margin-left: 4px; }
+    .admin-nav__links { display: flex; align-items: center; gap: 2px; flex: 1; }
+    .admin-nav__link { color: var(--color-text-muted); text-decoration: none; font-size: 0.875rem; padding: var(--space-xs) var(--space-sm); border-radius: var(--radius-sm); border-bottom: 2px solid transparent; transition: color .15s; }
+    .admin-nav__link:hover { color: var(--color-text); }
+    .admin-nav__link--active { color: var(--color-accent-light, #0FA87F); border-bottom-color: var(--color-accent-light, #0FA87F); }
+    .admin-nav__sep { width: 1px; height: 20px; background: var(--color-border); margin: 0 var(--space-sm); }
+    .admin-auth { display: flex; align-items: center; justify-content: center; min-height: 60vh; }
+    .admin-auth__card { width: 100%; max-width: 380px; }
+    .data-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+    .data-table th { text-align: left; font-size: 0.72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--color-text-muted); padding: var(--space-sm) var(--space-md); border-bottom: 1px solid var(--color-border); font-weight: 600; }
+    .data-table td { padding: var(--space-sm) var(--space-md); border-bottom: 1px solid var(--color-border); vertical-align: middle; }
+    .data-table tr.clickable:hover td { background: var(--color-surface-2, rgba(255,255,255,.03)); cursor: pointer; }
+    .badge { display: inline-block; border-radius: var(--radius-sm, 4px); padding: 2px 8px; font-size: 0.78rem; font-weight: 700; }
+    .badge--open     { background: rgba(245,158,11,.18); color: #f59e0b; }
+    .badge--resolved { background: rgba(13,122,95,.18); color: #0FA87F; }
+    .badge--pro      { background: rgba(13,122,95,.18); color: #0FA87F; }
+    .badge--free     { background: rgba(138,156,192,.15); color: #8A9CC0; }
+    .filter-bar { display: flex; align-items: center; gap: var(--space-sm); margin-bottom: var(--space-lg); flex-wrap: wrap; }
+    .filter-bar .btn { font-size: 0.8rem; padding: 5px 12px; }
+    .btn--active { background: var(--color-primary, #0D7A5F); color: #fff; border-color: var(--color-primary, #0D7A5F); }
+    .ticket-detail { background: var(--color-surface-2, rgba(255,255,255,.04)); border: 1px solid var(--color-border); border-radius: var(--radius-md, 8px); padding: var(--space-lg); margin-top: var(--space-md); }
+    .ticket-detail__header { font-weight: 700; font-size: 1rem; margin-bottom: var(--space-xs); }
+    .ticket-detail__meta { font-size: 0.82rem; color: var(--color-text-muted); margin-bottom: var(--space-lg); }
+    .ticket-detail__section { border-top: 1px solid var(--color-border); padding-top: var(--space-md); margin-top: var(--space-md); }
+    .ticket-detail__label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--color-text-muted); font-weight: 600; margin-bottom: var(--space-sm); }
+    .ticket-detail__message { font-size: 0.9rem; line-height: 1.6; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+
+  <div id="auth-screen" class="admin-auth">
+    <div class="admin-auth__card card">
+      <h2 style="margin-bottom: var(--space-md);">ScoutHook Admin</h2>
+      <div class="field"><label for="pw-input">Admin password</label><input type="password" id="pw-input" placeholder="ADMIN_PASSWORD" /></div>
+      <div id="pw-error" class="hidden" style="color: var(--color-error); font-size: 0.85rem; margin-bottom: var(--space-md);"></div>
+      <button id="pw-btn" class="btn btn--primary" style="width:100%">Unlock</button>
+    </div>
+  </div>
+
+  <div id="main" class="hidden">
+    <nav class="admin-nav">
+      <a href="/admin.html" class="admin-nav__brand">Scout&#x25AA;hook <span>Admin</span></a>
+      <div class="admin-nav__links">
+        <a href="/admin.html" class="admin-nav__link">Dashboard</a>
+        <a href="/admin-users.html" class="admin-nav__link">Users</a>
+        <a href="/admin-feedback.html" class="admin-nav__link">Feedback</a>
+        <a href="/admin-support.html" class="admin-nav__link admin-nav__link--active">Support</a>
+        <div class="admin-nav__sep"></div>
+        <a href="/admin-settings.html" class="admin-nav__link">Settings</a>
+        <a href="/admin-templates.html" class="admin-nav__link">Templates</a>
+      </div>
+    </nav>
+
+    <main class="container--wide" style="padding: var(--space-xl);">
+      <h1 style="margin-bottom: var(--space-lg);">Support Tickets</h1>
+
+      <div class="filter-bar">
+        <button class="btn btn--secondary btn--active" data-status="">All</button>
+        <button class="btn btn--secondary" data-status="open">Open</button>
+        <button class="btn btn--secondary" data-status="resolved">Resolved</button>
+        <span id="count-label" style="margin-left:auto;font-size:0.8rem;color:var(--color-text-muted);"></span>
+      </div>
+
+      <div class="card" style="overflow-x: auto;">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>User</th>
+              <th>Email</th>
+              <th>Plan</th>
+              <th>Topic</th>
+              <th>Message</th>
+              <th>Status</th>
+              <th>Submitted</th>
+            </tr>
+          </thead>
+          <tbody id="tickets-tbody">
+            <tr><td colspan="7" style="text-align:center;color:var(--color-text-muted);padding:var(--space-xl);">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Inline ticket detail -->
+      <div id="ticket-detail" class="hidden"></div>
+    </main>
+  </div>
+
+  <script>
+    let adminPw = '';
+    let tickets = [];
+    let expandedId = null;
+
+    function init() {
+      const saved = sessionStorage.getItem('adminPw');
+      if (saved) { adminPw = saved; showMain(); return; }
+    }
+
+    document.getElementById('pw-btn').addEventListener('click', async () => {
+      const pw = document.getElementById('pw-input').value;
+      const r = await fetch('/admin/settings', { headers: { 'X-Admin-Password': pw } });
+      if (r.status === 401) { document.getElementById('pw-error').textContent = 'Incorrect password.'; document.getElementById('pw-error').classList.remove('hidden'); return; }
+      adminPw = pw; sessionStorage.setItem('adminPw', pw); showMain();
+    });
+    document.getElementById('pw-input').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('pw-btn').click(); });
+
+    function showMain() {
+      document.getElementById('auth-screen').classList.add('hidden');
+      document.getElementById('main').classList.remove('hidden');
+      loadTickets('');
+    }
+
+    function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+    function planBadge(plan, status) {
+      if (status === 'active' && plan === 'pro') return `<span class="badge badge--pro">Pro</span>`;
+      return `<span class="badge badge--free">${esc(plan || 'Free')}</span>`;
+    }
+
+    async function loadTickets(status) {
+      const params = status ? `?status=${encodeURIComponent(status)}` : '';
+      const r = await fetch(`/admin/support${params}`, { headers: { 'X-Admin-Password': adminPw } });
+      const data = await r.json();
+      tickets = data.tickets || [];
+      document.getElementById('count-label').textContent = `Count: ${tickets.length}`;
+      expandedId = null;
+      document.getElementById('ticket-detail').classList.add('hidden');
+      renderTickets();
+    }
+
+    function renderTickets() {
+      const tbody = document.getElementById('tickets-tbody');
+      if (!tickets.length) {
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--color-text-muted);padding:var(--space-xl);">No tickets found.</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = tickets.map(t => `
+        <tr class="clickable${expandedId === t.id ? ' selected' : ''}" data-id="${t.id}">
+          <td>${esc(t.display_name || '—')}</td>
+          <td>${esc(t.email || '—')}</td>
+          <td>${planBadge(t.plan, t.status)}</td>
+          <td style="font-weight:600">${esc(t.topic || '—')}</td>
+          <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--color-text-muted)">${esc((t.message||'').slice(0,80))}${(t.message||'').length>80?'…':''}</td>
+          <td><span class="badge badge--${t.status === 'resolved' ? 'resolved' : 'open'}">${esc(t.status || 'open')}</span></td>
+          <td style="white-space:nowrap">${t.created_at ? new Date(t.created_at).toLocaleDateString() : '—'}</td>
+        </tr>`).join('');
+      tbody.querySelectorAll('tr.clickable').forEach(tr => {
+        tr.addEventListener('click', () => {
+          const id = parseInt(tr.dataset.id);
+          if (expandedId === id) {
+            expandedId = null;
+            document.getElementById('ticket-detail').classList.add('hidden');
+          } else {
+            expandedId = id;
+            renderDetail(tickets.find(t => t.id === id));
+          }
+        });
+      });
+    }
+
+    function renderDetail(ticket) {
+      if (!ticket) return;
+      const el = document.getElementById('ticket-detail');
+      el.classList.remove('hidden');
+      el.innerHTML = `
+        <div class="ticket-detail">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:var(--space-md);flex-wrap:wrap;">
+            <div>
+              <div class="ticket-detail__header">Support Request #${ticket.id} — ${esc(ticket.topic || '—')}</div>
+              <div class="ticket-detail__meta">From: ${esc(ticket.display_name || '—')} (${esc(ticket.email || '—')}) · ${planBadge(ticket.plan, ticket.status_sub)} · ${ticket.created_at ? new Date(ticket.created_at).toLocaleDateString() : '—'}</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:var(--space-sm);">
+              <span class="badge badge--${ticket.status === 'resolved' ? 'resolved' : 'open'}" id="detail-badge">${esc(ticket.status || 'open')}</span>
+              ${ticket.status !== 'resolved' ? `<button class="btn btn--secondary btn--sm" id="mark-resolved-btn" data-id="${ticket.id}">Mark Resolved</button>` : `<button class="btn btn--secondary btn--sm" id="mark-open-btn" data-id="${ticket.id}">Reopen</button>`}
+            </div>
+          </div>
+
+          <div class="ticket-detail__section">
+            <div class="ticket-detail__label">Message</div>
+            <div class="ticket-detail__message">${esc(ticket.message || '')}</div>
+          </div>
+
+          ${ticket.admin_note ? `
+          <div class="ticket-detail__section">
+            <div class="ticket-detail__label">Previous Admin Note</div>
+            <div class="ticket-detail__message" style="color:var(--color-text-muted)">${esc(ticket.admin_note)}</div>
+          </div>` : ''}
+
+          <div class="ticket-detail__section">
+            <div class="ticket-detail__label">Reply to user</div>
+            <div class="field" style="margin-bottom:var(--space-sm)">
+              <textarea id="reply-body" rows="5" placeholder="Type your reply…" style="width:100%;resize:vertical;"></textarea>
+            </div>
+            <div style="display:flex;justify-content:flex-end;gap:var(--space-sm);align-items:center;">
+              <span id="reply-msg" style="font-size:0.82rem;"></span>
+              <button class="btn btn--primary" id="send-reply-btn" data-id="${ticket.id}">Send Reply &amp; Resolve</button>
+            </div>
+          </div>
+        </div>
+      `;
+
+      document.getElementById('send-reply-btn')?.addEventListener('click', async () => {
+        const id  = parseInt(document.getElementById('send-reply-btn').dataset.id);
+        const msg = document.getElementById('reply-body').value.trim();
+        const msgEl = document.getElementById('reply-msg');
+        if (!msg) { msgEl.style.color = 'var(--color-error)'; msgEl.textContent = 'Reply cannot be empty.'; return; }
+        msgEl.style.color = 'var(--color-text-muted)'; msgEl.textContent = 'Sending…';
+        const r = await fetch(`/admin/support/${id}/reply`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Admin-Password': adminPw },
+          body: JSON.stringify({ message: msg }),
+        });
+        const data = await r.json();
+        if (data.ok) {
+          msgEl.style.color = 'var(--color-success, #0FA87F)';
+          msgEl.textContent = 'Reply sent & ticket resolved.';
+          const t = tickets.find(t => t.id === id);
+          if (t) { t.status = 'resolved'; t.admin_note = msg; }
+          renderTickets();
+          renderDetail(tickets.find(t => t.id === id));
+        } else {
+          msgEl.style.color = 'var(--color-error)';
+          msgEl.textContent = data.error || 'Failed to send.';
+        }
+      });
+
+      const markResolvedBtn = document.getElementById('mark-resolved-btn');
+      const markOpenBtn     = document.getElementById('mark-open-btn');
+      if (markResolvedBtn) {
+        markResolvedBtn.addEventListener('click', () => toggleStatus(ticket.id, 'resolved'));
+      }
+      if (markOpenBtn) {
+        markOpenBtn.addEventListener('click', () => toggleStatus(ticket.id, 'open'));
+      }
+    }
+
+    async function toggleStatus(id, status) {
+      const r = await fetch(`/admin/support/${id}/status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Admin-Password': adminPw },
+        body: JSON.stringify({ status }),
+      });
+      const data = await r.json();
+      if (data.ok) {
+        const t = tickets.find(t => t.id === id);
+        if (t) t.status = status;
+        renderTickets();
+        renderDetail(tickets.find(t => t.id === id));
+      }
+    }
+
+    document.querySelectorAll('[data-status]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('[data-status]').forEach(b => b.classList.remove('btn--active'));
+        btn.classList.add('btn--active');
+        loadTickets(btn.dataset.status);
+      });
+    });
+
+    init();
+  </script>
+</body>
+</html>

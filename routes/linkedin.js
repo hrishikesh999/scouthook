@@ -603,6 +603,12 @@ router.delete('/connections/:id', async (req, res) => {
       }
     }
 
+    try {
+      await db.prepare(
+        'INSERT INTO platform_events (event_type, user_id, workspace_id) VALUES (?, ?, ?)'
+      ).run('linkedin_disconnect', userId, tenantId);
+    } catch { /* platform_events table may not exist yet */ }
+
     await db.prepare('DELETE FROM linkedin_connections WHERE id = ? AND workspace_id = ?').run(id, tenantId);
 
     return res.json({ ok: true });
@@ -1270,6 +1276,12 @@ router.post('/disconnect', (req, res) => {
     }
 
     // Delete the connections.
+    try {
+      await db.prepare(
+        'INSERT INTO platform_events (event_type, user_id, workspace_id) VALUES (?, ?, ?)'
+      ).run('linkedin_disconnect', userId, tenantId);
+    } catch { /* platform_events table may not exist yet */ }
+
     await db.prepare(
       isOwner
         ? `DELETE FROM linkedin_connections WHERE workspace_id = ? AND account_type = 'personal'`
@@ -1328,6 +1340,11 @@ router.delete('/user-data', (req, res) => {
       await tx.prepare('DELETE FROM copy_events WHERE user_id = ? AND tenant_id = ?').run(userId, tenantId);
       await tx.prepare('DELETE FROM generated_posts WHERE user_id = ? AND tenant_id = ?').run(userId, tenantId);
       await tx.prepare('DELETE FROM generation_runs WHERE user_id = ? AND tenant_id = ?').run(userId, tenantId);
+      try {
+        await tx.prepare(
+          'INSERT INTO platform_events (event_type, user_id, workspace_id) VALUES (?, ?, ?)'
+        ).run('linkedin_disconnect', userId, tenantId);
+      } catch { /* platform_events table may not exist yet */ }
       await tx.prepare('DELETE FROM linkedin_connections WHERE workspace_id = ? AND authorized_by = ?').run(tenantId, userId);
       await tx.prepare('DELETE FROM user_profiles WHERE user_id = ?').run(userId);
     });

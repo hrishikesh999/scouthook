@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Settings — ScoutHook Admin</title>
+  <link rel="stylesheet" href="/css/scouthook.css" />
+  <link rel="stylesheet" href="/css/main.css" />
+  <style>
+    .admin-nav { background: var(--color-surface); border-bottom: 1px solid var(--color-border); padding: 0 var(--space-xl); display: flex; align-items: center; gap: var(--space-xl); height: 52px; }
+    .admin-nav__brand { font-weight: 700; font-size: 1rem; color: var(--color-text); text-decoration: none; margin-right: var(--space-md); white-space: nowrap; }
+    .admin-nav__brand span { color: var(--color-text-muted); font-weight: 400; font-size: 0.75rem; margin-left: 4px; }
+    .admin-nav__links { display: flex; align-items: center; gap: 2px; flex: 1; }
+    .admin-nav__link { color: var(--color-text-muted); text-decoration: none; font-size: 0.875rem; padding: var(--space-xs) var(--space-sm); border-radius: var(--radius-sm); border-bottom: 2px solid transparent; transition: color .15s; }
+    .admin-nav__link:hover { color: var(--color-text); }
+    .admin-nav__link--active { color: var(--color-accent-light, #0FA87F); border-bottom-color: var(--color-accent-light, #0FA87F); }
+    .admin-nav__sep { width: 1px; height: 20px; background: var(--color-border); margin: 0 var(--space-sm); }
+    .admin-auth { display: flex; align-items: center; justify-content: center; min-height: 60vh; }
+    .admin-auth__card { width: 100%; max-width: 380px; }
+    .section-heading { font-size: 0.78rem; text-transform: uppercase; letter-spacing: .08em; color: var(--color-text-muted); font-weight: 600; margin: 0 0 var(--space-md); }
+  </style>
+</head>
+<body>
+
+  <div id="auth-screen" class="admin-auth">
+    <div class="admin-auth__card card">
+      <h2 style="margin-bottom: var(--space-md);">ScoutHook Admin</h2>
+      <div class="field"><label for="pw-input">Admin password</label><input type="password" id="pw-input" placeholder="ADMIN_PASSWORD" /></div>
+      <div id="pw-error" class="hidden" style="color: var(--color-error); font-size: 0.85rem; margin-bottom: var(--space-md);"></div>
+      <button id="pw-btn" class="btn btn--primary" style="width:100%">Unlock</button>
+    </div>
+  </div>
+
+  <div id="main" class="hidden">
+    <nav class="admin-nav">
+      <a href="/admin.html" class="admin-nav__brand">Scout&#x25AA;hook <span>Admin</span></a>
+      <div class="admin-nav__links">
+        <a href="/admin.html" class="admin-nav__link">Dashboard</a>
+        <a href="/admin-users.html" class="admin-nav__link">Users</a>
+        <a href="/admin-feedback.html" class="admin-nav__link">Feedback</a>
+        <a href="/admin-support.html" class="admin-nav__link">Support</a>
+        <div class="admin-nav__sep"></div>
+        <a href="/admin-settings.html" class="admin-nav__link admin-nav__link--active">Settings</a>
+        <a href="/admin-templates.html" class="admin-nav__link">Templates</a>
+      </div>
+    </nav>
+
+    <main style="padding: var(--space-xl);">
+      <div style="max-width: 640px; margin: 0 auto;">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom: var(--space-xl);">
+          <h1>Platform Settings</h1>
+          <div style="display:flex;align-items:center;gap:var(--space-sm);">
+            <div id="save-success" class="hidden" style="color: var(--color-success, #0FA87F); font-size:0.85rem;">Saved.</div>
+            <div id="save-error" class="hidden" style="color: var(--color-error); font-size:0.85rem;"></div>
+            <button id="save-btn" class="btn btn--primary">
+              <span id="save-btn-text">Save changes</span>
+              <span id="save-spinner" class="spinner hidden"></span>
+            </button>
+          </div>
+        </div>
+
+        <!-- AI section -->
+        <div class="card" style="margin-bottom: var(--space-lg);">
+          <h3 class="section-heading">AI</h3>
+          <div class="field">
+            <label for="anthropic_api_key">Anthropic API key</label>
+            <input type="password" id="anthropic_api_key" name="anthropic_api_key" placeholder="sk-ant-…" autocomplete="off" />
+            <div class="text-muted" style="font-size:0.8rem; margin-top:0.25rem;">Used for all Claude calls — fingerprint extraction, generation, visuals.</div>
+          </div>
+        </div>
+
+        <!-- LinkedIn OAuth section -->
+        <div class="card" style="margin-bottom: var(--space-lg);">
+          <h3 class="section-heading">LinkedIn OAuth</h3>
+          <div class="field">
+            <label for="linkedin_client_id">LinkedIn client ID</label>
+            <input type="text" id="linkedin_client_id" name="linkedin_client_id" placeholder="From LinkedIn Developer Portal" autocomplete="off" />
+          </div>
+          <div class="field">
+            <label for="linkedin_client_secret">LinkedIn client secret</label>
+            <input type="password" id="linkedin_client_secret" name="linkedin_client_secret" placeholder="From LinkedIn Developer Portal" autocomplete="off" />
+          </div>
+          <div class="field">
+            <label for="linkedin_redirect_uri">OAuth redirect URI</label>
+            <input type="text" id="linkedin_redirect_uri" name="linkedin_redirect_uri" placeholder="https://yourdomain.com/api/linkedin/callback" />
+          </div>
+        </div>
+
+        <!-- Security section -->
+        <div class="card" style="margin-bottom: var(--space-lg);">
+          <h3 class="section-heading">Security</h3>
+          <div class="field">
+            <label for="token_encryption_key">Token encryption key</label>
+            <input type="password" id="token_encryption_key" name="token_encryption_key" placeholder="32-byte hex key (64 hex chars)" autocomplete="off" />
+            <div class="text-muted" style="font-size:0.8rem; margin-top:0.25rem;">
+              AES-256 key for encrypting LinkedIn tokens at rest.
+              Generate: <code style="font-family: var(--font-mono); font-size:0.8rem;">node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"</code>
+            </div>
+          </div>
+        </div>
+
+        <!-- Infrastructure section -->
+        <div class="card" style="margin-bottom: var(--space-lg);">
+          <h3 class="section-heading">Infrastructure</h3>
+          <div class="field">
+            <label for="redis_url">Redis URL</label>
+            <input type="text" id="redis_url" name="redis_url" placeholder="redis://localhost:6379" />
+            <div class="text-muted" style="font-size:0.8rem; margin-top:0.25rem;">Required for BullMQ post scheduling. Leave blank to disable scheduling.</div>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <script>
+    const SETTING_KEYS = [
+      'anthropic_api_key', 'linkedin_client_id', 'linkedin_client_secret',
+      'linkedin_redirect_uri', 'token_encryption_key', 'redis_url',
+    ];
+    let adminPw = '';
+
+    function init() {
+      const saved = sessionStorage.getItem('adminPw');
+      if (saved) { adminPw = saved; showMain(); return; }
+    }
+
+    document.getElementById('pw-btn').addEventListener('click', async () => {
+      const pw = document.getElementById('pw-input').value;
+      const r = await fetch('/admin/settings', { headers: { 'X-Admin-Password': pw } });
+      if (r.status === 401) { document.getElementById('pw-error').textContent = 'Incorrect password.'; document.getElementById('pw-error').classList.remove('hidden'); return; }
+      adminPw = pw; sessionStorage.setItem('adminPw', pw); showMain();
+    });
+    document.getElementById('pw-input').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('pw-btn').click(); });
+
+    async function showMain() {
+      document.getElementById('auth-screen').classList.add('hidden');
+      document.getElementById('main').classList.remove('hidden');
+      const r = await fetch('/admin/settings', { headers: { 'X-Admin-Password': adminPw } });
+      const data = await r.json();
+      if (data.ok) populateSettings(data.settings);
+    }
+
+    function populateSettings(settings) {
+      settings.forEach(({ key, is_set }) => {
+        const el = document.getElementById(key);
+        if (el && is_set) el.placeholder += ' (already set — enter new value to change)';
+      });
+    }
+
+    document.getElementById('save-btn').addEventListener('click', async () => {
+      const btn = document.getElementById('save-btn');
+      btn.disabled = true;
+      document.getElementById('save-spinner').classList.remove('hidden');
+      document.getElementById('save-success').classList.add('hidden');
+      document.getElementById('save-error').classList.add('hidden');
+
+      const settings = {};
+      SETTING_KEYS.forEach(key => {
+        const el = document.getElementById(key);
+        if (el && el.value.trim()) settings[key] = el.value.trim();
+      });
+
+      if (Object.keys(settings).length === 0) {
+        document.getElementById('save-error').textContent = 'No changes to save.';
+        document.getElementById('save-error').classList.remove('hidden');
+        btn.disabled = false;
+        document.getElementById('save-spinner').classList.add('hidden');
+        return;
+      }
+
+      try {
+        const r = await fetch('/admin/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Admin-Password': adminPw },
+          body: JSON.stringify({ settings }),
+        });
+        const data = await r.json();
+        if (data.ok) {
+          document.getElementById('save-success').classList.remove('hidden');
+          SETTING_KEYS.forEach(key => { const el = document.getElementById(key); if (el) el.value = ''; });
+        } else {
+          document.getElementById('save-error').textContent = data.error || 'Save failed.';
+          document.getElementById('save-error').classList.remove('hidden');
+        }
+      } catch (e) {
+        document.getElementById('save-error').textContent = 'Network error.';
+        document.getElementById('save-error').classList.remove('hidden');
+      } finally {
+        btn.disabled = false;
+        document.getElementById('save-spinner').classList.add('hidden');
+      }
+    });
+
+    init();
+  </script>
+</body>
+</html>

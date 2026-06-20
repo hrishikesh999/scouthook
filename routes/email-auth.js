@@ -269,6 +269,19 @@ router.post('/login', loginLimiter, async (req, res) => {
 
     await establishSession(req, row.user_id, workspaceId);
 
+    // Track login event + capture country on first login
+    try {
+      await db.prepare(
+        'INSERT INTO platform_events (event_type, user_id) VALUES (?, ?)'
+      ).run('login', row.user_id);
+      const geo = require('geoip-lite').lookup(req.ip);
+      if (geo?.country) {
+        await db.prepare(
+          'UPDATE user_profiles SET country = ? WHERE user_id = ? AND country IS NULL'
+        ).run(geo.country, row.user_id);
+      }
+    } catch { /* platform_events table may not exist yet */ }
+
     const brandProfile = await db.prepare(
       'SELECT onboarding_complete FROM profiles WHERE workspace_id = ? AND is_default = true LIMIT 1'
     ).get(workspaceId);

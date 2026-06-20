@@ -343,6 +343,19 @@ app.get('/auth/google/callback',
     return passport.authenticate('google', { failureRedirect: '/login.html?error=oauth_failed' })(req, res, next);
   },
   async (req, res) => {
+    // Track login event + capture country on first login
+    try {
+      await db.prepare(
+        'INSERT INTO platform_events (event_type, user_id) VALUES (?, ?)'
+      ).run('login', req.user.user_id);
+      const geo = require('geoip-lite').lookup(req.ip);
+      if (geo?.country) {
+        await db.prepare(
+          'UPDATE user_profiles SET country = ? WHERE user_id = ? AND country IS NULL'
+        ).run(geo.country, req.user.user_id);
+      }
+    } catch { /* platform_events table may not exist yet */ }
+
     // Consume pro intent once — always clear it regardless of path taken.
     const proIntent = req.session.proIntent === true;
     delete req.session.proIntent;

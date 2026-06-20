@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Feedback — ScoutHook Admin</title>
+  <link rel="stylesheet" href="/css/scouthook.css" />
+  <link rel="stylesheet" href="/css/main.css" />
+  <style>
+    .admin-nav { background: var(--color-surface); border-bottom: 1px solid var(--color-border); padding: 0 var(--space-xl); display: flex; align-items: center; gap: var(--space-xl); height: 52px; }
+    .admin-nav__brand { font-weight: 700; font-size: 1rem; color: var(--color-text); text-decoration: none; margin-right: var(--space-md); white-space: nowrap; }
+    .admin-nav__brand span { color: var(--color-text-muted); font-weight: 400; font-size: 0.75rem; margin-left: 4px; }
+    .admin-nav__links { display: flex; align-items: center; gap: 2px; flex: 1; }
+    .admin-nav__link { color: var(--color-text-muted); text-decoration: none; font-size: 0.875rem; padding: var(--space-xs) var(--space-sm); border-radius: var(--radius-sm); border-bottom: 2px solid transparent; transition: color .15s; }
+    .admin-nav__link:hover { color: var(--color-text); }
+    .admin-nav__link--active { color: var(--color-accent-light, #0FA87F); border-bottom-color: var(--color-accent-light, #0FA87F); }
+    .admin-nav__sep { width: 1px; height: 20px; background: var(--color-border); margin: 0 var(--space-sm); }
+    .admin-auth { display: flex; align-items: center; justify-content: center; min-height: 60vh; }
+    .admin-auth__card { width: 100%; max-width: 380px; }
+    .data-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+    .data-table th { text-align: left; font-size: 0.72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--color-text-muted); padding: var(--space-sm) var(--space-md); border-bottom: 1px solid var(--color-border); font-weight: 600; }
+    .data-table td { padding: var(--space-sm) var(--space-md); border-bottom: 1px solid var(--color-border); vertical-align: middle; }
+    .data-table tr.clickable:hover td { background: var(--color-surface-2, rgba(255,255,255,.03)); cursor: pointer; }
+    .detail-row-expanded td { background: var(--color-surface-2, rgba(255,255,255,.04)) !important; padding: var(--space-md) var(--space-md) var(--space-lg); }
+    .badge { display: inline-block; border-radius: var(--radius-sm, 4px); padding: 2px 8px; font-size: 0.78rem; font-weight: 700; }
+    .badge--feature  { background: rgba(15,168,127,.18); color: #0FA87F; }
+    .badge--bug      { background: rgba(239,68,68,.18); color: #ef4444; }
+    .badge--improve  { background: rgba(245,158,11,.18); color: #f59e0b; }
+    .badge--other    { background: rgba(138,156,192,.15); color: #8A9CC0; }
+    .filter-bar { display: flex; align-items: center; gap: var(--space-sm); margin-bottom: var(--space-lg); flex-wrap: wrap; }
+    .filter-bar .btn { font-size: 0.8rem; padding: 5px 12px; }
+    .btn--active { background: var(--color-primary, #0D7A5F); color: #fff; border-color: var(--color-primary, #0D7A5F); }
+    .stars { color: #f59e0b; font-size: 0.9rem; letter-spacing: 1px; }
+  </style>
+</head>
+<body>
+
+  <div id="auth-screen" class="admin-auth">
+    <div class="admin-auth__card card">
+      <h2 style="margin-bottom: var(--space-md);">ScoutHook Admin</h2>
+      <div class="field"><label for="pw-input">Admin password</label><input type="password" id="pw-input" placeholder="ADMIN_PASSWORD" /></div>
+      <div id="pw-error" class="hidden" style="color: var(--color-error); font-size: 0.85rem; margin-bottom: var(--space-md);"></div>
+      <button id="pw-btn" class="btn btn--primary" style="width:100%">Unlock</button>
+    </div>
+  </div>
+
+  <div id="main" class="hidden">
+    <nav class="admin-nav">
+      <a href="/admin.html" class="admin-nav__brand">Scout&#x25AA;hook <span>Admin</span></a>
+      <div class="admin-nav__links">
+        <a href="/admin.html" class="admin-nav__link">Dashboard</a>
+        <a href="/admin-users.html" class="admin-nav__link">Users</a>
+        <a href="/admin-feedback.html" class="admin-nav__link admin-nav__link--active">Feedback</a>
+        <a href="/admin-support.html" class="admin-nav__link">Support</a>
+        <div class="admin-nav__sep"></div>
+        <a href="/admin-settings.html" class="admin-nav__link">Settings</a>
+        <a href="/admin-templates.html" class="admin-nav__link">Templates</a>
+      </div>
+    </nav>
+
+    <main class="container--wide" style="padding: var(--space-xl);">
+      <h1 style="margin-bottom: var(--space-lg);">Feedback</h1>
+
+      <div class="filter-bar">
+        <button class="btn btn--secondary btn--active" data-cat="">All</button>
+        <button class="btn btn--secondary" data-cat="feature_request">Feature Requests</button>
+        <button class="btn btn--secondary" data-cat="bug_report">Bug Reports</button>
+        <button class="btn btn--secondary" data-cat="improvement">Improvements</button>
+        <span id="count-label" style="margin-left:auto;font-size:0.8rem;color:var(--color-text-muted);"></span>
+      </div>
+
+      <div class="card" style="overflow-x: auto;">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>User</th>
+              <th>Email</th>
+              <th>Category</th>
+              <th>Rating</th>
+              <th>Message</th>
+              <th>Page</th>
+              <th>Submitted</th>
+            </tr>
+          </thead>
+          <tbody id="feedback-tbody">
+            <tr><td colspan="7" style="text-align:center;color:var(--color-text-muted);padding:var(--space-xl);">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    let adminPw = '';
+    let allFeedback = [];
+    let expandedId = null;
+
+    function init() {
+      const saved = sessionStorage.getItem('adminPw');
+      if (saved) { adminPw = saved; showMain(); return; }
+    }
+
+    document.getElementById('pw-btn').addEventListener('click', async () => {
+      const pw = document.getElementById('pw-input').value;
+      const r = await fetch('/admin/settings', { headers: { 'X-Admin-Password': pw } });
+      if (r.status === 401) { document.getElementById('pw-error').textContent = 'Incorrect password.'; document.getElementById('pw-error').classList.remove('hidden'); return; }
+      adminPw = pw; sessionStorage.setItem('adminPw', pw); showMain();
+    });
+    document.getElementById('pw-input').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('pw-btn').click(); });
+
+    function showMain() {
+      document.getElementById('auth-screen').classList.add('hidden');
+      document.getElementById('main').classList.remove('hidden');
+      loadFeedback('');
+    }
+
+    function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+    function catBadge(cat) {
+      if (cat === 'feature_request') return `<span class="badge badge--feature">Feature Request</span>`;
+      if (cat === 'bug_report')      return `<span class="badge badge--bug">Bug Report</span>`;
+      if (cat === 'improvement')     return `<span class="badge badge--improve">Improvement</span>`;
+      return `<span class="badge badge--other">${esc(cat || 'Other')}</span>`;
+    }
+
+    function stars(n) {
+      if (!n) return '—';
+      return '<span class="stars">' + '★'.repeat(Math.min(5, n)) + '</span>';
+    }
+
+    async function loadFeedback(category) {
+      const params = category ? `?category=${encodeURIComponent(category)}` : '';
+      const r = await fetch(`/admin/feedback${params}`, { headers: { 'X-Admin-Password': adminPw } });
+      const data = await r.json();
+      allFeedback = data.feedback || [];
+      document.getElementById('count-label').textContent = `Count: ${allFeedback.length}`;
+      expandedId = null;
+      renderFeedback();
+    }
+
+    function renderFeedback() {
+      const tbody = document.getElementById('feedback-tbody');
+      if (!allFeedback.length) {
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--color-text-muted);padding:var(--space-xl);">No feedback found.</td></tr>`;
+        return;
+      }
+      let html = '';
+      for (const f of allFeedback) {
+        const isExpanded = expandedId === f.id;
+        html += `<tr class="clickable" data-id="${f.id}">
+          <td>${esc(f.display_name || '—')}</td>
+          <td>${esc(f.email || '—')}</td>
+          <td>${catBadge(f.category)}</td>
+          <td>${stars(f.rating)}</td>
+          <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc((f.message||'').slice(0,80))}${(f.message||'').length > 80 ? '…' : ''}</td>
+          <td style="font-size:0.75rem;color:var(--color-text-muted);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(f.page_url || '—')}</td>
+          <td style="white-space:nowrap">${f.created_at ? new Date(f.created_at).toLocaleDateString() : '—'}</td>
+        </tr>`;
+        if (isExpanded) {
+          html += `<tr class="detail-row-expanded"><td colspan="7">
+            <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--color-text-muted);margin-bottom:8px;font-weight:600;">Full Message</div>
+            <div style="font-size:0.9rem;line-height:1.6;white-space:pre-wrap;">${esc(f.message || '')}</div>
+            ${f.page_url ? `<div style="margin-top:12px;font-size:0.8rem;color:var(--color-text-muted);">Page: ${esc(f.page_url)}</div>` : ''}
+          </td></tr>`;
+        }
+      }
+      tbody.innerHTML = html;
+      tbody.querySelectorAll('tr.clickable').forEach(tr => {
+        tr.addEventListener('click', () => {
+          const id = parseInt(tr.dataset.id);
+          expandedId = expandedId === id ? null : id;
+          renderFeedback();
+        });
+      });
+    }
+
+    document.querySelectorAll('[data-cat]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('[data-cat]').forEach(b => b.classList.remove('btn--active'));
+        btn.classList.add('btn--active');
+        loadFeedback(btn.dataset.cat);
+      });
+    });
+
+    init();
+  </script>
+</body>
+</html>

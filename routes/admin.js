@@ -476,4 +476,361 @@ router.post('/placid-templates/reorder', requireAdminPassword, async (req, res) 
   }
 });
 
+// ---------------------------------------------------------------------------
+// GET /admin/dashboard/metrics?start=&end=&granularity=day|week|month
+// ---------------------------------------------------------------------------
+router.get('/dashboard/metrics', requireAdminPassword, (req, res) => {
+  (async () => {
+    const GRAN_MAP = { day: 'day', week: 'week', month: 'month' };
+    const gran = GRAN_MAP[req.query.granularity] || 'day';
+    const start = req.query.start || '2020-01-01';
+    const end   = req.query.end   || new Date().toISOString().slice(0, 10);
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end)) {
+      return res.status(400).json({ ok: false, error: 'start/end must be ISO dates' });
+    }
+
+    const bucket = `date_trunc('${gran}', created_at)::date`;
+
+    const [signupsR, upgradesR, cancelsR, postsR, placidR, placidByTypeR, linkedinR, mrrR] =
+      await Promise.all([
+        // signups
+        db.prepare(`
+          SELECT ${bucket} AS bucket, COUNT(*) AS count
+          FROM user_profiles WHERE created_at BETWEEN ? AND ?::date + INTERVAL '1 day'
+          GROUP BY 1 ORDER BY 1
+        `).all(start, end),
+        // paid upgrades
+        db.prepare(`
+          SELECT date_trunc('${gran}', updated_at)::date AS bucket, COUNT(*) AS count
+          FROM user_subscriptions
+          WHERE status = 'active' AND plan = 'pro'
+            AND updated_at BETWEEN ? AND ?::date + INTERVAL '1 day'
+          GROUP BY 1 ORDER BY 1
+        `).all(start, end),
+        // cancellations
+        db.prepare(`
+          SELECT date_trunc('${gran}', canceled_at)::date AS bucket, COUNT(*) AS count
+          FROM user_subscriptions
+          WHERE status = 'canceled' AND canceled_at IS NOT NULL
+            AND canceled_at BETWEEN ? AND ?::date + INTERVAL '1 day'
+          GROUP BY 1 ORDER BY 1
+        `).all(start, end),
+        // posts created
+        db.prepare(`
+          SELECT ${bucket} AS bucket, COUNT(*) AS count
+          FROM generated_posts WHERE created_at BETWEEN ? AND ?::date + INTERVAL '1 day'
+          GROUP BY 1 ORDER BY 1
+        `).all(start, end),
+        // placid total
+        db.prepare(`
+          SELECT ${bucket} AS bucket, COUNT(*) AS count
+          FROM visual_generation_log WHERE created_at BETWEEN ? AND ?::date + INTERVAL '1 day'
+          GROUP BY 1 ORDER BY 1
+        `).all(start, end),
+        // placid by type
+        db.prepare(`
+          SELECT date_trunc('${gran}', created_at)::date AS bucket, visual_type, COUNT(*) AS count
+          FROM visual_generation_log WHERE created_at BETWEEN ? AND ?::date + INTERVAL '1 day'
+          GROUP BY 1, 2 ORDER BY 1
+        `).all(start, end),
+        // linkedin connections
+        db.prepare(`
+          SELECT ${bucket} AS bucket, COUNT(*) AS count
+          FROM linkedin_connections WHERE created_at BETWEEN ? AND ?::date + INTERVAL '1 day'
+          GROUP BY 1 ORDER BY 1
+        `).all(start, end),
+        // MRR snapshot
+        db.prepare(`
+          SELECT COUNT(*) AS active_pro FROM user_subscriptions
+          WHERE status = 'active' AND plan = 'pro'
+        `).get(),
+      ]);
+
+    // platform_events — degrade gracefully if table doesn't exist yet
+    let disconnectsR = [], loginsR = [];
+    try {
+      [disconnectsR, loginsR] = await Promise.all([
+        db.prepare(`
+          SELECT date_trunc('${gran}', created_at)::date AS bucket, COUNT(*) AS count
+          FROM platform_events WHERE event_type = 'linkedin_disconnect'
+            AND created_at BETWEEN ? AND ?::date + INTERVAL '1 day'
+          GROUP BY 1 ORDER BY 1
+        `).all(start, end),
+        db.prepare(`
+          SELECT date_trunc('${gran}', created_at)::date AS bucket, COUNT(*) AS count
+          FROM platform_events WHERE event_type = 'login'
+            AND created_at BETWEEN ? AND ?::date + INTERVAL '1 day'
+          GROUP BY 1 ORDER BY 1
+        `).all(start, end),
+      ]);
+    } catch { /* table not yet created */ }
+
+    // Reshape placid_by_type into { quote_card: [...], carousel: [...], branded_quote: [...] }
+    const placidByType = {};
+    for (const row of placidByTypeR) {
+      const t = row.visual_type || 'unknown';
+      if (!placidByType[t]) placidByType[t] = [];
+      placidByType[t].push({ bucket: row.bucket, count: Number(row.count) });
+    }
+
+    const toSeries = rows => rows.map(r => ({ bucket: r.bucket, count: Number(r.count) }));
+
+    return res.json({
+      ok: true,
+      period: { start, end, granularity: gran },
+      mrr_estimate: (Number(mrrR?.active_pro) || 0) * 29,
+      series: {
+        signups:              toSeries(signupsR),
+        paid_upgrades:        toSeries(upgradesR),
+        cancellations:        toSeries(cancelsR),
+        posts_created:        toSeries(postsR),
+        placid_total:         toSeries(placidR),
+        placid_by_type:       placidByType,
+        linkedin_connections: toSeries(linkedinR),
+        linkedin_disconnects: toSeries(disconnectsR),
+        logins:               toSeries(loginsR),
+      },
+    });
+  })().catch(err => res.status(500).json({ ok: false, error: err.message }));
+});
+
+// ---------------------------------------------------------------------------
+// GET /admin/users?limit=100&offset=0&search=
+// ---------------------------------------------------------------------------
+router.get('/users', requireAdminPassword, (req, res) => {
+  (async () => {
+    const limit  = Math.min(Math.max(parseInt(req.query.limit)  || 100, 1), 500);
+    const offset = Math.max(parseInt(req.query.offset) || 0, 0);
+    const search = (req.query.search || '').trim();
+
+    let whereClause = '';
+    let params = [];
+    if (search) {
+      whereClause = "WHERE up.email ILIKE ? OR up.display_name ILIKE ?";
+      params = [`%${search}%`, `%${search}%`];
+    }
+
+    const users = await db.prepare(`
+      SELECT
+        up.user_id, up.email, up.display_name, up.country, up.created_at,
+        us.plan, us.status, us.trial_ends_at,
+        (SELECT COUNT(*) FROM generated_posts gp
+         JOIN workspace_members wm ON wm.workspace_id = gp.tenant_id
+         WHERE wm.user_id = up.user_id) AS post_count,
+        (SELECT MAX(gp.created_at) FROM generated_posts gp
+         JOIN workspace_members wm ON wm.workspace_id = gp.tenant_id
+         WHERE wm.user_id = up.user_id) AS last_active
+      FROM user_profiles up
+      LEFT JOIN user_subscriptions us ON us.user_id = up.user_id
+      ${whereClause}
+      ORDER BY last_active DESC NULLS LAST
+      LIMIT ? OFFSET ?
+    `).all(...params, limit, offset);
+
+    return res.json({ ok: true, users });
+  })().catch(err => res.status(500).json({ ok: false, error: err.message }));
+});
+
+// ---------------------------------------------------------------------------
+// GET /admin/users/:userId
+// ---------------------------------------------------------------------------
+router.get('/users/:userId', requireAdminPassword, (req, res) => {
+  (async () => {
+    const { userId } = req.params;
+
+    const [profile, subscription, workspaces, connections, profiles, recentPosts] =
+      await Promise.all([
+        db.prepare('SELECT * FROM user_profiles WHERE user_id = ?').get(userId),
+        db.prepare('SELECT plan, status, trial_ends_at, current_period_end, canceled_at FROM user_subscriptions WHERE user_id = ?').get(userId),
+        db.prepare(`
+          SELECT w.id, w.name, w.deleted_at,
+                 (SELECT COUNT(*) FROM workspace_members WHERE workspace_id = w.id) AS member_count,
+                 (SELECT COUNT(*) FROM generated_posts WHERE tenant_id = w.id) AS post_count
+          FROM workspaces w
+          JOIN workspace_members wm ON wm.workspace_id = w.id
+          WHERE wm.user_id = ?
+          ORDER BY w.created_at ASC
+        `).all(userId),
+        db.prepare(`
+          SELECT account_type, display_name, expires_at
+          FROM linkedin_connections lc
+          JOIN workspace_members wm ON wm.workspace_id = lc.workspace_id
+          WHERE wm.user_id = ?
+        `).all(userId),
+        db.prepare(`
+          SELECT display_name, onboarding_complete, voice_profile_completion_pct
+          FROM profiles p
+          JOIN workspace_members wm ON wm.workspace_id = p.workspace_id
+          WHERE wm.user_id = ?
+        `).all(userId),
+        db.prepare(`
+          SELECT gp.content, gp.archetype_used, gp.status, gp.created_at
+          FROM generated_posts gp
+          JOIN workspace_members wm ON wm.workspace_id = gp.tenant_id
+          WHERE wm.user_id = ?
+          ORDER BY gp.created_at DESC
+          LIMIT 10
+        `).all(userId),
+      ]);
+
+    if (!profile) return res.status(404).json({ ok: false, error: 'user_not_found' });
+
+    return res.json({ ok: true, profile, subscription, workspaces, connections, profiles, recent_posts: recentPosts });
+  })().catch(err => res.status(500).json({ ok: false, error: err.message }));
+});
+
+// ---------------------------------------------------------------------------
+// POST /admin/users/:userId/extend-trial
+// Body: { days: 7 }
+// ---------------------------------------------------------------------------
+router.post('/users/:userId/extend-trial', requireAdminPassword, (req, res) => {
+  (async () => {
+    const { userId } = req.params;
+    const days = parseInt(req.body?.days);
+    if (!Number.isFinite(days) || days < 1 || days > 90) {
+      return res.status(400).json({ ok: false, error: 'days must be 1–90' });
+    }
+
+    await db.prepare(`
+      UPDATE user_subscriptions
+      SET trial_ends_at = GREATEST(COALESCE(trial_ends_at, NOW()), NOW()) + ($1 * INTERVAL '1 day'),
+          status = 'trialing'
+      WHERE user_id = $2
+    `).run(days, userId);
+
+    return res.json({ ok: true });
+  })().catch(err => res.status(500).json({ ok: false, error: err.message }));
+});
+
+// ---------------------------------------------------------------------------
+// GET /admin/feedback?category=feature_request|bug_report|improvement
+// ---------------------------------------------------------------------------
+router.get('/feedback', requireAdminPassword, (req, res) => {
+  (async () => {
+    const { category } = req.query;
+    const VALID_CATS = ['feature_request', 'bug_report', 'improvement'];
+
+    let rows;
+    if (category && VALID_CATS.includes(category)) {
+      rows = await db.prepare(`
+        SELECT f.id, f.message, f.rating, f.category, f.page_url, f.created_at,
+               up.email, up.display_name
+        FROM feedback f
+        JOIN user_profiles up ON up.user_id = f.user_id
+        WHERE f.category = ?
+        ORDER BY f.created_at DESC
+      `).all(category);
+    } else {
+      rows = await db.prepare(`
+        SELECT f.id, f.message, f.rating, f.category, f.page_url, f.created_at,
+               up.email, up.display_name
+        FROM feedback f
+        JOIN user_profiles up ON up.user_id = f.user_id
+        ORDER BY f.created_at DESC
+      `).all();
+    }
+
+    return res.json({ ok: true, feedback: rows });
+  })().catch(err => res.status(500).json({ ok: false, error: err.message }));
+});
+
+// ---------------------------------------------------------------------------
+// GET /admin/support?status=open|resolved
+// ---------------------------------------------------------------------------
+router.get('/support', requireAdminPassword, (req, res) => {
+  (async () => {
+    const { status } = req.query;
+    const VALID_STATUSES = ['open', 'resolved'];
+
+    let rows;
+    if (status && VALID_STATUSES.includes(status)) {
+      rows = await db.prepare(`
+        SELECT sr.id, sr.topic, sr.message, sr.status, sr.admin_note, sr.created_at,
+               up.email, up.display_name, us.plan
+        FROM support_requests sr
+        JOIN user_profiles up ON up.user_id = sr.user_id
+        LEFT JOIN user_subscriptions us ON us.user_id = sr.user_id
+        WHERE sr.status = ?
+        ORDER BY sr.created_at DESC
+      `).all(status);
+    } else {
+      rows = await db.prepare(`
+        SELECT sr.id, sr.topic, sr.message, sr.status, sr.admin_note, sr.created_at,
+               up.email, up.display_name, us.plan
+        FROM support_requests sr
+        JOIN user_profiles up ON up.user_id = sr.user_id
+        LEFT JOIN user_subscriptions us ON us.user_id = sr.user_id
+        ORDER BY sr.created_at DESC
+      `).all();
+    }
+
+    return res.json({ ok: true, tickets: rows });
+  })().catch(err => res.status(500).json({ ok: false, error: err.message }));
+});
+
+// ---------------------------------------------------------------------------
+// POST /admin/support/:id/reply
+// Body: { message: "..." }
+// ---------------------------------------------------------------------------
+router.post('/support/:id/reply', requireAdminPassword, (req, res) => {
+  (async () => {
+    const ticketId = parseInt(req.params.id);
+    if (!Number.isFinite(ticketId)) return res.status(400).json({ ok: false, error: 'invalid id' });
+
+    const { message } = req.body || {};
+    if (!message || typeof message !== 'string' || !message.trim()) {
+      return res.status(400).json({ ok: false, error: 'message is required' });
+    }
+
+    const ticket = await db.prepare(`
+      SELECT sr.id, sr.topic, sr.message AS original_message, sr.user_id,
+             up.email, up.display_name
+      FROM support_requests sr
+      JOIN user_profiles up ON up.user_id = sr.user_id
+      WHERE sr.id = ?
+    `).get(ticketId);
+    if (!ticket) return res.status(404).json({ ok: false, error: 'ticket_not_found' });
+
+    const { sendEmail } = require('../emails');
+    const appUrl = process.env.APP_URL || '';
+    await sendEmail('admin-support-reply', ticket.email, {
+      name:             (ticket.display_name || '').split(' ')[0] || 'there',
+      topic:            ticket.topic || 'Support request',
+      admin_message:    message.trim(),
+      original_message: ticket.original_message || '',
+      app_url:          appUrl,
+    });
+
+    await db.prepare(`
+      UPDATE support_requests SET status = 'resolved', admin_note = ? WHERE id = ?
+    `).run(message.trim(), ticketId);
+
+    return res.json({ ok: true });
+  })().catch(err => res.status(500).json({ ok: false, error: err.message }));
+});
+
+// ---------------------------------------------------------------------------
+// POST /admin/support/:id/status
+// Body: { status: 'open'|'resolved' }
+// ---------------------------------------------------------------------------
+router.post('/support/:id/status', requireAdminPassword, (req, res) => {
+  (async () => {
+    const ticketId = parseInt(req.params.id);
+    if (!Number.isFinite(ticketId)) return res.status(400).json({ ok: false, error: 'invalid id' });
+
+    const { status } = req.body || {};
+    if (!['open', 'resolved'].includes(status)) {
+      return res.status(400).json({ ok: false, error: 'status must be open or resolved' });
+    }
+
+    const row = await db.prepare(
+      'UPDATE support_requests SET status = ? WHERE id = ? RETURNING id'
+    ).get(status, ticketId);
+    if (!row) return res.status(404).json({ ok: false, error: 'ticket_not_found' });
+
+    return res.json({ ok: true });
+  })().catch(err => res.status(500).json({ ok: false, error: err.message }));
+});
+
 module.exports = router;

@@ -4,515 +4,349 @@
   <meta charset="UTF-8" />
   <link rel="icon" type="image/png" href="/favicon.png">
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Platform Settings — Scouthook Admin</title>
+  <title>Dashboard — ScoutHook Admin</title>
   <link rel="stylesheet" href="/css/scouthook.css" />
   <link rel="stylesheet" href="/css/main.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <style>
+    .admin-nav { background: var(--color-surface); border-bottom: 1px solid var(--color-border); padding: 0 var(--space-xl); display: flex; align-items: center; gap: var(--space-xl); height: 52px; }
+    .admin-nav__brand { font-weight: 700; font-size: 1rem; color: var(--color-text); text-decoration: none; margin-right: var(--space-md); white-space: nowrap; }
+    .admin-nav__brand span { color: var(--color-text-muted); font-weight: 400; font-size: 0.75rem; margin-left: 4px; }
+    .admin-nav__links { display: flex; align-items: center; gap: 2px; flex: 1; }
+    .admin-nav__link { color: var(--color-text-muted); text-decoration: none; font-size: 0.875rem; padding: var(--space-xs) var(--space-sm); border-radius: var(--radius-sm); border-bottom: 2px solid transparent; transition: color .15s; }
+    .admin-nav__link:hover { color: var(--color-text); }
+    .admin-nav__link--active { color: var(--color-accent-light, #0FA87F); border-bottom-color: var(--color-accent-light, #0FA87F); }
+    .admin-nav__sep { width: 1px; height: 20px; background: var(--color-border); margin: 0 var(--space-sm); }
+    .admin-auth { display: flex; align-items: center; justify-content: center; min-height: 60vh; }
+    .admin-auth__card { width: 100%; max-width: 380px; }
+    .metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-md); margin-bottom: var(--space-xl); }
+    @media (max-width: 900px) { .metric-grid { grid-template-columns: repeat(2,1fr); } }
+    .metric-card { padding: var(--space-lg); }
+    .metric-card__num { font-size: 2rem; font-weight: 700; line-height: 1; margin-bottom: 4px; }
+    .metric-card__label { font-size: 0.78rem; text-transform: uppercase; letter-spacing: .06em; color: var(--color-text-muted); }
+    .charts-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-md); }
+    @media (max-width: 1100px) { .charts-grid { grid-template-columns: repeat(2,1fr); } }
+    @media (max-width: 700px) { .charts-grid { grid-template-columns: 1fr; } }
+    .chart-card { padding: var(--space-lg); }
+    .chart-card__title { font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--color-text-muted); margin-bottom: var(--space-md); }
+    .chart-card__canvas { position: relative; height: 160px; }
+    .empty-state { display: flex; align-items: center; justify-content: center; height: 120px; font-size: 0.8rem; color: var(--color-text-muted); text-align: center; }
+    .filter-bar { display: flex; align-items: center; gap: var(--space-sm); flex-wrap: wrap; padding: var(--space-md) 0; margin-bottom: var(--space-lg); }
+    .filter-bar .btn { font-size: 0.8rem; padding: 5px 12px; }
+    .filter-bar__sep { width: 1px; height: 20px; background: var(--color-border); }
+    .filter-bar__custom { display: flex; align-items: center; gap: var(--space-xs); }
+    .filter-bar__custom input[type="date"] { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-text); padding: 4px 8px; font-size: 0.8rem; }
+    .btn--active { background: var(--color-primary, #0D7A5F); color: #fff; border-color: var(--color-primary, #0D7A5F); }
+  </style>
 </head>
 <body>
 
-  <header class="site-header">
-    <div class="container site-header__inner">
-      <a href="/" class="site-header__logo">Scout<span>hook</span> <span style="font-size:0.75rem; color: var(--color-text-muted); font-weight: 400;">Admin</span></a>
+  <!-- Password gate -->
+  <div id="auth-screen" class="admin-auth">
+    <div class="admin-auth__card card">
+      <h2 style="margin-bottom: var(--space-md);">ScoutHook Admin</h2>
+      <p class="text-muted" style="margin-bottom: var(--space-lg); font-size: 0.9rem;">Enter admin password to continue.</p>
+      <div class="field">
+        <label for="pw-input">Admin password</label>
+        <input type="password" id="pw-input" placeholder="ADMIN_PASSWORD" />
+      </div>
+      <div id="pw-error" class="hidden" style="color: var(--color-error); font-size: 0.85rem; margin-bottom: var(--space-md);"></div>
+      <button id="pw-btn" class="btn btn--primary" style="width:100%">Unlock</button>
     </div>
-  </header>
+  </div>
 
-  <main class="container">
-    <div style="max-width: 600px; margin: 0 auto;">
+  <!-- Main content -->
+  <div id="main" class="hidden">
+    <nav class="admin-nav">
+      <a href="/admin.html" class="admin-nav__brand">Scout&#x25AA;hook <span>Admin</span></a>
+      <div class="admin-nav__links">
+        <a href="/admin.html" class="admin-nav__link admin-nav__link--active">Dashboard</a>
+        <a href="/admin-users.html" class="admin-nav__link">Users</a>
+        <a href="/admin-feedback.html" class="admin-nav__link">Feedback</a>
+        <a href="/admin-support.html" class="admin-nav__link">Support</a>
+        <div class="admin-nav__sep"></div>
+        <a href="/admin-settings.html" class="admin-nav__link">Settings</a>
+        <a href="/admin-templates.html" class="admin-nav__link">Templates</a>
+      </div>
+    </nav>
 
-      <!-- Password gate -->
-      <div id="auth-panel">
-        <h1 style="margin-bottom: var(--space-md);">Platform settings</h1>
-        <p class="text-muted mb-lg">Enter the admin password to manage API keys and platform configuration.</p>
-        <div class="field">
-          <label for="admin-password">Admin password</label>
-          <input type="password" id="admin-password" placeholder="Enter ADMIN_PASSWORD from .env" />
-        </div>
-        <div id="auth-error" class="hidden" style="color: var(--color-error); font-size:0.9rem; margin-bottom: var(--space-md);"></div>
-        <button id="auth-btn" class="btn btn--primary">Unlock settings</button>
+    <main class="container--wide" style="padding: var(--space-xl) var(--space-xl);">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom: var(--space-lg);">
+        <h1 style="margin:0;">Dashboard</h1>
       </div>
 
-      <!-- Settings panel (shown after auth) -->
-      <div id="settings-panel" class="hidden">
-        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom: var(--space-xl);">
-          <h1>Platform settings</h1>
-          <button id="save-btn" class="btn btn--primary">
-            <span id="save-btn-text">Save changes</span>
-            <span id="save-spinner" class="spinner hidden"></span>
-          </button>
-        </div>
-
-        <div id="save-success" class="hidden" style="color: var(--color-success); font-size:0.9rem; margin-bottom: var(--space-lg);">Settings saved successfully.</div>
-        <div id="save-error" class="hidden" style="color: var(--color-error); font-size:0.9rem; margin-bottom: var(--space-lg);"></div>
-
-        <h3 style="margin-bottom: var(--space-md); color: var(--color-text-muted); font-size:0.8rem; text-transform:uppercase; letter-spacing:0.08em;">AI</h3>
-
-        <div class="field">
-          <label for="anthropic_api_key">Anthropic API key</label>
-          <input type="password" id="anthropic_api_key" name="anthropic_api_key" placeholder="sk-ant-…" autocomplete="off" />
-          <div class="text-muted" style="font-size:0.8rem; margin-top:0.25rem;">Used for all Claude calls — fingerprint extraction, generation, visuals.</div>
-        </div>
-
-        <h3 style="margin: var(--space-xl) 0 var(--space-md); color: var(--color-text-muted); font-size:0.8rem; text-transform:uppercase; letter-spacing:0.08em;">LinkedIn OAuth</h3>
-
-        <div class="field">
-          <label for="linkedin_client_id">LinkedIn client ID</label>
-          <input type="text" id="linkedin_client_id" name="linkedin_client_id" placeholder="From LinkedIn Developer Portal" autocomplete="off" />
-        </div>
-
-        <div class="field">
-          <label for="linkedin_client_secret">LinkedIn client secret</label>
-          <input type="password" id="linkedin_client_secret" name="linkedin_client_secret" placeholder="From LinkedIn Developer Portal" autocomplete="off" />
-        </div>
-
-        <div class="field">
-          <label for="linkedin_redirect_uri">OAuth redirect URI</label>
-          <input type="text" id="linkedin_redirect_uri" name="linkedin_redirect_uri" placeholder="https://yourdomain.com/api/linkedin/callback" />
-        </div>
-
-        <h3 style="margin: var(--space-xl) 0 var(--space-md); color: var(--color-text-muted); font-size:0.8rem; text-transform:uppercase; letter-spacing:0.08em;">Security</h3>
-
-        <div class="field">
-          <label for="token_encryption_key">Token encryption key</label>
-          <input type="password" id="token_encryption_key" name="token_encryption_key" placeholder="32-byte hex key (64 hex chars)" autocomplete="off" />
-          <div class="text-muted" style="font-size:0.8rem; margin-top:0.25rem;">
-            AES-256 key for encrypting LinkedIn tokens at rest.
-            Generate: <code style="font-family: var(--font-mono); font-size:0.8rem;">node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"</code>
-          </div>
-        </div>
-
-        <h3 style="margin: var(--space-xl) 0 var(--space-md); color: var(--color-text-muted); font-size:0.8rem; text-transform:uppercase; letter-spacing:0.08em;">Infrastructure</h3>
-
-        <div class="field">
-          <label for="redis_url">Redis URL</label>
-          <input type="text" id="redis_url" name="redis_url" placeholder="redis://localhost:6379" />
-          <div class="text-muted" style="font-size:0.8rem; margin-top:0.25rem;">Required for BullMQ post scheduling. Leave blank to disable scheduling.</div>
-        </div>
-
-        <!-- ── Placid Templates ──────────────────────────────────────────── -->
-        <h3 style="margin: var(--space-xl) 0 var(--space-md); color: var(--color-text-muted); font-size:0.8rem; text-transform:uppercase; letter-spacing:0.08em;">Placid Templates</h3>
-        <p class="text-muted" style="font-size:0.85rem; margin-bottom: var(--space-md);">Manage the AI image templates available to all users. Templates are global across all workspaces.</p>
-
-        <div id="placid-api-key-field" class="field">
-          <label for="placid_api_key">Placid API key</label>
-          <input type="password" id="placid_api_key" name="placid_api_key" placeholder="From placid.app → API" autocomplete="off" />
-          <div class="text-muted" style="font-size:0.8rem; margin-top:0.25rem;">Required for AI image generation. Saved with the other platform settings above.</div>
-        </div>
-
-        <div id="placid-template-list" style="margin-bottom: var(--space-md);"></div>
-
-        <button id="placid-add-btn" class="btn btn--secondary" type="button" style="margin-bottom: var(--space-xl);">+ Add template</button>
-
-        <!-- Add/Edit form (hidden by default) -->
-        <div id="placid-form" class="hidden" style="background: var(--color-surface-2, #f5f5f5); border-radius:10px; padding: var(--space-lg); margin-bottom: var(--space-xl);">
-          <h4 id="placid-form-title" style="margin:0 0 var(--space-md);">Add template</h4>
-          <input type="hidden" id="placid-form-id">
-          <div class="field">
-            <label for="placid-form-name">Template name</label>
-            <input type="text" id="placid-form-name" placeholder="e.g. Dark Quote Card" maxlength="80">
-          </div>
-          <div class="field">
-            <label for="placid-form-uuid">Placid template UUID</label>
-            <input type="text" id="placid-form-uuid" placeholder="abc123…" maxlength="200">
-            <div class="text-muted" style="font-size:0.8rem; margin-top:0.25rem;">Found in your Placid dashboard under the template settings.</div>
-          </div>
-          <div class="field">
-            <label for="placid-form-headline">Headline layer name</label>
-            <input type="text" id="placid-form-headline" placeholder="headline" maxlength="80">
-            <div class="text-muted" style="font-size:0.8rem; margin-top:0.25rem;">Exact name of the text layer in Placid that receives the post headline.</div>
-          </div>
-          <div class="field">
-            <label for="placid-form-subtext">Subtext layer name</label>
-            <input type="text" id="placid-form-subtext" placeholder="subtext" maxlength="80">
-            <div class="text-muted" style="font-size:0.8rem; margin-top:0.25rem;">Exact name of the text layer that receives the supporting text.</div>
-          </div>
-          <div class="field">
-            <label for="placid-form-background">Background image layer name <span style="font-weight:400;color:var(--color-text-muted)">(optional)</span></label>
-            <input type="text" id="placid-form-background" placeholder="background" maxlength="80">
-            <div class="text-muted" style="font-size:0.8rem; margin-top:0.25rem;">Name of the image layer users can swap with their own photo. Leave blank if this template has no swappable background.</div>
-          </div>
-          <div class="field">
-            <label for="placid-form-preview">Preview image URL <span style="font-weight:400;color:var(--color-text-muted)">(optional)</span></label>
-            <input type="url" id="placid-form-preview" placeholder="https://…">
-            <div class="text-muted" style="font-size:0.8rem; margin-top:0.25rem;">Thumbnail shown to users when picking a template in the editor.</div>
-          </div>
-          <div class="field" style="margin-top: var(--space-md);">
-            <label style="font-weight:600;display:block;margin-bottom:6px">Custom fields <span style="font-weight:400;color:var(--color-text-muted)">(optional)</span></label>
-            <div class="text-muted" style="font-size:0.8rem;margin-bottom:10px">Extra Placid layers beyond headline, subtext, and background — shown as editable inputs in the editor.</div>
-            <div id="placid-custom-fields-list"></div>
-            <button type="button" id="placid-add-field-btn" class="btn btn--secondary" style="margin-top:8px;font-size:0.85rem">+ Add field</button>
-          </div>
-          <div class="field" style="margin-top: var(--space-md);">
-            <label style="font-weight:600;display:block;margin-bottom:6px">Brand mappings <span style="font-weight:400;color:var(--color-text-muted)">(optional)</span></label>
-            <div class="text-muted" style="font-size:0.8rem;margin-bottom:10px">Map workspace brand properties (colors, fonts, logo) to specific Placid layers — applied automatically at render time, no user action needed.</div>
-            <div id="placid-brand-layers-list"></div>
-            <button type="button" id="placid-add-brand-layer-btn" class="btn btn--secondary" style="margin-top:8px;font-size:0.85rem">+ Add mapping</button>
-          </div>
-          <div id="placid-form-error" class="hidden" style="color: var(--color-error); font-size:0.85rem; margin-bottom: var(--space-md);"></div>
-          <div style="display:flex; gap: var(--space-sm);">
-            <button id="placid-form-save" class="btn btn--primary" type="button">Save</button>
-            <button id="placid-form-cancel" class="btn btn--secondary" type="button">Cancel</button>
-          </div>
-        </div>
-
+      <!-- Filter bar -->
+      <div class="filter-bar">
+        <button class="btn btn--secondary btn--active" data-preset="today">Today</button>
+        <button class="btn btn--secondary" data-preset="week">This Week</button>
+        <button class="btn btn--secondary" data-preset="month">This Month</button>
+        <button class="btn btn--secondary" data-preset="ytd">YTD</button>
+        <button class="btn btn--secondary" data-preset="custom">Custom</button>
+        <div class="filter-bar__sep"></div>
+        <button class="btn btn--secondary btn--active" data-gran="day">Day</button>
+        <button class="btn btn--secondary" data-gran="week">Week</button>
+        <button class="btn btn--secondary" data-gran="month">Month</button>
       </div>
-    </div>
-  </main>
+      <div id="custom-range" class="filter-bar__custom hidden" style="margin-bottom: var(--space-md);">
+        <input type="date" id="range-start" />
+        <span style="color:var(--color-text-muted)">to</span>
+        <input type="date" id="range-end" />
+        <button id="apply-range" class="btn btn--primary" style="font-size:0.8rem;padding:5px 12px;">Apply</button>
+      </div>
 
-  <footer class="app-footer" role="contentinfo" style="margin-top: var(--space-12);">
-    <div class="app-footer-inner">
-      <a href="https://www.scouthook.com/privacy" target="_blank" rel="noopener">Privacy Policy</a>
-      <span class="app-footer-sep">|</span>
-      <a href="https://www.scouthook.com/terms" target="_blank" rel="noopener">Terms of Service</a>
-      <p class="app-footer-legal">© 2026 CopyPower Digital LLP. ScoutHook is an AI-powered authority engine.</p>
-    </div>
-  </footer>
+      <!-- Metric summary cards -->
+      <div class="metric-grid" id="metric-grid">
+        <div class="card metric-card"><div class="metric-card__num" id="m-signups">—</div><div class="metric-card__label">New Signups</div></div>
+        <div class="card metric-card"><div class="metric-card__num" id="m-upgrades">—</div><div class="metric-card__label">Paid Upgrades</div></div>
+        <div class="card metric-card"><div class="metric-card__num" id="m-cancels">—</div><div class="metric-card__label">Cancellations</div></div>
+        <div class="card metric-card"><div class="metric-card__num" id="m-mrr">—</div><div class="metric-card__label">MRR (est.)</div></div>
+        <div class="card metric-card"><div class="metric-card__num" id="m-posts">—</div><div class="metric-card__label">Posts Created</div></div>
+        <div class="card metric-card"><div class="metric-card__num" id="m-placid">—</div><div class="metric-card__label">Placid Assets</div></div>
+        <div class="card metric-card"><div class="metric-card__num" id="m-linkedin">—</div><div class="metric-card__label">LinkedIn Connects</div></div>
+        <div class="card metric-card"><div class="metric-card__num" id="m-logins">—</div><div class="metric-card__label">Logins</div></div>
+      </div>
+
+      <!-- Charts -->
+      <div class="charts-grid">
+        <div class="card chart-card"><div class="chart-card__title">New Signups</div><div class="chart-card__canvas"><canvas id="chart-signups"></canvas></div></div>
+        <div class="card chart-card"><div class="chart-card__title">Paid Upgrades</div><div class="chart-card__canvas"><canvas id="chart-upgrades"></canvas></div></div>
+        <div class="card chart-card"><div class="chart-card__title">Cancellations</div><div class="chart-card__canvas"><canvas id="chart-cancels"></canvas></div></div>
+        <div class="card chart-card"><div class="chart-card__title">Posts Created</div><div class="chart-card__canvas"><canvas id="chart-posts"></canvas></div></div>
+        <div class="card chart-card"><div class="chart-card__title">Placid Assets by Type</div><div class="chart-card__canvas"><canvas id="chart-placid"></canvas></div></div>
+        <div class="card chart-card"><div class="chart-card__title">LinkedIn Connections</div><div class="chart-card__canvas"><canvas id="chart-linkedin"></canvas></div></div>
+        <div class="card chart-card"><div class="chart-card__title">Logins</div><div class="chart-card__canvas"><canvas id="chart-logins"></canvas></div></div>
+        <div class="card chart-card"><div class="chart-card__title">LinkedIn Disconnects</div><div class="chart-card__canvas"><canvas id="chart-disconnects"></canvas></div></div>
+        <div class="card chart-card"><div class="chart-card__title">Plan Distribution</div><div class="chart-card__canvas"><canvas id="chart-plans"></canvas></div></div>
+      </div>
+    </main>
+  </div>
 
   <script>
-    const SETTING_KEYS = [
-      'anthropic_api_key', 'linkedin_client_id', 'linkedin_client_secret',
-      'linkedin_redirect_uri', 'token_encryption_key', 'redis_url', 'placid_api_key',
-    ];
+    const COLORS = {
+      primary:  '#0D7A5F',
+      accent:   '#0FA87F',
+      amber:    '#f59e0b',
+      muted:    '#8A9CC0',
+      error:    '#ef4444',
+    };
 
-    let adminPassword = '';
+    let adminPw = '';
+    let currentStart = '', currentEnd = '', currentGran = 'day';
+    const charts = {};
 
-    // ---------------------------------------------------------------------------
-    // Auth
-    // ---------------------------------------------------------------------------
-    document.getElementById('auth-btn').addEventListener('click', async () => {
-      const pw = document.getElementById('admin-password').value;
+    // ── Auth ──────────────────────────────────────────────────────────────────
+    function init() {
+      const saved = sessionStorage.getItem('adminPw');
+      if (saved) { adminPw = saved; showMain(); return; }
+      document.getElementById('auth-screen').classList.remove('hidden');
+    }
+
+    document.getElementById('pw-btn').addEventListener('click', async () => {
+      const pw = document.getElementById('pw-input').value;
       if (!pw) return;
-
-      try {
-        const res = await fetch('/admin/settings', {
-          headers: { 'X-Admin-Password': pw }
-        });
-        if (res.status === 401) {
-          document.getElementById('auth-error').textContent = 'Incorrect password.';
-          document.getElementById('auth-error').classList.remove('hidden');
-          return;
-        }
-        const data = await res.json();
-        adminPassword = pw;
-        sessionStorage.setItem('adminPw', pw);
-        document.getElementById('auth-panel').classList.add('hidden');
-        document.getElementById('settings-panel').classList.remove('hidden');
-        populateSettings(data.settings);
-        loadPlacidTemplates();
-      } catch (e) {
-        document.getElementById('auth-error').textContent = 'Network error.';
-        document.getElementById('auth-error').classList.remove('hidden');
-      }
-    });
-
-    document.getElementById('admin-password').addEventListener('keydown', e => {
-      if (e.key === 'Enter') document.getElementById('auth-btn').click();
-    });
-
-    // ---------------------------------------------------------------------------
-    // Populate fields (masked values from API — don't overwrite with masked versions)
-    // ---------------------------------------------------------------------------
-    function populateSettings(settings) {
-      settings.forEach(({ key, is_set }) => {
-        const el = document.getElementById(key);
-        if (el && is_set) {
-          el.placeholder = el.placeholder + ' (already set — enter new value to change)';
-        }
-      });
-    }
-
-    // ---------------------------------------------------------------------------
-    // Save
-    // ---------------------------------------------------------------------------
-    document.getElementById('save-btn').addEventListener('click', async () => {
-      const btn = document.getElementById('save-btn');
-      btn.disabled = true;
-      document.getElementById('save-spinner').classList.remove('hidden');
-      document.getElementById('save-success').classList.add('hidden');
-      document.getElementById('save-error').classList.add('hidden');
-
-      const settings = {};
-      SETTING_KEYS.forEach(key => {
-        const el = document.getElementById(key);
-        if (el && el.value.trim()) settings[key] = el.value.trim();
-      });
-
-      if (Object.keys(settings).length === 0) {
-        document.getElementById('save-error').textContent = 'No changes to save.';
-        document.getElementById('save-error').classList.remove('hidden');
-        btn.disabled = false;
-        document.getElementById('save-spinner').classList.add('hidden');
+      const r = await fetch('/admin/settings', { headers: { 'X-Admin-Password': pw } });
+      if (r.status === 401) {
+        document.getElementById('pw-error').textContent = 'Incorrect password.';
+        document.getElementById('pw-error').classList.remove('hidden');
         return;
       }
+      adminPw = pw;
+      sessionStorage.setItem('adminPw', pw);
+      showMain();
+    });
+    document.getElementById('pw-input').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('pw-btn').click(); });
 
-      try {
-        const res = await fetch('/admin/settings', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Admin-Password': adminPassword },
-          body: JSON.stringify({ settings }),
-        });
-        const data = await res.json();
-        if (data.ok) {
-          document.getElementById('save-success').classList.remove('hidden');
-          SETTING_KEYS.forEach(key => {
-            const el = document.getElementById(key);
-            if (el) el.value = '';
-          });
-        } else {
-          document.getElementById('save-error').textContent = data.error || 'Save failed.';
-          document.getElementById('save-error').classList.remove('hidden');
-        }
-      } catch (e) {
-        document.getElementById('save-error').textContent = 'Network error.';
-        document.getElementById('save-error').classList.remove('hidden');
-      } finally {
-        btn.disabled = false;
-        document.getElementById('save-spinner').classList.add('hidden');
+    function showMain() {
+      document.getElementById('auth-screen').classList.add('hidden');
+      document.getElementById('main').classList.remove('hidden');
+      setPreset('today');
+    }
+
+    // ── Preset date ranges ────────────────────────────────────────────────────
+    function isoToday() { return new Date().toISOString().slice(0,10); }
+    function isoOffset(days) {
+      const d = new Date(); d.setDate(d.getDate() + days);
+      return d.toISOString().slice(0,10);
+    }
+    function isoStartOfWeek() {
+      const d = new Date(); d.setDate(d.getDate() - d.getDay());
+      return d.toISOString().slice(0,10);
+    }
+    function isoStartOfMonth() {
+      const d = new Date(); d.setDate(1);
+      return d.toISOString().slice(0,10);
+    }
+    function isoStartOfYear() {
+      return new Date().getFullYear() + '-01-01';
+    }
+
+    function setPreset(preset) {
+      document.querySelectorAll('[data-preset]').forEach(b => b.classList.remove('btn--active'));
+      document.querySelector(`[data-preset="${preset}"]`)?.classList.add('btn--active');
+      document.getElementById('custom-range').classList.add('hidden');
+
+      const today = isoToday();
+      if (preset === 'today')  { currentStart = today; currentEnd = today; }
+      else if (preset === 'week')  { currentStart = isoStartOfWeek(); currentEnd = today; }
+      else if (preset === 'month') { currentStart = isoStartOfMonth(); currentEnd = today; }
+      else if (preset === 'ytd')   { currentStart = isoStartOfYear(); currentEnd = today; }
+      else if (preset === 'custom') {
+        document.getElementById('custom-range').classList.remove('hidden');
+        document.getElementById('range-start').value = currentStart || isoOffset(-30);
+        document.getElementById('range-end').value   = currentEnd   || today;
+        return;
       }
+      loadMetrics();
+    }
+
+    document.querySelectorAll('[data-preset]').forEach(btn => {
+      btn.addEventListener('click', () => setPreset(btn.dataset.preset));
     });
 
-    // ---------------------------------------------------------------------------
-    // Placid Templates
-    // ---------------------------------------------------------------------------
-    let placidTemplates    = [];
-    let placidCustomFields = []; // [{ layer_name, label, type, max_chars }]
-    let placidBrandLayers  = []; // [{ layer_name, property, brand_source }]
-
-    const BRAND_SOURCE_LABELS = {
-      brand_bg:             'Background color',
-      brand_accent:         'Accent color',
-      brand_text:           'Text color',
-      brand_secondary_bg:   'Secondary background',
-      brand_secondary_text: 'Secondary text',
-      brand_font_heading:   'Heading font',
-      brand_font_body:      'Body font',
-      brand_name:           'Brand name',
-      brand_logo:           'Brand logo (URL)',
-    };
-    const PLACID_PROPERTY_LABELS = {
-      color:            'Text color',
-      background_color: 'Fill / background color',
-      font_family:      'Font family',
-      image_url:        'Image URL',
-    };
-
-    function renderBrandLayerRows() {
-      const list = document.getElementById('placid-brand-layers-list');
-      if (placidBrandLayers.length === 0) {
-        list.innerHTML = '<p style="font-size:0.8rem;color:var(--color-text-muted);margin:0 0 4px">No brand mappings yet.</p>';
-        return;
-      }
-      const cellStyle = 'padding:5px 8px;border:1px solid var(--color-border);border-radius:6px;font-size:0.85rem;width:100%';
-      const propertyOptions = Object.entries(PLACID_PROPERTY_LABELS)
-        .map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
-      const sourceOptions = Object.entries(BRAND_SOURCE_LABELS)
-        .map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
-      list.innerHTML = placidBrandLayers.map((f, i) => `
-        <div class="placid-bl-row" data-idx="${i}" style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:6px;align-items:center;margin-bottom:6px">
-          <input type="text" class="bl-layer-name" value="${escHtml(f.layer_name)}" placeholder="Placid layer name" maxlength="80" style="${cellStyle}" title="Exact layer name in your Placid template">
-          <select class="bl-property" style="${cellStyle}">${propertyOptions}</select>
-          <select class="bl-brand-source" style="${cellStyle}">${sourceOptions}</select>
-          <button type="button" class="bl-remove-btn" data-idx="${i}" style="padding:4px 9px;background:none;border:1px solid var(--color-border);border-radius:6px;cursor:pointer;color:var(--color-error);font-size:0.9rem" title="Remove">✕</button>
-        </div>`).join('');
-      // Set current values
-      list.querySelectorAll('.placid-bl-row').forEach((row, i) => {
-        row.querySelector('.bl-property').value     = placidBrandLayers[i].property     || 'color';
-        row.querySelector('.bl-brand-source').value = placidBrandLayers[i].brand_source || 'brand_bg';
-      });
-      list.querySelectorAll('.bl-remove-btn').forEach(btn => {
-        btn.addEventListener('click', () => { placidBrandLayers.splice(+btn.dataset.idx, 1); renderBrandLayerRows(); });
-      });
-      list.querySelectorAll('.bl-layer-name').forEach((inp, i)    => inp.addEventListener('input', () => { placidBrandLayers[i].layer_name   = inp.value; }));
-      list.querySelectorAll('.bl-property').forEach((sel, i)      => sel.addEventListener('change', () => { placidBrandLayers[i].property     = sel.value; }));
-      list.querySelectorAll('.bl-brand-source').forEach((sel, i)  => sel.addEventListener('change', () => { placidBrandLayers[i].brand_source = sel.value; }));
-    }
-
-    function renderCustomFieldRows() {
-      const list = document.getElementById('placid-custom-fields-list');
-      if (placidCustomFields.length === 0) {
-        list.innerHTML = '<p style="font-size:0.8rem;color:var(--color-text-muted);margin:0 0 4px">No custom fields yet.</p>';
-        return;
-      }
-      const cellStyle = 'padding:5px 8px;border:1px solid var(--color-border);border-radius:6px;font-size:0.85rem;width:100%';
-      list.innerHTML = placidCustomFields.map((f, i) => `
-        <div class="placid-cf-row" data-idx="${i}" style="display:grid;grid-template-columns:1fr 1fr 80px 64px auto;gap:6px;align-items:center;margin-bottom:6px">
-          <input type="text" class="cf-layer-name" value="${escHtml(f.layer_name)}" placeholder="Layer name" maxlength="80" style="${cellStyle}" title="Exact layer name in Placid">
-          <input type="text" class="cf-label" value="${escHtml(f.label)}" placeholder="Editor label" maxlength="80" style="${cellStyle}" title="Label shown to users in the editor">
-          <select class="cf-type" style="${cellStyle}">
-            <option value="text" ${f.type === 'text' ? 'selected' : ''}>Text</option>
-            <option value="image" ${f.type === 'image' ? 'selected' : ''}>Image</option>
-          </select>
-          <input type="number" class="cf-max-chars" value="${f.max_chars || ''}" placeholder="Max" min="1" max="2000" style="${cellStyle}${f.type === 'image' ? ';opacity:0.35' : ''}" ${f.type === 'image' ? 'disabled' : ''} title="Max characters (text only)">
-          <button type="button" class="cf-remove-btn" data-idx="${i}" style="padding:4px 9px;background:none;border:1px solid var(--color-border);border-radius:6px;cursor:pointer;color:var(--color-error);font-size:0.9rem" title="Remove">✕</button>
-        </div>`).join('');
-      list.querySelectorAll('.cf-remove-btn').forEach(btn => {
-        btn.addEventListener('click', () => { placidCustomFields.splice(+btn.dataset.idx, 1); renderCustomFieldRows(); });
-      });
-      list.querySelectorAll('.cf-type').forEach((sel, i) => {
-        sel.addEventListener('change', () => {
-          placidCustomFields[i].type = sel.value;
-          const mc = sel.closest('.placid-cf-row').querySelector('.cf-max-chars');
-          mc.disabled = sel.value === 'image';
-          mc.style.opacity = sel.value === 'image' ? '0.35' : '';
-        });
-      });
-      list.querySelectorAll('.cf-layer-name').forEach((inp, i) => inp.addEventListener('input', () => { placidCustomFields[i].layer_name = inp.value; }));
-      list.querySelectorAll('.cf-label').forEach((inp, i) => inp.addEventListener('input', () => { placidCustomFields[i].label = inp.value; }));
-      list.querySelectorAll('.cf-max-chars').forEach((inp, i) => inp.addEventListener('input', () => { placidCustomFields[i].max_chars = parseInt(inp.value) || null; }));
-    }
-
-    function escHtml(s) {
-      return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-    }
-
-    async function adminFetch(path, opts = {}) {
-      return fetch(path, {
-        ...opts,
-        headers: { 'Content-Type': 'application/json', 'X-Admin-Password': adminPassword, ...(opts.headers || {}) },
-      });
-    }
-
-    async function loadPlacidTemplates() {
-      try {
-        const res  = await adminFetch('/admin/placid-templates');
-        const data = await res.json();
-        placidTemplates = data.templates || [];
-        renderPlacidTemplates();
-      } catch { /* non-fatal */ }
-    }
-
-    function renderPlacidTemplates() {
-      const list = document.getElementById('placid-template-list');
-      if (placidTemplates.length === 0) {
-        list.innerHTML = '<p class="text-muted" style="font-size:0.85rem">No templates yet.</p>';
-        return;
-      }
-      list.innerHTML = placidTemplates.map(t => `
-        <div style="display:flex;align-items:center;gap:12px;padding:12px;border:1px solid var(--color-border);border-radius:8px;margin-bottom:8px;" data-template-id="${escHtml(t.id)}">
-          ${t.preview_image_url ? `<img src="${escHtml(t.preview_image_url)}" style="width:48px;height:48px;object-fit:cover;border-radius:6px;flex-shrink:0" alt="">` : `<div style="width:48px;height:48px;background:var(--color-surface-2);border-radius:6px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--color-text-muted)">${escHtml((t.name||'?').slice(0,2).toUpperCase())}</div>`}
-          <div style="flex:1;min-width:0">
-            <div style="font-weight:600;font-size:0.9rem">${escHtml(t.name)} ${t.is_default ? '<span style="font-size:0.7rem;background:var(--color-primary,#0d7a5f);color:#fff;padding:1px 6px;border-radius:4px;margin-left:4px;font-weight:700">DEFAULT</span>' : ''}</div>
-            <div style="font-size:0.75rem;color:var(--color-text-muted);font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(t.template_uuid)}</div>
-            <div style="font-size:0.75rem;color:var(--color-text-muted)">headline → <code>${escHtml(t.layer_headline)}</code> · subtext → <code>${escHtml(t.layer_subtext)}</code>${t.layer_background ? ` · background → <code>${escHtml(t.layer_background)}</code>` : ''}${Array.isArray(t.custom_layers) && t.custom_layers.length > 0 ? ` · <span style="color:var(--color-primary,#0d7a5f)">${t.custom_layers.length} custom field${t.custom_layers.length > 1 ? 's' : ''}</span>` : ''}${Array.isArray(t.brand_layers) && t.brand_layers.length > 0 ? ` · <span style="color:var(--color-primary,#0d7a5f)">${t.brand_layers.length} brand mapping${t.brand_layers.length > 1 ? 's' : ''}</span>` : ''}</div>
-          </div>
-          <div style="display:flex;gap:6px;flex-shrink:0">
-            <button class="btn btn--secondary tpl-edit-btn" style="font-size:0.75rem;padding:4px 10px">Edit</button>
-            ${!t.is_default ? `<button class="btn btn--secondary tpl-default-btn" style="font-size:0.75rem;padding:4px 10px">Set default</button>` : ''}
-            <button class="btn btn--secondary tpl-delete-btn" style="font-size:0.75rem;padding:4px 10px;color:var(--color-error)">Delete</button>
-          </div>
-        </div>`).join('');
-      list.querySelectorAll('[data-template-id]').forEach(row => {
-        const id = row.dataset.templateId;
-        row.querySelector('.tpl-edit-btn')?.addEventListener('click', () => editPlacidTemplate(id));
-        row.querySelector('.tpl-default-btn')?.addEventListener('click', () => setPlacidDefault(id));
-        row.querySelector('.tpl-delete-btn')?.addEventListener('click', () => deletePlacidTemplate(id));
-      });
-    }
-
-    function openPlacidForm(template = null) {
-      document.getElementById('placid-form-title').textContent      = template ? 'Edit template' : 'Add template';
-      document.getElementById('placid-form-id').value               = template?.id || '';
-      document.getElementById('placid-form-name').value             = template?.name || '';
-      document.getElementById('placid-form-uuid').value             = template?.template_uuid || '';
-      document.getElementById('placid-form-headline').value         = template?.layer_headline || 'headline';
-      document.getElementById('placid-form-subtext').value          = template?.layer_subtext  || 'subtext';
-      document.getElementById('placid-form-background').value       = template?.layer_background || '';
-      document.getElementById('placid-form-preview').value          = template?.preview_image_url || '';
-      document.getElementById('placid-form-error').classList.add('hidden');
-      placidCustomFields = Array.isArray(template?.custom_layers) ? JSON.parse(JSON.stringify(template.custom_layers)) : [];
-      placidBrandLayers  = Array.isArray(template?.brand_layers)  ? JSON.parse(JSON.stringify(template.brand_layers))  : [];
-      renderCustomFieldRows();
-      renderBrandLayerRows();
-      document.getElementById('placid-form').classList.remove('hidden');
-      document.getElementById('placid-form-name').focus();
-    }
-
-    function closePlacidForm() {
-      placidCustomFields = [];
-      placidBrandLayers  = [];
-      document.getElementById('placid-form').classList.add('hidden');
-    }
-
-    function editPlacidTemplate(id) {
-      openPlacidForm(placidTemplates.find(t => t.id === id));
-    }
-
-    async function setPlacidDefault(id) {
-      const res = await adminFetch(`/admin/placid-templates/${encodeURIComponent(id)}/set-default`, { method: 'POST' });
-      const data = await res.json();
-      if (data.ok) { placidTemplates = placidTemplates.map(t => ({ ...t, is_default: t.id === id })); renderPlacidTemplates(); }
-    }
-
-    async function deletePlacidTemplate(id) {
-      const t = placidTemplates.find(t => t.id === id);
-      if (!t || !confirm(`Delete template "${t.name}"?`)) return;
-      const res = await adminFetch(`/admin/placid-templates/${encodeURIComponent(id)}`, { method: 'DELETE' });
-      const data = await res.json();
-      if (data.ok) { placidTemplates = placidTemplates.filter(t => t.id !== id); renderPlacidTemplates(); }
-    }
-
-    document.getElementById('placid-add-btn').addEventListener('click', () => openPlacidForm());
-    document.getElementById('placid-form-cancel').addEventListener('click', closePlacidForm);
-    document.getElementById('placid-add-field-btn').addEventListener('click', () => {
-      placidCustomFields.push({ layer_name: '', label: '', type: 'text', max_chars: null });
-      renderCustomFieldRows();
-      const rows = document.querySelectorAll('#placid-custom-fields-list .cf-layer-name');
-      rows[rows.length - 1]?.focus();
-    });
-    document.getElementById('placid-add-brand-layer-btn').addEventListener('click', () => {
-      placidBrandLayers.push({ layer_name: '', property: 'color', brand_source: 'brand_text' });
-      renderBrandLayerRows();
-      const rows = document.querySelectorAll('#placid-brand-layers-list .bl-layer-name');
-      rows[rows.length - 1]?.focus();
+    document.getElementById('apply-range').addEventListener('click', () => {
+      currentStart = document.getElementById('range-start').value;
+      currentEnd   = document.getElementById('range-end').value;
+      if (currentStart && currentEnd) loadMetrics();
     });
 
-    document.getElementById('placid-form-save').addEventListener('click', async () => {
-      const id      = document.getElementById('placid-form-id').value;
-      // Collect current values from DOM (handles fast typists who didn't blur)
-      const cfRows = document.querySelectorAll('#placid-custom-fields-list .placid-cf-row');
-      const custom_layers = Array.from(cfRows).map(row => {
-        const layer_name = row.querySelector('.cf-layer-name').value.trim();
-        const label      = row.querySelector('.cf-label').value.trim();
-        const type       = row.querySelector('.cf-type').value;
-        const max_chars  = parseInt(row.querySelector('.cf-max-chars').value) || null;
-        return { layer_name, label, type, ...(type === 'text' && max_chars ? { max_chars } : {}) };
-      }).filter(f => f.layer_name);
-      const blRows = document.querySelectorAll('#placid-brand-layers-list .placid-bl-row');
-      const brand_layers = Array.from(blRows).map(row => ({
-        layer_name:   row.querySelector('.bl-layer-name').value.trim(),
-        property:     row.querySelector('.bl-property').value,
-        brand_source: row.querySelector('.bl-brand-source').value,
-      })).filter(f => f.layer_name);
-      const payload = {
-        name:              document.getElementById('placid-form-name').value.trim(),
-        template_uuid:     document.getElementById('placid-form-uuid').value.trim(),
-        layer_headline:    document.getElementById('placid-form-headline').value.trim()   || 'headline',
-        layer_subtext:     document.getElementById('placid-form-subtext').value.trim()    || 'subtext',
-        layer_background:  document.getElementById('placid-form-background').value.trim() || null,
-        preview_image_url: document.getElementById('placid-form-preview').value.trim()   || null,
-        custom_layers,
-        brand_layers,
-      };
-      const errEl = document.getElementById('placid-form-error');
-      if (!payload.name || !payload.template_uuid) {
-        errEl.textContent = 'Name and template UUID are required.';
-        errEl.classList.remove('hidden');
-        return;
-      }
-      const method = id ? 'PUT' : 'POST';
-      const url    = id ? `/admin/placid-templates/${encodeURIComponent(id)}` : '/admin/placid-templates';
-      const res    = await adminFetch(url, { method, body: JSON.stringify(payload) });
-      const data   = await res.json();
-      if (!data.ok) {
-        errEl.textContent = data.error || 'Save failed.';
-        errEl.classList.remove('hidden');
-        return;
-      }
-      if (id) { placidTemplates = placidTemplates.map(t => t.id === id ? data.template : t); }
-      else    { placidTemplates = [...placidTemplates, data.template]; }
-      renderPlacidTemplates();
-      closePlacidForm();
+    document.querySelectorAll('[data-gran]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('[data-gran]').forEach(b => b.classList.remove('btn--active'));
+        btn.classList.add('btn--active');
+        currentGran = btn.dataset.gran;
+        loadMetrics();
+      });
     });
+
+    // ── Load metrics ──────────────────────────────────────────────────────────
+    async function loadMetrics() {
+      const params = new URLSearchParams({ start: currentStart, end: currentEnd, granularity: currentGran });
+      const r = await fetch(`/admin/dashboard/metrics?${params}`, {
+        headers: { 'X-Admin-Password': adminPw }
+      });
+      const data = await r.json();
+      if (!data.ok) return;
+
+      const s = data.series;
+      const sum = arr => arr.reduce((a, b) => a + Number(b.count), 0);
+
+      document.getElementById('m-signups').textContent  = sum(s.signups).toLocaleString();
+      document.getElementById('m-upgrades').textContent = sum(s.paid_upgrades).toLocaleString();
+      document.getElementById('m-cancels').textContent  = sum(s.cancellations).toLocaleString();
+      document.getElementById('m-mrr').textContent      = '$' + (data.mrr_estimate || 0).toLocaleString() + '/mo';
+      document.getElementById('m-posts').textContent    = sum(s.posts_created).toLocaleString();
+      document.getElementById('m-placid').textContent   = sum(s.placid_total).toLocaleString();
+      document.getElementById('m-linkedin').textContent = sum(s.linkedin_connections).toLocaleString();
+      document.getElementById('m-logins').textContent   = sum(s.logins).toLocaleString();
+
+      renderBar('chart-signups',     s.signups,              COLORS.accent);
+      renderBar('chart-upgrades',    s.paid_upgrades,        COLORS.primary);
+      renderBar('chart-cancels',     s.cancellations,        COLORS.error);
+      renderBar('chart-posts',       s.posts_created,        COLORS.accent);
+      renderPlacidStacked('chart-placid', s.placid_by_type);
+      renderBar('chart-linkedin',    s.linkedin_connections, COLORS.primary);
+      renderBarWithEmpty('chart-logins',      s.logins,               COLORS.accent);
+      renderBarWithEmpty('chart-disconnects', s.linkedin_disconnects, COLORS.amber);
+
+      loadPlanDistribution();
+    }
+
+    async function loadPlanDistribution() {
+      const r = await fetch('/admin/diagnostics', { headers: { 'X-Admin-Password': adminPw } });
+      const data = await r.json();
+      if (!data.ok) return;
+      const counts = { pro: 0, trialing: 0, free: 0, canceled: 0 };
+      for (const u of data.users) {
+        const s = u.status || 'free';
+        const p = u.plan || 'free';
+        if (s === 'active' && p === 'pro') counts.pro++;
+        else if (s === 'trialing') counts.trialing++;
+        else if (s === 'canceled') counts.canceled++;
+        else counts.free++;
+      }
+      renderDonut('chart-plans', [
+        { label: 'Pro', value: counts.pro, color: COLORS.primary },
+        { label: 'Trialing', value: counts.trialing, color: COLORS.amber },
+        { label: 'Free', value: counts.free, color: COLORS.muted },
+        { label: 'Canceled', value: counts.canceled, color: COLORS.error },
+      ]);
+    }
+
+    // ── Chart helpers ─────────────────────────────────────────────────────────
+    function destroyChart(id) { if (charts[id]) { charts[id].destroy(); delete charts[id]; } }
+
+    function renderBar(id, series, color) {
+      destroyChart(id);
+      const ctx = document.getElementById(id);
+      if (!ctx) return;
+      if (!series || series.length === 0) {
+        ctx.getContext('2d').clearRect(0,0,ctx.width,ctx.height);
+        ctx.parentElement.innerHTML = `<div class="chart-card__title">${ctx.parentElement.querySelector('.chart-card__title')?.textContent||''}</div><div class="empty-state">No data yet</div>`;
+        return;
+      }
+      charts[id] = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: series.map(r => r.bucket),
+          datasets: [{ data: series.map(r => r.count), backgroundColor: color + 'CC', borderColor: color, borderWidth: 1 }],
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ' ' + ctx.parsed.y } } }, scales: { x: { ticks: { color: '#8A9CC0', maxRotation: 0, font: { size: 10 } }, grid: { color: 'rgba(255,255,255,.05)' } }, y: { ticks: { color: '#8A9CC0', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,.05)' }, beginAtZero: true } } },
+      });
+    }
+
+    function renderBarWithEmpty(id, series, color) {
+      destroyChart(id);
+      const ctx = document.getElementById(id);
+      if (!ctx) return;
+      if (!series || series.length === 0) {
+        const title = ctx.closest('.chart-card')?.querySelector('.chart-card__title')?.textContent || '';
+        ctx.closest('.chart-card').innerHTML = `<div class="chart-card__title">${title}</div><div class="empty-state">Tracking starts after next deploy</div>`;
+        return;
+      }
+      renderBar(id, series, color);
+    }
+
+    function renderPlacidStacked(id, byType) {
+      destroyChart(id);
+      const ctx = document.getElementById(id);
+      if (!ctx) return;
+      const types = Object.keys(byType || {});
+      if (types.length === 0) {
+        const title = ctx.closest('.chart-card')?.querySelector('.chart-card__title')?.textContent || '';
+        ctx.closest('.chart-card').innerHTML = `<div class="chart-card__title">${title}</div><div class="empty-state">No data yet</div>`;
+        return;
+      }
+      const allBuckets = [...new Set(types.flatMap(t => (byType[t]||[]).map(r => r.bucket)))].sort();
+      const typeColors = [COLORS.primary, COLORS.accent, COLORS.amber, COLORS.muted];
+      const datasets = types.map((t, i) => ({
+        label: t,
+        data: allBuckets.map(b => { const row = (byType[t]||[]).find(r => r.bucket === b); return row ? row.count : 0; }),
+        backgroundColor: (typeColors[i] || COLORS.muted) + 'CC',
+        borderColor: typeColors[i] || COLORS.muted,
+        borderWidth: 1,
+      }));
+      charts[id] = new Chart(ctx, {
+        type: 'bar',
+        data: { labels: allBuckets, datasets },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: true, labels: { color: '#8A9CC0', font: { size: 10 }, boxWidth: 10 } } }, scales: { x: { stacked: true, ticks: { color: '#8A9CC0', maxRotation: 0, font: { size: 10 } }, grid: { color: 'rgba(255,255,255,.05)' } }, y: { stacked: true, ticks: { color: '#8A9CC0', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,.05)' }, beginAtZero: true } } },
+      });
+    }
+
+    function renderDonut(id, slices) {
+      destroyChart(id);
+      const ctx = document.getElementById(id);
+      if (!ctx) return;
+      charts[id] = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: slices.map(s => s.label),
+          datasets: [{ data: slices.map(s => s.value), backgroundColor: slices.map(s => s.color + 'CC'), borderColor: slices.map(s => s.color), borderWidth: 1 }],
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: true, position: 'bottom', labels: { color: '#8A9CC0', font: { size: 10 }, boxWidth: 12 } } } },
+      });
+    }
+
+    init();
   </script>
-
 </body>
 </html>

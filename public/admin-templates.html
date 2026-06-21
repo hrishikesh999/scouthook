@@ -154,7 +154,7 @@
         const data = await r.json();
         placidTemplateLayers = data.layers || [];
         if (placidTemplateLayers.length) {
-          setBrandStatus(`${placidTemplateLayers.length} layer${placidTemplateLayers.length !== 1 ? 's' : ''} found in Placid — click "Auto-detect" to map them`);
+          setBrandStatus(`${placidTemplateLayers.length} layer${placidTemplateLayers.length !== 1 ? 's' : ''} found in Placid — click "Fetch all fields" to populate`);
         } else {
           setBrandStatus('No layers found for this UUID');
         }

@@ -21,39 +21,18 @@
           <h1 class="vault-title">Content Vault</h1>
           <p class="vault-subtitle">Your document library. Upload case studies, service docs, and newsletters — ScoutHook uses them to generate posts in your voice.</p>
         </div>
+        <button id="vault-add-btn" class="btn-teal-filled" type="button">+ Add Content</button>
       </div>
 
-      <div class="vault-layout">
+      <div class="vault-layout vault-layout-single">
 
-        <!-- Left: upload -->
-        <section class="vault-upload-col" aria-label="Upload documents">
-          <p class="vault-col-label">Add a document</p>
-
-          <label class="vault-dropzone" id="vault-dropzone" aria-label="Drop files here or click to browse">
-            <input type="file" id="vault-file-input" accept=".pdf,.docx,.txt" multiple aria-label="Choose file">
-            <svg class="vault-dropzone-icon" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-            <p class="vault-dropzone-label">Drop files here or click to browse</p>
-            <p class="vault-dropzone-hint">PDF, DOCX, or TXT · Up to 25 MB each</p>
-          </label>
-
-          <div id="vault-upload-status" class="vault-upload-status" role="status" aria-live="polite"></div>
-
-          <div class="vault-divider">or paste a URL</div>
-
-          <div class="vault-url-row">
-            <input type="url" id="vault-url-input" class="vault-url-input" placeholder="https://your-newsletter.com/article…" aria-label="Article or newsletter URL">
-            <button id="vault-url-btn" class="btn-teal-filled" type="button">Add URL</button>
-          </div>
-        </section>
-
-        <!-- Right: documents -->
+        <!-- Documents -->
         <section class="vault-docs-col" aria-label="Your documents">
-          <p class="vault-col-label">Your knowledge base</p>
 
           <div id="vault-empty" class="vault-empty" aria-label="No documents yet">
             <svg class="vault-empty-icon" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
             <p class="vault-empty-label">No documents yet</p>
-            <p class="vault-empty-sub">Upload a PDF, DOCX, or paste a URL to get started.</p>
+            <p class="vault-empty-sub">Click <strong>+ Add Content</strong> to upload a file, blog article, YouTube video, or Google Doc.</p>
           </div>
 
           <div id="vault-mine-banner-slot"></div>
@@ -75,6 +54,88 @@
     </footer>
 
   </div><!-- /main-content -->
+
+  <!-- ── Add Content modal ───────────────────────────────────────────────── -->
+  <div id="vault-add-overlay" class="vault-add-overlay" style="display:none" role="dialog" aria-modal="true" aria-labelledby="vault-add-modal-title">
+    <div class="vault-add-modal">
+
+      <div class="vault-add-modal-header">
+        <button id="vault-add-back" class="vault-add-back" type="button" aria-label="Back to source selection" style="visibility:hidden">← Back</button>
+        <h2 id="vault-add-modal-title" class="vault-add-modal-title">Add to Knowledge Base</h2>
+        <button id="vault-add-close" class="vault-add-close" type="button" aria-label="Close">✕</button>
+      </div>
+
+      <!-- Step 1: source type grid -->
+      <div id="vault-source-grid" class="vault-source-grid">
+        <button class="vault-source-block" type="button" data-source="file">
+          <span class="vault-source-emoji">📄</span>
+          <span class="vault-source-name">Upload a File</span>
+          <span class="vault-source-hint">Doc, PDF, PPTX</span>
+        </button>
+        <button class="vault-source-block" type="button" data-source="url">
+          <span class="vault-source-emoji">🔗</span>
+          <span class="vault-source-name">Blog URL</span>
+          <span class="vault-source-hint">Newsletter, article</span>
+        </button>
+        <button class="vault-source-block" type="button" data-source="youtube">
+          <span class="vault-source-emoji">🎥</span>
+          <span class="vault-source-name">YouTube Video</span>
+          <span class="vault-source-hint">Paste the video URL</span>
+        </button>
+        <button class="vault-source-block" type="button" data-source="gdrive">
+          <span class="vault-source-emoji">📁</span>
+          <span class="vault-source-name">Google Drive</span>
+          <span class="vault-source-hint">Shared Doc or Slide</span>
+        </button>
+      </div>
+
+      <!-- Step 2: input for chosen source -->
+      <div id="vault-source-input" class="vault-source-input" style="display:none">
+
+        <!-- File -->
+        <div id="vault-input-file" class="vault-input-section" style="display:none">
+          <label class="vault-dropzone" id="vault-modal-dropzone" aria-label="Drop files here or click to browse">
+            <input type="file" id="vault-file-input" accept=".pdf,.docx,.pptx,.txt" multiple aria-label="Choose file">
+            <svg class="vault-dropzone-icon" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            <p class="vault-dropzone-label">Drop files here or click to browse</p>
+            <p class="vault-dropzone-hint">PDF, DOCX, PPTX, or TXT · Up to 25 MB each</p>
+          </label>
+        </div>
+
+        <!-- Blog URL -->
+        <div id="vault-input-url" class="vault-input-section" style="display:none">
+          <p class="vault-input-label">Paste the article or newsletter URL:</p>
+          <div class="vault-url-row">
+            <input type="url" id="vault-url-input" class="vault-url-input" placeholder="https://your-newsletter.com/article…" aria-label="Article or newsletter URL">
+            <button id="vault-url-btn" class="btn-teal-filled" type="button">Add URL</button>
+          </div>
+        </div>
+
+        <!-- YouTube -->
+        <div id="vault-input-youtube" class="vault-input-section" style="display:none">
+          <p class="vault-input-label">Paste the YouTube video URL:</p>
+          <p class="vault-input-hint">ScoutHook will extract the video transcript and mine it for post ideas.</p>
+          <div class="vault-url-row">
+            <input type="url" id="vault-yt-input" class="vault-url-input" placeholder="https://youtube.com/watch?v=…" aria-label="YouTube video URL">
+            <button id="vault-yt-btn" class="btn-teal-filled" type="button">Extract</button>
+          </div>
+        </div>
+
+        <!-- Google Drive -->
+        <div id="vault-input-gdrive" class="vault-input-section" style="display:none">
+          <p class="vault-input-label">Paste your shared Google Doc URL:</p>
+          <p class="vault-input-hint">Make sure the doc is shared as <strong>"Anyone with the link"</strong> before importing.</p>
+          <div class="vault-url-row">
+            <input type="url" id="vault-gdrive-input" class="vault-url-input" placeholder="https://docs.google.com/document/d/…" aria-label="Google Drive document URL">
+            <button id="vault-gdrive-btn" class="btn-teal-filled" type="button">Import</button>
+          </div>
+        </div>
+
+        <div id="vault-modal-status" class="vault-upload-status" role="status" aria-live="polite"></div>
+      </div>
+
+    </div>
+  </div>
 
   <!-- Ideas slide-over panel (hidden until a card is clicked) -->
   <div id="vault-ideas-overlay" class="vault-ideas-overlay" style="display:none" role="dialog" aria-modal="true" aria-label="Ideas panel">
@@ -100,11 +161,25 @@
   let documents = [];
   const newlyMinedIds = new Set();
 
-  const dropzone     = document.getElementById('vault-dropzone');
+  // ── DOM refs ──────────────────────────────────────────────────────────────
+  const addBtn       = document.getElementById('vault-add-btn');
+  const addOverlay   = document.getElementById('vault-add-overlay');
+  const addBack      = document.getElementById('vault-add-back');
+  const addClose     = document.getElementById('vault-add-close');
+  const addTitle     = document.getElementById('vault-add-modal-title');
+  const sourceGrid   = document.getElementById('vault-source-grid');
+  const sourceInput  = document.getElementById('vault-source-input');
+  const modalStatus  = document.getElementById('vault-modal-status');
+
   const fileInput    = document.getElementById('vault-file-input');
+  const dropzone     = document.getElementById('vault-modal-dropzone');
   const urlInput     = document.getElementById('vault-url-input');
   const urlBtn       = document.getElementById('vault-url-btn');
-  const uploadStatus = document.getElementById('vault-upload-status');
+  const ytInput      = document.getElementById('vault-yt-input');
+  const ytBtn        = document.getElementById('vault-yt-btn');
+  const gdriveInput  = document.getElementById('vault-gdrive-input');
+  const gdriveBtn    = document.getElementById('vault-gdrive-btn');
+
   const docList      = document.getElementById('vault-doc-list');
   const docEmpty     = document.getElementById('vault-empty');
   const ideasOverlay = document.getElementById('vault-ideas-overlay');
@@ -113,7 +188,68 @@
   const ideasTitle   = document.getElementById('vault-ideas-panel-title');
   const ideasSub     = document.getElementById('vault-ideas-panel-sub');
 
-  // ── Upload: file drag/drop/select ────────────────────────────────
+  // ── Add Content modal ─────────────────────────────────────────────────────
+  addBtn.addEventListener('click', openAddModal);
+
+  function openAddModal() {
+    showStep1();
+    clearModalStatus();
+    addOverlay.style.display = 'flex';
+  }
+
+  function closeAddModal() {
+    addOverlay.style.display = 'none';
+    showStep1();
+    clearModalStatus();
+    // Reset inputs
+    fileInput.value = '';
+    urlInput.value  = '';
+    ytInput.value   = '';
+    gdriveInput.value = '';
+  }
+
+  addClose.addEventListener('click', closeAddModal);
+  addOverlay.addEventListener('click', e => { if (e.target === addOverlay) closeAddModal(); });
+  addBack.addEventListener('click', () => { showStep1(); clearModalStatus(); });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      if (addOverlay.style.display !== 'none') closeAddModal();
+      else if (ideasOverlay.style.display !== 'none') closeIdeasPanel();
+    }
+  });
+
+  function showStep1() {
+    sourceGrid.style.display  = '';
+    sourceInput.style.display = 'none';
+    addBack.style.visibility  = 'hidden';
+    addTitle.textContent      = 'Add to Knowledge Base';
+  }
+
+  const SOURCE_LABELS = {
+    file:    'Upload a File',
+    url:     'Blog URL',
+    youtube: 'YouTube Video',
+    gdrive:  'Google Drive',
+  };
+
+  function showStep2(source) {
+    sourceGrid.style.display  = 'none';
+    sourceInput.style.display = '';
+    addBack.style.visibility  = 'visible';
+    addTitle.textContent      = SOURCE_LABELS[source] || 'Add Content';
+
+    // Show only the relevant input section
+    document.getElementById('vault-input-file').style.display    = source === 'file'    ? '' : 'none';
+    document.getElementById('vault-input-url').style.display     = source === 'url'     ? '' : 'none';
+    document.getElementById('vault-input-youtube').style.display = source === 'youtube' ? '' : 'none';
+    document.getElementById('vault-input-gdrive').style.display  = source === 'gdrive'  ? '' : 'none';
+  }
+
+  sourceGrid.querySelectorAll('.vault-source-block').forEach(btn => {
+    btn.addEventListener('click', () => showStep2(btn.dataset.source));
+  });
+
+  // ── File drag/drop/select ─────────────────────────────────────────────────
   dropzone.addEventListener('dragover',  e => { e.preventDefault(); dropzone.classList.add('dragging'); });
   dropzone.addEventListener('dragleave', ()  => dropzone.classList.remove('dragging'));
   dropzone.addEventListener('drop', e => {
@@ -127,14 +263,21 @@
     fileInput.value = '';
   });
 
+  const ALLOWED_MIME = new Set([
+    'application/pdf',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'text/plain',
+  ]);
+
   async function uploadFiles(files) {
     for (const file of files) {
       const mime = file.type || guessMime(file.name);
-      if (!['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain'].includes(mime)) {
-        setUploadStatus(`"${file.name}" is not a supported file type (PDF, DOCX, TXT only).`, 'error');
+      if (!ALLOWED_MIME.has(mime)) {
+        setModalStatus(`"${file.name}" is not a supported file type (PDF, DOCX, PPTX, TXT only).`, 'error');
         continue;
       }
-      setUploadStatus(`Uploading "${file.name}"…`, 'info');
+      setModalStatus(`Uploading "${file.name}"…`, 'info');
       try {
         const buffer = await file.arrayBuffer();
         const res    = await fetch('/api/vault/upload', {
@@ -144,19 +287,69 @@
         });
         const data = await res.json();
         if (!data.ok) throw Object.assign(new Error(data.error || 'Upload failed'), { planData: data });
-        setUploadStatus(`"${file.name}" uploaded — indexing…`, 'ok');
+        closeAddModal();
         prependDocument(data.document);
         pollDocumentStatus(data.document.id);
       } catch (err) {
         if (err.message === 'plan_limit_exceeded') {
-          setUploadStatus(planLimitMessage(err.planData), 'error', true);
+          setModalStatus(planLimitMessage(err.planData), 'error', true);
         } else {
-          setUploadStatus(`Upload failed: ${err.message}`, 'error');
+          setModalStatus(`Upload failed: ${err.message}`, 'error');
         }
       }
     }
   }
 
+  // ── URL / YouTube / Google Drive submission ───────────────────────────────
+  urlBtn.addEventListener('click',    () => submitUrl(urlInput.value.trim(),     urlBtn));
+  ytBtn.addEventListener('click',     () => submitUrl(ytInput.value.trim(),      ytBtn));
+  gdriveBtn.addEventListener('click', () => submitUrl(gdriveInput.value.trim(),  gdriveBtn));
+
+  // Allow Enter key in URL inputs
+  [urlInput, ytInput, gdriveInput].forEach(inp => {
+    inp.addEventListener('keydown', e => {
+      if (e.key === 'Enter') inp.nextElementSibling?.click();
+    });
+  });
+
+  async function submitUrl(url, btn) {
+    if (!url) return;
+    btn.disabled = true;
+    setModalStatus('Adding…', 'info');
+    try {
+      const res  = await fetch('/api/vault/upload', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ url }),
+      });
+      const data = await res.json();
+      if (!data.ok) throw Object.assign(new Error(data.error || 'Failed to add URL'), { planData: data });
+      closeAddModal();
+      prependDocument(data.document);
+      pollDocumentStatus(data.document.id);
+    } catch (err) {
+      if (err.message === 'plan_limit_exceeded') {
+        setModalStatus(planLimitMessage(err.planData), 'error', true);
+      } else {
+        setModalStatus(`Failed: ${err.message}`, 'error');
+      }
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  // ── Status helpers ────────────────────────────────────────────────────────
+  function setModalStatus(msg, type, isHtml) {
+    if (isHtml) modalStatus.innerHTML = msg;
+    else        modalStatus.textContent = msg;
+    modalStatus.className = `vault-upload-status ${type}`;
+  }
+  function clearModalStatus() {
+    modalStatus.textContent = '';
+    modalStatus.className   = 'vault-upload-status';
+  }
+
+  // ── Shared helpers ────────────────────────────────────────────────────────
   function escHtml(str) {
     return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
@@ -169,52 +362,14 @@
   }
 
   function guessMime(filename) {
-    if (/\.pdf$/i.test(filename))  return 'application/pdf';
-    if (/\.docx$/i.test(filename)) return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-    if (/\.txt$/i.test(filename))  return 'text/plain';
+    if (/\.pdf$/i.test(filename))   return 'application/pdf';
+    if (/\.docx$/i.test(filename))  return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    if (/\.pptx$/i.test(filename))  return 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+    if (/\.txt$/i.test(filename))   return 'text/plain';
     return 'application/octet-stream';
   }
 
-  function setUploadStatus(msg, type, isHtml) {
-    if (isHtml) uploadStatus.innerHTML = msg;
-    else        uploadStatus.textContent = msg;
-    uploadStatus.className = `vault-upload-status ${type}`;
-  }
-  function clearUploadStatus() {
-    uploadStatus.textContent = '';
-    uploadStatus.className   = 'vault-upload-status';
-  }
-
-  // ── Upload: URL ───────────────────────────────────────────────────
-  urlBtn.addEventListener('click', async () => {
-    const url = urlInput.value.trim();
-    if (!url) return;
-    urlBtn.disabled = true;
-    setUploadStatus('Adding URL…', 'info');
-    try {
-      const res  = await fetch('/api/vault/upload', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ url }),
-      });
-      const data = await res.json();
-      if (!data.ok) throw Object.assign(new Error(data.error || 'Failed to add URL'), { planData: data });
-      urlInput.value = '';
-      setUploadStatus('URL added — indexing…', 'ok');
-      prependDocument(data.document);
-      pollDocumentStatus(data.document.id);
-    } catch (err) {
-      if (err.message === 'plan_limit_exceeded') {
-        setUploadStatus(planLimitMessage(err.planData), 'error', true);
-      } else {
-        setUploadStatus(`Failed: ${err.message}`, 'error');
-      }
-    } finally {
-      urlBtn.disabled = false;
-    }
-  });
-
-  // ── Documents: load, render, poll, delete ─────────────────────────
+  // ── Documents: load, render, poll, delete ─────────────────────────────────
   async function loadDocuments() {
     try {
       const res  = await fetch('/api/vault/documents');
@@ -224,11 +379,8 @@
       renderDocuments();
       for (const doc of documents) {
         if (doc.status === 'indexing' || doc.status === 'pending' || doc.status === 'mining') {
-          // Server is handling extraction/mining — just poll for status updates
           pollDocumentStatus(doc.id);
         } else if (doc.status === 'ready' && !doc.ideas_mined) {
-          // Legacy doc: reached 'ready' without going through auto-mining
-          // (e.g. server restart before this fix, or pre-fix upload)
           triggerMining();
           pollDocumentStatus(doc.id);
         }
@@ -236,8 +388,6 @@
     } catch { /* non-fatal */ }
   }
 
-  // Returns 'mining' when doc is ready but ideas haven't been extracted yet.
-  // All other states pass through unchanged.
   function effectiveStatus(doc) {
     if (doc.status === 'ready' && !doc.ideas_mined) return 'mining';
     return doc.status;
@@ -277,7 +427,6 @@
     const errMsg  = doc.status === 'error' && doc.error_message
       ? `<p style="font-size:0.75rem;color:var(--text-danger);margin:4px 0 0 0">${escHtml(doc.error_message)}</p>` : '';
 
-    // Card body is a button only when ideas exist (something to show)
     const isNewlyMined = newlyMinedIds.has(doc.id) && !!doc.ideas_mined;
     const bodyAttrs = `data-id="${doc.id}" data-name="${escHtml(doc.filename)}" data-count="${doc.ideas_mined || 0}"`;
     const bodyStart = doc.ideas_mined
@@ -312,7 +461,10 @@
   function docIcon(type) {
     if (type === 'pdf')  return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`;
     if (type === 'docx') return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>`;
+    if (type === 'pptx') return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><rect x="8" y="12" width="5" height="4" rx="1"/></svg>`;
     if (type === 'url')  return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>`;
+    if (type === 'youtube') return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M22.54 6.42a2.78 2.78 0 0 0-1.95-1.97C18.88 4 12 4 12 4s-6.88 0-8.59.45A2.78 2.78 0 0 0 1.46 6.42 29 29 0 0 0 1 12a29 29 0 0 0 .46 5.58 2.78 2.78 0 0 0 1.95 1.97C5.12 20 12 20 12 20s6.88 0 8.59-.45a2.78 2.78 0 0 0 1.95-1.97A29 29 0 0 0 23 12a29 29 0 0 0-.46-5.58z"/><polygon points="9.75 15.02 15.5 12 9.75 8.98 9.75 15.02"/></svg>`;
+    if (type === 'gdrive') return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`;
     return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`;
   }
 
@@ -324,18 +476,13 @@
   async function triggerMining() {
     try {
       await fetch('/api/vault/mine', { method: 'POST' });
-    } catch { /* non-fatal — mining is fire-and-forget */ }
+    } catch { /* non-fatal */ }
   }
 
-  // Polls a document until it reaches a terminal state:
-  //   indexing/pending → keep polling (indexing in progress)
-  //   ready + no ideas → trigger mining once, keep polling (mining in progress)
-  //   ready + ideas    → stop, toast success
-  //   error            → stop
   function pollDocumentStatus(docId) {
     let miningTriggered = false;
     let miningStartAt   = 0;
-    const MINING_TIMEOUT_MS = 120_000; // 2 min — stop waiting if AI mining stalls
+    const MINING_TIMEOUT_MS = 120_000;
 
     const interval = setInterval(async () => {
       try {
@@ -349,29 +496,23 @@
         const idx = documents.findIndex(d => d.id === docId);
         if (idx !== -1) { documents[idx] = updated; renderDocuments(); }
 
-        // Server is still working (extracting or mining) — keep polling
         if (updated.status === 'indexing' || updated.status === 'pending' || updated.status === 'mining') return;
 
-        // Indexing done, mining not yet complete — trigger once and keep polling
         if (updated.status === 'ready' && !updated.ideas_mined) {
           if (!miningTriggered) {
             miningTriggered = true;
             miningStartAt   = Date.now();
             triggerMining();
           }
-          // Give up after timeout so the interval doesn't spin forever
           if (Date.now() - miningStartAt > MINING_TIMEOUT_MS) {
             clearInterval(interval);
-            clearUploadStatus();
           }
           return;
         }
 
-        // Terminal state
         clearInterval(interval);
 
         if (updated.status === 'ready' && updated.ideas_mined) {
-          clearUploadStatus();
           newlyMinedIds.add(docId);
           showMineBanner(docId, updated.filename, updated.ideas_mined);
           renderDocuments();
@@ -390,7 +531,6 @@
 
   async function deleteDocument(docId) {
     if (!confirm('Remove this document from your vault?')) return;
-    // Close panel if it's showing this doc
     if (ideasOverlay.dataset.docId === String(docId)) closeIdeasPanel();
     try {
       const res  = await fetch(`/api/vault/documents/${docId}`, { method: 'DELETE' });
@@ -403,14 +543,10 @@
     }
   }
 
-  // ── Ideas slide-over panel ────────────────────────────────────────
+  // ── Ideas slide-over panel ────────────────────────────────────────────────
   ideasClose.addEventListener('click', closeIdeasPanel);
   ideasOverlay.addEventListener('click', e => {
-    // Close when clicking the dark backdrop (not the panel itself)
     if (e.target === ideasOverlay) closeIdeasPanel();
-  });
-  document.addEventListener('keydown', e => {
-    if (e.key === 'Escape' && ideasOverlay.style.display !== 'none') closeIdeasPanel();
   });
 
   function closeIdeasPanel() {
@@ -480,10 +616,9 @@
     const hook     = idea.hook_preview || '';
     const seed     = idea.seed_text    || '';
     const display  = hook || seed;
-    const detail   = hook ? seed : '';  // show seed as detail only when hook is the headline
+    const detail   = hook ? seed : '';
 
-    // Build generate URL — pass seed_text as the idea input, funnel_type as the post type
-    const ideaParam = encodeURIComponent((seed || hook).slice(0, 800));
+    const ideaParam  = encodeURIComponent((seed || hook).slice(0, 800));
     const generateUrl = `/generate.html?type=${encodeURIComponent(funnel)}&idea=${ideaParam}`;
 
     return `

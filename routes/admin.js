@@ -387,6 +387,29 @@ async function fetchPlacidThumbnail(apiKey, templateUuid) {
   } catch { return null; }
 }
 
+router.get('/placid-templates/fetch-layers', requireAdminPassword, async (req, res) => {
+  const { uuid } = req.query;
+  if (!uuid) return res.status(400).json({ ok: false, error: 'uuid required' });
+  try {
+    const apiKey = process.env.PLACID_API_KEY || await getSetting('placid_api_key') || null;
+    if (!apiKey) return res.json({ ok: true, layers: [] });
+    const r = await fetch('https://api.placid.app/api/rest/templates', {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+    if (!r.ok) return res.json({ ok: true, layers: [] });
+    const body = await r.json();
+    const list = Array.isArray(body.data) ? body.data : Array.isArray(body) ? body : [];
+    const tpl = list.find(t => t.uuid === uuid);
+    if (!tpl) return res.json({ ok: true, layers: [] });
+    const layers = Array.isArray(tpl.layers)
+      ? tpl.layers.map(l => ({ name: l.name, type: l.type || 'unknown' }))
+      : [];
+    return res.json({ ok: true, layers });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 function parsePlacidJsonArray(raw) {
   try { const v = JSON.parse(raw || '[]'); return Array.isArray(v) ? v : []; } catch { return []; }
 }

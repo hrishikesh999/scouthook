@@ -90,7 +90,11 @@
           <!-- Brand mappings -->
           <div class="field field--top-gap">
             <label class="label-block">Brand mappings <span class="label-optional">(optional)</span></label>
-            <div class="text-muted field-hint field-hint--mb">Map workspace brand properties to Placid layers — applied automatically at render time.</div>
+            <div class="text-muted field-hint field-hint--mb">Map your workspace brand to Placid layers — applied automatically at render time.</div>
+            <div class="brand-mapping-actions">
+              <button type="button" id="placid-auto-detect-btn" class="btn btn--secondary btn--sm">Auto-detect from Placid</button>
+              <span id="placid-layers-status" class="brand-layers-status"></span>
+            </div>
             <div id="placid-brand-layers-list"></div>
             <button type="button" id="placid-add-brand-layer-btn" class="btn btn--secondary btn--sm btn--top-gap">+ Add mapping</button>
           </div>

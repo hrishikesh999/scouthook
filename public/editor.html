@@ -311,8 +311,7 @@
         <button id="ai-image-back-btn"     class="btn-text"         hidden>← Change template</button>
         <div style="flex:1"></div>
         <button id="ai-image-cancel-btn"   class="slide-over-discard">Cancel</button>
-        <button id="ai-image-generate-btn" class="btn-teal-filled"  hidden>Generate</button>
-        <button id="ai-image-add-btn"      class="btn-outlined-teal" hidden>Add to post</button>
+        <button id="ai-image-generate-btn" class="btn-teal-filled"  hidden>Save</button>
       </div>
     </div>
   </div>
@@ -479,7 +478,9 @@ let selectedTemplate      = null;  // full template object (needed to check laye
 let selectedBackgroundUrl = null;  // background image URL chosen by user
 let selectedCustomImages  = {};    // layer_name → URL for image-type custom fields
 let _mediaDrawerMode      = 'attach'; // 'attach' | 'background' | 'custom_image:{layer_name}'
-let _aiModalState         = 'picker'; // 'picker' | 'editing' | 'generating' | 'preview'
+let _aiModalState         = 'picker'; // 'picker' | 'editing' | 'generating'
+let _aiPreviewDebounceTimer = null;
+let _aiAutoPreviewRunning   = false;
 
 const visualCache = new Map();
 
@@ -1353,12 +1354,14 @@ function openAiImageModal() {
 
   const cached = visualCache.get(`${currentPostId}:ai_image`);
   if (cached?.assetUrl) {
-    currentAssetUrl   = cached.assetUrl;
-    currentPreviewUrl = cached.previewUrl || null;
-    extractedContent  = cached.extractedContent || null;
-    _setAiModalState('preview');
+    currentAssetUrl    = cached.assetUrl;
+    currentPreviewUrl  = cached.previewUrl || null;
+    extractedContent   = cached.extractedContent || null;
+    selectedTemplateId = cached.templateId || selectedTemplateId;
+    selectedTemplate   = cached.template   || selectedTemplate;
+    _setAiModalState('editing');
     _renderAiPreviewImage(cached.assetUrl);
-    if (extractedContent) renderAiImageFormInModal(extractedContent);
+    if (extractedContent && selectedTemplate) renderAiImageFormInModal(extractedContent);
     return;
   }
 
@@ -1383,17 +1386,21 @@ function openAiImageModal() {
 function closeAiImageModal() {
   const overlay = document.getElementById('ai-image-overlay');
   overlay.setAttribute('aria-hidden', 'true');
+  clearTimeout(_aiPreviewDebounceTimer);
   extractedContent       = null;
   currentRenderedContent = null;
+  currentAssetUrl        = null;
+  currentPreviewUrl      = null;
   selectedTemplateId     = null;
   selectedTemplate       = null;
   selectedBackgroundUrl  = null;
   selectedCustomImages   = {};
   _mediaDrawerMode       = 'attach';
   _aiModalState          = 'picker';
+  _aiAutoPreviewRunning  = false;
   currentAssetType       = null;
   document.getElementById('ai-image-generate-btn').disabled = false;
-  document.getElementById('ai-image-generate-btn').textContent = 'Generate';
+  document.getElementById('ai-image-generate-btn').textContent = 'Save';
 }
 
 function _setAiModalState(state) {
@@ -1402,19 +1409,15 @@ function _setAiModalState(state) {
   const formPane = document.getElementById('ai-image-form-pane');
   const backBtn  = document.getElementById('ai-image-back-btn');
   const genBtn   = document.getElementById('ai-image-generate-btn');
-  const addBtn   = document.getElementById('ai-image-add-btn');
 
   body.classList.toggle('is-picker', state === 'picker');
   formPane.hidden = (state === 'picker');
   backBtn.hidden  = (state === 'picker');
-  addBtn.hidden   = (state !== 'preview');
 
-  if (state === 'preview') {
-    genBtn.hidden = false; genBtn.disabled = false; genBtn.textContent = 'Regenerate';
-  } else if (state === 'editing') {
-    genBtn.hidden = false; genBtn.disabled = false; genBtn.textContent = 'Generate';
+  if (state === 'editing') {
+    genBtn.hidden = false; genBtn.disabled = false; genBtn.textContent = 'Save';
   } else if (state === 'generating') {
-    genBtn.hidden = false; genBtn.disabled = true;  genBtn.textContent = 'Generating…';
+    genBtn.hidden = false; genBtn.disabled = true;  genBtn.textContent = 'Saving…';
   } else {
     genBtn.hidden = true;
   }
@@ -1501,7 +1504,6 @@ function _showAiFormSkeleton() {
 function _showAiPreviewPaneLoading() {
   const previewPane = document.getElementById('ai-image-preview-pane');
   previewPane.innerHTML = `<div class="slide-over-skeleton" style="width:80%;max-width:460px;aspect-ratio:1;border-radius:8px"></div>`;
-  previewPane.querySelector('.ai-annotation-strip')?.remove();
 }
 
 function renderAiImageFormInModal(content) {
@@ -1615,6 +1617,7 @@ function renderAiImageFormInModal(content) {
           const preview  = document.getElementById(`aim-custom-${safeName}-preview`);
           if (preview) preview.innerHTML = `<img src="${escHtml(url)}" alt="">`;
         }
+        _scheduleAiPreview();
       });
     });
   });
@@ -1629,54 +1632,62 @@ function renderAiImageFormInModal(content) {
     });
   });
 
-  _renderAnnotationChips();
-
-  formPane.querySelectorAll('input[id^="aim-"], textarea[id^="aim-"], .aim-img-zone').forEach(el => {
-    el.addEventListener('focus', () => {
-      document.querySelectorAll('.ai-chip').forEach(chip => {
-        chip.classList.toggle('active', chip.dataset.targetId === el.id);
-      });
-    });
-    el.addEventListener('blur', () => {
-      document.querySelectorAll('.ai-chip').forEach(chip => chip.classList.remove('active'));
-    });
+  // Wire auto-preview on input changes
+  if (hlInput) hlInput.addEventListener('input', _scheduleAiPreview);
+  if (stInput) stInput.addEventListener('input', _scheduleAiPreview);
+  formPane.querySelectorAll('.aim-custom-text-input').forEach(inp => {
+    inp.addEventListener('input', _scheduleAiPreview);
   });
+
+  // Auto-preview on first load; skip if we already have a cached image showing
+  if (!currentAssetUrl) {
+    _generateAiPreviewSilently();
+  }
 }
 
-function _renderAnnotationChips() {
+function _scheduleAiPreview() {
+  clearTimeout(_aiPreviewDebounceTimer);
+  _aiPreviewDebounceTimer = setTimeout(_generateAiPreviewSilently, 1500);
+}
+
+async function _generateAiPreviewSilently() {
+  if (_aiAutoPreviewRunning || !currentPostId || !selectedTemplateId) return;
+  _aiAutoPreviewRunning = true;
+
   const previewPane = document.getElementById('ai-image-preview-pane');
-  previewPane.querySelector('.ai-annotation-strip')?.remove();
+  const loader = document.createElement('div');
+  loader.id = 'aim-preview-loader';
+  loader.className = 'aim-preview-loading-overlay';
+  loader.innerHTML = '<div class="slide-over-skeleton" style="width:36px;height:36px;border-radius:50%;flex-shrink:0"></div>';
+  document.getElementById('aim-preview-loader')?.remove();
+  previewPane.appendChild(loader);
 
-  const hasBgLayer   = !!(selectedTemplate?.layer_background);
-  const customLayers = Array.isArray(selectedTemplate?.custom_layers) ? selectedTemplate.custom_layers : [];
-
-  const chips = [
-    { label: '✎ Headline', targetId: 'aim-headline-input' },
-    { label: '✎ Subtext',  targetId: 'aim-subtext-input' },
-    ...(hasBgLayer ? [{ label: '🖼 Background', targetId: 'aim-bg-zone' }] : []),
-    ...customLayers.map(field => ({
-      label:    `✎ ${field.label || field.layer_name}`,
-      targetId: field.type === 'image'
-        ? `aim-custom-${field.layer_name.replace(/[^a-zA-Z0-9]/g, '_')}`
-        : `aim-custom-${field.layer_name.replace(/[^a-zA-Z0-9]/g, '_')}-input`,
-    })),
-  ];
-
-  const strip = document.createElement('div');
-  strip.className = 'ai-annotation-strip';
-  chips.forEach(({ label, targetId }) => {
-    const btn = document.createElement('button');
-    btn.type = 'button'; btn.className = 'ai-chip';
-    btn.textContent = label; btn.dataset.targetId = targetId;
-    btn.addEventListener('click', () => {
-      const el = document.getElementById(targetId);
-      if (!el) return;
-      el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      setTimeout(() => el.focus?.(), 150);
+  try {
+    const content = readEditorContentFromModal();
+    const res = await fetch(`/api/visuals/${encodeURIComponent(String(currentPostId))}`, {
+      method: 'POST', headers: apiHeaders(), credentials: 'include',
+      body: JSON.stringify({ visual_type: 'ai_image', mode: 'render', content, template_id: selectedTemplateId }),
     });
-    strip.appendChild(btn);
-  });
-  previewPane.appendChild(strip);
+    let data;
+    try { data = await res.json(); } catch { return; }
+    if (!res.ok || !data.ok) return;
+
+    // Discard result if modal was closed while generating
+    if (document.getElementById('ai-image-overlay').getAttribute('aria-hidden') === 'true') return;
+
+    currentAssetUrl   = data.png_url;
+    currentPreviewUrl = data.png_url;
+    visualCache.set(`${currentPostId}:ai_image`, {
+      extractedContent, assetUrl: data.png_url, previewUrl: data.png_url, slideCount: 0,
+      templateId: selectedTemplateId, template: selectedTemplate,
+    });
+    _renderAiPreviewImage(data.png_url);
+  } catch {
+    if (!currentAssetUrl) _renderAiTemplatePreview();
+  } finally {
+    _aiAutoPreviewRunning = false;
+    document.getElementById('aim-preview-loader')?.remove();
+  }
 }
 
 function readEditorContentFromModal() {
@@ -1695,12 +1706,26 @@ function readEditorContentFromModal() {
   };
 }
 
-async function generateAiImageInModal() {
-  _setAiModalState('generating');
-  _showAiPreviewPaneLoading();
+function _doSaveAiImage() {
+  if (!currentAssetUrl) return;
+  attachedAssetUrl   = currentAssetUrl;
+  attachedAssetType  = 'ai_image';
+  attachedPreviewUrl = currentPreviewUrl;
+  attachedSlideCount = 0;
+  const chipLabel = document.getElementById('asset-chip-label');
+  const chip      = document.getElementById('asset-chip');
+  if (chipLabel) chipLabel.textContent = 'AI Image';
+  if (chip) chip.classList.remove('hidden');
+  renderPreviewAsset();
+  closeAiImageModal();
+}
 
+async function generateAiImageInModal() {
   const content = readEditorContentFromModal();
   extractedContent = content;
+
+  _setAiModalState('generating');
+  _showAiPreviewPaneLoading();
 
   try {
     const res = await fetch(`/api/visuals/${encodeURIComponent(String(currentPostId))}`, {
@@ -1714,11 +1739,11 @@ async function generateAiImageInModal() {
     currentAssetUrl   = data.png_url;
     currentPreviewUrl = data.png_url;
     currentSlideCount = 0;
-    visualCache.set(`${currentPostId}:ai_image`, { extractedContent, assetUrl: data.png_url, previewUrl: data.png_url, slideCount: 0 });
-
-    _renderAiPreviewImage(data.png_url);
-    renderAiImageFormInModal(extractedContent);
-    _setAiModalState('preview');
+    visualCache.set(`${currentPostId}:ai_image`, {
+      extractedContent, assetUrl: data.png_url, previewUrl: data.png_url, slideCount: 0,
+      templateId: selectedTemplateId, template: selectedTemplate,
+    });
+    _doSaveAiImage();
   } catch (e) {
     _renderAiTemplatePreview();
     renderAiImageFormInModal(extractedContent);
@@ -1757,13 +1782,20 @@ function _hideAiModalForMediaPicker() {
 function _reopenAiImageModal() {
   document.getElementById('ai-image-overlay').removeAttribute('aria-hidden');
   _setAiModalState('editing');
-  _renderAiTemplatePreview();
+  // Show existing generated image if available, otherwise the template thumbnail
+  if (currentAssetUrl) {
+    _renderAiPreviewImage(currentAssetUrl);
+  } else {
+    _renderAiTemplatePreview();
+  }
   if (extractedContent) {
     renderAiImageFormInModal(extractedContent);
   } else {
     _showAiFormSkeleton();
     extractContent('ai_image');
   }
+  // Re-trigger preview because background/custom image changed
+  _scheduleAiPreview();
 }
 
 async function extractContent(type) {
@@ -2413,24 +2445,13 @@ function wireVisualButtons() {
   document.getElementById('ai-image-modal-close').addEventListener('click', closeAiImageModal);
   document.getElementById('ai-image-cancel-btn').addEventListener('click', closeAiImageModal);
   document.getElementById('ai-image-generate-btn').addEventListener('click', generateAiImageInModal);
-  document.getElementById('ai-image-add-btn').addEventListener('click', () => {
-    if (currentAssetUrl) {
-      attachedAssetUrl   = currentAssetUrl;
-      attachedAssetType  = 'ai_image';
-      attachedPreviewUrl = currentPreviewUrl;
-      attachedSlideCount = 0;
-      const chipLabel = document.getElementById('asset-chip-label');
-      const chip      = document.getElementById('asset-chip');
-      if (chipLabel) chipLabel.textContent = 'AI Image';
-      if (chip) chip.classList.remove('hidden');
-      renderPreviewAsset();
-    }
-    closeAiImageModal();
-  });
   document.getElementById('ai-image-back-btn').addEventListener('click', () => {
+    clearTimeout(_aiPreviewDebounceTimer);
     selectedTemplate   = null;
     selectedTemplateId = null;
     extractedContent   = null;
+    currentAssetUrl    = null;
+    currentPreviewUrl  = null;
     _setAiModalState('picker');
     loadAiTemplatePicker();
   });

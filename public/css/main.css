@@ -6957,7 +6957,7 @@ html[data-nav-dir="back"] #main-content.spa-entering {
 
 /* ── AI Image Modal (Choose Template) ───────────────────────────────── */
 .ai-image-overlay {
-  position: fixed; inset: 0; z-index: 400;
+  position: fixed; left: 240px; top: 0; right: 0; bottom: 0; z-index: 400;
   background: rgba(9,9,11,0.65); backdrop-filter: blur(4px);
   display: flex; align-items: center; justify-content: center;
 }
@@ -6992,18 +6992,12 @@ html[data-nav-dir="back"] #main-content.spa-entering {
   max-width: 100%; max-height: 100%; object-fit: contain; border-radius: var(--radius-md);
 }
 
-.ai-annotation-strip {
-  position: absolute; bottom: var(--space-4); left: 50%; transform: translateX(-50%);
-  display: flex; gap: var(--space-2); flex-wrap: wrap; justify-content: center;
-  pointer-events: auto; z-index: 2;
+.aim-preview-loading-overlay {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(9,9,11,0.38); border-radius: var(--radius-md);
+  z-index: 2;
 }
-.ai-chip {
-  background: rgba(9,9,11,0.68); color: #fff; border: none; cursor: pointer;
-  font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 20px;
-  transition: background 0.15s; white-space: nowrap;
-}
-.ai-chip:hover  { background: rgba(9,9,11,0.88); }
-.ai-chip.active { background: var(--brand); }
 
 .ai-image-form-pane {
   width: 340px; flex-shrink: 0;
@@ -7065,5 +7059,5 @@ html[data-nav-dir="back"] #main-content.spa-entering {
     height: 200px; flex: none;
   }
   .ai-image-form-pane { width: 100%; }
-  .ai-image-overlay { align-items: flex-end; }
+  .ai-image-overlay { left: 0; align-items: flex-end; }
 }

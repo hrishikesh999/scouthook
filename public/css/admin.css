@@ -496,6 +496,11 @@ label, .field label { color: #111111; }
 }
 .layer-grid { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: var(--space-xs); align-items: center; margin-bottom: var(--space-xs); }
 .cf-grid    { display: grid; grid-template-columns: 1fr 1fr 80px 64px auto; gap: var(--space-xs); align-items: center; margin-bottom: var(--space-xs); }
+.bl-grid         { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: var(--space-xs); align-items: center; margin-bottom: var(--space-xs); }
+.bl-grid-header  { margin-bottom: 4px; }
+.bl-grid-header .cell-label { font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--color-text-muted, #6B7280); }
+.brand-mapping-actions { display: flex; align-items: center; gap: var(--space-sm, 8px); margin-bottom: var(--space-sm, 8px); }
+.brand-layers-status   { font-size: 0.82rem; color: var(--color-text-muted, #6B7280); }
 .remove-btn {
   padding: 4px 9px;
   background: none;

@@ -58,7 +58,9 @@
             </div>
             <div id="linkedin-company-list"></div>
           </div>
-          <p id="linkedin-company-hint" style="display:none;font-size:12px;color:var(--text-muted);margin:0 0 12px;line-height:1.5">No company pages found. If you admin a LinkedIn Company Page, <button type="button" id="linkedin-refresh-org-btn2" style="background:none;border:none;padding:0;font-size:12px;color:var(--accent,#6366f1);cursor:pointer;text-decoration:underline">click here to search for them</button>.</p>
+          <div id="linkedin-company-hint" style="display:none;margin:0 0 12px">
+            <span id="linkedin-hint-msg" style="font-size:12px;color:var(--text-muted);line-height:1.5">No company pages found. If you admin a LinkedIn Company Page, </span><button type="button" id="linkedin-refresh-org-btn2" style="background:none;border:none;padding:0;font-size:12px;color:var(--accent,#6366f1);cursor:pointer;text-decoration:underline">click here to search for them</button><span id="linkedin-hint-status" style="font-size:12px;color:var(--text-muted);margin-left:6px"></span>
+          </div>
           <button type="button" id="linkedin-connect-btn" class="btn-outlined" style="font-size:13px;height:32px;padding:0 14px;display:none">Connect LinkedIn</button>
         </div>
       </div>
@@ -177,21 +179,27 @@
         window.location.href = '/api/linkedin/connect';
       });
 
+      function setRefreshStatus(msg) {
+        const s1 = document.getElementById('linkedin-refresh-status');
+        const s2 = document.getElementById('linkedin-hint-status');
+        if (s1) s1.textContent = msg;
+        if (s2) s2.textContent = msg;
+      }
+
       async function refreshOrgPages() {
-        const statusEl = document.getElementById('linkedin-refresh-status');
-        if (statusEl) statusEl.textContent = 'Searching…';
+        setRefreshStatus('Searching…');
         try {
           const r = await fetch('/api/linkedin/connections/refresh-org-pages', { method: 'POST', credentials: 'same-origin' });
           const d = await r.json();
           if (!d.ok) {
-            if (statusEl) statusEl.textContent = `Error: ${d.discovery?.error || d.error || 'unknown'}`;
+            setRefreshStatus(`Error: ${d.discovery?.error || d.error || 'unknown'}`);
             return;
           }
           const found = d.discovery?.found ?? 0;
-          if (statusEl) statusEl.textContent = found > 0 ? `Found ${found}` : 'None found';
+          setRefreshStatus(found > 0 ? `Found ${found}` : 'None found');
           loadConnections();
         } catch (e) {
-          if (statusEl) statusEl.textContent = 'Request failed';
+          setRefreshStatus('Request failed');
         }
       }
 

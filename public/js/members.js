@@ -55,12 +55,15 @@
       list.innerHTML = members.map(m => {
         const isMe      = m.user_id === currentUserId;
         const canRemove = currentUserRole === 'owner' && !isMe;
+        const youBadge  = isMe
+          ? `<span style="background:#eef2ff;color:#4338ca;border-radius:4px;padding:2px 8px;font-size:12px;font-weight:600;margin-right:4px">You</span>`
+          : '';
         return `<div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid #f3f4f6">
           <div style="flex:1">
             <p style="margin:0;font-size:14px;font-weight:600;color:#111827">${escapeHtml(m.display_name || m.email)}</p>
             ${m.display_name ? `<p style="margin:0;font-size:12px;color:#9ca3af">${escapeHtml(m.email)}</p>` : ''}
           </div>
-          <span style="background:#f3f4f6;color:#6b7280;border-radius:4px;padding:2px 8px;font-size:12px;font-weight:600;text-transform:capitalize">${escapeHtml(m.role)}</span>
+          ${youBadge}<span style="background:#f3f4f6;color:#6b7280;border-radius:4px;padding:2px 8px;font-size:12px;font-weight:600;text-transform:capitalize">${escapeHtml(m.role)}</span>
           ${canRemove ? `<button class="vw-chip-remove" data-remove-user="${escapeHtml(m.user_id)}" type="button" title="Remove member" style="flex-shrink:0">✕</button>` : ''}
         </div>`;
       }).join('');
@@ -143,11 +146,15 @@
           inviteStatus.hidden = false;
           loadMembers();
         } else {
-          const msg = d.error === 'already_a_member'      ? 'This person is already a member.'
-            : d.error === 'invite_already_pending'        ? 'An invitation is already pending for this email.'
-            : d.error === 'feature_not_available'         ? 'Team members require the Pro plan.'
-            : (d.error || 'Failed to send invite.');
-          inviteStatus.textContent = msg;
+          if (d.error === 'feature_not_available') {
+            inviteStatus.innerHTML = 'Inviting teammates requires the <a href="/billing.html" style="color:inherit;font-weight:700;text-decoration:underline">Pro plan</a>. Upgrade to unlock team members.';
+            inviteBtn.disabled = true;
+          } else {
+            const msg = d.error === 'already_a_member'   ? 'This person is already a member.'
+              : d.error === 'invite_already_pending'      ? 'An invitation is already pending for this email.'
+              : (d.error || 'Failed to send invite.');
+            inviteStatus.textContent = msg;
+          }
           inviteStatus.className = 'field-helper vw-save-status--error';
           inviteStatus.hidden = false;
         }

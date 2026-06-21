@@ -1150,6 +1150,12 @@ function setModalAvatar(el, photoUrl, name) {
   }
 }
 
+function updateModalLabel(conn) {
+  const labelEl = document.querySelector('#modal-li-account .modal-li-label');
+  if (!labelEl) return;
+  labelEl.textContent = conn?.account_type === 'company' ? 'Posting as Company Page' : 'Posting to LinkedIn';
+}
+
 function populateModalAccount() {
   const nameEl   = document.getElementById('modal-li-name');
   const avatarEl = document.getElementById('modal-li-avatar');
@@ -1158,8 +1164,9 @@ function populateModalAccount() {
   // Remove any selector rendered by a previous call
   document.getElementById('modal-li-select')?.remove();
 
-  if (linkedinConnections.length > 1) {
-    // Multiple accounts — render a <select> and hide the static name span
+  const hasCompany = linkedinConnections.some(c => c.account_type === 'company');
+  if (linkedinConnections.length > 1 || hasCompany) {
+    // Multiple accounts or company pages present — render a <select> and hide the static name span
     nameEl.style.display = 'none';
     const sel = document.createElement('select');
     sel.id = 'modal-li-select';
@@ -1167,23 +1174,33 @@ function populateModalAccount() {
     linkedinConnections.forEach(c => {
       const opt = document.createElement('option');
       opt.value = c.id;
-      opt.textContent = c.display_name || 'LinkedIn account';
+      opt.textContent = c.account_type === 'company'
+        ? (c.display_name || 'Company Page') + ' (Company Page)'
+        : (c.display_name || 'LinkedIn account');
       if (c.id === selectedConnectionId) opt.selected = true;
       sel.appendChild(opt);
     });
     sel.addEventListener('change', () => {
       selectedConnectionId = Number(sel.value);
       const conn = linkedinConnections.find(c => c.id === selectedConnectionId);
-      if (conn) setModalAvatar(avatarEl, conn.avatar_url, conn.display_name);
+      if (conn) {
+        setModalAvatar(avatarEl, conn.avatar_url, conn.display_name);
+        updateModalLabel(conn);
+      }
     });
     nameEl.parentElement.insertBefore(sel, nameEl);
     const conn = linkedinConnections.find(c => c.id === selectedConnectionId) || linkedinConnections[0];
-    if (conn) setModalAvatar(avatarEl, conn.avatar_url, conn.display_name);
+    if (conn) {
+      setModalAvatar(avatarEl, conn.avatar_url, conn.display_name);
+      updateModalLabel(conn);
+    }
   } else {
-    // Single connection — keep existing static display
+    // Single personal connection — keep existing static display
     nameEl.style.display = '';
     nameEl.textContent = linkedinProfileName || 'LinkedIn account';
     setModalAvatar(avatarEl, linkedinProfilePhoto, linkedinProfileName);
+    const conn = linkedinConnections[0];
+    if (conn) updateModalLabel(conn);
   }
 }
 
@@ -1294,11 +1311,13 @@ function openSlideOver(type, label) {
     currentRenderedContent = cached.renderedContent || null;
     _restoreVisualModalCachedPreview(type, cached);
     if (extractedContent) renderEditorForm(type, extractedContent);
+    if (type === 'carousel' && _carouselSlides.length > 0) _selectCarouselSlide(0);
     setSlideOverState('editing');
     _showInsertBtn();
   } else if (cached?.extractedContent) {
     extractedContent = cached.extractedContent;
     renderEditorForm(type, extractedContent);
+    if (type === 'carousel') { _carouselActiveSlide = 0; _selectCarouselSlide(0); _generateVisualPreviewSilently(type); }
     setSlideOverState('editing');
   } else {
     formPane.hidden = false;
@@ -1849,6 +1868,7 @@ async function extractContent(type) {
     extractedContent = data.content;
     visualCache.set(`${currentPostId}:${type}`, { extractedContent });
     renderEditorForm(type, extractedContent);
+    if (type === 'carousel') { _carouselActiveSlide = 0; _selectCarouselSlide(0); _generateVisualPreviewSilently(type); }
     setSlideOverState('editing');
   } catch (e) {
     if (formPane) {
@@ -1945,7 +1965,11 @@ function renderEditorForm(type, content) {
         const current = readEditorContent('carousel');
         const allCards = Array.from(wrap.querySelectorAll('.so-slide-card'));
         const idx = allCards.indexOf(btn.closest('.so-slide-card'));
-        if (idx !== -1) { current.slides.splice(idx, 1); renderEditorForm('carousel', current); }
+        if (idx !== -1) {
+          current.slides.splice(idx, 1);
+          renderEditorForm('carousel', current);
+          _selectCarouselSlide(Math.min(_carouselActiveSlide, current.slides.length - 1));
+        }
       });
     });
 

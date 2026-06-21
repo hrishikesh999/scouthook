@@ -291,7 +291,8 @@
       <div class="ai-image-modal-footer">
         <div style="flex:1"></div>
         <button id="visual-modal-cancel-btn" class="slide-over-discard">Cancel</button>
-        <button id="visual-modal-save-btn"   class="btn-teal-filled" hidden>Save</button>
+        <button id="visual-modal-insert-btn" class="btn-secondary" hidden disabled>Insert in Post</button>
+        <button id="visual-modal-save-btn"   class="btn-teal-filled" hidden>Save &amp; Preview</button>
       </div>
     </div>
   </div>
@@ -311,7 +312,8 @@
         <button id="ai-image-back-btn"     class="btn-text"         hidden>← Change template</button>
         <div style="flex:1"></div>
         <button id="ai-image-cancel-btn"   class="slide-over-discard">Cancel</button>
-        <button id="ai-image-generate-btn" class="btn-teal-filled"  hidden>Save</button>
+        <button id="ai-image-insert-btn"   class="btn-secondary"    hidden disabled>Insert in Post</button>
+        <button id="ai-image-generate-btn" class="btn-teal-filled"  hidden>Save &amp; Preview</button>
       </div>
     </div>
   </div>
@@ -497,6 +499,8 @@ let _aiPreviewDebounceTimer = null;
 let _aiAutoPreviewRunning   = false;
 let _visualPreviewDebounceTimer = null;
 let _visualAutoPreviewRunning   = false;
+let _carouselActiveSlide        = 0;
+let _carouselSlides             = [];
 
 const visualCache = new Map();
 
@@ -1245,7 +1249,7 @@ function setSlideOverState(s) {
   const saveBtn = document.getElementById('visual-modal-save-btn');
   if (!saveBtn) return;
   if (s === 'editing') {
-    saveBtn.hidden = false; saveBtn.disabled = false; saveBtn.textContent = 'Save';
+    saveBtn.hidden = false; saveBtn.disabled = false; saveBtn.textContent = 'Save & Preview';
   } else if (s === 'generating') {
     saveBtn.hidden = false; saveBtn.disabled = true; saveBtn.textContent = 'Saving…';
   } else {
@@ -1265,6 +1269,10 @@ function openSlideOver(type, label) {
   currentPreviewUrl      = null;
   extractedContent       = null;
   currentRenderedContent = null;
+
+  // Reset insert button state
+  const _vmInsert = document.getElementById('visual-modal-insert-btn');
+  if (_vmInsert) { _vmInsert.hidden = true; _vmInsert.disabled = true; }
 
   const overlay     = document.getElementById('visual-modal-overlay');
   const previewPane = document.getElementById('visual-modal-preview-pane');
@@ -1287,6 +1295,7 @@ function openSlideOver(type, label) {
     _restoreVisualModalCachedPreview(type, cached);
     if (extractedContent) renderEditorForm(type, extractedContent);
     setSlideOverState('editing');
+    _showInsertBtn();
   } else if (cached?.extractedContent) {
     extractedContent = cached.extractedContent;
     renderEditorForm(type, extractedContent);
@@ -1313,6 +1322,8 @@ function closeVisualModal() {
   currentAssetType       = null;
   currentRenderedContent = null;
   setSlideOverState('loading');
+  const _vmInsert = document.getElementById('visual-modal-insert-btn');
+  if (_vmInsert) { _vmInsert.hidden = true; _vmInsert.disabled = true; }
 }
 
 function _restoreVisualModalCachedPreview(type, cached) {
@@ -1348,6 +1359,10 @@ function openAiImageModal() {
 
   currentAssetType = 'ai_image';
 
+  // Reset insert button state
+  const _aiInsert = document.getElementById('ai-image-insert-btn');
+  if (_aiInsert) { _aiInsert.hidden = true; _aiInsert.disabled = true; }
+
   const overlay = document.getElementById('ai-image-overlay');
   overlay.removeAttribute('aria-hidden');
 
@@ -1361,6 +1376,7 @@ function openAiImageModal() {
     _setAiModalState('editing');
     _renderAiPreviewImage(cached.assetUrl);
     if (extractedContent && selectedTemplate) renderAiImageFormInModal(extractedContent);
+    _showInsertBtn();
     return;
   }
 
@@ -1399,7 +1415,9 @@ function closeAiImageModal() {
   _aiAutoPreviewRunning  = false;
   currentAssetType       = null;
   document.getElementById('ai-image-generate-btn').disabled = false;
-  document.getElementById('ai-image-generate-btn').textContent = 'Save';
+  document.getElementById('ai-image-generate-btn').textContent = 'Save & Preview';
+  const _aiInsert = document.getElementById('ai-image-insert-btn');
+  if (_aiInsert) { _aiInsert.hidden = true; _aiInsert.disabled = true; }
 }
 
 function _setAiModalState(state) {
@@ -1414,7 +1432,7 @@ function _setAiModalState(state) {
   backBtn.hidden  = (state === 'picker');
 
   if (state === 'editing') {
-    genBtn.hidden = false; genBtn.disabled = false; genBtn.textContent = 'Save';
+    genBtn.hidden = false; genBtn.disabled = false; genBtn.textContent = 'Save & Preview';
   } else if (state === 'generating') {
     genBtn.hidden = false; genBtn.disabled = true;  genBtn.textContent = 'Saving…';
   } else {
@@ -1440,6 +1458,8 @@ async function loadAiTemplatePicker() {
     if (tpls.length === 1) {
       selectedTemplate   = tpls[0];
       selectedTemplateId = String(tpls[0].id);
+      const _tplTitleEl = document.querySelector('#ai-image-overlay .ai-image-modal-title');
+      if (_tplTitleEl) _tplTitleEl.textContent = `Using ${selectedTemplate.name}`;
       _setAiModalState('editing');
       _renderAiTemplatePreview();
       _showAiFormSkeleton();
@@ -1467,6 +1487,8 @@ async function loadAiTemplatePicker() {
       card.addEventListener('click', () => {
         selectedTemplate   = tpls.find(t => String(t.id) === card.dataset.tplId) || null;
         selectedTemplateId = card.dataset.tplId;
+        const _tplTitleEl = document.querySelector('#ai-image-overlay .ai-image-modal-title');
+        if (_tplTitleEl && selectedTemplate) _tplTitleEl.textContent = `Using ${selectedTemplate.name}`;
         _setAiModalState('editing');
         _renderAiTemplatePreview();
         _showAiFormSkeleton();
@@ -1616,7 +1638,6 @@ function renderAiImageFormInModal(content) {
           const preview  = document.getElementById(`aim-custom-${safeName}-preview`);
           if (preview) preview.innerHTML = `<img src="${escHtml(url)}" alt="">`;
         }
-        _scheduleAiPreview();
       });
     });
   });
@@ -1631,18 +1652,8 @@ function renderAiImageFormInModal(content) {
     });
   });
 
-  // Wire auto-preview on input changes
-  if (hlInput) hlInput.addEventListener('input', _scheduleAiPreview);
-  if (stInput) stInput.addEventListener('input', _scheduleAiPreview);
-  formPane.querySelectorAll('.aim-custom-text-input').forEach(inp => {
-    inp.addEventListener('input', _scheduleAiPreview);
-  });
-
-  // Auto-preview on first load; skip if we already have a cached image showing
-  if (!currentAssetUrl) {
-    _generateAiPreviewSilently();
-  }
 }
+
 
 function _scheduleAiPreview() {
   clearTimeout(_aiPreviewDebounceTimer);
@@ -1742,7 +1753,9 @@ async function generateAiImageInModal() {
       extractedContent, assetUrl: data.png_url, previewUrl: data.png_url, slideCount: 0,
       templateId: selectedTemplateId, template: selectedTemplate,
     });
-    _doSaveAiImage();
+    _renderAiPreviewImage(data.png_url);
+    _setAiModalState('editing');
+    _showInsertBtn();
   } catch (e) {
     _renderAiTemplatePreview();
     renderAiImageFormInModal(extractedContent);
@@ -1793,8 +1806,6 @@ function _reopenAiImageModal() {
     _showAiFormSkeleton();
     extractContent('ai_image');
   }
-  // Re-trigger preview because background/custom image changed
-  _scheduleAiPreview();
 }
 
 async function extractContent(type) {
@@ -1910,7 +1921,7 @@ function renderEditorForm(type, content) {
           <div class="so-char-counter"><span class="so-body-len">${(slide.body || '').length}</span> / 150</div>
         </div>` : '';
       return `
-        <div class="so-slide-card" data-type="${escHtml(slide.type)}">
+        <div class="so-slide-card" data-type="${escHtml(slide.type)}" data-slide-index="${i}">
           <div class="so-slide-card-header">
             <span class="so-slide-badge so-slide-badge--${escHtml(slide.type)}">${badge}</span>
             <span class="so-slide-num">Slide ${i + 1}</span>
@@ -1947,6 +1958,10 @@ function renderEditorForm(type, content) {
         if (closingIdx !== -1) current.slides.splice(closingIdx, 0, newSlide);
         else current.slides.push(newSlide);
         renderEditorForm('carousel', current);
+        if (_carouselSlides.length > 0) {
+          const newIdx = closingIdx !== -1 ? closingIdx : current.slides.length - 1;
+          _selectCarouselSlide(newIdx);
+        }
       });
     }
 
@@ -2011,13 +2026,20 @@ async function generateFromEditor(type) {
       currentPreviewUrl = data.slides?.[0]?.png_url || null;
       currentSlideCount = data.slides?.length || 0;
       visualCache.set(`${currentPostId}:${type}`, { extractedContent, renderedContent: currentRenderedContent, assetUrl: currentAssetUrl, previewUrl: currentPreviewUrl, slideCount: currentSlideCount, slides: data.slides.map(s => s.png_url) });
+      renderCarousel(data.slides);
     } else {
       currentAssetUrl   = data.png_url;
       currentPreviewUrl = data.png_url;
       currentSlideCount = 0;
       visualCache.set(`${currentPostId}:${type}`, { extractedContent, assetUrl: data.png_url, previewUrl: data.png_url, slideCount: 0 });
+      previewPane.classList.remove('is-carousel');
+      previewPane.innerHTML = '';
+      const img = document.createElement('img');
+      img.src = data.png_url; img.alt = ''; img.style.cssText = 'width:100%;border-radius:8px;display:block';
+      previewPane.appendChild(img);
     }
-    _doSaveVisual(type);
+    setSlideOverState('editing');
+    _showInsertBtn();
   } catch (e) {
     setSlideOverState('editing');
     if (currentAssetUrl) {
@@ -2045,21 +2067,49 @@ function _doSaveVisual(type) {
   closeVisualModal();
 }
 
+function _showInsertBtn() {
+  const id = currentAssetType === 'ai_image' ? 'ai-image-insert-btn' : 'visual-modal-insert-btn';
+  const btn = document.getElementById(id);
+  if (btn) { btn.hidden = false; btn.disabled = false; }
+}
+
 function renderCarousel(slides) {
+  if (!slides || !slides.length) return;
+  _carouselSlides = slides.map(s => (typeof s === 'string' ? s : s.png_url));
   const pane = document.getElementById('visual-modal-preview-pane');
-  if (!slides || !slides.length || !pane) return;
+  if (!pane) return;
   pane.classList.add('is-carousel');
   pane.innerHTML = '';
-  slides.forEach((slide, i) => {
-    const wrapper = document.createElement('div');
-    wrapper.className = 'carousel-slide';
-    const lbl = document.createElement('div');
-    lbl.className = 'carousel-slide-label'; lbl.textContent = `Slide ${i + 1}`;
-    const img = document.createElement('img');
-    img.src = slide.png_url; img.alt = ''; img.className = 'slide-over-image';
-    wrapper.appendChild(lbl); wrapper.appendChild(img);
-    pane.appendChild(wrapper);
+
+  const mainImg = document.createElement('img');
+  mainImg.className = 'carousel-main-img slide-over-image';
+  pane.appendChild(mainImg);
+
+  const strip = document.createElement('div');
+  strip.className = 'carousel-thumbnails';
+  _carouselSlides.forEach((url, i) => {
+    const thumb = document.createElement('div');
+    thumb.className = 'carousel-thumb';
+    thumb.dataset.idx = i;
+    const tImg = document.createElement('img');
+    tImg.src = url;
+    thumb.appendChild(tImg);
+    thumb.addEventListener('click', () => _selectCarouselSlide(i));
+    strip.appendChild(thumb);
   });
+  pane.appendChild(strip);
+
+  _selectCarouselSlide(0);
+}
+
+function _selectCarouselSlide(idx) {
+  _carouselActiveSlide = idx;
+  const mainImg = document.querySelector('#visual-modal-preview-pane .carousel-main-img');
+  if (mainImg) mainImg.src = _carouselSlides[idx] || '';
+  document.querySelectorAll('.carousel-thumb').forEach((t, i) =>
+    t.classList.toggle('active', i === idx));
+  document.querySelectorAll('#visual-modal-form-pane .so-slide-card').forEach((c, i) =>
+    c.style.display = i === idx ? '' : 'none');
 }
 
 function _scheduleVisualPreview(type) {
@@ -2107,6 +2157,7 @@ async function _generateVisualPreviewSilently(type) {
       previewPane.appendChild(img);
     }
     setSlideOverState('editing');
+    _showInsertBtn();
   } catch {
     if (!hasExisting) {
       const overlay = document.getElementById('visual-modal-overlay');
@@ -2460,6 +2511,9 @@ function wireVisualButtons() {
   document.getElementById('visual-modal-save-btn').addEventListener('click', () => {
     if (currentAssetType) generateFromEditor(currentAssetType);
   });
+  document.getElementById('visual-modal-insert-btn').addEventListener('click', () => {
+    if (currentAssetType) _doSaveVisual(currentAssetType);
+  });
   document.getElementById('visual-modal-overlay').addEventListener('click', e => {
     if (e.target === e.currentTarget) closeVisualModal();
   });
@@ -2489,6 +2543,7 @@ function wireVisualButtons() {
   document.getElementById('ai-image-modal-close').addEventListener('click', closeAiImageModal);
   document.getElementById('ai-image-cancel-btn').addEventListener('click', closeAiImageModal);
   document.getElementById('ai-image-generate-btn').addEventListener('click', generateAiImageInModal);
+  document.getElementById('ai-image-insert-btn').addEventListener('click', _doSaveAiImage);
   document.getElementById('ai-image-back-btn').addEventListener('click', () => {
     clearTimeout(_aiPreviewDebounceTimer);
     selectedTemplate   = null;
@@ -2496,6 +2551,10 @@ function wireVisualButtons() {
     extractedContent   = null;
     currentAssetUrl    = null;
     currentPreviewUrl  = null;
+    const _backTitleEl = document.querySelector('#ai-image-overlay .ai-image-modal-title');
+    if (_backTitleEl) _backTitleEl.textContent = 'Choose Template';
+    const _aiInsertBack = document.getElementById('ai-image-insert-btn');
+    if (_aiInsertBack) { _aiInsertBack.hidden = true; _aiInsertBack.disabled = true; }
     _setAiModalState('picker');
     loadAiTemplatePicker();
   });

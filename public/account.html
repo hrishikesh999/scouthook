@@ -51,10 +51,14 @@
           <p class="field-helper" style="margin:6px 0 16px">Connect your LinkedIn account for publishing. Your workspace Voice DNA is shared across all content.</p>
           <div id="linkedin-conn-list" style="margin-bottom:12px"></div>
           <div id="linkedin-company-section" style="display:none;margin-bottom:12px">
-            <div style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">Company Pages</div>
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+              <span style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em">Company Pages</span>
+              <button type="button" id="linkedin-refresh-org-btn" style="background:none;border:none;padding:0;font-size:11px;color:var(--accent,#6366f1);cursor:pointer;text-decoration:underline">Refresh</button>
+              <span id="linkedin-refresh-status" style="font-size:11px;color:var(--text-muted)"></span>
+            </div>
             <div id="linkedin-company-list"></div>
           </div>
-          <p id="linkedin-company-hint" style="display:none;font-size:12px;color:var(--text-muted);margin:0 0 12px;line-height:1.5">Company pages are auto-discovered when you connect. If you manage a LinkedIn Company Page and don't see it here, <button type="button" id="linkedin-reconnect-btn" style="background:none;border:none;padding:0;font-size:12px;color:var(--accent,#6366f1);cursor:pointer;text-decoration:underline">reconnect your account</button> to refresh access.</p>
+          <p id="linkedin-company-hint" style="display:none;font-size:12px;color:var(--text-muted);margin:0 0 12px;line-height:1.5">No company pages found. If you admin a LinkedIn Company Page, <button type="button" id="linkedin-refresh-org-btn2" style="background:none;border:none;padding:0;font-size:12px;color:var(--accent,#6366f1);cursor:pointer;text-decoration:underline">click here to search for them</button>.</p>
           <button type="button" id="linkedin-connect-btn" class="btn-outlined" style="font-size:13px;height:32px;padding:0 14px;display:none">Connect LinkedIn</button>
         </div>
       </div>
@@ -173,9 +177,26 @@
         window.location.href = '/api/linkedin/connect';
       });
 
-      document.getElementById('linkedin-reconnect-btn')?.addEventListener('click', () => {
-        window.location.href = '/api/linkedin/connect';
-      });
+      async function refreshOrgPages() {
+        const statusEl = document.getElementById('linkedin-refresh-status');
+        if (statusEl) statusEl.textContent = 'Searching…';
+        try {
+          const r = await fetch('/api/linkedin/connections/refresh-org-pages', { method: 'POST', credentials: 'same-origin' });
+          const d = await r.json();
+          if (!d.ok) {
+            if (statusEl) statusEl.textContent = `Error: ${d.discovery?.error || d.error || 'unknown'}`;
+            return;
+          }
+          const found = d.discovery?.found ?? 0;
+          if (statusEl) statusEl.textContent = found > 0 ? `Found ${found}` : 'None found';
+          loadConnections();
+        } catch (e) {
+          if (statusEl) statusEl.textContent = 'Request failed';
+        }
+      }
+
+      document.getElementById('linkedin-refresh-org-btn')?.addEventListener('click', refreshOrgPages);
+      document.getElementById('linkedin-refresh-org-btn2')?.addEventListener('click', refreshOrgPages);
 
       loadConnections();
     })();

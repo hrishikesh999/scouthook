@@ -90,8 +90,9 @@ async function discoverOrgPages(accessToken, userId, workspaceId, expiresAt) {
       }
     );
     if (!aclRes.ok) {
-      console.warn('[linkedin/discoverOrgPages] ACL fetch failed:', aclRes.status, await aclRes.text());
-      return;
+      const body = await aclRes.text();
+      console.warn('[linkedin/discoverOrgPages] ACL fetch failed:', aclRes.status, body);
+      return { ok: false, status: aclRes.status, error: body };
     }
     const aclData = await aclRes.json();
     const orgIds = (aclData.elements || [])
@@ -102,7 +103,7 @@ async function discoverOrgPages(accessToken, userId, workspaceId, expiresAt) {
       })
       .filter(Boolean);
 
-    if (orgIds.length === 0) return;
+    if (orgIds.length === 0) return { ok: true, found: 0, pages: [] };
 
     const accessTokenEnc = encrypt(accessToken);
 
@@ -152,8 +153,10 @@ async function discoverOrgPages(accessToken, userId, workspaceId, expiresAt) {
       `).run(workspaceId, userId, accountKey, orgName, orgLogo, orgId, accessTokenEnc, expiresAt);
     }
     console.log(`[linkedin/discoverOrgPages] Upserted ${orgIds.length} org pages for workspace=${workspaceId}`);
+    return { ok: true, found: orgIds.length, pages: orgIds };
   } catch (e) {
     console.warn('[linkedin/discoverOrgPages] Error (non-fatal):', e.message);
+    return { ok: false, error: e.message };
   }
 }
 
@@ -544,6 +547,42 @@ router.get('/connections', async (req, res) => {
     return res.json({ ok: true, connections });
   } catch (err) {
     console.error('[linkedin/connections] Error:', err.message);
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/linkedin/connections/refresh-org-pages
+// Manually re-run org-page discovery using the workspace's personal token.
+// Returns what was found (or the error) — useful for debugging.
+// ---------------------------------------------------------------------------
+router.post('/connections/refresh-org-pages', async (req, res) => {
+  const userId   = req.userId;
+  const tenantId = req.tenantId;
+  if (!tenantId) return res.status(400).json({ ok: false, error: 'missing_tenant' });
+
+  try {
+    const conn = await db.prepare(
+      `SELECT access_token_enc, expires_at FROM linkedin_connections
+       WHERE workspace_id = ? AND account_type = 'personal' LIMIT 1`
+    ).get(tenantId);
+
+    if (!conn) return res.status(400).json({ ok: false, error: 'no_personal_connection' });
+
+    const accessToken = decrypt(conn.access_token_enc);
+    const result = await discoverOrgPages(accessToken, userId, tenantId, conn.expires_at);
+
+    const connections = await db.prepare(`
+      SELECT id, account_type, account_key, display_name, avatar_url,
+             linkedin_member_id, organization_id, expires_at, is_default, authorized_by
+      FROM linkedin_connections
+      WHERE workspace_id = ?
+      ORDER BY account_type ASC, created_at ASC
+    `).all(tenantId);
+
+    return res.json({ ok: true, discovery: result, connections });
+  } catch (err) {
+    console.error('[linkedin/refresh-org-pages] Error:', err.message);
     return res.status(500).json({ ok: false, error: err.message });
   }
 });

@@ -257,7 +257,7 @@ async function requireWorkspaceMember(req, res, next) {
     if (!req.tenantId) return res.status(401).json({ ok: false, error: 'no_workspace_context' });
 
     const ws = await db.prepare(
-      'SELECT deleted_at FROM workspaces WHERE id = ?'
+      'SELECT deleted_at, created_by FROM workspaces WHERE id = ?'
     ).get(req.tenantId);
     if (!ws || ws.deleted_at) {
       // Stale session — workspace no longer valid. Force re-auth so the user
@@ -267,10 +267,22 @@ async function requireWorkspaceMember(req, res, next) {
       return res.status(401).json({ ok: false, error: 'workspace_not_found' });
     }
 
-    const member = await db.prepare(
+    let member = await db.prepare(
       'SELECT role FROM workspace_members WHERE workspace_id = ? AND user_id = ?'
     ).get(req.tenantId, req.userId);
-    if (!member) return res.status(403).json({ ok: false, error: 'not_a_member' });
+
+    if (!member) {
+      // Self-heal: workspace creator missing from workspace_members (migration 036
+      // backfill not yet applied — common in dev or after a DB restore).
+      if (ws.created_by === req.userId) {
+        await db.prepare(
+          'INSERT INTO workspace_members (workspace_id, user_id, role, joined_at) VALUES (?, ?, ?, now()) ON CONFLICT DO NOTHING'
+        ).run(req.tenantId, req.userId, 'owner');
+        member = { role: 'owner' };
+      } else {
+        return res.status(403).json({ ok: false, error: 'not_a_member' });
+      }
+    }
 
     req.workspaceRole = member.role;
     next();

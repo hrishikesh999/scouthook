@@ -1,6 +1,7 @@
 /* members.js — Team members page logic
-   Loaded as a PAGE_SCRIPT so the SPA router handles both first-visit injection
-   and re-init (via window.__pageInit) on subsequent SPA navigations. */
+   Hard nav: initMembers() is called directly at the bottom of the IIFE.
+   SPA re-nav: handled via spa:navigated event (not window.__pageInit, which
+   is a shared global clobbered by every other page script). */
 
 (function () {
 
@@ -204,10 +205,15 @@
     });
   }
 
-  // Called by SPA router on re-visits to /members.html
-  window.__pageInit = initMembers;
-
-  // Run on initial hard-nav load
+  // Hard-nav: run immediately on first load
   initMembers();
+
+  // SPA re-nav: spa:navigated fires after every SPA navigation.
+  // We use this instead of window.__pageInit because __pageInit is a shared
+  // global that gets clobbered by whichever page script ran last — so on a
+  // second visit via SPA the router ends up calling the wrong page's init.
+  document.addEventListener('spa:navigated', function (e) {
+    if (e.detail && e.detail.pathname === '/members.html') initMembers();
+  });
 
 })();

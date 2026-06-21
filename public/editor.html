@@ -632,9 +632,10 @@ async function loadPost(id) {
 
     // Auto-focus editor and move cursor to end
     if (state.activeTab === 'edit' && !scheduleEditLocked) {
-      postBody.focus();
+      postBody.focus({ preventScroll: true });
       postBody.setSelectionRange(postBody.value.length, postBody.value.length);
     }
+    document.getElementById('editor').scrollTop = 0;
 
     // Autosave indicator — show timestamp at load so user always sees a time
     updateAutosaveIndicator();

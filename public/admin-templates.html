@@ -66,6 +66,10 @@
             <label for="placid-form-uuid">Placid template UUID</label>
             <input type="text" id="placid-form-uuid" placeholder="abc123…" maxlength="200">
             <div class="text-muted field-hint">Found in your Placid dashboard under the template settings.</div>
+            <div class="brand-mapping-actions" style="margin-top:var(--space-sm,8px)">
+              <button type="button" id="placid-fetch-all-btn" class="btn btn--secondary btn--sm">Fetch all fields from Placid</button>
+              <span id="placid-layers-status" class="brand-layers-status"></span>
+            </div>
           </div>
           <div class="field">
             <label for="placid-form-headline">Headline layer name</label>
@@ -83,9 +87,6 @@
           <div class="field field--top-gap">
             <label class="label-block">Custom fields <span class="label-optional">(optional)</span></label>
             <div class="text-muted field-hint field-hint--mb">Extra Placid layers shown as editable inputs in the editor.</div>
-            <div class="brand-mapping-actions">
-              <button type="button" id="placid-auto-detect-cf-btn" class="btn btn--secondary btn--sm">Auto-detect from Placid</button>
-            </div>
             <div id="placid-custom-fields-list"></div>
             <button type="button" id="placid-add-field-btn" class="btn btn--secondary btn--sm btn--top-gap">+ Add field</button>
           </div>
@@ -94,10 +95,6 @@
           <div class="field field--top-gap">
             <label class="label-block">Brand mappings <span class="label-optional">(optional)</span></label>
             <div class="text-muted field-hint field-hint--mb">Map your workspace brand to Placid layers — applied automatically at render time.</div>
-            <div class="brand-mapping-actions">
-              <button type="button" id="placid-auto-detect-btn" class="btn btn--secondary btn--sm">Auto-detect from Placid</button>
-              <span id="placid-layers-status" class="brand-layers-status"></span>
-            </div>
             <div id="placid-brand-layers-list"></div>
             <button type="button" id="placid-add-brand-layer-btn" class="btn btn--secondary btn--sm btn--top-gap">+ Add mapping</button>
           </div>
@@ -179,25 +176,52 @@
       ].filter(Boolean));
     }
 
-    // Heuristic: auto-detect brand mappings AND custom fields from Placid layers
+    function detectHeadlineLayer(layers) {
+      const kws = ['headline','header','title','heading','main_text','primary_text','h1'];
+      return layers.find(l => l.type === 'text' && kws.some(k => l.name.toLowerCase().includes(k)))
+          || layers.find(l => l.type === 'text');
+    }
+
+    function detectSubtextLayer(layers, headlineName) {
+      const kws = ['subtext','subtitle','body','description','caption','copy','supporting','sub'];
+      return layers.find(l => l.type === 'text' && l.name !== headlineName && kws.some(k => l.name.toLowerCase().includes(k)))
+          || layers.find(l => l.type === 'text' && l.name !== headlineName);
+    }
+
+    function detectBackgroundLayer(layers) {
+      const kws = ['background','bg_image','hero','photo'];
+      return layers.find(l => l.type === 'image' && kws.some(k => l.name.toLowerCase().includes(k))) || null;
+    }
+
+    // Heuristic: auto-detect ALL fields from Placid layers (headline, subtext, bg, brand mappings, custom fields)
     function autoDetectAllLayers() {
       const uuid  = document.getElementById('placid-form-uuid').value.trim();
       const errEl = document.getElementById('placid-form-error');
 
       if (!placidTemplateLayers.length) {
         if (!uuid) {
-          errEl.textContent = 'Enter the Placid template UUID first, then click Auto-detect.';
+          errEl.textContent = 'Enter the Placid template UUID first, then click "Fetch all fields".';
           errEl.classList.remove('hidden');
           return;
         }
         fetchPlacidLayers(uuid).then(() => {
           if (placidTemplateLayers.length) autoDetectAllLayers();
-          else setBrandStatus('No layers found — add fields and mappings manually below');
+          else setBrandStatus('No layers found — fill fields manually below');
         });
         return;
       }
 
-      // Step 1: brand heuristics (each brand source matched at most once)
+      const usedLayer = new Set();
+
+      // Step 1: core layer fields (headline, subtext, background)
+      const headlineLayer   = detectHeadlineLayer(placidTemplateLayers);
+      const subtextLayer    = detectSubtextLayer(placidTemplateLayers, headlineLayer?.name);
+      const backgroundLayer = detectBackgroundLayer(placidTemplateLayers);
+      if (headlineLayer)   { document.getElementById('placid-form-headline').value   = headlineLayer.name;   usedLayer.add(headlineLayer.name); }
+      if (subtextLayer)    { document.getElementById('placid-form-subtext').value    = subtextLayer.name;    usedLayer.add(subtextLayer.name); }
+      if (backgroundLayer) { document.getElementById('placid-form-background').value = backgroundLayer.name; usedLayer.add(backgroundLayer.name); }
+
+      // Step 2: brand heuristics (each brand source matched at most once)
       const HEURISTICS = [
         { names:['logo','brand_logo','picture','icon'],         types:['picture'],            src:'brand_logo',           prop:'image_url' },
         { names:['secondary_bg','secondary_background'],        types:[],                     src:'brand_secondary_bg',   prop:'background_color' },
@@ -207,13 +231,11 @@
         { names:['body_font','font_body','paragraph_font'],     types:[],                     src:'brand_font_body',      prop:'font_family' },
         { names:['brand_name','company_name','company'],        types:[],                     src:'brand_name',           prop:'text' },
         { names:['bg','background','fill','brand_bg','primary'],types:['rectangle','image'],  src:'brand_bg',             prop:'background_color' },
-        { names:['text_color','brand_text','color'],            types:['text'],               src:'brand_text',           prop:'color' },
+        { names:['text_color','brand_text','font_color','text_col'], types:[],               src:'brand_text',           prop:'color' },
       ];
 
-      const usedSrc   = new Set();
-      const usedLayer = new Set();
+      const usedSrc = new Set();
       const brandDetected = [];
-
       for (const h of HEURISTICS) {
         if (usedSrc.has(h.src)) continue;
         for (const layer of placidTemplateLayers) {
@@ -228,7 +250,7 @@
         }
       }
 
-      // Step 2: remaining user-editable layers → custom fields
+      // Step 3: remaining user-editable layers → custom fields
       const reserved = getReservedLayerNames();
       const customDetected = [];
       for (const layer of placidTemplateLayers) {
@@ -248,9 +270,10 @@
       renderCustomFieldRows();
 
       const parts = [];
-      if (brandDetected.length)  parts.push(`${brandDetected.length} brand mapping${brandDetected.length  !== 1 ? 's' : ''}`);
-      if (customDetected.length) parts.push(`${customDetected.length} custom field${customDetected.length !== 1 ? 's' : ''}`);
-      setBrandStatus(parts.length ? `${parts.join(' + ')} auto-detected — review and save` : 'No layers matched — add fields and mappings manually below', !!parts.length === false);
+      if (headlineLayer || subtextLayer) parts.push('layer names');
+      if (brandDetected.length)          parts.push(`${brandDetected.length} brand mapping${brandDetected.length !== 1 ? 's' : ''}`);
+      if (customDetected.length)         parts.push(`${customDetected.length} custom field${customDetected.length !== 1 ? 's' : ''}`);
+      setBrandStatus(parts.length ? `Auto-detected: ${parts.join(', ')} — review and save` : 'No layers matched — fill fields manually below', !parts.length);
     }
 
     function init() {
@@ -443,8 +466,7 @@
       if (uuid) fetchPlacidLayers(uuid);
     });
 
-    document.getElementById('placid-auto-detect-btn').addEventListener('click', autoDetectAllLayers);
-    document.getElementById('placid-auto-detect-cf-btn').addEventListener('click', autoDetectAllLayers);
+    document.getElementById('placid-fetch-all-btn').addEventListener('click', autoDetectAllLayers);
 
     document.getElementById('placid-add-field-btn').addEventListener('click', () => {
       placidCustomFields.push({ layer_name:'', label:'', type:'text', max_chars:null });

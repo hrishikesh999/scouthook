@@ -58,49 +58,201 @@ async function extractPptx(buffer) {
   return { text: text || '', pages: null };
 }
 
+// ── HTTP fetch primitive ─────────────────────────────────────────────────────
+
+const BROWSER_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+  'Accept-Language': 'en-US,en;q=0.9',
+  'Accept-Encoding': 'identity',
+  'Cache-Control': 'no-cache',
+};
+
 /**
- * Fetch plain text from a URL. Strips HTML tags, collapses whitespace.
- * Returns { text: string, pages: null }
+ * Fetch a URL and return the raw response body as a UTF-8 string.
+ * - Follows up to maxRedirects redirects (resolves relative Location headers)
+ * - 30 s timeout
+ * - Retries once on transient network errors (ECONNRESET, ETIMEDOUT, etc.)
+ * - Throws on 4xx / 5xx with a human-readable message
  */
-async function extractUrl(url) {
+async function fetchRaw(url, { maxRedirects = 5, timeout = 30000, _attempt = 1 } = {}) {
   const https  = require('https');
   const http   = require('http');
   const parsed = new URL(url);
   const lib    = parsed.protocol === 'https:' ? https : http;
 
-  const html = await new Promise((resolve, reject) => {
-    const req = lib.get(url, { headers: { 'User-Agent': 'ScoutHook/1.0' } }, (res) => {
+  return new Promise((resolve, reject) => {
+    const req = lib.get(url, { headers: BROWSER_HEADERS }, (res) => {
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        // Follow one redirect
-        extractUrl(res.headers.location).then(r => resolve(r.text)).catch(reject);
+        if (maxRedirects <= 0) { reject(new Error('Too many redirects')); return; }
+        let next = res.headers.location;
+        try { next = new URL(next, url).href; } catch { /* use as-is */ }
+        fetchRaw(next, { maxRedirects: maxRedirects - 1, timeout, _attempt }).then(resolve).catch(reject);
         return;
       }
-      const chunks = [];
-      res.on('data', c => chunks.push(c));
-      res.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+      if (res.statusCode === 403 || res.statusCode === 401) {
+        reject(new Error(`Access denied (HTTP ${res.statusCode}) — the page may require login or sharing permissions`));
+        return;
+      }
+      if (res.statusCode >= 400) {
+        reject(new Error(`HTTP ${res.statusCode} error fetching URL`));
+        return;
+      }
+      const bufs = [];
+      res.on('data', c => bufs.push(c));
+      res.on('end', () => resolve(Buffer.concat(bufs).toString('utf8')));
       res.on('error', reject);
     });
-    req.on('error', reject);
-    req.setTimeout(15000, () => { req.destroy(); reject(new Error('URL fetch timeout')); });
-  });
 
-  const text = stripHtml(html);
-  return { text, pages: null };
+    req.on('error', (err) => {
+      const transient = ['ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT', 'ENOTFOUND', 'EPIPE'];
+      if (transient.includes(err.code) && _attempt === 1) {
+        setTimeout(() => {
+          fetchRaw(url, { maxRedirects, timeout, _attempt: 2 }).then(resolve).catch(reject);
+        }, 2000);
+      } else {
+        reject(new Error(err.code || err.message));
+      }
+    });
+
+    req.setTimeout(timeout, () => { req.destroy(); reject(new Error('URL fetch timeout after 30s')); });
+  });
+}
+
+/**
+ * Fetch plain text from a URL. Strips HTML tags, collapses whitespace.
+ * Returns { text: string, pages: null }
+ */
+async function extractUrl(url) {
+  const html = await fetchRaw(url);
+  return { text: stripHtml(html), pages: null };
 }
 
 function stripHtml(html) {
   return html
-    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
-    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    // Remove entire semantic blocks that are typically boilerplate chrome
+    .replace(/<(nav|header|footer|aside|noscript|template)\b[\s\S]*?<\/\1>/gi, ' ')
+    .replace(/<script\b[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style\b[\s\S]*?<\/style>/gi, ' ')
     .replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
+    // HTML entities
+    .replace(/&nbsp;/g,    ' ')
+    .replace(/&amp;/g,     '&')
+    .replace(/&lt;/g,      '<')
+    .replace(/&gt;/g,      '>')
+    .replace(/&quot;/g,    '"')
+    .replace(/&apos;/g,    "'")
+    .replace(/&#39;/g,     "'")
+    .replace(/&hellip;/g,  '…')
+    .replace(/&mdash;/g,   '—')
+    .replace(/&ndash;/g,   '–')
+    .replace(/&#(\d+);/g,         (_, n) => String.fromCharCode(Number(n)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCharCode(parseInt(h, 16)))
     .replace(/\s{2,}/g, ' ')
     .trim();
+}
+
+// ── YouTube transcript extraction ────────────────────────────────────────────
+
+/**
+ * Extract text from a YouTube video — prefers captions, falls back to description.
+ * No API key required: reads ytInitialPlayerResponse from the watch page.
+ * Returns { text: string, pages: null }
+ */
+async function extractYoutube(url) {
+  const pageHtml = await fetchRaw(url);
+
+  // Extract the ytInitialPlayerResponse JSON object embedded in the page
+  let playerData = null;
+  const marker   = 'ytInitialPlayerResponse = ';
+  const markerIdx = pageHtml.indexOf(marker);
+  if (markerIdx !== -1) {
+    const jsonStart = pageHtml.indexOf('{', markerIdx);
+    if (jsonStart !== -1) {
+      let depth = 0, i = jsonStart;
+      const cap = Math.min(pageHtml.length, jsonStart + 2_000_000);
+      for (; i < cap; i++) {
+        const ch = pageHtml[i];
+        if (ch === '{') depth++;
+        else if (ch === '}') { depth--; if (depth === 0) { i++; break; } }
+      }
+      try { playerData = JSON.parse(pageHtml.slice(jsonStart, i)); } catch { /* skip */ }
+    }
+  }
+
+  let title      = '';
+  let transcript = '';
+
+  if (playerData) {
+    title = playerData.videoDetails?.title || '';
+
+    // Attempt caption extraction
+    const tracks = playerData?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
+    if (Array.isArray(tracks) && tracks.length > 0) {
+      const track = tracks.find(t => (t.languageCode || '').startsWith('en')) || tracks[0];
+      if (track?.baseUrl) {
+        try {
+          const xmlUrl = track.baseUrl.includes('?')
+            ? `${track.baseUrl}&fmt=xml`
+            : `${track.baseUrl}?fmt=xml`;
+          const captionXml = await fetchRaw(xmlUrl, { timeout: 15000 });
+          transcript = captionXml
+            .replace(/<text[^>]*>/g, '')
+            .replace(/<\/text>/g, ' ')
+            .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+            .replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+            .replace(/\s{2,}/g, ' ')
+            .trim();
+        } catch { /* fall through to description */ }
+      }
+    }
+
+    if (!transcript) {
+      transcript = playerData.videoDetails?.shortDescription || '';
+    }
+  }
+
+  if (!title && !transcript) {
+    const pageText = stripHtml(pageHtml);
+    if (pageText.length < 100) throw new Error('YouTube video has no accessible transcript or description');
+    return { text: pageText.slice(0, 50000), pages: null };
+  }
+
+  const text = [title && `Title: ${title}`, transcript].filter(Boolean).join('\n\n');
+  if (text.trim().length < 50) throw new Error('YouTube video has no accessible transcript or description');
+  return { text, pages: null };
+}
+
+// ── Google Drive extraction ──────────────────────────────────────────────────
+
+/**
+ * Extract plain text from a publicly shared Google Doc.
+ * The document must be shared as "Anyone with the link".
+ * Returns { text: string, pages: null }
+ */
+async function extractGoogleDrive(url) {
+  const match = url.match(/docs\.google\.com\/document\/d\/([A-Za-z0-9_-]+)/);
+  if (!match) throw new Error('Invalid Google Drive URL — paste the full sharing link from Google Docs');
+
+  const docId     = match[1];
+  const exportUrl = `https://docs.google.com/document/d/${docId}/export?format=txt`;
+
+  let text;
+  try {
+    text = await fetchRaw(exportUrl, { maxRedirects: 5, timeout: 30000 });
+  } catch (err) {
+    if (/403|401/.test(err.message)) {
+      throw new Error('Google Drive doc is private — share it as "Anyone with the link" first');
+    }
+    throw err;
+  }
+
+  if (!text || text.trim().length < 50) {
+    throw new Error('Google Drive doc returned no text — make sure the document has content and is shared publicly');
+  }
+
+  const cleaned = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+  return { text: cleaned, pages: null };
 }
 
 // ── Chunking ─────────────────────────────────────────────────────────────────
@@ -397,26 +549,7 @@ async function extractBlogPosts(url) {
  * Like extractUrl but also returns raw HTML for link discovery.
  */
 async function extractUrlWithHtml(url) {
-  const https  = require('https');
-  const http   = require('http');
-  const parsed = new URL(url);
-  const lib    = parsed.protocol === 'https:' ? https : http;
-
-  const html = await new Promise((resolve, reject) => {
-    const req = lib.get(url, { headers: { 'User-Agent': 'ScoutHook/1.0' } }, (res) => {
-      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        extractUrlWithHtml(res.headers.location).then(resolve).catch(reject);
-        return;
-      }
-      const chunks = [];
-      res.on('data', c => chunks.push(c));
-      res.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
-      res.on('error', reject);
-    });
-    req.on('error', reject);
-    req.setTimeout(15000, () => { req.destroy(); reject(new Error('URL fetch timeout')); });
-  });
-
+  const html = await fetchRaw(url);
   return { html, text: stripHtml(html) };
 }
 
@@ -466,4 +599,6 @@ module.exports = {
   chunkText,
   extractBlogPosts,
   extractAboutPage,
+  extractYoutube,
+  extractGoogleDrive,
 };

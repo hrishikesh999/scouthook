@@ -15,7 +15,7 @@ const express     = require('express');
 const router      = express.Router();
 const { db }      = require('../db');
 const storage     = require('../services/storage');
-const { extractAndChunk, extractAndChunkUrl, mineChunks } = require('../services/vaultMiner');
+const { extractAndChunk, extractAndChunkUrl, mineChunks, chunkText, extractYoutube, extractGoogleDrive } = require('../services/vaultMiner');
 const { classifyContent } = require('../services/funnelClassifier');
 const { canUploadVaultDoc } = require('../services/subscription');
 
@@ -30,6 +30,15 @@ const MIME_TO_TYPE = {
   'text/plain': 'txt',
 };
 const MAX_BYTES = 25 * 1024 * 1024; // 25 MB
+
+// ---------------------------------------------------------------------------
+// Helper: detect the source type of a URL
+// ---------------------------------------------------------------------------
+function detectUrlSourceType(url) {
+  if (/youtube\.com\/watch|youtu\.be\//.test(url)) return 'youtube';
+  if (/docs\.google\.com\/document/.test(url))     return 'gdrive';
+  return 'url';
+}
 
 // ---------------------------------------------------------------------------
 // Helper: require authenticated user
@@ -79,20 +88,25 @@ router.post('/upload', async (req, res) => {
       return res.status(400).json({ ok: false, error: 'invalid_url_protocol' });
     }
 
-    const filename = parsed.hostname + (parsed.pathname !== '/' ? parsed.pathname : '');
+    const srcType = detectUrlSourceType(parsed.href);
+    const filename = (
+      srcType === 'youtube' ? `YouTube: ${parsed.hostname}${parsed.pathname}` :
+      srcType === 'gdrive'  ? `Google Doc: ${parsed.hostname}${parsed.pathname}` :
+      parsed.hostname + (parsed.pathname !== '/' ? parsed.pathname : '')
+    );
 
     // Create the document record immediately (pending)
     const docResult = await db.prepare(`
       INSERT INTO vault_documents (user_id, tenant_id, filename, source_type, source_url, status)
-      VALUES (?, ?, ?, 'url', ?, 'indexing')
+      VALUES (?, ?, ?, ?, ?, 'indexing')
       RETURNING id
-    `).run(userId, tenantId, filename.slice(0, 200), url);
+    `).run(userId, tenantId, filename.slice(0, 200), srcType, url);
     const docId = docResult.lastInsertRowid;
 
     // Process asynchronously so the HTTP response returns immediately
-    setImmediate(() => processUrl(docId, url, filename, userId, tenantId));
+    setImmediate(() => processUrl(docId, url, srcType, filename, userId, tenantId));
 
-    return res.json({ ok: true, document: { id: docId, filename, source_type: 'url', status: 'indexing' } });
+    return res.json({ ok: true, document: { id: docId, filename, source_type: srcType, status: 'indexing' } });
   }
 
   // ── File upload ────────────────────────────────────────────────────────────
@@ -162,9 +176,19 @@ async function processFile(docId, buffer, sourceType, filename, userId, tenantId
 }
 
 // ── Async processing: url ─────────────────────────────────────────────────────
-async function processUrl(docId, url, filename, userId, tenantId) {
+async function processUrl(docId, url, srcType, filename, userId, tenantId) {
   try {
-    const chunks = await extractAndChunkUrl(url);
+    let chunks;
+    if (srcType === 'youtube') {
+      const { text } = await extractYoutube(url);
+      if (!text || text.trim().length < 50) throw new Error('YouTube video has no accessible transcript or description');
+      chunks = chunkText(text, null);
+    } else if (srcType === 'gdrive') {
+      const { text } = await extractGoogleDrive(url);
+      chunks = chunkText(text, null);
+    } else {
+      chunks = await extractAndChunkUrl(url);
+    }
     await saveChunks(docId, chunks, userId, tenantId);
   } catch (err) {
     console.error(`[vault] processUrl failed doc=${docId}:`, err.message);

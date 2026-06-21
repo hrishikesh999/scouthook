@@ -449,8 +449,12 @@
           <span class="vbo-tile-name">Attach Image</span>
           <span class="vbo-tile-desc">Upload a photo or PDF</span>
         </button>
+        <button class="vbo-tile" data-type="text_only">
+          <span class="vbo-tile-icon">📝</span>
+          <span class="vbo-tile-name">Text Only</span>
+          <span class="vbo-tile-desc">Post without any visual</span>
+        </button>
       </div>
-      <button class="vbo-skip" id="vbo-skip-btn">Continue as plain text &rarr;</button>
     </div>
   </div>
 
@@ -2500,7 +2504,6 @@ function wireVisualButtons() {
   });
 
   // Visual Boost Overlay tiles + backdrop click
-  document.getElementById('vbo-skip-btn')?.addEventListener('click', hideBoostOverlay);
   document.getElementById('visual-boost-overlay')?.addEventListener('click', e => {
     if (e.target === e.currentTarget) hideBoostOverlay();
   });

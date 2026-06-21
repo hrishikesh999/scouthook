@@ -277,22 +277,22 @@
   </div>
   <!-- /page-wrapper -->
 
-  <!-- Slide-over panel -->
-  <div id="slide-over" class="slide-over" role="dialog" aria-modal="true" aria-label="Asset generator" aria-hidden="true">
-    <div class="slide-over-handle" aria-hidden="true"></div>
-    <div class="slide-over-header">
-      <span class="slide-over-type-label" id="slide-over-label">Asset</span>
-      <button class="slide-over-close" id="slide-over-close" aria-label="Close panel">✕</button>
-    </div>
-    <div class="slide-over-content" id="slide-over-content">
-      <div class="slide-over-skeleton" id="slide-over-skeleton" aria-label="Loading asset"></div>
-    </div>
-    <div class="slide-over-footer">
-      <button class="btn-teal-filled" id="slide-over-generate" aria-label="Generate image" hidden>Generate</button>
-      <button class="btn-outlined" id="slide-over-edit" aria-label="Edit slides" hidden>Edit slides</button>
-      <button class="btn-outlined" id="slide-over-save" aria-label="Save asset" hidden>Save asset</button>
-      <button class="btn-outlined-teal" id="slide-over-add" aria-label="Add asset to post" hidden>Add to post</button>
-      <button class="slide-over-discard" id="slide-over-discard">Discard</button>
+  <!-- Visual Modal (quote_card / carousel / branded_quote) -->
+  <div id="visual-modal-overlay" class="ai-image-overlay" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="ai-image-modal">
+      <div class="ai-image-modal-header">
+        <span class="ai-image-modal-title" id="visual-modal-title">QUOTE CARD</span>
+        <button class="slide-over-close" id="visual-modal-close" aria-label="Close">✕</button>
+      </div>
+      <div class="ai-image-modal-body" id="visual-modal-body">
+        <div class="ai-image-preview-pane" id="visual-modal-preview-pane"></div>
+        <div class="ai-image-form-pane"    id="visual-modal-form-pane" hidden></div>
+      </div>
+      <div class="ai-image-modal-footer">
+        <div style="flex:1"></div>
+        <button id="visual-modal-cancel-btn" class="slide-over-discard">Cancel</button>
+        <button id="visual-modal-save-btn"   class="btn-teal-filled" hidden>Save</button>
+      </div>
     </div>
   </div>
 
@@ -374,23 +374,33 @@
     <div class="modal-error" id="modal-error" role="alert"></div>
   </div>
 
-  <!-- Media drawer -->
-  <div id="media-drawer" class="media-drawer" role="dialog" aria-modal="true" aria-label="Media library" aria-hidden="true">
-    <div class="media-drawer-header">
-      <span class="slide-over-type-label">MEDIA LIBRARY</span>
-      <button class="slide-over-close" id="media-drawer-close" aria-label="Close media library">✕</button>
-    </div>
-    <div class="media-drawer-body">
-      <div id="drawer-upload-zone" class="media-upload-zone media-upload-zone--compact" role="button" tabindex="0" aria-label="Upload — click or drop">
-        <div class="upload-zone-icon" aria-hidden="true">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-        </div>
-        <p class="upload-zone-text">Drop or <span class="upload-zone-link">click to upload</span></p>
-        <input type="file" id="drawer-file-input" accept="image/jpeg,image/png,image/gif,image/webp,application/pdf" multiple aria-hidden="true" tabindex="-1">
+  <!-- Media Modal -->
+  <div id="media-modal-overlay" class="ai-image-overlay" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="ai-image-modal media-modal">
+      <div class="ai-image-modal-header">
+        <span class="ai-image-modal-title">MEDIA LIBRARY</span>
+        <button class="slide-over-close" id="media-modal-close" aria-label="Close">✕</button>
       </div>
-      <div id="drawer-media-grid" class="media-drawer-grid" aria-live="polite"></div>
-      <p id="drawer-empty-msg" class="media-empty" style="display:none">No media yet — upload above.</p>
-      <p id="drawer-error-msg" class="media-drawer-error" style="display:none"></p>
+      <div class="ai-image-modal-body">
+        <div class="ai-image-preview-pane media-modal-upload-pane" id="media-modal-upload-pane">
+          <div id="media-modal-upload-zone" class="media-upload-zone" role="button" tabindex="0" aria-label="Upload — click or drop">
+            <div class="upload-zone-icon" aria-hidden="true">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            </div>
+            <p class="upload-zone-text">Drop or <span class="upload-zone-link">click to upload</span></p>
+            <input type="file" id="media-modal-file-input" accept="image/jpeg,image/png,image/gif,image/webp,application/pdf" multiple aria-hidden="true" tabindex="-1">
+          </div>
+        </div>
+        <div class="ai-image-form-pane media-modal-grid-pane" id="media-modal-grid-pane">
+          <div id="media-modal-grid" class="media-drawer-grid" aria-live="polite"></div>
+          <p id="media-modal-empty-msg" class="media-empty" style="display:none">No media yet — upload above.</p>
+          <p id="media-modal-error-msg" class="media-drawer-error" style="display:none"></p>
+        </div>
+      </div>
+      <div class="ai-image-modal-footer">
+        <div style="flex:1"></div>
+        <button id="media-modal-cancel-btn" class="slide-over-discard">Close</button>
+      </div>
     </div>
   </div>
 
@@ -481,6 +491,8 @@ let _mediaDrawerMode      = 'attach'; // 'attach' | 'background' | 'custom_image
 let _aiModalState         = 'picker'; // 'picker' | 'editing' | 'generating'
 let _aiPreviewDebounceTimer = null;
 let _aiAutoPreviewRunning   = false;
+let _visualPreviewDebounceTimer = null;
+let _visualAutoPreviewRunning   = false;
 
 const visualCache = new Map();
 
@@ -534,8 +546,6 @@ function truncMediaName(name, max = 18) {
 
 function overlayVisible() {
   return document.getElementById('schedule-modal').classList.contains('visible') ||
-         document.getElementById('slide-over').classList.contains('open') ||
-         document.getElementById('media-drawer').classList.contains('open') ||
          document.getElementById('success-sheet').classList.contains('visible');
 }
 
@@ -1223,14 +1233,19 @@ function calcPreset(key) {
 }
 
 /* ════════════════════════════════════════════════════════════════════════
-   SLIDE-OVER (quote_card / branded_quote)
+   VISUAL MODAL (quote_card / carousel / branded_quote)
 ════════════════════════════════════════════════════════════════════════ */
 function setSlideOverState(s) {
   slideOverState = s;
-  document.getElementById('slide-over-generate').hidden = (s !== 'editing');
-  document.getElementById('slide-over-edit').hidden     = (s !== 'preview') || currentAssetType !== 'carousel';
-  document.getElementById('slide-over-save').hidden     = (s !== 'preview');
-  document.getElementById('slide-over-add').hidden      = (s !== 'preview');
+  const saveBtn = document.getElementById('visual-modal-save-btn');
+  if (!saveBtn) return;
+  if (s === 'editing') {
+    saveBtn.hidden = false; saveBtn.disabled = false; saveBtn.textContent = 'Save';
+  } else if (s === 'generating') {
+    saveBtn.hidden = false; saveBtn.disabled = true; saveBtn.textContent = 'Saving…';
+  } else {
+    saveBtn.hidden = true;
+  }
 }
 
 function openSlideOver(type, label) {
@@ -1238,25 +1253,24 @@ function openSlideOver(type, label) {
   if (!currentPostId) return;
   if (userPlan === 'free') { window.PricingModal?.open({ feature: 'scheduling' }); return; }
 
-  // ai_image uses its own fullscreen modal
   if (type === 'ai_image') { openAiImageModal(); return; }
 
   currentAssetType       = type;
   currentAssetUrl        = null;
+  currentPreviewUrl      = null;
   extractedContent       = null;
   currentRenderedContent = null;
 
-  const so      = document.getElementById('slide-over');
-  const content = document.getElementById('slide-over-content');
-  const skel    = _soSkel;
-  const ov      = document.getElementById('overlay');
+  const overlay     = document.getElementById('visual-modal-overlay');
+  const previewPane = document.getElementById('visual-modal-preview-pane');
+  const formPane    = document.getElementById('visual-modal-form-pane');
 
-  document.getElementById('slide-over-label').textContent = label;
-  content.innerHTML = '';
-  so.classList.add('open');
-  so.setAttribute('aria-hidden', 'false');
-  ov.classList.add('visible');
-  ov.setAttribute('aria-hidden', 'false');
+  document.getElementById('visual-modal-title').textContent = label;
+  previewPane.innerHTML = '';
+  previewPane.classList.remove('is-carousel');
+  formPane.innerHTML    = '';
+  formPane.hidden       = true;
+  overlay.removeAttribute('aria-hidden');
 
   const cached = visualCache.get(`${currentPostId}:${type}`);
   if (cached?.assetUrl) {
@@ -1265,67 +1279,47 @@ function openSlideOver(type, label) {
     currentSlideCount      = cached.slideCount || 0;
     extractedContent       = cached.extractedContent || null;
     currentRenderedContent = cached.renderedContent || null;
-    restoreCachedPreview(type, cached);
-    setSlideOverState('preview');
+    _restoreVisualModalCachedPreview(type, cached);
+    if (extractedContent) renderEditorForm(type, extractedContent);
+    setSlideOverState('editing');
   } else if (cached?.extractedContent) {
     extractedContent = cached.extractedContent;
     renderEditorForm(type, extractedContent);
     setSlideOverState('editing');
   } else {
-    skel.style.display = '';
-    content.appendChild(skel);
+    formPane.hidden = false;
+    formPane.innerHTML = `<div class="slide-over-skeleton" style="width:100%;border-radius:8px;min-height:220px"></div>`;
     setSlideOverState('loading');
     extractContent(type);
   }
 }
 
 function _hideSlideOverForMediaPicker() {
-  const so = document.getElementById('slide-over');
-  so.classList.remove('open');
-  so.setAttribute('aria-hidden', 'true');
-  maybeHideOverlay();
+  document.getElementById('visual-modal-overlay').setAttribute('aria-hidden', 'true');
 }
 
-function closeSlideOver() {
-  const so = document.getElementById('slide-over');
-  so.classList.remove('open');
-  so.setAttribute('aria-hidden', 'true');
-  maybeHideOverlay();
-  extractedContent      = null;
-  selectedTemplateId    = null;
-  selectedTemplate      = null;
-  selectedBackgroundUrl = null;
-  selectedCustomImages  = {};
-  _mediaDrawerMode      = 'attach';
-  const genBtn = document.getElementById('slide-over-generate');
-  genBtn.disabled    = false;
-  genBtn.textContent = 'Generate';
+function closeVisualModal() {
+  document.getElementById('visual-modal-overlay').setAttribute('aria-hidden', 'true');
+  clearTimeout(_visualPreviewDebounceTimer);
+  _visualAutoPreviewRunning = false;
+  extractedContent       = null;
+  currentAssetUrl        = null;
+  currentPreviewUrl      = null;
+  currentAssetType       = null;
+  currentRenderedContent = null;
   setSlideOverState('loading');
 }
 
-function restoreCachedPreview(type, cached) {
-  const content = document.getElementById('slide-over-content');
-  content.innerHTML = '';
+function _restoreVisualModalCachedPreview(type, cached) {
+  const previewPane = document.getElementById('visual-modal-preview-pane');
+  previewPane.innerHTML = '';
   if (type === 'carousel') {
     renderCarousel((cached.slides || []).map(url => ({ png_url: url })));
   } else {
     const img = document.createElement('img');
-    img.src = cached.assetUrl; img.alt = ''; img.className = 'slide-over-image';
-    content.appendChild(img);
+    img.src = cached.assetUrl; img.alt = ''; img.style.cssText = 'width:100%;border-radius:8px;display:block';
+    previewPane.appendChild(img);
   }
-  const bar = document.createElement('div');
-  bar.className = 'so-regen-bar';
-  bar.innerHTML = `<span class="so-regen-hint">Previously generated</span><button class="so-regen-btn" id="so-regen-btn">Regenerate</button>`;
-  content.appendChild(bar);
-  document.getElementById('so-regen-btn').addEventListener('click', () => {
-    visualCache.delete(`${currentPostId}:${type}`);
-    const skel = _soSkel;
-    content.innerHTML = '';
-    skel.style.display = '';
-    content.appendChild(skel);
-    setSlideOverState('loading');
-    extractContent(type);
-  });
 }
 
 function visualErrorMessage(code) {
@@ -1825,8 +1819,7 @@ async function extractContent(type) {
     return;
   }
 
-  const content = document.getElementById('slide-over-content');
-  const skel    = _soSkel;
+  const formPane = document.getElementById('visual-modal-form-pane');
   try {
     const res = await fetch(`/api/visuals/${encodeURIComponent(String(currentPostId))}`, {
       method: 'POST',
@@ -1839,21 +1832,24 @@ async function extractContent(type) {
     if (!res.ok || !data.ok) throw new Error(visualErrorMessage(data.error));
     extractedContent = data.content;
     visualCache.set(`${currentPostId}:${type}`, { extractedContent });
-    skel.style.display = 'none';
     renderEditorForm(type, extractedContent);
     setSlideOverState('editing');
   } catch (e) {
-    skel.style.display = 'none';
-    const err = document.createElement('p');
-    err.className = 'so-extract-error';
-    err.innerHTML = (e instanceof Error && e.message) ? e.message : 'Could not load suggestions. Try again.';
-    content.appendChild(err);
+    if (formPane) {
+      formPane.hidden = false;
+      formPane.innerHTML = '';
+      const err = document.createElement('p');
+      err.className = 'so-extract-error';
+      err.innerHTML = (e instanceof Error && e.message) ? e.message : 'Could not load suggestions. Try again.';
+      formPane.appendChild(err);
+    }
     setSlideOverState('editing');
   }
 }
 
 function renderEditorForm(type, content) {
-  const wrap = document.getElementById('slide-over-content');
+  const wrap = document.getElementById('visual-modal-form-pane');
+  wrap.hidden = false;
   wrap.innerHTML = '';
   if (!content) {
     wrap.innerHTML = '<p class="so-extract-error">Could not load suggestions — try again.</p>';
@@ -1871,7 +1867,7 @@ function renderEditorForm(type, content) {
       </div>`;
     const ta = document.getElementById('so-quote-input');
     const le = document.getElementById('so-quote-len');
-    ta.addEventListener('input', () => { le.textContent = ta.value.length; });
+    ta.addEventListener('input', () => { le.textContent = ta.value.length; _scheduleVisualPreview(type); });
 
   } else if (type === 'branded_quote') {
     const q = content.quote || '', maxLen = 160;
@@ -1891,6 +1887,7 @@ function renderEditorForm(type, content) {
       const n = ta.value.length;
       le.textContent = n;
       co.classList.toggle('so-char-counter--full', n >= maxLen);
+      _scheduleVisualPreview(type);
     });
 
   } else if (type === 'carousel') {
@@ -1956,13 +1953,16 @@ function renderEditorForm(type, content) {
         let warn = wcWrap.querySelector('.so-wc-warn');
         if (wc > 8 && !warn) { warn = document.createElement('span'); warn.className = 'so-wc-warn'; warn.textContent = ' Too long'; wcWrap.appendChild(warn); }
         else if (wc <= 8 && warn) warn.remove();
+        _scheduleVisualPreview(type);
       });
     });
     wrap.querySelectorAll('.so-body-textarea').forEach(ta => {
       const lenEl = ta.closest('.so-field-group').querySelector('.so-body-len');
-      if (lenEl) ta.addEventListener('input', () => { lenEl.textContent = ta.value.length; });
+      if (lenEl) ta.addEventListener('input', () => { lenEl.textContent = ta.value.length; _scheduleVisualPreview(type); });
     });
   }
+
+  if (!currentAssetUrl) _generateVisualPreviewSilently(type);
 }
 
 function readEditorContent(type) {
@@ -1970,7 +1970,7 @@ function readEditorContent(type) {
     return { quote: (document.getElementById('so-quote-input')?.value || '').trim() };
   }
   if (type === 'carousel') {
-    const wrap  = document.getElementById('slide-over-content');
+    const wrap  = document.getElementById('visual-modal-form-pane');
     const cards = wrap.querySelectorAll('.so-slide-card');
     return { slides: Array.from(cards).map(card => ({
       type:     card.dataset.type || 'content',
@@ -1982,55 +1982,69 @@ function readEditorContent(type) {
 }
 
 async function generateFromEditor(type) {
-  const wrap    = document.getElementById('slide-over-content');
-  const skel    = _soSkel;
-  const genBtn  = document.getElementById('slide-over-generate');
-  genBtn.disabled = true; genBtn.textContent = 'Generating…';
+  const formPane    = document.getElementById('visual-modal-form-pane');
+  const previewPane = document.getElementById('visual-modal-preview-pane');
+  setSlideOverState('generating');
+  previewPane.innerHTML = `<div class="slide-over-skeleton" style="width:80%;max-width:500px;height:300px;border-radius:8px"></div>`;
+
   const content = readEditorContent(type);
   if (type === 'carousel') currentRenderedContent = content;
-  wrap.innerHTML = '';
-  skel.style.display = '';
-  wrap.appendChild(skel);
+
   try {
     const res = await fetch(`/api/visuals/${encodeURIComponent(String(currentPostId))}`, {
       method: 'POST',
       headers: apiHeaders(),
       credentials: 'include',
-      body: JSON.stringify({ visual_type: type, mode: 'render', content, ...(type === 'ai_image' && selectedTemplateId ? { template_id: selectedTemplateId } : {}) }),
+      body: JSON.stringify({ visual_type: type, mode: 'render', content }),
     });
     let data;
     try { data = await res.json(); } catch { throw new Error('Could not read server response.'); }
     if (!res.ok || !data.ok) throw new Error(visualErrorMessage(data.error));
-    skel.style.display = 'none';
+
     if (type === 'carousel') {
-      renderCarousel(data.slides);
       currentAssetUrl   = data.pdf_url || data.zip_url;
       currentPreviewUrl = data.slides?.[0]?.png_url || null;
       currentSlideCount = data.slides?.length || 0;
       visualCache.set(`${currentPostId}:${type}`, { extractedContent, renderedContent: currentRenderedContent, assetUrl: currentAssetUrl, previewUrl: currentPreviewUrl, slideCount: currentSlideCount, slides: data.slides.map(s => s.png_url) });
     } else {
-      currentAssetUrl = data.png_url; currentPreviewUrl = data.png_url; currentSlideCount = 0;
+      currentAssetUrl   = data.png_url;
+      currentPreviewUrl = data.png_url;
+      currentSlideCount = 0;
       visualCache.set(`${currentPostId}:${type}`, { extractedContent, assetUrl: data.png_url, previewUrl: data.png_url, slideCount: 0 });
-      const img = document.createElement('img');
-      img.src = data.png_url; img.alt = ''; img.className = 'slide-over-image';
-      wrap.appendChild(img);
     }
-    setSlideOverState('preview');
+    _doSaveVisual(type);
   } catch (e) {
-    skel.style.display = 'none';
-    genBtn.disabled = false; genBtn.textContent = 'Generate';
-    if (extractedContent) renderEditorForm(type, extractedContent);
     setSlideOverState('editing');
+    if (currentAssetUrl) {
+      _restoreVisualModalCachedPreview(type, { assetUrl: currentAssetUrl, previewUrl: currentPreviewUrl, slides: [] });
+    } else {
+      previewPane.innerHTML = '';
+    }
     const err = document.createElement('p');
     err.className = 'so-extract-error';
     err.innerHTML = (e instanceof Error && e.message) ? e.message : 'Could not generate asset. Try again.';
-    wrap.insertBefore(err, wrap.firstChild);
+    if (formPane) formPane.insertBefore(err, formPane.firstChild);
   }
 }
 
+function _doSaveVisual(type) {
+  attachedAssetUrl   = currentAssetUrl;
+  attachedAssetType  = type;
+  attachedPreviewUrl = currentPreviewUrl;
+  attachedSlideCount = currentSlideCount;
+  const chip      = document.getElementById('asset-chip');
+  const chipLabel = document.getElementById('asset-chip-label');
+  if (chipLabel) chipLabel.textContent = type === 'carousel' ? 'Carousel' : type === 'quote_card' ? 'Quote' : 'Branded';
+  if (chip) chip.classList.remove('hidden');
+  renderPreviewAsset();
+  closeVisualModal();
+}
+
 function renderCarousel(slides) {
-  const wrap = document.getElementById('slide-over-content');
-  if (!slides || !slides.length) return;
+  const pane = document.getElementById('visual-modal-preview-pane');
+  if (!slides || !slides.length || !pane) return;
+  pane.classList.add('is-carousel');
+  pane.innerHTML = '';
   slides.forEach((slide, i) => {
     const wrapper = document.createElement('div');
     wrapper.className = 'carousel-slide';
@@ -2039,8 +2053,63 @@ function renderCarousel(slides) {
     const img = document.createElement('img');
     img.src = slide.png_url; img.alt = ''; img.className = 'slide-over-image';
     wrapper.appendChild(lbl); wrapper.appendChild(img);
-    wrap.appendChild(wrapper);
+    pane.appendChild(wrapper);
   });
+}
+
+function _scheduleVisualPreview(type) {
+  clearTimeout(_visualPreviewDebounceTimer);
+  _visualPreviewDebounceTimer = setTimeout(() => _generateVisualPreviewSilently(type), 1500);
+}
+
+async function _generateVisualPreviewSilently(type) {
+  if (_visualAutoPreviewRunning || !currentPostId || !currentAssetType) return;
+  _visualAutoPreviewRunning = true;
+  const previewPane = document.getElementById('visual-modal-preview-pane');
+  if (!previewPane) { _visualAutoPreviewRunning = false; return; }
+
+  const hasExisting = !!currentAssetUrl;
+  if (!hasExisting) {
+    previewPane.innerHTML = `<div class="slide-over-skeleton" style="width:80%;max-width:500px;height:300px;border-radius:8px"></div>`;
+  }
+
+  const content = readEditorContent(type);
+  try {
+    const res = await fetch(`/api/visuals/${encodeURIComponent(String(currentPostId))}`, {
+      method: 'POST', headers: apiHeaders(), credentials: 'include',
+      body: JSON.stringify({ visual_type: type, mode: 'render', content }),
+    });
+    let data;
+    try { data = await res.json(); } catch { throw new Error('bad response'); }
+    if (!res.ok || !data.ok) throw new Error(data.error || 'render failed');
+
+    const overlay = document.getElementById('visual-modal-overlay');
+    if (overlay?.getAttribute('aria-hidden') === 'true') return;
+
+    if (type === 'carousel') {
+      currentAssetUrl   = data.pdf_url || data.zip_url;
+      currentPreviewUrl = data.slides?.[0]?.png_url || null;
+      currentSlideCount = data.slides?.length || 0;
+      renderCarousel(data.slides);
+    } else {
+      currentAssetUrl   = data.png_url;
+      currentPreviewUrl = data.png_url;
+      currentSlideCount = 0;
+      previewPane.classList.remove('is-carousel');
+      previewPane.innerHTML = '';
+      const img = document.createElement('img');
+      img.src = data.png_url; img.alt = ''; img.style.cssText = 'width:100%;border-radius:8px;display:block';
+      previewPane.appendChild(img);
+    }
+    setSlideOverState('editing');
+  } catch {
+    if (!hasExisting) {
+      const overlay = document.getElementById('visual-modal-overlay');
+      if (overlay?.getAttribute('aria-hidden') !== 'true') previewPane.innerHTML = '';
+    }
+  } finally {
+    _visualAutoPreviewRunning = false;
+  }
 }
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -2079,31 +2148,22 @@ function hideBoostOverlay() {
 }
 
 /* ════════════════════════════════════════════════════════════════════════
-   MEDIA DRAWER
+   MEDIA MODAL
 ════════════════════════════════════════════════════════════════════════ */
 function openMediaDrawer() {
   if (scheduleEditLocked || !currentPostId) return;
-  if (document.getElementById('slide-over').classList.contains('open')) closeSlideOver();
-  const md = document.getElementById('media-drawer');
-  const ov = document.getElementById('overlay');
-  md.classList.add('open');
-  md.setAttribute('aria-hidden', 'false');
-  ov.classList.add('visible');
-  ov.setAttribute('aria-hidden', 'false');
+  document.getElementById('media-modal-overlay').removeAttribute('aria-hidden');
   loadDrawerMedia();
 }
 
 function closeMediaDrawer() {
-  const md = document.getElementById('media-drawer');
-  md.classList.remove('open');
-  md.setAttribute('aria-hidden', 'true');
-  maybeHideOverlay();
+  document.getElementById('media-modal-overlay').setAttribute('aria-hidden', 'true');
 }
 
 async function loadDrawerMedia() {
-  const grid     = document.getElementById('drawer-media-grid');
-  const emptyMsg = document.getElementById('drawer-empty-msg');
-  const errMsg   = document.getElementById('drawer-error-msg');
+  const grid     = document.getElementById('media-modal-grid');
+  const emptyMsg = document.getElementById('media-modal-empty-msg');
+  const errMsg   = document.getElementById('media-modal-error-msg');
   grid.innerHTML = '';
   if (emptyMsg) emptyMsg.style.display = 'none';
   if (errMsg)   errMsg.style.display   = 'none';
@@ -2169,8 +2229,8 @@ function buildDrawerCard(file) {
 }
 
 async function drawerProcessFiles(files) {
-  const zone   = document.getElementById('drawer-upload-zone');
-  const errMsg = document.getElementById('drawer-error-msg');
+  const zone   = document.getElementById('media-modal-upload-zone');
+  const errMsg = document.getElementById('media-modal-error-msg');
   zone.classList.add('uploading');
   for (const file of files) {
     try { await drawerUploadFile(file); }
@@ -2192,8 +2252,8 @@ async function drawerUploadFile(file) {
   let data;
   try { data = await res.json(); } catch { throw new Error(`Upload failed (HTTP ${res.status})`); }
   if (!data.ok) throw new Error(data.error || 'Upload failed');
-  const grid     = document.getElementById('drawer-media-grid');
-  const emptyMsg = document.getElementById('drawer-empty-msg');
+  const grid     = document.getElementById('media-modal-grid');
+  const emptyMsg = document.getElementById('media-modal-empty-msg');
   grid.prepend(buildDrawerCard(data.file));
   if (emptyMsg) emptyMsg.style.display = 'none';
 }
@@ -2211,39 +2271,6 @@ function bindEvents() {
     document.getElementById('schedule-pause-btn')?.click();
   });
 
-  /* Slide-over */
-  document.getElementById('slide-over-close').addEventListener('click',   closeSlideOver);
-  document.getElementById('slide-over-discard').addEventListener('click', closeSlideOver);
-  document.getElementById('slide-over-generate').addEventListener('click', () => {
-    if (currentAssetType) generateFromEditor(currentAssetType);
-  });
-  document.getElementById('slide-over-edit').addEventListener('click', () => {
-    if (currentAssetType === 'carousel') {
-      const editContent = currentRenderedContent || extractedContent;
-      if (editContent) { renderEditorForm('carousel', editContent); setSlideOverState('editing'); }
-    }
-  });
-  document.getElementById('slide-over-save').addEventListener('click', () => {
-    if (!currentAssetUrl) return;
-    const a = document.createElement('a');
-    a.href = currentAssetUrl; a.download = '';
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  });
-  document.getElementById('slide-over-add').addEventListener('click', () => {
-    if (currentAssetUrl) {
-      attachedAssetUrl   = currentAssetUrl;
-      attachedAssetType  = currentAssetType;
-      attachedPreviewUrl = currentPreviewUrl;
-      attachedSlideCount = currentSlideCount;
-      const labelMap = { quote_card: 'Quote Card', carousel: 'Carousel', branded_quote: 'Branded Quote', ai_image: 'AI Image' };
-      const chipLabel = document.getElementById('asset-chip-label');
-      const chip      = document.getElementById('asset-chip');
-      if (chipLabel) chipLabel.textContent = labelMap[attachedAssetType] || attachedAssetType;
-      if (chip) chip.classList.remove('hidden');
-      renderPreviewAsset();
-    }
-    closeSlideOver();
-  });
 
   /* Modal cancel + X close */
   document.getElementById('schedule-cancel').addEventListener('click', closeModal);
@@ -2266,12 +2293,10 @@ function bindEvents() {
     if (el) el.addEventListener('input', () => document.querySelectorAll('.schedule-preset-btn').forEach(b => b.classList.remove('active')));
   });
 
-  /* Overlay */
+  /* Overlay (schedule modal + success sheet only — visual/media modals are self-contained) */
   document.getElementById('overlay').addEventListener('click', () => {
-    if (document.getElementById('success-sheet').classList.contains('visible'))   closeSuccessSheet();
+    if (document.getElementById('success-sheet').classList.contains('visible'))        closeSuccessSheet();
     else if (document.getElementById('schedule-modal').classList.contains('visible'))  closeModal();
-    else if (document.getElementById('slide-over').classList.contains('open'))    closeSlideOver();
-    else if (document.getElementById('media-drawer').classList.contains('open'))  closeMediaDrawer();
   });
 
   /* ESC */
@@ -2280,26 +2305,10 @@ function bindEvents() {
     if (document.getElementById('visual-boost-overlay').classList.contains('visible')) hideBoostOverlay();
     else if (document.getElementById('success-sheet').classList.contains('visible'))   closeSuccessSheet();
     else if (document.getElementById('schedule-modal').classList.contains('visible'))  closeModal();
-    else if (document.getElementById('slide-over').classList.contains('open'))    closeSlideOver();
-    else if (document.getElementById('media-drawer').classList.contains('open'))  closeMediaDrawer();
+    else if (document.getElementById('visual-modal-overlay')?.getAttribute('aria-hidden') !== 'true') closeVisualModal();
+    else if (document.getElementById('media-modal-overlay')?.getAttribute('aria-hidden') !== 'true')  closeMediaDrawer();
   });
 
-  /* Media drawer */
-  document.getElementById('media-drawer-close').addEventListener('click', closeMediaDrawer);
-  const zone      = document.getElementById('drawer-upload-zone');
-  const fileInput = document.getElementById('drawer-file-input');
-  zone.addEventListener('click', () => fileInput.click());
-  fileInput.addEventListener('change', () => {
-    if (fileInput.files.length) drawerProcessFiles(Array.from(fileInput.files));
-    fileInput.value = '';
-  });
-  zone.addEventListener('dragover',  e => { e.preventDefault(); zone.classList.add('dragover'); });
-  zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
-  zone.addEventListener('drop', e => {
-    e.preventDefault(); zone.classList.remove('dragover');
-    const files = Array.from(e.dataTransfer.files);
-    if (files.length) drawerProcessFiles(files);
-  });
 }
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -2431,7 +2440,6 @@ function wireSchedule() {
 }
 
 function wireVisualButtons() {
-  _soSkel = document.getElementById('slide-over-skeleton');
   document.getElementById('quote-card-btn').addEventListener('click', () => openSlideOver('quote_card', 'QUOTE CARD'));
   document.getElementById('branded-quote-btn').addEventListener('click', () => openSlideOver('branded_quote', 'BRANDED QUOTE'));
   document.getElementById('carousel-btn').addEventListener('click', () => openSlideOver('carousel', 'CAROUSEL'));
@@ -2439,6 +2447,37 @@ function wireVisualButtons() {
   document.getElementById('media-library-btn').addEventListener('click', () => {
     if (scheduleEditLocked) return;
     openMediaDrawer();
+  });
+
+  // Visual modal buttons
+  document.getElementById('visual-modal-close').addEventListener('click', closeVisualModal);
+  document.getElementById('visual-modal-cancel-btn').addEventListener('click', closeVisualModal);
+  document.getElementById('visual-modal-save-btn').addEventListener('click', () => {
+    if (currentAssetType) generateFromEditor(currentAssetType);
+  });
+  document.getElementById('visual-modal-overlay').addEventListener('click', e => {
+    if (e.target === e.currentTarget) closeVisualModal();
+  });
+
+  // Media modal buttons + upload zone
+  document.getElementById('media-modal-close').addEventListener('click', closeMediaDrawer);
+  document.getElementById('media-modal-cancel-btn').addEventListener('click', closeMediaDrawer);
+  document.getElementById('media-modal-overlay').addEventListener('click', e => {
+    if (e.target === e.currentTarget) closeMediaDrawer();
+  });
+  const mediaZone      = document.getElementById('media-modal-upload-zone');
+  const mediaFileInput = document.getElementById('media-modal-file-input');
+  mediaZone.addEventListener('click', () => mediaFileInput.click());
+  mediaFileInput.addEventListener('change', () => {
+    if (mediaFileInput.files.length) drawerProcessFiles(Array.from(mediaFileInput.files));
+    mediaFileInput.value = '';
+  });
+  mediaZone.addEventListener('dragover',  e => { e.preventDefault(); mediaZone.classList.add('dragover'); });
+  mediaZone.addEventListener('dragleave', () => mediaZone.classList.remove('dragover'));
+  mediaZone.addEventListener('drop', e => {
+    e.preventDefault(); mediaZone.classList.remove('dragover');
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length) drawerProcessFiles(files);
   });
 
   // AI Image Modal buttons
@@ -2459,7 +2498,7 @@ function wireVisualButtons() {
     if (e.target === e.currentTarget) closeAiImageModal();
   });
 
-  // Visual Boost Overlay tiles + backdrop click + escape
+  // Visual Boost Overlay tiles + backdrop click
   document.getElementById('vbo-skip-btn')?.addEventListener('click', hideBoostOverlay);
   document.getElementById('visual-boost-overlay')?.addEventListener('click', e => {
     if (e.target === e.currentTarget) hideBoostOverlay();

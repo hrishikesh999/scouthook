@@ -324,7 +324,7 @@ router.get('/connect', async (req, res) => {
     client_id:     clientId,
     redirect_uri:  redirectUri,
     state,
-    scope:         'openid profile w_member_social w_organization_social r_organization_social',
+    scope:         'openid profile w_member_social',
   });
 
   res.redirect(`https://www.linkedin.com/oauth/v2/authorization?${params}`);

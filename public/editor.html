@@ -1967,6 +1967,8 @@ function renderEditorForm(type, content) {
         const idx = allCards.indexOf(btn.closest('.so-slide-card'));
         if (idx !== -1) {
           current.slides.splice(idx, 1);
+          _carouselSlides.splice(idx, 1);
+          _rebuildThumbnailStrip();
           renderEditorForm('carousel', current);
           _selectCarouselSlide(Math.min(_carouselActiveSlide, current.slides.length - 1));
         }
@@ -1979,13 +1981,13 @@ function renderEditorForm(type, content) {
         const current = readEditorContent('carousel');
         const closingIdx = current.slides.reduce((acc, s, i) => s.type === 'closing' ? i : acc, -1);
         const newSlide = { type: 'content', headline: '', body: '' };
+        const newIdx = closingIdx !== -1 ? closingIdx : current.slides.length;
         if (closingIdx !== -1) current.slides.splice(closingIdx, 0, newSlide);
         else current.slides.push(newSlide);
+        _carouselSlides.splice(newIdx, 0, '');
+        _rebuildThumbnailStrip();
         renderEditorForm('carousel', current);
-        if (_carouselSlides.length > 0) {
-          const newIdx = closingIdx !== -1 ? closingIdx : current.slides.length - 1;
-          _selectCarouselSlide(newIdx);
-        }
+        _selectCarouselSlide(newIdx);
       });
     }
 
@@ -2097,6 +2099,20 @@ function _showInsertBtn() {
   if (btn) { btn.hidden = false; btn.disabled = false; }
 }
 
+function _rebuildThumbnailStrip() {
+  const strip = document.querySelector('#visual-modal-preview-pane .carousel-thumbnails');
+  if (!strip) return;
+  strip.innerHTML = '';
+  _carouselSlides.forEach((url, i) => {
+    const thumb = document.createElement('div');
+    thumb.className = 'carousel-thumb' + (i === _carouselActiveSlide ? ' active' : '');
+    thumb.dataset.idx = i;
+    if (url) { const img = document.createElement('img'); img.src = url; thumb.appendChild(img); }
+    thumb.addEventListener('click', () => _selectCarouselSlide(i));
+    strip.appendChild(thumb);
+  });
+}
+
 function renderCarousel(slides) {
   if (!slides || !slides.length) return;
   _carouselSlides = slides.map(s => (typeof s === 'string' ? s : s.png_url));
@@ -2109,20 +2125,33 @@ function renderCarousel(slides) {
   mainImg.className = 'carousel-main-img slide-over-image';
   pane.appendChild(mainImg);
 
+  const wrapper = document.createElement('div');
+  wrapper.className = 'carousel-thumbnails-wrapper';
+
+  const prevBtn = document.createElement('button');
+  prevBtn.type = 'button';
+  prevBtn.className = 'carousel-strip-arrow carousel-strip-prev';
+  prevBtn.setAttribute('aria-label', 'Scroll thumbnails left');
+  prevBtn.textContent = '‹';
+
   const strip = document.createElement('div');
   strip.className = 'carousel-thumbnails';
-  _carouselSlides.forEach((url, i) => {
-    const thumb = document.createElement('div');
-    thumb.className = 'carousel-thumb';
-    thumb.dataset.idx = i;
-    const tImg = document.createElement('img');
-    tImg.src = url;
-    thumb.appendChild(tImg);
-    thumb.addEventListener('click', () => _selectCarouselSlide(i));
-    strip.appendChild(thumb);
-  });
-  pane.appendChild(strip);
 
+  const nextBtn = document.createElement('button');
+  nextBtn.type = 'button';
+  nextBtn.className = 'carousel-strip-arrow carousel-strip-next';
+  nextBtn.setAttribute('aria-label', 'Scroll thumbnails right');
+  nextBtn.textContent = '›';
+
+  prevBtn.addEventListener('click', () => strip.scrollBy({ left: -220, behavior: 'smooth' }));
+  nextBtn.addEventListener('click', () => strip.scrollBy({ left: 220, behavior: 'smooth' }));
+
+  wrapper.appendChild(prevBtn);
+  wrapper.appendChild(strip);
+  wrapper.appendChild(nextBtn);
+  pane.appendChild(wrapper);
+
+  _rebuildThumbnailStrip();
   _selectCarouselSlide(0);
 }
 

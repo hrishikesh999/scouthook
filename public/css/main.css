@@ -7247,31 +7247,38 @@ html[data-nav-dir="back"] #main-content.spa-entering {
   padding: var(--space-5);
   box-sizing: border-box;
 }
-.carousel-thumbnails {
-  display: flex;
-  gap: 8px;
-  overflow-x: scroll;
-  -webkit-overflow-scrolling: touch;
-  padding: 8px 12px;
-  flex-shrink: 0;
-  height: 80px;
-  align-items: center;
+.carousel-thumbnails-wrapper {
+  display: flex; align-items: center; flex-shrink: 0;
+  height: 92px;
   border-top: 1px solid var(--border);
   background: var(--bg-app);
 }
+.carousel-strip-arrow {
+  flex-shrink: 0; width: 28px; height: 100%;
+  background: transparent; border: none; cursor: pointer;
+  font-size: 20px; color: var(--text-secondary);
+  display: flex; align-items: center; justify-content: center;
+  padding: 0; transition: color 0.15s, background 0.1s;
+  user-select: none;
+}
+.carousel-strip-arrow:hover { color: var(--text-primary); background: var(--surface-2); }
+.carousel-thumbnails {
+  flex: 1; display: flex; gap: 8px;
+  overflow-x: scroll; -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding: 0 4px; height: 100%; align-items: center;
+}
+.carousel-thumbnails::-webkit-scrollbar { display: none; }
 .carousel-thumb {
-  width: 60px;
-  flex-shrink: 0;
-  cursor: pointer;
-  border: 2px solid transparent;
-  border-radius: 4px;
-  overflow: hidden;
-  opacity: 0.65;
+  width: 69px;
+  flex-shrink: 0; cursor: pointer;
+  border: 2px solid transparent; border-radius: 4px;
+  overflow: hidden; opacity: 0.65;
   transition: opacity 0.15s, border-color 0.15s;
 }
-.carousel-thumb:hover { opacity: 1; }
+.carousel-thumb:hover  { opacity: 1; }
 .carousel-thumb.active { opacity: 1; border-color: var(--teal); }
-.carousel-thumb img { width: 100%; height: auto; display: block; }
+.carousel-thumb img    { width: 100%; height: auto; display: block; }
 
 @media (max-width: 768px) {
   .media-modal-upload-pane {

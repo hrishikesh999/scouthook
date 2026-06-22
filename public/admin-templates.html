@@ -115,7 +115,11 @@
             <!-- All fetched layers with mapping controls -->
             <fieldset class="wizard-fieldset">
               <legend class="wizard-fieldset__legend">Brand mappings</legend>
-              <div class="text-muted field-hint field-hint--mb">Click "Map to brand" on any layer to link it to a brand setting from your Brand page. Mapped layers are auto-filled at render time.</div>
+              <div class="text-muted field-hint field-hint--mb">Map Placid layers to brand settings from your Brand page. Mapped layers are auto-filled at render time.</div>
+              <div class="brand-mapping-actions">
+                <button type="button" id="placid-auto-map-btn" class="btn btn--primary btn--sm">Auto-map all layers</button>
+                <span id="placid-auto-map-status" class="brand-layers-status"></span>
+              </div>
               <div id="placid-layer-map-list"></div>
               <button type="button" id="placid-add-brand-layer-btn" class="btn btn--secondary btn--sm btn--top-gap">+ Add layer manually</button>
             </fieldset>
@@ -514,6 +518,42 @@
       return 'brand_text';
     }
 
+    // ── Auto-map all unmapped layers using heuristics ─────────────────────
+    function autoMapAllLayers() {
+      const coreNames = getCoreLayerNames();
+      const alreadyMapped = new Set(placidBrandLayers.map(m => m.layer_name));
+      const unmapped = placidTemplateLayers.filter(l => !coreNames.has(l.name) && !alreadyMapped.has(l.name));
+
+      if (!unmapped.length) {
+        const statusEl = document.getElementById('placid-auto-map-status');
+        statusEl.textContent = placidTemplateLayers.length ? 'All layers are already mapped.' : 'No layers to map — fetch a template first.';
+        return;
+      }
+
+      let added = 0;
+      for (const layer of unmapped) {
+        if (layer.type === 'text') {
+          const fontSrc  = guessDefaultFontSource(layer.name);
+          const colorSrc = guessDefaultColorSource(layer.name);
+          placidBrandLayers.push({ layer_name: layer.name, brand_source: fontSrc,  property: 'font_family' });
+          placidBrandLayers.push({ layer_name: layer.name, brand_source: colorSrc, property: 'color' });
+          added++;
+        } else if (layer.type === 'picture' || layer.type === 'image') {
+          const src = guessDefaultBrandSource(layer.name, layer.type);
+          placidBrandLayers.push({ layer_name: layer.name, brand_source: src, property: inferProperty(src) });
+          added++;
+        } else {
+          const src = guessDefaultBrandSource(layer.name, layer.type);
+          placidBrandLayers.push({ layer_name: layer.name, brand_source: src, property: inferProperty(src) });
+          added++;
+        }
+      }
+
+      renderLayerMapRows();
+      const statusEl = document.getElementById('placid-auto-map-status');
+      statusEl.textContent = `Mapped ${added} layer${added !== 1 ? 's' : ''} — review and adjust below.`;
+    }
+
     function renderCustomFieldRows() {
       const list = document.getElementById('placid-custom-fields-list');
       if (!placidCustomFields.length) { list.innerHTML = '<p class="empty-section-text">No custom fields yet.</p>'; return; }
@@ -757,6 +797,7 @@
     // ── Event listeners ────────────────────────────────────────────────────
     document.getElementById('placid-add-btn').addEventListener('click', () => openForm());
     document.getElementById('placid-form-cancel').addEventListener('click', closeForm);
+    document.getElementById('placid-auto-map-btn').addEventListener('click', autoMapAllLayers);
 
     // Step 1 → Step 2
     document.getElementById('placid-step1-next').addEventListener('click', () => {

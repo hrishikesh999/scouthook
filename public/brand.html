@@ -229,12 +229,20 @@
           <div class="brand-preview-section">
             <p class="brand-preview-section-label">Branded Quote</p>
             <div class="brand-preview-visual" id="bpv-branded">
-              <div class="bpv-inner-card" id="bpv-bq-card">
-                <div class="bpv-bq-bar" id="bpv-bq-bar"></div>
-                <div class="bpv-quote-text bpv-bq-quote" id="bpv-bq-quote">
-                  "Consistency in brand voice builds trust and recognition that compounds over time."
+              <div class="bpv-bq-header">
+                <div class="bpv-bq-avatar" id="bpv-bq-avatar">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <circle cx="12" cy="8" r="4"/>
+                    <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
+                  </svg>
                 </div>
-                <div class="bpv-bq-attribution" id="bpv-bq-attribution">— Your Name &nbsp;·&nbsp; Your Title</div>
+                <div>
+                  <div class="bpv-bq-name" id="bpv-bq-name">Your Name</div>
+                  <div class="bpv-bq-role" id="bpv-bq-role">Your Title · Company</div>
+                </div>
+              </div>
+              <div class="bpv-quote-text bpv-bq-quote" id="bpv-bq-quote">
+                "Consistency in brand voice builds trust and recognition that compounds over time."
               </div>
               <div class="bpv-footer" id="bpv-branded-footer">
                 <div class="bpv-logo-area" id="bpv-branded-logo"></div>
@@ -242,40 +250,46 @@
             </div>
           </div>
 
-          <!-- Carousel — three slide types side by side -->
+          <!-- Carousel — single slide with arrow navigation -->
           <div class="brand-preview-section">
             <p class="brand-preview-section-label">Carousel</p>
-            <div class="brand-carousel-trio">
+            <div class="bpv-carousel-nav-wrap">
+              <button class="bpv-carousel-arrow" id="bpv-cs-prev" aria-label="Previous slide" disabled>‹</button>
+              <div class="bpv-carousel-viewport">
 
-              <div class="brand-carousel-trio-col">
-                <div class="bct-slide" id="bpv-cs-cover">
+                <!-- Cover slide -->
+                <div class="bpv-carousel-slide active" id="bpv-cs-cover">
                   <div>
                     <div class="bpv-cs-eyebrow" id="bpv-cs-eyebrow">Thread</div>
                     <div class="bpv-quote-text bpv-cs-title" id="bpv-cs-title">Build Your Brand on LinkedIn</div>
                   </div>
                   <div class="bpv-cs-swipe" id="bpv-cs-swipe">Swipe to read →</div>
                 </div>
-                <p class="bct-slide-label">Cover</p>
-              </div>
 
-              <div class="brand-carousel-trio-col">
-                <div class="bct-slide" id="bpv-cs-content">
+                <!-- Content slide -->
+                <div class="bpv-carousel-slide" id="bpv-cs-content">
                   <div>
                     <div class="bpv-cs-num" id="bpv-cs-num">01</div>
                     <div class="bpv-cs-body" id="bpv-cs-body">Consistency builds trust over time.</div>
                   </div>
                 </div>
-                <p class="bct-slide-label">Content</p>
-              </div>
 
-              <div class="brand-carousel-trio-col">
-                <div class="bct-slide" id="bpv-cs-closing">
+                <!-- Closing slide -->
+                <div class="bpv-carousel-slide" id="bpv-cs-closing">
                   <div class="bpv-cs-outro" id="bpv-cs-outro">Follow for more insights on building your brand.</div>
                   <div class="bpv-logo-area bpv-cs-logo" id="bpv-cs-logo"></div>
                 </div>
-                <p class="bct-slide-label">Closing</p>
-              </div>
 
+              </div>
+              <button class="bpv-carousel-arrow" id="bpv-cs-next" aria-label="Next slide">›</button>
+            </div>
+            <div class="bpv-carousel-foot">
+              <p class="bpv-carousel-slide-lbl" id="bpv-cs-lbl">Cover slide</p>
+              <div class="bpv-carousel-dots">
+                <button class="bpv-dot active" data-slide="0" aria-label="Cover slide"></button>
+                <button class="bpv-dot" data-slide="1" aria-label="Content slide"></button>
+                <button class="bpv-dot" data-slide="2" aria-label="Closing slide"></button>
+              </div>
             </div>
           </div>
 

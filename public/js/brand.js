@@ -563,11 +563,11 @@ function updatePreview() {
   el('bpv-quote-logo',  e => { e.innerHTML = logoHtml(); });
 
   // ── Branded Quote ─────────────────────────────────────────────
-  el('bpv-bq-card',        e => { e.style.background = secondaryBg || 'rgba(255,255,255,0.07)'; });
-  el('bpv-bq-bar',         e => { e.style.background = accent; });
-  el('bpv-bq-quote',       e => { e.style.color = text; e.style.fontFamily = headingFF; });
-  el('bpv-bq-attribution', e => { e.style.color = secondaryTxt || text; e.style.fontFamily = bodyFF; });
-  el('bpv-branded-logo',   e => { e.innerHTML = logoHtml(); });
+  el('bpv-bq-avatar', e => { e.style.color = text; });
+  el('bpv-bq-name',   e => { e.style.color = text; });
+  el('bpv-bq-role',   e => { e.style.color = text; });
+  el('bpv-bq-quote',  e => { e.style.color = text; e.style.fontFamily = headingFF; });
+  el('bpv-branded-logo', e => { e.innerHTML = logoHtml(); });
 
   // ── Carousel trio ─────────────────────────────────────────────
   const eyebrowTextColor = _bgType === 'gradient'
@@ -588,6 +588,35 @@ function el(id, fn) {
   const node = document.getElementById(id);
   if (node) fn(node);
 }
+
+/* ── Carousel slide navigation ────────────────────────────────── */
+const CS_SLIDE_IDS    = ['bpv-cs-cover', 'bpv-cs-content', 'bpv-cs-closing'];
+const CS_SLIDE_LABELS = ['Cover slide', 'Content slide', 'Closing slide'];
+let _csSlide = 0;
+
+function setCarouselSlide(idx) {
+  _csSlide = idx;
+  CS_SLIDE_IDS.forEach((id, i) => {
+    const s = document.getElementById(id);
+    if (s) s.classList.toggle('active', i === idx);
+  });
+  document.querySelectorAll('.bpv-dot').forEach((d, i) => d.classList.toggle('active', i === idx));
+  el('bpv-cs-lbl', e => { e.textContent = CS_SLIDE_LABELS[idx] || ''; });
+  const prev = document.getElementById('bpv-cs-prev');
+  const next = document.getElementById('bpv-cs-next');
+  if (prev) prev.disabled = idx === 0;
+  if (next) next.disabled = idx === CS_SLIDE_IDS.length - 1;
+}
+
+document.getElementById('bpv-cs-prev')?.addEventListener('click', () => {
+  if (_csSlide > 0) setCarouselSlide(_csSlide - 1);
+});
+document.getElementById('bpv-cs-next')?.addEventListener('click', () => {
+  if (_csSlide < CS_SLIDE_IDS.length - 1) setCarouselSlide(_csSlide + 1);
+});
+document.querySelectorAll('.bpv-dot').forEach(dot => {
+  dot.addEventListener('click', () => setCarouselSlide(parseInt(dot.dataset.slide, 10)));
+});
 
 /* ── Logo picker ──────────────────────────────────────────────── */
 function setLogo(url) {

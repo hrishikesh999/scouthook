@@ -88,7 +88,10 @@
               <option value="trial_expired">Trial Expired</option>
             </select>
           </div>
-          <div class="chart-card__canvas chart-card__canvas--lg"><canvas id="chart-line-overview"></canvas></div>
+          <div class="chart-card__canvas chart-card__canvas--lg">
+            <canvas id="chart-line-overview"></canvas>
+            <div class="chart-empty-state" id="chart-line-empty" hidden>No data for this period</div>
+          </div>
         </div>
         <div class="card chart-card analytics-row__funnel">
           <div class="chart-card__title">Conversion Funnel</div>
@@ -98,14 +101,14 @@
 
       <!-- Charts -->
       <div class="charts-grid">
-        <div class="card chart-card"><div class="chart-card__title">New Signups</div><div class="chart-card__canvas"><canvas id="chart-signups"></canvas></div></div>
-        <div class="card chart-card"><div class="chart-card__title">Paid Upgrades</div><div class="chart-card__canvas"><canvas id="chart-upgrades"></canvas></div></div>
-        <div class="card chart-card"><div class="chart-card__title">Cancellations</div><div class="chart-card__canvas"><canvas id="chart-cancels"></canvas></div></div>
-        <div class="card chart-card"><div class="chart-card__title">Posts Created</div><div class="chart-card__canvas"><canvas id="chart-posts"></canvas></div></div>
-        <div class="card chart-card"><div class="chart-card__title">Assets by Type</div><div class="chart-card__canvas"><canvas id="chart-placid"></canvas></div></div>
-        <div class="card chart-card"><div class="chart-card__title">LinkedIn Connections</div><div class="chart-card__canvas"><canvas id="chart-linkedin"></canvas></div></div>
-        <div class="card chart-card"><div class="chart-card__title">Logins</div><div class="chart-card__canvas"><canvas id="chart-logins"></canvas></div></div>
-        <div class="card chart-card"><div class="chart-card__title">LinkedIn Disconnects</div><div class="chart-card__canvas"><canvas id="chart-disconnects"></canvas></div></div>
+        <div class="card chart-card"><div class="chart-card__title">New Signups</div><div class="chart-card__canvas"><canvas id="chart-signups"></canvas><div class="chart-empty-state" hidden>No data yet</div></div></div>
+        <div class="card chart-card"><div class="chart-card__title">Paid Upgrades</div><div class="chart-card__canvas"><canvas id="chart-upgrades"></canvas><div class="chart-empty-state" hidden>No data yet</div></div></div>
+        <div class="card chart-card"><div class="chart-card__title">Cancellations</div><div class="chart-card__canvas"><canvas id="chart-cancels"></canvas><div class="chart-empty-state" hidden>No data yet</div></div></div>
+        <div class="card chart-card"><div class="chart-card__title">Posts Created</div><div class="chart-card__canvas"><canvas id="chart-posts"></canvas><div class="chart-empty-state" hidden>No data yet</div></div></div>
+        <div class="card chart-card"><div class="chart-card__title">Assets by Type</div><div class="chart-card__canvas"><canvas id="chart-placid"></canvas><div class="chart-empty-state" hidden>No data yet</div></div></div>
+        <div class="card chart-card"><div class="chart-card__title">LinkedIn Connections</div><div class="chart-card__canvas"><canvas id="chart-linkedin"></canvas><div class="chart-empty-state" hidden>No data yet</div></div></div>
+        <div class="card chart-card"><div class="chart-card__title">Logins</div><div class="chart-card__canvas"><canvas id="chart-logins"></canvas><div class="chart-empty-state" hidden>No data yet</div></div></div>
+        <div class="card chart-card"><div class="chart-card__title">LinkedIn Disconnects</div><div class="chart-card__canvas"><canvas id="chart-disconnects"></canvas><div class="chart-empty-state" hidden>No data yet</div></div></div>
         <div class="card chart-card"><div class="chart-card__title">Plan Distribution</div><div class="chart-card__canvas"><canvas id="chart-plans"></canvas></div></div>
       </div>
     </main>
@@ -202,44 +205,48 @@
 
     // ── Load metrics ──────────────────────────────────────────────────────────
     async function loadMetrics() {
-      const params = new URLSearchParams({ start: currentStart, end: currentEnd, granularity: currentGran });
-      const r = await fetch(`/admin/dashboard/metrics?${params}`, {
-        headers: { 'X-Admin-Password': adminPw }
-      });
-      const data = await r.json();
-      if (!data.ok) return;
+      try {
+        const params = new URLSearchParams({ start: currentStart, end: currentEnd, granularity: currentGran });
+        const r = await fetch(`/admin/dashboard/metrics?${params}`, {
+          headers: { 'X-Admin-Password': adminPw }
+        });
+        const data = await r.json();
+        if (!data.ok) { console.error('[admin] metrics error:', data.error); return; }
 
-      const s = data.series;
-      const sum = arr => arr.reduce((a, b) => a + Number(b.count), 0);
+        const s = data.series;
+        const sum = arr => arr.reduce((a, b) => a + Number(b.count), 0);
 
-      document.getElementById('m-signups').textContent  = sum(s.signups).toLocaleString();
-      document.getElementById('m-upgrades').textContent = sum(s.paid_upgrades).toLocaleString();
-      document.getElementById('m-cancels').textContent  = sum(s.cancellations).toLocaleString();
-      document.getElementById('m-mrr').textContent      = '$' + (data.mrr_estimate || 0).toLocaleString() + '/mo';
-      document.getElementById('m-posts').textContent    = sum(s.posts_created).toLocaleString();
-      document.getElementById('m-placid').textContent   = sum(s.placid_total).toLocaleString();
-      document.getElementById('m-linkedin').textContent = sum(s.linkedin_connections).toLocaleString();
-      document.getElementById('m-logins').textContent   = sum(s.logins).toLocaleString();
+        document.getElementById('m-signups').textContent  = sum(s.signups).toLocaleString();
+        document.getElementById('m-upgrades').textContent = sum(s.paid_upgrades).toLocaleString();
+        document.getElementById('m-cancels').textContent  = sum(s.cancellations).toLocaleString();
+        document.getElementById('m-mrr').textContent      = '$' + (data.mrr_estimate || 0).toLocaleString() + '/mo';
+        document.getElementById('m-posts').textContent    = sum(s.posts_created).toLocaleString();
+        document.getElementById('m-placid').textContent   = sum(s.placid_total).toLocaleString();
+        document.getElementById('m-linkedin').textContent = sum(s.linkedin_connections).toLocaleString();
+        document.getElementById('m-logins').textContent   = sum(s.logins).toLocaleString();
 
-      // Line chart overview
-      lastSeries = s;
-      const lineMetric = document.getElementById('line-metric-select').value;
-      const lineColorMap = { signups: COLORS.accent, paid_upgrades: COLORS.primary, cancellations: COLORS.error, trial_expired: COLORS.amber };
-      renderLineChart('chart-line-overview', s[lineMetric] || [], lineColorMap[lineMetric]);
+        // Line chart overview
+        lastSeries = s;
+        const lineMetric = document.getElementById('line-metric-select').value;
+        const lineColorMap = { signups: COLORS.accent, paid_upgrades: COLORS.primary, cancellations: COLORS.error, trial_expired: COLORS.amber };
+        renderLineChart('chart-line-overview', s[lineMetric] || [], lineColorMap[lineMetric]);
 
-      // Funnel
-      if (data.funnel) renderFunnel(data.funnel);
+        // Funnel
+        if (data.funnel) renderFunnel(data.funnel);
 
-      renderBar('chart-signups',     s.signups,              COLORS.accent);
-      renderBar('chart-upgrades',    s.paid_upgrades,        COLORS.primary);
-      renderBar('chart-cancels',     s.cancellations,        COLORS.error);
-      renderBar('chart-posts',       s.posts_created,        COLORS.accent);
-      renderPlacidStacked('chart-placid', s.placid_by_type);
-      renderBar('chart-linkedin',    s.linkedin_connections, COLORS.primary);
-      renderBarWithEmpty('chart-logins',      s.logins,               COLORS.accent);
-      renderBarWithEmpty('chart-disconnects', s.linkedin_disconnects, COLORS.amber);
+        renderBar('chart-signups',     s.signups,              COLORS.accent);
+        renderBar('chart-upgrades',    s.paid_upgrades,        COLORS.primary);
+        renderBar('chart-cancels',     s.cancellations,        COLORS.error);
+        renderBar('chart-posts',       s.posts_created,        COLORS.accent);
+        renderPlacidStacked('chart-placid', s.placid_by_type);
+        renderBar('chart-linkedin',    s.linkedin_connections, COLORS.primary);
+        renderBarWithEmpty('chart-logins',      s.logins,               COLORS.accent);
+        renderBarWithEmpty('chart-disconnects', s.linkedin_disconnects, COLORS.amber);
 
-      loadPlanDistribution();
+        loadPlanDistribution();
+      } catch (err) {
+        console.error('[admin] loadMetrics failed:', err);
+      }
     }
 
     async function loadPlanDistribution() {
@@ -266,34 +273,37 @@
     // ── Chart helpers ─────────────────────────────────────────────────────────
     function destroyChart(id) { if (charts[id]) { charts[id].destroy(); delete charts[id]; } }
 
+    function formatBucket(iso) {
+      const d = new Date(iso);
+      return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    }
+
+    function showChartEmpty(canvas, show) {
+      const empty = canvas.parentElement.querySelector('.chart-empty-state');
+      if (empty) empty.hidden = !show;
+      canvas.style.display = show ? 'none' : '';
+    }
+
     function renderBar(id, series, color) {
       destroyChart(id);
       const ctx = document.getElementById(id);
       if (!ctx) return;
       if (!series || series.length === 0) {
-        ctx.getContext('2d').clearRect(0,0,ctx.width,ctx.height);
-        ctx.parentElement.innerHTML = `<div class="chart-card__title">${ctx.parentElement.querySelector('.chart-card__title')?.textContent||''}</div><div class="empty-state">No data yet</div>`;
+        showChartEmpty(ctx, true);
         return;
       }
+      showChartEmpty(ctx, false);
       charts[id] = new Chart(ctx, {
         type: 'bar',
         data: {
-          labels: series.map(r => r.bucket),
+          labels: series.map(r => formatBucket(r.bucket)),
           datasets: [{ data: series.map(r => r.count), backgroundColor: color + 'CC', borderColor: color, borderWidth: 1 }],
         },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ' ' + ctx.parsed.y } } }, scales: { x: { ticks: { color: '#6B7280', maxRotation: 0, font: { size: 10 } }, grid: { color: 'rgba(0,0,0,0.06)' } }, y: { ticks: { color: '#6B7280', font: { size: 10 } }, grid: { color: 'rgba(0,0,0,0.06)' }, beginAtZero: true } } },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => ' ' + c.parsed.y } } }, scales: { x: { ticks: { color: '#6B7280', maxRotation: 0, font: { size: 10 } }, grid: { color: 'rgba(0,0,0,0.06)' } }, y: { ticks: { color: '#6B7280', font: { size: 10 } }, grid: { color: 'rgba(0,0,0,0.06)' }, beginAtZero: true } } },
       });
     }
 
     function renderBarWithEmpty(id, series, color) {
-      destroyChart(id);
-      const ctx = document.getElementById(id);
-      if (!ctx) return;
-      if (!series || series.length === 0) {
-        const title = ctx.closest('.chart-card')?.querySelector('.chart-card__title')?.textContent || '';
-        ctx.closest('.chart-card').innerHTML = `<div class="chart-card__title">${title}</div><div class="empty-state">Tracking starts after next deploy</div>`;
-        return;
-      }
       renderBar(id, series, color);
     }
 
@@ -303,10 +313,10 @@
       if (!ctx) return;
       const types = Object.keys(byType || {});
       if (types.length === 0) {
-        const title = ctx.closest('.chart-card')?.querySelector('.chart-card__title')?.textContent || '';
-        ctx.closest('.chart-card').innerHTML = `<div class="chart-card__title">${title}</div><div class="empty-state">No data yet</div>`;
+        showChartEmpty(ctx, true);
         return;
       }
+      showChartEmpty(ctx, false);
       const allBuckets = [...new Set(types.flatMap(t => (byType[t]||[]).map(r => r.bucket)))].sort();
       const typeColors = [COLORS.primary, COLORS.accent, COLORS.amber, COLORS.muted];
       const datasets = types.map((t, i) => ({
@@ -318,7 +328,7 @@
       }));
       charts[id] = new Chart(ctx, {
         type: 'bar',
-        data: { labels: allBuckets, datasets },
+        data: { labels: allBuckets.map(formatBucket), datasets },
         options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: true, labels: { color: '#6B7280', font: { size: 10 }, boxWidth: 10 } } }, scales: { x: { stacked: true, ticks: { color: '#6B7280', maxRotation: 0, font: { size: 10 } }, grid: { color: 'rgba(0,0,0,0.06)' } }, y: { stacked: true, ticks: { color: '#6B7280', font: { size: 10 } }, grid: { color: 'rgba(0,0,0,0.06)' }, beginAtZero: true } } },
       });
     }
@@ -339,23 +349,17 @@
 
     function renderLineChart(id, series, color) {
       destroyChart(id);
-      // Canvas may have been replaced by a previous empty-state — restore it
-      let ctx = document.getElementById(id);
-      if (!ctx) {
-        const wrapper = document.querySelector('.chart-card__canvas--lg');
-        if (!wrapper) return;
-        wrapper.innerHTML = `<canvas id="${id}"></canvas>`;
-        ctx = document.getElementById(id);
-        if (!ctx) return;
-      }
+      const ctx = document.getElementById(id);
+      if (!ctx) return;
       if (!series || series.length === 0) {
-        ctx.closest('.chart-card__canvas--lg').innerHTML = '<div class="empty-state">No data for this period</div>';
+        showChartEmpty(ctx, true);
         return;
       }
+      showChartEmpty(ctx, false);
       charts[id] = new Chart(ctx, {
         type: 'line',
         data: {
-          labels: series.map(r => r.bucket),
+          labels: series.map(r => formatBucket(r.bucket)),
           datasets: [{
             data: series.map(r => r.count),
             borderColor: color,

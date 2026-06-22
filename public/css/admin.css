@@ -550,6 +550,16 @@ label, .field label { color: #111111; }
 }
 .chart-card__canvas--lg { position: relative; height: 200px; }
 
+.chart-empty-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  font-size: 0.85rem;
+  color: #9CA3AF;
+  font-family: var(--font-sans);
+}
+
 /* ── Funnel visualization ───────────────────────────────────────────────── */
 .funnel-container { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: var(--space-sm) 0 var(--space-md); }
 .funnel-stage-wrap { position: relative; width: 100%; display: flex; align-items: center; justify-content: center; }

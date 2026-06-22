@@ -379,16 +379,12 @@
       for (const doc of documents) {
         if (doc.status === 'indexing' || doc.status === 'pending' || doc.status === 'mining') {
           pollDocumentStatus(doc.id);
-        } else if (doc.status === 'ready' && !doc.ideas_mined) {
-          triggerMining();
-          pollDocumentStatus(doc.id);
         }
       }
     } catch { /* non-fatal */ }
   }
 
   function effectiveStatus(doc) {
-    if (doc.status === 'ready' && !doc.ideas_mined) return 'mining';
     return doc.status;
   }
 
@@ -479,11 +475,20 @@
   }
 
   function pollDocumentStatus(docId) {
-    let miningTriggered = false;
-    let miningStartAt   = 0;
-    const MINING_TIMEOUT_MS = 120_000;
+    const pollStartAt = Date.now();
+    const POLL_TIMEOUT_MS = 180_000;
 
     const interval = setInterval(async () => {
+      if (Date.now() - pollStartAt > POLL_TIMEOUT_MS) {
+        clearInterval(interval);
+        const idx = documents.findIndex(d => d.id === docId);
+        if (idx !== -1 && documents[idx].status !== 'ready' && documents[idx].status !== 'error') {
+          documents[idx].status = 'error';
+          documents[idx].error_message = 'Processing timed out — try again later';
+          renderDocuments();
+        }
+        return;
+      }
       try {
         const res  = await fetch('/api/vault/documents');
         const data = await res.json();
@@ -496,18 +501,6 @@
         if (idx !== -1) { documents[idx] = updated; renderDocuments(); }
 
         if (updated.status === 'indexing' || updated.status === 'pending' || updated.status === 'mining') return;
-
-        if (updated.status === 'ready' && !updated.ideas_mined) {
-          if (!miningTriggered) {
-            miningTriggered = true;
-            miningStartAt   = Date.now();
-            triggerMining();
-          }
-          if (Date.now() - miningStartAt > MINING_TIMEOUT_MS) {
-            clearInterval(interval);
-          }
-          return;
-        }
 
         clearInterval(interval);
 

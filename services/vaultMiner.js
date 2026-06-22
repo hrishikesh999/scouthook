@@ -53,9 +53,19 @@ async function extractDocx(buffer) {
 }
 
 async function extractPptx(buffer) {
-  const officeparser = require('officeparser');
-  const text = await officeparser.parseOfficeAsync(buffer, { outputErrorToConsole: false });
-  return { text: text || '', pages: null };
+  const { parseOffice } = require('officeparser');
+  const fs   = require('fs');
+  const os   = require('os');
+  const path = require('path');
+  const tmpDir  = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'vault-pptx-'));
+  const tmpFile = path.join(tmpDir, 'upload.pptx');
+  try {
+    await fs.promises.writeFile(tmpFile, buffer);
+    const text = await parseOffice(tmpFile, { outputErrorToConsole: false });
+    return { text: text || '', pages: null };
+  } finally {
+    await fs.promises.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
+  }
 }
 
 // ── HTTP fetch primitive ─────────────────────────────────────────────────────
@@ -160,67 +170,66 @@ function stripHtml(html) {
  * Returns { text: string, pages: null }
  */
 async function extractYoutube(url) {
-  const pageHtml = await fetchRaw(url);
+  const { YoutubeTranscript } = require('youtube-transcript');
 
-  // Extract the ytInitialPlayerResponse JSON object embedded in the page
-  let playerData = null;
-  const marker   = 'ytInitialPlayerResponse = ';
-  const markerIdx = pageHtml.indexOf(marker);
-  if (markerIdx !== -1) {
-    const jsonStart = pageHtml.indexOf('{', markerIdx);
-    if (jsonStart !== -1) {
-      let depth = 0, i = jsonStart;
-      const cap = Math.min(pageHtml.length, jsonStart + 2_000_000);
-      for (; i < cap; i++) {
-        const ch = pageHtml[i];
-        if (ch === '{') depth++;
-        else if (ch === '}') { depth--; if (depth === 0) { i++; break; } }
-      }
-      try { playerData = JSON.parse(pageHtml.slice(jsonStart, i)); } catch { /* skip */ }
-    }
-  }
+  const videoId = extractVideoId(url);
+  if (!videoId) throw new Error('Could not parse YouTube video ID from URL');
 
-  let title      = '';
+  let title = '';
   let transcript = '';
 
-  if (playerData) {
-    title = playerData.videoDetails?.title || '';
+  // Primary: use youtube-transcript library (handles cookies/anti-bot)
+  try {
+    const segments = await YoutubeTranscript.fetchTranscript(videoId);
+    if (Array.isArray(segments) && segments.length > 0) {
+      transcript = segments.map(s => s.text).join(' ').replace(/\s{2,}/g, ' ').trim();
+    }
+  } catch { /* fall through to page scrape */ }
 
-    // Attempt caption extraction
-    const tracks = playerData?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
-    if (Array.isArray(tracks) && tracks.length > 0) {
-      const track = tracks.find(t => (t.languageCode || '').startsWith('en')) || tracks[0];
-      if (track?.baseUrl) {
-        try {
-          const xmlUrl = track.baseUrl.includes('?')
-            ? `${track.baseUrl}&fmt=xml`
-            : `${track.baseUrl}?fmt=xml`;
-          const captionXml = await fetchRaw(xmlUrl, { timeout: 15000 });
-          transcript = captionXml
-            .replace(/<text[^>]*>/g, '')
-            .replace(/<\/text>/g, ' ')
-            .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
-            .replace(/&quot;/g, '"').replace(/&#39;/g, "'")
-            .replace(/\s{2,}/g, ' ')
-            .trim();
-        } catch { /* fall through to description */ }
+  // Fetch page for title (and fallback description if transcript failed)
+  try {
+    const pageHtml = await fetchRaw(url);
+    let playerData = null;
+    const marker   = 'ytInitialPlayerResponse = ';
+    const markerIdx = pageHtml.indexOf(marker);
+    if (markerIdx !== -1) {
+      const jsonStart = pageHtml.indexOf('{', markerIdx);
+      if (jsonStart !== -1) {
+        let depth = 0, i = jsonStart;
+        const cap = Math.min(pageHtml.length, jsonStart + 2_000_000);
+        for (; i < cap; i++) {
+          const ch = pageHtml[i];
+          if (ch === '{') depth++;
+          else if (ch === '}') { depth--; if (depth === 0) { i++; break; } }
+        }
+        try { playerData = JSON.parse(pageHtml.slice(jsonStart, i)); } catch { /* skip */ }
       }
     }
-
-    if (!transcript) {
-      transcript = playerData.videoDetails?.shortDescription || '';
+    if (playerData) {
+      title = playerData.videoDetails?.title || '';
+      if (!transcript) {
+        transcript = playerData.videoDetails?.shortDescription || '';
+      }
     }
-  }
-
-  if (!title && !transcript) {
-    const pageText = stripHtml(pageHtml);
-    if (pageText.length < 100) throw new Error('YouTube video has no accessible transcript or description');
-    return { text: pageText.slice(0, 50000), pages: null };
-  }
+    if (!title && !transcript) {
+      const pageText = stripHtml(pageHtml);
+      if (pageText.length >= 100) return { text: pageText.slice(0, 50000), pages: null };
+    }
+  } catch { /* page fetch failed — use whatever we have */ }
 
   const text = [title && `Title: ${title}`, transcript].filter(Boolean).join('\n\n');
   if (text.trim().length < 50) throw new Error('YouTube video has no accessible transcript or description');
   return { text, pages: null };
+}
+
+function extractVideoId(url) {
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname.includes('youtu.be')) return parsed.pathname.slice(1).split('/')[0];
+    if (parsed.searchParams.has('v')) return parsed.searchParams.get('v');
+  } catch { /* fall through */ }
+  const match = url.match(/(?:v=|youtu\.be\/)([A-Za-z0-9_-]{11})/);
+  return match ? match[1] : null;
 }
 
 // ── Google Drive extraction ──────────────────────────────────────────────────
@@ -330,10 +339,12 @@ Do NOT extract:
 - Simple summaries of what the document says
 - Ideas that could equally apply to any professional in any field
 
-For EACH idea return exactly three fields:
+For EACH idea return exactly five fields:
 - "seed_text": 1–2 sentences, first person, with a clear position. Specific enough to anchor real follow-up answers. This is what the author uses as their starting point — make it feel like something they'd say, not something an analyst would write about them.
 - "hook_line": The single most arresting LinkedIn opening line this idea could become. Max 14 words. Must stop a scrolling ${audience} mid-scroll. Written in the author's voice. No filler openers like "Here's the thing:" or "Unpopular opinion:".
 - "source_ref": Copy the exact label from the [brackets] before the passage this idea came from (e.g. "chunk_0", "chunk_3").
+- "funnel_type": One of "reach" (broad stories, observations, hot takes — maximise impressions), "trust" (frameworks, methodologies, expertise demonstrations — build authority), or "convert" (offers, case studies, client results — drive inbound).
+- "hook_archetype": One of "CONFESSION", "BEFORE_AFTER", "INSIGHT", "DIRECT_ADDRESS", "NUMBER", "MYTH_BUST", "CURIOSITY_GAP", "REFRAME".
 
 Return ONLY a JSON array. No other text.`;
 }
@@ -374,13 +385,22 @@ ${chunkContent}`;
 
   if (!Array.isArray(parsed)) return [];
 
+  const VALID_FUNNELS    = ['reach', 'trust', 'convert'];
+  const VALID_ARCHETYPES = ['CONFESSION', 'BEFORE_AFTER', 'INSIGHT', 'DIRECT_ADDRESS', 'NUMBER', 'MYTH_BUST', 'CURIOSITY_GAP', 'REFRAME'];
+
   return parsed
     .filter(item => typeof item.seed_text === 'string' && item.seed_text.trim())
-    .map(item => ({
-      seed_text:  item.seed_text.trim(),
-      hook_line:  typeof item.hook_line === 'string' ? item.hook_line.trim() : null,
-      source_ref: typeof item.source_ref === 'string' ? item.source_ref.trim() : '',
-    }));
+    .map(item => {
+      const ft = typeof item.funnel_type === 'string' ? item.funnel_type.trim().toLowerCase() : '';
+      const ha = typeof item.hook_archetype === 'string' ? item.hook_archetype.trim().toUpperCase() : '';
+      return {
+        seed_text:      item.seed_text.trim(),
+        hook_line:      typeof item.hook_line === 'string' ? item.hook_line.trim() : null,
+        source_ref:     typeof item.source_ref === 'string' ? item.source_ref.trim() : '',
+        funnel_type:    VALID_FUNNELS.includes(ft) ? ft : 'reach',
+        hook_archetype: VALID_ARCHETYPES.includes(ha) ? ha : 'INSIGHT',
+      };
+    });
 }
 
 // ── Public API ───────────────────────────────────────────────────────────────
@@ -465,9 +485,11 @@ async function mineChunks(chunks, documentFilename, userProfile = {}) {
         : (batchInput[0]?.displayRef || seed.source_ref);
       allSeeds.push({
         chunkId,
-        seed_text:  seed.seed_text,
-        hook_line:  seed.hook_line || null,
-        source_ref: displayRef,
+        seed_text:      seed.seed_text,
+        hook_line:      seed.hook_line || null,
+        source_ref:     displayRef,
+        funnel_type:    seed.funnel_type    || 'reach',
+        hook_archetype: seed.hook_archetype || 'INSIGHT',
       });
     }
   }

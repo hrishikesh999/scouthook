@@ -16,7 +16,6 @@ const router      = express.Router();
 const { db }      = require('../db');
 const storage     = require('../services/storage');
 const { extractAndChunk, extractAndChunkUrl, mineChunks, chunkText, extractYoutube, extractGoogleDrive } = require('../services/vaultMiner');
-const { classifyContent } = require('../services/funnelClassifier');
 const { canUploadVaultDoc } = require('../services/subscription');
 
 const HAIKU_MODEL  = 'claude-haiku-4-5-20251001';
@@ -171,7 +170,9 @@ async function processFile(docId, buffer, sourceType, filename, userId, tenantId
     await mineDocumentById(docId, userId, tenantId);
   } catch (err) {
     console.error(`[vault] auto-mining failed doc=${docId}:`, err.message);
-    // Doc stays in 'mining' state — recoverable via POST /api/vault/mine
+    await db.prepare(`
+      UPDATE vault_documents SET status = 'error', error_message = ?, updated_at = now() WHERE id = ?
+    `).run(('Mining failed: ' + err.message).slice(0, 500), docId);
   }
 }
 
@@ -201,6 +202,9 @@ async function processUrl(docId, url, srcType, filename, userId, tenantId) {
     await mineDocumentById(docId, userId, tenantId);
   } catch (err) {
     console.error(`[vault] auto-mining failed doc=${docId}:`, err.message);
+    await db.prepare(`
+      UPDATE vault_documents SET status = 'error', error_message = ?, updated_at = now() WHERE id = ?
+    `).run(('Mining failed: ' + err.message).slice(0, 500), docId);
   }
 }
 
@@ -258,20 +262,16 @@ async function mineDocumentById(docId, userId, tenantId) {
 
   const seeds = await mineChunks(unmined, filename, userProfile);
 
-  // Classify all seeds in parallel — one Haiku call per seed but all concurrent
-  const docFilename     = filename.length > 60 ? filename.slice(0, 57) + '…' : filename;
-  const classifications = await Promise.all(seeds.map(s => classifyContent(s.seed_text)));
+  const docFilename = filename.length > 60 ? filename.slice(0, 57) + '…' : filename;
 
   const insertIdea = db.prepare(`
     INSERT INTO vault_ideas
       (user_id, tenant_id, document_id, chunk_id, seed_text, source_ref, funnel_type, hook_archetype, hook_preview)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
-  for (let i = 0; i < seeds.length; i++) {
-    const seed = seeds[i];
-    const { funnelType, hookArchetype } = classifications[i];
+  for (const seed of seeds) {
     const sourceRef = `From: "${docFilename}" · ${seed.source_ref}`;
-    insertIdea.run(userId, tenantId, docId, seed.chunkId, seed.seed_text, sourceRef, funnelType, hookArchetype, seed.hook_line || null);
+    insertIdea.run(userId, tenantId, docId, seed.chunkId, seed.seed_text, sourceRef, seed.funnel_type, seed.hook_archetype, seed.hook_line || null);
   }
 
   // Bulk-mark chunks as mined
@@ -374,20 +374,16 @@ router.post('/mine', async (req, res) => {
     try {
       const seeds = await mineChunks(chunks, filename, userProfile);
 
-      // Classify all seeds in parallel
-      const docFilename     = filename.length > 60 ? filename.slice(0, 57) + '…' : filename;
-      const classifications = await Promise.all(seeds.map(s => classifyContent(s.seed_text)));
+      const docFilename = filename.length > 60 ? filename.slice(0, 57) + '…' : filename;
 
       const insertIdea = db.prepare(`
         INSERT INTO vault_ideas
           (user_id, tenant_id, document_id, chunk_id, seed_text, source_ref, funnel_type, hook_archetype, hook_preview)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
-      for (let i = 0; i < seeds.length; i++) {
-        const seed = seeds[i];
-        const { funnelType, hookArchetype } = classifications[i];
+      for (const seed of seeds) {
         const sourceRef = `From: "${docFilename}" · ${seed.source_ref}`;
-        insertIdea.run(userId, tenantId, docId, seed.chunkId, seed.seed_text, sourceRef, funnelType, hookArchetype, seed.hook_line || null);
+        insertIdea.run(userId, tenantId, docId, seed.chunkId, seed.seed_text, sourceRef, seed.funnel_type, seed.hook_archetype, seed.hook_line || null);
         totalSeeds++;
       }
 

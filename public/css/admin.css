@@ -538,25 +538,41 @@ label, .field label { color: #111111; }
   color: var(--color-text, #111111);
 }
 
-/* Layer mapping rows in step 2 */
-.layer-map-row {
-  display: grid; grid-template-columns: 1fr auto 1fr 1fr auto;
-  gap: var(--space-xs, 6px); align-items: center;
+/* Layer mapping cards in step 2 */
+.layer-map-card {
+  border: 1px solid var(--color-border, #E5E7EB);
+  border-radius: var(--radius-sm, 6px);
+  padding: var(--space-sm, 8px) var(--space-md, 12px);
   margin-bottom: var(--space-xs, 6px);
+  background: var(--color-bg-card, #ffffff);
 }
-.layer-map-header {
-  display: grid; grid-template-columns: 1fr auto 1fr 1fr auto;
-  gap: var(--space-xs, 6px); margin-bottom: 4px;
+.layer-map-card__header {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--space-sm, 8px);
 }
-.layer-map-header .cell-label {
-  font-size: 0.72rem; font-weight: 600;
+.layer-map-card__controls {
+  display: flex; gap: var(--space-md, 12px);
+  margin-top: var(--space-sm, 8px);
+  padding-top: var(--space-sm, 8px);
+  border-top: 1px solid var(--color-border, #E5E7EB);
+}
+.layer-map-card__controls .field--inline {
+  flex: 1; margin: 0;
+}
+.field--inline .field-label--sm {
+  display: block; font-size: 0.72rem; font-weight: 600;
   text-transform: uppercase; letter-spacing: 0.04em;
-  color: var(--color-text-muted, #6B7280);
+  color: var(--color-text-muted, #6B7280); margin-bottom: 2px;
 }
-.layer-map-arrow { color: var(--color-text-muted, #6B7280); font-size: 0.85rem; text-align: center; }
-.layer-map-row .layer-name-cell {
+.layer-map-card--manual .layer-map-card__header {
+  gap: var(--space-sm, 8px);
+}
+.layer-map-card--manual .lm-layer-name {
+  flex: 1;
+}
+.layer-name-cell {
   font-size: 0.85rem; font-family: var(--font-mono, monospace);
-  padding: 6px 8px; background: var(--color-surface-2, #F3F4F6);
+  padding: 4px 8px; background: var(--color-surface-2, #F3F4F6);
   border-radius: var(--radius-sm, 6px); white-space: nowrap;
   overflow: hidden; text-overflow: ellipsis;
 }
@@ -565,6 +581,9 @@ label, .field label { color: #111111; }
   text-transform: uppercase; letter-spacing: 0.04em;
   padding: 1px 6px; border-radius: 3px; margin-left: 6px;
   background: var(--color-surface-2, #F3F4F6); color: var(--color-text-muted, #6B7280);
+}
+.btn--xs {
+  padding: 3px 10px; font-size: 0.75rem; line-height: 1.4;
 }
 .remove-btn {
   padding: 4px 9px;

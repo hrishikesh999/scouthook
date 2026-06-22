@@ -115,9 +115,9 @@
             <!-- All fetched layers with mapping controls -->
             <fieldset class="wizard-fieldset">
               <legend class="wizard-fieldset__legend">Brand mappings</legend>
-              <div class="text-muted field-hint field-hint--mb">For each Placid layer, map it to a brand setting saved in your Brand page. Only mapped layers are auto-filled at render time.</div>
+              <div class="text-muted field-hint field-hint--mb">Click "Map to brand" on any layer to link it to a brand setting from your Brand page. Mapped layers are auto-filled at render time.</div>
               <div id="placid-layer-map-list"></div>
-              <button type="button" id="placid-add-brand-layer-btn" class="btn btn--secondary btn--sm btn--top-gap">+ Add manual mapping</button>
+              <button type="button" id="placid-add-brand-layer-btn" class="btn btn--secondary btn--sm btn--top-gap">+ Add layer manually</button>
             </fieldset>
 
             <!-- Custom fields -->
@@ -290,60 +290,154 @@
       fillSelect(document.getElementById('placid-form-background'), imageLayers, bgName, true);
     }
 
+    // ── Get layer names reserved for core fields ─────────────────────────
+    function getCoreLayerNames() {
+      return new Set([
+        document.getElementById('placid-form-headline')?.value,
+        document.getElementById('placid-form-subtext')?.value,
+        document.getElementById('placid-form-background')?.value,
+      ].filter(Boolean));
+    }
+
     // ── Render per-layer mapping rows (step 2) ────────────────────────────
     function renderLayerMapRows() {
       const list = document.getElementById('placid-layer-map-list');
-      if (!placidBrandLayers.length) {
-        list.innerHTML = '<p class="empty-section-text">No brand mappings. Click "+ Add manual mapping" below.</p>';
+      const coreNames = getCoreLayerNames();
+      const srcOpts  = Object.entries(BRAND_SOURCE_LABELS).map(([v,l]) => `<option value="${v}">${esc(l)}</option>`).join('');
+      const propOpts = Object.entries(PLACID_PROPERTY_LABELS).map(([v,l]) => `<option value="${v}">${esc(l)}</option>`).join('');
+
+      // Build a unified list: all fetched layers (minus core) + any manual entries
+      const mappedNames = new Set(placidBrandLayers.map(m => m.layer_name));
+      const fetchedNonCore = placidTemplateLayers.filter(l => !coreNames.has(l.name));
+      const manualOnly = placidBrandLayers.filter(m => !placidTemplateLayers.find(l => l.name === m.layer_name));
+
+      if (!fetchedNonCore.length && !manualOnly.length) {
+        list.innerHTML = '<p class="empty-section-text">No additional layers found. Click "+ Add layer manually" if needed.</p>';
         return;
       }
-      const srcOpts  = '<option value="">(skip)</option>' + Object.entries(BRAND_SOURCE_LABELS).map(([v,l]) => `<option value="${v}">${esc(l)}</option>`).join('');
-      const propOpts = Object.entries(PLACID_PROPERTY_LABELS).map(([v,l]) => `<option value="${v}">${esc(l)}</option>`).join('');
-      const layerOpts = placidTemplateLayers.length
-        ? '<option value="">(type manually)</option>' + placidTemplateLayers.map(l => `<option value="${esc(l.name)}">${esc(l.name)} (${esc(l.type)})</option>`).join('')
-        : '';
 
-      list.innerHTML = `
-        <div class="layer-map-header">
-          <span class="cell-label">Placid layer</span>
-          <span></span>
-          <span class="cell-label">Brand setting</span>
-          <span class="cell-label">Applied as</span>
-          <span></span>
-        </div>` +
-        placidBrandLayers.map((m, i) => {
-          const layer = placidTemplateLayers.find(l => l.name === m.layer_name);
-          const typeBadge = layer ? `<span class="layer-type-badge">${esc(layer.type)}</span>` : '';
-          const isFromFetch = !!layer;
-          return `
-        <div class="layer-map-row" data-idx="${i}">
-          ${isFromFetch
-            ? `<div class="layer-name-cell" data-layer="${esc(m.layer_name)}">${esc(m.layer_name)}${typeBadge}</div>`
-            : `<input type="text" class="lm-layer-name cell-input" value="${esc(m.layer_name)}" placeholder="Layer name" maxlength="80">`}
-          <div class="layer-map-arrow">→</div>
-          <select class="lm-brand-source cell-select">${srcOpts}</select>
-          <select class="lm-property cell-select">${propOpts}</select>
-          <button type="button" class="remove-btn lm-remove-btn" data-idx="${i}">✕</button>
+      let html = '';
+
+      // Fetched layers
+      for (const layer of fetchedNonCore) {
+        const mapping = placidBrandLayers.find(m => m.layer_name === layer.name);
+        const isMapped = !!mapping;
+        html += `
+        <div class="layer-map-card" data-layer="${esc(layer.name)}">
+          <div class="layer-map-card__header">
+            <div class="layer-name-cell">${esc(layer.name)}<span class="layer-type-badge">${esc(layer.type)}</span></div>
+            ${isMapped
+              ? `<button type="button" class="btn btn--secondary btn--xs lm-unmap-btn" data-layer="${esc(layer.name)}">Unmap</button>`
+              : `<button type="button" class="btn btn--primary btn--xs lm-map-btn" data-layer="${esc(layer.name)}">Map to brand</button>`}
+          </div>
+          ${isMapped ? `
+          <div class="layer-map-card__controls">
+            <div class="field field--inline">
+              <label class="field-label--sm">Brand setting</label>
+              <select class="lm-brand-source cell-select" data-layer="${esc(layer.name)}">${srcOpts}</select>
+            </div>
+            <div class="field field--inline">
+              <label class="field-label--sm">Applied as</label>
+              <select class="lm-property cell-select" data-layer="${esc(layer.name)}">${propOpts}</select>
+            </div>
+          </div>` : ''}
         </div>`;
-        }).join('');
+      }
 
-      list.querySelectorAll('.layer-map-row').forEach((row, i) => {
-        row.querySelector('.lm-brand-source').value = placidBrandLayers[i].brand_source || '';
-        row.querySelector('.lm-property').value     = placidBrandLayers[i].property     || inferProperty(placidBrandLayers[i].brand_source);
+      // Manual entries (not from Placid fetch)
+      for (const m of manualOnly) {
+        html += `
+        <div class="layer-map-card layer-map-card--manual" data-manual-layer="${esc(m.layer_name)}">
+          <div class="layer-map-card__header">
+            <input type="text" class="lm-layer-name cell-input" value="${esc(m.layer_name)}" placeholder="Layer name" maxlength="80">
+            <button type="button" class="btn btn--secondary btn--xs lm-remove-manual-btn" data-layer="${esc(m.layer_name)}">Remove</button>
+          </div>
+          <div class="layer-map-card__controls">
+            <div class="field field--inline">
+              <label class="field-label--sm">Brand setting</label>
+              <select class="lm-brand-source cell-select" data-layer="${esc(m.layer_name)}">${srcOpts}</select>
+            </div>
+            <div class="field field--inline">
+              <label class="field-label--sm">Applied as</label>
+              <select class="lm-property cell-select" data-layer="${esc(m.layer_name)}">${propOpts}</select>
+            </div>
+          </div>
+        </div>`;
+      }
+
+      list.innerHTML = html;
+
+      // Set dropdown values for mapped layers
+      list.querySelectorAll('.lm-brand-source[data-layer]').forEach(sel => {
+        const m = placidBrandLayers.find(b => b.layer_name === sel.dataset.layer);
+        if (m) sel.value = m.brand_source || 'brand_bg';
+      });
+      list.querySelectorAll('.lm-property[data-layer]').forEach(sel => {
+        const m = placidBrandLayers.find(b => b.layer_name === sel.dataset.layer);
+        if (m) sel.value = m.property || inferProperty(m.brand_source);
       });
 
-      list.querySelectorAll('.lm-remove-btn').forEach(b =>
-        b.addEventListener('click', () => { placidBrandLayers.splice(+b.dataset.idx, 1); renderLayerMapRows(); }));
-      list.querySelectorAll('.lm-layer-name').forEach((el, i) =>
-        el.addEventListener('input', () => { placidBrandLayers[i].layer_name = el.value; }));
-      list.querySelectorAll('.lm-brand-source').forEach((el, i) =>
-        el.addEventListener('change', () => {
-          placidBrandLayers[i].brand_source = el.value;
-          const propSel = el.closest('.layer-map-row').querySelector('.lm-property');
-          if (el.value) { propSel.value = inferProperty(el.value); placidBrandLayers[i].property = propSel.value; }
+      // "Map to brand" button — adds mapping and re-renders
+      list.querySelectorAll('.lm-map-btn').forEach(btn =>
+        btn.addEventListener('click', () => {
+          const layerName = btn.dataset.layer;
+          const layer = placidTemplateLayers.find(l => l.name === layerName);
+          const guessedSrc = guessDefaultBrandSource(layerName, layer?.type);
+          placidBrandLayers.push({ layer_name: layerName, brand_source: guessedSrc, property: inferProperty(guessedSrc) });
+          renderLayerMapRows();
         }));
-      list.querySelectorAll('.lm-property').forEach((el, i) =>
-        el.addEventListener('change', () => { placidBrandLayers[i].property = el.value; }));
+
+      // "Unmap" button — removes mapping and re-renders
+      list.querySelectorAll('.lm-unmap-btn').forEach(btn =>
+        btn.addEventListener('click', () => {
+          const layerName = btn.dataset.layer;
+          placidBrandLayers = placidBrandLayers.filter(m => m.layer_name !== layerName);
+          renderLayerMapRows();
+        }));
+
+      // Remove manual entry
+      list.querySelectorAll('.lm-remove-manual-btn').forEach(btn =>
+        btn.addEventListener('click', () => {
+          const layerName = btn.dataset.layer;
+          placidBrandLayers = placidBrandLayers.filter(m => m.layer_name !== layerName);
+          renderLayerMapRows();
+        }));
+
+      // Dropdown changes update the data
+      list.querySelectorAll('.lm-brand-source').forEach(sel =>
+        sel.addEventListener('change', () => {
+          const m = placidBrandLayers.find(b => b.layer_name === sel.dataset.layer);
+          if (m) {
+            m.brand_source = sel.value;
+            const propSel = sel.closest('.layer-map-card').querySelector('.lm-property');
+            propSel.value = inferProperty(sel.value);
+            m.property = propSel.value;
+          }
+        }));
+      list.querySelectorAll('.lm-property').forEach(sel =>
+        sel.addEventListener('change', () => {
+          const m = placidBrandLayers.find(b => b.layer_name === sel.dataset.layer);
+          if (m) m.property = sel.value;
+        }));
+
+      // Manual layer name changes
+      list.querySelectorAll('.lm-layer-name').forEach(el =>
+        el.addEventListener('input', () => {
+          const card = el.closest('.layer-map-card--manual');
+          const oldName = card.dataset.manualLayer;
+          const m = placidBrandLayers.find(b => b.layer_name === oldName);
+          if (m) { m.layer_name = el.value.trim(); card.dataset.manualLayer = el.value.trim(); }
+        }));
+    }
+
+    function guessDefaultBrandSource(layerName, layerType) {
+      const n = layerName.toLowerCase();
+      for (const h of BRAND_HEURISTICS) {
+        if (h.names.some(kw => n.includes(kw)) || (h.types.length && layerType && h.types.includes(layerType))) {
+          return h.src;
+        }
+      }
+      return 'brand_bg';
     }
 
     function renderCustomFieldRows() {
@@ -566,7 +660,7 @@
       const src = 'brand_bg';
       placidBrandLayers.push({ brand_source: src, layer_name: '', property: inferProperty(src) });
       renderLayerMapRows();
-      const inputs = document.querySelectorAll('#placid-layer-map-list .lm-layer-name');
+      const inputs = document.querySelectorAll('#placid-layer-map-list .layer-map-card--manual .lm-layer-name');
       if (inputs.length) inputs[inputs.length - 1].focus();
     });
 
@@ -588,16 +682,9 @@
         return { layer_name, label, type, ...(type==='text'&&max_chars?{max_chars}:{}) };
       }).filter(f => f.layer_name);
 
-      const brand_layers = Array.from(document.querySelectorAll('#placid-layer-map-list .layer-map-row')).map(row => {
-        const nameCell = row.querySelector('.layer-name-cell');
-        const nameInput = row.querySelector('.lm-layer-name');
-        const layer_name = nameCell ? (nameCell.dataset.layer || '') : (nameInput?.value.trim() || '');
-        return {
-          layer_name,
-          property:     row.querySelector('.lm-property').value,
-          brand_source: row.querySelector('.lm-brand-source').value,
-        };
-      }).filter(f => f.layer_name && f.brand_source);
+      const brand_layers = placidBrandLayers
+        .filter(m => m.layer_name && m.brand_source)
+        .map(m => ({ layer_name: m.layer_name, property: m.property, brand_source: m.brand_source }));
 
       const payload = {
         name:             document.getElementById('placid-form-name').value.trim(),

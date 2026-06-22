@@ -11,9 +11,12 @@
       .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
-  var currentWorkspaceId = null;
-  var currentUserRole    = null;
-  var currentUserId      = null;
+  var currentWorkspaceId     = null;
+  var currentUserRole        = null;
+  var currentUserId          = null;
+  var currentUserEmail       = null;
+  var currentUserDisplayName = null;
+  var invitePlanGated        = false;
 
   async function loadMembers() {
     if (!currentWorkspaceId) return;
@@ -33,8 +36,29 @@
       return;
     }
 
-    const members = data.members || [];
+    let members = data.members || [];
     const pending = data.pending_invites || [];
+
+    // Fill in missing profile fields for the current user using session data
+    members = members.map(m => {
+      if (m.user_id !== currentUserId) return m;
+      return {
+        ...m,
+        display_name: m.display_name || currentUserDisplayName,
+        email:        m.email        || currentUserEmail,
+      };
+    });
+
+    // If the owner has no workspace_members row, add a synthetic entry so they always see themselves
+    if (currentUserId && !members.find(m => m.user_id === currentUserId)) {
+      members = [{
+        user_id:      currentUserId,
+        role:         currentUserRole || 'owner',
+        email:        currentUserEmail,
+        display_name: currentUserDisplayName,
+        joined_at:    null,
+      }, ...members];
+    }
 
     if (members.length === 0) {
       list.innerHTML = `
@@ -147,8 +171,8 @@
           loadMembers();
         } else {
           if (d.error === 'feature_not_available') {
+            invitePlanGated = true;
             inviteStatus.innerHTML = 'Inviting teammates requires the <a href="/billing.html" style="color:inherit;font-weight:700;text-decoration:underline">Pro plan</a>. Upgrade to unlock team members.';
-            inviteBtn.disabled = true;
           } else {
             const msg = d.error === 'already_a_member'   ? 'This person is already a member.'
               : d.error === 'invite_already_pending'      ? 'An invitation is already pending for this email.'
@@ -163,8 +187,10 @@
         inviteStatus.className = 'field-helper vw-save-status--error';
         inviteStatus.hidden = false;
       } finally {
-        inviteBtn.disabled = false;
-        inviteBtn.textContent = 'Send invite';
+        if (!invitePlanGated) {
+          inviteBtn.disabled = false;
+          inviteBtn.textContent = 'Send invite';
+        }
       }
     };
   }
@@ -173,17 +199,22 @@
     if (!document.getElementById('members-list')) return;
 
     // Reset state for re-init on SPA re-navigation
-    currentWorkspaceId = null;
-    currentUserRole    = null;
-    currentUserId      = null;
+    currentWorkspaceId     = null;
+    currentUserRole        = null;
+    currentUserId          = null;
+    currentUserEmail       = null;
+    currentUserDisplayName = null;
+    invitePlanGated        = false;
 
     wireInviteForm();
 
     window.scouthookAuthReady.then(authData => {
       const user = authData && authData.user;
       if (user) {
-        currentWorkspaceId = user.tenant_id;
-        currentUserId      = user.user_id;
+        currentWorkspaceId     = user.tenant_id;
+        currentUserId          = user.user_id;
+        currentUserEmail       = user.email       || null;
+        currentUserDisplayName = user.displayName || null;
       }
       if (!currentWorkspaceId) {
         const list = document.getElementById('members-list');

@@ -85,23 +85,33 @@ router.get('/stats', async (req, res) => {
     monthStart.setHours(0, 0, 0, 0);
     const monthStartIso = monthStart.toISOString();
 
-    const postsThisMonth = await db.prepare(`
-      SELECT COUNT(*) AS cnt
-      FROM generated_posts
-      WHERE tenant_id = ? AND created_at >= ?
-    `).get(req.tenantId, monthStartIso);
+    const yearStart = new Date().getFullYear() + '-01-01T00:00:00.000Z';
 
-    // Count of pending scheduled posts
-    const scheduledCount = await db.prepare(`
-      SELECT COUNT(*) AS cnt
-      FROM scheduled_posts
-      WHERE tenant_id = ? AND status = 'pending'
-    `).get(req.tenantId);
+    const [postsThisMonth, postsYtd, scheduledCount, draftCount] = await Promise.all([
+      db.prepare(`
+        SELECT COUNT(*) AS cnt FROM generated_posts
+        WHERE tenant_id = ? AND created_at >= ?
+      `).get(req.tenantId, monthStartIso),
+      db.prepare(`
+        SELECT COUNT(*) AS cnt FROM generated_posts
+        WHERE tenant_id = ? AND created_at >= ?
+      `).get(req.tenantId, yearStart),
+      db.prepare(`
+        SELECT COUNT(*) AS cnt FROM scheduled_posts
+        WHERE tenant_id = ? AND status = 'pending'
+      `).get(req.tenantId),
+      db.prepare(`
+        SELECT COUNT(*) AS cnt FROM generated_posts
+        WHERE tenant_id = ? AND status = 'draft'
+      `).get(req.tenantId),
+    ]);
 
     return res.json({
       ok: true,
       posts_this_month: postsThisMonth.cnt,
-      scheduled_count: scheduledCount.cnt
+      posts_ytd: postsYtd.cnt,
+      scheduled_count: scheduledCount.cnt,
+      draft_count: draftCount.cnt,
     });
   } catch (err) {
     console.error('[stats] GET /api/stats error:', err);

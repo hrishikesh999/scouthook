@@ -32,6 +32,35 @@
     <!-- LinkedIn reconnect nudge — shown when token expires within 7 days -->
     <div id="linkedin-expiry-banner" class="linkedin-expiry-banner" hidden role="alert"></div>
 
+    <!-- Zone 1.3: Stats strip -->
+    <div id="stats-strip" class="stats-strip" hidden>
+      <a href="/drafts.html?tab=published" class="stat-chip">
+        <span class="stat-chip__value" id="stat-ytd">—</span>
+        <span class="stat-chip__label">Posts YTD</span>
+      </a>
+      <a href="/drafts.html" class="stat-chip">
+        <span class="stat-chip__value" id="stat-drafts">—</span>
+        <span class="stat-chip__label">Drafts</span>
+      </a>
+      <a href="/drafts.html?tab=scheduled" class="stat-chip">
+        <span class="stat-chip__value" id="stat-scheduled">—</span>
+        <span class="stat-chip__label">Scheduled</span>
+      </a>
+      <div class="stat-chip">
+        <span class="stat-chip__value stat-chip__value--mix" id="stat-mix">—</span>
+        <span class="stat-chip__label">Post Mix</span>
+      </div>
+    </div>
+
+    <!-- Zone 1.4: Next Scheduled Post -->
+    <div id="next-up-card" class="posts-card next-up-card" hidden role="region" aria-label="Next scheduled post">
+      <div class="card-header">
+        <span class="card-title">Next Up</span>
+        <a href="/drafts.html?tab=scheduled" class="card-view-all">All scheduled →</a>
+      </div>
+      <div id="next-up-body"></div>
+    </div>
+
     <!-- Zone 1.5a: Onboarding checklist — shown for new users, auto-hides when all done -->
     <div id="onboarding-checklist" class="onboarding-checklist" hidden role="region" aria-label="Getting started">
       <div class="checklist-header">
@@ -55,10 +84,23 @@
       <div id="ci-body" class="ci-body"></div>
     </div>
 
-    <!-- Zone 2: Recent posts -->
-    <div class="posts-card" role="region" aria-label="Recent posts">
+    <!-- Zone 2: Recent published -->
+    <div class="posts-card" role="region" aria-label="Recent published posts">
       <div class="card-header">
-        <span class="card-title">Recent posts</span>
+        <span class="card-title">Recent Published</span>
+        <a href="/drafts.html?tab=published" class="card-view-all">View all →</a>
+      </div>
+      <div id="recent-published-list" aria-live="polite">
+        <div class="card-empty-state">
+          No published posts yet — <a href="/generate.html?new=1">Generate your first post →</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Zone 2b: Recent drafts -->
+    <div class="posts-card" role="region" aria-label="Recent drafts">
+      <div class="card-header">
+        <span class="card-title">Recent Drafts</span>
         <a href="/drafts.html" class="card-view-all">View all →</a>
       </div>
       <div id="recent-posts-list" aria-live="polite">

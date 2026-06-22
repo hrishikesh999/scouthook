@@ -7,7 +7,9 @@ async function init() {
   const recentList = document.getElementById('recent-posts-list');
   if (!recentList) return; // not on dashboard
   await window.scouthookAuthReady;
+  loadDashboardStats();
   loadRecentPosts();
+  loadRecentPublished();
   loadChecklist();
   loadPerformance();
   loadLinkedInExpiryBanner();
@@ -22,21 +24,21 @@ window.__pageCleanup = function () {
 
 init();
 
-/* ── Recent posts ────────────────────────────────────────────── */
+/* ── Recent drafts ──────────────────────────────────────────── */
 async function loadRecentPosts() {
   const recentList = document.getElementById('recent-posts-list');
   try {
-    const res  = await fetch('/api/posts/recent', { headers: apiHeaders() });
-    if (!res.ok) throw new Error('No recent posts endpoint');
+    const res  = await fetch('/api/posts?status=draft', { headers: apiHeaders() });
+    if (!res.ok) throw new Error('Failed to load drafts');
     const data = await res.json();
 
-    const posts = data.posts || data;
-    if (!Array.isArray(posts) || posts.length === 0) {
+    const posts = (data.posts || []).slice(0, 5);
+    if (posts.length === 0) {
       showEmptyRecent();
       return;
     }
 
-    renderPostRows(recentList, posts.slice(0, 5), 'recent');
+    renderPostRows(recentList, posts, 'recent');
   } catch {
     showEmptyRecent();
   }
@@ -152,6 +154,86 @@ async function loadLinkedInExpiryBanner() {
       <a href="/onboarding.html?step=linkedin">Reconnect now →</a>
     `;
     banner.hidden = false;
+  } catch {
+    // Non-fatal
+  }
+}
+
+/* ── Dashboard stats strip + next-up ────────────────────────── */
+async function loadDashboardStats() {
+  try {
+    const [statsRes, schedRes, mixRes] = await Promise.all([
+      fetch('/api/stats', { headers: apiHeaders() }),
+      fetch('/api/posts/scheduled', { headers: apiHeaders() }),
+      fetch('/api/posts/mix-recommendation', { headers: apiHeaders() }),
+    ]);
+
+    const stats = statsRes.ok ? await statsRes.json() : {};
+    const sched = schedRes.ok ? await schedRes.json() : {};
+    const mix   = mixRes.ok   ? await mixRes.json()   : {};
+
+    // Stats strip
+    const strip = document.getElementById('stats-strip');
+    if (strip) {
+      const ytdEl  = document.getElementById('stat-ytd');
+      const draftEl = document.getElementById('stat-drafts');
+      const schedEl = document.getElementById('stat-scheduled');
+      const mixEl   = document.getElementById('stat-mix');
+
+      if (ytdEl)   ytdEl.textContent   = Number(stats.posts_ytd || 0).toLocaleString();
+      if (draftEl) draftEl.textContent  = Number(stats.draft_count || 0).toLocaleString();
+      if (schedEl) schedEl.textContent  = Number(stats.scheduled_count || 0).toLocaleString();
+
+      if (mixEl && mix.ok && mix.has_enough_data) {
+        mixEl.textContent = mix.recommended_type
+          ? 'Try ' + mix.recommended_type
+          : 'Balanced';
+      } else if (mixEl) {
+        mixEl.textContent = '—';
+      }
+
+      strip.hidden = false;
+    }
+
+    // Next Up card
+    const nextCard = document.getElementById('next-up-card');
+    const nextBody = document.getElementById('next-up-body');
+    if (nextCard && nextBody) {
+      const posts = (sched.ok && Array.isArray(sched.posts)) ? sched.posts : [];
+      if (posts.length > 0) {
+        const p = posts[0];
+        const firstLine = (p.content || '').split('\n')[0] || 'Scheduled post';
+        const dateStr = p.scheduled_for ? formatDate(p.scheduled_for, true) : '';
+        nextBody.innerHTML = `
+          <div class="next-up-preview" title="${escHtml(firstLine)}">${escHtml(firstLine)}</div>
+          <div class="next-up-meta">${escHtml(dateStr)}</div>`;
+      } else {
+        nextBody.innerHTML = `
+          <div class="next-up-empty">
+            Nothing scheduled — <a href="/generate.html?new=1">create a post</a> and schedule it.
+          </div>`;
+      }
+      nextCard.hidden = false;
+    }
+  } catch {
+    // Non-fatal — stats strip is progressive enhancement
+  }
+}
+
+/* ── Recent published posts ─────────────────────────────────── */
+async function loadRecentPublished() {
+  const list = document.getElementById('recent-published-list');
+  if (!list) return;
+  try {
+    const res = await fetch('/api/posts?status=published', { headers: apiHeaders() });
+    if (!res.ok) return;
+    const data = await res.json();
+    const posts = (data.posts || []).slice(0, 3);
+    if (posts.length === 0) return;
+    renderPostRows(list, posts.map(p => ({
+      ...p,
+      status: 'published',
+    })), 'recent');
   } catch {
     // Non-fatal
   }

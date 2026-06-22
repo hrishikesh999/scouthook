@@ -4124,6 +4124,95 @@ body.has-trial-banner #main-content {
   text-decoration: underline;
 }
 
+/* ── Stats Strip ───────────────────────────────────────────── */
+.stats-strip {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-4);
+  margin-top: var(--space-6);
+}
+
+.stat-chip {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5) var(--space-5);
+  text-align: center;
+  text-decoration: none;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+a.stat-chip:hover {
+  box-shadow: var(--shadow-md);
+  border-color: #D4D4D8;
+}
+
+.stat-chip__value {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--text-heading);
+  font-family: var(--font-sans);
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.stat-chip__value--mix {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.stat-chip__label {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* ── Next Up Card ──────────────────────────────────────────── */
+.next-up-card .next-up-preview {
+  font-size: 14px;
+  color: var(--text-heading);
+  line-height: 1.5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.next-up-card .next-up-meta {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-top: var(--space-2);
+}
+
+.next-up-card .next-up-empty {
+  font-size: 14px;
+  color: var(--text-muted);
+  text-align: center;
+  padding: var(--space-4) 0;
+}
+
+.next-up-card .next-up-empty a {
+  color: var(--brand);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.next-up-card .next-up-empty a:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 640px) {
+  .stats-strip {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
 /* ── Coming Soon (stub pages) ───────────────────────────────── */
 .coming-soon-page {
   max-width: 640px;

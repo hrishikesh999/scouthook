@@ -56,10 +56,6 @@
         <button class="btn btn--secondary" data-preset="month">This Month</button>
         <button class="btn btn--secondary" data-preset="ytd">YTD</button>
         <button class="btn btn--secondary" data-preset="custom">Custom</button>
-        <div class="filter-bar__sep"></div>
-        <button class="btn btn--secondary btn--active" data-gran="day">Day</button>
-        <button class="btn btn--secondary" data-gran="week">Week</button>
-        <button class="btn btn--secondary" data-gran="month">Month</button>
       </div>
       <div id="custom-range" class="custom-range hidden">
         <input type="date" id="range-start" />
@@ -154,7 +150,7 @@
     function showMain() {
       document.getElementById('auth-screen').classList.add('hidden');
       document.getElementById('main').classList.remove('hidden');
-      setPreset('today');
+      setPreset('month');
     }
 
     // ── Preset date ranges ────────────────────────────────────────────────────
@@ -202,15 +198,6 @@
       currentStart = document.getElementById('range-start').value;
       currentEnd   = document.getElementById('range-end').value;
       if (currentStart && currentEnd) loadMetrics();
-    });
-
-    document.querySelectorAll('[data-gran]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        document.querySelectorAll('[data-gran]').forEach(b => b.classList.remove('btn--active'));
-        btn.classList.add('btn--active');
-        currentGran = btn.dataset.gran;
-        loadMetrics();
-      });
     });
 
     // ── Load metrics ──────────────────────────────────────────────────────────
@@ -352,12 +339,17 @@
 
     function renderLineChart(id, series, color) {
       destroyChart(id);
-      const ctx = document.getElementById(id);
-      if (!ctx) return;
+      // Canvas may have been replaced by a previous empty-state — restore it
+      let ctx = document.getElementById(id);
+      if (!ctx) {
+        const wrapper = document.querySelector('.chart-card__canvas--lg');
+        if (!wrapper) return;
+        wrapper.innerHTML = `<canvas id="${id}"></canvas>`;
+        ctx = document.getElementById(id);
+        if (!ctx) return;
+      }
       if (!series || series.length === 0) {
-        const card = ctx.closest('.chart-card');
-        const existing = card.querySelector('.chart-card__canvas--lg');
-        if (existing) existing.innerHTML = '<div class="empty-state">No data for this period</div>';
+        ctx.closest('.chart-card__canvas--lg').innerHTML = '<div class="empty-state">No data for this period</div>';
         return;
       }
       charts[id] = new Chart(ctx, {

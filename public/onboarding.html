@@ -13,15 +13,20 @@
 
   <header class="ob-header">
     <img src="/images/sh-logo-dark.png" alt="Scouthook" class="ob-logo-img">
-    <div id="ob-step-dots" class="ob-step-dots" hidden aria-hidden="true">
-      <span class="ob-dot" data-step="1"></span>
-      <span class="ob-dot" data-step="2"></span>
-      <span class="ob-dot" data-step="3"></span>
-      <span class="ob-dot" data-step="4"></span>
-      <span class="ob-dot" data-step="5"></span>
-      <span class="ob-dot" data-step="6"></span>
-      <span class="ob-dot" data-step="7"></span>
-    </div>
+    <nav id="ob-progress-track" class="ob-progress-track" hidden aria-label="Setup progress">
+      <div class="ob-progress-rail">
+        <div id="ob-progress-fill" class="ob-progress-fill"></div>
+      </div>
+      <ol class="ob-progress-steps-row">
+        <li class="ob-progress-step-label" data-step="1">LinkedIn</li>
+        <li class="ob-progress-step-label" data-step="2">Website</li>
+        <li class="ob-progress-step-label" data-step="3">Story</li>
+        <li class="ob-progress-step-label" data-step="4">Results</li>
+        <li class="ob-progress-step-label" data-step="5">Voice</li>
+        <li class="ob-progress-step-label" data-step="6">Audience</li>
+        <li class="ob-progress-step-label" data-step="7">Sample</li>
+      </ol>
+    </nav>
   </header>
 
   <!-- ── Step 1: Connect LinkedIn ───────────────────────── -->
@@ -77,8 +82,8 @@
       <p id="ob-website-error" class="ob-field-error" hidden>Please enter a valid website address.</p>
 
       <div id="ob-website-extracting" class="ob-extracting-state" hidden>
-        <span class="ob-spinner"></span>
-        <span>Reading your website…</span>
+        <div class="ob-thinking-dots" aria-hidden="true"><span></span><span></span><span></span></div>
+        <span>Reading your website<span class="ob-dots-anim">...</span></span>
       </div>
 
       <div class="ob-interview-actions" style="margin-top:16px; flex-direction:column; align-items:flex-start; gap:8px">
@@ -193,8 +198,8 @@
       </div>
 
       <div id="ob-bv-generating" class="ob-generating-state" hidden>
-        <span class="ob-spinner"></span>
-        <span>Building your brand voice profile…</span>
+        <div class="ob-thinking-dots" aria-hidden="true"><span></span><span></span><span></span></div>
+        <span>On it<span class="ob-dots-anim">...</span></span>
       </div>
 
       <div class="ob-interview-actions" style="margin-top:24px">
@@ -218,8 +223,8 @@
       </p>
 
       <div id="ob-aud-generating" class="ob-generating-state" hidden>
-        <span class="ob-spinner"></span>
-        <span>Building your audience profile…</span>
+        <div class="ob-thinking-dots" aria-hidden="true"><span></span><span></span><span></span></div>
+        <span>On it<span class="ob-dots-anim">...</span></span>
       </div>
 
       <div class="ob-interview-actions" style="margin-top:16px">
@@ -260,8 +265,11 @@
       <p class="ob-celebration-tip">
         💡 After your first post, head to <strong>Settings → Brand Voice</strong> to complete your profile for sharper results.
       </p>
-      <button id="ob-write-first-post" class="ob-btn-primary ob-btn-primary--large" type="button" style="margin-top:28px">
-        Write your first post →
+      <button id="ob-write-first-post" class="ob-btn-primary ob-btn-primary--large ob-cel-cta" type="button" style="margin-top:28px">
+        Write your first post
+        <svg class="ob-cel-cta-arrow" viewBox="0 0 20 20" fill="none" width="16" height="16" aria-hidden="true">
+          <path d="M4 10h12M11 5l5 5-5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
       </button>
     </div>
   </section>

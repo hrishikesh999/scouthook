@@ -20,24 +20,65 @@ const state = {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function showScreen(id) {
-  document.querySelectorAll('.ob-screen').forEach(s => s.classList.remove('active'));
-  const el = document.getElementById('ob-' + id);
-  if (el) el.classList.add('active');
+const TRANSITION_MS = 300;
 
-  const dots = document.getElementById('ob-step-dots');
-  const idx = STEPS.indexOf(id);
-  if (idx < 0 || id === 's9') {
-    dots.hidden = true;
-  } else {
-    dots.hidden = false;
-    dots.querySelectorAll('.ob-dot').forEach((d, i) => {
-      d.classList.toggle('ob-dot--active', i === idx);
-      d.classList.toggle('ob-dot--done', i < idx);
-    });
+function transitionScreen(id, direction) {
+  const all      = document.querySelectorAll('.ob-screen');
+  const entering = document.getElementById('ob-' + id);
+  if (!entering) return;
+
+  const exiting = document.querySelector('.ob-screen.active');
+
+  const exitClass  = direction === 'forward' ? 'ob-exiting-forward'  : 'ob-exiting-back';
+  const enterClass = direction === 'forward' ? 'ob-entering-forward' : 'ob-entering-back';
+
+  // Strip any leftover animation classes
+  all.forEach(s => s.classList.remove(
+    'ob-entering-forward','ob-entering-back',
+    'ob-exiting-forward','ob-exiting-back'
+  ));
+
+  if (exiting && exiting !== entering) {
+    exiting.classList.remove('active');
+    exiting.classList.add(exitClass);
+    setTimeout(() => exiting.classList.remove(exitClass), TRANSITION_MS);
   }
 
+  entering.classList.add('active', enterClass);
+  setTimeout(() => entering.classList.remove(enterClass), TRANSITION_MS);
+
+  updateProgress(id);
   window.scrollTo({ top: 0, behavior: 'instant' });
+}
+
+function showScreen(id) {
+  transitionScreen(id, 'forward');
+}
+
+function showScreenBack(id) {
+  transitionScreen(id, 'back');
+}
+
+function updateProgress(id) {
+  const track = document.getElementById('ob-progress-track');
+  const fill  = document.getElementById('ob-progress-fill');
+  const labels = document.querySelectorAll('.ob-progress-step-label');
+  if (!track) return;
+
+  const idx = STEPS.indexOf(id);
+  if (idx < 0 || id === 's9') {
+    track.hidden = true;
+    return;
+  }
+
+  track.hidden = false;
+  const pct = Math.round(((idx + 0.5) / (STEPS.length - 1)) * 100);
+  if (fill) fill.style.width = pct + '%';
+
+  labels.forEach((label, i) => {
+    label.classList.toggle('active', i === idx);
+    label.classList.toggle('done',   i < idx);
+  });
 }
 
 async function apiPost(path, body) {
@@ -112,7 +153,7 @@ function checkLinkedInReturn() {
 // ── Step 2: Website URL ───────────────────────────────────────────────────────
 
 function initS3() {
-  document.getElementById('ob-s3-back').addEventListener('click', () => showScreen('s2'));
+  document.getElementById('ob-s3-back').addEventListener('click', () => showScreenBack('s2'));
   document.getElementById('ob-website-next').addEventListener('click', () => submitWebsite());
   document.getElementById('ob-website-skip').addEventListener('click', () => showScreen('s4'));
   document.getElementById('ob-website-url').addEventListener('keydown', e => {
@@ -164,7 +205,7 @@ async function submitWebsite() {
 // ── Step 3: What do you do? + Industry ───────────────────────────────────────
 
 function initS4() {
-  document.getElementById('ob-s4-back').addEventListener('click', () => showScreen('s3'));
+  document.getElementById('ob-s4-back').addEventListener('click', () => showScreenBack('s3'));
 
   document.getElementById('ob-s4-next').addEventListener('click', () => {
     state.brandDescription = document.getElementById('ob-brand-description').value.trim();
@@ -177,7 +218,7 @@ function initS4() {
 // ── Step 4: Results & method ──────────────────────────────────────────────────
 
 function initSe() {
-  document.getElementById('ob-se-back').addEventListener('click', () => showScreen('s4'));
+  document.getElementById('ob-se-back').addEventListener('click', () => showScreenBack('s4'));
 
   document.getElementById('ob-se-next').addEventListener('click', () => {
     state.elevatorResult    = document.getElementById('ob-elevator-result').value.trim();
@@ -204,7 +245,7 @@ function initSeScreen() {
 // ── Step 5: Brand personality ─────────────────────────────────────────────────
 
 function initS6() {
-  document.getElementById('ob-s6-back').addEventListener('click', () => showScreen('se'));
+  document.getElementById('ob-s6-back').addEventListener('click', () => showScreenBack('se'));
 
   const countEl = document.getElementById('ob-trait-count');
   document.querySelectorAll('.ob-trait-chip').forEach(chip => {
@@ -216,12 +257,21 @@ function initS6() {
       chip.setAttribute('aria-pressed', String(next));
       chip.classList.toggle('ob-trait-chip--selected', next);
 
+      // Spring animation
+      chip.classList.add('ob-chip-selecting');
+      setTimeout(() => chip.classList.remove('ob-chip-selecting'), 280);
+
       if (next) {
         state.brandPersonalityTraits.push(chip.dataset.trait);
       } else {
         state.brandPersonalityTraits = state.brandPersonalityTraits.filter(t => t !== chip.dataset.trait);
       }
       countEl.textContent = state.brandPersonalityTraits.length + ' / 5 selected';
+
+      // Auto-advance when 5 are selected
+      if (state.brandPersonalityTraits.length === 5) {
+        setTimeout(() => runBrandVoiceExtraction(), 500);
+      }
     });
   });
 
@@ -271,7 +321,7 @@ async function runBrandVoiceExtraction() {
 // ── Step 6: Target audience ───────────────────────────────────────────────────
 
 function initS7() {
-  document.getElementById('ob-s7-back').addEventListener('click', () => showScreen('s6'));
+  document.getElementById('ob-s7-back').addEventListener('click', () => showScreenBack('s6'));
 
   document.getElementById('ob-s7-next').addEventListener('click', async () => {
     state.audienceDescription = document.getElementById('ob-audience-description').value.trim();
@@ -321,7 +371,7 @@ async function runAudienceExtraction() {
 // ── Step 7: Writing sample ────────────────────────────────────────────────────
 
 function initSw() {
-  document.getElementById('ob-sw-back').addEventListener('click', () => showScreen('s7'));
+  document.getElementById('ob-sw-back').addEventListener('click', () => showScreenBack('s7'));
 
   const ta        = document.getElementById('ob-writing-sample');
   const charCount = document.getElementById('ob-writing-char-count');
@@ -379,6 +429,48 @@ function initS9() {
   });
 }
 
+// ── Keyboard navigation ───────────────────────────────────────────────────────
+
+function initKeyboard() {
+  const nextMap = {
+    s2: 'ob-s2-next',
+    s3: 'ob-website-next',
+    s4: 'ob-s4-next',
+    se: 'ob-se-next',
+    s6: 'ob-s6-next',
+    s7: 'ob-s7-next',
+    sw: 'ob-sw-next',
+    s9: 'ob-write-first-post',
+  };
+  const backMap = {
+    s3: 'ob-s3-back',
+    s4: 'ob-s4-back',
+    se: 'ob-se-back',
+    s6: 'ob-s6-back',
+    s7: 'ob-s7-back',
+    sw: 'ob-sw-back',
+  };
+
+  document.addEventListener('keydown', e => {
+    const tag = document.activeElement?.tagName;
+    if (tag === 'TEXTAREA' && e.key !== 'Escape') return;
+    if (tag === 'SELECT') return;
+
+    const active = document.querySelector('.ob-screen.active');
+    if (!active) return;
+    const sid = active.id.replace('ob-', '');
+
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      document.getElementById(nextMap[sid])?.click();
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      document.getElementById(backMap[sid])?.click();
+    }
+  });
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 async function init() {
@@ -402,6 +494,7 @@ async function init() {
   initS7();
   initSw();
   initS9();
+  initKeyboard();
 
   // Must come after all init calls so DOM is wired
   if (checkLinkedInReturn()) return;

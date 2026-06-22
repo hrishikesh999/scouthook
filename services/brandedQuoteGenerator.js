@@ -5,6 +5,7 @@ const Anthropic = require('@anthropic-ai/sdk');
 const { getSetting } = require('../db');
 const storage = require('./storage');
 const { getAnthropicMessageText } = require('./voiceFingerprint');
+const { buildBackgroundSvg, buildFontFamily, fetchFontFaceBlock, FALLBACK_FONT } = require('./svgBrandBackground');
 
 const TEXT_MUTED = '#8A9CC0';
 const W = 1080;
@@ -111,8 +112,9 @@ async function renderBrandedQuote(post, brand = {}, content, linkedin = {}, ctx 
   const bg = brand.bg || '#0F1A3C';
   const text = brand.text || '#F0F4FF';
 
+  const fontStyles = await fetchFontFaceBlock(brand.font_heading, brand.font_body);
   const previewLines = linesFromQuote(content.quote, MAX_LINES, getBodyMaxChars());
-  const svg = buildBrandedQuoteSvg(previewLines, brand, linkedin, bg, text);
+  const svg = buildBrandedQuoteSvg(previewLines, brand, linkedin, bg, text, fontStyles);
 
   const filename = `branded_quote_${post.id}_${Date.now()}.png`;
   const pngBuffer = await sharp(Buffer.from(svg)).png().toBuffer();
@@ -238,7 +240,9 @@ function wrapText(text, maxChars) {
   return lines;
 }
 
-function buildBrandedQuoteSvg(lines, brand, linkedin, bg, text) {
+function buildBrandedQuoteSvg(lines, brand, linkedin, bg, text, fontStyles = '') {
+  const headingFont = buildFontFamily(brand.font_heading, FALLBACK_FONT);
+  const bodyFont = buildFontFamily(brand.font_body, FALLBACK_FONT);
   const nameMax = getNameMaxChars();
   const brandMax = approxCharsPerLine(24, headerTextAvailableWidth());
   const memberName = escapeXml(truncatePlain(linkedin.name || '', nameMax));
@@ -255,52 +259,47 @@ function buildBrandedQuoteSvg(lines, brand, linkedin, bg, text) {
   const headerClipDef = `<clipPath id="headerTextClip"><rect x="${HEADER_TEXT_LEFT}" y="0" width="${headerClipW}" height="${H}"/></clipPath>`;
   const quoteClipDef = `<clipPath id="quoteTextClip"><rect x="${QUOTE_TEXT_LEFT}" y="0" width="${quoteClipW}" height="${H}"/></clipPath>`;
 
-  const avatarXml = linkedin.photoDataUri
-    ? `<defs>
-  <clipPath id="avatarClip"><circle cx="${cx}" cy="${cy}" r="${AVATAR / 2}"/></clipPath>
-  ${headerClipDef}
-  ${quoteClipDef}
-</defs>
-<image href="${linkedin.photoDataUri}" x="${AVATAR_X}" y="${avatarY}" width="${AVATAR}" height="${AVATAR}" clip-path="url(#avatarClip)" preserveAspectRatio="xMidYMid slice"/>`
-    : `<defs>
-  ${headerClipDef}
-  ${quoteClipDef}
-</defs>
-<circle cx="${cx}" cy="${cy}" r="${AVATAR / 2}" fill="${TEXT_MUTED}" opacity="0.35"/>`;
+  const { defs: bgDefs, rects: bgRects } = buildBackgroundSvg(brand, W, H);
 
-  const nameXml = `<text x="${HEADER_TEXT_LEFT}" y="${nameY}" font-family="system-ui,-apple-system,'Helvetica Neue',sans-serif" font-size="${NAME_FONT_SIZE}" font-weight="600" fill="${text}" dominant-baseline="middle" clip-path="url(#headerTextClip)">${memberName}</text>`;
+  const avatarClipDef = linkedin.photoDataUri
+    ? `<clipPath id="avatarClip"><circle cx="${cx}" cy="${cy}" r="${AVATAR / 2}"/></clipPath>`
+    : '';
+
+  const avatarXml = linkedin.photoDataUri
+    ? `<image href="${linkedin.photoDataUri}" x="${AVATAR_X}" y="${avatarY}" width="${AVATAR}" height="${AVATAR}" clip-path="url(#avatarClip)" preserveAspectRatio="xMidYMid slice"/>`
+    : `<circle cx="${cx}" cy="${cy}" r="${AVATAR / 2}" fill="${TEXT_MUTED}" opacity="0.35"/>`;
+
+  const nameXml = `<text x="${HEADER_TEXT_LEFT}" y="${nameY}" font-family="${headingFont}" font-size="${NAME_FONT_SIZE}" font-weight="600" fill="${text}" dominant-baseline="middle" clip-path="url(#headerTextClip)">${memberName}</text>`;
 
   const brandHeaderXml = brandLabel
-    ? `<text x="${HEADER_TEXT_LEFT}" y="${brandY}" font-family="system-ui,-apple-system,'Helvetica Neue',sans-serif" font-size="24" font-weight="500" fill="${TEXT_MUTED}" dominant-baseline="middle" clip-path="url(#headerTextClip)">${brandLabel}</text>`
+    ? `<text x="${HEADER_TEXT_LEFT}" y="${brandY}" font-family="${bodyFont}" font-size="24" font-weight="500" fill="${TEXT_MUTED}" dominant-baseline="middle" clip-path="url(#headerTextClip)">${brandLabel}</text>`
     : '';
 
   const bodyXml = lines.map((line, i) =>
-    `<text x="${QUOTE_TEXT_LEFT}" y="${bodyStartY + i * LINE_HEIGHT}" font-family="system-ui,-apple-system,'Helvetica Neue',sans-serif" font-size="${FONT_SIZE}" font-weight="500" fill="${text}" dominant-baseline="hanging" clip-path="url(#quoteTextClip)">${escapeXml(line)}</text>`
+    `<text x="${QUOTE_TEXT_LEFT}" y="${bodyStartY + i * LINE_HEIGHT}" font-family="${headingFont}" font-size="${FONT_SIZE}" font-weight="500" fill="${text}" dominant-baseline="hanging" clip-path="url(#quoteTextClip)">${escapeXml(line)}</text>`
   ).join('\n  ');
 
-  const fadeXml = `<defs>
-  <linearGradient id="brandedFade" x1="0" y1="0" x2="0" y2="1">
+  const fadeXml = `<linearGradient id="brandedFade" x1="0" y1="0" x2="0" y2="1">
     <stop offset="0%" stop-color="${bg}" stop-opacity="0"/>
     <stop offset="100%" stop-color="${bg}" stop-opacity="1"/>
-  </linearGradient>
-</defs>
-<rect x="0" y="${fadeTop}" width="${W}" height="${H - fadeTop}" fill="url(#brandedFade)"/>`;
+  </linearGradient>`;
 
   let brandMarkXml;
   if (brand.logo) {
     brandMarkXml = `<image xlink:href="${brand.logo}" x="300" y="${H - 149}" width="480" height="109" preserveAspectRatio="xMidYMid meet"/>`;
   } else {
     const mark = escapeXml(brand.name || 'Scouthook');
-    brandMarkXml = `<text x="540" y="${BRAND_TEXT_Y}" font-family="system-ui,-apple-system,'Helvetica Neue',sans-serif" font-size="28" font-weight="600" fill="${TEXT_MUTED}" text-anchor="middle">${mark}</text>`;
+    brandMarkXml = `<text x="540" y="${BRAND_TEXT_Y}" font-family="${headingFont}" font-size="28" font-weight="600" fill="${TEXT_MUTED}" text-anchor="middle">${mark}</text>`;
   }
 
   return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">
-  <rect width="${W}" height="${H}" fill="${bg}"/>
+  <defs>${fontStyles}${avatarClipDef}${headerClipDef}${quoteClipDef}${bgDefs}${fadeXml}</defs>
+  ${bgRects}
   ${avatarXml}
   ${nameXml}
   ${brandHeaderXml}
   ${bodyXml}
-  ${fadeXml}
+  <rect x="0" y="${fadeTop}" width="${W}" height="${H - fadeTop}" fill="url(#brandedFade)"/>
   ${brandMarkXml}
 </svg>`;
 }

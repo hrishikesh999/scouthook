@@ -7,8 +7,8 @@ const Anthropic = require('@anthropic-ai/sdk');
 const { getSetting } = require('../db');
 const { extractJsonFromResponse, getAnthropicMessageText } = require('./voiceFingerprint');
 const storage = require('./storage');
+const { buildBackgroundSvg, buildFontFamily, fetchFontFaceBlock, FALLBACK_FONT } = require('./svgBrandBackground');
 
-// Brand tokens
 const BG = '#0F1A3C';
 const ACCENT = '#0D7A5F';
 const TEXT = '#F0F4FF';
@@ -79,13 +79,14 @@ async function renderCarousel(post, brand = {}, content, ctx = {}) {
   const { userId, tenantId } = ctx;
   const { slides } = content;
 
+  const fontStyles = await fetchFontFaceBlock(brand.font_heading, brand.font_body);
   const timestamp = Date.now();
   const pngBuffers = [];
   const slideResults = [];
 
   for (let i = 0; i < slides.length; i++) {
     const slide = slides[i];
-    const svg = buildSlideSvg(slide, i + 1, slides.length, brand);
+    const svg = buildSlideSvg(slide, i + 1, slides.length, brand, fontStyles);
     const filename = `carousel_${post.id}_${timestamp}_slide${i + 1}.png`;
     const pngBuffer = await sharp(Buffer.from(svg)).png().toBuffer();
     await storage.upload(pngBuffer, { tenantId, userId, type: 'generated', filename, mimeType: 'image/png' });
@@ -128,16 +129,15 @@ async function buildCarouselPdfFromBuffers(pngBuffers) {
   return Buffer.from(await pdfDoc.save());
 }
 
-function buildSlideSvg(slide, slideNum, totalSlides, brand = {}) {
-  const BG_SLIDE  = brand.bg     || BG;
+function buildSlideSvg(slide, slideNum, totalSlides, brand = {}, fontStyles = '') {
   const AC        = brand.accent || ACCENT;
   const TX        = brand.text   || TEXT;
+  const headingFont = buildFontFamily(brand.font_heading, FALLBACK_FONT);
+  const bodyFont = buildFontFamily(brand.font_body, FALLBACK_FONT);
 
   const isTitle = slide.type === 'title';
   const isClosing = slide.type === 'closing';
 
-  // Title uses 72px font (~38px/char) — wrap at 20 chars (~760px) for balanced margins.
-  // Content/closing uses 56px font (~30px/char) — can fit more chars per line.
   const headlineMaxChars = isTitle ? 20 : 22;
   const headlineLines = wrapText(slide.headline || '', headlineMaxChars);
   const bodyLines = slide.body ? wrapText(slide.body, 38) : [];
@@ -152,43 +152,40 @@ function buildSlideSvg(slide, slideNum, totalSlides, brand = {}) {
   const totalBlockH = headlineBlockH + bodyBlockH;
   const startY = (H - totalBlockH) / 2;
 
-  // Horizontal padding: 80px each side → text area = 920px wide, centred at 540.
   const PAD = 80;
   const textClipDef = `<clipPath id="textClip"><rect x="${PAD}" y="0" width="${W - PAD * 2}" height="${H}"/></clipPath>`;
 
   const headlineXml = headlineLines.map((line, i) =>
-    `<text x="540" y="${startY + i * headlineLineHeight}" font-family="system-ui,-apple-system,'Helvetica Neue',sans-serif" font-size="${headlineFontSize}" font-weight="600" letter-spacing="-0.5" fill="${TX}" text-anchor="middle" dominant-baseline="hanging" clip-path="url(#textClip)">${escapeXml(line)}</text>`
+    `<text x="540" y="${startY + i * headlineLineHeight}" font-family="${headingFont}" font-size="${headlineFontSize}" font-weight="600" letter-spacing="-0.5" fill="${TX}" text-anchor="middle" dominant-baseline="hanging" clip-path="url(#textClip)">${escapeXml(line)}</text>`
   ).join('\n  ');
 
   const bodyStartY = startY + headlineBlockH + 40;
   const bodyXml = bodyLines.map((line, i) =>
-    `<text x="540" y="${bodyStartY + i * bodyLineHeight}" font-family="system-ui,-apple-system,'Helvetica Neue',sans-serif" font-size="${bodyFontSize}" font-weight="400" fill="${TX}" opacity="0.75" text-anchor="middle" dominant-baseline="hanging" clip-path="url(#textClip)">${escapeXml(line)}</text>`
+    `<text x="540" y="${bodyStartY + i * bodyLineHeight}" font-family="${bodyFont}" font-size="${bodyFontSize}" font-weight="400" fill="${TX}" opacity="0.75" text-anchor="middle" dominant-baseline="hanging" clip-path="url(#textClip)">${escapeXml(line)}</text>`
   ).join('\n  ');
 
-  // Accent treatment: title gets full bottom bar, others get left bar
   const accentXml = isTitle
     ? `<rect x="0" y="${H - 12}" width="${W}" height="12" fill="${AC}"/>`
     : `<rect x="60" y="${startY - 20}" width="8" height="${headlineBlockH + 40}" fill="${AC}" rx="4"/>`;
 
-  // Slide counter
-  const counterXml = `<text x="540" y="${H - 48}" font-family="system-ui,-apple-system,'Helvetica Neue',sans-serif" font-size="24" fill="${TX}" opacity="0.45" text-anchor="middle">${slideNum} / ${totalSlides}</text>`;
+  const counterXml = `<text x="540" y="${H - 48}" font-family="${bodyFont}" font-size="24" fill="${TX}" opacity="0.45" text-anchor="middle">${slideNum} / ${totalSlides}</text>`;
 
-  // Swipe hint on title slide
   const swipeHint = isTitle
-    ? `<text x="540" y="${H - 90}" font-family="system-ui,-apple-system,'Helvetica Neue',sans-serif" font-size="24" fill="${TX}" opacity="0.45" text-anchor="middle">Swipe →</text>`
+    ? `<text x="540" y="${H - 90}" font-family="${bodyFont}" font-size="24" fill="${TX}" opacity="0.45" text-anchor="middle">Swipe →</text>`
     : '';
 
-  // Brand mark bottom-right: logo > name > nothing (carousel has slide counter bottom-center)
   let brandXml = '';
   if (brand.logo) {
     brandXml = `<image xlink:href="${brand.logo}" x="${W - 420}" y="${H - 136}" width="360" height="96" preserveAspectRatio="xMidYMid meet"/>`;
   } else if (brand.name) {
-    brandXml = `<text x="${W - 60}" y="${H - 56}" font-family="system-ui,-apple-system,'Helvetica Neue',sans-serif" font-size="22" font-weight="600" fill="${TX}" opacity="0.45" text-anchor="end">${escapeXml(brand.name)}</text>`;
+    brandXml = `<text x="${W - 60}" y="${H - 56}" font-family="${headingFont}" font-size="22" font-weight="600" fill="${TX}" opacity="0.45" text-anchor="end">${escapeXml(brand.name)}</text>`;
   }
 
+  const { defs: bgDefs, rects: bgRects } = buildBackgroundSvg(brand, W, H);
+
   return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">
-  <defs>${textClipDef}</defs>
-  <rect width="${W}" height="${H}" fill="${BG_SLIDE}"/>
+  <defs>${fontStyles}${textClipDef}${bgDefs}</defs>
+  ${bgRects}
   ${accentXml}
   ${headlineXml}
   ${bodyXml}

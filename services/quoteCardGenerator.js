@@ -5,8 +5,8 @@ const Anthropic = require('@anthropic-ai/sdk');
 const { getSetting } = require('../db');
 const storage = require('./storage');
 const { getAnthropicMessageText } = require('./voiceFingerprint');
+const { buildBackgroundSvg, buildFontFamily, fetchFontFaceBlock, FALLBACK_FONT } = require('./svgBrandBackground');
 
-// Brand tokens
 const BG = '#0F1A3C';
 const ACCENT = '#0D7A5F';
 const TEXT = '#F0F4FF';
@@ -31,7 +31,8 @@ async function extractQuoteCardContent(post) {
 
 async function renderQuoteCard(post, brand = {}, content, ctx = {}) {
   const { userId, tenantId } = ctx;
-  const svg = buildQuoteCardSvg(content.quote, brand);
+  const fontStyles = await fetchFontFaceBlock(brand.font_heading, brand.font_body);
+  const svg = buildQuoteCardSvg(content.quote, brand, fontStyles);
   const filename = `quote_${post.id}_${Date.now()}.png`;
   const pngBuffer = await sharp(Buffer.from(svg)).png().toBuffer();
   await storage.upload(pngBuffer, { tenantId, userId, type: 'generated', filename, mimeType: 'image/png' });
@@ -43,14 +44,11 @@ async function generateQuoteCard(post, brand = {}, ctx = {}) {
   return renderQuoteCard(post, brand, content, ctx);
 }
 
-function buildQuoteCardSvg(quote, brand = {}) {
-  const bg     = brand.bg     || BG;
+function buildQuoteCardSvg(quote, brand = {}, fontStyles = '') {
   const accent = brand.accent || ACCENT;
   const text   = brand.text   || TEXT;
+  const headingFont = buildFontFamily(brand.font_heading, FALLBACK_FONT);
 
-  // Accent bar right edge is at x=80. Keep text ≥24px clear → clip from x=104.
-  // Symmetric right clip: 1080-104=976. At 50px font ~26.5px/char, 32 chars ≈ 848px
-  // centred at 540 → extends to x=116 left, x=964 right — well inside both clip edges.
   const TEXT_LEFT_CLIP = 104;
   const TEXT_RIGHT_CLIP = W - TEXT_LEFT_CLIP;
   const lines = wrapText(quote, 32);
@@ -59,21 +57,22 @@ function buildQuoteCardSvg(quote, brand = {}) {
   const startY = (H - blockHeight) / 2;
 
   const linesXml = lines.map((line, i) =>
-    `<text x="540" y="${startY + i * lineHeight}" font-family="system-ui, -apple-system, 'Helvetica Neue', sans-serif" font-size="50" font-weight="500" letter-spacing="-0.3" fill="${text}" text-anchor="middle" dominant-baseline="hanging" clip-path="url(#quoteTextClip)">${escapeXml(line)}</text>`
+    `<text x="540" y="${startY + i * lineHeight}" font-family="${headingFont}" font-size="50" font-weight="500" letter-spacing="-0.3" fill="${text}" text-anchor="middle" dominant-baseline="hanging" clip-path="url(#quoteTextClip)">${escapeXml(line)}</text>`
   ).join('\n  ');
 
-  // Brand mark: logo image > brand name text > "Scouthook" fallback
   let brandXml;
   if (brand.logo) {
     brandXml = `<image xlink:href="${brand.logo}" x="300" y="${H - 149}" width="480" height="109" preserveAspectRatio="xMidYMid meet"/>`;
   } else {
     const brandLabel = escapeXml(brand.name || 'Scouthook');
-    brandXml = `<text x="540" y="${H - 64}" font-family="system-ui, -apple-system, 'Helvetica Neue', sans-serif" font-size="28" font-weight="600" fill="${TEXT_MUTED}" text-anchor="middle">${brandLabel}</text>`;
+    brandXml = `<text x="540" y="${H - 64}" font-family="${headingFont}" font-size="28" font-weight="600" fill="${TEXT_MUTED}" text-anchor="middle">${brandLabel}</text>`;
   }
 
+  const { defs: bgDefs, rects: bgRects } = buildBackgroundSvg(brand, W, H);
+
   return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">
-  <defs><clipPath id="quoteTextClip"><rect x="${TEXT_LEFT_CLIP}" y="0" width="${TEXT_RIGHT_CLIP - TEXT_LEFT_CLIP}" height="${H}"/></clipPath></defs>
-  <rect width="${W}" height="${H}" fill="${bg}"/>
+  <defs>${fontStyles}<clipPath id="quoteTextClip"><rect x="${TEXT_LEFT_CLIP}" y="0" width="${TEXT_RIGHT_CLIP - TEXT_LEFT_CLIP}" height="${H}"/></clipPath>${bgDefs}</defs>
+  ${bgRects}
   <rect x="72" y="${startY - 40}" width="8" height="${blockHeight + 80}" fill="${accent}" rx="4"/>
   ${linesXml}
   ${brandXml}

@@ -64,8 +64,13 @@ router.post('/:postId', async (req, res) => {
 
   // Load brand settings from the workspace (fall back to defaults)
   const profile = await db.prepare(
-    'SELECT brand_bg, brand_accent, brand_text, brand_name, brand_logo, brand_font_heading, brand_font_body, brand_secondary_bg, brand_secondary_text FROM workspaces WHERE id = ?'
+    'SELECT brand_bg, brand_accent, brand_text, brand_name, brand_logo, brand_font_heading, brand_font_body, brand_secondary_bg, brand_secondary_text, brand_bg_type, brand_bg_gradient, brand_bg_pattern, brand_bg_image FROM workspaces WHERE id = ?'
   ).get(tenantId);
+
+  let bgGradient = null;
+  if (profile?.brand_bg_gradient) {
+    try { bgGradient = JSON.parse(profile.brand_bg_gradient); } catch (_) { /* malformed */ }
+  }
 
   const brand = {
     bg:             profile?.brand_bg             || '#0F1A3C',
@@ -78,6 +83,10 @@ router.post('/:postId', async (req, res) => {
     font_body:      profile?.brand_font_body      || null,
     secondary_bg:   profile?.brand_secondary_bg   || null,
     secondary_text: profile?.brand_secondary_text || null,
+    bg_type:        profile?.brand_bg_type        || 'solid',
+    bg_gradient:    bgGradient,
+    bg_pattern:     profile?.brand_bg_pattern     || null,
+    bg_image:       null,
   };
 
   if (profile?.brand_logo) {
@@ -102,6 +111,30 @@ router.post('/:postId', async (req, res) => {
       }
     } catch (err) {
       console.warn('[visuals] Could not load brand logo:', err.message);
+    }
+  }
+
+  if (profile?.brand_bg_image && brand.bg_type === 'image') {
+    try {
+      const imgUrl = profile.brand_bg_image;
+      if (/^https?:\/\//i.test(imgUrl)) {
+        const imgRes = await fetch(imgUrl);
+        if (imgRes.ok) {
+          const ab = await imgRes.arrayBuffer();
+          const rawMime = imgRes.headers.get('content-type') || 'image/jpeg';
+          const mime = rawMime.split(';')[0].trim();
+          brand.bg_image = `data:${mime};base64,${Buffer.from(ab).toString('base64')}`;
+        }
+      } else {
+        const storedName = require('path').basename(imgUrl);
+        const key = storage.buildKey(tenantId, userId, 'uploads', storedName);
+        const buf = await storage.download(key);
+        const ext = storedName.split('.').pop().toLowerCase();
+        const mime = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif' }[ext] || 'image/jpeg';
+        brand.bg_image = `data:${mime};base64,${buf.toString('base64')}`;
+      }
+    } catch (err) {
+      console.warn('[visuals] Could not load brand bg image:', err.message);
     }
   }
 

@@ -309,10 +309,10 @@ function chunkText(text, totalPages) {
 // ── Mining prompt ────────────────────────────────────────────────────────────
 
 function buildMiningSystemPrompt(userProfile = {}) {
-  const niche        = userProfile.content_niche   || 'their professional field';
-  const audience     = userProfile.audience_role   || 'professionals in the field';
-  const audiencePain = userProfile.audience_pain   || 'professional challenges in their field';
-  const contrarian   = userProfile.contrarian_view || 'challenge common assumptions with specificity';
+  const niche        = userProfile.brand_industry         || 'their professional field';
+  const audience     = userProfile.audience_description    || 'professionals in the field';
+  const audiencePain = userProfile.audience_obstacles      || 'professional challenges in their field';
+  const contrarian   = userProfile.brand_core_beliefs      || 'challenge common assumptions with specificity';
 
   return `You are a LinkedIn content strategist extracting post ideas from a professional's own document.
 

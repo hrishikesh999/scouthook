@@ -31,6 +31,25 @@ const MIME_TO_TYPE = {
 const MAX_BYTES = 25 * 1024 * 1024; // 25 MB
 
 // ---------------------------------------------------------------------------
+// Helper: fetch the workspace's default profile with brand voice + audience
+// ---------------------------------------------------------------------------
+async function fetchMiningProfile(tenantId) {
+  return db.prepare(`
+    SELECT p.voice_fingerprint, p.onboarding_q2, p.content_pillars,
+           p.authority_statements, p.input_examples, p.writing_samples,
+           bvp.brand_industry, bvp.brand_description, bvp.elevator_main_result,
+           bvp.brand_core_beliefs, bvp.brand_personality_traits,
+           bvp.brand_archetype, bvp.brand_phrases_to_use,
+           ap.audience_description, ap.audience_goals, ap.audience_obstacles,
+           ap.audience_core_beliefs_market
+    FROM profiles p
+    LEFT JOIN brand_voice_profiles bvp ON bvp.profile_id = p.id
+    LEFT JOIN audience_profiles ap ON ap.profile_id = p.id
+    WHERE p.workspace_id = ? AND p.is_default = true
+  `).get(tenantId);
+}
+
+// ---------------------------------------------------------------------------
 // Helper: detect the source type of a URL
 // ---------------------------------------------------------------------------
 function detectUrlSourceType(url) {
@@ -256,9 +275,7 @@ async function mineDocumentById(docId, userId, tenantId) {
   }
 
   const filename    = unmined[0].filename;
-  const userProfile = await db.prepare(
-    'SELECT content_niche, audience_role, audience_pain, contrarian_view FROM profiles WHERE workspace_id = ? AND is_default = true'
-  ).get(tenantId) || {};
+  const userProfile = await fetchMiningProfile(tenantId) || {};
 
   const seeds = await mineChunks(unmined, filename, userProfile);
 
@@ -364,9 +381,7 @@ router.post('/mine', async (req, res) => {
   }
 
   // Fetch workspace default profile for audience-aware mining
-  const userProfile = await db.prepare(
-    'SELECT content_niche, audience_role, audience_pain, contrarian_view FROM profiles WHERE workspace_id = ? AND is_default = true'
-  ).get(tenantId) || {};
+  const userProfile = await fetchMiningProfile(tenantId) || {};
 
   let totalSeeds = 0;
 
@@ -467,21 +482,18 @@ router.get('/suggest-topics', async (req, res) => {
   try { excluded = JSON.parse(exclude_topics || '[]'); if (!Array.isArray(excluded)) excluded = []; } catch { excluded = []; }
 
   try {
-    const profile = await db.prepare(
-      `SELECT content_niche, audience_role, audience_pain, business_positioning, contrarian_view, input_examples, content_pillars
-       FROM profiles WHERE workspace_id = ? AND is_default = true`
-    ).get(tenantId);
+    const profile = await fetchMiningProfile(tenantId);
 
     const liRow = await db.prepare(
       'SELECT display_name FROM linkedin_connections WHERE workspace_id = ? AND is_default = true'
     ).get(tenantId);
 
-    const niche       = profile?.content_niche        || '';
-    const audience    = profile?.audience_role         || '';
-    const pain        = profile?.audience_pain         || '';
-    const positioning = profile?.business_positioning  || '';
+    const niche       = profile?.brand_industry         || '';
+    const audience    = profile?.audience_description    || '';
+    const pain        = profile?.audience_obstacles      || '';
+    const positioning = profile?.elevator_main_result    || '';
     const headline    = liRow?.display_name              || '';
-    const contrarian  = profile?.contrarian_view       || '';
+    const contrarian  = profile?.brand_core_beliefs      || '';
 
     // Parse writing samples — take up to 2, cap each at 350 chars to keep prompt tight
     let writingSamples = [];
@@ -613,21 +625,15 @@ router.get('/generate-ideas', async (req, res) => {
   excludedHooks = excludedHooks.slice(-12);
 
   try {
-    const profile = await db.prepare(`
-      SELECT content_niche, audience_role, audience_pain, business_positioning,
-             contrarian_view, voice_fingerprint, content_pillars,
-             authority_statements, writing_sample_phrases
-      FROM   profiles
-      WHERE  workspace_id = ? AND is_default = true
-    `).get(tenantId);
+    const profile = await fetchMiningProfile(tenantId);
 
     const liRow = await db.prepare(
       'SELECT display_name FROM linkedin_connections WHERE workspace_id = ? AND is_default = true'
     ).get(tenantId);
 
-    const niche    = profile?.content_niche        || '';
-    const audience = profile?.audience_role         || '';
-    const pain     = profile?.audience_pain         || '';
+    const niche    = profile?.brand_industry         || '';
+    const audience = profile?.audience_description    || '';
+    const pain     = profile?.audience_obstacles      || '';
 
     // Parse voice_fingerprint for deep ICP signals
     let fp = {};
@@ -665,11 +671,11 @@ router.get('/generate-ideas', async (req, res) => {
       niche                             && `Creator niche: ${niche}`,
       audience                          && `Their audience: ${audience}`,
       pain                              && `What keeps the audience up at night: ${pain}`,
-      profile?.business_positioning     && `Positioning: ${profile.business_positioning}`,
+      profile?.elevator_main_result      && `Positioning: ${profile.elevator_main_result}`,
       pos.stands_for                    && `What the creator stands for: ${pos.stands_for}`,
       pos.pushes_back_against           && `What they push back against: ${pos.pushes_back_against}`,
       pos.outcome                       && `Outcome they deliver: ${pos.outcome}`,
-      profile?.contrarian_view          && `Their contrarian belief: ${profile.contrarian_view}`,
+      profile?.brand_core_beliefs       && `Their contrarian belief: ${profile.brand_core_beliefs}`,
       pillars.length                    && `Strategic pillars: ${pillars.join(' | ')}`,
       liRow?.display_name               && `LinkedIn: ${liRow.display_name}`,
     ].filter(Boolean).join('\n');
@@ -811,13 +817,10 @@ router.get('/brief-idea', async (req, res) => {
     }
 
     // Fetch workspace default profile for voice context
-    const profile = await db.prepare(`
-      SELECT content_niche, audience_role, onboarding_q2, contrarian_view, voice_fingerprint
-      FROM   profiles WHERE workspace_id = ? AND is_default = true
-    `).get(tenantId);
+    const profile = await fetchMiningProfile(tenantId);
 
-    const niche    = profile?.content_niche  || '';
-    const audience = profile?.audience_role  || '';
+    const niche    = profile?.brand_industry         || '';
+    const audience = profile?.audience_description    || '';
     const voiceSample = profile?.onboarding_q2 || '';
     let fp = {};
     try { fp = JSON.parse(profile?.voice_fingerprint || '{}'); } catch {}
@@ -836,7 +839,7 @@ CREATOR CONTEXT:
 - Niche: ${niche}
 - Audience: ${audience}
 - Stands for: ${pos.stands_for || ''}
-- Contrarian belief: ${profile?.contrarian_view || ''}
+- Contrarian belief: ${profile?.brand_core_beliefs || ''}
 ${voiceSample ? `- Their natural voice (from an interview): "${voiceSample.slice(0, 300)}"` : ''}
 
 POST IDEA:
@@ -896,15 +899,12 @@ router.get('/expand-idea', async (req, res) => {
 
     if (!idea) return res.status(404).json({ ok: false, error: 'not_found' });
 
-    const profile = db.prepare(
-      `SELECT content_niche, audience_role, audience_pain, contrarian_view, onboarding_q2
-       FROM   profiles WHERE workspace_id = ? AND is_default = true`
-    ).get(tenantId);
+    const profile = await fetchMiningProfile(tenantId);
 
-    const niche      = profile?.content_niche    || '';
-    const audience   = profile?.audience_role    || '';
-    const contrarian = profile?.contrarian_view  || '';
-    const voiceQ2    = profile?.onboarding_q2    || '';
+    const niche      = profile?.brand_industry         || '';
+    const audience   = profile?.audience_description    || '';
+    const contrarian = profile?.brand_core_beliefs      || '';
+    const voiceQ2    = profile?.onboarding_q2           || '';
 
     const TYPE_GUIDANCE = {
       reach:   'REACH (story/lesson): relatable moment, before/after, personal lesson learned the hard way',

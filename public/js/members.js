@@ -99,7 +99,7 @@
 
     if (pendingWrap && pendingList) {
       if (pending.length > 0) {
-        pendingWrap.hidden = false;
+        pendingWrap.style.display = 'block';
         pendingList.innerHTML = pending.map(inv => `
           <div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid #f3f4f6">
             <div style="flex:1">
@@ -114,7 +114,7 @@
           btn.addEventListener('click', () => revokeInvite(Number(btn.dataset.revokeInvite)));
         });
       } else {
-        pendingWrap.hidden = true;
+        pendingWrap.style.display = 'none';
       }
     }
   }

@@ -148,6 +148,69 @@
       </div>
       <div id="vault-ideas-body" class="vault-ideas-body" aria-live="polite"></div>
     </div>
+  </div>
+
+  <!-- ── Post type picker (shown before navigating to generate) ── -->
+  <div id="vault-type-picker-overlay" class="vault-add-overlay" style="display:none" role="dialog" aria-modal="true" aria-label="Choose a post type">
+    <div class="vault-add-modal vault-type-picker-modal">
+      <div class="vault-add-modal-header">
+        <span style="min-width:60px"></span>
+        <h2 class="vault-add-modal-title">Choose a post type</h2>
+        <button id="vault-type-picker-close" class="vault-add-close" type="button" aria-label="Close">✕</button>
+      </div>
+      <div class="vault-type-grid">
+        <button class="vault-type-card" data-type="trust">
+          <span class="vault-type-card-icon">✏️</span>
+          <span class="vault-type-card-title">Authority / Expertise</span>
+          <span class="vault-type-card-desc">Teach or clarify a concept</span>
+        </button>
+        <button class="vault-type-card" data-type="story">
+          <span class="vault-type-card-icon">📖</span>
+          <span class="vault-type-card-title">Story / Experience</span>
+          <span class="vault-type-card-desc">A moment that shaped you</span>
+        </button>
+        <button class="vault-type-card" data-type="bts">
+          <span class="vault-type-card-icon">🎬</span>
+          <span class="vault-type-card-title">Behind the Scenes</span>
+          <span class="vault-type-card-desc">Show your process</span>
+        </button>
+        <button class="vault-type-card" data-type="contrarian">
+          <span class="vault-type-card-icon">🔥</span>
+          <span class="vault-type-card-title">Contrarian / Hot Take</span>
+          <span class="vault-type-card-desc">Challenge a belief</span>
+        </button>
+        <button class="vault-type-card" data-type="framework">
+          <span class="vault-type-card-icon">📚</span>
+          <span class="vault-type-card-title">Framework / How-To</span>
+          <span class="vault-type-card-desc">Step-by-step guidance</span>
+        </button>
+        <button class="vault-type-card" data-type="announcement">
+          <span class="vault-type-card-icon">🎉</span>
+          <span class="vault-type-card-title">Announcement</span>
+          <span class="vault-type-card-desc">Share news or a launch</span>
+        </button>
+        <button class="vault-type-card" data-type="lead_gen">
+          <span class="vault-type-card-icon">🎯</span>
+          <span class="vault-type-card-title">Lead Gen / Offer</span>
+          <span class="vault-type-card-desc">Attract your ideal client</span>
+        </button>
+        <button class="vault-type-card" data-type="lessons_learned">
+          <span class="vault-type-card-icon">📝</span>
+          <span class="vault-type-card-title">Lessons Learned</span>
+          <span class="vault-type-card-desc">Wisdom from experience</span>
+        </button>
+        <button class="vault-type-card" data-type="pis">
+          <span class="vault-type-card-icon">💡</span>
+          <span class="vault-type-card-title">Problem-Insight-Solution</span>
+          <span class="vault-type-card-desc">Diagnose a problem</span>
+        </button>
+        <button class="vault-type-card" data-type="results">
+          <span class="vault-type-card-icon">📊</span>
+          <span class="vault-type-card-title">Results / Case Study</span>
+          <span class="vault-type-card-desc">Prove your impact</span>
+        </button>
+      </div>
+    </div>
   </div><!-- /main-content -->
 
   <script src="/js/session.js"></script>
@@ -187,6 +250,12 @@
   const ideasTitle   = document.getElementById('vault-ideas-panel-title');
   const ideasSub     = document.getElementById('vault-ideas-panel-sub');
 
+  const typePickerOverlay = document.getElementById('vault-type-picker-overlay');
+  const typePickerClose   = document.getElementById('vault-type-picker-close');
+
+  let _pendingIdeaId   = null;
+  let _pendingIdeaSeed = '';
+
   // ── Add Content modal ─────────────────────────────────────────────────────
   addBtn.addEventListener('click', openAddModal);
 
@@ -212,9 +281,36 @@
   addBack.addEventListener('click', () => { showStep1(); clearModalStatus(); });
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
-      if (addOverlay.style.display !== 'none') closeAddModal();
+      if (typePickerOverlay.style.display !== 'none') closeTypePicker();
+      else if (addOverlay.style.display !== 'none') closeAddModal();
       else if (ideasOverlay.style.display !== 'none') closeIdeasPanel();
     }
+  });
+
+  // ── Type picker ───────────────────────────────────────────────────────────
+  function openTypePicker(ideaId, ideaSeed) {
+    _pendingIdeaId   = ideaId;
+    _pendingIdeaSeed = ideaSeed;
+    typePickerOverlay.style.display = 'flex';
+  }
+
+  function closeTypePicker() {
+    typePickerOverlay.style.display = 'none';
+    _pendingIdeaId   = null;
+    _pendingIdeaSeed = '';
+  }
+
+  typePickerClose.addEventListener('click', closeTypePicker);
+  typePickerOverlay.addEventListener('click', e => { if (e.target === typePickerOverlay) closeTypePicker(); });
+
+  typePickerOverlay.querySelectorAll('.vault-type-card').forEach(card => {
+    card.addEventListener('click', () => {
+      const type = card.dataset.type;
+      const seed = _pendingIdeaSeed.slice(0, 800);
+      const url  = `/generate.html?type=${encodeURIComponent(type)}&idea=${encodeURIComponent(seed)}&vault_idea_id=${encodeURIComponent(_pendingIdeaId || '')}`;
+      closeTypePicker();
+      window.location.href = url;
+    });
   });
 
   function showStep1() {
@@ -609,9 +705,7 @@
     const seed     = idea.seed_text    || '';
     const display  = hook || seed;
     const detail   = hook ? seed : '';
-
-    const ideaParam  = encodeURIComponent((seed || hook).slice(0, 800));
-    const generateUrl = `/generate.html?type=${encodeURIComponent(funnel)}&idea=${ideaParam}`;
+    const ideaSeed = (seed || hook);
 
     return `
       <div class="vault-idea-item">
@@ -619,10 +713,19 @@
         <p class="vault-idea-hook">${escHtml(display)}</p>
         ${detail ? `<p class="vault-idea-seed">${escHtml(detail)}</p>` : ''}
         <div class="vault-idea-actions">
-          <a class="vault-idea-generate" href="${generateUrl}">Generate post →</a>
+          <button class="vault-idea-generate" type="button"
+            data-idea-id="${escHtml(String(idea.id || ''))}"
+            data-idea-seed="${escHtml(ideaSeed)}">Generate post →</button>
         </div>
       </div>`;
   }
+
+  // Delegate clicks on "Generate post" buttons inside the ideas panel
+  ideasBody.addEventListener('click', e => {
+    const btn = e.target.closest('.vault-idea-generate');
+    if (!btn) return;
+    openTypePicker(btn.dataset.ideaId, btn.dataset.ideaSeed);
+  });
 
   loadDocuments();
   </script>

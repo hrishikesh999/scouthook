@@ -269,6 +269,14 @@ router.post('/', async (req, res) => {
 
     const funnelTypeForGate = vaultIdea?.funnel_type || post_type || bodyFunnelType || null;
 
+    // When vault source material is available and a specific post type was chosen,
+    // enrich raw_idea with the chunk text so type-specific services can use it.
+    if (vaultChunkText && post_type) {
+      const neighborBlock = vaultNeighborContext
+        ? `\n\n[Additional context from the same document:]\n${vaultNeighborContext}` : '';
+      raw_idea = `[Source material from author's document:]\n${vaultChunkText}${neighborBlock}\n\n---\nIdea from this material: ${raw_idea || vaultIdea?.seed_text || ''}`;
+    }
+
     // ── SSE streaming path ────────────────────────────────────────────────────
     // Only for the standard idea path (not vault path).
     if (req.body.streaming && !vaultIdea) {
@@ -888,7 +896,7 @@ router.post('/', async (req, res) => {
     }
 
     // ── Authority/Expertise path (non-streaming, trust post type) ────────────
-    if (post_type === 'trust' && !vaultIdea) {
+    if (post_type === 'trust') {
       const authorityResult = await generateAuthorityPost(raw_idea, profile, {
         lengthPreference: length_preference || 'Medium',
         ctaIntent:        cta_intent || '',
@@ -907,7 +915,7 @@ router.post('/', async (req, res) => {
         primaryGate,
         contentFeedback: null,
       };
-    } else if (post_type === 'story' && !vaultIdea) {
+    } else if (post_type === 'story') {
       // ── Story / Personal Experience path (non-streaming) ─────────────────
       const storyResult = await generateStoryPost(raw_idea, profile, {
         lengthPreference: length_preference || 'Medium',
@@ -927,7 +935,7 @@ router.post('/', async (req, res) => {
         primaryGate:     storyGate,
         contentFeedback: null,
       };
-    } else if (post_type === 'lessons_learned' && !vaultIdea) {
+    } else if (post_type === 'lessons_learned') {
       // ── Lessons Learned path (non-streaming) ─────────────────────────────
       const lessonsResult = await generateLessonsLearnedPost(raw_idea, profile, {
         lengthPreference: length_preference || 'Medium',
@@ -947,7 +955,7 @@ router.post('/', async (req, res) => {
         primaryGate:     lessonsGate,
         contentFeedback: null,
       };
-    } else if (post_type === 'bts' && !vaultIdea) {
+    } else if (post_type === 'bts') {
       // ── Behind-the-Scenes path (non-streaming) ────────────────────────────
       const btsResult = await generateBtsPost(raw_idea, profile, {
         lengthPreference: length_preference || 'Medium',
@@ -967,7 +975,7 @@ router.post('/', async (req, res) => {
         primaryGate:     btsGate,
         contentFeedback: null,
       };
-    } else if (post_type === 'contrarian' && !vaultIdea) {
+    } else if (post_type === 'contrarian') {
       // ── Contrarian / Hot Take path (non-streaming) ────────────────────────
       const contrarianResult = await generateContrarianPost(raw_idea, profile, {
         lengthPreference: length_preference || 'Medium',
@@ -986,7 +994,7 @@ router.post('/', async (req, res) => {
         primaryGate:     contrarianGate,
         contentFeedback: null,
       };
-    } else if (post_type === 'framework' && !vaultIdea) {
+    } else if (post_type === 'framework') {
       // ── Framework / How-To path (non-streaming) ───────────────────────
       const frameworkResult = await generateFrameworkPost(raw_idea, profile, {
         lengthPreference: length_preference || 'Medium',
@@ -1005,7 +1013,7 @@ router.post('/', async (req, res) => {
         primaryGate:     frameworkGate,
         contentFeedback: null,
       };
-    } else if (post_type === 'announcement' && !vaultIdea) {
+    } else if (post_type === 'announcement') {
       // ── Announcement path (non-streaming) ────────────────────────────────
       const annResult = await generateAnnouncementPost(raw_idea, profile, {
         lengthPreference: length_preference || 'Medium',
@@ -1024,7 +1032,7 @@ router.post('/', async (req, res) => {
         primaryGate:     annGate,
         contentFeedback: null,
       };
-    } else if (post_type === 'lead_gen' && !vaultIdea) {
+    } else if (post_type === 'lead_gen') {
       // ── Lead Gen / Offer path (non-streaming) ────────────────────────────
       const leadGenResult = await generateLeadGenPost(raw_idea, profile, {
         lengthPreference: length_preference || 'Medium',
@@ -1043,7 +1051,7 @@ router.post('/', async (req, res) => {
         primaryGate:     leadGenGate,
         contentFeedback: null,
       };
-    } else if (post_type === 'pis' && !vaultIdea) {
+    } else if (post_type === 'pis') {
       // ── Problem-Insight-Solution path (non-streaming) ────────────────────
       const pisResult = await generatePisPost(raw_idea, profile, {
         lengthPreference: length_preference || 'Medium',
@@ -1062,7 +1070,7 @@ router.post('/', async (req, res) => {
         primaryGate:     pisGate,
         contentFeedback: null,
       };
-    } else if (post_type === 'results' && !vaultIdea) {
+    } else if (post_type === 'results') {
       // ── Results / Case Study path (non-streaming) ─────────────────────────
       const resultsResult = await generateResultsPost(raw_idea, profile, {
         lengthPreference: length_preference || 'Medium',

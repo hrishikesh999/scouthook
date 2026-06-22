@@ -50,7 +50,9 @@ let selectedType        = null; // 'reach'|'trust'|'convert'
 let chatStep            = 0;
 let chatAnswers         = {};
 let mixRecommended      = null;
-let selectedVaultIdeaId = null; // set when user picks a vault idea
+let selectedVaultIdeaId  = null; // set when user picks a vault idea
+let _pendingVaultIdeaId  = null; // vault idea awaiting type selection in picker
+let _pendingVaultIdeaSeed = '';  // brief/seed text for pending vault idea
 let _tensionResult      = null; // { tension, missing } from silent extraction
 let _tensionDebounce    = null; // debounce timer for extraction on input
 let _nichePlaceholders  = [];   // niche-specific placeholder examples loaded from profile
@@ -681,25 +683,13 @@ function renderIdeaEngine(panel, ideas, icpSummary, activeTab, onItemSelected) {
     <div class="idea-engine-grid">${cards}</div>
     ${isFreshTab ? `<button class="idea-load-more" type="button" id="idea-load-more-btn">Load more ideas →</button>` : ''}`;
 
-  // Card click — expand into rich brief via Haiku, fill textarea, keep panel open
-  const VAULT_TYPE_MAP = {
-    lesson_learned: 'lessons_learned',
-    contrarian:     'contrarian',
-    myth_bust:      'contrarian',
-    outcome_proof:  'results',
-    behind_scenes:  'bts',
-  };
-
+  // Card click — fetch brief, store pending vault data, open type picker
   panel.querySelectorAll('.idea-engine-card').forEach((btn, i) => {
     btn.addEventListener('click', async () => {
-      const idea       = ideas[i];
-      const seedText   = `${idea.hook}\n\n${idea.angle}`;
-      const mappedType = VAULT_TYPE_MAP[idea.tension_type] || null;
+      const idea     = ideas[i];
+      const seedText = `${idea.hook}\n\n${idea.angle}`;
 
-      // Set vault idea id immediately (bug fix — was never set before)
-      selectedVaultIdeaId = idea.id || null;
-
-      // Fetch expanded brief, then route
+      // Fetch expanded brief
       let brief = seedText;
       if (idea.id) {
         showSpecificityNudge('Preparing your idea…');
@@ -711,29 +701,13 @@ function renderIdeaEngine(panel, ideas, icpSummary, activeTab, onItemSelected) {
         hideSpecificityNudge();
       }
 
-      // Close vault panel
+      // Close vault panel and open type picker
       panel.style.display = 'none';
       document.getElementById('intent-ideas')?.classList.remove('active');
 
-      if (mappedType) {
-        selectType(mappedType);
-        chatInput.value        = brief;
-        chatInput.style.height = 'auto';
-        chatInput.style.height = chatInput.scrollHeight + 'px';
-        showVaultContextNote(mappedType);
-      } else {
-        // Unmapped tension type — restore pill row, prompt user to pick a type
-        const genHeader     = document.querySelector('.gen-header');
-        const startingPills = document.getElementById('starting-pills');
-        if (genHeader)     genHeader.style.display     = '';
-        if (startingPills) startingPills.style.display = '';
-        chatInput.value        = brief;
-        chatInput.style.height = 'auto';
-        chatInput.style.height = chatInput.scrollHeight + 'px';
-        showVaultContextNote(null);
-      }
-
-      chatInput.focus();
+      _pendingVaultIdeaId   = idea.id || null;
+      _pendingVaultIdeaSeed = brief;
+      openGenVaultTypePicker();
     });
   });
 
@@ -2613,12 +2587,51 @@ function showVaultContextNote(type) {
   const el = document.getElementById('vault-context-note');
   if (!el) return;
   if (type) {
-    const label = POST_TYPE_MAP[type]?.label || type;
+    const label = CHAT_CONFIGS[type]?.label || type;
     el.innerHTML = `Writing this as <strong>${label}</strong> — edit or generate when ready.`;
   } else {
     el.textContent = 'Choose a post type above to continue.';
   }
   el.classList.add('visible');
+}
+
+function openGenVaultTypePicker() {
+  const overlay = document.getElementById('gen-vault-type-picker-overlay');
+  if (overlay) overlay.style.display = 'flex';
+}
+
+function closeGenVaultTypePicker() {
+  const overlay = document.getElementById('gen-vault-type-picker-overlay');
+  if (overlay) overlay.style.display = 'none';
+}
+
+function initGenVaultTypePicker() {
+  const overlay   = document.getElementById('gen-vault-type-picker-overlay');
+  const closeBtn  = document.getElementById('gen-vault-type-picker-close');
+  if (!overlay) return;
+
+  closeBtn?.addEventListener('click', closeGenVaultTypePicker);
+  overlay.addEventListener('click', e => { if (e.target === overlay) closeGenVaultTypePicker(); });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && overlay.style.display !== 'none') closeGenVaultTypePicker();
+  });
+
+  overlay.querySelectorAll('.gen-vault-type-card').forEach(card => {
+    card.addEventListener('click', () => {
+      const type = card.dataset.type;
+      closeGenVaultTypePicker();
+      selectType(type);
+      selectedVaultIdeaId = _pendingVaultIdeaId;
+      if (_pendingVaultIdeaSeed) {
+        chatInput.value        = _pendingVaultIdeaSeed;
+        chatInput.style.height = 'auto';
+        chatInput.style.height = chatInput.scrollHeight + 'px';
+        chatInput.dispatchEvent(new Event('input'));
+      }
+      showVaultContextNote(type);
+      chatInput.focus();
+    });
+  });
 }
 function hideVaultContextNote() {
   const el = document.getElementById('vault-context-note');
@@ -2800,6 +2813,8 @@ async function loadProfileSelector() {
 async function init() {
   await window.scouthookAuthReady;
 
+  initGenVaultTypePicker();
+
   // Default to reach immediately; loadMixRecommendation may update this
   selectType('reach');
 
@@ -2809,12 +2824,15 @@ async function init() {
   prefetchIdeas();            // fire-and-forget — warms idea cache for instant vault panel
   loadProfileSelector();      // fire-and-forget — shows "Creating for" selector if >1 profile
 
-  const urlParams = new URLSearchParams(location.search);
-  const urlType   = urlParams.get('type');
-  const urlIdea   = urlParams.get('idea');
+  const urlParams      = new URLSearchParams(location.search);
+  const urlType        = urlParams.get('type');
+  const urlIdea        = urlParams.get('idea');
+  const urlVaultIdeaId = urlParams.get('vault_idea_id');
 
   if (urlType && CHAT_CONFIGS[urlType]) {
     selectType(urlType);
+    // Restore vault idea id AFTER selectType (selectType clears it)
+    if (urlVaultIdeaId) selectedVaultIdeaId = parseInt(urlVaultIdeaId, 10) || null;
     if (urlIdea) {
       chatInput.value        = urlIdea;
       chatInput.style.height = 'auto';

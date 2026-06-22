@@ -2502,13 +2502,55 @@ body.has-trial-banner #main-content {
   border: none;
   cursor: pointer;
   color: var(--text-muted);
-  font-size: 13px;
-  padding: 2px 4px;
+  padding: 4px 6px;
   border-radius: var(--radius-sm);
-  line-height: 1;
+  line-height: 0;
   margin-left: auto;
+  display: flex;
+  align-items: center;
+  transition: color 0.15s, background 0.15s;
 }
-.so-slide-remove:hover { color: var(--text-danger, #DC2626); background: #FEF2F2; }
+.so-slide-remove:hover:not(:disabled) { color: var(--text-danger, #DC2626); background: #FEF2F2; }
+.so-slide-remove:disabled { opacity: 0.35; cursor: default; }
+
+.so-slide-confirm-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0 10px;
+  border-top: 1px solid #FEE2E2;
+  margin-bottom: 4px;
+}
+.so-slide-confirm-bar[hidden] { display: none; }
+.so-slide-confirm-msg {
+  flex: 1;
+  font-size: 12px;
+  color: var(--text-danger, #DC2626);
+  font-family: var(--font-sans);
+}
+.so-slide-confirm-cancel,
+.so-slide-confirm-delete {
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.so-slide-confirm-cancel {
+  background: none;
+  border-color: var(--border);
+  color: var(--text-secondary);
+}
+.so-slide-confirm-cancel:hover { background: var(--surface-2); }
+.so-slide-confirm-delete {
+  background: #DC2626;
+  border-color: #DC2626;
+  color: #fff;
+}
+.so-slide-confirm-delete:hover { background: #B91C1C; border-color: #B91C1C; }
 
 .so-add-slide-btn {
   display: block;

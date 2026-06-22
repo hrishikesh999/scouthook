@@ -148,6 +148,9 @@
     let placidTemplateLayers = [];
     let wizardStep           = 1;
     let editingTemplate      = null;
+    let lastFetchReason      = null;
+    let step2PopulatedForUuid = null;
+    let coreListenersAttached = false;
 
     const BRAND_SOURCE_LABELS = {
       brand_bg:'Background color', brand_accent:'Accent color', brand_text:'Text color',
@@ -189,11 +192,15 @@
     // ── Fetch layers from Placid API ───────────────────────────────────────
     async function fetchPlacidLayers(uuid) {
       if (!uuid) return;
+      lastFetchReason = null;
       try {
-        const r    = await adminFetch(`/admin/placid-templates/fetch-layers?uuid=${encodeURIComponent(uuid)}`);
+        const r = await adminFetch(`/admin/placid-templates/fetch-layers?uuid=${encodeURIComponent(uuid)}`);
+        if (!r.ok) { lastFetchReason = 'network_error'; placidTemplateLayers = []; return; }
         const data = await r.json();
         placidTemplateLayers = data.layers || [];
+        lastFetchReason = data.reason || null;
       } catch {
+        lastFetchReason = 'network_error';
         placidTemplateLayers = [];
       }
     }
@@ -274,8 +281,25 @@
       const textLayers  = placidTemplateLayers.filter(l => l.type === 'text');
       const imageLayers = placidTemplateLayers.filter(l => l.type === 'image' || l.type === 'picture');
 
+      // Remove any prior manual-input companions
+      document.querySelectorAll('.core-layer-manual-input').forEach(el => el.remove());
+
       function fillSelect(sel, layers, selected, addEmpty) {
         sel.innerHTML = '';
+        if (!layers.length && !addEmpty) {
+          // No layers to choose from — show a text input that syncs back to a hidden option
+          sel.style.display = 'none';
+          sel.innerHTML = `<option value="${esc(selected || '')}">${esc(selected || '')}<\/option>`;
+          const input = document.createElement('input');
+          input.type = 'text'; input.className = 'cell-input core-layer-manual-input';
+          input.value = selected || ''; input.placeholder = 'Type layer name';
+          sel.parentNode.insertBefore(input, sel.nextSibling);
+          input.addEventListener('input', () => {
+            sel.innerHTML = `<option value="${esc(input.value)}" selected>${esc(input.value)}<\/option>`;
+          });
+          return;
+        }
+        sel.style.display = '';
         if (addEmpty) sel.innerHTML = '<option value="">(none)</option>';
         for (const l of layers) {
           sel.innerHTML += `<option value="${esc(l.name)}" ${l.name === selected ? 'selected' : ''}>${esc(l.name)}<\/option>`;
@@ -508,6 +532,7 @@
       list.querySelectorAll('.cf-type').forEach((sel,i) => sel.addEventListener('change', () => {
         placidCustomFields[i].type = sel.value;
         const mc = sel.closest('.placid-cf-row').querySelector('.cf-max-chars');
+        if (sel.value === 'image') { mc.value = ''; placidCustomFields[i].max_chars = null; }
         mc.disabled = sel.value === 'image'; mc.classList.toggle('cell-input--disabled', sel.value === 'image');
       }));
       list.querySelectorAll('.cf-layer-name').forEach((el,i) => el.addEventListener('input', () => { placidCustomFields[i].layer_name = el.value; }));
@@ -591,11 +616,15 @@
       document.getElementById('placid-form-id').value          = template?.id || '';
       document.getElementById('placid-form-name').value        = template?.name || '';
       document.getElementById('placid-form-uuid').value        = template?.template_uuid || '';
-      document.getElementById('placid-form-error').classList.add('hidden');
-      document.getElementById('placid-form-error-2').classList.add('hidden');
+      const errEl1 = document.getElementById('placid-form-error');
+      const errEl2 = document.getElementById('placid-form-error-2');
+      errEl1.textContent = ''; errEl1.classList.add('hidden');
+      errEl2.textContent = ''; errEl2.classList.add('hidden');
       placidTemplateLayers = [];
       placidCustomFields   = [];
       placidBrandLayers    = [];
+      step2PopulatedForUuid = null;
+      lastFetchReason       = null;
 
       if (template) {
         // Editing: fetch layers then jump to step 2
@@ -625,20 +654,26 @@
 
       const statusEl = document.getElementById('placid-step2-status');
 
-      // Show step 2 with loading state
       setWizardStep(2);
       statusEl.textContent = 'Fetching layers from Placid…';
 
       await fetchPlacidLayers(uuid);
 
+      // Build status message (assign, never append)
+      let statusMsg = '';
       if (!placidTemplateLayers.length) {
-        statusEl.textContent = 'No layers found for this UUID — add mappings manually below.';
+        const REASON_MSGS = {
+          no_api_key:     'Placid API key not configured — go to Settings to add it, or add mappings manually.',
+          api_error:      'Placid API returned an error — check your API key and try again.',
+          uuid_not_found: 'Template UUID not found in Placid — double-check the UUID.',
+          network_error:  'Could not reach the server — check your connection and try again.',
+        };
+        statusMsg = REASON_MSGS[lastFetchReason] || 'No layers found for this UUID — add mappings manually below.';
       } else {
-        statusEl.textContent = `${placidTemplateLayers.length} layer${placidTemplateLayers.length !== 1 ? 's' : ''} fetched from Placid.`;
+        statusMsg = `${placidTemplateLayers.length} layer${placidTemplateLayers.length !== 1 ? 's' : ''} fetched from Placid.`;
       }
 
       if (template && (template.brand_layers?.length || template.custom_layers?.length)) {
-        // Restore saved mappings when editing
         placidBrandLayers  = JSON.parse(JSON.stringify(template.brand_layers  || []));
         placidCustomFields = JSON.parse(JSON.stringify(template.custom_layers || []));
         populateCoreLayerDropdowns(
@@ -646,9 +681,8 @@
           template.layer_subtext   || 'subtext',
           template.layer_background || ''
         );
-        statusEl.textContent += ' Showing saved mappings — edit as needed.';
+        statusMsg += ' Showing saved mappings — edit as needed.';
       } else {
-        // Auto-detect everything
         const detected = autoDetectMappings();
         placidBrandLayers  = detected.brandDetected;
         placidCustomFields = detected.customDetected;
@@ -662,17 +696,45 @@
         if (detected.headlineLayer || detected.subtextLayer) parts.push('core layers');
         if (detected.brandDetected.length) parts.push(`${detected.brandDetected.length} brand mapping${detected.brandDetected.length !== 1 ? 's' : ''}`);
         if (detected.customDetected.length) parts.push(`${detected.customDetected.length} custom field${detected.customDetected.length !== 1 ? 's' : ''}`);
-        if (parts.length) statusEl.textContent += ` Auto-detected: ${parts.join(', ')}.`;
+        if (parts.length) statusMsg += ` Auto-detected: ${parts.join(', ')}.`;
+      }
+      statusEl.textContent = statusMsg;
+
+      // Attach core-layer change listeners once
+      if (!coreListenersAttached) {
+        ['placid-form-headline', 'placid-form-subtext', 'placid-form-background'].forEach(id => {
+          document.getElementById(id).addEventListener('change', () => {
+            validateCoreLayerSelections();
+            renderLayerMapRows();
+          });
+        });
+        coreListenersAttached = true;
       }
 
+      step2PopulatedForUuid = uuid;
       renderLayerMapRows();
       renderCustomFieldRows();
       document.getElementById('wizard-step-2').scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
+    function validateCoreLayerSelections() {
+      const headline = document.getElementById('placid-form-headline').value;
+      const subtext  = document.getElementById('placid-form-subtext').value;
+      const errEl    = document.getElementById('placid-form-error-2');
+      if (headline && subtext && headline === subtext) {
+        errEl.textContent = 'Headline and subtext cannot use the same layer.';
+        errEl.classList.remove('hidden');
+        return false;
+      }
+      errEl.textContent = ''; errEl.classList.add('hidden');
+      return true;
+    }
+
     function closeForm() {
       placidCustomFields = []; placidBrandLayers = []; placidTemplateLayers = [];
       editingTemplate = null;
+      step2PopulatedForUuid = null;
+      lastFetchReason = null;
       document.getElementById('placid-form').classList.add('hidden');
     }
 
@@ -697,7 +759,26 @@
     document.getElementById('placid-form-cancel').addEventListener('click', closeForm);
 
     // Step 1 → Step 2
-    document.getElementById('placid-step1-next').addEventListener('click', () => goToStep2(null));
+    document.getElementById('placid-step1-next').addEventListener('click', () => {
+      const btn = document.getElementById('placid-step1-next');
+      if (btn.disabled) return;
+
+      const currentUuid = document.getElementById('placid-form-uuid').value.trim();
+
+      // If step 2 was already populated for the same UUID, just show it
+      if (step2PopulatedForUuid === currentUuid && placidTemplateLayers.length > 0) {
+        setWizardStep(2);
+        document.getElementById('wizard-step-2').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return;
+      }
+
+      btn.disabled = true;
+      btn.innerHTML = 'Fetching layers&hellip;';
+      goToStep2(editingTemplate).finally(() => {
+        btn.disabled = false;
+        btn.innerHTML = 'Fetch fields &amp; continue';
+      });
+    });
 
     // Step 2 → Step 1
     document.getElementById('placid-step2-back').addEventListener('click', () => {
@@ -748,6 +829,19 @@
       const errEl = document.getElementById('placid-form-error-2');
       if (!payload.name || !payload.template_uuid) {
         errEl.textContent = 'Name and template UUID are required.'; errEl.classList.remove('hidden'); return;
+      }
+      if (payload.layer_headline && payload.layer_subtext && payload.layer_headline === payload.layer_subtext) {
+        errEl.textContent = 'Headline and subtext cannot use the same layer.'; errEl.classList.remove('hidden'); return;
+      }
+      const cfNames = custom_layers.map(f => f.layer_name);
+      const cfDupe = cfNames.find((n, i) => cfNames.indexOf(n) !== i);
+      if (cfDupe) {
+        errEl.textContent = `Duplicate custom field layer name: "${cfDupe}". Each must be unique.`; errEl.classList.remove('hidden'); return;
+      }
+      const blNames = new Set(brand_layers.map(m => m.layer_name));
+      const overlap = custom_layers.find(f => blNames.has(f.layer_name));
+      if (overlap) {
+        errEl.textContent = `"${overlap.layer_name}" is mapped as both a brand layer and a custom field.`; errEl.classList.remove('hidden'); return;
       }
       errEl.classList.add('hidden');
 

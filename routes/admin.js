@@ -392,15 +392,15 @@ router.get('/placid-templates/fetch-layers', requireAdminPassword, async (req, r
   if (!uuid) return res.status(400).json({ ok: false, error: 'uuid required' });
   try {
     const apiKey = process.env.PLACID_API_KEY || await getSetting('placid_api_key') || null;
-    if (!apiKey) return res.json({ ok: true, layers: [] });
+    if (!apiKey) return res.json({ ok: true, layers: [], reason: 'no_api_key' });
     const r = await fetch('https://api.placid.app/api/rest/templates', {
       headers: { Authorization: `Bearer ${apiKey}` },
     });
-    if (!r.ok) return res.json({ ok: true, layers: [] });
+    if (!r.ok) return res.json({ ok: true, layers: [], reason: 'api_error' });
     const body = await r.json();
     const list = Array.isArray(body.data) ? body.data : Array.isArray(body) ? body : [];
     const tpl = list.find(t => t.uuid === uuid);
-    if (!tpl) return res.json({ ok: true, layers: [] });
+    if (!tpl) return res.json({ ok: true, layers: [], reason: 'uuid_not_found' });
     const layers = Array.isArray(tpl.layers)
       ? tpl.layers.map(l => ({ name: l.name, type: l.type || 'unknown' }))
       : [];
@@ -420,6 +420,27 @@ function normalisePlacidRow(row) {
     brand_layers:  parsePlacidJsonArray(row.brand_layers),
   };
 }
+function validateBrandLayers(arr) {
+  if (!Array.isArray(arr)) return 'brand_layers must be an array';
+  for (let i = 0; i < arr.length; i++) {
+    const e = arr[i];
+    if (!e.layer_name || typeof e.layer_name !== 'string') return `brand_layers[${i}] missing layer_name`;
+    if (!e.brand_source || typeof e.brand_source !== 'string') return `brand_layers[${i}] missing brand_source`;
+    if (!e.property || typeof e.property !== 'string') return `brand_layers[${i}] missing property`;
+  }
+  return null;
+}
+function validateCustomLayers(arr) {
+  if (!Array.isArray(arr)) return 'custom_layers must be an array';
+  const seen = new Set();
+  for (let i = 0; i < arr.length; i++) {
+    const e = arr[i];
+    if (!e.layer_name || typeof e.layer_name !== 'string') return `custom_layers[${i}] missing layer_name`;
+    if (seen.has(e.layer_name)) return `Duplicate custom_layers layer_name: "${e.layer_name}"`;
+    seen.add(e.layer_name);
+  }
+  return null;
+}
 
 router.get('/placid-templates', requireAdminPassword, async (req, res) => {
   try {
@@ -437,6 +458,10 @@ router.post('/placid-templates', requireAdminPassword, async (req, res) => {
   if (!name || !template_uuid) {
     return res.status(400).json({ ok: false, error: 'name and template_uuid are required' });
   }
+  const blErr = validateBrandLayers(brand_layers);
+  if (blErr) return res.status(400).json({ ok: false, error: blErr });
+  const clErr = validateCustomLayers(custom_layers);
+  if (clErr) return res.status(400).json({ ok: false, error: clErr });
   const customLayersJson = JSON.stringify(Array.isArray(custom_layers) ? custom_layers : []);
   const brandLayersJson  = JSON.stringify(Array.isArray(brand_layers)  ? brand_layers  : []);
   try {
@@ -461,6 +486,10 @@ router.put('/placid-templates/:id', requireAdminPassword, async (req, res) => {
   if (!name || !template_uuid) {
     return res.status(400).json({ ok: false, error: 'name and template_uuid are required' });
   }
+  const blErr = validateBrandLayers(brand_layers);
+  if (blErr) return res.status(400).json({ ok: false, error: blErr });
+  const clErr = validateCustomLayers(custom_layers);
+  if (clErr) return res.status(400).json({ ok: false, error: clErr });
   const customLayersJson = JSON.stringify(Array.isArray(custom_layers) ? custom_layers : []);
   const brandLayersJson  = JSON.stringify(Array.isArray(brand_layers)  ? brand_layers  : []);
   try {

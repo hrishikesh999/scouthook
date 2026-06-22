@@ -591,6 +591,9 @@ label, .field label { color: #111111; }
 .btn--xs {
   padding: 3px 10px; font-size: 0.75rem; line-height: 1.4;
 }
+.btn[disabled] {
+  opacity: 0.55; cursor: not-allowed;
+}
 .remove-btn {
   padding: 4px 9px;
   background: none;

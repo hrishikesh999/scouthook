@@ -7236,18 +7236,22 @@ html[data-nav-dir="back"] #main-content.spa-entering {
   align-items: stretch;
   justify-content: flex-start;
   overflow: hidden;
+  padding: 0;
 }
 .carousel-main-img {
   flex: 1;
+  min-height: 0;
   width: 100%;
-  max-height: calc(100% - 88px);
   object-fit: contain;
   display: block;
+  padding: var(--space-5);
+  box-sizing: border-box;
 }
 .carousel-thumbnails {
   display: flex;
   gap: 8px;
-  overflow-x: auto;
+  overflow-x: scroll;
+  -webkit-overflow-scrolling: touch;
   padding: 8px 12px;
   flex-shrink: 0;
   height: 80px;

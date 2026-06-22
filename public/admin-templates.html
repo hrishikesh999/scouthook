@@ -53,56 +53,86 @@
           <div class="loading-text--padded">Loading…</div>
         </div>
 
-        <!-- Add/Edit form -->
+        <!-- Add/Edit wizard -->
         <div id="placid-form" class="hidden card card--section-xl">
-          <h3 id="placid-form-title" class="form-section-title">Add template</h3>
           <input type="hidden" id="placid-form-id">
 
-          <div class="field">
-            <label for="placid-form-name">Template name</label>
-            <input type="text" id="placid-form-name" placeholder="e.g. Dark Quote Card" maxlength="80">
-          </div>
-          <div class="field">
-            <label for="placid-form-uuid">Placid template UUID</label>
-            <input type="text" id="placid-form-uuid" placeholder="abc123…" maxlength="200">
-            <div class="text-muted field-hint">Found in your Placid dashboard under the template settings.</div>
-            <div class="brand-mapping-actions" style="margin-top:var(--space-sm,8px)">
-              <button type="button" id="placid-fetch-all-btn" class="btn btn--secondary btn--sm">Fetch all fields from Placid</button>
-              <span id="placid-layers-status" class="brand-layers-status"></span>
+          <!-- Step indicator -->
+          <div class="wizard-steps">
+            <div class="wizard-step wizard-step--active" id="wizard-indicator-1">
+              <span class="wizard-step__num">1</span>
+              <span class="wizard-step__label">Template setup</span>
+            </div>
+            <div class="wizard-step__line"></div>
+            <div class="wizard-step" id="wizard-indicator-2">
+              <span class="wizard-step__num">2</span>
+              <span class="wizard-step__label">Field mapping</span>
             </div>
           </div>
-          <div class="field">
-            <label for="placid-form-headline">Headline layer name</label>
-            <input type="text" id="placid-form-headline" placeholder="headline" maxlength="80">
-          </div>
-          <div class="field">
-            <label for="placid-form-subtext">Subtext layer name</label>
-            <input type="text" id="placid-form-subtext" placeholder="subtext" maxlength="80">
-          </div>
-          <div class="field">
-            <label for="placid-form-background">Background image layer name <span class="label-optional">(optional)</span></label>
-            <input type="text" id="placid-form-background" placeholder="background" maxlength="80">
-          </div>
-          <!-- Custom fields -->
-          <div class="field field--top-gap">
-            <label class="label-block">Custom fields <span class="label-optional">(optional)</span></label>
-            <div class="text-muted field-hint field-hint--mb">Extra Placid layers shown as editable inputs in the editor.</div>
-            <div id="placid-custom-fields-list"></div>
-            <button type="button" id="placid-add-field-btn" class="btn btn--secondary btn--sm btn--top-gap">+ Add field</button>
+
+          <!-- STEP 1: Template setup -->
+          <div id="wizard-step-1">
+            <h3 id="placid-form-title" class="form-section-title">Add template</h3>
+            <div class="field">
+              <label for="placid-form-name">Template name</label>
+              <input type="text" id="placid-form-name" placeholder="e.g. Dark Quote Card" maxlength="80">
+            </div>
+            <div class="field">
+              <label for="placid-form-uuid">Placid template UUID</label>
+              <input type="text" id="placid-form-uuid" placeholder="abc123…" maxlength="200">
+              <div class="text-muted field-hint">Found in your Placid dashboard under the template settings.</div>
+            </div>
+            <div id="placid-form-error" class="form-error hidden"></div>
+            <div class="form-actions">
+              <button id="placid-step1-next" class="btn btn--primary" type="button">Fetch fields &amp; continue</button>
+              <button id="placid-form-cancel" class="btn btn--secondary" type="button">Cancel</button>
+            </div>
           </div>
 
-          <!-- Brand mappings -->
-          <div class="field field--top-gap">
-            <label class="label-block">Brand mappings <span class="label-optional">(optional)</span></label>
-            <div class="text-muted field-hint field-hint--mb">Map your workspace brand to Placid layers — applied automatically at render time.</div>
-            <div id="placid-brand-layers-list"></div>
-            <button type="button" id="placid-add-brand-layer-btn" class="btn btn--secondary btn--sm btn--top-gap">+ Add mapping</button>
-          </div>
+          <!-- STEP 2: Field mapping review -->
+          <div id="wizard-step-2" class="hidden">
+            <h3 class="form-section-title">Review field mappings</h3>
+            <div id="placid-step2-status" class="brand-layers-status" style="margin-bottom:var(--space-md)"></div>
 
-          <div id="placid-form-error" class="form-error hidden"></div>
-          <div class="form-actions">
-            <button id="placid-form-save" class="btn btn--primary" type="button">Save template</button>
-            <button id="placid-form-cancel" class="btn btn--secondary" type="button">Cancel</button>
+            <!-- Core layers -->
+            <fieldset class="wizard-fieldset">
+              <legend class="wizard-fieldset__legend">Core layers</legend>
+              <div class="text-muted field-hint field-hint--mb">These Placid layers receive the AI-generated hook text and optional background image.</div>
+              <div class="field">
+                <label for="placid-form-headline">Headline layer</label>
+                <select id="placid-form-headline" class="cell-select"></select>
+              </div>
+              <div class="field">
+                <label for="placid-form-subtext">Subtext layer</label>
+                <select id="placid-form-subtext" class="cell-select"></select>
+              </div>
+              <div class="field">
+                <label for="placid-form-background">Background image layer <span class="label-optional">(optional)</span></label>
+                <select id="placid-form-background" class="cell-select"></select>
+              </div>
+            </fieldset>
+
+            <!-- All fetched layers with mapping controls -->
+            <fieldset class="wizard-fieldset">
+              <legend class="wizard-fieldset__legend">Brand mappings</legend>
+              <div class="text-muted field-hint field-hint--mb">For each Placid layer, map it to a brand setting saved in your Brand page. Only mapped layers are auto-filled at render time.</div>
+              <div id="placid-layer-map-list"></div>
+              <button type="button" id="placid-add-brand-layer-btn" class="btn btn--secondary btn--sm btn--top-gap">+ Add manual mapping</button>
+            </fieldset>
+
+            <!-- Custom fields -->
+            <fieldset class="wizard-fieldset">
+              <legend class="wizard-fieldset__legend">Custom fields</legend>
+              <div class="text-muted field-hint field-hint--mb">Extra Placid layers shown as editable inputs in the editor. Auto-detected from remaining text/image layers.</div>
+              <div id="placid-custom-fields-list"></div>
+              <button type="button" id="placid-add-field-btn" class="btn btn--secondary btn--sm btn--top-gap">+ Add field</button>
+            </fieldset>
+
+            <div id="placid-form-error-2" class="form-error hidden"></div>
+            <div class="form-actions">
+              <button id="placid-step2-back" class="btn btn--secondary" type="button">Back</button>
+              <button id="placid-form-save" class="btn btn--primary" type="button">Save template</button>
+            </div>
           </div>
         </div>
 
@@ -115,7 +145,9 @@
     let placidTemplates      = [];
     let placidCustomFields   = [];
     let placidBrandLayers    = [];
-    let placidTemplateLayers = []; // layers fetched from Placid API for the current form
+    let placidTemplateLayers = [];
+    let wizardStep           = 1;
+    let editingTemplate      = null;
 
     const BRAND_SOURCE_LABELS = {
       brand_bg:'Background color', brand_accent:'Accent color', brand_text:'Text color',
@@ -128,7 +160,6 @@
       background_color:'Fill / background color', font_family:'Font family', image_url:'Image URL',
     };
 
-    // Default Placid property for each brand source
     function inferProperty(brand_source) {
       if (['brand_bg','brand_accent','brand_secondary_bg'].includes(brand_source)) return 'background_color';
       if (['brand_text','brand_secondary_text'].includes(brand_source))            return 'color';
@@ -140,103 +171,75 @@
 
     function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
-    function setBrandStatus(msg, muted = true) {
-      const el = document.getElementById('placid-layers-status');
-      if (el) { el.textContent = msg; el.className = 'brand-layers-status' + (muted ? ' text-muted' : ''); }
-    }
-
-    // Fetch Placid template layers from the backend
-    async function fetchPlacidLayers(uuid) {
-      if (!uuid) return;
-      setBrandStatus('Fetching layers from Placid…');
-      try {
-        const r    = await adminFetch(`/admin/placid-templates/fetch-layers?uuid=${encodeURIComponent(uuid)}`);
-        const data = await r.json();
-        placidTemplateLayers = data.layers || [];
-        if (placidTemplateLayers.length) {
-          setBrandStatus(`${placidTemplateLayers.length} layer${placidTemplateLayers.length !== 1 ? 's' : ''} found in Placid — click "Fetch all fields" to populate`);
-        } else {
-          setBrandStatus('No layers found for this UUID');
-        }
-      } catch {
-        placidTemplateLayers = [];
-        setBrandStatus('Could not fetch layers from Placid');
-      }
-    }
-
     function layerNameToLabel(name) {
       return name.replace(/[_-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).trim();
     }
 
-    function getReservedLayerNames() {
-      return new Set([
-        document.getElementById('placid-form-headline').value.trim()   || 'headline',
-        document.getElementById('placid-form-subtext').value.trim()    || 'subtext',
-        document.getElementById('placid-form-background').value.trim(),
-      ].filter(Boolean));
+    // ── Wizard navigation ──────────────────────────────────────────────────
+    function setWizardStep(step) {
+      wizardStep = step;
+      document.getElementById('wizard-step-1').classList.toggle('hidden', step !== 1);
+      document.getElementById('wizard-step-2').classList.toggle('hidden', step !== 2);
+      const ind1 = document.getElementById('wizard-indicator-1');
+      const ind2 = document.getElementById('wizard-indicator-2');
+      ind1.className = 'wizard-step' + (step === 1 ? ' wizard-step--active' : ' wizard-step--done');
+      ind2.className = 'wizard-step' + (step === 2 ? ' wizard-step--active' : '');
     }
 
+    // ── Fetch layers from Placid API ───────────────────────────────────────
+    async function fetchPlacidLayers(uuid) {
+      if (!uuid) return;
+      try {
+        const r    = await adminFetch(`/admin/placid-templates/fetch-layers?uuid=${encodeURIComponent(uuid)}`);
+        const data = await r.json();
+        placidTemplateLayers = data.layers || [];
+      } catch {
+        placidTemplateLayers = [];
+      }
+    }
+
+    // ── Auto-detect heuristics ─────────────────────────────────────────────
     function detectHeadlineLayer(layers) {
       const kws = ['headline','header','title','heading','main_text','primary_text','h1'];
       return layers.find(l => l.type === 'text' && kws.some(k => l.name.toLowerCase().includes(k)))
           || layers.find(l => l.type === 'text');
     }
-
     function detectSubtextLayer(layers, headlineName) {
       const kws = ['subtext','subtitle','body','description','caption','copy','supporting','sub'];
       return layers.find(l => l.type === 'text' && l.name !== headlineName && kws.some(k => l.name.toLowerCase().includes(k)))
           || layers.find(l => l.type === 'text' && l.name !== headlineName);
     }
-
     function detectBackgroundLayer(layers) {
       const kws = ['background','bg_image','hero','photo'];
       return layers.find(l => l.type === 'image' && kws.some(k => l.name.toLowerCase().includes(k))) || null;
     }
 
-    // Heuristic: auto-detect ALL fields from Placid layers (headline, subtext, bg, brand mappings, custom fields)
-    function autoDetectAllLayers() {
-      const uuid  = document.getElementById('placid-form-uuid').value.trim();
-      const errEl = document.getElementById('placid-form-error');
+    const BRAND_HEURISTICS = [
+      { names:['logo','brand_logo','picture','icon'],         types:['picture'],            src:'brand_logo',           prop:'image_url' },
+      { names:['secondary_bg','secondary_background'],        types:[],                     src:'brand_secondary_bg',   prop:'background_color' },
+      { names:['secondary_text','secondary_color'],           types:[],                     src:'brand_secondary_text', prop:'color' },
+      { names:['accent','highlight','cta','brand_accent'],    types:[],                     src:'brand_accent',         prop:'background_color' },
+      { names:['heading_font','font_heading','title_font'],   types:[],                     src:'brand_font_heading',   prop:'font_family' },
+      { names:['body_font','font_body','paragraph_font'],     types:[],                     src:'brand_font_body',      prop:'font_family' },
+      { names:['brand_name','company_name','company'],        types:[],                     src:'brand_name',           prop:'text' },
+      { names:['bg','background','fill','brand_bg','primary'],types:['rectangle','image'],  src:'brand_bg',             prop:'background_color' },
+      { names:['text_color','brand_text','font_color','text_col'], types:[],                src:'brand_text',           prop:'color' },
+    ];
 
-      if (!placidTemplateLayers.length) {
-        if (!uuid) {
-          errEl.textContent = 'Enter the Placid template UUID first, then click "Fetch all fields".';
-          errEl.classList.remove('hidden');
-          return;
-        }
-        fetchPlacidLayers(uuid).then(() => {
-          if (placidTemplateLayers.length) autoDetectAllLayers();
-          else setBrandStatus('No layers found — fill fields manually below');
-        });
-        return;
-      }
-
+    function autoDetectMappings() {
       const usedLayer = new Set();
 
-      // Step 1: core layer fields (headline, subtext, background)
       const headlineLayer   = detectHeadlineLayer(placidTemplateLayers);
       const subtextLayer    = detectSubtextLayer(placidTemplateLayers, headlineLayer?.name);
       const backgroundLayer = detectBackgroundLayer(placidTemplateLayers);
-      if (headlineLayer)   { document.getElementById('placid-form-headline').value   = headlineLayer.name;   usedLayer.add(headlineLayer.name); }
-      if (subtextLayer)    { document.getElementById('placid-form-subtext').value    = subtextLayer.name;    usedLayer.add(subtextLayer.name); }
-      if (backgroundLayer) { document.getElementById('placid-form-background').value = backgroundLayer.name; usedLayer.add(backgroundLayer.name); }
+      if (headlineLayer)   usedLayer.add(headlineLayer.name);
+      if (subtextLayer)    usedLayer.add(subtextLayer.name);
+      if (backgroundLayer) usedLayer.add(backgroundLayer.name);
 
-      // Step 2: brand heuristics (each brand source matched at most once)
-      const HEURISTICS = [
-        { names:['logo','brand_logo','picture','icon'],         types:['picture'],            src:'brand_logo',           prop:'image_url' },
-        { names:['secondary_bg','secondary_background'],        types:[],                     src:'brand_secondary_bg',   prop:'background_color' },
-        { names:['secondary_text','secondary_color'],           types:[],                     src:'brand_secondary_text', prop:'color' },
-        { names:['accent','highlight','cta','brand_accent'],    types:[],                     src:'brand_accent',         prop:'background_color' },
-        { names:['heading_font','font_heading','title_font'],   types:[],                     src:'brand_font_heading',   prop:'font_family' },
-        { names:['body_font','font_body','paragraph_font'],     types:[],                     src:'brand_font_body',      prop:'font_family' },
-        { names:['brand_name','company_name','company'],        types:[],                     src:'brand_name',           prop:'text' },
-        { names:['bg','background','fill','brand_bg','primary'],types:['rectangle','image'],  src:'brand_bg',             prop:'background_color' },
-        { names:['text_color','brand_text','font_color','text_col'], types:[],               src:'brand_text',           prop:'color' },
-      ];
-
+      // Brand mappings
       const usedSrc = new Set();
       const brandDetected = [];
-      for (const h of HEURISTICS) {
+      for (const h of BRAND_HEURISTICS) {
         if (usedSrc.has(h.src)) continue;
         for (const layer of placidTemplateLayers) {
           if (usedLayer.has(layer.name)) continue;
@@ -250,11 +253,10 @@
         }
       }
 
-      // Step 3: remaining user-editable layers → custom fields
-      const reserved = getReservedLayerNames();
+      // Custom fields from remaining layers
       const customDetected = [];
       for (const layer of placidTemplateLayers) {
-        if (usedLayer.has(layer.name) || reserved.has(layer.name)) continue;
+        if (usedLayer.has(layer.name)) continue;
         if (layer.type === 'text') {
           customDetected.push({ layer_name: layer.name, label: layerNameToLabel(layer.name), type: 'text', max_chars: null });
           usedLayer.add(layer.name);
@@ -264,18 +266,112 @@
         }
       }
 
-      placidBrandLayers  = brandDetected;
-      placidCustomFields = customDetected;
-      renderBrandLayerRows();
-      renderCustomFieldRows();
-
-      const parts = [];
-      if (headlineLayer || subtextLayer) parts.push('layer names');
-      if (brandDetected.length)          parts.push(`${brandDetected.length} brand mapping${brandDetected.length !== 1 ? 's' : ''}`);
-      if (customDetected.length)         parts.push(`${customDetected.length} custom field${customDetected.length !== 1 ? 's' : ''}`);
-      setBrandStatus(parts.length ? `Auto-detected: ${parts.join(', ')} — review and save` : 'No layers matched — fill fields manually below', !parts.length);
+      return { headlineLayer, subtextLayer, backgroundLayer, brandDetected, customDetected };
     }
 
+    // ── Populate core-layer dropdowns with fetched layers ──────────────────
+    function populateCoreLayerDropdowns(headlineName, subtextName, bgName) {
+      const textLayers  = placidTemplateLayers.filter(l => l.type === 'text');
+      const imageLayers = placidTemplateLayers.filter(l => l.type === 'image' || l.type === 'picture');
+
+      function fillSelect(sel, layers, selected, addEmpty) {
+        sel.innerHTML = '';
+        if (addEmpty) sel.innerHTML = '<option value="">(none)</option>';
+        for (const l of layers) {
+          sel.innerHTML += `<option value="${esc(l.name)}" ${l.name === selected ? 'selected' : ''}>${esc(l.name)}<\/option>`;
+        }
+        if (selected && !layers.find(l => l.name === selected)) {
+          sel.innerHTML += `<option value="${esc(selected)}" selected>${esc(selected)}<\/option>`;
+        }
+      }
+
+      fillSelect(document.getElementById('placid-form-headline'), textLayers, headlineName, false);
+      fillSelect(document.getElementById('placid-form-subtext'),  textLayers, subtextName, false);
+      fillSelect(document.getElementById('placid-form-background'), imageLayers, bgName, true);
+    }
+
+    // ── Render per-layer mapping rows (step 2) ────────────────────────────
+    function renderLayerMapRows() {
+      const list = document.getElementById('placid-layer-map-list');
+      if (!placidBrandLayers.length) {
+        list.innerHTML = '<p class="empty-section-text">No brand mappings. Click "+ Add manual mapping" below.</p>';
+        return;
+      }
+      const srcOpts  = '<option value="">(skip)</option>' + Object.entries(BRAND_SOURCE_LABELS).map(([v,l]) => `<option value="${v}">${esc(l)}</option>`).join('');
+      const propOpts = Object.entries(PLACID_PROPERTY_LABELS).map(([v,l]) => `<option value="${v}">${esc(l)}</option>`).join('');
+      const layerOpts = placidTemplateLayers.length
+        ? '<option value="">(type manually)</option>' + placidTemplateLayers.map(l => `<option value="${esc(l.name)}">${esc(l.name)} (${esc(l.type)})</option>`).join('')
+        : '';
+
+      list.innerHTML = `
+        <div class="layer-map-header">
+          <span class="cell-label">Placid layer</span>
+          <span></span>
+          <span class="cell-label">Brand setting</span>
+          <span class="cell-label">Applied as</span>
+          <span></span>
+        </div>` +
+        placidBrandLayers.map((m, i) => {
+          const layer = placidTemplateLayers.find(l => l.name === m.layer_name);
+          const typeBadge = layer ? `<span class="layer-type-badge">${esc(layer.type)}</span>` : '';
+          const isFromFetch = !!layer;
+          return `
+        <div class="layer-map-row" data-idx="${i}">
+          ${isFromFetch
+            ? `<div class="layer-name-cell" data-layer="${esc(m.layer_name)}">${esc(m.layer_name)}${typeBadge}</div>`
+            : `<input type="text" class="lm-layer-name cell-input" value="${esc(m.layer_name)}" placeholder="Layer name" maxlength="80">`}
+          <div class="layer-map-arrow">→</div>
+          <select class="lm-brand-source cell-select">${srcOpts}</select>
+          <select class="lm-property cell-select">${propOpts}</select>
+          <button type="button" class="remove-btn lm-remove-btn" data-idx="${i}">✕</button>
+        </div>`;
+        }).join('');
+
+      list.querySelectorAll('.layer-map-row').forEach((row, i) => {
+        row.querySelector('.lm-brand-source').value = placidBrandLayers[i].brand_source || '';
+        row.querySelector('.lm-property').value     = placidBrandLayers[i].property     || inferProperty(placidBrandLayers[i].brand_source);
+      });
+
+      list.querySelectorAll('.lm-remove-btn').forEach(b =>
+        b.addEventListener('click', () => { placidBrandLayers.splice(+b.dataset.idx, 1); renderLayerMapRows(); }));
+      list.querySelectorAll('.lm-layer-name').forEach((el, i) =>
+        el.addEventListener('input', () => { placidBrandLayers[i].layer_name = el.value; }));
+      list.querySelectorAll('.lm-brand-source').forEach((el, i) =>
+        el.addEventListener('change', () => {
+          placidBrandLayers[i].brand_source = el.value;
+          const propSel = el.closest('.layer-map-row').querySelector('.lm-property');
+          if (el.value) { propSel.value = inferProperty(el.value); placidBrandLayers[i].property = propSel.value; }
+        }));
+      list.querySelectorAll('.lm-property').forEach((el, i) =>
+        el.addEventListener('change', () => { placidBrandLayers[i].property = el.value; }));
+    }
+
+    function renderCustomFieldRows() {
+      const list = document.getElementById('placid-custom-fields-list');
+      if (!placidCustomFields.length) { list.innerHTML = '<p class="empty-section-text">No custom fields yet.</p>'; return; }
+      list.innerHTML = placidCustomFields.map((f, i) => `
+        <div class="cf-grid placid-cf-row" data-idx="${i}">
+          <input type="text" class="cf-layer-name cell-input" value="${esc(f.layer_name)}" placeholder="Layer name" maxlength="80">
+          <input type="text" class="cf-label cell-input" value="${esc(f.label)}" placeholder="Editor label" maxlength="80">
+          <select class="cf-type cell-select">
+            <option value="text" ${f.type==='text'?'selected':''}>Text</option>
+            <option value="image" ${f.type==='image'?'selected':''}>Image</option>
+          </select>
+          <input type="number" class="cf-max-chars cell-input${f.type==='image'?' cell-input--disabled':''}" value="${f.max_chars||''}" placeholder="Max" min="1" max="2000" ${f.type==='image'?'disabled':''}>
+          <button type="button" class="remove-btn cf-remove-btn" data-idx="${i}">✕</button>
+        </div>`).join('');
+      list.querySelectorAll('.cf-remove-btn').forEach(b => b.addEventListener('click', () => { placidCustomFields.splice(+b.dataset.idx,1); renderCustomFieldRows(); }));
+      list.querySelectorAll('.cf-type').forEach((sel,i) => sel.addEventListener('change', () => {
+        placidCustomFields[i].type = sel.value;
+        const mc = sel.closest('.placid-cf-row').querySelector('.cf-max-chars');
+        mc.disabled = sel.value === 'image'; mc.classList.toggle('cell-input--disabled', sel.value === 'image');
+      }));
+      list.querySelectorAll('.cf-layer-name').forEach((el,i) => el.addEventListener('input', () => { placidCustomFields[i].layer_name = el.value; }));
+      list.querySelectorAll('.cf-label').forEach((el,i)      => el.addEventListener('input', () => { placidCustomFields[i].label = el.value; }));
+      list.querySelectorAll('.cf-max-chars').forEach((el,i)  => el.addEventListener('input', () => { placidCustomFields[i].max_chars = parseInt(el.value)||null; }));
+    }
+
+    // ── Auth & init ────────────────────────────────────────────────────────
     function init() {
       const saved = sessionStorage.getItem('adminPw');
       if (saved) { adminPw = saved; showMain(); return; }
@@ -302,6 +398,7 @@
       });
     }
 
+    // ── Template CRUD ──────────────────────────────────────────────────────
     async function loadPlacidTemplates() {
       const r = await adminFetch('/admin/placid-templates');
       const data = await r.json();
@@ -343,30 +440,95 @@
       });
     }
 
+    // ── Open form (new or edit) ────────────────────────────────────────────
     function openForm(template = null) {
-      document.getElementById('placid-form-title').textContent    = template ? 'Edit template' : 'Add template';
-      document.getElementById('placid-form-id').value             = template?.id || '';
-      document.getElementById('placid-form-name').value           = template?.name || '';
-      document.getElementById('placid-form-uuid').value           = template?.template_uuid || '';
-      document.getElementById('placid-form-headline').value       = template?.layer_headline || 'headline';
-      document.getElementById('placid-form-subtext').value        = template?.layer_subtext  || 'subtext';
-      document.getElementById('placid-form-background').value     = template?.layer_background || '';
+      editingTemplate = template;
+      document.getElementById('placid-form-title').textContent = template ? 'Edit template' : 'Add template';
+      document.getElementById('placid-form-id').value          = template?.id || '';
+      document.getElementById('placid-form-name').value        = template?.name || '';
+      document.getElementById('placid-form-uuid').value        = template?.template_uuid || '';
       document.getElementById('placid-form-error').classList.add('hidden');
+      document.getElementById('placid-form-error-2').classList.add('hidden');
       placidTemplateLayers = [];
-      placidCustomFields   = template?.custom_layers ? JSON.parse(JSON.stringify(template.custom_layers)) : [];
-      placidBrandLayers    = template?.brand_layers  ? JSON.parse(JSON.stringify(template.brand_layers))  : [];
-      setBrandStatus('');
+      placidCustomFields   = [];
+      placidBrandLayers    = [];
+
+      if (template) {
+        // Editing: fetch layers then jump to step 2
+        document.getElementById('placid-form').classList.remove('hidden');
+        document.getElementById('placid-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        setWizardStep(1);
+        goToStep2(template);
+      } else {
+        setWizardStep(1);
+        document.getElementById('placid-form').classList.remove('hidden');
+        document.getElementById('placid-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        document.getElementById('placid-form-name').focus();
+      }
+    }
+
+    async function goToStep2(template) {
+      const uuid = document.getElementById('placid-form-uuid').value.trim();
+      const name = document.getElementById('placid-form-name').value.trim();
+      const errEl = document.getElementById('placid-form-error');
+
+      if (!name || !uuid) {
+        errEl.textContent = 'Name and template UUID are required.';
+        errEl.classList.remove('hidden');
+        return;
+      }
+      errEl.classList.add('hidden');
+
+      const statusEl = document.getElementById('placid-step2-status');
+
+      // Show step 2 with loading state
+      setWizardStep(2);
+      statusEl.textContent = 'Fetching layers from Placid…';
+
+      await fetchPlacidLayers(uuid);
+
+      if (!placidTemplateLayers.length) {
+        statusEl.textContent = 'No layers found for this UUID — add mappings manually below.';
+      } else {
+        statusEl.textContent = `${placidTemplateLayers.length} layer${placidTemplateLayers.length !== 1 ? 's' : ''} fetched from Placid.`;
+      }
+
+      if (template && (template.brand_layers?.length || template.custom_layers?.length)) {
+        // Restore saved mappings when editing
+        placidBrandLayers  = JSON.parse(JSON.stringify(template.brand_layers  || []));
+        placidCustomFields = JSON.parse(JSON.stringify(template.custom_layers || []));
+        populateCoreLayerDropdowns(
+          template.layer_headline  || 'headline',
+          template.layer_subtext   || 'subtext',
+          template.layer_background || ''
+        );
+        statusEl.textContent += ' Showing saved mappings — edit as needed.';
+      } else {
+        // Auto-detect everything
+        const detected = autoDetectMappings();
+        placidBrandLayers  = detected.brandDetected;
+        placidCustomFields = detected.customDetected;
+        populateCoreLayerDropdowns(
+          detected.headlineLayer?.name   || 'headline',
+          detected.subtextLayer?.name    || 'subtext',
+          detected.backgroundLayer?.name || ''
+        );
+
+        const parts = [];
+        if (detected.headlineLayer || detected.subtextLayer) parts.push('core layers');
+        if (detected.brandDetected.length) parts.push(`${detected.brandDetected.length} brand mapping${detected.brandDetected.length !== 1 ? 's' : ''}`);
+        if (detected.customDetected.length) parts.push(`${detected.customDetected.length} custom field${detected.customDetected.length !== 1 ? 's' : ''}`);
+        if (parts.length) statusEl.textContent += ` Auto-detected: ${parts.join(', ')}.`;
+      }
+
+      renderLayerMapRows();
       renderCustomFieldRows();
-      renderBrandLayerRows();
-      document.getElementById('placid-form').classList.remove('hidden');
-      document.getElementById('placid-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
-      document.getElementById('placid-form-name').focus();
-      // Silently pre-fetch layers so auto-detect is ready
-      if (template?.template_uuid) fetchPlacidLayers(template.template_uuid);
+      document.getElementById('wizard-step-2').scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
     function closeForm() {
       placidCustomFields = []; placidBrandLayers = []; placidTemplateLayers = [];
+      editingTemplate = null;
       document.getElementById('placid-form').classList.add('hidden');
     }
 
@@ -386,100 +548,36 @@
       if (data.ok) { placidTemplates = placidTemplates.filter(t => t.id !== id); renderPlacidTemplates(); }
     }
 
-    function renderCustomFieldRows() {
-      const list = document.getElementById('placid-custom-fields-list');
-      if (!placidCustomFields.length) { list.innerHTML = '<p class="empty-section-text">No custom fields yet.</p>'; return; }
-      list.innerHTML = placidCustomFields.map((f, i) => `
-        <div class="cf-grid placid-cf-row" data-idx="${i}">
-          <input type="text" class="cf-layer-name cell-input" value="${esc(f.layer_name)}" placeholder="Layer name" maxlength="80">
-          <input type="text" class="cf-label cell-input" value="${esc(f.label)}" placeholder="Editor label" maxlength="80">
-          <select class="cf-type cell-select">
-            <option value="text" ${f.type==='text'?'selected':''}>Text</option>
-            <option value="image" ${f.type==='image'?'selected':''}>Image</option>
-          </select>
-          <input type="number" class="cf-max-chars cell-input${f.type==='image'?' cell-input--disabled':''}" value="${f.max_chars||''}" placeholder="Max" min="1" max="2000" ${f.type==='image'?'disabled':''}>
-          <button type="button" class="remove-btn cf-remove-btn" data-idx="${i}">✕</button>
-        </div>`).join('');
-      list.querySelectorAll('.cf-remove-btn').forEach(b => b.addEventListener('click', () => { placidCustomFields.splice(+b.dataset.idx,1); renderCustomFieldRows(); }));
-      list.querySelectorAll('.cf-type').forEach((sel,i) => sel.addEventListener('change', () => {
-        placidCustomFields[i].type = sel.value;
-        const mc = sel.closest('.placid-cf-row').querySelector('.cf-max-chars');
-        mc.disabled = sel.value === 'image'; mc.classList.toggle('cell-input--disabled', sel.value === 'image');
-      }));
-      list.querySelectorAll('.cf-layer-name').forEach((el,i) => el.addEventListener('input', () => { placidCustomFields[i].layer_name = el.value; }));
-      list.querySelectorAll('.cf-label').forEach((el,i)      => el.addEventListener('input', () => { placidCustomFields[i].label = el.value; }));
-      list.querySelectorAll('.cf-max-chars').forEach((el,i)  => el.addEventListener('input', () => { placidCustomFields[i].max_chars = parseInt(el.value)||null; }));
-    }
-
-    function renderBrandLayerRows() {
-      const list = document.getElementById('placid-brand-layers-list');
-      if (!placidBrandLayers.length) {
-        list.innerHTML = '<p class="empty-section-text">No brand mappings yet — click "Auto-detect" or add manually.</p>';
-        return;
-      }
-      const srcOpts  = Object.entries(BRAND_SOURCE_LABELS).map(([v,l]) => `<option value="${v}">${l}</option>`).join('');
-      const propOpts = Object.entries(PLACID_PROPERTY_LABELS).map(([v,l]) => `<option value="${v}">${l}</option>`).join('');
-      list.innerHTML = `
-        <div class="bl-grid bl-grid-header">
-          <span class="cell-label">Your brand</span>
-          <span class="cell-label">Placid layer name</span>
-          <span class="cell-label">Applied as</span>
-          <span></span>
-        </div>` +
-        placidBrandLayers.map((f,i) => `
-        <div class="bl-grid placid-bl-row" data-idx="${i}">
-          <select class="bl-brand-source cell-select">${srcOpts}</select>
-          <input type="text" class="bl-layer-name cell-input" value="${esc(f.layer_name)}" placeholder="e.g. brand_bg_rect" maxlength="80">
-          <select class="bl-property cell-select">${propOpts}</select>
-          <button type="button" class="remove-btn bl-remove-btn" data-idx="${i}">✕</button>
-        </div>`).join('');
-
-      // Set saved/detected values on dropdowns
-      list.querySelectorAll('.placid-bl-row').forEach((row, i) => {
-        row.querySelector('.bl-brand-source').value = placidBrandLayers[i].brand_source || 'brand_bg';
-        row.querySelector('.bl-property').value     = placidBrandLayers[i].property     || inferProperty(placidBrandLayers[i].brand_source);
-      });
-
-      // Events
-      list.querySelectorAll('.bl-remove-btn').forEach(b =>
-        b.addEventListener('click', () => { placidBrandLayers.splice(+b.dataset.idx, 1); renderBrandLayerRows(); }));
-      list.querySelectorAll('.bl-layer-name').forEach((el, i) =>
-        el.addEventListener('input', () => { placidBrandLayers[i].layer_name = el.value; }));
-      list.querySelectorAll('.bl-property').forEach((el, i) =>
-        el.addEventListener('change', () => { placidBrandLayers[i].property = el.value; }));
-      list.querySelectorAll('.bl-brand-source').forEach((el, i) =>
-        el.addEventListener('change', () => {
-          placidBrandLayers[i].brand_source = el.value;
-          // Auto-update the property to the sensible default for this brand source
-          const propSel = el.closest('.placid-bl-row').querySelector('.bl-property');
-          propSel.value = inferProperty(el.value);
-          placidBrandLayers[i].property = propSel.value;
-        }));
-    }
-
+    // ── Event listeners ────────────────────────────────────────────────────
     document.getElementById('placid-add-btn').addEventListener('click', () => openForm());
     document.getElementById('placid-form-cancel').addEventListener('click', closeForm);
 
-    // Fetch layers in background when UUID is entered
-    document.getElementById('placid-form-uuid').addEventListener('blur', () => {
-      const uuid = document.getElementById('placid-form-uuid').value.trim();
-      if (uuid) fetchPlacidLayers(uuid);
+    // Step 1 → Step 2
+    document.getElementById('placid-step1-next').addEventListener('click', () => goToStep2(null));
+
+    // Step 2 → Step 1
+    document.getElementById('placid-step2-back').addEventListener('click', () => {
+      setWizardStep(1);
+      document.getElementById('placid-form-name').focus();
     });
 
-    document.getElementById('placid-fetch-all-btn').addEventListener('click', autoDetectAllLayers);
+    // Add manual brand mapping
+    document.getElementById('placid-add-brand-layer-btn').addEventListener('click', () => {
+      const src = 'brand_bg';
+      placidBrandLayers.push({ brand_source: src, layer_name: '', property: inferProperty(src) });
+      renderLayerMapRows();
+      const inputs = document.querySelectorAll('#placid-layer-map-list .lm-layer-name');
+      if (inputs.length) inputs[inputs.length - 1].focus();
+    });
 
+    // Add custom field
     document.getElementById('placid-add-field-btn').addEventListener('click', () => {
       placidCustomFields.push({ layer_name:'', label:'', type:'text', max_chars:null });
       renderCustomFieldRows();
       document.querySelectorAll('#placid-custom-fields-list .cf-layer-name').forEach((el,i,arr) => { if (i===arr.length-1) el.focus(); });
     });
-    document.getElementById('placid-add-brand-layer-btn').addEventListener('click', () => {
-      const src = 'brand_bg';
-      placidBrandLayers.push({ brand_source: src, layer_name:'', property: inferProperty(src) });
-      renderBrandLayerRows();
-      document.querySelectorAll('#placid-brand-layers-list .bl-layer-name').forEach((el,i,arr) => { if (i===arr.length-1) el.focus(); });
-    });
 
+    // Save (step 2)
     document.getElementById('placid-form-save').addEventListener('click', async () => {
       const id = document.getElementById('placid-form-id').value;
       const custom_layers = Array.from(document.querySelectorAll('#placid-custom-fields-list .placid-cf-row')).map(row => {
@@ -489,11 +587,17 @@
         const max_chars  = parseInt(row.querySelector('.cf-max-chars').value) || null;
         return { layer_name, label, type, ...(type==='text'&&max_chars?{max_chars}:{}) };
       }).filter(f => f.layer_name);
-      const brand_layers = Array.from(document.querySelectorAll('#placid-brand-layers-list .placid-bl-row')).map(row => ({
-        layer_name:   row.querySelector('.bl-layer-name').value.trim(),
-        property:     row.querySelector('.bl-property').value,
-        brand_source: row.querySelector('.bl-brand-source').value,
-      })).filter(f => f.layer_name);
+
+      const brand_layers = Array.from(document.querySelectorAll('#placid-layer-map-list .layer-map-row')).map(row => {
+        const nameCell = row.querySelector('.layer-name-cell');
+        const nameInput = row.querySelector('.lm-layer-name');
+        const layer_name = nameCell ? (nameCell.dataset.layer || '') : (nameInput?.value.trim() || '');
+        return {
+          layer_name,
+          property:     row.querySelector('.lm-property').value,
+          brand_source: row.querySelector('.lm-brand-source').value,
+        };
+      }).filter(f => f.layer_name && f.brand_source);
 
       const payload = {
         name:             document.getElementById('placid-form-name').value.trim(),
@@ -504,7 +608,7 @@
         custom_layers, brand_layers,
       };
 
-      const errEl = document.getElementById('placid-form-error');
+      const errEl = document.getElementById('placid-form-error-2');
       if (!payload.name || !payload.template_uuid) {
         errEl.textContent = 'Name and template UUID are required.'; errEl.classList.remove('hidden'); return;
       }
@@ -520,19 +624,6 @@
       if (id) { placidTemplates = placidTemplates.map(t => t.id===id ? saved : t); }
       else    { placidTemplates = [...placidTemplates, saved]; }
       renderPlacidTemplates();
-
-      // For a brand-new template with no layers set yet, stay in form and auto-detect both
-      const isNew    = !id;
-      const noLayers = brand_layers.length === 0 && custom_layers.length === 0;
-      if (isNew && noLayers) {
-        document.getElementById('placid-form-id').value         = saved.id;
-        document.getElementById('placid-form-title').textContent = 'Edit template';
-        setBrandStatus('Template saved! Auto-detecting layers…', false);
-        await fetchPlacidLayers(payload.template_uuid);
-        autoDetectAllLayers();
-        return; // leave form open for review
-      }
-
       closeForm();
     });
 

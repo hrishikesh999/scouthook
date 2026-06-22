@@ -550,13 +550,19 @@ label, .field label { color: #111111; }
   display: flex; align-items: center; justify-content: space-between;
   gap: var(--space-sm, 8px);
 }
-.layer-map-card__controls {
-  display: flex; gap: var(--space-md, 12px);
+.layer-map-card__actions {
+  display: flex; gap: var(--space-xs, 4px); flex-shrink: 0;
+}
+.layer-map-card__slots {
   margin-top: var(--space-sm, 8px);
   padding-top: var(--space-sm, 8px);
   border-top: 1px solid var(--color-border, #E5E7EB);
+  display: flex; flex-direction: column; gap: var(--space-xs, 6px);
 }
-.layer-map-card__controls .field--inline {
+.layer-map-slot {
+  display: flex; gap: var(--space-sm, 8px); align-items: flex-end;
+}
+.layer-map-slot .field--inline {
   flex: 1; margin: 0;
 }
 .field--inline .field-label--sm {

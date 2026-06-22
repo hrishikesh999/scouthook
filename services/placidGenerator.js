@@ -96,23 +96,29 @@ async function renderPlacidImage(post, content, ctx = {}, templateId = null) {
       if (field.type === 'image') layers[field.layer_name] = { ...(layers[field.layer_name] || {}), image_url: val };
     }
   }
-  if (brandLayers.length > 0) {
-    const brandValues = {
-      brand_bg:             brand.bg,
-      brand_accent:         brand.accent,
-      brand_text:           brand.text,
-      brand_secondary_bg:   brand.secondary_bg,
-      brand_secondary_text: brand.secondary_text,
-      brand_name:           brand.name,
-      brand_logo:           brand.logo_url,
-      brand_font_heading:   brand.font_heading,
-      brand_font_body:      brand.font_body,
-    };
-    for (const mapping of brandLayers) {
-      const val = brandValues[mapping.brand_source];
-      if (!val) continue;
-      layers[mapping.layer_name] = { ...(layers[mapping.layer_name] || {}), [mapping.property]: val };
-    }
+  const brandValues = {
+    brand_bg:             brand.bg,
+    brand_accent:         brand.accent,
+    brand_text:           brand.text,
+    brand_secondary_bg:   brand.secondary_bg,
+    brand_secondary_text: brand.secondary_text,
+    brand_name:           brand.name,
+    brand_logo:           brand.logo_url,
+    brand_font_heading:   brand.font_heading,
+    brand_font_body:      brand.font_body,
+  };
+  const effectiveBrandLayers = brandLayers.length > 0 ? brandLayers : [
+    ...(brand.font_heading ? [{ layer_name: headlineLayer, property: 'font_family', brand_source: 'brand_font_heading' }] : []),
+    ...(brand.font_body    ? [{ layer_name: subtextLayer,  property: 'font_family', brand_source: 'brand_font_body' }]    : []),
+    ...(brand.text         ? [
+      { layer_name: headlineLayer, property: 'color', brand_source: 'brand_text' },
+      { layer_name: subtextLayer,  property: 'color', brand_source: 'brand_text' },
+    ] : []),
+  ];
+  for (const mapping of effectiveBrandLayers) {
+    const val = brandValues[mapping.brand_source];
+    if (!val) continue;
+    layers[mapping.layer_name] = { ...(layers[mapping.layer_name] || {}), [mapping.property]: val };
   }
 
   const createRes = await fetch('https://api.placid.app/api/rest/images', {

@@ -7500,6 +7500,20 @@ html[data-nav-dir="back"] #main-content.spa-entering {
 }
 .ai-tpl-card:hover { border-color: var(--brand); transform: translateY(-1px); }
 
+.aim-brand-info {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 8px 12px; margin-top: 10px;
+  background: var(--surface-2); border-radius: 8px;
+  font-size: 12px; color: var(--text-muted);
+}
+.aim-brand-colors { display: flex; gap: 5px; }
+.aim-brand-dot {
+  width: 16px; height: 16px; border-radius: 50%; flex-shrink: 0;
+  border: 1.5px solid var(--border);
+}
+.aim-brand-fonts { font-weight: 600; }
+.aim-brand-hint  { font-size: 11px; opacity: 0.8; }
+
 @media (max-width: 768px) {
   .ai-image-modal {
     width: 100vw; height: 92vh;

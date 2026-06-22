@@ -495,8 +495,8 @@ let selectedBackgroundUrl = null;  // background image URL chosen by user
 let selectedCustomImages  = {};    // layer_name → URL for image-type custom fields
 let _mediaDrawerMode      = 'attach'; // 'attach' | 'background' | 'custom_image:{layer_name}'
 let _aiModalState         = 'picker'; // 'picker' | 'editing' | 'generating'
-let _aiPreviewDebounceTimer = null;
 let _aiAutoPreviewRunning   = false;
+let _workspaceBrand         = null;
 let _visualPreviewDebounceTimer = null;
 let _visualAutoPreviewRunning   = false;
 let _carouselActiveSlide        = 0;
@@ -1420,7 +1420,6 @@ function openAiImageModal() {
 function closeAiImageModal() {
   const overlay = document.getElementById('ai-image-overlay');
   overlay.setAttribute('aria-hidden', 'true');
-  clearTimeout(_aiPreviewDebounceTimer);
   extractedContent       = null;
   currentRenderedContent = null;
   currentAssetUrl        = null;
@@ -1467,6 +1466,7 @@ async function loadAiTemplatePicker() {
     const res  = await fetch('/api/placid-templates', { headers: apiHeaders(), credentials: 'include' });
     const data = await res.json();
     const tpls = data.templates || [];
+    _workspaceBrand = data.brand || null;
 
     if (tpls.length === 0) {
       previewPane.innerHTML = `<div style="text-align:center;padding:40px 24px;color:var(--text-muted)">
@@ -1529,6 +1529,28 @@ function _renderAiTemplatePreview() {
       <span style="font-size:13px">No preview available</span>
     </div>`;
   }
+  _renderBrandInfoPanel();
+}
+
+function _renderBrandInfoPanel() {
+  const previewPane = document.getElementById('ai-image-preview-pane');
+  const b = _workspaceBrand;
+  if (!b) return;
+  const hasBrandLayers = Array.isArray(selectedTemplate?.brand_layers) && selectedTemplate.brand_layers.length > 0;
+  const dots = [b.bg, b.accent, b.text].filter(Boolean)
+    .map(c => `<span class="aim-brand-dot" style="background:${escHtml(c)}"></span>`).join('');
+  const fonts = [b.font_heading, b.font_body].filter(Boolean);
+  const fontLabel = fonts.length ? fonts.join(' &middot; ') : '';
+  const hint = hasBrandLayers
+    ? 'Brand colors &amp; fonts will be applied'
+    : 'Brand fonts &amp; text color will auto-apply';
+  const panel = document.createElement('div');
+  panel.className = 'aim-brand-info';
+  panel.innerHTML = `
+    ${dots ? `<div class="aim-brand-colors">${dots}</div>` : ''}
+    ${fontLabel ? `<div class="aim-brand-fonts">${escHtml(fonts.join(' · '))}</div>` : ''}
+    <div class="aim-brand-hint">${hint}</div>`;
+  previewPane.appendChild(panel);
 }
 
 function _renderAiPreviewImage(url) {
@@ -1628,13 +1650,13 @@ function renderAiImageFormInModal(content) {
   const hlLen   = document.getElementById('aim-hl-len');
   const stInput = document.getElementById('aim-subtext-input');
   const stLen   = document.getElementById('aim-st-len');
-  if (hlInput) hlInput.addEventListener('input', () => { hlLen.textContent = hlInput.value.length; _scheduleAiPreview(); });
-  if (stInput) stInput.addEventListener('input', () => { stLen.textContent = stInput.value.length; _scheduleAiPreview(); });
+  if (hlInput) hlInput.addEventListener('input', () => { hlLen.textContent = hlInput.value.length; });
+  if (stInput) stInput.addEventListener('input', () => { stLen.textContent = stInput.value.length; });
 
   formPane.querySelectorAll('.aim-custom-text-input').forEach(inp => {
     const safeName = inp.dataset.layerName.replace(/[^a-zA-Z0-9]/g, '_');
     const lenEl = document.getElementById(`aim-custom-${safeName}-len`);
-    if (lenEl) inp.addEventListener('input', () => { lenEl.textContent = inp.value.length; _scheduleAiPreview(); });
+    if (lenEl) inp.addEventListener('input', () => { lenEl.textContent = inp.value.length; });
   });
 
   formPane.querySelectorAll('.aim-file-input').forEach(input => {
@@ -1657,7 +1679,6 @@ function renderAiImageFormInModal(content) {
           const preview  = document.getElementById(`aim-custom-${safeName}-preview`);
           if (preview) preview.innerHTML = `<img src="${escHtml(url)}" alt="">`;
         }
-        _scheduleAiPreview();
       });
     });
   });
@@ -1675,12 +1696,7 @@ function renderAiImageFormInModal(content) {
 }
 
 
-function _scheduleAiPreview() {
-  clearTimeout(_aiPreviewDebounceTimer);
-  _aiPreviewDebounceTimer = setTimeout(_generateAiPreviewSilently, 1500);
-}
-
-async function _generateAiPreviewSilently() {
+async function _generateInitialBrandedPreview() {
   if (_aiAutoPreviewRunning || !currentPostId || !selectedTemplateId) return;
   _aiAutoPreviewRunning = true;
 
@@ -1702,7 +1718,6 @@ async function _generateAiPreviewSilently() {
     try { data = await res.json(); } catch { return; }
     if (!res.ok || !data.ok) return;
 
-    // Discard result if modal was closed while generating
     if (document.getElementById('ai-image-overlay').getAttribute('aria-hidden') === 'true') return;
 
     currentAssetUrl   = data.png_url;
@@ -1712,6 +1727,7 @@ async function _generateAiPreviewSilently() {
       templateId: selectedTemplateId, template: selectedTemplate,
     });
     _renderAiPreviewImage(data.png_url);
+    _showInsertBtn();
   } catch {
     if (!currentAssetUrl) _renderAiTemplatePreview();
   } finally {
@@ -1842,7 +1858,7 @@ async function extractContent(type) {
       extractedContent = data.content;
       visualCache.set(`${currentPostId}:ai_image`, { extractedContent });
       renderAiImageFormInModal(extractedContent);
-      _generateAiPreviewSilently();
+      _generateInitialBrandedPreview();
     } catch (e) {
       const formPane = document.getElementById('ai-image-form-pane');
       if (formPane) {
@@ -2618,7 +2634,6 @@ function wireVisualButtons() {
   document.getElementById('ai-image-generate-btn').addEventListener('click', generateAiImageInModal);
   document.getElementById('ai-image-insert-btn').addEventListener('click', _doSaveAiImage);
   document.getElementById('ai-image-back-btn').addEventListener('click', () => {
-    clearTimeout(_aiPreviewDebounceTimer);
     selectedTemplate   = null;
     selectedTemplateId = null;
     extractedContent   = null;

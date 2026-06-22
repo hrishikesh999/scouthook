@@ -1628,13 +1628,13 @@ function renderAiImageFormInModal(content) {
   const hlLen   = document.getElementById('aim-hl-len');
   const stInput = document.getElementById('aim-subtext-input');
   const stLen   = document.getElementById('aim-st-len');
-  if (hlInput) hlInput.addEventListener('input', () => { hlLen.textContent = hlInput.value.length; });
-  if (stInput) stInput.addEventListener('input', () => { stLen.textContent = stInput.value.length; });
+  if (hlInput) hlInput.addEventListener('input', () => { hlLen.textContent = hlInput.value.length; _scheduleAiPreview(); });
+  if (stInput) stInput.addEventListener('input', () => { stLen.textContent = stInput.value.length; _scheduleAiPreview(); });
 
   formPane.querySelectorAll('.aim-custom-text-input').forEach(inp => {
     const safeName = inp.dataset.layerName.replace(/[^a-zA-Z0-9]/g, '_');
     const lenEl = document.getElementById(`aim-custom-${safeName}-len`);
-    if (lenEl) inp.addEventListener('input', () => { lenEl.textContent = inp.value.length; });
+    if (lenEl) inp.addEventListener('input', () => { lenEl.textContent = inp.value.length; _scheduleAiPreview(); });
   });
 
   formPane.querySelectorAll('.aim-file-input').forEach(input => {
@@ -1657,6 +1657,7 @@ function renderAiImageFormInModal(content) {
           const preview  = document.getElementById(`aim-custom-${safeName}-preview`);
           if (preview) preview.innerHTML = `<img src="${escHtml(url)}" alt="">`;
         }
+        _scheduleAiPreview();
       });
     });
   });
@@ -1841,6 +1842,7 @@ async function extractContent(type) {
       extractedContent = data.content;
       visualCache.set(`${currentPostId}:ai_image`, { extractedContent });
       renderAiImageFormInModal(extractedContent);
+      _generateAiPreviewSilently();
     } catch (e) {
       const formPane = document.getElementById('ai-image-form-pane');
       if (formPane) {

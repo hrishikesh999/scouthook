@@ -533,7 +533,7 @@ router.get('/dashboard/metrics', requireAdminPassword, (req, res) => {
 
     const bucket = `date_trunc('${gran}', created_at)::date`;
 
-    const [signupsR, upgradesR, cancelsR, postsR, placidR, placidByTypeR, linkedinR, mrrR] =
+    const [signupsR, upgradesR, cancelsR, postsR, placidR, placidByTypeR, linkedinR, mrrR, trialExpiredR, funnelOnboardingR, funnelFirstPostR] =
       await Promise.all([
         // signups
         db.prepare(`
@@ -586,6 +586,31 @@ router.get('/dashboard/metrics', requireAdminPassword, (req, res) => {
           SELECT COUNT(*) AS active_pro FROM user_subscriptions
           WHERE status = 'active' AND plan = 'pro'
         `).get(),
+        // trial expired — trial ended in period without converting to active
+        db.prepare(`
+          SELECT date_trunc('${gran}', trial_ends_at)::date AS bucket, COUNT(*) AS count
+          FROM user_subscriptions
+          WHERE trial_ends_at IS NOT NULL
+            AND trial_ends_at BETWEEN ? AND ?::date + INTERVAL '1 day'
+            AND status != 'active'
+          GROUP BY 1 ORDER BY 1
+        `).all(start, end),
+        // funnel: onboarding completed in period
+        db.prepare(`
+          SELECT COUNT(*) AS n FROM user_profiles
+          WHERE onboarding_completed_at IS NOT NULL
+            AND onboarding_completed_at BETWEEN ? AND ?::date + INTERVAL '1 day'
+        `).get(start, end),
+        // funnel: users whose first-ever post was created in this period
+        db.prepare(`
+          SELECT COUNT(*) AS n FROM (
+            SELECT wm.user_id
+            FROM generated_posts gp
+            JOIN workspace_members wm ON wm.workspace_id = gp.tenant_id
+            GROUP BY wm.user_id
+            HAVING MIN(gp.created_at) BETWEEN ? AND ?::date + INTERVAL '1 day'
+          ) sub
+        `).get(start, end),
       ]);
 
     // platform_events — degrade gracefully if table doesn't exist yet
@@ -616,6 +641,7 @@ router.get('/dashboard/metrics', requireAdminPassword, (req, res) => {
     }
 
     const toSeries = rows => rows.map(r => ({ bucket: r.bucket, count: Number(r.count) }));
+    const sumSeries = rows => rows.reduce((a, r) => a + Number(r.count), 0);
 
     return res.json({
       ok: true,
@@ -631,6 +657,13 @@ router.get('/dashboard/metrics', requireAdminPassword, (req, res) => {
         linkedin_connections: toSeries(linkedinR),
         linkedin_disconnects: toSeries(disconnectsR),
         logins:               toSeries(loginsR),
+        trial_expired:        toSeries(trialExpiredR),
+      },
+      funnel: {
+        signups:    sumSeries(signupsR),
+        onboarding: Number(funnelOnboardingR?.n) || 0,
+        first_post: Number(funnelFirstPostR?.n)  || 0,
+        upgrades:   sumSeries(upgradesR),
       },
     });
   })().catch(err => res.status(500).json({ ok: false, error: err.message }));

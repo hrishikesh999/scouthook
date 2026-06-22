@@ -75,9 +75,29 @@
         <div class="card metric-card"><div class="metric-card__num" id="m-cancels">—</div><div class="metric-card__label">Cancellations</div></div>
         <div class="card metric-card"><div class="metric-card__num" id="m-mrr">—</div><div class="metric-card__label">MRR (est.)</div></div>
         <div class="card metric-card"><div class="metric-card__num" id="m-posts">—</div><div class="metric-card__label">Posts Created</div></div>
-        <div class="card metric-card"><div class="metric-card__num" id="m-placid">—</div><div class="metric-card__label">Placid Assets</div></div>
+        <div class="card metric-card"><div class="metric-card__num" id="m-placid">—</div><div class="metric-card__label">Assets</div></div>
         <div class="card metric-card"><div class="metric-card__num" id="m-linkedin">—</div><div class="metric-card__label">LinkedIn Connects</div></div>
         <div class="card metric-card"><div class="metric-card__num" id="m-logins">—</div><div class="metric-card__label">Logins</div></div>
+      </div>
+
+      <!-- Analytics row: line chart + funnel -->
+      <div class="analytics-row">
+        <div class="card chart-card analytics-row__line">
+          <div class="chart-card__header">
+            <div class="chart-card__title">Trend</div>
+            <select id="line-metric-select" class="chart-metric-select">
+              <option value="signups">New Sign Ups</option>
+              <option value="paid_upgrades">New Upgrades</option>
+              <option value="cancellations">Cancellations</option>
+              <option value="trial_expired">Trial Expired</option>
+            </select>
+          </div>
+          <div class="chart-card__canvas chart-card__canvas--lg"><canvas id="chart-line-overview"></canvas></div>
+        </div>
+        <div class="card chart-card analytics-row__funnel">
+          <div class="chart-card__title">Conversion Funnel</div>
+          <div id="funnel-viz" class="funnel-container"></div>
+        </div>
       </div>
 
       <!-- Charts -->
@@ -86,7 +106,7 @@
         <div class="card chart-card"><div class="chart-card__title">Paid Upgrades</div><div class="chart-card__canvas"><canvas id="chart-upgrades"></canvas></div></div>
         <div class="card chart-card"><div class="chart-card__title">Cancellations</div><div class="chart-card__canvas"><canvas id="chart-cancels"></canvas></div></div>
         <div class="card chart-card"><div class="chart-card__title">Posts Created</div><div class="chart-card__canvas"><canvas id="chart-posts"></canvas></div></div>
-        <div class="card chart-card"><div class="chart-card__title">Placid Assets by Type</div><div class="chart-card__canvas"><canvas id="chart-placid"></canvas></div></div>
+        <div class="card chart-card"><div class="chart-card__title">Assets by Type</div><div class="chart-card__canvas"><canvas id="chart-placid"></canvas></div></div>
         <div class="card chart-card"><div class="chart-card__title">LinkedIn Connections</div><div class="chart-card__canvas"><canvas id="chart-linkedin"></canvas></div></div>
         <div class="card chart-card"><div class="chart-card__title">Logins</div><div class="chart-card__canvas"><canvas id="chart-logins"></canvas></div></div>
         <div class="card chart-card"><div class="chart-card__title">LinkedIn Disconnects</div><div class="chart-card__canvas"><canvas id="chart-disconnects"></canvas></div></div>
@@ -106,6 +126,7 @@
 
     let adminPw = '';
     let currentStart = '', currentEnd = '', currentGran = 'day';
+    let lastSeries = null;
     const charts = {};
 
     // ── Auth ──────────────────────────────────────────────────────────────────
@@ -213,6 +234,15 @@
       document.getElementById('m-linkedin').textContent = sum(s.linkedin_connections).toLocaleString();
       document.getElementById('m-logins').textContent   = sum(s.logins).toLocaleString();
 
+      // Line chart overview
+      lastSeries = s;
+      const lineMetric = document.getElementById('line-metric-select').value;
+      const lineColorMap = { signups: COLORS.accent, paid_upgrades: COLORS.primary, cancellations: COLORS.error, trial_expired: COLORS.amber };
+      renderLineChart('chart-line-overview', s[lineMetric] || [], lineColorMap[lineMetric]);
+
+      // Funnel
+      if (data.funnel) renderFunnel(data.funnel);
+
       renderBar('chart-signups',     s.signups,              COLORS.accent);
       renderBar('chart-upgrades',    s.paid_upgrades,        COLORS.primary);
       renderBar('chart-cancels',     s.cancellations,        COLORS.error);
@@ -319,6 +349,98 @@
         options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: true, position: 'bottom', labels: { color: '#6B7280', font: { size: 10 }, boxWidth: 12 } } } },
       });
     }
+
+    function renderLineChart(id, series, color) {
+      destroyChart(id);
+      const ctx = document.getElementById(id);
+      if (!ctx) return;
+      if (!series || series.length === 0) {
+        const card = ctx.closest('.chart-card');
+        const existing = card.querySelector('.chart-card__canvas--lg');
+        if (existing) existing.innerHTML = '<div class="empty-state">No data for this period</div>';
+        return;
+      }
+      charts[id] = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: series.map(r => r.bucket),
+          datasets: [{
+            data: series.map(r => r.count),
+            borderColor: color,
+            backgroundColor: color + '22',
+            borderWidth: 2,
+            pointRadius: 3,
+            pointHoverRadius: 5,
+            fill: true,
+            tension: 0.3,
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => ' ' + c.parsed.y } } },
+          scales: {
+            x: { ticks: { color: '#6B7280', maxRotation: 0, font: { size: 10 } }, grid: { color: 'rgba(0,0,0,0.06)' } },
+            y: { ticks: { color: '#6B7280', font: { size: 10 } }, grid: { color: 'rgba(0,0,0,0.06)' }, beginAtZero: true },
+          },
+        },
+      });
+    }
+
+    const FUNNEL_COLORS = ['#0D7A5F', '#0FA87F', '#f59e0b', '#6366f1'];
+    const FUNNEL_STAGES = [
+      { key: 'signups',    label: 'New Sign Ups' },
+      { key: 'onboarding', label: 'Onboarding Done' },
+      { key: 'first_post', label: 'First Post' },
+      { key: 'upgrades',   label: 'Upgraded to Paid' },
+    ];
+    const FUNNEL_WIDTHS = ['100%', '85%', '70%', '55%'];
+
+    function renderFunnel(funnel) {
+      const container = document.getElementById('funnel-viz');
+      if (!container) return;
+      container.innerHTML = '';
+      FUNNEL_STAGES.forEach((stage, i) => {
+        const count = funnel[stage.key] || 0;
+        const prev  = i > 0 ? (funnel[FUNNEL_STAGES[i - 1].key] || 0) : null;
+        const pct   = prev !== null ? (prev > 0 ? Math.round((count / prev) * 100) : 0) : null;
+
+        const wrap = document.createElement('div');
+        wrap.className = 'funnel-stage-wrap';
+
+        const block = document.createElement('div');
+        block.className = 'funnel-stage';
+        block.style.cssText = `width:${FUNNEL_WIDTHS[i]};background:${FUNNEL_COLORS[i]};`;
+
+        const countEl = document.createElement('div');
+        countEl.className = 'funnel-stage__count';
+        countEl.textContent = count.toLocaleString();
+
+        const labelEl = document.createElement('div');
+        labelEl.className = 'funnel-stage__label';
+        labelEl.textContent = stage.label;
+
+        block.appendChild(countEl);
+        block.appendChild(labelEl);
+        wrap.appendChild(block);
+
+        if (pct !== null) {
+          const convEl = document.createElement('div');
+          convEl.className = 'funnel-conversion';
+          convEl.textContent = pct + '%';
+          wrap.appendChild(convEl);
+        }
+
+        container.appendChild(wrap);
+      });
+    }
+
+    document.getElementById('line-metric-select').addEventListener('change', e => {
+      if (!lastSeries) return;
+      const metric = e.target.value;
+      const colorMap = { signups: COLORS.accent, paid_upgrades: COLORS.primary, cancellations: COLORS.error, trial_expired: COLORS.amber };
+      renderLineChart('chart-line-overview', lastSeries[metric] || [], colorMap[metric]);
+    });
 
     init();
   </script>

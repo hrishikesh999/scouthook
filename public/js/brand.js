@@ -363,30 +363,11 @@ function makeFontCombobox(inputEl, listEl, which) {
 
   function getMatches(query) {
     const q = query.trim().toLowerCase();
-    if (!q) return POPULAR_FONTS;
+    if (!q) return null;
     return ALL_FONTS.filter(f => f.toLowerCase().includes(q)).slice(0, 50);
   }
 
-  function renderList(query) {
-    listEl.innerHTML = '';
-    activeIndex = -1;
-    const fonts = getMatches(query);
-
-    if (!query.trim()) {
-      const hdr = document.createElement('li');
-      hdr.className = 'font-combobox-section-header';
-      hdr.textContent = 'Popular fonts';
-      listEl.appendChild(hdr);
-    }
-
-    if (fonts.length === 0) {
-      const empty = document.createElement('li');
-      empty.className = 'font-combobox-no-results';
-      empty.textContent = 'No matching fonts';
-      listEl.appendChild(empty);
-      return;
-    }
-
+  function addFontItems(fonts) {
     fonts.forEach(fontName => {
       const li = document.createElement('li');
       li.setAttribute('role', 'option');
@@ -401,6 +382,39 @@ function makeFontCombobox(inputEl, listEl, which) {
       });
       listEl.appendChild(li);
     });
+  }
+
+  function renderList(query) {
+    listEl.innerHTML = '';
+    activeIndex = -1;
+    const filtered = getMatches(query);
+
+    if (filtered === null) {
+      const hdr1 = document.createElement('li');
+      hdr1.className = 'font-combobox-section-header';
+      hdr1.textContent = 'Popular fonts';
+      listEl.appendChild(hdr1);
+      addFontItems(POPULAR_FONTS);
+
+      const popularSet = new Set(POPULAR_FONTS);
+      const rest = ALL_FONTS.filter(f => !popularSet.has(f));
+      const hdr2 = document.createElement('li');
+      hdr2.className = 'font-combobox-section-header';
+      hdr2.textContent = 'All fonts';
+      listEl.appendChild(hdr2);
+      addFontItems(rest);
+      return;
+    }
+
+    if (filtered.length === 0) {
+      const empty = document.createElement('li');
+      empty.className = 'font-combobox-no-results';
+      empty.textContent = 'No matching fonts';
+      listEl.appendChild(empty);
+      return;
+    }
+
+    addFontItems(filtered);
   }
 
   function openDropdown() {

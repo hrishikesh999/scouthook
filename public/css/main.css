@@ -2650,7 +2650,7 @@ body.has-trial-banner #main-content {
   background: var(--bg-surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  max-height: 224px;
+  max-height: 320px;
   overflow-y: auto;
   z-index: 200;
   list-style: none;

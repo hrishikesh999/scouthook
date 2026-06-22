@@ -35,11 +35,80 @@
             <p class="field-helper">Shown in the footer of visuals when no logo is set.</p>
           </div>
 
-          <div class="brand-field">
-            <label class="field-label">Background color</label>
-            <div class="brand-color-row">
-              <input type="color" id="brand-bg-swatch" class="brand-color-swatch" value="#0F1A3C" />
-              <input type="text"  id="brand-bg-hex"    class="field-input brand-hex-input" value="#0F1A3C" maxlength="7" spellcheck="false" />
+          <!-- Background — type picker + sub-panels -->
+          <div class="brand-field" id="brand-bg-field">
+            <label class="field-label">Background</label>
+            <div class="brand-bg-type-pills">
+              <button class="brand-bg-type-btn active" data-bgtype="solid">Solid</button>
+              <button class="brand-bg-type-btn" data-bgtype="gradient">Gradient</button>
+              <button class="brand-bg-type-btn" data-bgtype="pattern">Pattern</button>
+              <button class="brand-bg-type-btn" data-bgtype="image">Image</button>
+            </div>
+
+            <!-- Solid -->
+            <div class="brand-bg-sub" id="brand-bg-sub-solid">
+              <div class="brand-color-row">
+                <input type="color" id="brand-bg-swatch" class="brand-color-swatch" value="#0F1A3C" />
+                <input type="text"  id="brand-bg-hex"    class="field-input brand-hex-input" value="#0F1A3C" maxlength="7" spellcheck="false" />
+              </div>
+            </div>
+
+            <!-- Gradient -->
+            <div class="brand-bg-sub" id="brand-bg-sub-gradient" style="display:none">
+              <div class="brand-bg-gradient-row">
+                <div class="brand-color-row" style="margin-top:0;flex:1">
+                  <input type="color" id="brand-bg-grad-from-swatch" class="brand-color-swatch" value="#0F1A3C" />
+                  <input type="text"  id="brand-bg-grad-from-hex"    class="field-input brand-hex-input" value="#0F1A3C" maxlength="7" spellcheck="false" />
+                </div>
+                <span class="brand-bg-gradient-arrow">→</span>
+                <div class="brand-color-row" style="margin-top:0;flex:1">
+                  <input type="color" id="brand-bg-grad-to-swatch" class="brand-color-swatch" value="#1a3060" />
+                  <input type="text"  id="brand-bg-grad-to-hex"    class="field-input brand-hex-input" value="#1a3060" maxlength="7" spellcheck="false" />
+                </div>
+              </div>
+              <div class="brand-bg-angles-row">
+                <span class="brand-bg-sub-label">Direction</span>
+                <div class="brand-bg-angle-pills">
+                  <button class="brand-bg-angle-btn active" data-angle="135">↘ 135°</button>
+                  <button class="brand-bg-angle-btn" data-angle="90">↓ 90°</button>
+                  <button class="brand-bg-angle-btn" data-angle="45">↗ 45°</button>
+                  <button class="brand-bg-angle-btn" data-angle="180">→ 180°</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Pattern -->
+            <div class="brand-bg-sub" id="brand-bg-sub-pattern" style="display:none">
+              <div class="brand-pattern-grid" id="brand-pattern-grid"><!-- tiles injected by JS --></div>
+              <div class="brand-color-row brand-pattern-color-row">
+                <span class="brand-bg-sub-label">Base color</span>
+                <input type="color" id="brand-bg-pattern-swatch" class="brand-color-swatch" value="#0F1A3C" />
+                <input type="text"  id="brand-bg-pattern-hex"    class="field-input brand-hex-input" value="#0F1A3C" maxlength="7" spellcheck="false" />
+              </div>
+            </div>
+
+            <!-- Image -->
+            <div class="brand-bg-sub" id="brand-bg-sub-image" style="display:none">
+              <div class="brand-bg-image-row">
+                <div class="brand-bg-image-thumb" id="brand-bg-image-thumb">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <rect x="3" y="3" width="18" height="18" rx="2"/>
+                    <circle cx="8.5" cy="8.5" r="1.5"/>
+                    <polyline points="21 15 16 10 5 21"/>
+                  </svg>
+                </div>
+                <div class="brand-logo-actions">
+                  <div class="brand-logo-btns">
+                    <button class="btn-outlined" id="brand-bg-image-upload-btn" type="button">Upload image</button>
+                    <button class="btn-outlined" id="brand-bg-image-pick-btn" type="button">Choose from Media</button>
+                  </div>
+                  <input type="file" id="brand-bg-image-file" accept="image/jpeg,image/png,image/webp" style="display:none" />
+                  <span class="brand-logo-uploading" id="brand-bg-image-uploading" style="display:none">Uploading…</span>
+                  <button class="brand-logo-clear-btn" id="brand-bg-image-clear-btn" type="button" style="display:none">Remove</button>
+                </div>
+              </div>
+              <input type="hidden" id="brand-bg-image-url" value="" />
+              <p class="field-helper">Image will be cropped to fill the background.</p>
             </div>
           </div>
 
@@ -138,17 +207,11 @@
         <!-- ── Live Preview ─────────────────────────────────────── -->
         <div class="brand-preview-card">
 
-          <div class="brand-preview-header">
-            <p class="brand-preview-label">Preview</p>
-            <div class="brand-preview-tabs" role="tablist">
-              <button class="brand-ptab active" data-tab="quote" role="tab" aria-selected="true">Quote</button>
-              <button class="brand-ptab" data-tab="branded" role="tab" aria-selected="false">Branded Quote</button>
-              <button class="brand-ptab" data-tab="carousel" role="tab" aria-selected="false">Carousel</button>
-            </div>
-          </div>
+          <p class="brand-preview-label">Live Preview</p>
 
-          <!-- Quote -->
-          <div class="brand-preview-panel" id="bpp-quote" role="tabpanel">
+          <!-- Quote Card -->
+          <div class="brand-preview-section">
+            <p class="brand-preview-section-label">Quote Card</p>
             <div class="brand-preview-visual" id="bpv-quote">
               <div>
                 <div class="bpv-accent-bar" id="bpv-accent-bar"></div>
@@ -163,7 +226,8 @@
           </div>
 
           <!-- Branded Quote -->
-          <div class="brand-preview-panel" id="bpp-branded" role="tabpanel" hidden>
+          <div class="brand-preview-section">
+            <p class="brand-preview-section-label">Branded Quote</p>
             <div class="brand-preview-visual" id="bpv-branded">
               <div class="bpv-inner-card" id="bpv-bq-card">
                 <div class="bpv-bq-bar" id="bpv-bq-bar"></div>
@@ -178,36 +242,40 @@
             </div>
           </div>
 
-          <!-- Carousel -->
-          <div class="brand-preview-panel" id="bpp-carousel" role="tabpanel" hidden>
-            <div class="brand-preview-visual brand-preview-carousel-wrap" id="bpv-carousel">
-              <!-- Slide 1: Title -->
-              <div class="bpv-carousel-slide active" id="bpv-cs-1">
-                <div>
-                  <div class="bpv-cs-eyebrow" id="bpv-cs-eyebrow">Thread</div>
-                  <div class="bpv-quote-text bpv-cs-title" id="bpv-cs-title">5 Ways to Build Your Brand Authority on LinkedIn</div>
+          <!-- Carousel — three slide types side by side -->
+          <div class="brand-preview-section">
+            <p class="brand-preview-section-label">Carousel</p>
+            <div class="brand-carousel-trio">
+
+              <div class="brand-carousel-trio-col">
+                <div class="bct-slide" id="bpv-cs-cover">
+                  <div>
+                    <div class="bpv-cs-eyebrow" id="bpv-cs-eyebrow">Thread</div>
+                    <div class="bpv-quote-text bpv-cs-title" id="bpv-cs-title">Build Your Brand on LinkedIn</div>
+                  </div>
+                  <div class="bpv-cs-swipe" id="bpv-cs-swipe">Swipe to read →</div>
                 </div>
-                <div class="bpv-cs-swipe" id="bpv-cs-swipe">Swipe to read →</div>
+                <p class="bct-slide-label">Cover</p>
               </div>
-              <!-- Slide 2: Content -->
-              <div class="bpv-carousel-slide" id="bpv-cs-2">
-                <div>
-                  <div class="bpv-cs-num" id="bpv-cs-num">01</div>
-                  <div class="bpv-cs-body" id="bpv-cs-body">Consistency in voice builds trust over time. Your audience recognises you before they see your name.</div>
+
+              <div class="brand-carousel-trio-col">
+                <div class="bct-slide" id="bpv-cs-content">
+                  <div>
+                    <div class="bpv-cs-num" id="bpv-cs-num">01</div>
+                    <div class="bpv-cs-body" id="bpv-cs-body">Consistency builds trust over time.</div>
+                  </div>
                 </div>
+                <p class="bct-slide-label">Content</p>
               </div>
-              <!-- Slide 3: Outro -->
-              <div class="bpv-carousel-slide" id="bpv-cs-3">
-                <div class="bpv-cs-outro" id="bpv-cs-outro">Follow for more insights on building your brand authority.</div>
-                <div class="bpv-logo-area bpv-cs-logo" id="bpv-cs-logo"></div>
+
+              <div class="brand-carousel-trio-col">
+                <div class="bct-slide" id="bpv-cs-closing">
+                  <div class="bpv-cs-outro" id="bpv-cs-outro">Follow for more insights on building your brand.</div>
+                  <div class="bpv-logo-area bpv-cs-logo" id="bpv-cs-logo"></div>
+                </div>
+                <p class="bct-slide-label">Closing</p>
               </div>
-            </div>
-            <div class="bpv-carousel-nav">
-              <div class="bpv-carousel-dots">
-                <button class="bpv-dot active" data-slide="0" aria-label="Slide 1"></button>
-                <button class="bpv-dot" data-slide="1" aria-label="Slide 2"></button>
-                <button class="bpv-dot" data-slide="2" aria-label="Slide 3"></button>
-              </div>
+
             </div>
           </div>
 
@@ -228,14 +296,14 @@
     </footer>
   </div><!-- /main-content -->
 
-  <!-- ── Media picker overlay ──────────────────────────────────── -->
-  <div class="brand-media-overlay" id="brand-media-overlay" role="dialog" aria-modal="true" aria-label="Pick logo from media library" aria-hidden="true">
+  <!-- ── Media picker overlay (shared: logo + bg image) ────────── -->
+  <div class="brand-media-overlay" id="brand-media-overlay" role="dialog" aria-modal="true" aria-label="Pick image from media library" aria-hidden="true">
     <div class="brand-media-modal">
       <div class="brand-media-modal-header">
-        <span class="brand-media-modal-title">Choose logo</span>
+        <span class="brand-media-modal-title" id="brand-media-modal-title">Choose image</span>
         <button class="slide-over-close" id="brand-media-close" aria-label="Close">✕</button>
       </div>
-      <p class="brand-media-modal-hint">Select an image to use as your brand logo.</p>
+      <p class="brand-media-modal-hint" id="brand-media-modal-hint">Select an image from your media library.</p>
       <div class="brand-media-grid" id="brand-media-grid">
         <p class="brand-media-empty" id="brand-media-empty" style="display:none">No images in your media library yet. <a href="/Media.html">Upload one</a> first.</p>
       </div>

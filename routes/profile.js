@@ -83,7 +83,7 @@ router.get('/:user_id?', async (req, res) => {
   try {
     [userRow, wsRow, profileRow] = await Promise.all([
       db.prepare('SELECT user_role, email, display_name FROM user_profiles WHERE user_id = ?').get(userId),
-      db.prepare('SELECT brand_name, brand_bg, brand_accent, brand_text, brand_logo, brand_font_heading, brand_font_body, brand_secondary_bg, brand_secondary_text FROM workspaces WHERE id = ?').get(tenantId),
+      db.prepare('SELECT brand_name, brand_bg, brand_accent, brand_text, brand_logo, brand_font_heading, brand_font_body, brand_secondary_bg, brand_secondary_text, brand_bg_type, brand_bg_gradient, brand_bg_pattern, brand_bg_image FROM workspaces WHERE id = ?').get(tenantId),
       profileQueryPromise,
     ]);
   } catch (err) {
@@ -134,6 +134,10 @@ router.get('/:user_id?', async (req, res) => {
       brand_font_body:              wsRow?.brand_font_body      || null,
       brand_secondary_bg:           wsRow?.brand_secondary_bg   || null,
       brand_secondary_text:         wsRow?.brand_secondary_text || null,
+      brand_bg_type:                wsRow?.brand_bg_type        || 'solid',
+      brand_bg_gradient:            wsRow?.brand_bg_gradient    || null,
+      brand_bg_pattern:             wsRow?.brand_bg_pattern     || null,
+      brand_bg_image:               wsRow?.brand_bg_image       || null,
       user_role:                    userRow?.user_role  || null,
       onboarding_complete:          !!profileRow.onboarding_complete,
       website_url:                  profileRow.website_url          || null,
@@ -177,6 +181,7 @@ router.post('/', async (req, res) => {
     audience_profile_json,
     brand_bg, brand_accent, brand_text, brand_name, brand_logo,
     brand_font_heading, brand_font_body, brand_secondary_bg, brand_secondary_text,
+    brand_bg_type, brand_bg_gradient, brand_bg_pattern, brand_bg_image,
     user_role, onboarding_complete, website_url,
     website_summary, website_extracted_at,
     onboarding_q2, onboarding_q3, onboarding_q_completed_at,
@@ -201,6 +206,8 @@ router.post('/', async (req, res) => {
       && !brand_bg && !brand_accent && !brand_text && !brand_name && brand_logo === undefined
       && brand_font_heading === undefined && brand_font_body === undefined
       && brand_secondary_bg === undefined && brand_secondary_text === undefined
+      && brand_bg_type === undefined && brand_bg_gradient === undefined
+      && brand_bg_pattern === undefined && brand_bg_image === undefined
       && user_role === undefined && onboarding_complete === undefined
       && !website_url && !hasVoiceDNAField && !content_pillars) {
     return res.status(400).json({ ok: false, error: 'no_fields_provided' });
@@ -231,8 +238,13 @@ router.post('/', async (req, res) => {
   const hasBrandField = brand_name !== undefined || brand_bg || brand_accent || brand_text
     || brand_logo !== undefined
     || brand_font_heading !== undefined || brand_font_body !== undefined
-    || brand_secondary_bg !== undefined || brand_secondary_text !== undefined;
+    || brand_secondary_bg !== undefined || brand_secondary_text !== undefined
+    || brand_bg_type !== undefined || brand_bg_gradient !== undefined
+    || brand_bg_pattern !== undefined || brand_bg_image !== undefined;
   if (hasBrandField) {
+    if (brand_bg_gradient !== undefined && brand_bg_gradient !== null) {
+      try { JSON.parse(brand_bg_gradient); } catch { return res.status(400).json({ ok: false, error: 'invalid_brand_bg_gradient' }); }
+    }
     await db.prepare(`
       UPDATE workspaces SET
         brand_name           = COALESCE(?, brand_name),
@@ -244,6 +256,10 @@ router.post('/', async (req, res) => {
         brand_font_body      = COALESCE(?, brand_font_body),
         brand_secondary_bg   = COALESCE(?, brand_secondary_bg),
         brand_secondary_text = COALESCE(?, brand_secondary_text),
+        brand_bg_type        = COALESCE(?, brand_bg_type),
+        brand_bg_gradient    = COALESCE(?, brand_bg_gradient),
+        brand_bg_pattern     = COALESCE(?, brand_bg_pattern),
+        brand_bg_image       = COALESCE(?, brand_bg_image),
         updated_at           = CURRENT_TIMESTAMP
       WHERE id = ?
     `).run(
@@ -253,6 +269,10 @@ router.post('/', async (req, res) => {
       brand_font_body      !== undefined ? (brand_font_body      || null) : null,
       brand_secondary_bg   !== undefined ? (brand_secondary_bg   || null) : null,
       brand_secondary_text !== undefined ? (brand_secondary_text || null) : null,
+      brand_bg_type        !== undefined ? (brand_bg_type        || 'solid') : null,
+      brand_bg_gradient    !== undefined ? (brand_bg_gradient    || null) : null,
+      brand_bg_pattern     !== undefined ? (brand_bg_pattern     || null) : null,
+      brand_bg_image       !== undefined ? (brand_bg_image       || null) : null,
       tenantId
     );
   }

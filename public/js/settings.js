@@ -485,6 +485,7 @@ async function init() {
     btn.disabled = true; btn.textContent = 'Saving…';
     const beliefsLines = (qs('bv-beliefs')?.value || '').split('\n').map(l => l.trim()).filter(Boolean);
     const payload = {
+      website_url:              qs('profile-website')?.value.trim()  || null,
       brand_description:        qs('bv-description')?.value.trim()  || null,
       brand_industry:           qs('bv-industry')?.value.trim()     || null,
       brand_personality_traits: bvTraits.length  > 0 ? JSON.stringify(bvTraits)  : null,
@@ -954,7 +955,7 @@ async function init() {
   }
 
   function firstIncompleteStep() {
-    for (let i = 1; i <= 8; i++) {
+    for (let i = 1; i <= 7; i++) {
       const check = qs('vw-check-' + i);
       if (!check || check.hidden) return i;
     }

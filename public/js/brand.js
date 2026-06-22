@@ -26,12 +26,112 @@ const logoClearBtn          = document.getElementById('brand-logo-clear-btn');
 const saveBtn               = document.getElementById('brand-save-btn');
 const saveStatus            = document.getElementById('brand-save-status');
 
+const mediaOverlay          = document.getElementById('brand-media-overlay');
+const brandOverlay          = document.getElementById('brand-overlay');
+const mediaClose            = document.getElementById('brand-media-close');
+const mediaGrid             = document.getElementById('brand-media-grid');
+const mediaEmpty            = document.getElementById('brand-media-empty');
+const mediaModalTitle       = document.getElementById('brand-media-modal-title');
+const mediaModalHint        = document.getElementById('brand-media-modal-hint');
 
-const mediaOverlay      = document.getElementById('brand-media-overlay');
-const brandOverlay      = document.getElementById('brand-overlay');
-const mediaClose        = document.getElementById('brand-media-close');
-const mediaGrid         = document.getElementById('brand-media-grid');
-const mediaEmpty        = document.getElementById('brand-media-empty');
+/* ── Background type state ────────────────────────────────────── */
+let _bgType         = 'solid';
+let _gradientAngle  = 135;
+let _activePattern  = 'dots';
+let _mediaPickerMode = 'logo'; // 'logo' | 'bgimage'
+
+/* ── Background patterns ──────────────────────────────────────── */
+const PATTERNS = [
+  { key: 'dots',     label: 'Dots' },
+  { key: 'grid',     label: 'Grid' },
+  { key: 'lines',    label: 'Lines' },
+  { key: 'diagonal', label: 'Diagonal' },
+  { key: 'diamond',  label: 'Diamond' },
+  { key: 'chevron',  label: 'Chevron' },
+  { key: 'stripe',   label: 'Stripes' },
+  { key: 'noise',    label: 'Noise' },
+];
+
+function getPatternBg(key, patternColor) {
+  const pc = patternColor || 'rgba(255,255,255,0.12)';
+  switch (key) {
+    case 'dots':
+      return { img: `radial-gradient(circle, ${pc} 1.5px, transparent 1.5px)`, size: '14px 14px' };
+    case 'grid':
+      return { img: `linear-gradient(${pc} 1px, transparent 1px), linear-gradient(90deg, ${pc} 1px, transparent 1px)`, size: '24px 24px' };
+    case 'lines':
+      return { img: `repeating-linear-gradient(0deg, transparent, transparent 10px, ${pc} 10px, ${pc} 11px)`, size: 'auto' };
+    case 'diagonal':
+      return { img: `repeating-linear-gradient(45deg, transparent, transparent 10px, ${pc} 10px, ${pc} 11px)`, size: 'auto' };
+    case 'diamond':
+      return { img: `repeating-linear-gradient(45deg, ${pc} 0, ${pc} 1px, transparent 0, transparent 50%), repeating-linear-gradient(-45deg, ${pc} 0, ${pc} 1px, transparent 0, transparent 50%)`, size: '20px 20px' };
+    case 'chevron':
+      return { img: `repeating-linear-gradient(135deg, ${pc} 0, ${pc} 1px, transparent 0, transparent 50%), repeating-linear-gradient(45deg, ${pc} 0, ${pc} 1px, transparent 0, transparent 50%)`, size: '14px 14px' };
+    case 'stripe':
+      return { img: `repeating-linear-gradient(90deg, ${pc} 0, ${pc} 1px, transparent 0, transparent 12px)`, size: 'auto' };
+    case 'noise':
+      return { img: `radial-gradient(circle, ${pc} 1px, transparent 1px)`, size: '7px 7px' };
+    default:
+      return { img: `radial-gradient(circle, ${pc} 1.5px, transparent 1.5px)`, size: '14px 14px' };
+  }
+}
+
+/* ── Render pattern tile grid ─────────────────────────────────── */
+function renderPatternGrid() {
+  const grid = document.getElementById('brand-pattern-grid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  const base = document.getElementById('brand-bg-pattern-hex')?.value || '#0F1A3C';
+  PATTERNS.forEach(p => {
+    const { img, size } = getPatternBg(p.key, 'rgba(255,255,255,0.18)');
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'brand-pattern-tile' + (p.key === _activePattern ? ' active' : '');
+    btn.title = p.label;
+    btn.style.backgroundColor = base;
+    btn.style.backgroundImage = img;
+    btn.style.backgroundSize  = size;
+    btn.setAttribute('aria-label', p.label);
+    btn.addEventListener('click', () => {
+      _activePattern = p.key;
+      document.querySelectorAll('.brand-pattern-tile').forEach(t => t.classList.remove('active'));
+      btn.classList.add('active');
+      updatePreview();
+    });
+    grid.appendChild(btn);
+  });
+}
+
+/* ── Switch bg type ───────────────────────────────────────────── */
+function setBgType(type) {
+  _bgType = type;
+  ['solid', 'gradient', 'pattern', 'image'].forEach(t => {
+    const sub = document.getElementById(`brand-bg-sub-${t}`);
+    if (sub) sub.style.display = t === type ? '' : 'none';
+  });
+  document.querySelectorAll('.brand-bg-type-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.bgtype === type);
+  });
+  if (type === 'pattern') renderPatternGrid();
+  updatePreview();
+}
+
+document.querySelectorAll('.brand-bg-type-btn').forEach(btn => {
+  btn.addEventListener('click', () => setBgType(btn.dataset.bgtype));
+});
+
+/* ── Gradient angle pills ─────────────────────────────────────── */
+function setGradientAngle(angle) {
+  _gradientAngle = Number(angle);
+  document.querySelectorAll('.brand-bg-angle-btn').forEach(btn => {
+    btn.classList.toggle('active', Number(btn.dataset.angle) === _gradientAngle);
+  });
+  updatePreview();
+}
+
+document.querySelectorAll('.brand-bg-angle-btn').forEach(btn => {
+  btn.addEventListener('click', () => setGradientAngle(btn.dataset.angle));
+});
 
 /* ── LinkedIn status ──────────────────────────────────────────── */
 function buildLinkedInChip(name, photoUrl) {
@@ -63,6 +163,7 @@ async function checkLinkedInStatus() {
 async function init() {
   await window.scouthookAuthReady;
   await checkLinkedInStatus();
+  renderPatternGrid();
   await loadBrand();
 }
 
@@ -79,7 +180,6 @@ async function loadBrand() {
     const p = data.profile;
 
     brandNameEl.value = p.brand_name || '';
-    setColor('bg',     p.brand_bg     || '#0F1A3C');
     setColor('accent', p.brand_accent || '#0D7A5F');
     setColor('text',   p.brand_text   || '#F0F4FF');
     if (p.brand_secondary_bg)   setOptionalColor('secondary-bg',   p.brand_secondary_bg);
@@ -87,6 +187,27 @@ async function loadBrand() {
     if (p.brand_logo) setLogo(p.brand_logo);
     if (p.brand_font_heading) { headingCombo.setValue(p.brand_font_heading); applyFontPreview('heading', p.brand_font_heading); }
     if (p.brand_font_body)    { bodyCombo.setValue(p.brand_font_body);       applyFontPreview('body',    p.brand_font_body); }
+
+    // Background — restore by type
+    const bgType = p.brand_bg_type || 'solid';
+    if (bgType === 'solid') {
+      setColor('bg', p.brand_bg || '#0F1A3C');
+    } else if (bgType === 'gradient') {
+      let grad = {};
+      try { grad = JSON.parse(p.brand_bg_gradient || '{}'); } catch { /* ignore */ }
+      setColor('bg-grad-from', grad.from || p.brand_bg || '#0F1A3C');
+      setColor('bg-grad-to',   grad.to   || '#1a3060');
+      _gradientAngle = grad.angle || 135;
+      document.querySelectorAll('.brand-bg-angle-btn').forEach(btn => {
+        btn.classList.toggle('active', Number(btn.dataset.angle) === _gradientAngle);
+      });
+    } else if (bgType === 'pattern') {
+      setColor('bg-pattern', p.brand_bg || '#0F1A3C');
+      _activePattern = p.brand_bg_pattern || 'dots';
+    } else if (bgType === 'image') {
+      if (p.brand_bg_image) setBgImage(p.brand_bg_image);
+    }
+    setBgType(bgType); // renders sub-panel and calls updatePreview
 
     updatePreview();
   } catch { /* leave defaults */ }
@@ -124,7 +245,7 @@ function wireColorPair(key) {
 
   input.addEventListener('blur', () => {
     let val = input.value.trim();
-    if (!val) return; // allow empty for optional fields
+    if (!val) return;
     if (/^[0-9A-Fa-f]{6}$/.test(val)) val = '#' + val;
     if (/^#[0-9A-Fa-f]{6}$/.test(val)) {
       input.value  = val;
@@ -141,6 +262,16 @@ wireColorPair('accent');
 wireColorPair('text');
 wireColorPair('secondary-bg');
 wireColorPair('secondary-text');
+wireColorPair('bg-grad-from');
+wireColorPair('bg-grad-to');
+wireColorPair('bg-pattern');
+
+// Pattern base-color change should also re-render tiles
+const patternHexEl = document.getElementById('brand-bg-pattern-hex');
+if (patternHexEl) {
+  patternHexEl.addEventListener('input',  renderPatternGrid);
+  patternHexEl.addEventListener('change', renderPatternGrid);
+}
 
 brandNameEl.addEventListener('input', updatePreview);
 
@@ -366,8 +497,43 @@ const headingCombo = makeFontCombobox(fontHeadingEl, fontHeadingListEl, 'heading
 const bodyCombo    = makeFontCombobox(fontBodyEl,    fontBodyListEl,    'body');
 
 /* ── Live preview ─────────────────────────────────────────────── */
+function applyBgToElement(node) {
+  if (!node) return;
+  node.style.backgroundImage = '';
+  node.style.backgroundSize  = '';
+  node.style.backgroundColor = '';
+  node.style.background      = '';
+
+  switch (_bgType) {
+    case 'solid': {
+      node.style.background = bgHex.value || '#0F1A3C';
+      break;
+    }
+    case 'gradient': {
+      const from = document.getElementById('brand-bg-grad-from-hex')?.value || '#0F1A3C';
+      const to   = document.getElementById('brand-bg-grad-to-hex')?.value   || '#1a3060';
+      node.style.background = `linear-gradient(${_gradientAngle}deg, ${from}, ${to})`;
+      break;
+    }
+    case 'pattern': {
+      const base = document.getElementById('brand-bg-pattern-hex')?.value || '#0F1A3C';
+      const { img, size } = getPatternBg(_activePattern, 'rgba(255,255,255,0.12)');
+      node.style.backgroundColor = base;
+      node.style.backgroundImage = img;
+      node.style.backgroundSize  = size;
+      break;
+    }
+    case 'image': {
+      const url = document.getElementById('brand-bg-image-url')?.value;
+      node.style.background = url
+        ? `url('${escHtml(url)}') center/cover no-repeat`
+        : (bgHex.value || '#0F1A3C');
+      break;
+    }
+  }
+}
+
 function updatePreview() {
-  const bg           = bgHex.value                    || '#0F1A3C';
   const accent       = accentHex.value                || '#0D7A5F';
   const text         = textHex.value                  || '#F0F4FF';
   const secondaryBg  = secondaryBgHex.value.trim()    || null;
@@ -386,66 +552,42 @@ function updatePreview() {
     return '';
   }
 
+  // Apply background to all visual panels
+  ['bpv-quote', 'bpv-branded', 'bpv-cs-cover', 'bpv-cs-content', 'bpv-cs-closing'].forEach(id => {
+    applyBgToElement(document.getElementById(id));
+  });
+
   // ── Quote ────────────────────────────────────────────────────
-  el('bpv-quote',       e => { e.style.background = bg; });
   el('bpv-accent-bar',  e => { e.style.background = accent; });
   el('bpv-quote-text',  e => { e.style.color = text; e.style.fontFamily = headingFF; });
   el('bpv-quote-logo',  e => { e.innerHTML = logoHtml(); });
 
   // ── Branded Quote ─────────────────────────────────────────────
-  el('bpv-branded',        e => { e.style.background = bg; });
   el('bpv-bq-card',        e => { e.style.background = secondaryBg || 'rgba(255,255,255,0.07)'; });
   el('bpv-bq-bar',         e => { e.style.background = accent; });
   el('bpv-bq-quote',       e => { e.style.color = text; e.style.fontFamily = headingFF; });
   el('bpv-bq-attribution', e => { e.style.color = secondaryTxt || text; e.style.fontFamily = bodyFF; });
   el('bpv-branded-logo',   e => { e.innerHTML = logoHtml(); });
 
-  // ── Carousel ──────────────────────────────────────────────────
-  ['bpv-cs-1', 'bpv-cs-2'].forEach(id => el(id, e => { e.style.background = bg; }));
-  el('bpv-cs-3',     e => { e.style.background = secondaryBg || bg; });
-  el('bpv-cs-eyebrow', e => { e.style.background = accent; e.style.color = bg; });
-  el('bpv-cs-title', e => { e.style.color = text; e.style.fontFamily = headingFF; });
-  el('bpv-cs-swipe', e => { e.style.color = text; });
-  el('bpv-cs-num',   e => { e.style.color = accent; e.style.fontFamily = headingFF; });
-  el('bpv-cs-body',  e => { e.style.color = text; e.style.fontFamily = bodyFF; });
-  el('bpv-cs-outro', e => { e.style.color = text; e.style.fontFamily = bodyFF; });
-  el('bpv-cs-logo',  e => { e.innerHTML = logoHtml(); });
+  // ── Carousel trio ─────────────────────────────────────────────
+  const eyebrowTextColor = _bgType === 'gradient'
+    ? (document.getElementById('brand-bg-grad-from-hex')?.value || '#0F1A3C')
+    : _bgType === 'pattern'
+    ? (document.getElementById('brand-bg-pattern-hex')?.value || '#0F1A3C')
+    : (bgHex.value || '#0F1A3C');
+  el('bpv-cs-eyebrow', e => { e.style.background = accent; e.style.color = eyebrowTextColor; e.style.filter = ''; });
+  el('bpv-cs-title',   e => { e.style.color = text; e.style.fontFamily = headingFF; });
+  el('bpv-cs-swipe',   e => { e.style.color = text; });
+  el('bpv-cs-num',     e => { e.style.color = accent; e.style.fontFamily = headingFF; });
+  el('bpv-cs-body',    e => { e.style.color = text; e.style.fontFamily = bodyFF; });
+  el('bpv-cs-outro',   e => { e.style.color = text; e.style.fontFamily = bodyFF; });
+  el('bpv-cs-logo',    e => { e.innerHTML = logoHtml(); });
 }
 
 function el(id, fn) {
   const node = document.getElementById(id);
   if (node) fn(node);
 }
-
-/* ── Preview tabs ─────────────────────────────────────────────── */
-document.querySelectorAll('.brand-ptab').forEach(tab => {
-  tab.addEventListener('click', () => {
-    document.querySelectorAll('.brand-ptab').forEach(t => {
-      t.classList.remove('active');
-      t.setAttribute('aria-selected', 'false');
-    });
-    tab.classList.add('active');
-    tab.setAttribute('aria-selected', 'true');
-    const target = tab.dataset.tab;
-    ['bpp-quote', 'bpp-branded', 'bpp-carousel'].forEach(id => {
-      const panel = document.getElementById(id);
-      if (panel) panel.hidden = id !== `bpp-${target}`;
-    });
-  });
-});
-
-/* ── Carousel slide nav ───────────────────────────────────────── */
-let _activeSlide = 0;
-
-function setCarouselSlide(idx) {
-  _activeSlide = idx;
-  document.querySelectorAll('.bpv-carousel-slide').forEach((s, i) => s.classList.toggle('active', i === idx));
-  document.querySelectorAll('.bpv-dot').forEach((d, i) => d.classList.toggle('active', i === idx));
-}
-
-document.querySelectorAll('.bpv-dot').forEach(dot => {
-  dot.addEventListener('click', () => setCarouselSlide(parseInt(dot.dataset.slide, 10)));
-});
 
 /* ── Logo picker ──────────────────────────────────────────────── */
 function setLogo(url) {
@@ -474,15 +616,11 @@ logoFileInput.addEventListener('change', async () => {
 
   const ALLOWED = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
   if (!ALLOWED.includes(file.type)) {
-    if (window.toast && typeof window.toast.error === 'function') {
-      window.toast.error('Logo upload failed: unsupported file type.');
-    }
+    if (window.toast?.error) window.toast.error('Logo upload failed: unsupported file type.');
     return;
   }
   if (file.size > 20 * 1024 * 1024) {
-    if (window.toast && typeof window.toast.error === 'function') {
-      window.toast.error('Logo upload failed: file exceeds 20 MB.');
-    }
+    if (window.toast?.error) window.toast.error('Logo upload failed: file exceeds 20 MB.');
     return;
   }
 
@@ -503,22 +641,100 @@ logoFileInput.addEventListener('change', async () => {
     const data = await res.json();
     if (!data.ok) throw new Error(data.error || 'Upload failed');
     setLogo(data.file.url);
-    if (window.toast && typeof window.toast.success === 'function') {
-      window.toast.success('Logo uploaded successfully.');
-    }
+    if (window.toast?.success) window.toast.success('Logo uploaded successfully.');
   } catch (err) {
-    if (window.toast && typeof window.toast.error === 'function') {
-      window.toast.error(err.message || 'Logo upload failed. Please try again.');
-    }
+    if (window.toast?.error) window.toast.error(err.message || 'Logo upload failed. Please try again.');
   } finally {
     logoUploadBtn.disabled = false;
     logoUploading.style.display = 'none';
   }
 });
 
-logoPickBtn.addEventListener('click', openMediaPicker);
+logoPickBtn.addEventListener('click', () => openMediaPicker('logo'));
 
-function openMediaPicker() {
+/* ── Background image handlers ────────────────────────────────── */
+function setBgImage(url) {
+  const urlInput  = document.getElementById('brand-bg-image-url');
+  const thumb     = document.getElementById('brand-bg-image-thumb');
+  const clearBtn  = document.getElementById('brand-bg-image-clear-btn');
+  if (urlInput)  urlInput.value = url;
+  if (thumb)     thumb.innerHTML = `<img src="${escHtml(url)}" alt="Background" style="width:100%;height:100%;object-fit:cover;border-radius:4px;">`;
+  if (clearBtn)  clearBtn.style.display = '';
+  updatePreview();
+}
+
+function clearBgImage() {
+  const urlInput  = document.getElementById('brand-bg-image-url');
+  const thumb     = document.getElementById('brand-bg-image-thumb');
+  const clearBtn  = document.getElementById('brand-bg-image-clear-btn');
+  if (urlInput)  urlInput.value = '';
+  if (thumb)     thumb.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>`;
+  if (clearBtn)  clearBtn.style.display = 'none';
+  updatePreview();
+}
+
+document.getElementById('brand-bg-image-clear-btn')?.addEventListener('click', clearBgImage);
+
+document.getElementById('brand-bg-image-upload-btn')?.addEventListener('click', () => {
+  document.getElementById('brand-bg-image-file')?.click();
+});
+
+document.getElementById('brand-bg-image-file')?.addEventListener('change', async function () {
+  const file = this.files[0];
+  if (!file) return;
+  this.value = '';
+
+  const ALLOWED = ['image/jpeg', 'image/png', 'image/webp'];
+  if (!ALLOWED.includes(file.type)) {
+    if (window.toast?.error) window.toast.error('Image upload failed: use JPEG, PNG, or WebP.');
+    return;
+  }
+  if (file.size > 20 * 1024 * 1024) {
+    if (window.toast?.error) window.toast.error('Image upload failed: file exceeds 20 MB.');
+    return;
+  }
+
+  const uploadBtn    = document.getElementById('brand-bg-image-upload-btn');
+  const uploadingEl  = document.getElementById('brand-bg-image-uploading');
+  if (uploadBtn)    uploadBtn.disabled = true;
+  if (uploadingEl)  uploadingEl.style.display = '';
+
+  try {
+    const res = await fetch('/api/media/upload', {
+      method: 'POST',
+      headers: {
+        'Content-Type': file.type,
+        'X-Filename':   encodeURIComponent(file.name),
+        'X-User-Id':    getUserId(),
+        'X-Tenant-Id':  getTenantId(),
+      },
+      body: file,
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'Upload failed');
+    setBgImage(data.file.url);
+    if (window.toast?.success) window.toast.success('Background image uploaded.');
+  } catch (err) {
+    if (window.toast?.error) window.toast.error(err.message || 'Upload failed. Please try again.');
+  } finally {
+    if (uploadBtn)    uploadBtn.disabled = false;
+    if (uploadingEl)  uploadingEl.style.display = 'none';
+  }
+});
+
+document.getElementById('brand-bg-image-pick-btn')?.addEventListener('click', () => openMediaPicker('bgimage'));
+
+/* ── Shared media picker ──────────────────────────────────────── */
+function openMediaPicker(mode) {
+  _mediaPickerMode = mode || 'logo';
+  if (mediaModalTitle) {
+    mediaModalTitle.textContent = mode === 'bgimage' ? 'Choose background image' : 'Choose logo';
+  }
+  if (mediaModalHint) {
+    mediaModalHint.textContent = mode === 'bgimage'
+      ? 'Select an image to use as the background.'
+      : 'Select an image to use as your brand logo.';
+  }
   mediaOverlay.classList.add('visible');
   mediaOverlay.setAttribute('aria-hidden', 'false');
   brandOverlay.classList.add('visible');
@@ -539,7 +755,6 @@ document.addEventListener('keydown', (e) => {
 });
 
 async function loadMediaForPicker() {
-  // Clear existing tiles (keep empty msg)
   Array.from(mediaGrid.children).forEach(c => {
     if (c !== mediaEmpty) c.remove();
   });
@@ -564,7 +779,11 @@ async function loadMediaForPicker() {
       tile.title = f.filename;
       tile.innerHTML = `<img src="${escHtml(f.url)}" alt="${escHtml(f.filename)}" loading="lazy">`;
       tile.addEventListener('click', () => {
-        setLogo(f.url);
+        if (_mediaPickerMode === 'bgimage') {
+          setBgImage(f.url);
+        } else {
+          setLogo(f.url);
+        }
         closeMediaPicker();
       });
       mediaGrid.appendChild(tile);
@@ -580,9 +799,26 @@ saveBtn.addEventListener('click', async () => {
   saveStatus.textContent = '';
   saveStatus.className   = 'brand-save-status';
 
+  // Determine the primary brand_bg based on type
+  let primaryBg = null;
+  if (_bgType === 'solid') {
+    primaryBg = bgHex.value || null;
+  } else if (_bgType === 'gradient') {
+    primaryBg = document.getElementById('brand-bg-grad-from-hex')?.value || null;
+  } else if (_bgType === 'pattern') {
+    primaryBg = document.getElementById('brand-bg-pattern-hex')?.value || null;
+  }
+
+  let gradientJson = null;
+  if (_bgType === 'gradient') {
+    const from = document.getElementById('brand-bg-grad-from-hex')?.value || '#0F1A3C';
+    const to   = document.getElementById('brand-bg-grad-to-hex')?.value   || '#1a3060';
+    gradientJson = JSON.stringify({ angle: _gradientAngle, from, to });
+  }
+
   const body = {
     brand_name:           brandNameEl.value.trim()        || null,
-    brand_bg:             bgHex.value                     || null,
+    brand_bg:             primaryBg,
     brand_accent:         accentHex.value                 || null,
     brand_text:           textHex.value                   || null,
     brand_logo:           logoUrlInput.value              || null,
@@ -590,6 +826,10 @@ saveBtn.addEventListener('click', async () => {
     brand_secondary_text: secondaryTextHex.value.trim()   || null,
     brand_font_heading:   fontHeadingEl.value.trim()      || null,
     brand_font_body:      fontBodyEl.value.trim()         || null,
+    brand_bg_type:        _bgType,
+    brand_bg_gradient:    gradientJson,
+    brand_bg_pattern:     _bgType === 'pattern' ? _activePattern : null,
+    brand_bg_image:       _bgType === 'image' ? (document.getElementById('brand-bg-image-url')?.value || null) : null,
   };
 
   const origText = saveBtn.textContent;
@@ -606,9 +846,7 @@ saveBtn.addEventListener('click', async () => {
     if (!res.ok || !data.ok) throw new Error(data.error || 'Save failed');
 
     saveBtn.textContent = 'Saved ✓';
-    if (window.toast && typeof window.toast.success === 'function') {
-      window.toast.success('Brand settings updated successfully.');
-    }
+    if (window.toast?.success) window.toast.success('Brand settings updated successfully.');
     setTimeout(() => {
       saveBtn.textContent = origText;
       saveBtn.disabled = false;
@@ -618,9 +856,7 @@ saveBtn.addEventListener('click', async () => {
     saveBtn.disabled = false;
     saveStatus.textContent = err.message || 'Could not save. Try again.';
     saveStatus.classList.add('error');
-    if (window.toast && typeof window.toast.error === 'function') {
-      window.toast.error('Couldn’t update brand settings. Please try again.');
-    }
+    if (window.toast?.error) window.toast.error('Couldn\'t update brand settings. Please try again.');
   }
 });
 

@@ -8,7 +8,7 @@
   <link rel="stylesheet" href="/css/scouthook.css" />
   <link rel="stylesheet" href="/css/main.css" />
   <link rel="stylesheet" href="/css/admin.css" />
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <script src="/js/chart.umd.min.js"></script>
 </head>
 <body>
 
@@ -204,49 +204,49 @@
     });
 
     // ── Load metrics ──────────────────────────────────────────────────────────
+    function safeRender(fn) { try { fn(); } catch (e) { console.error('[admin] chart render error:', e); } }
+
     async function loadMetrics() {
+      const params = new URLSearchParams({ start: currentStart, end: currentEnd, granularity: currentGran });
+      let data;
       try {
-        const params = new URLSearchParams({ start: currentStart, end: currentEnd, granularity: currentGran });
         const r = await fetch(`/admin/dashboard/metrics?${params}`, {
           headers: { 'X-Admin-Password': adminPw }
         });
-        const data = await r.json();
-        if (!data.ok) { console.error('[admin] metrics error:', data.error); return; }
+        data = await r.json();
+      } catch (e) { console.error('[admin] fetch failed:', e); return; }
+      if (!data.ok) { console.error('[admin] metrics error:', data.error); return; }
 
-        const s = data.series;
-        const sum = arr => arr.reduce((a, b) => a + Number(b.count), 0);
+      const s = data.series;
+      const sum = arr => arr.reduce((a, b) => a + Number(b.count), 0);
 
-        document.getElementById('m-signups').textContent  = sum(s.signups).toLocaleString();
-        document.getElementById('m-upgrades').textContent = sum(s.paid_upgrades).toLocaleString();
-        document.getElementById('m-cancels').textContent  = sum(s.cancellations).toLocaleString();
-        document.getElementById('m-mrr').textContent      = '$' + (data.mrr_estimate || 0).toLocaleString() + '/mo';
-        document.getElementById('m-posts').textContent    = sum(s.posts_created).toLocaleString();
-        document.getElementById('m-placid').textContent   = sum(s.placid_total).toLocaleString();
-        document.getElementById('m-linkedin').textContent = sum(s.linkedin_connections).toLocaleString();
-        document.getElementById('m-logins').textContent   = sum(s.logins).toLocaleString();
+      document.getElementById('m-signups').textContent  = sum(s.signups).toLocaleString();
+      document.getElementById('m-upgrades').textContent = sum(s.paid_upgrades).toLocaleString();
+      document.getElementById('m-cancels').textContent  = sum(s.cancellations).toLocaleString();
+      document.getElementById('m-mrr').textContent      = '$' + (data.mrr_estimate || 0).toLocaleString() + '/mo';
+      document.getElementById('m-posts').textContent    = sum(s.posts_created).toLocaleString();
+      document.getElementById('m-placid').textContent   = sum(s.placid_total).toLocaleString();
+      document.getElementById('m-linkedin').textContent = sum(s.linkedin_connections).toLocaleString();
+      document.getElementById('m-logins').textContent   = sum(s.logins).toLocaleString();
 
-        // Line chart overview
-        lastSeries = s;
-        const lineMetric = document.getElementById('line-metric-select').value;
-        const lineColorMap = { signups: COLORS.accent, paid_upgrades: COLORS.primary, cancellations: COLORS.error, trial_expired: COLORS.amber };
-        renderLineChart('chart-line-overview', s[lineMetric] || [], lineColorMap[lineMetric]);
+      // Each chart render is isolated — one failure can't break the others
+      lastSeries = s;
+      const lineMetric = document.getElementById('line-metric-select').value;
+      const lineColorMap = { signups: COLORS.accent, paid_upgrades: COLORS.primary, cancellations: COLORS.error, trial_expired: COLORS.amber };
+      safeRender(() => renderLineChart('chart-line-overview', s[lineMetric] || [], lineColorMap[lineMetric]));
 
-        // Funnel
-        if (data.funnel) renderFunnel(data.funnel);
+      if (data.funnel) safeRender(() => renderFunnel(data.funnel));
 
-        renderBar('chart-signups',     s.signups,              COLORS.accent);
-        renderBar('chart-upgrades',    s.paid_upgrades,        COLORS.primary);
-        renderBar('chart-cancels',     s.cancellations,        COLORS.error);
-        renderBar('chart-posts',       s.posts_created,        COLORS.accent);
-        renderPlacidStacked('chart-placid', s.placid_by_type);
-        renderBar('chart-linkedin',    s.linkedin_connections, COLORS.primary);
-        renderBarWithEmpty('chart-logins',      s.logins,               COLORS.accent);
-        renderBarWithEmpty('chart-disconnects', s.linkedin_disconnects, COLORS.amber);
+      safeRender(() => renderBar('chart-signups',     s.signups,              COLORS.accent));
+      safeRender(() => renderBar('chart-upgrades',    s.paid_upgrades,        COLORS.primary));
+      safeRender(() => renderBar('chart-cancels',     s.cancellations,        COLORS.error));
+      safeRender(() => renderBar('chart-posts',       s.posts_created,        COLORS.accent));
+      safeRender(() => renderPlacidStacked('chart-placid', s.placid_by_type));
+      safeRender(() => renderBar('chart-linkedin',    s.linkedin_connections, COLORS.primary));
+      safeRender(() => renderBar('chart-logins',      s.logins,               COLORS.accent));
+      safeRender(() => renderBar('chart-disconnects', s.linkedin_disconnects, COLORS.amber));
 
-        loadPlanDistribution();
-      } catch (err) {
-        console.error('[admin] loadMetrics failed:', err);
-      }
+      loadPlanDistribution();
     }
 
     async function loadPlanDistribution() {
@@ -274,7 +274,9 @@
     function destroyChart(id) { if (charts[id]) { charts[id].destroy(); delete charts[id]; } }
 
     function formatBucket(iso) {
+      if (!iso) return '';
       const d = new Date(iso);
+      if (isNaN(d)) return String(iso);
       return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
     }
 
@@ -350,12 +352,15 @@
     function renderLineChart(id, series, color) {
       destroyChart(id);
       const ctx = document.getElementById(id);
-      if (!ctx) return;
+      console.log('[chart] renderLineChart', id, 'canvas:', !!ctx, 'series:', series?.length, 'color:', color);
+      if (!ctx) { console.warn('[chart] canvas not found:', id); return; }
       if (!series || series.length === 0) {
+        console.log('[chart] empty series, showing empty state');
         showChartEmpty(ctx, true);
         return;
       }
       showChartEmpty(ctx, false);
+      console.log('[chart] creating Chart.js line chart with labels:', series.map(r => formatBucket(r.bucket)), 'data:', series.map(r => r.count));
       charts[id] = new Chart(ctx, {
         type: 'line',
         data: {

@@ -404,23 +404,42 @@ app.get('/auth/google/callback',
       console.log(`[auth/google/callback] userId=${userId} workspaceId=${req.user.tenant_id} hasCompletedOnboarding=${hasCompletedOnboarding}`);
 
       if (!hasCompletedOnboarding) {
-        // First-time user. Check the active workspace profile.
+        // Check the active workspace profile.
         const brandProfile = await db.prepare(
           'SELECT id, onboarding_complete FROM profiles WHERE workspace_id = ? AND is_default = true'
         ).get(req.user.tenant_id);
         if (!brandProfile?.onboarding_complete) {
-          // Legacy safety: if they have posts they're a returning user whose flag was
-          // never backfilled — mark both complete so they're not blocked again.
-          const postCount = await db.prepare(
-            'SELECT COUNT(*) AS cnt FROM generated_posts WHERE tenant_id = ?'
-          ).get(req.user.tenant_id);
-          if ((postCount?.cnt || 0) > 0 && brandProfile?.id) {
-            await db.prepare('UPDATE profiles SET onboarding_complete = true WHERE id = ?').run(brandProfile.id);
+          // Before giving up and sending to onboarding, check if the user has ANY
+          // complete workspace (e.g. their tenant_id is stale/pointing to an empty
+          // auto-created workspace while their real workspace is fully set up).
+          const bestWs = await db.prepare(`
+            SELECT wm.workspace_id FROM workspace_members wm
+            JOIN workspaces w ON w.id = wm.workspace_id
+            JOIN profiles p ON p.workspace_id = w.id
+            WHERE wm.user_id = ? AND p.is_default = true AND p.onboarding_complete = true
+              AND w.deleted_at IS NULL
+            ORDER BY wm.created_at ASC LIMIT 1
+          `).get(userId);
+          if (bestWs) {
+            // Switch to the complete workspace and stamp onboarding as done.
+            req.user.tenant_id = bestWs.workspace_id;
             await db.prepare(
-              'UPDATE user_profiles SET onboarding_completed_at = now() WHERE user_id = ? AND onboarding_completed_at IS NULL'
-            ).run(userId);
+              'UPDATE user_profiles SET onboarding_completed_at = now(), last_active_workspace_id = ? WHERE user_id = ?'
+            ).run(bestWs.workspace_id, userId);
           } else {
-            return res.redirect('/onboarding.html');
+            // Legacy safety: if they have posts they're a returning user whose flag was
+            // never backfilled — mark both complete so they're not blocked again.
+            const postCount = await db.prepare(
+              'SELECT COUNT(*) AS cnt FROM generated_posts WHERE tenant_id = ?'
+            ).get(req.user.tenant_id);
+            if ((postCount?.cnt || 0) > 0 && brandProfile?.id) {
+              await db.prepare('UPDATE profiles SET onboarding_complete = true WHERE id = ?').run(brandProfile.id);
+              await db.prepare(
+                'UPDATE user_profiles SET onboarding_completed_at = now() WHERE user_id = ? AND onboarding_completed_at IS NULL'
+              ).run(userId);
+            } else {
+              return res.redirect('/onboarding.html');
+            }
           }
         }
       } else {

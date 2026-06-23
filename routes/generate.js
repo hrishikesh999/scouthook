@@ -20,6 +20,7 @@ const { canGeneratePost } = require('../services/subscription');
 const { sendEmailToUser } = require('../emails');
 const { resolveProfile } = require('../lib/resolveProfile');
 const { planHasFeature } = require('../lib/planFeatures');
+const { buildVaultContextBlock } = require('../services/vaultContext');
 
 // ---------------------------------------------------------------------------
 // Sliding window rate limiter — 10 generations per hour per user.
@@ -260,6 +261,38 @@ router.post('/', async (req, res) => {
     }
   }
 
+  // RAG: fetch relevant vault context for all non-vault-idea generation paths.
+  // Two-tier: (1) FTS match on chunk content; (2) fallback to recent mined ideas.
+  // Fires for all 10 post types. Fails silently — never blocks generation.
+  let ragContext = [];
+  if (!vaultIdea && raw_idea && raw_idea.trim().length > 20) {
+    try {
+      ragContext = await db.prepare(`
+        SELECT vc.content, vc.source_ref, vd.filename,
+               ts_rank(to_tsvector('english', vc.content),
+                       plainto_tsquery('english', ?)) AS rank
+        FROM   vault_chunks vc
+        JOIN   vault_documents vd ON vd.id = vc.document_id
+        WHERE  vc.tenant_id = ?
+          AND  to_tsvector('english', vc.content)
+                 @@ plainto_tsquery('english', ?)
+        ORDER  BY rank DESC
+        LIMIT  3
+      `).all(raw_idea.slice(0, 500), tenantId, raw_idea.slice(0, 500));
+
+      if (ragContext.length === 0) {
+        ragContext = await db.prepare(`
+          SELECT vi.seed_text AS content, vi.source_ref, vd.filename
+          FROM   vault_ideas vi
+          JOIN   vault_documents vd ON vd.id = vi.document_id
+          WHERE  vi.tenant_id = ? AND vi.status != 'discarded'
+          ORDER  BY vi.created_at DESC
+          LIMIT  3
+        `).all(tenantId);
+      }
+    } catch { ragContext = []; }
+  }
+
   try {
     let ideaResult;
 
@@ -275,6 +308,14 @@ router.post('/', async (req, res) => {
       const neighborBlock = vaultNeighborContext
         ? `\n\n[Additional context from the same document:]\n${vaultNeighborContext}` : '';
       raw_idea = `[Source material from author's document:]\n${vaultChunkText}${neighborBlock}\n\n---\nIdea from this material: ${raw_idea || vaultIdea?.seed_text || ''}`;
+    }
+
+    // Append RAG vault context to raw_idea so all downstream generators receive it.
+    // Mutually exclusive with the vaultChunkText enrichment above (ragContext is only
+    // populated when !vaultIdea).
+    const vaultCtxBlock = buildVaultContextBlock(ragContext);
+    if (vaultCtxBlock) {
+      raw_idea = `${raw_idea}\n\n${vaultCtxBlock}`;
     }
 
     // ── SSE streaming path ────────────────────────────────────────────────────

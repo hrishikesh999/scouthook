@@ -53,35 +53,71 @@
           <div class="loading-text--padded">Loading…</div>
         </div>
 
-        <!-- Add/Edit form -->
+        <!-- Add/Edit wizard -->
         <div id="placid-form" class="hidden card card--section-xl">
           <input type="hidden" id="placid-form-id">
-          <h3 id="placid-form-title" class="form-section-title">Add template</h3>
 
-          <div class="field">
-            <label for="placid-form-name">Template name</label>
-            <input type="text" id="placid-form-name" placeholder="e.g. Dark Quote Card" maxlength="80">
-          </div>
-          <div class="field">
-            <label for="placid-form-uuid">Placid template UUID</label>
-            <input type="text" id="placid-form-uuid" placeholder="abc123…" maxlength="200">
-            <div class="text-muted field-hint">Found in your Placid dashboard under the template settings.</div>
-          </div>
-          <div class="field">
-            <label for="placid-form-headline">Headline layer name</label>
-            <input type="text" id="placid-form-headline" placeholder="headline" maxlength="80">
-            <div class="text-muted field-hint">The Placid layer that receives the main hook text.</div>
-          </div>
-          <div class="field">
-            <label for="placid-form-subtext">Subtext layer name</label>
-            <input type="text" id="placid-form-subtext" placeholder="subtext" maxlength="80">
-            <div class="text-muted field-hint">The Placid layer that receives the supporting text.</div>
+          <!-- Step indicator -->
+          <div class="wizard-steps">
+            <div class="wizard-step wizard-step--active" id="wizard-indicator-1">
+              <span class="wizard-step__num">1</span>
+              <span class="wizard-step__label">Template setup</span>
+            </div>
+            <div class="wizard-step__line"></div>
+            <div class="wizard-step" id="wizard-indicator-2">
+              <span class="wizard-step__num">2</span>
+              <span class="wizard-step__label">Text layers</span>
+            </div>
           </div>
 
-          <div id="placid-form-error" class="form-error hidden"></div>
-          <div class="form-actions">
-            <button id="placid-form-save" class="btn btn--primary" type="button">Save template</button>
-            <button id="placid-form-cancel" class="btn btn--secondary" type="button">Cancel</button>
+          <!-- STEP 1 -->
+          <div id="wizard-step-1">
+            <h3 id="placid-form-title" class="form-section-title">Add template</h3>
+            <div class="field">
+              <label for="placid-form-name">Template name</label>
+              <input type="text" id="placid-form-name" placeholder="e.g. Dark Quote Card" maxlength="80">
+            </div>
+            <div class="field">
+              <label for="placid-form-uuid">Placid template UUID</label>
+              <input type="text" id="placid-form-uuid" placeholder="abc123…" maxlength="200">
+              <div class="text-muted field-hint">Found in your Placid dashboard under the template settings.</div>
+            </div>
+            <div id="placid-form-error" class="form-error hidden"></div>
+            <div class="form-actions">
+              <button id="placid-step1-next" class="btn btn--primary" type="button">Fetch text layers &amp; continue</button>
+              <button id="placid-form-cancel" class="btn btn--secondary" type="button">Cancel</button>
+            </div>
+          </div>
+
+          <!-- STEP 2 -->
+          <div id="wizard-step-2" class="hidden">
+            <h3 class="form-section-title">Configure text layers</h3>
+            <p id="placid-step2-status" class="text-muted" style="margin-bottom:var(--space-md)"></p>
+
+            <fieldset class="wizard-fieldset">
+              <legend class="wizard-fieldset__legend">Core text layers</legend>
+              <div class="text-muted field-hint field-hint--mb">Pick which Placid text layers receive the AI-generated headline and subtext.</div>
+              <div class="field">
+                <label for="placid-form-headline">Headline layer</label>
+                <select id="placid-form-headline" class="cell-select"></select>
+              </div>
+              <div class="field">
+                <label for="placid-form-subtext">Subtext layer</label>
+                <select id="placid-form-subtext" class="cell-select"></select>
+              </div>
+            </fieldset>
+
+            <fieldset class="wizard-fieldset">
+              <legend class="wizard-fieldset__legend">Additional text layers</legend>
+              <div class="text-muted field-hint field-hint--mb">Remaining text layers are shown as editable inputs in the editor. Set a display label and optional character limit for each.</div>
+              <div id="placid-extra-layers-list"></div>
+            </fieldset>
+
+            <div id="placid-form-error-2" class="form-error hidden"></div>
+            <div class="form-actions">
+              <button id="placid-step2-back" class="btn btn--secondary" type="button">Back</button>
+              <button id="placid-form-save" class="btn btn--primary" type="button">Save template</button>
+            </div>
           </div>
         </div>
 
@@ -90,15 +126,134 @@
   </div>
 
   <script>
-    let adminPw = '';
-    let placidTemplates = [];
+    let adminPw          = '';
+    let placidTemplates  = [];
+    let fetchedLayers    = [];   // text layers from Placid API
+    let extraLayers      = [];   // [{ layer_name, label, max_chars }] — layers beyond headline/subtext
+    let editingTemplate  = null;
+    let fetchedForUuid   = null;
+    let fetchReason      = null;
 
     function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+    function layerLabel(name) { return name.replace(/[_-]+/g,' ').replace(/\b\w/g, c => c.toUpperCase()).trim(); }
+
+    // ── Wizard nav ─────────────────────────────────────────────────────────
+    function setWizardStep(n) {
+      document.getElementById('wizard-step-1').classList.toggle('hidden', n !== 1);
+      document.getElementById('wizard-step-2').classList.toggle('hidden', n !== 2);
+      document.getElementById('wizard-indicator-1').className = 'wizard-step' + (n === 1 ? ' wizard-step--active' : ' wizard-step--done');
+      document.getElementById('wizard-indicator-2').className = 'wizard-step' + (n === 2 ? ' wizard-step--active' : '');
+    }
+
+    // ── Fetch text layers ───────────────────────────────────────────────────
+    async function fetchLayers(uuid) {
+      fetchReason = null;
+      try {
+        const r = await adminFetch(`/admin/placid-templates/fetch-layers?uuid=${encodeURIComponent(uuid)}`);
+        if (!r.ok) { fetchReason = 'network_error'; fetchedLayers = []; return; }
+        const data = await r.json();
+        fetchedLayers = data.layers || [];
+        fetchReason   = data.reason || null;
+      } catch {
+        fetchReason   = 'network_error';
+        fetchedLayers = [];
+      }
+    }
+
+    // ── Populate core dropdowns ─────────────────────────────────────────────
+    function populateCoreDropdowns(headlineName, subtextName) {
+      function fill(sel, selected) {
+        sel.innerHTML = fetchedLayers.length
+          ? fetchedLayers.map(l => `<option value="${esc(l.name)}" ${l.name === selected ? 'selected' : ''}>${esc(l.name)}</option>`).join('')
+          : `<option value="${esc(selected||'')}">${esc(selected||'')}</option>`;
+        if (selected && !fetchedLayers.find(l => l.name === selected)) {
+          sel.innerHTML += `<option value="${esc(selected)}" selected>${esc(selected)}</option>`;
+        }
+      }
+      fill(document.getElementById('placid-form-headline'), headlineName);
+      fill(document.getElementById('placid-form-subtext'),  subtextName);
+    }
+
+    // ── Build extra layers from fetched layers minus core ───────────────────
+    function buildExtraLayers(headlineName, subtextName, savedExtras) {
+      const coreSet = new Set([headlineName, subtextName].filter(Boolean));
+      // Start from fetched layers (minus core), preserve any saved config
+      const byName = Object.fromEntries((savedExtras || []).map(e => [e.layer_name, e]));
+      extraLayers = fetchedLayers
+        .filter(l => !coreSet.has(l.name))
+        .map(l => byName[l.name] || { layer_name: l.name, label: layerLabel(l.name), max_chars: null });
+    }
+
+    // ── Render extra layers table ───────────────────────────────────────────
+    function renderExtraLayers() {
+      const list = document.getElementById('placid-extra-layers-list');
+      if (!extraLayers.length) {
+        list.innerHTML = '<p class="empty-section-text">No additional text layers.</p>';
+        return;
+      }
+      list.innerHTML = extraLayers.map((f, i) => `
+        <div class="cf-grid placid-cf-row" data-idx="${i}">
+          <div style="padding:6px 8px;font-size:13px;font-weight:500;color:var(--text-muted)">${esc(f.layer_name)}</div>
+          <input type="text" class="cf-label cell-input" value="${esc(f.label)}" placeholder="Display label" maxlength="80">
+          <input type="number" class="cf-max-chars cell-input" value="${f.max_chars||''}" placeholder="Char limit" min="1" max="2000">
+        </div>`).join('');
+      list.querySelectorAll('.cf-label').forEach((el, i) =>
+        el.addEventListener('input', () => { extraLayers[i].label = el.value; }));
+      list.querySelectorAll('.cf-max-chars').forEach((el, i) =>
+        el.addEventListener('input', () => { extraLayers[i].max_chars = parseInt(el.value) || null; }));
+    }
+
+    // ── Rebuild extras when core dropdowns change ──────────────────────────
+    function onCoreChange() {
+      const h = document.getElementById('placid-form-headline').value;
+      const s = document.getElementById('placid-form-subtext').value;
+      buildExtraLayers(h, s, extraLayers);
+      renderExtraLayers();
+    }
+
+    // ── Go to step 2 ───────────────────────────────────────────────────────
+    async function goToStep2(template) {
+      const uuid = document.getElementById('placid-form-uuid').value.trim();
+      const name = document.getElementById('placid-form-name').value.trim();
+      const errEl = document.getElementById('placid-form-error');
+      if (!name || !uuid) {
+        errEl.textContent = 'Name and template UUID are required.'; errEl.classList.remove('hidden'); return;
+      }
+      errEl.classList.add('hidden');
+      setWizardStep(2);
+
+      const statusEl = document.getElementById('placid-step2-status');
+      statusEl.textContent = 'Fetching text layers from Placid…';
+
+      if (fetchedForUuid !== uuid) {
+        await fetchLayers(uuid);
+        fetchedForUuid = uuid;
+      }
+
+      const REASON_MSGS = {
+        no_api_key:     'Placid API key not configured — layers not fetched. Enter layer names manually.',
+        api_error:      'Placid API error — enter layer names manually.',
+        uuid_not_found: 'Template UUID not found in Placid — double-check the UUID.',
+        network_error:  'Could not reach server — enter layer names manually.',
+      };
+      statusEl.textContent = fetchedLayers.length
+        ? `${fetchedLayers.length} text layer${fetchedLayers.length !== 1 ? 's' : ''} found.`
+        : (REASON_MSGS[fetchReason] || 'No text layers found — enter layer names manually.');
+
+      const savedHeadline = template?.layer_headline || (fetchedLayers[0]?.name || 'headline');
+      const savedSubtext  = template?.layer_subtext  || (fetchedLayers[1]?.name || 'subtext');
+
+      populateCoreDropdowns(savedHeadline, savedSubtext);
+      buildExtraLayers(savedHeadline, savedSubtext, template?.text_layers || []);
+      renderExtraLayers();
+
+      document.getElementById('wizard-step-2').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
 
     // ── Auth ───────────────────────────────────────────────────────────────
     function init() {
       const saved = sessionStorage.getItem('adminPw');
-      if (saved) { adminPw = saved; showMain(); return; }
+      if (saved) { adminPw = saved; showMain(); }
     }
 
     document.getElementById('pw-btn').addEventListener('click', async () => {
@@ -144,7 +299,10 @@
           <div class="template-row__info">
             <div class="template-row__name">${esc(t.name)}${t.is_default ? '<span class="default-badge">DEFAULT</span>' : ''}</div>
             <div class="template-row__uuid">${esc(t.template_uuid)}</div>
-            <div class="template-row__meta">headline→<code>${esc(t.layer_headline)}</code> · subtext→<code>${esc(t.layer_subtext)}</code></div>
+            <div class="template-row__meta">
+              headline→<code>${esc(t.layer_headline)}</code> · subtext→<code>${esc(t.layer_subtext)}</code>
+              ${t.text_layers?.length ? ` · <span class="text-primary">${t.text_layers.length} extra text layer${t.text_layers.length !== 1 ? 's' : ''}</span>` : ''}
+            </div>
           </div>
           <div class="template-row__actions">
             <button class="btn btn--secondary btn--sm tpl-edit-btn">Edit</button>
@@ -160,23 +318,36 @@
       });
     }
 
-    // ── Form open/close ────────────────────────────────────────────────────
+    // ── Open/close form ────────────────────────────────────────────────────
     function openForm(template = null) {
+      editingTemplate  = template;
+      fetchedLayers    = [];
+      extraLayers      = [];
+      fetchedForUuid   = null;
+      fetchReason      = null;
+      document.getElementById('placid-form-id').value   = template?.id || '';
+      document.getElementById('placid-form-name').value = template?.name || '';
+      document.getElementById('placid-form-uuid').value = template?.template_uuid || '';
       document.getElementById('placid-form-title').textContent = template ? 'Edit template' : 'Add template';
-      document.getElementById('placid-form-id').value          = template?.id || '';
-      document.getElementById('placid-form-name').value        = template?.name || '';
-      document.getElementById('placid-form-uuid').value        = template?.template_uuid || '';
-      document.getElementById('placid-form-headline').value    = template?.layer_headline || 'headline';
-      document.getElementById('placid-form-subtext').value     = template?.layer_subtext  || 'subtext';
-      const errEl = document.getElementById('placid-form-error');
-      errEl.textContent = ''; errEl.classList.add('hidden');
+      ['placid-form-error','placid-form-error-2'].forEach(id => {
+        const el = document.getElementById(id); el.textContent = ''; el.classList.add('hidden');
+      });
+      setWizardStep(1);
       document.getElementById('placid-form').classList.remove('hidden');
       document.getElementById('placid-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
       document.getElementById('placid-form-name').focus();
+
+      if (template) {
+        // Skip straight to step 2 for edits
+        const btn = document.getElementById('placid-step1-next');
+        btn.disabled = true; btn.innerHTML = 'Fetching layers&hellip;';
+        goToStep2(template).finally(() => { btn.disabled = false; btn.innerHTML = 'Fetch text layers &amp; continue'; });
+      }
     }
 
     function closeForm() {
       document.getElementById('placid-form').classList.add('hidden');
+      editingTemplate = null;
     }
 
     // ── CRUD ───────────────────────────────────────────────────────────────
@@ -194,27 +365,53 @@
       if (data.ok) { placidTemplates = placidTemplates.filter(t => t.id !== id); renderPlacidTemplates(); }
     }
 
-    // ── Save ───────────────────────────────────────────────────────────────
+    // ── Event listeners ────────────────────────────────────────────────────
+    document.getElementById('placid-add-btn').addEventListener('click', () => openForm());
+    document.getElementById('placid-form-cancel').addEventListener('click', closeForm);
+
+    document.getElementById('placid-step1-next').addEventListener('click', () => {
+      const btn = document.getElementById('placid-step1-next');
+      if (btn.disabled) return;
+      btn.disabled = true; btn.innerHTML = 'Fetching layers&hellip;';
+      goToStep2(editingTemplate).finally(() => {
+        btn.disabled = false; btn.innerHTML = 'Fetch text layers &amp; continue';
+      });
+    });
+
+    document.getElementById('placid-step2-back').addEventListener('click', () => setWizardStep(1));
+
+    // Re-compute extra layers when core dropdowns change
+    document.getElementById('placid-form-headline').addEventListener('change', onCoreChange);
+    document.getElementById('placid-form-subtext').addEventListener('change', onCoreChange);
+
+    // Save
     document.getElementById('placid-form-save').addEventListener('click', async () => {
       const id             = document.getElementById('placid-form-id').value;
       const name           = document.getElementById('placid-form-name').value.trim();
       const template_uuid  = document.getElementById('placid-form-uuid').value.trim();
       const layer_headline = document.getElementById('placid-form-headline').value.trim() || 'headline';
       const layer_subtext  = document.getElementById('placid-form-subtext').value.trim()  || 'subtext';
-      const errEl          = document.getElementById('placid-form-error');
+      const errEl          = document.getElementById('placid-form-error-2');
 
       if (!name || !template_uuid) {
         errEl.textContent = 'Name and template UUID are required.'; errEl.classList.remove('hidden'); return;
       }
       if (layer_headline === layer_subtext) {
-        errEl.textContent = 'Headline and subtext cannot use the same layer name.'; errEl.classList.remove('hidden'); return;
+        errEl.textContent = 'Headline and subtext cannot use the same layer.'; errEl.classList.remove('hidden'); return;
       }
+
+      // Collect extra layers, filtering out any that ended up matching core
+      const coreSet = new Set([layer_headline, layer_subtext]);
+      const text_layers = extraLayers
+        .filter(f => f.layer_name && !coreSet.has(f.layer_name))
+        .map(f => ({ layer_name: f.layer_name, label: f.label || layerLabel(f.layer_name), ...(f.max_chars ? { max_chars: f.max_chars } : {}) }));
+
       errEl.classList.add('hidden');
 
-      const method  = id ? 'PUT' : 'POST';
-      const url     = id ? `/admin/placid-templates/${encodeURIComponent(id)}` : '/admin/placid-templates';
-      const r       = await adminFetch(url, { method, body: JSON.stringify({ name, template_uuid, layer_headline, layer_subtext }) });
-      const data    = await r.json();
+      const method = id ? 'PUT' : 'POST';
+      const url    = id ? `/admin/placid-templates/${encodeURIComponent(id)}` : '/admin/placid-templates';
+      const r      = await adminFetch(url, { method, body: JSON.stringify({ name, template_uuid, layer_headline, layer_subtext, text_layers }) });
+      const data   = await r.json();
       if (!data.ok) { errEl.textContent = data.error || 'Save failed.'; errEl.classList.remove('hidden'); return; }
 
       const saved = data.template;
@@ -223,9 +420,6 @@
       renderPlacidTemplates();
       closeForm();
     });
-
-    document.getElementById('placid-add-btn').addEventListener('click', () => openForm());
-    document.getElementById('placid-form-cancel').addEventListener('click', closeForm);
 
     init();
   </script>

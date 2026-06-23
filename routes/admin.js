@@ -387,8 +387,50 @@ async function fetchPlacidThumbnail(apiKey, templateUuid) {
   } catch { return null; }
 }
 
+router.get('/placid-templates/fetch-layers', requireAdminPassword, async (req, res) => {
+  const { uuid } = req.query;
+  if (!uuid) return res.status(400).json({ ok: false, error: 'uuid required' });
+  try {
+    const apiKey = process.env.PLACID_API_KEY || await getSetting('placid_api_key') || null;
+    if (!apiKey) return res.json({ ok: true, layers: [], reason: 'no_api_key' });
+    const r = await fetch('https://api.placid.app/api/rest/templates', {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+    if (!r.ok) return res.json({ ok: true, layers: [], reason: 'api_error' });
+    const body = await r.json();
+    const list = Array.isArray(body.data) ? body.data : Array.isArray(body) ? body : [];
+    const tpl = list.find(t => t.uuid === uuid);
+    if (!tpl) return res.json({ ok: true, layers: [], reason: 'uuid_not_found' });
+    const layers = (Array.isArray(tpl.layers) ? tpl.layers : [])
+      .filter(l => l.type === 'text')
+      .map(l => ({ name: l.name }));
+    return res.json({ ok: true, layers });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+function parseTextLayers(raw) {
+  try { const v = JSON.parse(raw || '[]'); return Array.isArray(v) ? v : []; } catch { return []; }
+}
+function validateTextLayers(arr) {
+  if (!Array.isArray(arr)) return 'text_layers must be an array';
+  const seen = new Set();
+  for (let i = 0; i < arr.length; i++) {
+    const e = arr[i];
+    if (!e.layer_name || typeof e.layer_name !== 'string') return `text_layers[${i}] missing layer_name`;
+    if (seen.has(e.layer_name)) return `Duplicate layer_name: "${e.layer_name}"`;
+    seen.add(e.layer_name);
+  }
+  return null;
+}
 function normalisePlacidRow(row) {
-  return { id: row.id, name: row.name, template_uuid: row.template_uuid, layer_headline: row.layer_headline, layer_subtext: row.layer_subtext, preview_image_url: row.preview_image_url, is_default: row.is_default, sort_order: row.sort_order };
+  return {
+    id: row.id, name: row.name, template_uuid: row.template_uuid,
+    layer_headline: row.layer_headline, layer_subtext: row.layer_subtext,
+    text_layers: parseTextLayers(row.custom_layers),
+    preview_image_url: row.preview_image_url, is_default: row.is_default, sort_order: row.sort_order,
+  };
 }
 
 router.get('/placid-templates', requireAdminPassword, async (req, res) => {
@@ -403,20 +445,23 @@ router.get('/placid-templates', requireAdminPassword, async (req, res) => {
 });
 
 router.post('/placid-templates', requireAdminPassword, async (req, res) => {
-  const { name, template_uuid, layer_headline = 'headline', layer_subtext = 'subtext' } = req.body || {};
+  const { name, template_uuid, layer_headline = 'headline', layer_subtext = 'subtext', text_layers = [] } = req.body || {};
   if (!name || !template_uuid) {
     return res.status(400).json({ ok: false, error: 'name and template_uuid are required' });
   }
+  const tlErr = validateTextLayers(text_layers);
+  if (tlErr) return res.status(400).json({ ok: false, error: tlErr });
   try {
-    const apiKey     = process.env.PLACID_API_KEY || await getSetting('placid_api_key') || null;
-    const previewUrl = apiKey ? await fetchPlacidThumbnail(apiKey, template_uuid) : null;
+    const apiKey         = process.env.PLACID_API_KEY || await getSetting('placid_api_key') || null;
+    const previewUrl     = apiKey ? await fetchPlacidThumbnail(apiKey, template_uuid) : null;
+    const textLayersJson = JSON.stringify(text_layers);
 
     const maxRow = await db.prepare('SELECT COALESCE(MAX(sort_order), -1) AS mx FROM placid_templates').get();
     const sortOrder = (maxRow?.mx ?? -1) + 1;
     const row = await db.prepare(`
       INSERT INTO placid_templates (name, template_uuid, layer_headline, layer_subtext, preview_image_url, sort_order, custom_layers, brand_layers)
-      VALUES (?, ?, ?, ?, ?, ?, '[]', '[]') RETURNING *
-    `).get(name, template_uuid, layer_headline, layer_subtext, previewUrl, sortOrder);
+      VALUES (?, ?, ?, ?, ?, ?, ?, '[]') RETURNING *
+    `).get(name, template_uuid, layer_headline, layer_subtext, previewUrl, sortOrder, textLayersJson);
     return res.status(201).json({ ok: true, template: normalisePlacidRow(row) });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
@@ -425,19 +470,22 @@ router.post('/placid-templates', requireAdminPassword, async (req, res) => {
 
 router.put('/placid-templates/:id', requireAdminPassword, async (req, res) => {
   const { id } = req.params;
-  const { name, template_uuid, layer_headline, layer_subtext } = req.body || {};
+  const { name, template_uuid, layer_headline, layer_subtext, text_layers = [] } = req.body || {};
   if (!name || !template_uuid) {
     return res.status(400).json({ ok: false, error: 'name and template_uuid are required' });
   }
+  const tlErr = validateTextLayers(text_layers);
+  if (tlErr) return res.status(400).json({ ok: false, error: tlErr });
   try {
-    const apiKey     = process.env.PLACID_API_KEY || await getSetting('placid_api_key') || null;
-    const previewUrl = apiKey ? await fetchPlacidThumbnail(apiKey, template_uuid) : null;
+    const apiKey         = process.env.PLACID_API_KEY || await getSetting('placid_api_key') || null;
+    const previewUrl     = apiKey ? await fetchPlacidThumbnail(apiKey, template_uuid) : null;
+    const textLayersJson = JSON.stringify(text_layers);
 
     const row = await db.prepare(`
       UPDATE placid_templates
-      SET name = ?, template_uuid = ?, layer_headline = ?, layer_subtext = ?, preview_image_url = ?
+      SET name = ?, template_uuid = ?, layer_headline = ?, layer_subtext = ?, preview_image_url = ?, custom_layers = ?
       WHERE id = ? RETURNING *
-    `).get(name, template_uuid, layer_headline || 'headline', layer_subtext || 'subtext', previewUrl, id);
+    `).get(name, template_uuid, layer_headline || 'headline', layer_subtext || 'subtext', previewUrl, textLayersJson, id);
     if (!row) return res.status(404).json({ ok: false, error: 'template_not_found' });
     return res.json({ ok: true, template: normalisePlacidRow(row) });
   } catch (err) {

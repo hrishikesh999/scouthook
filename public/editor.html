@@ -1547,8 +1547,24 @@ function renderAiImageFormInModal(content) {
     return;
   }
 
-  const h = content.headline || '';
-  const s = content.subtext  || '';
+  const h           = content.headline || '';
+  const s           = content.subtext  || '';
+  const textLayers  = Array.isArray(selectedTemplate?.text_layers) ? selectedTemplate.text_layers : [];
+  const savedExtras = content.extra_fields || {};
+
+  const extraHtml = textLayers.map(field => {
+    const safeName  = field.layer_name.replace(/[^a-zA-Z0-9]/g, '_');
+    const fieldId   = `aim-extra-${safeName}`;
+    const maxChars  = field.max_chars || 200;
+    const existing  = savedExtras[field.layer_name] || '';
+    return `
+      <div style="margin-top:12px">
+        <label class="field-label" for="${escHtml(fieldId)}">${escHtml(field.label || field.layer_name)}</label>
+        <input type="text" id="${escHtml(fieldId)}" class="field-input aim-extra-text-input"
+          data-layer-name="${escHtml(field.layer_name)}" maxlength="${maxChars}" value="${escHtml(existing)}"/>
+        <div class="so-char-counter"><span id="${escHtml(fieldId)}-len">${existing.length}</span> / ${maxChars}</div>
+      </div>`;
+  }).join('');
 
   formPane.innerHTML = `
     <div class="so-editor-form">
@@ -1559,6 +1575,7 @@ function renderAiImageFormInModal(content) {
       <label class="field-label" for="aim-subtext-input" style="margin-top:12px">Subtext</label>
       <textarea id="aim-subtext-input" class="field-textarea so-quote-textarea" maxlength="200">${escHtml(s)}</textarea>
       <div class="so-char-counter"><span id="aim-st-len">${s.length}</span> / 200</div>
+      ${extraHtml}
     </div>`;
 
   const hlInput = document.getElementById('aim-headline-input');
@@ -1567,6 +1584,12 @@ function renderAiImageFormInModal(content) {
   const stLen   = document.getElementById('aim-st-len');
   if (hlInput) hlInput.addEventListener('input', () => { hlLen.textContent = hlInput.value.length; });
   if (stInput) stInput.addEventListener('input', () => { stLen.textContent = stInput.value.length; });
+
+  formPane.querySelectorAll('.aim-extra-text-input').forEach(inp => {
+    const safeName = inp.dataset.layerName.replace(/[^a-zA-Z0-9]/g, '_');
+    const lenEl = document.getElementById(`aim-extra-${safeName}-len`);
+    if (lenEl) inp.addEventListener('input', () => { lenEl.textContent = inp.value.length; });
+  });
 }
 
 
@@ -1611,9 +1634,15 @@ async function _generateInitialBrandedPreview() {
 }
 
 function readEditorContentFromModal() {
+  const extra_fields = {};
+  document.querySelectorAll('#ai-image-form-pane .aim-extra-text-input[data-layer-name]').forEach(inp => {
+    const val = inp.value.trim();
+    if (val) extra_fields[inp.dataset.layerName] = val;
+  });
   return {
     headline: (document.getElementById('aim-headline-input')?.value || '').trim(),
     subtext:  (document.getElementById('aim-subtext-input')?.value  || '').trim(),
+    ...(Object.keys(extra_fields).length > 0 ? { extra_fields } : {}),
   };
 }
 

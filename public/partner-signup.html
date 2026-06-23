@@ -4,181 +4,130 @@
   <meta charset="UTF-8" />
   <link rel="icon" type="image/png" href="/favicon.png">
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Partner Program — ScoutHook</title>
-  <link rel="stylesheet" href="/css/main.css">
+  <title>Join the Partner Program — ScoutHook</title>
   <style>
-    body { background: #f9fafb; }
-    .partner-wrap {
-      max-width: 680px;
-      margin: 60px auto;
-      padding: 0 24px;
-    }
-    .partner-hero {
-      text-align: center;
-      margin-bottom: 40px;
-    }
-    .partner-hero h1 {
-      font-size: 2rem;
-      font-weight: 700;
-      color: #09090b;
-      margin: 0 0 12px;
-    }
-    .partner-hero p {
-      color: #52525b;
-      font-size: 1.05rem;
-      margin: 0;
-    }
-    .perks-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 16px;
-      margin-bottom: 40px;
-    }
-    @media (max-width: 600px) {
-      .perks-grid { grid-template-columns: 1fr; }
-    }
-    .perk-card {
-      background: #fff;
-      border: 1px solid #e4e4e7;
-      border-radius: 12px;
-      padding: 24px 20px;
-      text-align: center;
-    }
-    .perk-card .perk-value {
-      font-size: 2rem;
-      font-weight: 700;
-      color: #0f766e;
-      margin-bottom: 6px;
-    }
-    .perk-card .perk-label {
-      font-size: 0.85rem;
-      color: #52525b;
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-      font-weight: 600;
-    }
-    .perk-card .perk-desc {
-      font-size: 0.9rem;
-      color: #71717a;
-      margin-top: 8px;
-    }
-    .how-card {
-      background: #fff;
-      border: 1px solid #e4e4e7;
-      border-radius: 12px;
-      padding: 28px 28px;
-      margin-bottom: 32px;
-    }
-    .how-card h2 {
-      font-size: 1rem;
-      font-weight: 700;
-      color: #09090b;
-      margin: 0 0 20px;
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-    }
+    *, *::before, *::after { box-sizing: border-box; }
+    body { margin: 0; font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif; background: #f9fafb; color: #09090b; font-size: 14px; }
+
+    /* Header */
+    .partner-nav { background: #fff; border-bottom: 1px solid #e4e4e7; position: sticky; top: 0; z-index: 50; }
+    .partner-nav-inner { max-width: 960px; margin: 0 auto; padding: 0 24px; height: 56px; display: flex; align-items: center; justify-content: space-between; }
+    .partner-nav-brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: inherit; }
+    .partner-nav-brand img { height: 26px; width: auto; }
+    .partner-nav-brand span { font-size: 0.85rem; font-weight: 600; color: #52525b; border-left: 1px solid #e4e4e7; padding-left: 10px; }
+    .partner-nav-links { display: flex; align-items: center; gap: 16px; }
+    .partner-nav-app { font-size: 0.82rem; color: #71717a; text-decoration: none; }
+    .partner-nav-app:hover { color: #09090b; }
+    .partner-nav-signout { font-size: 0.82rem; color: #71717a; text-decoration: none; background: none; border: none; cursor: pointer; padding: 0; font-family: inherit; }
+    .partner-nav-signout:hover { color: #09090b; }
+
+    /* Content */
+    .partner-wrap { max-width: 680px; margin: 0 auto; padding: 48px 24px 60px; }
+
+    .partner-hero { text-align: center; margin-bottom: 40px; }
+    .partner-hero h1 { font-size: 2rem; font-weight: 700; color: #09090b; margin: 0 0 12px; }
+    .partner-hero p { color: #52525b; font-size: 1.05rem; margin: 0; }
+
+    .perks-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 40px; }
+    @media (max-width: 600px) { .perks-grid { grid-template-columns: 1fr; } }
+    .perk-card { background: #fff; border: 1px solid #e4e4e7; border-radius: 12px; padding: 24px 20px; text-align: center; }
+    .perk-card .perk-value { font-size: 2rem; font-weight: 700; color: #0f766e; margin-bottom: 6px; }
+    .perk-card .perk-label { font-size: 0.85rem; color: #52525b; text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; }
+    .perk-card .perk-desc { font-size: 0.9rem; color: #71717a; margin-top: 8px; }
+
+    .how-card { background: #fff; border: 1px solid #e4e4e7; border-radius: 12px; padding: 28px; margin-bottom: 32px; }
+    .how-card h2 { font-size: 1rem; font-weight: 700; color: #09090b; margin: 0 0 20px; text-transform: uppercase; letter-spacing: 0.04em; }
     .steps { list-style: none; padding: 0; margin: 0; }
-    .steps li {
-      display: flex;
-      gap: 16px;
-      margin-bottom: 16px;
-      align-items: flex-start;
-    }
+    .steps li { display: flex; gap: 16px; margin-bottom: 16px; align-items: flex-start; }
     .steps li:last-child { margin-bottom: 0; }
-    .step-num {
-      width: 28px;
-      height: 28px;
-      border-radius: 50%;
-      background: #0f766e;
-      color: #fff;
-      font-size: 0.85rem;
-      font-weight: 700;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-    }
+    .step-num { width: 28px; height: 28px; border-radius: 50%; background: #0f766e; color: #fff; font-size: 0.85rem; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
     .step-text { padding-top: 4px; color: #3f3f46; font-size: 0.95rem; }
+
     .join-section { text-align: center; }
-    .btn-join {
-      display: inline-block;
-      background: #0f766e;
-      color: #fff;
-      border: none;
-      border-radius: 8px;
-      padding: 14px 36px;
-      font-size: 1.05rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background 0.15s;
-    }
+    .btn-join { display: inline-block; background: #0f766e; color: #fff; border: none; border-radius: 8px; padding: 14px 36px; font-size: 1.05rem; font-weight: 600; cursor: pointer; transition: background 0.15s; }
     .btn-join:hover { background: #0d6460; }
     .btn-join:disabled { background: #a1a1aa; cursor: default; }
     #join-msg { margin-top: 12px; font-size: 0.9rem; }
     #join-msg.error { color: #dc2626; }
     #join-msg.success { color: #16a34a; }
-    .fine-print {
-      margin-top: 24px;
-      font-size: 0.82rem;
-      color: #a1a1aa;
-      text-align: center;
-    }
+    .fine-print { margin-top: 24px; font-size: 0.82rem; color: #a1a1aa; text-align: center; }
   </style>
 </head>
 <body>
-  <script src="/js/cached-fetch.js"></script>
-  <script src="/js/sidebar.js"></script>
 
-  <div id="main-content">
-    <div class="partner-wrap">
-
-      <div class="partner-hero">
-        <h1>ScoutHook Partner Program</h1>
-        <p>Earn recurring income by sharing ScoutHook. Every referral pays you every month.</p>
+  <!-- Standalone partner header -->
+  <nav class="partner-nav">
+    <div class="partner-nav-inner">
+      <a href="/partner-signup.html" class="partner-nav-brand">
+        <img src="/images/scout-hook-logo.png" alt="ScoutHook">
+        <span>Partner Program</span>
+      </a>
+      <div class="partner-nav-links">
+        <a href="/dashboard.html" class="partner-nav-app">Go to app →</a>
+        <button id="signout-btn" class="partner-nav-signout">Sign out</button>
       </div>
-
-      <div class="perks-grid">
-        <div class="perk-card">
-          <div class="perk-value">10%</div>
-          <div class="perk-label">Lifetime Commission</div>
-          <div class="perk-desc">On every payment and renewal, forever</div>
-        </div>
-        <div class="perk-card">
-          <div class="perk-value" id="bonus-value">$2</div>
-          <div class="perk-label">Performance Bonus</div>
-          <div class="perk-desc">Per referral who publishes <span id="milestone-count">100</span> posts</div>
-        </div>
-        <div class="perk-card">
-          <div class="perk-value" id="min-payout-value">$10</div>
-          <div class="perk-label">Minimum Payout</div>
-          <div class="perk-desc">One of the lowest thresholds available</div>
-        </div>
-      </div>
-
-      <div class="how-card">
-        <h2>How it works</h2>
-        <ol class="steps">
-          <li><div class="step-num">1</div><div class="step-text">Join the program and get your unique referral link instantly.</div></li>
-          <li><div class="step-num">2</div><div class="step-text">Share your link with your audience, clients, or network.</div></li>
-          <li><div class="step-num">3</div><div class="step-text">When someone subscribes through your link, they're permanently tagged to you.</div></li>
-          <li><div class="step-num">4</div><div class="step-text">Earn 10% of every payment they make, plus performance bonuses — credited to your wallet.</div></li>
-        </ol>
-      </div>
-
-      <div class="join-section">
-        <button class="btn-join" id="join-btn">Join the Partner Program</button>
-        <div id="join-msg"></div>
-        <p class="fine-print">Attribution is permanent. No earning cap. No time limit.</p>
-      </div>
-
     </div>
+  </nav>
+
+  <div class="partner-wrap">
+
+    <div class="partner-hero">
+      <h1>ScoutHook Partner Program</h1>
+      <p>Earn recurring income by sharing ScoutHook. Every referral pays you every month.</p>
+    </div>
+
+    <div class="perks-grid">
+      <div class="perk-card">
+        <div class="perk-value">10%</div>
+        <div class="perk-label">Lifetime Commission</div>
+        <div class="perk-desc">On every payment and renewal, forever</div>
+      </div>
+      <div class="perk-card">
+        <div class="perk-value" id="bonus-value">$2</div>
+        <div class="perk-label">Performance Bonus</div>
+        <div class="perk-desc">Per referral who publishes <span id="milestone-count">100</span> posts</div>
+      </div>
+      <div class="perk-card">
+        <div class="perk-value" id="min-payout-value">$10</div>
+        <div class="perk-label">Minimum Payout</div>
+        <div class="perk-desc">One of the lowest thresholds available</div>
+      </div>
+    </div>
+
+    <div class="how-card">
+      <h2>How it works</h2>
+      <ol class="steps">
+        <li><div class="step-num">1</div><div class="step-text">Join the program and get your unique referral link instantly.</div></li>
+        <li><div class="step-num">2</div><div class="step-text">Share your link with your audience, clients, or network.</div></li>
+        <li><div class="step-num">3</div><div class="step-text">When someone subscribes through your link, they're permanently tagged to you.</div></li>
+        <li><div class="step-num">4</div><div class="step-text">Earn 10% of every payment they make, plus performance bonuses — credited to your wallet.</div></li>
+      </ol>
+    </div>
+
+    <div class="join-section">
+      <button class="btn-join" id="join-btn">Join the Partner Program</button>
+      <div id="join-msg"></div>
+      <p class="fine-print">Attribution is permanent. No earning cap. No time limit.</p>
+    </div>
+
   </div>
 
   <script>
+    document.getElementById('signout-btn').addEventListener('click', async () => {
+      await fetch('/auth/logout', { method: 'POST' }).catch(() => {});
+      window.location.replace('/partner-login.html');
+    });
+
     (async () => {
-      // Check if already an affiliate
+      // Not logged in → partner login page
       const me = await fetch('/api/affiliates/me').catch(() => null);
-      if (me && me.ok) {
+      if (!me) return;
+      if (me.status === 401) {
+        window.location.replace('/partner-login.html');
+        return;
+      }
+      // Already a partner → dashboard
+      if (me.ok) {
         const data = await me.json().catch(() => null);
         if (data?.ok) {
           window.location.replace('/partner.html');

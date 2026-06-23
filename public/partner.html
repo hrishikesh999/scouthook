@@ -5,11 +5,25 @@
   <link rel="icon" type="image/png" href="/favicon.png">
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Partner Dashboard — ScoutHook</title>
-  <link rel="stylesheet" href="/css/main.css">
   <style>
-    body { background: #f9fafb; }
-    .partner-wrap { max-width: 900px; margin: 0 auto; padding: 0 24px 60px; }
-    .page-title { font-size: 1.5rem; font-weight: 700; color: #09090b; margin: 32px 0 4px; }
+    *, *::before, *::after { box-sizing: border-box; }
+    body { margin: 0; font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif; background: #f9fafb; color: #09090b; font-size: 14px; }
+
+    /* Header */
+    .partner-nav { background: #fff; border-bottom: 1px solid #e4e4e7; position: sticky; top: 0; z-index: 50; }
+    .partner-nav-inner { max-width: 960px; margin: 0 auto; padding: 0 24px; height: 56px; display: flex; align-items: center; justify-content: space-between; }
+    .partner-nav-brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: inherit; }
+    .partner-nav-brand img { height: 26px; width: auto; }
+    .partner-nav-brand span { font-size: 0.85rem; font-weight: 600; color: #52525b; border-left: 1px solid #e4e4e7; padding-left: 10px; }
+    .partner-nav-links { display: flex; align-items: center; gap: 16px; }
+    .partner-nav-app { font-size: 0.82rem; color: #71717a; text-decoration: none; }
+    .partner-nav-app:hover { color: #09090b; }
+    .partner-nav-signout { font-size: 0.82rem; color: #71717a; text-decoration: none; background: none; border: none; cursor: pointer; padding: 0; font-family: inherit; }
+    .partner-nav-signout:hover { color: #09090b; }
+
+    /* Main content */
+    .partner-wrap { max-width: 960px; margin: 0 auto; padding: 32px 24px 60px; }
+    .page-title { font-size: 1.5rem; font-weight: 700; color: #09090b; margin: 0 0 4px; }
     .page-sub { color: #71717a; margin: 0 0 28px; font-size: 0.95rem; }
 
     /* Stats row */
@@ -56,6 +70,7 @@
     .badge-reversed  { background: #fee2e2; color: #991b1b; }
     .badge-converted { background: #dcfce7; color: #166534; }
     .badge-signed_up { background: #f4f4f5; color: #52525b; }
+    .badge-churned   { background: #fee2e2; color: #991b1b; }
 
     /* Payout method form */
     .method-card { background: #fff; border: 1px solid #e4e4e7; border-radius: 10px; padding: 24px; margin-bottom: 24px; }
@@ -64,7 +79,7 @@
     @media (max-width: 600px) { .field-row { grid-template-columns: 1fr; } }
     .field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 14px; }
     .field label { font-size: 0.85rem; font-weight: 600; color: #3f3f46; }
-    .field select, .field input, .field textarea { border: 1px solid #e4e4e7; border-radius: 7px; padding: 9px 12px; font-size: 0.9rem; font-family: inherit; color: #09090b; background: #fff; }
+    .field select, .field input { border: 1px solid #e4e4e7; border-radius: 7px; padding: 9px 12px; font-size: 0.9rem; font-family: inherit; color: #09090b; background: #fff; }
     .btn-save { background: #0f766e; color: #fff; border: none; border-radius: 8px; padding: 10px 22px; font-size: 0.9rem; font-weight: 600; cursor: pointer; }
     .btn-save:hover { background: #0d6460; }
     .save-msg { margin-left: 12px; font-size: 0.85rem; }
@@ -73,153 +88,168 @@
     #payout-msg.error { color: #dc2626; }
     #payout-msg.success { color: #16a34a; }
 
-    .loading-pulse { color: #a1a1aa; text-align: center; padding: 40px; }
+    .loading-pulse { color: #a1a1aa; text-align: center; padding: 60px; }
   </style>
 </head>
 <body>
-  <script src="/js/cached-fetch.js"></script>
-  <script src="/js/sidebar.js"></script>
 
-  <div id="main-content">
-    <div class="partner-wrap">
-      <h1 class="page-title">Partner Dashboard</h1>
-      <p class="page-sub">Your referral link, earnings, and payout history.</p>
-
-      <div id="partner-loading" class="loading-pulse">Loading your dashboard…</div>
-      <div id="partner-content" style="display:none">
-
-        <!-- Stats -->
-        <div class="stats-row">
-          <div class="stat-card">
-            <div class="stat-label">Confirmed Balance</div>
-            <div class="stat-value" id="stat-wallet">—</div>
-            <div class="stat-sub" id="stat-pending-sub"></div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">Total Earned</div>
-            <div class="stat-value" id="stat-earned">—</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">Total Referrals</div>
-            <div class="stat-value" id="stat-referrals">—</div>
-            <div class="stat-sub" id="stat-converted-sub"></div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">Link Clicks</div>
-            <div class="stat-value" id="stat-clicks">—</div>
-          </div>
-        </div>
-
-        <!-- Wallet / payout -->
-        <div class="wallet-card">
-          <div>
-            <div class="wallet-balance-label">Available Balance</div>
-            <div class="wallet-balance-value" id="wallet-balance">$0.00</div>
-            <div class="wallet-sub" id="wallet-min-note"></div>
-          </div>
-          <div>
-            <button class="btn-payout" id="payout-btn">Request Payout</button>
-            <div id="payout-msg"></div>
-          </div>
-        </div>
-
-        <!-- Referral link -->
-        <div class="referral-card">
-          <h2>Your Referral Link</h2>
-          <div class="link-row">
-            <div class="link-box" id="referral-link-text"></div>
-            <button class="btn-copy" id="copy-btn">Copy</button>
-          </div>
-          <div class="click-count" id="click-count-text"></div>
-        </div>
-
-        <!-- Commissions table -->
-        <div class="table-card">
-          <div class="table-header"><h2>Commission History</h2></div>
-          <table>
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Type</th>
-                <th>Amount</th>
-                <th>Status</th>
-                <th>Clears</th>
-              </tr>
-            </thead>
-            <tbody id="commissions-body">
-              <tr class="empty-row"><td colspan="5">Loading…</td></tr>
-            </tbody>
-          </table>
-        </div>
-
-        <!-- Referrals table -->
-        <div class="table-card">
-          <div class="table-header"><h2>Referrals</h2></div>
-          <table>
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Status</th>
-                <th>Signed Up</th>
-                <th>Posts</th>
-                <th>Milestone</th>
-              </tr>
-            </thead>
-            <tbody id="referrals-body">
-              <tr class="empty-row"><td colspan="6">Loading…</td></tr>
-            </tbody>
-          </table>
-        </div>
-
-        <!-- Payout history -->
-        <div class="table-card">
-          <div class="table-header"><h2>Payout History</h2></div>
-          <table>
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Amount</th>
-                <th>Status</th>
-                <th>Note</th>
-              </tr>
-            </thead>
-            <tbody id="payouts-body">
-              <tr class="empty-row"><td colspan="4">No payouts yet</td></tr>
-            </tbody>
-          </table>
-        </div>
-
-        <!-- Payout method -->
-        <div class="method-card">
-          <h2>Payout Method</h2>
-          <div class="field-row">
-            <div class="field">
-              <label for="method-type">Method</label>
-              <select id="method-type">
-                <option value="">Select…</option>
-                <option value="paypal">PayPal</option>
-                <option value="wise">Wise</option>
-                <option value="bank">Bank Transfer</option>
-              </select>
-            </div>
-            <div class="field">
-              <label for="method-details">Account details (email, IBAN, etc.)</label>
-              <input type="text" id="method-details" placeholder="e.g. partner@email.com" />
-            </div>
-          </div>
-          <button class="btn-save" id="method-save-btn">Save</button>
-          <span class="save-msg" id="method-save-msg"></span>
-        </div>
-
-      </div><!-- /partner-content -->
+  <!-- Standalone partner header -->
+  <nav class="partner-nav">
+    <div class="partner-nav-inner">
+      <a href="/partner.html" class="partner-nav-brand">
+        <img src="/images/scout-hook-logo.png" alt="ScoutHook">
+        <span>Partner Program</span>
+      </a>
+      <div class="partner-nav-links">
+        <a href="/dashboard.html" class="partner-nav-app">Go to app →</a>
+        <button id="signout-btn" class="partner-nav-signout">Sign out</button>
+      </div>
     </div>
+  </nav>
+
+  <div class="partner-wrap">
+    <h1 class="page-title">Partner Dashboard</h1>
+    <p class="page-sub">Your referral link, earnings, and payout history.</p>
+
+    <div id="partner-loading" class="loading-pulse">Loading your dashboard…</div>
+    <div id="partner-content" style="display:none">
+
+      <!-- Stats -->
+      <div class="stats-row">
+        <div class="stat-card">
+          <div class="stat-label">Confirmed Balance</div>
+          <div class="stat-value" id="stat-wallet">—</div>
+          <div class="stat-sub" id="stat-pending-sub"></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Total Earned</div>
+          <div class="stat-value" id="stat-earned">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Total Referrals</div>
+          <div class="stat-value" id="stat-referrals">—</div>
+          <div class="stat-sub" id="stat-converted-sub"></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Link Clicks</div>
+          <div class="stat-value" id="stat-clicks">—</div>
+        </div>
+      </div>
+
+      <!-- Wallet / payout -->
+      <div class="wallet-card">
+        <div>
+          <div class="wallet-balance-label">Available Balance</div>
+          <div class="wallet-balance-value" id="wallet-balance">$0.00</div>
+          <div class="wallet-sub" id="wallet-min-note"></div>
+        </div>
+        <div>
+          <button class="btn-payout" id="payout-btn">Request Payout</button>
+          <div id="payout-msg"></div>
+        </div>
+      </div>
+
+      <!-- Referral link -->
+      <div class="referral-card">
+        <h2>Your Referral Link</h2>
+        <div class="link-row">
+          <div class="link-box" id="referral-link-text"></div>
+          <button class="btn-copy" id="copy-btn">Copy</button>
+        </div>
+        <div class="click-count" id="click-count-text"></div>
+      </div>
+
+      <!-- Commissions table -->
+      <div class="table-card">
+        <div class="table-header"><h2>Commission History</h2></div>
+        <table>
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Type</th>
+              <th>Amount</th>
+              <th>Status</th>
+              <th>Clears</th>
+            </tr>
+          </thead>
+          <tbody id="commissions-body">
+            <tr class="empty-row"><td colspan="5">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Referrals table -->
+      <div class="table-card">
+        <div class="table-header"><h2>Referrals</h2></div>
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Email</th>
+              <th>Status</th>
+              <th>Signed Up</th>
+              <th>Posts</th>
+              <th>Milestone</th>
+            </tr>
+          </thead>
+          <tbody id="referrals-body">
+            <tr class="empty-row"><td colspan="6">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Payout history -->
+      <div class="table-card">
+        <div class="table-header"><h2>Payout History</h2></div>
+        <table>
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Amount</th>
+              <th>Status</th>
+              <th>Note</th>
+            </tr>
+          </thead>
+          <tbody id="payouts-body">
+            <tr class="empty-row"><td colspan="4">No payouts yet</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Payout method -->
+      <div class="method-card">
+        <h2>Payout Method</h2>
+        <div class="field-row">
+          <div class="field">
+            <label for="method-type">Method</label>
+            <select id="method-type">
+              <option value="">Select…</option>
+              <option value="paypal">PayPal</option>
+              <option value="wise">Wise</option>
+              <option value="bank">Bank Transfer</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="method-details">Account details (email, IBAN, etc.)</label>
+            <input type="text" id="method-details" placeholder="e.g. partner@email.com" />
+          </div>
+        </div>
+        <button class="btn-save" id="method-save-btn">Save</button>
+        <span class="save-msg" id="method-save-msg"></span>
+      </div>
+
+    </div><!-- /partner-content -->
   </div>
 
   <script>
     function cents(n) { return '$' + (n / 100).toFixed(2); }
     function dateStr(s) { return s ? new Date(s).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' }) : '—'; }
-    function badge(status) { return `<span class="badge badge-${status}">${status}</span>`; }
+    function badge(status) { return `<span class="badge badge-${status}">${status.replace('_', ' ')}</span>`; }
+
+    document.getElementById('signout-btn').addEventListener('click', async () => {
+      await fetch('/auth/logout', { method: 'POST' }).catch(() => {});
+      window.location.replace('/partner-login.html');
+    });
 
     async function loadDashboard() {
       const [meRes, commissionsRes, referralsRes, payoutsRes] = await Promise.all([
@@ -229,27 +259,30 @@
         fetch('/api/affiliates/payouts'),
       ]);
 
+      if (meRes.status === 401) {
+        window.location.replace('/partner-login.html');
+        return;
+      }
+      if (meRes.status === 404) {
+        window.location.replace('/partner-signup.html');
+        return;
+      }
+
       const [me, commissionsData, referralsData, payoutsData] = await Promise.all([
         meRes.json(), commissionsRes.json(), referralsRes.json(), payoutsRes.json(),
       ]);
 
       if (!me.ok) {
-        if (meRes.status === 404) {
-          window.location.replace('/partner-signup.html');
-          return;
-        }
-        if (meRes.status === 401) {
-          window.location.replace('/login.html?next=' + encodeURIComponent('/partner.html'));
-          return;
-        }
+        window.location.replace('/partner-login.html');
+        return;
       }
 
       const aff = me.affiliate;
       const minCents = aff.min_payout_cents || 1000;
+      const confirmedCents = Math.max(0, (aff.wallet_balance_cents || 0) - (aff.pending_balance_cents || 0));
 
       // Stats
-      const confirmedCents = (aff.wallet_balance_cents || 0) - (aff.pending_balance_cents || 0);
-      document.getElementById('stat-wallet').textContent = cents(Math.max(0, confirmedCents));
+      document.getElementById('stat-wallet').textContent = cents(confirmedCents);
       const pendingSub = document.getElementById('stat-pending-sub');
       if (aff.pending_balance_cents > 0) {
         pendingSub.textContent = `+ ${cents(aff.pending_balance_cents)} clearing`;
@@ -259,13 +292,13 @@
       document.getElementById('stat-converted-sub').textContent = `${aff.converted_referrals || 0} converted`;
       document.getElementById('stat-clicks').textContent = aff.click_count || 0;
 
-      // Wallet — show confirmed balance (cleared commissions only)
-      document.getElementById('wallet-balance').textContent = cents(Math.max(0, confirmedCents));
+      // Wallet
+      document.getElementById('wallet-balance').textContent = cents(confirmedCents);
       const minNote = document.getElementById('wallet-min-note');
       if (confirmedCents < minCents) {
         const needed = minCents - confirmedCents;
         minNote.textContent = aff.pending_balance_cents > 0
-          ? `${cents(needed)} more confirmed to reach minimum payout (${cents(aff.pending_balance_cents)} still clearing)`
+          ? `${cents(needed)} more confirmed (${cents(aff.pending_balance_cents)} still clearing)`
           : `${cents(needed)} more to reach minimum payout`;
       } else {
         minNote.textContent = 'Ready to withdraw';
@@ -387,11 +420,8 @@
       document.getElementById('partner-content').style.display = 'block';
     }
 
-    loadDashboard().catch(err => {
-      console.error(err);
-      if (err.message?.includes('401') || err.message?.includes('unauthenticated')) {
-        window.location.replace('/login.html?next=' + encodeURIComponent('/partner.html'));
-      }
+    loadDashboard().catch(() => {
+      window.location.replace('/partner-login.html');
     });
   </script>
 </body>

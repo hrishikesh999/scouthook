@@ -388,6 +388,12 @@ app.get('/auth/google/callback',
     const proIntent = req.session.proIntent === true;
     delete req.session.proIntent;
 
+    // Honour a post-login redirect BEFORE the onboarding check so that invite-accept
+    // flows (and any other ?next= redirects) are never intercepted by onboarding.
+    const postLoginRedirect = req.session.postLoginRedirect || null;
+    delete req.session.postLoginRedirect;
+    if (postLoginRedirect) return res.redirect(postLoginRedirect);
+
     // Route new users to the onboarding wizard; returning users go straight to dashboard.
     try {
       const userId = req.user.user_id;
@@ -445,11 +451,6 @@ app.get('/auth/google/callback',
       console.error('[auth/google/callback] onboarding check failed:', err.message);
       // Non-fatal — fall through to dashboard if the check fails.
     }
-    // Honour any post-login redirect (e.g. back to invite-accept page), then clear it.
-    const postLoginRedirect = req.session.postLoginRedirect || null;
-    delete req.session.postLoginRedirect;
-    if (postLoginRedirect) return res.redirect(postLoginRedirect);
-
     // Returning user with pro intent: open billing with auto-upgrade param.
     return res.redirect(proIntent ? '/billing.html?upgrade=1' : '/dashboard.html');
   }

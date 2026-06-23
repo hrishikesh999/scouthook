@@ -185,13 +185,30 @@ if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
         if (membership) {
           workspaceId = membership.workspace_id;
         } else {
-          workspaceId = await createPersonalWorkspace(userId, displayName);
-          seedTrialSubscription(userId).catch(() => {});
-          // Welcome email only on brand-new signup (new workspace = new user)
-          if (email) {
-            const appUrl = process.env.APP_URL || '';
-            sendEmail('welcome', email, { name: displayName.split(' ')[0] || displayName, app_url: appUrl });
-            require('./services/mailerlite').addFreeSubscriber(email, displayName).catch(() => {});
+          // Before creating a personal workspace, check for a pending invite.
+          // If one exists the user came here via an invite link — skip workspace
+          // creation so no orphaned empty workspace is left behind.
+          const pendingInvite = email ? await db.prepare(`
+            SELECT workspace_id FROM workspace_invites
+            WHERE  LOWER(email) = LOWER(?)
+              AND  accepted_at IS NULL
+              AND  expires_at  > now()
+            ORDER  BY created_at DESC LIMIT 1
+          `).get(email).catch(() => null) : null;
+
+          if (pendingInvite) {
+            // Use the invited workspace as a temporary home; the invite-accept
+            // page will formally add them to workspace_members.
+            workspaceId = pendingInvite.workspace_id;
+          } else {
+            workspaceId = await createPersonalWorkspace(userId, displayName);
+            seedTrialSubscription(userId).catch(() => {});
+            // Welcome email only on brand-new signup (new workspace = new user)
+            if (email) {
+              const appUrl = process.env.APP_URL || '';
+              sendEmail('welcome', email, { name: displayName.split(' ')[0] || displayName, app_url: appUrl });
+              require('./services/mailerlite').addFreeSubscriber(email, displayName).catch(() => {});
+            }
           }
         }
       }

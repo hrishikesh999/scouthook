@@ -116,6 +116,30 @@ router.post('/:token/accept', async (req, res) => {
       );
     }
 
+    // Write last_active_workspace_id through to the DB so future logins resolve
+    // to this workspace directly, without depending on a stale session value.
+    await db.prepare(
+      'UPDATE user_profiles SET last_active_workspace_id = ? WHERE user_id = ?'
+    ).run(invite.workspace_id, req.userId);
+
+    // Clean up the empty personal workspace that was auto-created when the user
+    // first signed in via the invite link. Only targets workspaces that are:
+    //   - owned by this user, created in the last 2 hours (fresh from invite signup)
+    //   - have no posts and no completed brand profile
+    //   - have exactly one member (the owner — nobody else was added)
+    //   - are not the workspace they just joined
+    await db.prepare(`
+      UPDATE workspaces
+      SET    deleted_at = now(), purge_at = now() + interval '7 days'
+      WHERE  created_by = ?
+        AND  id != ?
+        AND  deleted_at IS NULL
+        AND  created_at > now() - interval '2 hours'
+        AND  NOT EXISTS (SELECT 1 FROM generated_posts  WHERE tenant_id   = workspaces.id)
+        AND  NOT EXISTS (SELECT 1 FROM profiles         WHERE workspace_id = workspaces.id AND onboarding_complete = true)
+        AND  (SELECT COUNT(*) FROM workspace_members WHERE workspace_id = workspaces.id) = 1
+    `).run(req.userId, invite.workspace_id);
+
     return res.json({ ok: true, redirect: '/dashboard.html', workspace_id: invite.workspace_id });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });

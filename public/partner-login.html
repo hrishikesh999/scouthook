@@ -90,7 +90,7 @@
           <div id="errorBox" class="login-error" hidden></div>
 
           <!-- Google sign-in -->
-          <a href="/auth/google?next=/partner.html" class="google-btn">
+          <a id="google-btn" href="/auth/google?next=/partner.html" class="google-btn">
             <span class="google-icon" aria-hidden="true">
               <svg viewBox="0 0 48 48" width="18" height="18">
                 <path fill="#EA4335" d="M24 9.5c3.54 0 6.08 1.53 7.48 2.81l5.1-4.9C33.44 4.59 29.17 2.5 24 2.5 14.74 2.5 6.94 7.82 3.1 15.6l6.35 4.93C11.34 14.1 17.14 9.5 24 9.5z"/>
@@ -135,6 +135,13 @@
 
   <script>
   (function () {
+    // Thread ?next= through the Google OAuth button so it lands on the right page after OAuth
+    const nextParam = new URLSearchParams(window.location.search).get('next');
+    if (nextParam) {
+      const btn = document.getElementById('google-btn');
+      btn.href = '/auth/google?next=' + encodeURIComponent(nextParam);
+    }
+
     // If already logged in, go straight to the partner dashboard
     fetch('/api/affiliates/me').then(r => {
       if (r.ok || r.status === 404) {
@@ -182,8 +189,8 @@
         const data = await res.json();
 
         if (data.ok) {
-          // Session established — go to partner dashboard regardless of server's redirect
-          window.location.href = '/partner.html';
+          const next = new URLSearchParams(window.location.search).get('next') || '/partner.html';
+          window.location.href = next;
           return;
         }
 

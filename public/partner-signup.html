@@ -119,21 +119,11 @@
     });
 
     (async () => {
-      // Not logged in → partner login page
+      // Page is visible to everyone — only redirect if already a partner
       const me = await fetch('/api/affiliates/me').catch(() => null);
-      if (!me) return;
-      if (me.status === 401) {
-        window.location.replace('/partner-login.html');
-        return;
-      }
-      // Already a partner → dashboard
-      if (me.ok) {
-        const data = await me.json().catch(() => null);
-        if (data?.ok) {
-          window.location.replace('/partner.html');
-          return;
-        }
-      }
+      if (!me || me.status === 401) return; // not logged in — show the page normally
+      const data = await me.json().catch(() => null);
+      if (data?.ok) window.location.replace('/partner.html');
     })();
 
     document.getElementById('join-btn').addEventListener('click', async () => {
@@ -146,6 +136,10 @@
 
       try {
         const res  = await fetch('/api/affiliates/join', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+        if (res.status === 401) {
+          window.location.replace('/partner-login.html?next=/partner-signup.html');
+          return;
+        }
         const data = await res.json();
         if (data.ok) {
           msg.textContent = 'Welcome to the program! Taking you to your dashboard…';

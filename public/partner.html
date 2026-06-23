@@ -91,9 +91,9 @@
         <!-- Stats -->
         <div class="stats-row">
           <div class="stat-card">
-            <div class="stat-label">Wallet Balance</div>
+            <div class="stat-label">Confirmed Balance</div>
             <div class="stat-value" id="stat-wallet">—</div>
-            <div class="stat-sub">confirmed earnings</div>
+            <div class="stat-sub" id="stat-pending-sub"></div>
           </div>
           <div class="stat-card">
             <div class="stat-label">Total Earned</div>
@@ -248,23 +248,31 @@
       const minCents = aff.min_payout_cents || 1000;
 
       // Stats
-      document.getElementById('stat-wallet').textContent = cents(aff.wallet_balance_cents || 0);
+      const confirmedCents = (aff.wallet_balance_cents || 0) - (aff.pending_balance_cents || 0);
+      document.getElementById('stat-wallet').textContent = cents(Math.max(0, confirmedCents));
+      const pendingSub = document.getElementById('stat-pending-sub');
+      if (aff.pending_balance_cents > 0) {
+        pendingSub.textContent = `+ ${cents(aff.pending_balance_cents)} clearing`;
+      }
       document.getElementById('stat-earned').textContent = cents(aff.total_earned_cents || 0);
       document.getElementById('stat-referrals').textContent = aff.total_referrals || 0;
       document.getElementById('stat-converted-sub').textContent = `${aff.converted_referrals || 0} converted`;
       document.getElementById('stat-clicks').textContent = aff.click_count || 0;
 
-      // Wallet
-      document.getElementById('wallet-balance').textContent = cents(aff.wallet_balance_cents || 0);
+      // Wallet — show confirmed balance (cleared commissions only)
+      document.getElementById('wallet-balance').textContent = cents(Math.max(0, confirmedCents));
       const minNote = document.getElementById('wallet-min-note');
-      if (aff.wallet_balance_cents < minCents) {
-        minNote.textContent = `${cents(minCents - aff.wallet_balance_cents)} more to reach minimum payout`;
+      if (confirmedCents < minCents) {
+        const needed = minCents - confirmedCents;
+        minNote.textContent = aff.pending_balance_cents > 0
+          ? `${cents(needed)} more confirmed to reach minimum payout (${cents(aff.pending_balance_cents)} still clearing)`
+          : `${cents(needed)} more to reach minimum payout`;
       } else {
         minNote.textContent = 'Ready to withdraw';
       }
 
       const payoutBtn = document.getElementById('payout-btn');
-      payoutBtn.disabled = aff.wallet_balance_cents < minCents;
+      payoutBtn.disabled = confirmedCents < minCents;
 
       payoutBtn.addEventListener('click', async () => {
         const msg = document.getElementById('payout-msg');

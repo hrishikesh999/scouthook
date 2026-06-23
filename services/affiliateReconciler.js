@@ -1,6 +1,7 @@
 'use strict';
 
 const { db, getSetting } = require('../db');
+const { pool } = require('../db/pg');
 const { getPaddle } = require('./subscription');
 const {
   creditCommission,
@@ -9,6 +10,10 @@ const {
 } = require('./affiliates');
 
 let _running = false;
+
+// Arbitrary fixed key for a PostgreSQL session-level advisory lock.
+// Prevents concurrent reconciler runs across multiple server instances.
+const RECONCILER_LOCK_KEY = 7463821;
 
 /**
  * Daily reconciliation job — queries Paddle's Transactions API for all
@@ -23,9 +28,24 @@ async function reconcileCommissions() {
   }
   _running = true;
   const startedAt = Date.now();
-  console.log('[affiliateReconciler] starting reconciliation');
+
+  const pgClient = await pool.connect();
+  let lockAcquired = false;
 
   try {
+    // Try to acquire a DB-level advisory lock so only one instance runs at a time
+    const lockResult = await pgClient.query(
+      'SELECT pg_try_advisory_lock($1) AS acquired',
+      [RECONCILER_LOCK_KEY]
+    );
+    lockAcquired = lockResult.rows[0]?.acquired === true;
+    if (!lockAcquired) {
+      console.log('[affiliateReconciler] lock held by another instance, skipping');
+      return;
+    }
+
+    console.log('[affiliateReconciler] starting reconciliation');
+
     const active = await getSetting('affiliate_program_active');
     if (active === 'false') {
       console.log('[affiliateReconciler] program inactive, skipping');
@@ -40,15 +60,16 @@ async function reconcileCommissions() {
              ar.affiliate_id,
              ar.referred_user_id,
              ar.converted_at,
+             ar.status     AS referral_status,
              us.paddle_customer_id
       FROM   affiliate_referrals ar
       JOIN   user_subscriptions us ON us.user_id = ar.referred_user_id
-      WHERE  ar.status = 'converted'
+      WHERE  ar.status IN ('converted', 'signed_up')
         AND  us.paddle_customer_id IS NOT NULL
     `).all();
 
     if (referrals.length === 0) {
-      console.log('[affiliateReconciler] no converted referrals to check');
+      console.log('[affiliateReconciler] no referrals to check');
       return;
     }
 
@@ -57,6 +78,7 @@ async function reconcileCommissions() {
 
     let credited = 0;
     let reversed = 0;
+    let churned = 0;
     let errors = 0;
 
     for (const referral of referrals) {
@@ -68,60 +90,87 @@ async function reconcileCommissions() {
           ? affiliate.commission_rate_pct
           : parseInt(await getSetting('affiliate_commission_rate_pct') || '10', 10);
 
-        // Fetch completed transactions for this customer in the lookback window
-        let after = since.toISOString();
-        let hasMore = true;
+        // Only reconcile payments for converted referrals
+        if (referral.referral_status === 'converted') {
+          // Fetch completed transactions for this customer — paginate through all pages
+          let after = null;
+          let hasMore = true;
 
-        while (hasMore) {
-          const page = await paddle.transactions.list({
+          while (hasMore) {
+            const params = {
+              customerId: [referral.paddle_customer_id],
+              status: ['completed'],
+              ...(after ? { after } : {}),
+            };
+            const page = await paddle.transactions.list(params);
+            const items = page?.data ?? (Array.isArray(page) ? page : []);
+
+            for (const tx of items) {
+              const txDate = new Date(tx.createdAt ?? tx.created_at ?? 0);
+              // Client-side date filter — only process transactions since lookback window
+              if (txDate < since) continue;
+
+              const subtotal = parseFloat(
+                tx.details?.totals?.subtotal ??
+                tx.details?.totals?.total ??
+                0
+              );
+              const amountCents = Math.round(subtotal * 100);
+              if (amountCents <= 0) continue;
+
+              const commissionCents = Math.round(amountCents * ratePct / 100);
+              const convertedAt = referral.converted_at ? new Date(referral.converted_at) : null;
+              const type = convertedAt && txDate > convertedAt ? 'renewal' : 'subscription';
+
+              await creditCommission(
+                referral.affiliate_id,
+                referral.referral_id,
+                commissionCents,
+                tx.id,
+                type
+              );
+              credited++;
+            }
+
+            // Advance cursor — check SDK pagination meta
+            const pagination = page?.meta?.pagination ?? page?.meta ?? {};
+            hasMore = !!(pagination.hasMore ?? pagination.has_more);
+            after = pagination.next ?? (items.length ? items[items.length - 1]?.id : null);
+            if (!items.length || !hasMore) break;
+          }
+
+          // Fetch refunds in the lookback window
+          const refundPage = await paddle.transactions.list({
             customerId: [referral.paddle_customer_id],
-            status: ['completed'],
-            // Paddle Node SDK uses camelCase options
+            status: ['refunded'],
           });
+          const refundItems = refundPage?.data ?? (Array.isArray(refundPage) ? refundPage : []);
 
-          hasMore = false; // SDK returns a collection; iterate items
-          const items = page?.data ?? (Array.isArray(page) ? page : []);
-
-          for (const tx of items) {
+          for (const tx of refundItems) {
             const txDate = new Date(tx.createdAt ?? tx.created_at ?? 0);
             if (txDate < since) continue;
-
-            // Calculate commission on the subscription subtotal (ex-tax)
-            const subtotal = parseFloat(
-              tx.details?.totals?.subtotal ??
-              tx.details?.totals?.total ??
-              0
-            );
-            const amountCents = Math.round(subtotal * 100);
-            if (amountCents <= 0) continue;
-
-            const commissionCents = Math.round(amountCents * ratePct / 100);
-            const convertedAt = referral.converted_at ? new Date(referral.converted_at) : null;
-            const type = convertedAt && txDate > convertedAt ? 'renewal' : 'subscription';
-
-            await creditCommission(
-              referral.affiliate_id,
-              referral.referral_id,
-              commissionCents,
-              tx.id,
-              type
-            );
-            credited++;
+            await reverseCommission(tx.id).catch(() => {});
+            reversed++;
           }
         }
 
-        // Check for refunds in the lookback window for this customer
-        const refundPage = await paddle.transactions.list({
-          customerId: [referral.paddle_customer_id],
-          status: ['refunded'],
-        });
-        const refundItems = refundPage?.data ?? (Array.isArray(refundPage) ? refundPage : []);
+        // Churn detection: mark referral churned if subscription is canceled and past period end
+        const sub = await db.prepare(
+          'SELECT status, current_period_end FROM user_subscriptions WHERE user_id = ?'
+        ).get(referral.referred_user_id);
 
-        for (const tx of refundItems) {
-          const txDate = new Date(tx.createdAt ?? tx.created_at ?? 0);
-          if (txDate < since) continue;
-          await reverseCommission(tx.id).catch(() => {});
-          reversed++;
+        if (
+          sub?.status === 'canceled' &&
+          sub.current_period_end &&
+          new Date(sub.current_period_end) < new Date() &&
+          referral.referral_status === 'converted'
+        ) {
+          await db.prepare(`
+            UPDATE affiliate_referrals
+            SET status = 'churned', updated_at = now()
+            WHERE id = ? AND status = 'converted'
+          `).run(referral.referral_id);
+          churned++;
         }
       } catch (err) {
         console.error(`[affiliateReconciler] error for referral=${referral.referral_id}:`, err.message);
@@ -131,11 +180,15 @@ async function reconcileCommissions() {
 
     const elapsed = Math.round((Date.now() - startedAt) / 1000);
     console.log(
-      `[affiliateReconciler] done — referrals=${referrals.length} credited=${credited} reversed=${reversed} errors=${errors} elapsed=${elapsed}s`
+      `[affiliateReconciler] done — referrals=${referrals.length} credited=${credited} reversed=${reversed} churned=${churned} errors=${errors} elapsed=${elapsed}s`
     );
   } catch (err) {
     console.error('[affiliateReconciler] fatal error:', err.message);
   } finally {
+    if (lockAcquired) {
+      await pgClient.query('SELECT pg_advisory_unlock($1)', [RECONCILER_LOCK_KEY]).catch(() => {});
+    }
+    pgClient.release();
     _running = false;
   }
 }

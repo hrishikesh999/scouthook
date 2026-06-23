@@ -34,7 +34,7 @@ router.get('/me', requireAuth, async (req, res) => {
     const affiliate = await getAffiliateByUserId(req.userId);
     if (!affiliate) return res.status(404).json({ ok: false, error: 'not_affiliate' });
 
-    const [clickCount, referralStats, minPayout] = await Promise.all([
+    const [clickCount, referralStats, minPayout, pendingRow] = await Promise.all([
       db.prepare(
         'SELECT COUNT(*)::int AS cnt FROM affiliate_clicks WHERE referral_code = ?'
       ).get(affiliate.referral_code),
@@ -46,6 +46,11 @@ router.get('/me', requireAuth, async (req, res) => {
         FROM affiliate_referrals WHERE affiliate_id = ?
       `).get(affiliate.id),
       getSetting('affiliate_min_payout_cents'),
+      db.prepare(`
+        SELECT COALESCE(SUM(amount_cents), 0)::int AS total
+        FROM affiliate_commissions
+        WHERE affiliate_id = ? AND status = 'pending'
+      `).get(affiliate.id),
     ]);
 
     const appUrl = process.env.APP_URL || '';
@@ -59,6 +64,7 @@ router.get('/me', requireAuth, async (req, res) => {
         converted_referrals: referralStats?.converted || 0,
         total_posts_across_referrals: referralStats?.total_posts || 0,
         min_payout_cents: parseInt(minPayout || '1000', 10),
+        pending_balance_cents: pendingRow?.total || 0,
       },
     });
   } catch (err) {
@@ -105,7 +111,7 @@ router.get('/referrals', requireAuth, async (req, res) => {
              up.display_name,
              CONCAT(LEFT(up.email, 2), '***@', SPLIT_PART(up.email, '@', 2)) AS masked_email
       FROM affiliate_referrals ar
-      JOIN user_profiles up ON up.id = ar.referred_user_id
+      JOIN user_profiles up ON up.user_id = ar.referred_user_id
       WHERE ar.affiliate_id = ?
       ORDER BY ar.created_at DESC
     `).all(affiliate.id);

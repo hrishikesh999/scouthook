@@ -293,7 +293,7 @@
 
 <script>
   const API = '/affiliate-admin';
-  let adminPw = localStorage.getItem('aff_admin_pw') || '';
+  let adminPw = sessionStorage.getItem('aff_admin_pw') || '';
 
   function cents(n) { return '$' + ((n||0) / 100).toFixed(2); }
   function dateStr(s) { return s ? new Date(s).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' }) : '—'; }
@@ -328,7 +328,7 @@
       const d = await tryLogin(adminPw).catch(() => null);
       if (d?.ok) { showApp(); return; }
       adminPw = '';
-      localStorage.removeItem('aff_admin_pw');
+      sessionStorage.removeItem('aff_admin_pw');
     }
   }
 
@@ -339,7 +339,7 @@
     const d = await tryLogin(pw).catch(() => null);
     if (d?.ok) {
       adminPw = pw;
-      localStorage.setItem('aff_admin_pw', pw);
+      sessionStorage.setItem('aff_admin_pw', pw);
       showApp();
     } else {
       errEl.textContent = 'Incorrect password.';
@@ -352,7 +352,7 @@
   document.getElementById('logout-link').addEventListener('click', e => {
     e.preventDefault();
     adminPw = '';
-    localStorage.removeItem('aff_admin_pw');
+    sessionStorage.removeItem('aff_admin_pw');
     window.location.reload();
   });
 

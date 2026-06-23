@@ -1,6 +1,7 @@
 'use strict';
 
 const express = require('express');
+const { rateLimit } = require('express-rate-limit');
 const router = express.Router();
 const { getSetting, setSetting } = require('../db');
 const {
@@ -11,7 +12,6 @@ const {
   markPayoutPaid,
   getPendingPayouts,
   getPayoutEligibleAffiliates,
-  requestPayout,
 } = require('../services/affiliates');
 const { reconcileCommissions } = require('../services/affiliateReconciler');
 const { db } = require('../db');
@@ -41,10 +41,18 @@ const AFFILIATE_CONFIG_KEYS = [
   'affiliate_program_active',
 ];
 
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { ok: false, error: 'too_many_attempts' },
+});
+
 // ---------------------------------------------------------------------------
 // POST /affiliate-admin/auth  — verify password (for UI login)
 // ---------------------------------------------------------------------------
-router.post('/auth', (req, res) => {
+router.post('/auth', authLimiter, (req, res) => {
   const { password } = req.body || {};
   if (!AFFILIATE_ADMIN_PASSWORD || password !== AFFILIATE_ADMIN_PASSWORD) {
     return res.status(401).json({ ok: false, error: 'invalid_password' });
@@ -71,7 +79,8 @@ router.get('/affiliates', requireAffiliateAdmin, async (req, res) => {
   try {
     const limit  = Math.min(parseInt(req.query.limit  || '50',  10), 200);
     const offset = parseInt(req.query.offset || '0', 10);
-    const status = req.query.status || null;
+    const VALID = ['active', 'inactive', 'suspended'];
+    const status = VALID.includes(req.query.status) ? req.query.status : null;
 
     const affiliates = await listAffiliates({ limit, offset, status });
     return res.json({ ok: true, affiliates });

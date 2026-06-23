@@ -11,24 +11,11 @@ function genReferralCode() {
   return 'sh_' + crypto.randomBytes(4).toString('hex');
 }
 
-async function getEffectiveCommissionRate(affiliate) {
-  if (affiliate.commission_rate_pct > 0) return affiliate.commission_rate_pct;
-  const global = await getSetting('affiliate_commission_rate_pct');
-  return parseInt(global || '10', 10);
-}
-
 // ---------------------------------------------------------------------------
 // Join the program
 // ---------------------------------------------------------------------------
 
 async function joinProgram(userId) {
-  const existing = await db.prepare('SELECT id FROM affiliates WHERE user_id = ?').get(userId);
-  if (existing) {
-    const err = new Error('already_affiliate');
-    err.statusCode = 409;
-    throw err;
-  }
-
   const active = await getSetting('affiliate_program_active');
   if (active === 'false') {
     const err = new Error('program_inactive');
@@ -45,11 +32,19 @@ async function joinProgram(userId) {
   }
   if (!code) throw new Error('code_generation_failed');
 
-  const row = await db.prepare(
-    `INSERT INTO affiliates (user_id, referral_code) VALUES (?, ?) RETURNING *`
-  ).get(userId, code);
-
-  return row;
+  try {
+    return await db.prepare(
+      `INSERT INTO affiliates (user_id, referral_code) VALUES (?, ?) RETURNING *`
+    ).get(userId, code);
+  } catch (err) {
+    // Postgres unique violation — user already joined
+    if (err.code === '23505') {
+      const e = new Error('already_affiliate');
+      e.statusCode = 409;
+      throw e;
+    }
+    throw err;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -69,12 +64,12 @@ async function getAffiliateByCode(code) {
 }
 
 // ---------------------------------------------------------------------------
-// Click tracking
+// Click tracking (deduplicated by ip_hash + date via DB unique index)
 // ---------------------------------------------------------------------------
 
 async function recordClick(code, ipHash) {
   await db.prepare(
-    'INSERT INTO affiliate_clicks (referral_code, ip_hash) VALUES (?, ?)'
+    'INSERT INTO affiliate_clicks (referral_code, ip_hash) VALUES (?, ?) ON CONFLICT DO NOTHING'
   ).run(code, ipHash || null);
 }
 
@@ -93,12 +88,6 @@ async function attributeReferral(referredUserId, code) {
 
   // Don't attribute to yourself
   if (affiliate.user_id === referredUserId) return;
-
-  // Already attributed?
-  const existing = await db.prepare(
-    'SELECT id FROM affiliate_referrals WHERE referred_user_id = ?'
-  ).get(referredUserId);
-  if (existing) return;
 
   await db.prepare(`
     INSERT INTO affiliate_referrals (affiliate_id, referred_user_id, referral_code)
@@ -126,7 +115,6 @@ async function markReferralConverted(referredUserId) {
 async function creditCommission(affiliateId, referralId, amountCents, paddleTxId, type) {
   if (amountCents <= 0) return;
 
-  // For subscription/renewal types, dedup by transaction ID
   if (paddleTxId) {
     const dupe = await db.prepare(
       'SELECT id FROM affiliate_commissions WHERE paddle_transaction_id = ?'
@@ -198,39 +186,42 @@ async function confirmClearedCommissions() {
 
 // ---------------------------------------------------------------------------
 // Milestone bonus check — called after each post publish
+// Atomically increments total_posts_published and fires the bonus exactly once
+// for converted (paying) referrals who hit the milestone threshold.
 // ---------------------------------------------------------------------------
 
 async function checkMilestoneBonus(referredUserId) {
-  const referral = await db.prepare(
-    'SELECT * FROM affiliate_referrals WHERE referred_user_id = ?'
-  ).get(referredUserId);
-  if (!referral || referral.milestone_bonus_paid) return;
+  // Atomic increment — returns null if user is not a referral or bonus already paid
+  const updated = await db.prepare(`
+    UPDATE affiliate_referrals
+    SET total_posts_published = total_posts_published + 1,
+        updated_at = now()
+    WHERE referred_user_id = ? AND milestone_bonus_paid = false
+    RETURNING id, affiliate_id, total_posts_published, status
+  `).get(referredUserId);
 
-  const milestoneStr = await getSetting('affiliate_milestone_posts');
-  const milestone = parseInt(milestoneStr || '100', 10);
+  if (!updated) return;
 
-  const newCount = (referral.total_posts_published || 0) + 1;
+  // Only credit bonus for converted (paying) referrals
+  if (updated.status !== 'converted') return;
 
-  await db.prepare(
-    'UPDATE affiliate_referrals SET total_posts_published = ? WHERE referred_user_id = ?'
-  ).run(newCount, referredUserId);
+  const milestone = parseInt(await getSetting('affiliate_milestone_posts') || '100', 10);
+  if (updated.total_posts_published < milestone) return;
 
-  if (newCount >= milestone) {
-    const bonusCentsStr = await getSetting('affiliate_bonus_cents');
-    const bonusCents = parseInt(bonusCentsStr || '200', 10);
+  // Two-phase commit: set the flag first (atomic guard), then credit
+  await db.transaction(async (tx) => {
+    const marked = await tx.prepare(`
+      UPDATE affiliate_referrals
+      SET milestone_bonus_paid = true, updated_at = now()
+      WHERE id = ? AND milestone_bonus_paid = false
+      RETURNING id
+    `).get(updated.id);
 
-    await db.prepare(
-      'UPDATE affiliate_referrals SET milestone_bonus_paid = true WHERE referred_user_id = ?'
-    ).run(referredUserId);
+    if (!marked) return; // concurrent call already set it
 
-    await creditCommission(
-      referral.affiliate_id,
-      referral.id,
-      bonusCents,
-      null,
-      'bonus'
-    );
-  }
+    const bonusCents = parseInt(await getSetting('affiliate_bonus_cents') || '200', 10);
+    await creditCommission(updated.affiliate_id, updated.id, bonusCents, null, 'bonus');
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -247,7 +238,6 @@ async function requestPayout(affiliateId) {
   const minStr = await getSetting('affiliate_min_payout_cents');
   const minCents = parseInt(minStr || '1000', 10);
 
-  // Only count confirmed (cleared) commissions toward payable balance
   const confirmedRow = await db.prepare(`
     SELECT COALESCE(SUM(amount_cents), 0)::int AS total
     FROM affiliate_commissions
@@ -263,32 +253,31 @@ async function requestPayout(affiliateId) {
     throw err;
   }
 
-  // Check no in-flight payout
-  const inflight = await db.prepare(
-    `SELECT id FROM affiliate_payouts WHERE affiliate_id = ? AND status = 'pending'`
-  ).get(affiliateId);
-  if (inflight) throw Object.assign(new Error('payout_in_flight'), { statusCode: 409 });
+  try {
+    await db.transaction(async (tx) => {
+      await tx.prepare(`
+        INSERT INTO affiliate_payouts (affiliate_id, amount_cents)
+        VALUES (?, ?)
+      `).run(affiliateId, confirmedBalance);
 
-  await db.transaction(async (tx) => {
-    await tx.prepare(`
-      INSERT INTO affiliate_payouts (affiliate_id, amount_cents)
-      VALUES (?, ?)
-    `).run(affiliateId, confirmedBalance);
+      await tx.prepare(`
+        UPDATE affiliates
+        SET wallet_balance_cents = GREATEST(0, wallet_balance_cents - ?),
+            updated_at = now()
+        WHERE id = ?
+      `).run(confirmedBalance, affiliateId);
 
-    // Debit wallet and mark commissions paid
-    await tx.prepare(`
-      UPDATE affiliates
-      SET wallet_balance_cents = GREATEST(0, wallet_balance_cents - ?),
-          updated_at = now()
-      WHERE id = ?
-    `).run(confirmedBalance, affiliateId);
-
-    await tx.prepare(`
-      UPDATE affiliate_commissions
-      SET status = 'paid'
-      WHERE affiliate_id = ? AND status = 'confirmed'
-    `).run(affiliateId);
-  });
+      await tx.prepare(`
+        UPDATE affiliate_commissions
+        SET status = 'paid'
+        WHERE affiliate_id = ? AND status = 'confirmed'
+      `).run(affiliateId);
+    });
+  } catch (err) {
+    // Partial unique index prevents two pending payouts for the same affiliate
+    if (err.code === '23505') throw Object.assign(new Error('payout_in_flight'), { statusCode: 409 });
+    throw err;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -337,21 +326,38 @@ async function getAdminSummary() {
 // Admin: list affiliates
 // ---------------------------------------------------------------------------
 
-async function listAffiliates({ limit = 50, offset = 0, status } = {}) {
-  const conditions = status ? [`a.status = '${status}'`] : [];
-  const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
+const VALID_STATUSES = new Set(['active', 'inactive', 'suspended']);
 
-  return db.prepare(`
-    SELECT a.*,
-      up.email, up.display_name,
-      (SELECT COUNT(*)::int FROM affiliate_referrals ar WHERE ar.affiliate_id = a.id) AS referral_count,
-      (SELECT COUNT(*)::int FROM affiliate_referrals ar WHERE ar.affiliate_id = a.id AND ar.status = 'converted') AS converted_count
-    FROM affiliates a
-    JOIN user_profiles up ON up.id = a.user_id
-    ${where}
-    ORDER BY a.total_earned_cents DESC
-    LIMIT ? OFFSET ?
-  `).all(limit, offset);
+async function listAffiliates({ limit = 50, offset = 0, status } = {}) {
+  // Validate status to prevent injection; use two pre-written queries instead of interpolation
+  const safeStatus = status && VALID_STATUSES.has(status) ? status : null;
+
+  const sql = safeStatus
+    ? `
+      SELECT a.*,
+        up.email, up.display_name,
+        (SELECT COUNT(*)::int FROM affiliate_referrals ar WHERE ar.affiliate_id = a.id) AS referral_count,
+        (SELECT COUNT(*)::int FROM affiliate_referrals ar WHERE ar.affiliate_id = a.id AND ar.status = 'converted') AS converted_count
+      FROM affiliates a
+      JOIN user_profiles up ON up.user_id = a.user_id
+      WHERE a.status = ?
+      ORDER BY a.total_earned_cents DESC
+      LIMIT ? OFFSET ?
+    `
+    : `
+      SELECT a.*,
+        up.email, up.display_name,
+        (SELECT COUNT(*)::int FROM affiliate_referrals ar WHERE ar.affiliate_id = a.id) AS referral_count,
+        (SELECT COUNT(*)::int FROM affiliate_referrals ar WHERE ar.affiliate_id = a.id AND ar.status = 'converted') AS converted_count
+      FROM affiliates a
+      JOIN user_profiles up ON up.user_id = a.user_id
+      ORDER BY a.total_earned_cents DESC
+      LIMIT ? OFFSET ?
+    `;
+
+  return safeStatus
+    ? db.prepare(sql).all(safeStatus, limit, offset)
+    : db.prepare(sql).all(limit, offset);
 }
 
 // ---------------------------------------------------------------------------
@@ -363,7 +369,7 @@ async function getAffiliateDetail(affiliateId) {
     db.prepare(`
       SELECT a.*, up.email, up.display_name
       FROM affiliates a
-      JOIN user_profiles up ON up.id = a.user_id
+      JOIN user_profiles up ON up.user_id = a.user_id
       WHERE a.id = ?
     `).get(affiliateId),
     db.prepare(`
@@ -372,7 +378,7 @@ async function getAffiliateDetail(affiliateId) {
     db.prepare(`
       SELECT ar.*, up.email, up.display_name
       FROM affiliate_referrals ar
-      JOIN user_profiles up ON up.id = ar.referred_user_id
+      JOIN user_profiles up ON up.user_id = ar.referred_user_id
       WHERE ar.affiliate_id = ?
       ORDER BY ar.created_at DESC
     `).all(affiliateId),
@@ -396,7 +402,7 @@ async function getPendingPayouts() {
            up.email, up.display_name
     FROM affiliate_payouts ap
     JOIN affiliates a ON a.id = ap.affiliate_id
-    JOIN user_profiles up ON up.id = a.user_id
+    JOIN user_profiles up ON up.user_id = a.user_id
     WHERE ap.status = 'pending'
     ORDER BY ap.created_at ASC
   `).all();
@@ -417,7 +423,7 @@ async function getPayoutEligibleAffiliates() {
            up.email, up.display_name,
            COALESCE(SUM(ac.amount_cents), 0)::int AS confirmed_balance_cents
     FROM affiliates a
-    JOIN user_profiles up ON up.id = a.user_id
+    JOIN user_profiles up ON up.user_id = a.user_id
     LEFT JOIN affiliate_commissions ac
       ON ac.affiliate_id = a.id AND ac.status = 'confirmed'
     WHERE a.status = 'active'

@@ -201,7 +201,7 @@ router.post('/:postId', async (req, res) => {
 
     if (visual_type === 'ai_image') {
       const renderContent = content || await extractPlacidContent(post);
-      const result = await renderPlacidImage(post, renderContent, { userId, tenantId, brand }, template_id || null);
+      const result = await renderPlacidImage(post, renderContent, { userId, tenantId }, template_id || null);
       await logVisualGeneration(userId, tenantId, postId, visual_type);
       return res.json({ ok: true, ...result });
     }

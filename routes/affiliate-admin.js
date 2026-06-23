@@ -168,8 +168,8 @@ router.get('/payouts/eligible', requireAffiliateAdmin, async (req, res) => {
 // ---------------------------------------------------------------------------
 router.post('/payouts/:payoutId/mark-paid', requireAffiliateAdmin, async (req, res) => {
   try {
-    const { note } = req.body || {};
-    await markPayoutPaid(req.params.payoutId, note);
+    const { note, paypal_txn_id } = req.body || {};
+    await markPayoutPaid(req.params.payoutId, note, paypal_txn_id);
     return res.json({ ok: true });
   } catch (err) {
     return res.status(err.statusCode || 500).json({ ok: false, error: err.message });

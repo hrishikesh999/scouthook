@@ -284,7 +284,7 @@ async function requestPayout(affiliateId) {
 // Admin: mark a payout as paid
 // ---------------------------------------------------------------------------
 
-async function markPayoutPaid(payoutId, note) {
+async function markPayoutPaid(payoutId, note, paypalTxnId) {
   const payout = await db.prepare(
     `SELECT * FROM affiliate_payouts WHERE id = ? AND status = 'pending'`
   ).get(payoutId);
@@ -292,8 +292,8 @@ async function markPayoutPaid(payoutId, note) {
 
   await db.transaction(async (tx) => {
     await tx.prepare(`
-      UPDATE affiliate_payouts SET status = 'paid', paid_at = now(), note = ? WHERE id = ?
-    `).run(note || null, payoutId);
+      UPDATE affiliate_payouts SET status = 'paid', paid_at = now(), note = ?, paypal_txn_id = ? WHERE id = ?
+    `).run(note || null, paypalTxnId || null, payoutId);
 
     await tx.prepare(`
       UPDATE affiliates

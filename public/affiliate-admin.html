@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Affiliate Admin — ScoutHook</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body { margin: 0; font-family: 'Inter', system-ui, sans-serif; background: #f8fafc; color: #1e293b; font-size: 14px; }
+
+    /* Auth screen */
+    .auth-screen { min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+    .auth-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 40px; width: 360px; text-align: center; }
+    .auth-card h1 { font-size: 1.3rem; margin: 0 0 6px; }
+    .auth-card p { color: #64748b; margin: 0 0 24px; font-size: 0.9rem; }
+    .auth-error { color: #dc2626; font-size: 0.85rem; margin-top: 10px; min-height: 18px; }
+
+    /* Layout */
+    .app { display: flex; min-height: 100vh; }
+    .sidebar { width: 220px; background: #0f172a; color: #94a3b8; flex-shrink: 0; display: flex; flex-direction: column; }
+    .sidebar-brand { padding: 24px 20px 20px; color: #f8fafc; font-weight: 700; font-size: 1.05rem; border-bottom: 1px solid #1e293b; }
+    .sidebar-brand span { font-weight: 400; color: #64748b; font-size: 0.8rem; margin-left: 6px; }
+    .sidebar-nav a { display: block; padding: 10px 20px; color: #94a3b8; text-decoration: none; font-size: 0.9rem; transition: color 0.12s, background 0.12s; }
+    .sidebar-nav a:hover, .sidebar-nav a.active { color: #f1f5f9; background: #1e293b; }
+    .sidebar-footer { margin-top: auto; padding: 16px 20px; border-top: 1px solid #1e293b; }
+    .sidebar-footer a { color: #64748b; font-size: 0.82rem; text-decoration: none; }
+
+    .main { flex: 1; overflow-y: auto; }
+    .topbar { background: #fff; border-bottom: 1px solid #e2e8f0; padding: 16px 28px; display: flex; align-items: center; justify-content: space-between; }
+    .topbar h2 { margin: 0; font-size: 1.1rem; font-weight: 600; }
+
+    .content { padding: 28px; }
+
+    /* Stats */
+    .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 28px; }
+    .stat-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 20px; }
+    .stat-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; font-weight: 600; margin-bottom: 6px; }
+    .stat-value { font-size: 1.8rem; font-weight: 700; color: #0f172a; }
+
+    /* Cards */
+    .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; margin-bottom: 24px; overflow: hidden; }
+    .card-header { padding: 16px 20px; border-bottom: 1px solid #f1f5f9; display: flex; align-items: center; justify-content: space-between; }
+    .card-header h3 { margin: 0; font-size: 0.9rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #475569; }
+
+    /* Tables */
+    table { width: 100%; border-collapse: collapse; }
+    th { padding: 10px 16px; text-align: left; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: #64748b; background: #f8fafc; border-bottom: 1px solid #e2e8f0; }
+    td { padding: 12px 16px; border-bottom: 1px solid #f8fafc; color: #334155; vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    .empty-row td { text-align: center; color: #94a3b8; padding: 32px; }
+
+    /* Badges */
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
+    .badge-active    { background: #dcfce7; color: #166534; }
+    .badge-inactive  { background: #f1f5f9; color: #475569; }
+    .badge-suspended { background: #fee2e2; color: #991b1b; }
+    .badge-pending   { background: #fef9c3; color: #854d0e; }
+    .badge-paid      { background: #dbeafe; color: #1e40af; }
+    .badge-failed    { background: #fee2e2; color: #991b1b; }
+
+    /* Forms */
+    .field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 14px; }
+    .field label { font-size: 0.82rem; font-weight: 600; color: #374151; }
+    .field input, .field select { border: 1px solid #d1d5db; border-radius: 7px; padding: 8px 12px; font-size: 0.9rem; font-family: inherit; color: #111827; width: 100%; }
+    .field input:focus, .field select:focus { outline: 2px solid #0f766e; border-color: #0f766e; }
+
+    /* Buttons */
+    .btn { border: none; border-radius: 7px; padding: 8px 16px; font-size: 0.85rem; font-weight: 600; cursor: pointer; }
+    .btn-primary { background: #0f766e; color: #fff; }
+    .btn-primary:hover { background: #0d6460; }
+    .btn-danger  { background: #fee2e2; color: #991b1b; }
+    .btn-danger:hover { background: #fecaca; }
+    .btn-ghost   { background: #f1f5f9; color: #334155; }
+    .btn-ghost:hover { background: #e2e8f0; }
+    .btn:disabled { opacity: 0.5; cursor: default; }
+
+    /* Config grid */
+    .config-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 20px; }
+    .config-row { display: flex; align-items: center; gap: 12px; justify-content: space-between; padding: 14px 20px; border-bottom: 1px solid #f1f5f9; }
+    .config-row:last-child { border-bottom: none; }
+    .config-label { font-size: 0.9rem; font-weight: 500; color: #1e293b; }
+    .config-desc { font-size: 0.8rem; color: #64748b; margin-top: 2px; }
+    .config-input { width: 100px; border: 1px solid #d1d5db; border-radius: 7px; padding: 7px 10px; font-size: 0.9rem; text-align: right; }
+
+    /* Payout row */
+    .payout-row td:last-child { white-space: nowrap; }
+    .payout-method { font-size: 0.8rem; color: #64748b; margin-top: 2px; }
+
+    /* Mark paid form */
+    .mark-paid-form { display: flex; gap: 8px; align-items: center; }
+    .mark-paid-form input { border: 1px solid #d1d5db; border-radius: 6px; padding: 6px 10px; font-size: 0.82rem; flex: 1; }
+
+    /* Tabs */
+    .tabs { display: flex; gap: 0; border-bottom: 1px solid #e2e8f0; margin-bottom: 24px; }
+    .tab { padding: 12px 20px; font-size: 0.9rem; font-weight: 500; color: #64748b; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+    .tab.active { color: #0f766e; border-bottom-color: #0f766e; }
+
+    /* Section visibility */
+    .section { display: none; }
+    .section.visible { display: block; }
+
+    /* Alerts */
+    .alert { padding: 12px 16px; border-radius: 8px; font-size: 0.88rem; margin-bottom: 16px; }
+    .alert-success { background: #dcfce7; color: #166534; }
+    .alert-error   { background: #fee2e2; color: #991b1b; }
+    .alert.hidden  { display: none; }
+
+    /* Detail modal */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 100; }
+    .modal-overlay.hidden { display: none; }
+    .modal { background: #fff; border-radius: 12px; width: 700px; max-width: 95vw; max-height: 85vh; overflow-y: auto; padding: 28px; }
+    .modal h2 { margin: 0 0 20px; font-size: 1.1rem; }
+    .modal-close { float: right; background: none; border: none; font-size: 1.3rem; cursor: pointer; color: #64748b; }
+
+    .hidden { display: none !important; }
+    .flex { display: flex; gap: 10px; align-items: center; }
+    .ml-auto { margin-left: auto; }
+  </style>
+</head>
+<body>
+
+<!-- ── Auth screen ─────────────────────────────────────────────────────────── -->
+<div class="auth-screen" id="auth-screen">
+  <div class="auth-card">
+    <h1>Affiliate Admin</h1>
+    <p>ScoutHook Partner Program Management</p>
+    <div class="field">
+      <label for="pw-input">Password</label>
+      <input type="password" id="pw-input" placeholder="AFFILIATE_ADMIN_PASSWORD" autocomplete="current-password" />
+    </div>
+    <div class="auth-error" id="pw-error"></div>
+    <button class="btn btn-primary" id="pw-btn" style="width:100%;padding:10px">Unlock</button>
+  </div>
+</div>
+
+<!-- ── App ────────────────────────────────────────────────────────────────── -->
+<div class="app hidden" id="app">
+  <div class="sidebar">
+    <div class="sidebar-brand">ScoutHook <span>Affiliates</span></div>
+    <nav class="sidebar-nav">
+      <a href="#" class="active" data-tab="overview">Overview</a>
+      <a href="#" data-tab="affiliates">Affiliates</a>
+      <a href="#" data-tab="payouts">Payouts</a>
+      <a href="#" data-tab="config">Settings</a>
+    </nav>
+    <div class="sidebar-footer">
+      <a href="#" id="logout-link">Log out</a>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="topbar">
+      <h2 id="topbar-title">Overview</h2>
+      <div class="flex">
+        <button class="btn btn-ghost" id="reconcile-btn">Run Reconciliation</button>
+      </div>
+    </div>
+
+    <div class="content">
+      <div id="alert-bar" class="alert hidden"></div>
+
+      <!-- Overview -->
+      <div id="tab-overview" class="section visible">
+        <div class="stats-grid">
+          <div class="stat-card"><div class="stat-label">Active Partners</div><div class="stat-value" id="stat-active">—</div></div>
+          <div class="stat-card"><div class="stat-label">Total Paid Out</div><div class="stat-value" id="stat-paid">—</div></div>
+          <div class="stat-card"><div class="stat-label">Pending Wallet</div><div class="stat-value" id="stat-wallet">—</div></div>
+          <div class="stat-card"><div class="stat-label">Pending Payouts</div><div class="stat-value" id="stat-pending-payouts">—</div></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h3>Quick actions</h3></div>
+          <div style="padding:20px;display:flex;gap:12px;flex-wrap:wrap">
+            <button class="btn btn-primary" onclick="switchTab('payouts')">Review Pending Payouts</button>
+            <button class="btn btn-ghost" onclick="switchTab('affiliates')">View All Partners</button>
+            <button class="btn btn-ghost" id="reconcile-btn2">Run Commission Reconciliation</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Affiliates -->
+      <div id="tab-affiliates" class="section">
+        <div class="card">
+          <div class="card-header">
+            <h3>All Partners</h3>
+            <button class="btn btn-ghost" id="refresh-affiliates-btn">Refresh</button>
+          </div>
+          <table id="affiliates-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Code</th>
+                <th>Referrals</th>
+                <th>Converted</th>
+                <th>Wallet</th>
+                <th>Total Earned</th>
+                <th>Rate</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="affiliates-body">
+              <tr class="empty-row"><td colspan="10">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Payouts -->
+      <div id="tab-payouts" class="section">
+        <div class="card">
+          <div class="card-header">
+            <h3>Pending Payouts (requested by partners)</h3>
+            <button class="btn btn-primary" id="batch-pay-btn">Mark All Paid</button>
+          </div>
+          <table>
+            <thead>
+              <tr><th>Partner</th><th>Amount</th><th>Method</th><th>Details</th><th>Requested</th><th>Action</th></tr>
+            </thead>
+            <tbody id="payouts-body">
+              <tr class="empty-row"><td colspan="6">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h3>Eligible Partners (cleared balance ≥ minimum)</h3>
+            <span style="font-size:0.8rem;color:#64748b">Partners who haven't requested a payout yet but could be paid</span>
+          </div>
+          <table>
+            <thead>
+              <tr><th>Partner</th><th>Email</th><th>Confirmed Balance</th><th>Method</th><th>Details</th></tr>
+            </thead>
+            <tbody id="eligible-body">
+              <tr class="empty-row"><td colspan="5">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Config -->
+      <div id="tab-config" class="section">
+        <div class="card">
+          <div class="card-header"><h3>Program Settings</h3></div>
+          <div id="config-rows">
+            <div class="config-row">
+              <div><div class="config-label">Commission Rate</div><div class="config-desc">Percentage of each payment credited to affiliates</div></div>
+              <div class="flex"><input class="config-input" type="number" id="cfg-commission" min="0" max="100" /> <span>%</span></div>
+            </div>
+            <div class="config-row">
+              <div><div class="config-label">Milestone Bonus</div><div class="config-desc">One-time bonus per referral who publishes the milestone count</div></div>
+              <div class="flex"><span>$</span> <input class="config-input" type="number" id="cfg-bonus-dollars" min="0" step="0.01" /></div>
+            </div>
+            <div class="config-row">
+              <div><div class="config-label">Milestone Post Count</div><div class="config-desc">Number of published posts to trigger the bonus</div></div>
+              <div class="flex"><input class="config-input" type="number" id="cfg-milestone" min="1" /> <span>posts</span></div>
+            </div>
+            <div class="config-row">
+              <div><div class="config-label">Minimum Payout</div><div class="config-desc">Minimum wallet balance before a payout can be requested</div></div>
+              <div class="flex"><span>$</span> <input class="config-input" type="number" id="cfg-min-payout-dollars" min="0" step="0.01" /></div>
+            </div>
+            <div class="config-row">
+              <div><div class="config-label">Program Active</div><div class="config-desc">Toggle the affiliate program on or off</div></div>
+              <div>
+                <select id="cfg-active" style="border:1px solid #d1d5db;border-radius:7px;padding:7px 10px;font-size:0.9rem">
+                  <option value="true">Active</option>
+                  <option value="false">Paused</option>
+                </select>
+              </div>
+            </div>
+            <div style="padding:16px 20px">
+              <button class="btn btn-primary" id="save-config-btn">Save Settings</button>
+              <span id="config-save-msg" style="margin-left:12px;font-size:0.85rem"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /content -->
+  </div><!-- /main -->
+</div><!-- /app -->
+
+<!-- Detail modal -->
+<div class="modal-overlay hidden" id="detail-modal">
+  <div class="modal">
+    <button class="modal-close" id="modal-close-btn">×</button>
+    <h2 id="modal-title">Partner Detail</h2>
+    <div id="modal-body"></div>
+  </div>
+</div>
+
+<script>
+  const API = '/affiliate-admin';
+  let adminPw = localStorage.getItem('aff_admin_pw') || '';
+
+  function cents(n) { return '$' + ((n||0) / 100).toFixed(2); }
+  function dateStr(s) { return s ? new Date(s).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' }) : '—'; }
+
+  function showAlert(msg, type = 'success') {
+    const el = document.getElementById('alert-bar');
+    el.textContent = msg;
+    el.className = `alert alert-${type}`;
+    setTimeout(() => el.classList.add('hidden'), 4000);
+  }
+
+  async function api(path, opts = {}) {
+    const res = await fetch(API + path, {
+      ...opts,
+      headers: { 'x-affiliate-admin-password': adminPw, 'Content-Type': 'application/json', ...(opts.headers || {}) },
+    });
+    return res.json();
+  }
+
+  // ── Auth ───────────────────────────────────────────────────────────────────
+  async function tryLogin(pw) {
+    const res = await fetch(API + '/auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: pw }),
+    });
+    return res.json();
+  }
+
+  async function init() {
+    if (adminPw) {
+      const d = await tryLogin(adminPw).catch(() => null);
+      if (d?.ok) { showApp(); return; }
+      adminPw = '';
+      localStorage.removeItem('aff_admin_pw');
+    }
+  }
+
+  document.getElementById('pw-btn').addEventListener('click', async () => {
+    const pw = document.getElementById('pw-input').value;
+    const errEl = document.getElementById('pw-error');
+    errEl.textContent = '';
+    const d = await tryLogin(pw).catch(() => null);
+    if (d?.ok) {
+      adminPw = pw;
+      localStorage.setItem('aff_admin_pw', pw);
+      showApp();
+    } else {
+      errEl.textContent = 'Incorrect password.';
+    }
+  });
+  document.getElementById('pw-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') document.getElementById('pw-btn').click();
+  });
+
+  document.getElementById('logout-link').addEventListener('click', e => {
+    e.preventDefault();
+    adminPw = '';
+    localStorage.removeItem('aff_admin_pw');
+    window.location.reload();
+  });
+
+  // ── App shell ──────────────────────────────────────────────────────────────
+  function showApp() {
+    document.getElementById('auth-screen').classList.add('hidden');
+    document.getElementById('app').classList.remove('hidden');
+    loadAll();
+  }
+
+  function switchTab(name) {
+    document.querySelectorAll('.sidebar-nav a').forEach(a => a.classList.toggle('active', a.dataset.tab === name));
+    document.querySelectorAll('.section').forEach(s => s.classList.toggle('visible', s.id === 'tab-' + name));
+    document.getElementById('topbar-title').textContent = { overview:'Overview', affiliates:'Affiliates', payouts:'Payouts', config:'Settings' }[name];
+  }
+
+  document.querySelectorAll('.sidebar-nav a').forEach(a => {
+    a.addEventListener('click', e => { e.preventDefault(); switchTab(a.dataset.tab); });
+  });
+
+  // ── Reconcile ──────────────────────────────────────────────────────────────
+  async function runReconcile() {
+    const d = await api('/reconcile', { method: 'POST' });
+    showAlert(d.ok ? 'Reconciliation started — commissions will be credited shortly.' : 'Error: ' + d.error, d.ok ? 'success' : 'error');
+  }
+  document.getElementById('reconcile-btn').addEventListener('click', runReconcile);
+  document.getElementById('reconcile-btn2').addEventListener('click', runReconcile);
+
+  // ── Load all ───────────────────────────────────────────────────────────────
+  async function loadAll() {
+    await Promise.all([ loadStats(), loadAffiliates(), loadPayouts(), loadConfig() ]);
+  }
+
+  // Stats
+  async function loadStats() {
+    const d = await api('/stats');
+    if (!d.ok) return;
+    const s = d.stats;
+    document.getElementById('stat-active').textContent = s.activeAffiliates;
+    document.getElementById('stat-paid').textContent = cents(s.totalPaidCents);
+    document.getElementById('stat-wallet').textContent = cents(s.pendingWalletCents);
+    document.getElementById('stat-pending-payouts').textContent = s.pendingPayouts;
+  }
+
+  // Affiliates
+  async function loadAffiliates() {
+    const d = await api('/affiliates');
+    const body = document.getElementById('affiliates-body');
+    if (!d.ok || !d.affiliates?.length) {
+      body.innerHTML = '<tr class="empty-row"><td colspan="10">No partners yet.</td></tr>';
+      return;
+    }
+    body.innerHTML = d.affiliates.map(a => `
+      <tr>
+        <td>${a.display_name || '—'}</td>
+        <td>${a.email}</td>
+        <td><code>${a.referral_code}</code></td>
+        <td>${a.referral_count}</td>
+        <td>${a.converted_count}</td>
+        <td>${cents(a.wallet_balance_cents)}</td>
+        <td>${cents(a.total_earned_cents)}</td>
+        <td>${a.commission_rate_pct > 0 ? a.commission_rate_pct + '%' : 'global'}</td>
+        <td><span class="badge badge-${a.status}">${a.status}</span></td>
+        <td>
+          <div class="flex" style="gap:6px">
+            <button class="btn btn-ghost" onclick="showDetail('${a.id}')">Detail</button>
+            <select onchange="changeStatus('${a.id}', this.value); this.value=''">
+              <option value="">Status…</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+              <option value="suspended">Suspend</option>
+            </select>
+          </div>
+        </td>
+      </tr>
+    `).join('');
+  }
+  document.getElementById('refresh-affiliates-btn').addEventListener('click', loadAffiliates);
+
+  async function changeStatus(id, status) {
+    if (!status) return;
+    const d = await api(`/affiliates/${id}/status`, { method: 'POST', body: JSON.stringify({ status }) });
+    showAlert(d.ok ? `Status updated to ${status}` : 'Error: ' + d.error, d.ok ? 'success' : 'error');
+    if (d.ok) loadAffiliates();
+  }
+
+  // Detail modal
+  async function showDetail(id) {
+    const d = await api(`/affiliates/${id}`);
+    if (!d.ok) return;
+    const { affiliate: a, commissions, referrals, payouts } = d;
+    document.getElementById('modal-title').textContent = `${a.display_name} (${a.email})`;
+    document.getElementById('modal-body').innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
+        <div><b>Code:</b> ${a.referral_code}</div>
+        <div><b>Status:</b> ${a.status}</div>
+        <div><b>Wallet:</b> ${cents(a.wallet_balance_cents)}</div>
+        <div><b>Total Earned:</b> ${cents(a.total_earned_cents)}</div>
+        <div><b>Commission Rate:</b> ${a.commission_rate_pct > 0 ? a.commission_rate_pct + '%' : 'global'}</div>
+        <div><b>Payout Method:</b> ${a.payout_method_type || '—'} ${a.payout_method_details ? '· ' + a.payout_method_details : ''}</div>
+      </div>
+      <div style="margin-bottom:12px">
+        <label style="font-size:0.82rem;font-weight:600">Override commission rate (%): </label>
+        <input type="number" min="0" max="100" value="${a.commission_rate_pct}" id="detail-rate-input" style="width:70px;border:1px solid #d1d5db;border-radius:6px;padding:5px 8px" />
+        <button class="btn btn-primary" style="margin-left:8px" onclick="saveRate('${a.id}')">Save</button>
+        <span style="font-size:0.8rem;color:#64748b;margin-left:6px">Set 0 to use global rate</span>
+      </div>
+      <b style="font-size:0.82rem;text-transform:uppercase;letter-spacing:0.04em">Recent Commissions</b>
+      <table style="margin-top:8px;margin-bottom:20px">
+        <thead><tr><th>Date</th><th>Type</th><th>Amount</th><th>Status</th></tr></thead>
+        <tbody>${commissions.slice(0,20).map(c => `<tr><td>${dateStr(c.created_at)}</td><td>${c.type}</td><td>${cents(c.amount_cents)}</td><td>${c.status}</td></tr>`).join('') || '<tr><td colspan="4" style="text-align:center;color:#94a3b8">None</td></tr>'}</tbody>
+      </table>
+      <b style="font-size:0.82rem;text-transform:uppercase;letter-spacing:0.04em">Referrals</b>
+      <table style="margin-top:8px">
+        <thead><tr><th>Name</th><th>Email</th><th>Status</th><th>Posts</th><th>Bonus Paid</th></tr></thead>
+        <tbody>${referrals.map(r => `<tr><td>${r.display_name||'—'}</td><td>${r.email}</td><td>${r.status}</td><td>${r.total_posts_published}</td><td>${r.milestone_bonus_paid ? '✓' : '—'}</td></tr>`).join('') || '<tr><td colspan="5" style="text-align:center;color:#94a3b8">None</td></tr>'}</tbody>
+      </table>
+    `;
+    document.getElementById('detail-modal').classList.remove('hidden');
+  }
+
+  async function saveRate(id) {
+    const rate = parseInt(document.getElementById('detail-rate-input').value, 10);
+    const d = await api(`/affiliates/${id}/commission`, { method: 'POST', body: JSON.stringify({ commission_rate_pct: rate }) });
+    showAlert(d.ok ? 'Rate updated' : 'Error: ' + d.error, d.ok ? 'success' : 'error');
+    if (d.ok) { loadAffiliates(); }
+  }
+
+  document.getElementById('modal-close-btn').addEventListener('click', () => {
+    document.getElementById('detail-modal').classList.add('hidden');
+  });
+
+  // Payouts
+  async function loadPayouts() {
+    const [pendingD, eligibleD] = await Promise.all([
+      api('/payouts/pending'),
+      api('/payouts/eligible'),
+    ]);
+
+    const pBody = document.getElementById('payouts-body');
+    const payouts = pendingD.payouts || [];
+    if (!payouts.length) {
+      pBody.innerHTML = '<tr class="empty-row"><td colspan="6">No pending payouts</td></tr>';
+    } else {
+      pBody.innerHTML = payouts.map(p => `
+        <tr class="payout-row">
+          <td>${p.display_name}<div class="payout-method">${p.email}</div></td>
+          <td>${cents(p.amount_cents)}</td>
+          <td>${p.payout_method_type || '—'}</td>
+          <td>${p.payout_method_details || '—'}</td>
+          <td>${dateStr(p.created_at)}</td>
+          <td>
+            <div class="mark-paid-form">
+              <input type="text" placeholder="Note (optional)" id="note-${p.id}" />
+              <button class="btn btn-primary" onclick="markPaid('${p.id}')">Mark Paid</button>
+            </div>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    const eBody = document.getElementById('eligible-body');
+    const eligible = eligibleD.eligible || [];
+    if (!eligible.length) {
+      eBody.innerHTML = '<tr class="empty-row"><td colspan="5">No partners eligible yet</td></tr>';
+    } else {
+      eBody.innerHTML = eligible.map(e => `
+        <tr>
+          <td>${e.display_name}</td>
+          <td>${e.email}</td>
+          <td>${cents(e.confirmed_balance_cents)}</td>
+          <td>${e.payout_method_type || '—'}</td>
+          <td>${e.payout_method_details || '—'}</td>
+        </tr>
+      `).join('');
+    }
+  }
+
+  async function markPaid(id) {
+    const note = document.getElementById('note-' + id)?.value || '';
+    const d = await api(`/payouts/${id}/mark-paid`, { method: 'POST', body: JSON.stringify({ note }) });
+    showAlert(d.ok ? 'Payout marked as paid' : 'Error: ' + d.error, d.ok ? 'success' : 'error');
+    if (d.ok) { loadPayouts(); loadStats(); }
+  }
+
+  document.getElementById('batch-pay-btn').addEventListener('click', async () => {
+    const rows = document.querySelectorAll('#payouts-body tr:not(.empty-row)');
+    if (!rows.length) { showAlert('No pending payouts', 'error'); return; }
+    const ids = Array.from(rows).map(r => {
+      const btn = r.querySelector('button');
+      if (!btn) return null;
+      const onc = btn.getAttribute('onclick') || '';
+      const m = onc.match(/'([^']+)'/);
+      return m ? m[1] : null;
+    }).filter(Boolean);
+
+    if (!confirm(`Mark ${ids.length} payout(s) as paid?`)) return;
+    const d = await api('/payouts/batch-pay', { method: 'POST', body: JSON.stringify({ payout_ids: ids, note: 'batch payment' }) });
+    showAlert(d.ok ? 'Batch payment recorded' : 'Error', d.ok ? 'success' : 'error');
+    if (d.ok) { loadPayouts(); loadStats(); }
+  });
+
+  // Config
+  async function loadConfig() {
+    const d = await api('/config');
+    if (!d.ok) return;
+    const c = d.config;
+    document.getElementById('cfg-commission').value = c.affiliate_commission_rate_pct || '10';
+    document.getElementById('cfg-bonus-dollars').value = ((parseInt(c.affiliate_bonus_cents||'200',10)) / 100).toFixed(2);
+    document.getElementById('cfg-milestone').value = c.affiliate_milestone_posts || '100';
+    document.getElementById('cfg-min-payout-dollars').value = ((parseInt(c.affiliate_min_payout_cents||'1000',10)) / 100).toFixed(2);
+    document.getElementById('cfg-active').value = c.affiliate_program_active || 'true';
+  }
+
+  document.getElementById('save-config-btn').addEventListener('click', async () => {
+    const msg = document.getElementById('config-save-msg');
+    const config = {
+      affiliate_commission_rate_pct: document.getElementById('cfg-commission').value,
+      affiliate_bonus_cents: String(Math.round(parseFloat(document.getElementById('cfg-bonus-dollars').value || '2') * 100)),
+      affiliate_milestone_posts: document.getElementById('cfg-milestone').value,
+      affiliate_min_payout_cents: String(Math.round(parseFloat(document.getElementById('cfg-min-payout-dollars').value || '10') * 100)),
+      affiliate_program_active: document.getElementById('cfg-active').value,
+    };
+    const d = await api('/config', { method: 'POST', body: JSON.stringify({ config }) });
+    msg.textContent = d.ok ? 'Saved!' : 'Error: ' + d.error;
+    msg.style.color = d.ok ? '#16a34a' : '#dc2626';
+    setTimeout(() => msg.textContent = '', 2500);
+  });
+
+  init();
+</script>
+</body>
+</html>

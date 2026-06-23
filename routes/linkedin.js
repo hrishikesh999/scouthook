@@ -754,6 +754,9 @@ router.post('/publish', async (req, res) => {
       }
     }
 
+    // Affiliate milestone bonus check (fire-and-forget)
+    require('../services/affiliates').checkMilestoneBonus(userId).catch(() => {});
+
     return res.json({ ok: true, linkedin_post_id: result.linkedin_post_id });
   } catch (err) {
     if (err.message === 'not_connected')      return res.status(401).json({ ok: false, error: 'not_connected' });

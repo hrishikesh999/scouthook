@@ -703,6 +703,9 @@ async function publishScheduledPost(scheduledPostId, { attemptsMade = 0, maxAtte
       WHERE id = ? AND tenant_id = ?
     `).run(linkedin_post_id, scheduledPostId, row.tenant_id);
 
+    // Affiliate milestone bonus check (fire-and-forget)
+    require('./affiliates').checkMilestoneBonus(row.user_id).catch(() => {});
+
     try {
       await db.prepare(`
         INSERT INTO scheduled_post_events (scheduled_post_id, user_id, tenant_id, event_type, message)

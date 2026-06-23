@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Partner Program — ScoutHook</title>
+  <link rel="stylesheet" href="/css/main.css">
+  <style>
+    body { background: #f9fafb; }
+    .partner-wrap {
+      max-width: 680px;
+      margin: 60px auto;
+      padding: 0 24px;
+    }
+    .partner-hero {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+    .partner-hero h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #09090b;
+      margin: 0 0 12px;
+    }
+    .partner-hero p {
+      color: #52525b;
+      font-size: 1.05rem;
+      margin: 0;
+    }
+    .perks-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-bottom: 40px;
+    }
+    @media (max-width: 600px) {
+      .perks-grid { grid-template-columns: 1fr; }
+    }
+    .perk-card {
+      background: #fff;
+      border: 1px solid #e4e4e7;
+      border-radius: 12px;
+      padding: 24px 20px;
+      text-align: center;
+    }
+    .perk-card .perk-value {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #0f766e;
+      margin-bottom: 6px;
+    }
+    .perk-card .perk-label {
+      font-size: 0.85rem;
+      color: #52525b;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      font-weight: 600;
+    }
+    .perk-card .perk-desc {
+      font-size: 0.9rem;
+      color: #71717a;
+      margin-top: 8px;
+    }
+    .how-card {
+      background: #fff;
+      border: 1px solid #e4e4e7;
+      border-radius: 12px;
+      padding: 28px 28px;
+      margin-bottom: 32px;
+    }
+    .how-card h2 {
+      font-size: 1rem;
+      font-weight: 700;
+      color: #09090b;
+      margin: 0 0 20px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .steps { list-style: none; padding: 0; margin: 0; }
+    .steps li {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 16px;
+      align-items: flex-start;
+    }
+    .steps li:last-child { margin-bottom: 0; }
+    .step-num {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: #0f766e;
+      color: #fff;
+      font-size: 0.85rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .step-text { padding-top: 4px; color: #3f3f46; font-size: 0.95rem; }
+    .join-section { text-align: center; }
+    .btn-join {
+      display: inline-block;
+      background: #0f766e;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 14px 36px;
+      font-size: 1.05rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn-join:hover { background: #0d6460; }
+    .btn-join:disabled { background: #a1a1aa; cursor: default; }
+    #join-msg { margin-top: 12px; font-size: 0.9rem; }
+    #join-msg.error { color: #dc2626; }
+    #join-msg.success { color: #16a34a; }
+    .fine-print {
+      margin-top: 24px;
+      font-size: 0.82rem;
+      color: #a1a1aa;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <script src="/js/cached-fetch.js"></script>
+  <script src="/js/sidebar.js"></script>
+
+  <div id="main-content">
+    <div class="partner-wrap">
+
+      <div class="partner-hero">
+        <h1>ScoutHook Partner Program</h1>
+        <p>Earn recurring income by sharing ScoutHook. Every referral pays you every month.</p>
+      </div>
+
+      <div class="perks-grid">
+        <div class="perk-card">
+          <div class="perk-value">10%</div>
+          <div class="perk-label">Lifetime Commission</div>
+          <div class="perk-desc">On every payment and renewal, forever</div>
+        </div>
+        <div class="perk-card">
+          <div class="perk-value" id="bonus-value">$2</div>
+          <div class="perk-label">Performance Bonus</div>
+          <div class="perk-desc">Per referral who publishes <span id="milestone-count">100</span> posts</div>
+        </div>
+        <div class="perk-card">
+          <div class="perk-value" id="min-payout-value">$10</div>
+          <div class="perk-label">Minimum Payout</div>
+          <div class="perk-desc">One of the lowest thresholds available</div>
+        </div>
+      </div>
+
+      <div class="how-card">
+        <h2>How it works</h2>
+        <ol class="steps">
+          <li><div class="step-num">1</div><div class="step-text">Join the program and get your unique referral link instantly.</div></li>
+          <li><div class="step-num">2</div><div class="step-text">Share your link with your audience, clients, or network.</div></li>
+          <li><div class="step-num">3</div><div class="step-text">When someone subscribes through your link, they're permanently tagged to you.</div></li>
+          <li><div class="step-num">4</div><div class="step-text">Earn 10% of every payment they make, plus performance bonuses — credited to your wallet.</div></li>
+        </ol>
+      </div>
+
+      <div class="join-section">
+        <button class="btn-join" id="join-btn">Join the Partner Program</button>
+        <div id="join-msg"></div>
+        <p class="fine-print">Attribution is permanent. No earning cap. No time limit.</p>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    (async () => {
+      // Check if already an affiliate
+      const me = await fetch('/api/affiliates/me').catch(() => null);
+      if (me && me.ok) {
+        const data = await me.json().catch(() => null);
+        if (data?.ok) {
+          window.location.replace('/partner.html');
+          return;
+        }
+      }
+    })();
+
+    document.getElementById('join-btn').addEventListener('click', async () => {
+      const btn = document.getElementById('join-btn');
+      const msg = document.getElementById('join-msg');
+      btn.disabled = true;
+      btn.textContent = 'Joining…';
+      msg.textContent = '';
+      msg.className = '';
+
+      try {
+        const res  = await fetch('/api/affiliates/join', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+        const data = await res.json();
+        if (data.ok) {
+          msg.textContent = 'Welcome to the program! Taking you to your dashboard…';
+          msg.className = 'success';
+          setTimeout(() => window.location.replace('/partner.html'), 1200);
+        } else if (data.error === 'already_affiliate') {
+          window.location.replace('/partner.html');
+        } else {
+          throw new Error(data.error || 'join_failed');
+        }
+      } catch (err) {
+        msg.textContent = err.message === 'program_inactive'
+          ? 'The partner program is currently paused. Please check back soon.'
+          : 'Something went wrong. Please try again.';
+        msg.className = 'error';
+        btn.disabled = false;
+        btn.textContent = 'Join the Partner Program';
+      }
+    });
+  </script>
+</body>
+</html>

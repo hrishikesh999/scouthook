@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Partner Dashboard — ScoutHook</title>
+  <link rel="stylesheet" href="/css/main.css">
+  <style>
+    body { background: #f9fafb; }
+    .partner-wrap { max-width: 900px; margin: 0 auto; padding: 0 24px 60px; }
+    .page-title { font-size: 1.5rem; font-weight: 700; color: #09090b; margin: 32px 0 4px; }
+    .page-sub { color: #71717a; margin: 0 0 28px; font-size: 0.95rem; }
+
+    /* Stats row */
+    .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 28px; }
+    @media (max-width: 700px) { .stats-row { grid-template-columns: 1fr 1fr; } }
+    .stat-card { background: #fff; border: 1px solid #e4e4e7; border-radius: 10px; padding: 20px 18px; }
+    .stat-label { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; color: #71717a; font-weight: 600; margin-bottom: 6px; }
+    .stat-value { font-size: 1.6rem; font-weight: 700; color: #09090b; }
+    .stat-sub { font-size: 0.8rem; color: #a1a1aa; margin-top: 2px; }
+
+    /* Referral link */
+    .referral-card { background: #fff; border: 1px solid #e4e4e7; border-radius: 10px; padding: 24px; margin-bottom: 24px; }
+    .referral-card h2 { font-size: 0.9rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #52525b; margin: 0 0 14px; }
+    .link-row { display: flex; gap: 10px; align-items: center; }
+    .link-box { flex: 1; font-family: monospace; font-size: 0.95rem; background: #f4f4f5; border: 1px solid #e4e4e7; border-radius: 8px; padding: 10px 14px; color: #09090b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .btn-copy { background: #0f766e; color: #fff; border: none; border-radius: 8px; padding: 10px 18px; font-size: 0.9rem; font-weight: 600; cursor: pointer; white-space: nowrap; }
+    .btn-copy:hover { background: #0d6460; }
+    .click-count { margin-top: 10px; font-size: 0.85rem; color: #71717a; }
+
+    /* Wallet */
+    .wallet-card { background: linear-gradient(135deg, #0f766e 0%, #10b981 100%); color: #fff; border-radius: 10px; padding: 28px 24px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; }
+    .wallet-balance-label { font-size: 0.85rem; opacity: 0.8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
+    .wallet-balance-value { font-size: 2.2rem; font-weight: 700; }
+    .wallet-sub { font-size: 0.82rem; opacity: 0.75; margin-top: 4px; }
+    .btn-payout { background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.5); color: #fff; border-radius: 8px; padding: 12px 22px; font-size: 0.95rem; font-weight: 600; cursor: pointer; backdrop-filter: blur(4px); }
+    .btn-payout:hover { background: rgba(255,255,255,0.3); }
+    .btn-payout:disabled { opacity: 0.5; cursor: default; }
+
+    /* Tables */
+    .table-card { background: #fff; border: 1px solid #e4e4e7; border-radius: 10px; padding: 0; margin-bottom: 24px; overflow: hidden; }
+    .table-header { padding: 18px 20px 14px; border-bottom: 1px solid #f4f4f5; display: flex; align-items: center; justify-content: space-between; }
+    .table-header h2 { font-size: 0.9rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #52525b; margin: 0; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    th { background: #fafafa; padding: 10px 16px; text-align: left; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: #71717a; border-bottom: 1px solid #f0f0f0; }
+    td { padding: 12px 16px; border-bottom: 1px solid #f9fafb; color: #3f3f46; }
+    tr:last-child td { border-bottom: none; }
+    .empty-row td { text-align: center; color: #a1a1aa; padding: 28px; }
+
+    /* Badges */
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.78rem; font-weight: 600; }
+    .badge-pending   { background: #fef9c3; color: #854d0e; }
+    .badge-confirmed { background: #dcfce7; color: #166534; }
+    .badge-paid      { background: #dbeafe; color: #1e40af; }
+    .badge-reversed  { background: #fee2e2; color: #991b1b; }
+    .badge-converted { background: #dcfce7; color: #166534; }
+    .badge-signed_up { background: #f4f4f5; color: #52525b; }
+
+    /* Payout method form */
+    .method-card { background: #fff; border: 1px solid #e4e4e7; border-radius: 10px; padding: 24px; margin-bottom: 24px; }
+    .method-card h2 { font-size: 0.9rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #52525b; margin: 0 0 16px; }
+    .field-row { display: grid; grid-template-columns: 1fr 2fr; gap: 12px; }
+    @media (max-width: 600px) { .field-row { grid-template-columns: 1fr; } }
+    .field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 14px; }
+    .field label { font-size: 0.85rem; font-weight: 600; color: #3f3f46; }
+    .field select, .field input, .field textarea { border: 1px solid #e4e4e7; border-radius: 7px; padding: 9px 12px; font-size: 0.9rem; font-family: inherit; color: #09090b; background: #fff; }
+    .btn-save { background: #0f766e; color: #fff; border: none; border-radius: 8px; padding: 10px 22px; font-size: 0.9rem; font-weight: 600; cursor: pointer; }
+    .btn-save:hover { background: #0d6460; }
+    .save-msg { margin-left: 12px; font-size: 0.85rem; }
+
+    #payout-msg { margin-top: 8px; font-size: 0.85rem; }
+    #payout-msg.error { color: #dc2626; }
+    #payout-msg.success { color: #16a34a; }
+
+    .loading-pulse { color: #a1a1aa; text-align: center; padding: 40px; }
+  </style>
+</head>
+<body>
+  <script src="/js/cached-fetch.js"></script>
+  <script src="/js/sidebar.js"></script>
+
+  <div id="main-content">
+    <div class="partner-wrap">
+      <h1 class="page-title">Partner Dashboard</h1>
+      <p class="page-sub">Your referral link, earnings, and payout history.</p>
+
+      <div id="partner-loading" class="loading-pulse">Loading your dashboard…</div>
+      <div id="partner-content" style="display:none">
+
+        <!-- Stats -->
+        <div class="stats-row">
+          <div class="stat-card">
+            <div class="stat-label">Wallet Balance</div>
+            <div class="stat-value" id="stat-wallet">—</div>
+            <div class="stat-sub">confirmed earnings</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Total Earned</div>
+            <div class="stat-value" id="stat-earned">—</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Total Referrals</div>
+            <div class="stat-value" id="stat-referrals">—</div>
+            <div class="stat-sub" id="stat-converted-sub"></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Link Clicks</div>
+            <div class="stat-value" id="stat-clicks">—</div>
+          </div>
+        </div>
+
+        <!-- Wallet / payout -->
+        <div class="wallet-card">
+          <div>
+            <div class="wallet-balance-label">Available Balance</div>
+            <div class="wallet-balance-value" id="wallet-balance">$0.00</div>
+            <div class="wallet-sub" id="wallet-min-note"></div>
+          </div>
+          <div>
+            <button class="btn-payout" id="payout-btn">Request Payout</button>
+            <div id="payout-msg"></div>
+          </div>
+        </div>
+
+        <!-- Referral link -->
+        <div class="referral-card">
+          <h2>Your Referral Link</h2>
+          <div class="link-row">
+            <div class="link-box" id="referral-link-text"></div>
+            <button class="btn-copy" id="copy-btn">Copy</button>
+          </div>
+          <div class="click-count" id="click-count-text"></div>
+        </div>
+
+        <!-- Commissions table -->
+        <div class="table-card">
+          <div class="table-header"><h2>Commission History</h2></div>
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Type</th>
+                <th>Amount</th>
+                <th>Status</th>
+                <th>Clears</th>
+              </tr>
+            </thead>
+            <tbody id="commissions-body">
+              <tr class="empty-row"><td colspan="5">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Referrals table -->
+        <div class="table-card">
+          <div class="table-header"><h2>Referrals</h2></div>
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Status</th>
+                <th>Signed Up</th>
+                <th>Posts</th>
+                <th>Milestone</th>
+              </tr>
+            </thead>
+            <tbody id="referrals-body">
+              <tr class="empty-row"><td colspan="6">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Payout history -->
+        <div class="table-card">
+          <div class="table-header"><h2>Payout History</h2></div>
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Amount</th>
+                <th>Status</th>
+                <th>Note</th>
+              </tr>
+            </thead>
+            <tbody id="payouts-body">
+              <tr class="empty-row"><td colspan="4">No payouts yet</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Payout method -->
+        <div class="method-card">
+          <h2>Payout Method</h2>
+          <div class="field-row">
+            <div class="field">
+              <label for="method-type">Method</label>
+              <select id="method-type">
+                <option value="">Select…</option>
+                <option value="paypal">PayPal</option>
+                <option value="wise">Wise</option>
+                <option value="bank">Bank Transfer</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="method-details">Account details (email, IBAN, etc.)</label>
+              <input type="text" id="method-details" placeholder="e.g. partner@email.com" />
+            </div>
+          </div>
+          <button class="btn-save" id="method-save-btn">Save</button>
+          <span class="save-msg" id="method-save-msg"></span>
+        </div>
+
+      </div><!-- /partner-content -->
+    </div>
+  </div>
+
+  <script>
+    function cents(n) { return '$' + (n / 100).toFixed(2); }
+    function dateStr(s) { return s ? new Date(s).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' }) : '—'; }
+    function badge(status) { return `<span class="badge badge-${status}">${status}</span>`; }
+
+    async function loadDashboard() {
+      const [meRes, commissionsRes, referralsRes, payoutsRes] = await Promise.all([
+        fetch('/api/affiliates/me'),
+        fetch('/api/affiliates/commissions'),
+        fetch('/api/affiliates/referrals'),
+        fetch('/api/affiliates/payouts'),
+      ]);
+
+      const [me, commissionsData, referralsData, payoutsData] = await Promise.all([
+        meRes.json(), commissionsRes.json(), referralsRes.json(), payoutsRes.json(),
+      ]);
+
+      if (!me.ok) {
+        if (meRes.status === 404) {
+          window.location.replace('/partner-signup.html');
+          return;
+        }
+        if (meRes.status === 401) {
+          window.location.replace('/login.html?next=' + encodeURIComponent('/partner.html'));
+          return;
+        }
+      }
+
+      const aff = me.affiliate;
+      const minCents = aff.min_payout_cents || 1000;
+
+      // Stats
+      document.getElementById('stat-wallet').textContent = cents(aff.wallet_balance_cents || 0);
+      document.getElementById('stat-earned').textContent = cents(aff.total_earned_cents || 0);
+      document.getElementById('stat-referrals').textContent = aff.total_referrals || 0;
+      document.getElementById('stat-converted-sub').textContent = `${aff.converted_referrals || 0} converted`;
+      document.getElementById('stat-clicks').textContent = aff.click_count || 0;
+
+      // Wallet
+      document.getElementById('wallet-balance').textContent = cents(aff.wallet_balance_cents || 0);
+      const minNote = document.getElementById('wallet-min-note');
+      if (aff.wallet_balance_cents < minCents) {
+        minNote.textContent = `${cents(minCents - aff.wallet_balance_cents)} more to reach minimum payout`;
+      } else {
+        minNote.textContent = 'Ready to withdraw';
+      }
+
+      const payoutBtn = document.getElementById('payout-btn');
+      payoutBtn.disabled = aff.wallet_balance_cents < minCents;
+
+      payoutBtn.addEventListener('click', async () => {
+        const msg = document.getElementById('payout-msg');
+        payoutBtn.disabled = true;
+        payoutBtn.textContent = 'Processing…';
+        try {
+          const r = await fetch('/api/affiliates/payout/request', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+          const d = await r.json();
+          if (d.ok) {
+            msg.textContent = 'Payout requested! We\'ll process it shortly.';
+            msg.className = 'success';
+          } else {
+            throw new Error(d.error);
+          }
+        } catch (err) {
+          msg.textContent = err.message === 'insufficient_balance' ? 'Not enough confirmed balance yet.' :
+                            err.message === 'payout_in_flight'     ? 'A payout is already pending.' :
+                            'Something went wrong.';
+          msg.className = 'error';
+          payoutBtn.disabled = false;
+          payoutBtn.textContent = 'Request Payout';
+        }
+      });
+
+      // Referral link
+      const link = aff.referral_link;
+      document.getElementById('referral-link-text').textContent = link;
+      document.getElementById('click-count-text').textContent = `${aff.click_count || 0} clicks on your link`;
+
+      document.getElementById('copy-btn').addEventListener('click', () => {
+        navigator.clipboard.writeText(link).then(() => {
+          const btn = document.getElementById('copy-btn');
+          btn.textContent = 'Copied!';
+          setTimeout(() => btn.textContent = 'Copy', 1800);
+        });
+      });
+
+      // Commissions
+      const commissions = commissionsData.commissions || [];
+      const cBody = document.getElementById('commissions-body');
+      if (commissions.length === 0) {
+        cBody.innerHTML = '<tr class="empty-row"><td colspan="5">No commissions yet. Share your link to start earning.</td></tr>';
+      } else {
+        cBody.innerHTML = commissions.map(c => `
+          <tr>
+            <td>${dateStr(c.created_at)}</td>
+            <td>${c.type}</td>
+            <td>${cents(c.amount_cents)}</td>
+            <td>${badge(c.status)}</td>
+            <td>${c.clears_at ? dateStr(c.clears_at) : '—'}</td>
+          </tr>
+        `).join('');
+      }
+
+      // Referrals
+      const referrals = referralsData.referrals || [];
+      const rBody = document.getElementById('referrals-body');
+      if (referrals.length === 0) {
+        rBody.innerHTML = '<tr class="empty-row"><td colspan="6">No referrals yet. Share your link!</td></tr>';
+      } else {
+        rBody.innerHTML = referrals.map(r => `
+          <tr>
+            <td>${r.display_name || '—'}</td>
+            <td>${r.masked_email}</td>
+            <td>${badge(r.status)}</td>
+            <td>${dateStr(r.signed_up_at)}</td>
+            <td>${r.total_posts_published}</td>
+            <td>${r.milestone_bonus_paid ? '✓' : '—'}</td>
+          </tr>
+        `).join('');
+      }
+
+      // Payouts
+      const payouts = payoutsData.payouts || [];
+      const pBody = document.getElementById('payouts-body');
+      if (payouts.length > 0) {
+        pBody.innerHTML = payouts.map(p => `
+          <tr>
+            <td>${dateStr(p.created_at)}</td>
+            <td>${cents(p.amount_cents)}</td>
+            <td>${badge(p.status)}</td>
+            <td>${p.note || '—'}</td>
+          </tr>
+        `).join('');
+      }
+
+      // Payout method
+      if (aff.payout_method_type) document.getElementById('method-type').value = aff.payout_method_type;
+      if (aff.payout_method_details) document.getElementById('method-details').value = aff.payout_method_details;
+
+      document.getElementById('method-save-btn').addEventListener('click', async () => {
+        const msg = document.getElementById('method-save-msg');
+        const type = document.getElementById('method-type').value;
+        const details = document.getElementById('method-details').value.trim();
+        try {
+          const r = await fetch('/api/affiliates/payout-method', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ payout_method_type: type, payout_method_details: details }),
+          });
+          const d = await r.json();
+          msg.textContent = d.ok ? 'Saved!' : 'Error saving.';
+          msg.style.color = d.ok ? '#16a34a' : '#dc2626';
+          setTimeout(() => msg.textContent = '', 2500);
+        } catch {
+          msg.textContent = 'Error saving.';
+          msg.style.color = '#dc2626';
+        }
+      });
+
+      document.getElementById('partner-loading').style.display = 'none';
+      document.getElementById('partner-content').style.display = 'block';
+    }
+
+    loadDashboard().catch(err => {
+      console.error(err);
+      if (err.message?.includes('401') || err.message?.includes('unauthenticated')) {
+        window.location.replace('/login.html?next=' + encodeURIComponent('/partner.html'));
+      }
+    });
+  </script>
+</body>
+</html>

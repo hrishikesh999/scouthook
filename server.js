@@ -16,6 +16,9 @@ const { db } = require('./db');
 const { pool: dbPool } = require('./db/pg');
 const { sendEmail } = require('./emails');
 const { seedTrialSubscription } = require('./services/subscription');
+const affiliatesService = require('./services/affiliates');
+const { scheduleReconciler } = require('./services/affiliateReconciler');
+const cookie = require('cookie');
 
 // Initialise DB adapter (schema is managed by migrations)
 require('./db');
@@ -235,6 +238,17 @@ if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
 app.use(passport.initialize());
 app.use(passport.session());
 
+// Affiliate referral cookie — capture ?ref=sh_XXXXXXXX and store as a 30-day cookie.
+app.use((req, res, next) => {
+  const ref = req.query?.ref;
+  if (ref && /^sh_[a-z0-9]{8}$/i.test(ref)) {
+    res.cookie('sh_ref', ref, { maxAge: 30 * 24 * 60 * 60 * 1000, httpOnly: true, sameSite: 'lax' });
+    affiliatesService.recordClick(ref, require('crypto').createHash('sha256').update(req.ip || '').digest('hex'))
+      .catch(() => {});
+  }
+  next();
+});
+
 // After passport restores req.user — attach tenant_id and user_id for API routes.
 // Both values are derived exclusively from the authenticated session; headers are
 // never trusted for identity or tenant resolution.
@@ -406,6 +420,13 @@ app.get('/auth/google/callback',
         ).run(geo.country, req.user.user_id);
       }
     } catch { /* platform_events table may not exist yet */ }
+
+    // Affiliate attribution — capture referral cookie set when the user first visited via ?ref=
+    try {
+      const cookies = cookie.parse(req.headers?.cookie || '');
+      const refCode = cookies.sh_ref;
+      if (refCode) affiliatesService.attributeReferral(req.user.user_id, refCode).catch(() => {});
+    } catch { /* non-fatal */ }
 
     // Consume pro intent once — always clear it regardless of path taken.
     const proIntent = req.session.proIntent === true;
@@ -608,9 +629,10 @@ app.use('/api/posts',         requireWorkspaceMember, require('./routes/performa
 app.use('/api/workspaces',    require('./routes/workspaces'));
 app.use('/api/invites',       require('./routes/invites'));
 // User-scoped routes — require authenticated user, no workspace check
-app.use('/api/billing',  require('./routes/billing'));
-app.use('/api/feedback', require('./routes/feedback'));
-app.use('/api/support',  require('./routes/support'));
+app.use('/api/billing',    require('./routes/billing'));
+app.use('/api/feedback',   require('./routes/feedback'));
+app.use('/api/support',    require('./routes/support'));
+app.use('/api/affiliates', require('./routes/affiliates'));
 app.use('/api',          requireWorkspaceMember, require('./routes/stats'));
 
 // Unmatched /api/* — avoid falling through to static/HTML 404
@@ -619,6 +641,7 @@ app.use('/api', (req, res) => {
 });
 
 app.use('/admin', require('./routes/admin'));
+app.use('/affiliate-admin', require('./routes/affiliate-admin'));
 
 // ---------------------------------------------------------------------------
 // App entry points (send login first)
@@ -986,6 +1009,13 @@ const { initRedis } = require('./services/redis');
 initRedis().catch(err => {
   console.warn('[redis] shared client init failed:', err.message);
 });
+
+// ---------------------------------------------------------------------------
+// Affiliate commission reconciliation (daily Paddle API polling)
+// ---------------------------------------------------------------------------
+if (process.env.NODE_ENV !== 'test') {
+  scheduleReconciler();
+}
 
 // ---------------------------------------------------------------------------
 // Start

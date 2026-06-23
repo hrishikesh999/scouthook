@@ -501,6 +501,9 @@ router.post('/sync', requireAuth, async (req, res) => {
     }
   }).catch(() => {});
 
+  // Mark affiliate referral as converted on first confirmed payment
+  require('../services/affiliates').markReferralConverted(userId).catch(() => {});
+
   return res.json({ ok: true, plan, status: subscription.status });
 });
 

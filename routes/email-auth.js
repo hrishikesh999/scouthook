@@ -199,6 +199,16 @@ router.post('/verify-email', async (req, res) => {
 
     await establishSession(req, row.user_id, workspaceId);
 
+    // Affiliate attribution — read referral cookie set when the user visited via ?ref=
+    try {
+      const cookieMod = require('cookie');
+      const cookies = cookieMod.parse(req.headers?.cookie || '');
+      const refCode = cookies.sh_ref;
+      if (refCode) {
+        require('../services/affiliates').attributeReferral(row.user_id, refCode).catch(() => {});
+      }
+    } catch { /* non-fatal */ }
+
     const brandProfile = await db.prepare(
       'SELECT onboarding_complete FROM profiles WHERE workspace_id = ? AND is_default = true LIMIT 1'
     ).get(workspaceId);

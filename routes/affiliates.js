@@ -169,8 +169,7 @@ router.put('/payout-method', requireAuth, async (req, res) => {
     if (!affiliate) return res.status(404).json({ ok: false, error: 'not_affiliate' });
 
     const { payout_method_type, payout_method_details } = req.body || {};
-    const allowed = ['paypal', 'bank', 'wise'];
-    if (payout_method_type && !allowed.includes(payout_method_type)) {
+    if (payout_method_type && payout_method_type !== 'paypal') {
       return res.status(400).json({ ok: false, error: 'invalid_payout_method_type' });
     }
 

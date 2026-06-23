@@ -219,20 +219,10 @@
       <!-- Payout method -->
       <div class="method-card">
         <h2>Payout Method</h2>
-        <div class="field-row">
-          <div class="field">
-            <label for="method-type">Method</label>
-            <select id="method-type">
-              <option value="">Select…</option>
-              <option value="paypal">PayPal</option>
-              <option value="wise">Wise</option>
-              <option value="bank">Bank Transfer</option>
-            </select>
-          </div>
-          <div class="field">
-            <label for="method-details">Account details (email, IBAN, etc.)</label>
-            <input type="text" id="method-details" placeholder="e.g. partner@email.com" />
-          </div>
+        <p style="margin:0 0 16px;color:#71717a;font-size:0.9rem;">Payouts are sent via PayPal. Enter the email address associated with your PayPal account.</p>
+        <div class="field" style="max-width:400px">
+          <label for="method-details">PayPal email address</label>
+          <input type="email" id="method-details" placeholder="you@paypal.com" />
         </div>
         <button class="btn-save" id="method-save-btn">Save</button>
         <span class="save-msg" id="method-save-msg"></span>
@@ -393,18 +383,17 @@
       }
 
       // Payout method
-      if (aff.payout_method_type) document.getElementById('method-type').value = aff.payout_method_type;
       if (aff.payout_method_details) document.getElementById('method-details').value = aff.payout_method_details;
 
       document.getElementById('method-save-btn').addEventListener('click', async () => {
         const msg = document.getElementById('method-save-msg');
-        const type = document.getElementById('method-type').value;
         const details = document.getElementById('method-details').value.trim();
+        if (!details) { msg.textContent = 'Enter your PayPal email.'; msg.style.color = '#dc2626'; return; }
         try {
           const r = await fetch('/api/affiliates/payout-method', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ payout_method_type: type, payout_method_details: details }),
+            body: JSON.stringify({ payout_method_type: 'paypal', payout_method_details: details }),
           });
           const d = await r.json();
           msg.textContent = d.ok ? 'Saved!' : 'Error saving.';

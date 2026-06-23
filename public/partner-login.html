@@ -83,7 +83,7 @@
     <!-- Right: sign-in panel -->
     <div class="login-right">
       <div class="login-right-inner">
-        <section class="login-card" role="region" aria-label="Partner sign in">
+        <section class="login-card" id="login-card" role="region" aria-label="Partner sign in" style="display:none">
           <p class="login-card-title">Partner sign in</p>
           <p class="login-card-sub">Use your ScoutHook account to access the partner dashboard.</p>
 
@@ -142,14 +142,17 @@
       btn.href = '/auth/google?next=' + encodeURIComponent(nextParam);
     }
 
-    // If already logged in, go straight to the partner dashboard
+    // Check auth before showing the form — prevents flash for already-logged-in users
     fetch('/api/affiliates/me').then(r => {
       if (r.ok || r.status === 404) {
-        // 200 = partner, 404 = logged in but not a partner yet → signup
         window.location.replace(r.status === 404 ? '/partner-signup.html' : '/partner.html');
+      } else {
+        // 401 = not logged in — reveal the form
+        document.getElementById('login-card').style.display = '';
       }
-      // 401 = not logged in → stay on this page
-    }).catch(() => {});
+    }).catch(() => {
+      document.getElementById('login-card').style.display = '';
+    });
 
     const errorBox = document.getElementById('errorBox');
     const params   = new URLSearchParams(window.location.search);

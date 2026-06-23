@@ -90,7 +90,7 @@
       <div class="login-right-inner">
 
         <!-- Sign-up form (default view) -->
-        <section class="login-card" id="signup-card" role="region" aria-label="Create account">
+        <section class="login-card" id="signup-card" role="region" aria-label="Create account" style="display:none">
           <p class="login-card-title">Create your account</p>
           <p class="login-card-sub">Sign up for ScoutHook to join the partner program.</p>
 
@@ -155,18 +155,23 @@
     // If already logged in: auto-join the program (handles return after email verification)
     // and redirect to the partner dashboard.
     fetch('/api/affiliates/me').then(async r => {
-      if (r.status === 401) return; // not logged in — show the form
+      if (r.status === 401) {
+        // Not logged in — reveal the form
+        document.getElementById('signup-card').style.display = '';
+        return;
+      }
       if (r.ok) {
-        // Already a partner
         window.location.replace('/partner.html');
         return;
       }
       if (r.status === 404) {
-        // Logged in but not yet a partner — auto-join
+        // Logged in but not yet a partner — auto-join then go to dashboard
         await fetch('/api/affiliates/join', { method: 'POST', headers: { 'Content-Type': 'application/json' } }).catch(() => {});
         window.location.replace('/partner.html');
       }
-    }).catch(() => {});
+    }).catch(() => {
+      document.getElementById('signup-card').style.display = '';
+    });
 
     const errorBox = document.getElementById('errorBox');
     function showError(msg) { errorBox.textContent = msg; errorBox.hidden = false; }

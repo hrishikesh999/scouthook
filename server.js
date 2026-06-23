@@ -325,10 +325,16 @@ async function requireWorkspaceActive(req, res, next) {
       'SELECT grace_expires_at FROM workspaces WHERE id = ?'
     ).get(req.tenantId);
     if (ws?.grace_expires_at) {
+      // grace_expires_at persists until the user upgrades (clearWorkspaceGracePeriods).
+      // We surface grace_expired so the frontend can show the right message:
+      //   - false → "X days remaining to upgrade"
+      //   - true  → "Grace period ended — upgrade to restore write access"
+      const grace_expired = new Date(ws.grace_expires_at) < new Date();
       return res.status(403).json({
         ok: false,
         error: 'workspace_in_grace_period',
         grace_expires_at: ws.grace_expires_at,
+        grace_expired,
       });
     }
     next();
@@ -955,13 +961,15 @@ if (process.env.NODE_ENV !== 'test') {
 }
 
 // ---------------------------------------------------------------------------
-// Workspace purge — hard-delete workspaces whose 30-day grace period expired.
+// Workspace purge — hard-delete workspaces + clean up stale expired invites daily.
 // ---------------------------------------------------------------------------
-const { purgeExpiredWorkspaces } = require('./workers/workspacePurge');
+const { purgeExpiredWorkspaces, purgeExpiredInvites } = require('./workers/workspacePurge');
 if (process.env.NODE_ENV !== 'test') {
   setTimeout(() => {
     purgeExpiredWorkspaces();
+    purgeExpiredInvites();
     setInterval(purgeExpiredWorkspaces, 24 * 60 * 60 * 1000);
+    setInterval(purgeExpiredInvites, 24 * 60 * 60 * 1000);
   }, 25 * 60 * 1000);
 }
 

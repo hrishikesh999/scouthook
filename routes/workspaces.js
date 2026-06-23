@@ -143,9 +143,9 @@ router.post('/', requireAuth, async (req, res) => {
 
 // ---------------------------------------------------------------------------
 // PATCH /api/workspaces/:id
-// Rename a workspace (any member can rename).
+// Rename a workspace (owner only).
 // ---------------------------------------------------------------------------
-router.patch('/:id', requireAuth, requireMemberOf, async (req, res) => {
+router.patch('/:id', requireAuth, requireMemberOf, requireOwnerOf, async (req, res) => {
   const { name } = req.body || {};
   if (!name?.trim()) return res.status(400).json({ ok: false, error: 'name_required' });
 
@@ -190,7 +190,9 @@ router.delete('/:id', requireAuth, requireMemberOf, requireOwnerOf, async (req, 
       "UPDATE workspaces SET deleted_at = now(), purge_at = now() + interval '30 days' WHERE id = ?"
     ).run(workspaceId);
 
-    // If deleting the active workspace, switch session to the user's next oldest workspace
+    // If deleting the active workspace, switch session to the user's next oldest workspace.
+    // Return switched_to so the frontend knows to reload into the new workspace context.
+    let switched_to = null;
     if (req.tenantId === workspaceId) {
       const next = await db.prepare(`
         SELECT workspace_id FROM workspace_members wm
@@ -200,13 +202,14 @@ router.delete('/:id', requireAuth, requireMemberOf, requireOwnerOf, async (req, 
       `).get(req.userId, workspaceId);
       if (next && req.user) {
         req.user.tenant_id = next.workspace_id;
+        switched_to = next.workspace_id;
         await new Promise((resolve, reject) =>
           req.session.save(err => err ? reject(err) : resolve())
         );
       }
     }
 
-    return res.json({ ok: true });
+    return res.json({ ok: true, switched_to });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
   }
@@ -254,6 +257,11 @@ router.post('/:id/invites', requireAuth, requireMemberOf, async (req, res) => {
     return res.status(400).json({ ok: false, error: 'invalid_role' });
   }
 
+  // Only owners can grant owner role — prevents editors from escalating privileges.
+  if (role === 'owner' && req.workspaceRole !== 'owner') {
+    return res.status(403).json({ ok: false, error: 'owner_required_to_invite_owner' });
+  }
+
   // Team members require Pro plan
   const inviterPlan = await getUserPlan(req.userId);
   if (!planHasFeature(inviterPlan, 'team_members')) {
@@ -268,6 +276,14 @@ router.post('/:id/invites', requireAuth, requireMemberOf, async (req, res) => {
       db.prepare('SELECT name FROM workspaces WHERE id = ?').get(workspaceId),
       db.prepare('SELECT display_name FROM user_profiles WHERE user_id = ?').get(req.userId),
     ]);
+
+    // Cap pending invites per workspace to prevent invite spam.
+    const pendingCount = await db.prepare(
+      "SELECT COUNT(*) AS cnt FROM workspace_invites WHERE workspace_id = ? AND accepted_at IS NULL AND expires_at > now()"
+    ).get(workspaceId);
+    if ((pendingCount?.cnt || 0) >= 20) {
+      return res.status(429).json({ ok: false, error: 'too_many_pending_invites' });
+    }
 
     // Already a member?
     const existingMember = await db.prepare(`
@@ -314,18 +330,27 @@ router.post('/:id/invites', requireAuth, requireMemberOf, async (req, res) => {
 
 // ---------------------------------------------------------------------------
 // DELETE /api/workspaces/:id/invites/:inviteId
-// Revoke a pending invite (any member can revoke).
+// Revoke a pending invite (owner only, or the original inviter).
 // ---------------------------------------------------------------------------
 router.delete('/:id/invites/:inviteId', requireAuth, requireMemberOf, async (req, res) => {
   try {
-    const result = await db.prepare(`
-      DELETE FROM workspace_invites
-      WHERE id = ? AND workspace_id = ? AND accepted_at IS NULL
-    `).run(Number(req.params.inviteId), req.params.id);
+    // Only the owner or the original inviter can revoke a pending invite.
+    const invite = await db.prepare(
+      'SELECT invited_by FROM workspace_invites WHERE id = ? AND workspace_id = ? AND accepted_at IS NULL'
+    ).get(Number(req.params.inviteId), req.params.id);
 
-    if (result.changes === 0) {
+    if (!invite) {
       return res.status(404).json({ ok: false, error: 'invite_not_found' });
     }
+
+    if (req.workspaceRole !== 'owner' && invite.invited_by !== req.userId) {
+      return res.status(403).json({ ok: false, error: 'owner_required' });
+    }
+
+    await db.prepare(
+      'DELETE FROM workspace_invites WHERE id = ? AND workspace_id = ?'
+    ).run(Number(req.params.inviteId), req.params.id);
+
     return res.json({ ok: true });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
@@ -334,7 +359,7 @@ router.delete('/:id/invites/:inviteId', requireAuth, requireMemberOf, async (req
 
 // ---------------------------------------------------------------------------
 // DELETE /api/workspaces/:id/members/:userId
-// Remove a member (owner only; cannot remove self if last owner).
+// Remove a member (owner only). Cannot remove self; cannot remove the last owner.
 // ---------------------------------------------------------------------------
 router.delete('/:id/members/:userId', requireAuth, requireMemberOf, requireOwnerOf, async (req, res) => {
   const { id: workspaceId, userId: targetUserId } = req.params;
@@ -342,10 +367,110 @@ router.delete('/:id/members/:userId', requireAuth, requireMemberOf, requireOwner
     if (targetUserId === req.userId) {
       return res.status(400).json({ ok: false, error: 'cannot_remove_self' });
     }
+
+    // Prevent orphaning a workspace by removing its last owner.
+    const targetMember = await db.prepare(
+      'SELECT role FROM workspace_members WHERE workspace_id = ? AND user_id = ?'
+    ).get(workspaceId, targetUserId);
+
+    if (targetMember?.role === 'owner') {
+      const ownerCount = await db.prepare(
+        "SELECT COUNT(*) AS cnt FROM workspace_members WHERE workspace_id = ? AND role = 'owner'"
+      ).get(workspaceId);
+      if ((ownerCount?.cnt || 0) <= 1) {
+        return res.status(400).json({ ok: false, error: 'cannot_remove_last_owner' });
+      }
+    }
+
     await db.prepare(
       'DELETE FROM workspace_members WHERE workspace_id = ? AND user_id = ?'
     ).run(workspaceId, targetUserId);
     return res.json({ ok: true });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// PATCH /api/workspaces/:id/members/:userId
+// Change a member's role (owner only). Cannot demote the last owner.
+// ---------------------------------------------------------------------------
+router.patch('/:id/members/:userId', requireAuth, requireMemberOf, requireOwnerOf, async (req, res) => {
+  const { id: workspaceId, userId: targetUserId } = req.params;
+  const { role } = req.body || {};
+
+  if (!['owner', 'editor'].includes(role)) {
+    return res.status(400).json({ ok: false, error: 'invalid_role' });
+  }
+
+  try {
+    const targetMember = await db.prepare(
+      'SELECT role FROM workspace_members WHERE workspace_id = ? AND user_id = ?'
+    ).get(workspaceId, targetUserId);
+
+    if (!targetMember) {
+      return res.status(404).json({ ok: false, error: 'member_not_found' });
+    }
+
+    // Prevent demoting the last owner to editor.
+    if (targetMember.role === 'owner' && role === 'editor') {
+      const ownerCount = await db.prepare(
+        "SELECT COUNT(*) AS cnt FROM workspace_members WHERE workspace_id = ? AND role = 'owner'"
+      ).get(workspaceId);
+      if ((ownerCount?.cnt || 0) <= 1) {
+        return res.status(400).json({ ok: false, error: 'cannot_demote_last_owner' });
+      }
+    }
+
+    await db.prepare(
+      'UPDATE workspace_members SET role = ? WHERE workspace_id = ? AND user_id = ?'
+    ).run(role, workspaceId, targetUserId);
+
+    return res.json({ ok: true });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// DELETE /api/workspaces/:id/leave
+// Leave a workspace voluntarily (any member). Owners cannot leave if last owner.
+// ---------------------------------------------------------------------------
+router.delete('/:id/leave', requireAuth, requireMemberOf, async (req, res) => {
+  const workspaceId = req.params.id;
+  try {
+    if (req.workspaceRole === 'owner') {
+      const ownerCount = await db.prepare(
+        "SELECT COUNT(*) AS cnt FROM workspace_members WHERE workspace_id = ? AND role = 'owner'"
+      ).get(workspaceId);
+      if ((ownerCount?.cnt || 0) <= 1) {
+        return res.status(400).json({ ok: false, error: 'cannot_leave_as_last_owner' });
+      }
+    }
+
+    await db.prepare(
+      'DELETE FROM workspace_members WHERE workspace_id = ? AND user_id = ?'
+    ).run(workspaceId, req.userId);
+
+    // If this was the active workspace, switch session to the user's next workspace.
+    let switched_to = null;
+    if (req.tenantId === workspaceId) {
+      const next = await db.prepare(`
+        SELECT workspace_id FROM workspace_members wm
+        JOIN workspaces w ON w.id = wm.workspace_id
+        WHERE wm.user_id = ? AND w.deleted_at IS NULL
+        ORDER BY wm.created_at ASC LIMIT 1
+      `).get(req.userId);
+      if (next && req.user) {
+        req.user.tenant_id = next.workspace_id;
+        switched_to = next.workspace_id;
+        await new Promise((resolve, reject) =>
+          req.session.save(err => err ? reject(err) : resolve())
+        );
+      }
+    }
+
+    return res.json({ ok: true, switched_to });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
   }

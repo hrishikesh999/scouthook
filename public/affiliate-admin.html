@@ -420,7 +420,7 @@
       return;
     }
     body.innerHTML = d.affiliates.map(a => `
-      <tr style="cursor:pointer" onclick="showDetail('${a.id}')">
+      <tr style="cursor:pointer" data-affiliate-id="${a.id}">
         <td>${a.display_name || '—'}</td>
         <td>${a.email}</td>
         <td><code>${a.referral_code}</code></td>
@@ -430,8 +430,8 @@
         <td>${cents(a.total_earned_cents)}</td>
         <td>${a.commission_rate_pct > 0 ? a.commission_rate_pct + '%' : 'global'}</td>
         <td><span class="badge badge-${a.status}">${a.status}</span></td>
-        <td onclick="event.stopPropagation()">
-          <select onchange="changeStatus('${a.id}', this.value); this.value=''">
+        <td class="js-no-row-click">
+          <select data-affiliate-id="${a.id}" class="js-status-select">
             <option value="">Status…</option>
             <option value="active">Active</option>
             <option value="inactive">Inactive</option>
@@ -442,6 +442,17 @@
     `).join('');
   }
   document.getElementById('refresh-affiliates-btn').addEventListener('click', loadAffiliates);
+
+  // Event delegation for affiliate row clicks and status changes
+  document.getElementById('affiliates-body').addEventListener('click', e => {
+    if (e.target.closest('.js-no-row-click')) return;
+    const row = e.target.closest('tr[data-affiliate-id]');
+    if (row) showDetail(row.dataset.affiliateId);
+  });
+  document.getElementById('affiliates-body').addEventListener('change', e => {
+    const sel = e.target.closest('.js-status-select');
+    if (sel && sel.value) { changeStatus(sel.dataset.affiliateId, sel.value); sel.value = ''; }
+  });
 
   async function changeStatus(id, status) {
     if (!status) return;

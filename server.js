@@ -343,6 +343,19 @@ app.get('/auth/google', (req, res, next) => {
     return res.redirect('/login.html?error=google_not_configured');
   }
   if (req.query.intent === 'pro') req.session.proIntent = true;
+  // Store post-login redirect so the callback can return the user to the right page
+  // (e.g. invite-accept.html). Accept relative paths or same-origin full URLs only.
+  if (req.query.next) {
+    try {
+      const appOrigin = new URL(process.env.APP_URL || 'https://app.scouthook.com').origin;
+      const resolved  = new URL(req.query.next, appOrigin);
+      if (resolved.origin === appOrigin) {
+        req.session.postLoginRedirect = resolved.pathname + resolved.search;
+      }
+    } catch {
+      if (req.query.next.startsWith('/')) req.session.postLoginRedirect = req.query.next;
+    }
+  }
   // Always show the Google account chooser so users can't accidentally log in as
   // the last Google account that was used in the browser.
   const opts = { scope: ['profile', 'email'], prompt: 'select_account' };
@@ -432,6 +445,11 @@ app.get('/auth/google/callback',
       console.error('[auth/google/callback] onboarding check failed:', err.message);
       // Non-fatal — fall through to dashboard if the check fails.
     }
+    // Honour any post-login redirect (e.g. back to invite-accept page), then clear it.
+    const postLoginRedirect = req.session.postLoginRedirect || null;
+    delete req.session.postLoginRedirect;
+    if (postLoginRedirect) return res.redirect(postLoginRedirect);
+
     // Returning user with pro intent: open billing with auto-upgrade param.
     return res.redirect(proIntent ? '/billing.html?upgrade=1' : '/dashboard.html');
   }

@@ -173,7 +173,8 @@
         `;
       }
 
-      function renderLoggedIn(invite) {
+      function renderLoggedIn(invite, currentUser) {
+        const currentEmail = currentUser && currentUser.email ? currentUser.email : null;
         card.innerHTML = `
           <div class="invite-workspace-badge">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
@@ -189,7 +190,8 @@
           <button class="invite-accept-btn" id="invite-accept-btn" type="button">
             Accept invitation →
           </button>
-          <p class="invite-email-hint">Sent to ${escapeHtml(invite.email_hint)}</p>
+          <p class="invite-email-hint">Invite sent to ${escapeHtml(invite.email_hint)}</p>
+          ${currentEmail ? `<p class="invite-email-hint">Signing in as ${escapeHtml(currentEmail)}</p>` : ''}
         `;
 
         document.getElementById('invite-accept-btn').addEventListener('click', acceptInvite);
@@ -215,15 +217,24 @@
             return;
           }
 
-          const msg =
-            data.error === 'email_mismatch'
-              ? `This invite was sent to a different email address${data.hint ? ' (' + data.hint + ')' : ''}. Please sign in with that account.`
-              : data.error === 'invite_not_found_or_expired'
-              ? 'This invite has expired or already been accepted.'
-              : 'Something went wrong. Please try again.';
-
-          if (errBox) {
-            errBox.innerHTML = `<div class="invite-error">${escapeHtml(msg)}</div>`;
+          if (data.error === 'email_mismatch') {
+            const hint = data.hint ? ` (${data.hint})` : '';
+            if (errBox) {
+              errBox.innerHTML = `
+                <div class="invite-error">This invite was sent to a different account${escapeHtml(hint)}. Sign out and sign in with that account to accept.</div>
+                <button class="invite-login-link" id="switch-account-btn" type="button" style="margin-bottom:8px">Sign out and switch account</button>
+              `;
+              document.getElementById('switch-account-btn').addEventListener('click', async () => {
+                await fetch('/auth/logout', { method: 'POST', credentials: 'same-origin' });
+                window.location.reload();
+              });
+            }
+          } else {
+            const msg =
+              data.error === 'invite_not_found_or_expired'
+                ? 'This invite has expired or already been accepted.'
+                : 'Something went wrong. Please try again.';
+            if (errBox) errBox.innerHTML = `<div class="invite-error">${escapeHtml(msg)}</div>`;
           }
         } catch {
           if (errBox) {
@@ -268,15 +279,15 @@
         }
 
         // Check if user is authenticated
-        let isLoggedIn = false;
+        let currentUser = null;
         try {
           const ar = await fetch('/api/auth/me', { credentials: 'same-origin' });
           const ad = await ar.json();
-          isLoggedIn = !!(ad.user && ad.user.user_id);
+          if (ad.user && ad.user.user_id) currentUser = ad.user;
         } catch { /* treat as not logged in */ }
 
-        if (isLoggedIn) {
-          renderLoggedIn(invite);
+        if (currentUser) {
+          renderLoggedIn(invite, currentUser);
         } else {
           renderLoggedOut(invite);
         }

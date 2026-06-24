@@ -39,12 +39,11 @@ function getS3Client() {
   if (_s3Client) return _s3Client;
   const { S3Client } = require('@aws-sdk/client-s3');
   const config = {
-    region: process.env.S3_REGION || 'us-east-1',
-    followRegionRedirects: true, // handles region mismatch automatically
+    region: process.env.S3_REGION || 'auto',
   };
   if (process.env.S3_ENDPOINT) {
     config.endpoint = process.env.S3_ENDPOINT;
-    config.forcePathStyle = true; // required for MinIO / LocalStack
+    config.forcePathStyle = true; // required for R2 / MinIO / LocalStack
   }
   _s3Client = new S3Client(config);
   return _s3Client;

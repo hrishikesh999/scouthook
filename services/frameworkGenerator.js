@@ -58,18 +58,20 @@ function buildFrameworkElement(theme, content) {
   const { name, steps } = content;
   const isHorizontal = steps.length <= 4;
 
-  function stepNode(step, index, total) {
+  function stepNode(step, index) {
+    const nodeStyle = {
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      gap: 10,
+      flex: 1,
+    };
+    if (isHorizontal) nodeStyle.maxWidth = 220;
+
     return {
       type: 'div',
       props: {
-        style: {
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: 10,
-          flex: 1,
-          maxWidth: isHorizontal ? 220 : undefined,
-        },
+        style: nodeStyle,
         children: [
           {
             type: 'div',
@@ -99,10 +101,10 @@ function buildFrameworkElement(theme, content) {
       return {
         type: 'div',
         props: {
-          style: { display: 'flex', alignItems: 'center', flexShrink: 0, padding: '0 4px', marginTop: -20 },
+          style: { display: 'flex', alignItems: 'center', flexShrink: 0, paddingLeft: 2, paddingRight: 2, marginTop: -20 },
           children: [
-            { type: 'div', props: { style: { width: 24, height: 2, backgroundColor: theme.accent, opacity: 0.5 } } },
-            { type: 'div', props: { style: { width: 0, height: 0, borderTop: '5px solid transparent', borderBottom: '5px solid transparent', borderLeft: `8px solid ${theme.accent}`, opacity: 0.5 } } },
+            { type: 'div', props: { style: { width: 20, height: 2, backgroundColor: theme.accent, opacity: 0.4 } } },
+            { type: 'span', props: { style: { fontSize: 14, color: theme.accent, opacity: 0.4, marginLeft: -2 }, children: '>' } },
           ],
         },
       };
@@ -110,10 +112,10 @@ function buildFrameworkElement(theme, content) {
     return {
       type: 'div',
       props: {
-        style: { display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0, padding: '4px 0' },
+        style: { display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0, paddingTop: 4, paddingBottom: 4 },
         children: [
-          { type: 'div', props: { style: { width: 2, height: 20, backgroundColor: theme.accent, opacity: 0.5 } } },
-          { type: 'div', props: { style: { width: 0, height: 0, borderLeft: '5px solid transparent', borderRight: '5px solid transparent', borderTop: `8px solid ${theme.accent}`, opacity: 0.5 } } },
+          { type: 'div', props: { style: { width: 2, height: 20, backgroundColor: theme.accent, opacity: 0.4 } } },
+          { type: 'span', props: { style: { fontSize: 16, color: theme.accent, opacity: 0.4, marginTop: -4 }, children: 'v' } },
         ],
       },
     };
@@ -121,7 +123,7 @@ function buildFrameworkElement(theme, content) {
 
   const stepsWithArrows = [];
   steps.forEach((step, i) => {
-    stepsWithArrows.push(stepNode(step, i, steps.length));
+    stepsWithArrows.push(stepNode(step, i));
     if (i < steps.length - 1) stepsWithArrows.push(arrow(isHorizontal));
   });
 

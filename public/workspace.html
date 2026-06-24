@@ -34,17 +34,9 @@
           <input type="text" id="ws-name-input" class="field-input" maxlength="80" style="width:100%" />
         </div>
         <button id="ws-name-save-btn" class="vw-save-btn" type="button" style="margin-bottom:0;height:40px">Save</button>
+        <button id="ws-name-cancel-btn" type="button" style="margin-bottom:0;height:40px;padding:0 14px;font-size:13px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text-muted);cursor:pointer">Cancel</button>
       </div>
       <p class="field-helper" id="ws-name-status" hidden></p>
-    </div>
-
-    <!-- Create new workspace -->
-    <div class="vw-stage-panel vw-stage-panel--active" style="max-width:640px;margin-bottom:32px">
-      <div class="vw-stage-header">
-        <h2 class="vw-stage-title">Add workspace</h2>
-      </div>
-      <p class="field-helper" style="margin:0 0 12px">Create a separate workspace for a different brand, client, or project.</p>
-      <button id="ws-new-btn" class="vw-save-btn" type="button">+ New workspace</button>
     </div>
 
     <!-- Invite form -->
@@ -78,6 +70,15 @@
         <h2 class="vw-stage-title">Pending invitations</h2>
       </div>
       <div id="pending-invites-list"></div>
+    </div>
+
+    <!-- Create new workspace -->
+    <div class="vw-stage-panel vw-stage-panel--active" style="max-width:640px;margin-bottom:32px">
+      <div class="vw-stage-header">
+        <h2 class="vw-stage-title">Add workspace</h2>
+      </div>
+      <p class="field-helper" style="margin:0 0 12px">Create a separate workspace for a different brand, client, or project.</p>
+      <button id="ws-new-btn" class="vw-save-btn" type="button">+ New workspace</button>
     </div>
 
     <!-- Danger zone (owner only) -->
@@ -202,6 +203,12 @@
       }
       btn.disabled = false;
       btn.textContent = 'Save';
+    });
+
+    // Cancel rename
+    document.getElementById('ws-name-cancel-btn').addEventListener('click', function () {
+      document.getElementById('ws-rename-panel').style.display = 'none';
+      document.getElementById('ws-name-status').hidden = true;
     });
 
     // New workspace

@@ -8,6 +8,7 @@ const { generateQuoteCard, extractQuoteCardContent, renderQuoteCard } = require(
 const { generateCarousel, extractCarouselContent, renderCarousel } = require('../services/carouselGenerator');
 const { generateBrandedQuote, extractBrandedQuoteContent, renderBrandedQuote } = require('../services/brandedQuoteGenerator');
 const { extractPlacidContent, renderPlacidImage } = require('../services/placidGenerator');
+const { extractInfographicContent, renderInfographic } = require('../services/infographicGenerator');
 const { canGenerateVisual, logVisualGeneration, getUserPlan } = require('../services/subscription');
 const { planHasFeature } = require('../lib/planFeatures');
 
@@ -26,7 +27,7 @@ router.post('/:postId', async (req, res) => {
     return res.status(401).json({ ok: false, error: 'unauthenticated' });
   }
 
-  if (!['quote_card', 'carousel', 'branded_quote', 'ai_image'].includes(visual_type)) {
+  if (!['quote_card', 'carousel', 'branded_quote', 'ai_image', 'infographic'].includes(visual_type)) {
     return res.status(400).json({ ok: false, error: 'invalid_visual_type' });
   }
 
@@ -153,6 +154,10 @@ router.post('/:postId', async (req, res) => {
         const extracted = await extractPlacidContent(post);
         return res.json({ ok: true, mode: 'extract', visual_type, content: extracted });
       }
+      if (visual_type === 'infographic') {
+        const extracted = await extractInfographicContent(post);
+        return res.json({ ok: true, mode: 'extract', visual_type, content: extracted });
+      }
       // carousel
       const extracted = await extractCarouselContent(post);
       return res.json({ ok: true, mode: 'extract', visual_type, content: extracted });
@@ -202,6 +207,14 @@ router.post('/:postId', async (req, res) => {
     if (visual_type === 'ai_image') {
       const renderContent = content || await extractPlacidContent(post);
       const result = await renderPlacidImage(post, renderContent, { userId, tenantId }, template_id || null);
+      await logVisualGeneration(userId, tenantId, postId, visual_type);
+      return res.json({ ok: true, ...result });
+    }
+
+    if (visual_type === 'infographic') {
+      const variant = content?._variant || 'dark';
+      const renderContent = content || await extractInfographicContent(post);
+      const result = await renderInfographic(post, brand, renderContent, { userId, tenantId }, variant);
       await logVisualGeneration(userId, tenantId, postId, visual_type);
       return res.json({ ok: true, ...result });
     }

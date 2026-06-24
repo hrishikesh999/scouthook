@@ -129,6 +129,9 @@
                 <button class="ptb-btn" id="ai-image-btn" title="Choose Template" aria-label="Choose Template">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l2.4 6.6H21l-5.7 4.1 2.2 6.7L12 15.3l-5.5 4.1 2.2-6.7L3 8.6h6.6z"/></svg>
                 </button>
+                <button class="ptb-btn" id="infographic-btn" title="Generate infographic" aria-label="Generate infographic">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+                </button>
               </div>
             </div>
 
@@ -441,13 +444,11 @@
           <span class="vbo-tile-name">Branded Quote</span>
           <span class="vbo-tile-desc">Quote with your LinkedIn photo</span>
         </button>
-        <!-- AI Template tile hidden — uncomment to restore Placid integration
-        <button class="vbo-tile" data-type="ai_image">
-          <span class="vbo-tile-icon">🖼️</span>
-          <span class="vbo-tile-name">AI Template</span>
-          <span class="vbo-tile-desc">Pick a branded image template</span>
+        <button class="vbo-tile" data-type="infographic">
+          <span class="vbo-tile-icon">📊</span>
+          <span class="vbo-tile-name">Infographic</span>
+          <span class="vbo-tile-desc">Auto-generate a visual layout</span>
         </button>
-        -->
         <button class="vbo-tile" data-type="media">
           <span class="vbo-tile-icon">📎</span>
           <span class="vbo-tile-name">Attach Image</span>
@@ -673,7 +674,7 @@ async function loadPost(id) {
       attachedPreviewUrl = p.assetPreviewUrl || (p.assetType !== 'carousel' ? p.assetUrl : null);
       attachedAssetType  = p.assetType || 'media_image';
       attachedSlideCount = p.assetSlideCount || 0;
-      const labelMap = { carousel: 'Carousel', media_pdf: 'PDF', media_image: 'Image', quote_card: 'Quote Card', branded_quote: 'Branded Quote', ai_image: 'AI Image' };
+      const labelMap = { carousel: 'Carousel', media_pdf: 'PDF', media_image: 'Image', quote_card: 'Quote Card', branded_quote: 'Branded Quote', ai_image: 'AI Image', infographic: 'Infographic' };
       const chipLabel = document.getElementById('asset-chip-label');
       const chip      = document.getElementById('asset-chip');
       if (chipLabel) chipLabel.textContent = labelMap[attachedAssetType] || attachedAssetType;
@@ -1021,7 +1022,7 @@ function applyScheduleLockUi(scheduledFor) {
   const schedBtn = document.getElementById('btn-schedule');
   if (schedBtn) { schedBtn.disabled = true; schedBtn.style.setProperty('display', 'none', 'important'); }
   document.getElementById('post-body').disabled = true;
-  ['quote-card-btn','carousel-btn','branded-quote-btn','ai-image-btn','media-library-btn','fmt-undo','fmt-bold','fmt-italic','fmt-bullet','fmt-num'].forEach(id => {
+  ['quote-card-btn','carousel-btn','branded-quote-btn','ai-image-btn','infographic-btn','media-library-btn','fmt-undo','fmt-bold','fmt-italic','fmt-bullet','fmt-num'].forEach(id => {
     document.getElementById(id)?.classList.add('disabled');
   });
   const chipRemove = document.getElementById('asset-chip-remove');
@@ -1042,7 +1043,7 @@ function clearScheduleLockUi() {
   const schedBtnRestore = document.getElementById('btn-schedule');
   if (schedBtnRestore) schedBtnRestore.style.removeProperty('display');
   if (linkedinConnected && schedBtnRestore) schedBtnRestore.disabled = false;
-  ['quote-card-btn','carousel-btn','branded-quote-btn','ai-image-btn','media-library-btn','fmt-undo','fmt-bold','fmt-italic','fmt-bullet','fmt-num'].forEach(id => {
+  ['quote-card-btn','carousel-btn','branded-quote-btn','ai-image-btn','infographic-btn','media-library-btn','fmt-undo','fmt-bold','fmt-italic','fmt-bullet','fmt-num'].forEach(id => {
     document.getElementById(id)?.classList.remove('disabled');
   });
   const chipRemove = document.getElementById('asset-chip-remove');
@@ -1938,6 +1939,68 @@ function renderEditorForm(type, content) {
       const lenEl = ta.closest('.so-field-group').querySelector('.so-body-len');
       if (lenEl) ta.addEventListener('input', () => { lenEl.textContent = ta.value.length; _scheduleVisualPreview(type); });
     });
+  } else if (type === 'infographic') {
+    const layout = extractedContent || {};
+    const themeSelect = `
+      <div class="so-field-group" style="margin-bottom:12px">
+        <label class="field-label">Theme</label>
+        <select id="so-infographic-theme" class="field-input" style="padding:6px 10px">
+          <option value="dark"${(layout._variant || 'dark') === 'dark' ? ' selected' : ''}>Dark</option>
+          <option value="light"${layout._variant === 'light' ? ' selected' : ''}>Light</option>
+          <option value="accent"${layout._variant === 'accent' ? ' selected' : ''}>Accent</option>
+        </select>
+      </div>`;
+    const tagHtml = `
+      <div class="so-field-group">
+        <label class="field-label">Tag</label>
+        <input type="text" id="so-infographic-tag" class="field-input" value="${escHtml(layout.tag || '')}" maxlength="30" placeholder="e.g. LINKEDIN GROWTH"/>
+      </div>`;
+    const titleHtml = `
+      <div class="so-field-group">
+        <label class="field-label">Title</label>
+        <input type="text" id="so-infographic-title" class="field-input" value="${escHtml(layout.title || '')}" maxlength="80"/>
+      </div>`;
+    const subtitleHtml = layout.subtitle !== undefined ? `
+      <div class="so-field-group">
+        <label class="field-label">Subtitle</label>
+        <input type="text" id="so-infographic-subtitle" class="field-input" value="${escHtml(layout.subtitle || '')}" maxlength="100"/>
+      </div>` : '';
+    const itemsHtml = (layout.items || []).map((item, i) => {
+      if (layout.type === 'metric') {
+        return `
+          <div class="so-slide-card" data-item-index="${i}">
+            <div class="so-slide-card-header"><span class="so-slide-badge so-slide-badge--title">Metric</span></div>
+            <div class="so-field-group"><label class="field-label">Value</label><input type="text" class="field-input so-item-value" value="${escHtml(item.value || '')}" maxlength="30"/></div>
+            <div class="so-field-group"><label class="field-label">Label</label><input type="text" class="field-input so-item-label" value="${escHtml(item.label || '')}" maxlength="80"/></div>
+            <div class="so-field-group"><label class="field-label">Context</label><input type="text" class="field-input so-item-context" value="${escHtml(item.context || '')}" maxlength="40"/></div>
+          </div>`;
+      }
+      if (layout.type === 'quote') {
+        return `
+          <div class="so-slide-card" data-item-index="${i}">
+            <div class="so-slide-card-header"><span class="so-slide-badge so-slide-badge--title">Quote</span></div>
+            <div class="so-field-group"><label class="field-label">Quote</label><textarea class="field-textarea so-item-quote" maxlength="300">${escHtml(item.quote || '')}</textarea></div>
+            <div class="so-field-group"><label class="field-label">Attribution</label><input type="text" class="field-input so-item-attribution" value="${escHtml(item.attribution || '')}" maxlength="60"/></div>
+          </div>`;
+      }
+      return `
+        <div class="so-slide-card" data-item-index="${i}">
+          <div class="so-slide-card-header">
+            <span class="so-slide-badge so-slide-badge--content">Item ${i + 1}</span>
+          </div>
+          <div class="so-field-group"><label class="field-label">Title</label><input type="text" class="field-input so-item-title" value="${escHtml(item.title || '')}" maxlength="60"/></div>
+          <div class="so-field-group"><label class="field-label">Body</label><textarea class="field-textarea so-item-body" maxlength="200">${escHtml(item.body || '')}</textarea></div>
+        </div>`;
+    }).join('');
+    const layoutTypeLabel = (layout.type || 'card-grid').replace(/-/g, ' ');
+    wrap.innerHTML = `
+      <div class="so-editor-form">
+        <div style="margin-bottom:8px;font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px">Layout: ${escHtml(layoutTypeLabel)}</div>
+        ${themeSelect}${tagHtml}${titleHtml}${subtitleHtml}${itemsHtml}
+      </div>`;
+    wrap.querySelectorAll('input, textarea, select').forEach(el => {
+      el.addEventListener('input', () => _scheduleVisualPreview(type));
+    });
   }
 
   if (!currentAssetUrl) _generateVisualPreviewSilently(type);
@@ -1955,6 +2018,29 @@ function readEditorContent(type) {
       headline: (card.querySelector('.so-hl-input')?.value || '').trim(),
       body:     (card.querySelector('.so-body-textarea')?.value || '').trim(),
     })) };
+  }
+  if (type === 'infographic') {
+    const wrap = document.getElementById('visual-modal-form-pane');
+    const layout = extractedContent || {};
+    const result = {
+      type: layout.type || 'card-grid',
+      columns: layout.columns,
+      tag: (document.getElementById('so-infographic-tag')?.value || '').trim() || undefined,
+      title: (document.getElementById('so-infographic-title')?.value || '').trim() || undefined,
+      subtitle: document.getElementById('so-infographic-subtitle')?.value?.trim() || undefined,
+      _variant: document.getElementById('so-infographic-theme')?.value || 'dark',
+      items: [],
+    };
+    wrap.querySelectorAll('.so-slide-card').forEach(card => {
+      if (layout.type === 'metric') {
+        result.items.push({ value: card.querySelector('.so-item-value')?.value || '', label: card.querySelector('.so-item-label')?.value || '', context: card.querySelector('.so-item-context')?.value || undefined });
+      } else if (layout.type === 'quote') {
+        result.items.push({ quote: card.querySelector('.so-item-quote')?.value || '', attribution: card.querySelector('.so-item-attribution')?.value || undefined });
+      } else {
+        result.items.push({ title: card.querySelector('.so-item-title')?.value || '', body: card.querySelector('.so-item-body')?.value || '' });
+      }
+    });
+    return result;
   }
   return {};
 }
@@ -2019,7 +2105,7 @@ function _doSaveVisual(type) {
   attachedSlideCount = currentSlideCount;
   const chip      = document.getElementById('asset-chip');
   const chipLabel = document.getElementById('asset-chip-label');
-  if (chipLabel) chipLabel.textContent = type === 'carousel' ? 'Carousel' : type === 'quote_card' ? 'Quote' : 'Branded';
+  if (chipLabel) chipLabel.textContent = type === 'carousel' ? 'Carousel' : type === 'quote_card' ? 'Quote' : type === 'infographic' ? 'Infographic' : 'Branded';
   if (chip) chip.classList.remove('hidden');
   renderPreviewAsset();
   closeVisualModal();
@@ -2470,6 +2556,7 @@ function wireVisualButtons() {
   document.getElementById('branded-quote-btn').addEventListener('click', () => openSlideOver('branded_quote', 'BRANDED QUOTE'));
   document.getElementById('carousel-btn').addEventListener('click', () => openSlideOver('carousel', 'CAROUSEL'));
   document.getElementById('ai-image-btn').addEventListener('click', () => openAiImageModal());
+  document.getElementById('infographic-btn').addEventListener('click', () => openSlideOver('infographic', 'INFOGRAPHIC'));
   document.getElementById('media-library-btn').addEventListener('click', () => {
     if (scheduleEditLocked) return;
     openMediaDrawer();
@@ -2543,6 +2630,7 @@ function wireVisualButtons() {
       else if (type === 'quote_card')     openSlideOver('quote_card', 'QUOTE CARD');
       else if (type === 'branded_quote')  openSlideOver('branded_quote', 'BRANDED QUOTE');
       else if (type === 'ai_image')       openAiImageModal();
+      else if (type === 'infographic')   openSlideOver('infographic', 'INFOGRAPHIC');
       else if (type === 'media')          openMediaDrawer();
     });
   });

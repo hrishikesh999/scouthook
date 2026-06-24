@@ -5,11 +5,14 @@ const { getSetting } = require('../db');
 const { extractJsonFromResponse, getAnthropicMessageText } = require('./voiceFingerprint');
 const storage = require('./storage');
 const { renderLayout, resolveFonts, buildTheme, buildLayout, renderToBuffer, W_SQUARE, H_SQUARE } = require('./satoriRenderer');
+const { CURATED_ICONS } = require('./iconLibrary');
 
 const LAYOUT_TYPES = ['card-grid', 'numbered-list', 'metric', 'quote', 'two-column'];
 const THEME_VARIANTS = ['dark', 'light', 'accent'];
 
-const EXTRACT_PROMPT = `Analyze this LinkedIn post and create an infographic layout. Return ONLY valid JSON matching one of these formats:
+const EXTRACT_PROMPT = `Analyze this LinkedIn post and create an infographic layout. Return ONLY valid JSON matching one of these formats.
+
+Available icons (pick one per item from this list): ${CURATED_ICONS.join(', ')}
 
 FORMAT 1 — card-grid (best for posts listing tips, tools, strategies, or features):
 {
@@ -19,7 +22,7 @@ FORMAT 1 — card-grid (best for posts listing tips, tools, strategies, or featu
   "title": "Compelling headline (max 10 words)",
   "subtitle": "One-line teaser (optional)",
   "items": [
-    { "title": "Card title (2-4 words)", "body": "1-2 sentences explaining this point." },
+    { "title": "Card title (2-4 words)", "body": "1-2 sentences explaining this point.", "icon": "icon-name" },
     ...
   ]
 }
@@ -30,7 +33,7 @@ FORMAT 2 — numbered-list (best for step-by-step posts, habits, mistakes, rules
   "tag": "SHORT CATEGORY",
   "title": "Compelling headline (max 10 words)",
   "items": [
-    { "title": "Step name (2-5 words)", "body": "1 sentence explanation." },
+    { "title": "Step name (2-5 words)", "body": "1 sentence explanation.", "icon": "icon-name" },
     ...
   ]
 }
@@ -55,10 +58,10 @@ FORMAT 5 — two-column (best for comparison, before/after, input/output, proble
   "tag": "SHORT CATEGORY",
   "title": "Compelling headline (max 10 words)",
   "items": [
-    { "title": "Left item 1 (2-5 words)", "body": "1 sentence." },
-    { "title": "Right item 1 (2-5 words)", "body": "1 sentence." },
-    { "title": "Left item 2", "body": "..." },
-    { "title": "Right item 2", "body": "..." },
+    { "title": "Left item 1 (2-5 words)", "body": "1 sentence.", "icon": "icon-name" },
+    { "title": "Right item 1 (2-5 words)", "body": "1 sentence.", "icon": "icon-name" },
+    { "title": "Left item 2", "body": "...", "icon": "icon-name" },
+    { "title": "Right item 2", "body": "...", "icon": "icon-name" },
     ...
   ]
 }
@@ -128,6 +131,7 @@ function validateLayout(layout) {
     layout.items = layout.items.slice(0, 12).map(item => ({
       title: String(item.title || '').slice(0, 60),
       body: String(item.body || '').slice(0, 200),
+      icon: CURATED_ICONS.includes(item.icon) ? item.icon : undefined,
     }));
     if (layout.items.length < 2) {
       throw new Error('card-grid needs at least 2 items');
@@ -138,6 +142,7 @@ function validateLayout(layout) {
     layout.items = layout.items.slice(0, 12).map(item => ({
       title: String(item.title || '').slice(0, 60),
       body: String(item.body || '').slice(0, 200),
+      icon: CURATED_ICONS.includes(item.icon) ? item.icon : undefined,
     }));
     if (layout.items.length < 2) {
       throw new Error('numbered-list needs at least 2 items');
@@ -165,6 +170,7 @@ function validateLayout(layout) {
     layout.items = layout.items.slice(0, 12).map(item => ({
       title: String(item.title || '').slice(0, 60),
       body: String(item.body || '').slice(0, 200),
+      icon: CURATED_ICONS.includes(item.icon) ? item.icon : undefined,
     }));
     if (layout.items.length % 2 !== 0) layout.items.pop();
     if (layout.items.length < 2) {

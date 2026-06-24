@@ -2,6 +2,7 @@
 
 const satori = require('satori').default;
 const sharp = require('sharp');
+const { getIconElement } = require('./iconLibrary');
 
 const W_SQUARE = 1080;
 const H_SQUARE = 1080;
@@ -181,7 +182,17 @@ function heroTitle(theme, { tag, title, subtitle }) {
   return { type: 'div', props: { style: { display: 'flex', flexDirection: 'column', marginBottom: 24 }, children } };
 }
 
-function iconCard(theme, { title, body, index }) {
+function iconCard(theme, { title, body, index, icon }) {
+  const iconEl = icon ? getIconElement(icon, theme.accent, 22) : null;
+  const badgeEl = typeof index === 'number' ? {
+    type: 'div',
+    props: {
+      style: { width: 28, height: 28, borderRadius: 14, backgroundColor: theme.badgeBg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+      children: [{ type: 'span', props: { style: { fontSize: 13, fontWeight: 700, color: theme.badgeText }, children: String(index + 1) } }],
+    },
+  } : null;
+  const leadEl = iconEl || badgeEl || { type: 'div', props: { style: { width: 28, height: 28, borderRadius: 14, backgroundColor: theme.accent, opacity: 0.2, flexShrink: 0 } } };
+
   return {
     type: 'div',
     props: {
@@ -201,16 +212,7 @@ function iconCard(theme, { title, body, index }) {
           type: 'div',
           props: {
             style: { display: 'flex', alignItems: 'center', gap: 10 },
-            children: [
-              typeof index === 'number' ? {
-                type: 'div',
-                props: {
-                  style: { width: 28, height: 28, borderRadius: 14, backgroundColor: theme.badgeBg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-                  children: [{ type: 'span', props: { style: { fontSize: 13, fontWeight: 700, color: theme.badgeText }, children: String(index + 1) } }],
-                },
-              } : { type: 'div', props: { style: { width: 28, height: 28, borderRadius: 14, backgroundColor: theme.accent, opacity: 0.2, flexShrink: 0 } } },
-              { type: 'span', props: { style: { fontSize: 22, fontWeight: 700, color: theme.text, fontFamily: theme.fontHeading, lineHeight: 1.2 }, children: title || '' } },
-            ],
+            children: [leadEl, { type: 'span', props: { style: { fontSize: 22, fontWeight: 700, color: theme.text, fontFamily: theme.fontHeading, lineHeight: 1.2 }, children: title || '' } }],
           },
         },
         { type: 'span', props: { style: { fontSize: 15, color: theme.textMuted, lineHeight: 1.55, fontFamily: theme.fontBody }, children: body || '' } },
@@ -219,7 +221,12 @@ function iconCard(theme, { title, body, index }) {
   };
 }
 
-function numberedRow(theme, { title, body, index }) {
+function numberedRow(theme, { title, body, index, icon }) {
+  const iconEl = icon ? getIconElement(icon, theme.badgeText, 20) : null;
+  const badgeContent = iconEl
+    ? [iconEl]
+    : [{ type: 'span', props: { style: { fontSize: 16, fontWeight: 700, color: theme.badgeText }, children: String((index || 0) + 1) } }];
+
   return {
     type: 'div',
     props: {
@@ -229,7 +236,7 @@ function numberedRow(theme, { title, body, index }) {
           type: 'div',
           props: {
             style: { width: 38, height: 38, borderRadius: 19, backgroundColor: theme.badgeBg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 },
-            children: [{ type: 'span', props: { style: { fontSize: 16, fontWeight: 700, color: theme.badgeText }, children: String((index || 0) + 1) } }],
+            children: badgeContent,
           },
         },
         {

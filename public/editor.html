@@ -2257,6 +2257,10 @@ async function generateFromEditor(type) {
 }
 
 function _doSaveVisual(type) {
+  if (!currentAssetUrl) {
+    console.warn('[visual] Insert attempted but no asset URL — render may not have completed');
+    return;
+  }
   attachedAssetUrl   = currentAssetUrl;
   attachedAssetType  = type;
   attachedPreviewUrl = currentPreviewUrl;

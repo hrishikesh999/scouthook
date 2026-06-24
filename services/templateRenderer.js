@@ -1,0 +1,298 @@
+'use strict';
+
+const Anthropic = require('@anthropic-ai/sdk');
+const { getSetting, db } = require('../db');
+const { extractJsonFromResponse, getAnthropicMessageText } = require('./voiceFingerprint');
+const storage = require('./storage');
+const { readSlotManifest, injectSlots } = require('./templateSlotInjector');
+const sharp = require('sharp');
+
+const FLY_RENDER_URL    = process.env.FLY_RENDER_URL    || '';
+const FLY_RENDER_SECRET = process.env.FLY_RENDER_SECRET || '';
+
+// ---------------------------------------------------------------------------
+// Render service call
+// ---------------------------------------------------------------------------
+
+async function callRenderService(html, width, height) {
+  if (!FLY_RENDER_URL) throw Object.assign(new Error('render_service_not_configured'), { status: 503 });
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15_000);
+
+  let res;
+  try {
+    res = await fetch(`${FLY_RENDER_URL}/render`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Render-Secret': FLY_RENDER_SECRET,
+      },
+      body: JSON.stringify({ html, width, height }),
+      signal: controller.signal,
+    });
+  } catch (err) {
+    clearTimeout(timer);
+    throw Object.assign(new Error('render_service_unavailable'), { status: 503 });
+  }
+  clearTimeout(timer);
+
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '');
+    const err = new Error('render_service_error');
+    err.status = 503;
+    err.detail = detail;
+    throw err;
+  }
+
+  const arrayBuf = await res.arrayBuffer();
+  return Buffer.from(arrayBuf);
+}
+
+// ---------------------------------------------------------------------------
+// Placeholder text for thumbnail generation (deterministic, no AI)
+// ---------------------------------------------------------------------------
+
+const TEXT_PLACEHOLDERS = {
+  headline: 'Your Headline Goes Here',
+  title:    'Title Goes Here',
+  subtitle: 'A short supporting subtitle',
+  tag:      'CATEGORY',
+  label:    'LABEL',
+  name:     'Your Name',
+  body:     'A short body text placeholder for this slot.',
+  cta:      'Get Started',
+  date:     'June 2026',
+};
+
+function placeholderForKey(key) {
+  const lower = key.toLowerCase();
+  for (const [k, v] of Object.entries(TEXT_PLACEHOLDERS)) {
+    if (lower.includes(k)) return v;
+  }
+  return `${key} text here`;
+}
+
+// ---------------------------------------------------------------------------
+// generateTemplateThumbnail
+// No post, no AI, no brand context — deterministic placeholder content.
+// Returns a PNG Buffer resized to 540px wide.
+// ---------------------------------------------------------------------------
+
+async function generateTemplateThumbnail(html, manifest) {
+  const { width = 1080, height = 1080 } = manifest.dimensions || {};
+  const slots = manifest.slots || {};
+
+  const placeholderSlots = {};
+
+  for (const [key, def] of Object.entries(slots)) {
+    if (key.startsWith('color:')) {
+      const val = def.default === 'brand' ? '#0f766e' : (def.default || '#cccccc');
+      placeholderSlots[key] = val;
+      continue;
+    }
+    if (key.startsWith('image:')) {
+      // Skip — no placeholder images for thumbnails
+      continue;
+    }
+    if (def.type === 'repeating') {
+      const count = def.min || 2;
+      const fields = def.fields || ['title', 'body'];
+      placeholderSlots[key] = Array.from({ length: count }, () => {
+        const item = {};
+        for (const f of fields) item[f] = `${f} placeholder`;
+        return item;
+      });
+      continue;
+    }
+    // text slot
+    let val = placeholderForKey(key);
+    if (def.maxLen) val = val.slice(0, Math.floor(def.maxLen / 2));
+    placeholderSlots[key] = val;
+  }
+
+  const finalHtml = injectSlots(html, placeholderSlots);
+  const fullPng = await callRenderService(finalHtml, width, height);
+  return sharp(fullPng).resize(540).png().toBuffer();
+}
+
+// ---------------------------------------------------------------------------
+// Claude Haiku extraction
+// Builds a dynamic prompt from the manifest's text/repeating slot definitions
+// ---------------------------------------------------------------------------
+
+async function extractSlotContent(post, manifest) {
+  const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
+  if (!apiKey) throw new Error('anthropic_api_key not configured');
+
+  const slots = manifest.slots || {};
+  const slotDescriptions = [];
+
+  for (const [key, def] of Object.entries(slots)) {
+    if (key.startsWith('color:') || key.startsWith('image:')) continue;
+    if (def.type === 'repeating') {
+      const fields = (def.fields || ['title', 'body']).join(', ');
+      slotDescriptions.push(
+        `- "${key}": array of ${def.min || 2}–${def.max || 6} objects each with { ${fields} }`
+      );
+    } else {
+      const maxNote = def.maxLen ? ` (max ${def.maxLen} chars)` : '';
+      const reqNote = def.required ? ' [REQUIRED]' : '';
+      slotDescriptions.push(`- "${key}": string${maxNote}${reqNote}`);
+    }
+  }
+
+  if (slotDescriptions.length === 0) return {};
+
+  const prompt = `Analyze this LinkedIn post and extract content for a visual template. Return ONLY valid JSON with these exact keys:
+
+${slotDescriptions.join('\n')}
+
+Rules:
+- Be concise — this is a visual, not an article
+- Preserve the author's voice and key stats
+- Do NOT wrap in markdown code fences. Return raw JSON only.
+
+POST:
+${post.content}`;
+
+  const client = new Anthropic({ apiKey });
+  const msg = await client.messages.create({
+    model: 'claude-haiku-4-5',
+    max_tokens: 1500,
+    messages: [{ role: 'user', content: prompt }],
+  });
+
+  let extracted;
+  const rawText = getAnthropicMessageText(msg);
+  try {
+    extracted = extractJsonFromResponse(rawText);
+  } catch (e) {
+    const retry = await client.messages.create({
+      model: 'claude-haiku-4-5',
+      max_tokens: 1500,
+      messages: [
+        { role: 'user', content: prompt },
+        { role: 'assistant', content: msg.content },
+        { role: 'user', content: 'Return only valid JSON, no other text.' },
+      ],
+    });
+    extracted = extractJsonFromResponse(getAnthropicMessageText(retry));
+  }
+
+  // Enforce maxLen constraints on text slots
+  for (const [key, def] of Object.entries(slots)) {
+    if (!def.maxLen || key.startsWith('color:') || key.startsWith('image:')) continue;
+    if (typeof extracted[key] === 'string') {
+      extracted[key] = extracted[key].slice(0, def.maxLen);
+    }
+  }
+
+  return extracted;
+}
+
+// ---------------------------------------------------------------------------
+// extractTemplateSlots — extract mode only, no rendering
+// ---------------------------------------------------------------------------
+
+async function extractTemplateSlots(post, templateId) {
+  const template = await db.prepare(
+    'SELECT * FROM html_templates WHERE id = ? AND active = TRUE'
+  ).get(templateId);
+  if (!template) {
+    const err = new Error('template_not_found');
+    err.status = 404;
+    throw err;
+  }
+
+  const manifest = template.slot_manifest; // pg returns JSONB pre-parsed
+  return extractSlotContent(post, manifest);
+}
+
+// ---------------------------------------------------------------------------
+// renderTemplate — full render pipeline
+// ---------------------------------------------------------------------------
+
+async function renderTemplate(post, templateId, userOverrides = {}, brand = {}, ctx = {}) {
+  const { tenantId, userId } = ctx;
+
+  // 1. Load template
+  const template = await db.prepare(
+    'SELECT * FROM html_templates WHERE id = ? AND active = TRUE'
+  ).get(templateId);
+  if (!template) {
+    const err = new Error('template_not_found');
+    err.status = 404;
+    throw err;
+  }
+
+  // 2. Download HTML
+  const htmlBuf = await storage.downloadAdmin(template.html_r2_key);
+  const html = htmlBuf.toString('utf8');
+
+  // 3. Manifest (pre-parsed JSONB from pg)
+  const manifest = template.slot_manifest;
+  const slots = manifest.slots || {};
+  const { width = 1080, height = 1080 } = manifest.dimensions || {};
+
+  // 4. Extract text + repeating slots via Claude Haiku
+  const textSlots = await extractSlotContent(post, manifest);
+
+  // 5. Resolve color slots
+  const colorSlots = {};
+  const overrideColors = (userOverrides && userOverrides.colors) || {};
+  for (const [key, def] of Object.entries(slots)) {
+    if (!key.startsWith('color:')) continue;
+    if (overrideColors[key] && /^(#[0-9a-fA-F]{3,8}|rgba?\([^)]+\))$/.test(overrideColors[key])) {
+      colorSlots[key] = overrideColors[key];
+    } else if (def.default === 'brand') {
+      // Map color:accent → brand.accent, color:bg → brand.bg, etc.
+      const colorRole = key.slice('color:'.length);
+      colorSlots[key] = brand[colorRole] || brand.accent || '#0f766e';
+    } else if (def.default) {
+      colorSlots[key] = def.default;
+    }
+  }
+
+  // 6. Resolve image slots
+  const imageSlots = {};
+  const overrideImages = (userOverrides && userOverrides.images) || {};
+  for (const [key, def] of Object.entries(slots)) {
+    if (!key.startsWith('image:')) continue;
+    const imageKey = key.slice('image:'.length);
+    const storageKey = overrideImages[key] || overrideImages[imageKey];
+    if (!storageKey) continue;
+    try {
+      const buf = await storage.download(storageKey);
+      // Detect MIME from buffer magic bytes
+      let mime = 'image/jpeg';
+      if (buf[0] === 0x89 && buf[1] === 0x50) mime = 'image/png';
+      else if (buf[0] === 0x47 && buf[1] === 0x49) mime = 'image/gif';
+      else if (buf[0] === 0x52 && buf[1] === 0x49) mime = 'image/webp';
+      imageSlots[key] = `data:${mime};base64,${buf.toString('base64')}`;
+    } catch (err) {
+      console.warn(`[templateRenderer] could not load image slot ${key}:`, err.message);
+    }
+  }
+
+  // 7. Inject all slots
+  const allSlots = { ...textSlots, ...colorSlots, ...imageSlots };
+  const finalHtml = injectSlots(html, allSlots);
+
+  // 8. Call render service
+  const pngBuffer = await callRenderService(finalHtml, width, height);
+
+  // 9. Upload to tenant storage
+  const filename = `template_${post.id}_${Date.now()}.png`;
+  await storage.upload(pngBuffer, {
+    tenantId,
+    userId,
+    type: 'generated',
+    filename,
+    mimeType: 'image/png',
+  });
+
+  return { png_url: `/files/${filename}`, content: textSlots };
+}
+
+module.exports = { renderTemplate, extractTemplateSlots, generateTemplateThumbnail };

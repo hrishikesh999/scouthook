@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HTML Templates — ScoutHook Admin</title>
+  <link rel="stylesheet" href="/css/scouthook.css" />
+  <link rel="stylesheet" href="/css/main.css" />
+  <link rel="stylesheet" href="/css/admin.css" />
+  <style>
+    .ht-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--space-md); }
+    .ht-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
+    .ht-card__thumb { width: 100%; aspect-ratio: 1/1; object-fit: cover; background: var(--neutral-100); display: block; }
+    .ht-card__body { padding: var(--space-sm) var(--space-md); }
+    .ht-card__name { font-weight: 600; font-size: .95rem; margin-bottom: 2px; }
+    .ht-card__meta { font-size: .8rem; color: var(--text-muted); display: flex; gap: var(--space-sm); align-items: center; flex-wrap: wrap; }
+    .ht-card__actions { padding: var(--space-sm) var(--space-md); border-top: 1px solid var(--border); display: flex; gap: var(--space-sm); flex-wrap: wrap; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 99px; font-size: .72rem; font-weight: 600; }
+    .badge--active { background: #d1fae5; color: #065f46; }
+    .badge--inactive { background: var(--neutral-100); color: var(--text-muted); }
+    .badge--cat { background: #ede9fe; color: #5b21b6; }
+    .slot-preview { background: var(--neutral-50); border: 1px solid var(--border); border-radius: var(--radius); padding: var(--space-sm); font-family: monospace; font-size: .78rem; max-height: 160px; overflow-y: auto; white-space: pre; }
+    .html-textarea { font-family: monospace; font-size: .78rem; resize: vertical; min-height: 220px; }
+    .thumb-placeholder { width: 100%; aspect-ratio: 1/1; background: var(--neutral-100); display: flex; align-items: center; justify-content: center; color: var(--text-muted); font-size: .8rem; }
+  </style>
+</head>
+<body>
+
+  <!-- Auth screen -->
+  <div id="auth-screen" class="admin-auth">
+    <div class="admin-auth__card card">
+      <h2 class="admin-auth__title">ScoutHook Admin</h2>
+      <div class="field"><label for="pw-input">Admin password</label><input type="password" id="pw-input" placeholder="ADMIN_PASSWORD" /></div>
+      <div id="pw-error" class="admin-error-msg hidden"></div>
+      <button id="pw-btn" class="btn btn--primary">Unlock</button>
+    </div>
+  </div>
+
+  <!-- Main app -->
+  <div id="main" class="hidden">
+    <nav class="admin-nav">
+      <a href="/admin.html" class="admin-nav__brand"><img src="/images/sh-logo-dark.png" alt="ScoutHook" class="admin-nav__logo" /><span>Admin</span></a>
+      <div class="admin-nav__links">
+        <a href="/admin.html" class="admin-nav__link">Dashboard</a>
+        <a href="/admin-users.html" class="admin-nav__link">Users</a>
+        <a href="/admin-feedback.html" class="admin-nav__link">Feedback</a>
+        <a href="/admin-support.html" class="admin-nav__link">Support</a>
+        <div class="admin-nav__sep"></div>
+        <a href="/admin-settings.html" class="admin-nav__link">Settings</a>
+        <a href="/admin-templates.html" class="admin-nav__link">Templates</a>
+        <a href="/admin-html-templates.html" class="admin-nav__link admin-nav__link--active">HTML Templates</a>
+      </div>
+      <div class="admin-nav__bottom">
+        <a href="/admin-logout.html" class="admin-nav__logout">Log out</a>
+      </div>
+    </nav>
+
+    <main class="admin-main">
+      <div class="admin-templates-body">
+
+        <div class="admin-page-header">
+          <div>
+            <h1>HTML Templates</h1>
+            <p class="text-muted admin-page-subtitle">Canva-designed templates rendered via Puppeteer. Users select, AI fills text slots, they adjust colors and images.</p>
+          </div>
+          <button id="add-btn" class="btn btn--primary">+ Add template</button>
+        </div>
+
+        <!-- Template grid -->
+        <div id="template-grid" class="ht-grid">
+          <div class="loading-text--padded">Loading…</div>
+        </div>
+
+        <!-- Add / Edit form -->
+        <div id="template-form" class="hidden card card--section-xl" style="margin-top: var(--space-lg);">
+          <input type="hidden" id="form-id" />
+          <h3 id="form-title" class="form-section-title">Add HTML Template</h3>
+
+          <div class="field">
+            <label for="f-name">Template name <span class="required">*</span></label>
+            <input type="text" id="f-name" maxlength="120" placeholder="e.g. Dark Insight Card">
+          </div>
+          <div class="field">
+            <label for="f-description">Description</label>
+            <input type="text" id="f-description" maxlength="255" placeholder="Optional — shown to users">
+          </div>
+          <div class="field">
+            <label for="f-category">Category</label>
+            <input type="text" id="f-category" maxlength="80" placeholder="e.g. Quote, Infographic, Stats">
+          </div>
+          <div class="field">
+            <label for="f-sort">Sort order</label>
+            <input type="number" id="f-sort" value="0" min="0" max="9999" style="width:100px">
+          </div>
+
+          <div class="field">
+            <label for="f-html">Template HTML <span class="required">*</span></label>
+            <p class="text-muted field-hint">Paste the full HTML from Canva. Add <code>data-slot="key"</code> attributes and a <code>&lt;script type="application/json" id="template-meta"&gt;</code> manifest block.</p>
+            <textarea id="f-html" class="html-textarea" placeholder='<!DOCTYPE html>&#10;<html>&#10;...your Canva HTML...&#10;</html>'></textarea>
+          </div>
+
+          <div class="field">
+            <label>Manifest preview <span class="text-muted" style="font-weight:400">(live — auto-parses as you type)</span></label>
+            <pre id="manifest-preview" class="slot-preview">Paste HTML above to preview manifest…</pre>
+          </div>
+
+          <div id="form-error" class="form-error hidden"></div>
+          <div class="form-actions">
+            <button id="form-save" class="btn btn--primary" type="button">Save template</button>
+            <button id="form-cancel" class="btn btn--secondary" type="button">Cancel</button>
+          </div>
+          <p class="text-muted" style="font-size:.8rem;margin-top:var(--space-sm)">Saving generates a thumbnail (~3–5 s). The page reloads when done.</p>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+<script>
+  let adminPw = '';
+
+  // ── Auth ──────────────────────────────────────────────────────────────────
+
+  const saved = sessionStorage.getItem('adminPw');
+  if (saved) { adminPw = saved; showMain(); }
+
+  document.getElementById('pw-btn').addEventListener('click', async () => {
+    const pw = document.getElementById('pw-input').value.trim();
+    const r = await fetch('/admin/html-templates', { headers: { 'X-Admin-Password': pw } });
+    if (r.status === 401) {
+      document.getElementById('pw-error').textContent = 'Wrong password';
+      document.getElementById('pw-error').classList.remove('hidden');
+      return;
+    }
+    adminPw = pw; sessionStorage.setItem('adminPw', pw); showMain();
+  });
+  document.getElementById('pw-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') document.getElementById('pw-btn').click();
+  });
+
+  function showMain() {
+    document.getElementById('auth-screen').classList.add('hidden');
+    document.getElementById('main').classList.remove('hidden');
+    loadTemplates();
+  }
+
+  function adminFetch(path, opts = {}) {
+    opts.headers = opts.headers || {};
+    opts.headers['X-Admin-Password'] = adminPw;
+    if (opts.body && !opts.headers['Content-Type']) {
+      opts.headers['Content-Type'] = 'application/json';
+    }
+    return fetch(path, opts);
+  }
+
+  // ── Load templates ────────────────────────────────────────────────────────
+
+  async function loadTemplates() {
+    const grid = document.getElementById('template-grid');
+    const r = await adminFetch('/admin/html-templates');
+    const { templates } = await r.json();
+
+    if (!templates || templates.length === 0) {
+      grid.innerHTML = '<p class="text-muted" style="padding:var(--space-md)">No templates yet. Click "+ Add template" to upload one.</p>';
+      return;
+    }
+
+    grid.innerHTML = templates.map(t => {
+      const thumbSrc = t.thumbnail_r2_key ? `/admin/html-templates/${t.id}/thumbnail` : null;
+      const slots = t.slot_manifest?.slots ? Object.keys(t.slot_manifest.slots) : [];
+      return `
+      <div class="ht-card" data-id="${t.id}">
+        ${thumbSrc
+          ? `<img class="ht-card__thumb" src="${thumbSrc}" alt="${esc(t.name)}" loading="lazy">`
+          : `<div class="thumb-placeholder">No thumbnail</div>`}
+        <div class="ht-card__body">
+          <div class="ht-card__name">${esc(t.name)}</div>
+          <div class="ht-card__meta">
+            <span class="badge ${t.active ? 'badge--active' : 'badge--inactive'}">${t.active ? 'Active' : 'Inactive'}</span>
+            ${t.category ? `<span class="badge badge--cat">${esc(t.category)}</span>` : ''}
+            <span>${slots.length} slot${slots.length !== 1 ? 's' : ''}</span>
+          </div>
+        </div>
+        <div class="ht-card__actions">
+          <button class="btn btn--sm btn--secondary" onclick="editTemplate('${t.id}')">Edit</button>
+          <button class="btn btn--sm btn--secondary" onclick="toggleTemplate('${t.id}', ${t.active})">${t.active ? 'Deactivate' : 'Activate'}</button>
+          ${!t.thumbnail_r2_key ? `<button class="btn btn--sm btn--secondary" onclick="regenThumb('${t.id}')">⟳ Thumbnail</button>` : ''}
+          <button class="btn btn--sm btn--danger" onclick="deleteTemplate('${t.id}', '${esc(t.name)}')">Delete</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  function esc(s) {
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // ── Template actions ──────────────────────────────────────────────────────
+
+  async function toggleTemplate(id, currentActive) {
+    await adminFetch(`/admin/html-templates/${id}/toggle`, { method: 'POST' });
+    loadTemplates();
+  }
+
+  async function regenThumb(id) {
+    const btn = event.target;
+    btn.textContent = '⟳ Generating…'; btn.disabled = true;
+    const r = await adminFetch(`/admin/html-templates/${id}/regenerate-thumbnail`, { method: 'POST' });
+    const data = await r.json();
+    if (data.ok) loadTemplates();
+    else { alert('Thumbnail generation failed: ' + data.error); btn.textContent = '⟳ Thumbnail'; btn.disabled = false; }
+  }
+
+  async function deleteTemplate(id, name) {
+    if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
+    await adminFetch(`/admin/html-templates/${id}`, { method: 'DELETE' });
+    loadTemplates();
+  }
+
+  // ── Add / Edit form ───────────────────────────────────────────────────────
+
+  document.getElementById('add-btn').addEventListener('click', () => openForm(null));
+  document.getElementById('form-cancel').addEventListener('click', closeForm);
+
+  async function editTemplate(id) {
+    const r = await adminFetch('/admin/html-templates');
+    const { templates } = await r.json();
+    const t = templates.find(x => x.id === id);
+    if (!t) return;
+    // We don't have the HTML body stored in DB — open a blank edit form for metadata only
+    openForm(t);
+  }
+
+  function openForm(t) {
+    const form = document.getElementById('template-form');
+    document.getElementById('form-id').value = t ? t.id : '';
+    document.getElementById('form-title').textContent = t ? `Edit: ${t.name}` : 'Add HTML Template';
+    document.getElementById('f-name').value = t ? t.name : '';
+    document.getElementById('f-description').value = t ? (t.description || '') : '';
+    document.getElementById('f-category').value = t ? (t.category || '') : '';
+    document.getElementById('f-sort').value = t ? (t.sort_order ?? 0) : 0;
+    document.getElementById('f-html').value = '';
+    document.getElementById('manifest-preview').textContent = t
+      ? JSON.stringify(t.slot_manifest, null, 2)
+      : 'Paste HTML above to preview manifest…';
+    document.getElementById('form-error').classList.add('hidden');
+    form.classList.remove('hidden');
+    form.scrollIntoView({ behavior: 'smooth' });
+  }
+
+  function closeForm() {
+    document.getElementById('template-form').classList.add('hidden');
+  }
+
+  // Live manifest preview
+  document.getElementById('f-html').addEventListener('input', function () {
+    const html = this.value;
+    const preview = document.getElementById('manifest-preview');
+    const start = html.indexOf('<script type="application/json" id="template-meta">');
+    const altStart = html.indexOf("<script type='application/json' id='template-meta'>");
+    const pos = start !== -1 ? start : altStart;
+    const tagLen = start !== -1 ? '<script type="application/json" id="template-meta">'.length : "<script type='application/json' id='template-meta'>".length;
+    if (pos === -1) { preview.textContent = 'No <script id="template-meta"> found in HTML.'; return; }
+    const end = html.indexOf('</script>', pos + tagLen);
+    if (end === -1) { preview.textContent = 'Unclosed <script id="template-meta"> block.'; return; }
+    const raw = html.slice(pos + tagLen, end).trim();
+    try {
+      const parsed = JSON.parse(raw);
+      preview.textContent = JSON.stringify(parsed, null, 2);
+    } catch (e) {
+      preview.textContent = 'Invalid JSON: ' + e.message;
+    }
+  });
+
+  // Save
+  document.getElementById('form-save').addEventListener('click', async () => {
+    const id = document.getElementById('form-id').value;
+    const name = document.getElementById('f-name').value.trim();
+    const description = document.getElementById('f-description').value.trim();
+    const category = document.getElementById('f-category').value.trim();
+    const html = document.getElementById('f-html').value;
+    const sort_order = parseInt(document.getElementById('f-sort').value, 10) || 0;
+    const errEl = document.getElementById('form-error');
+
+    if (!name) { showFormError('Name is required.'); return; }
+    if (!id && !html) { showFormError('HTML is required for new templates.'); return; }
+
+    errEl.classList.add('hidden');
+    const saveBtn = document.getElementById('form-save');
+    saveBtn.textContent = 'Saving…'; saveBtn.disabled = true;
+
+    const body = { name, description: description || undefined, category: category || undefined, sort_order };
+    if (html) body.html = html;
+
+    const url = id ? `/admin/html-templates/${id}` : '/admin/html-templates';
+    const method = id ? 'PUT' : 'POST';
+
+    const r = await adminFetch(url, { method, body: JSON.stringify(body) });
+    const data = await r.json();
+
+    saveBtn.textContent = 'Save template'; saveBtn.disabled = false;
+
+    if (!data.ok) { showFormError(data.error || 'Save failed.'); return; }
+    closeForm();
+    loadTemplates();
+  });
+
+  function showFormError(msg) {
+    const el = document.getElementById('form-error');
+    el.textContent = msg;
+    el.classList.remove('hidden');
+  }
+</script>
+</body>
+</html>

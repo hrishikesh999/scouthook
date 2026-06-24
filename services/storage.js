@@ -224,4 +224,94 @@ async function stream(key, res, next) {
   }
 }
 
-module.exports = { buildKey, getBackend, upload, download, delete: remove, copy, stream };
+// ---------------------------------------------------------------------------
+// Admin raw-key API — bypasses tenant-scoped path builder.
+// Used for global assets: templates/{id}.html, thumbnails/{id}.png
+// ---------------------------------------------------------------------------
+
+const LOCAL_ADMIN_DIR = path.join(__dirname, '..', 'uploads', 'admin');
+if (!fs.existsSync(LOCAL_ADMIN_DIR)) fs.mkdirSync(LOCAL_ADMIN_DIR, { recursive: true });
+
+function adminKeyToLocalPath(key) {
+  // key e.g. "templates/abc.html" → uploads/admin/templates/abc.html
+  const safeParts = key.split('/').map(p => p.replace(/[^a-zA-Z0-9._-]/g, '_'));
+  const dir = path.join(LOCAL_ADMIN_DIR, ...safeParts.slice(0, -1));
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  return path.join(dir, safeParts[safeParts.length - 1]);
+}
+
+/**
+ * Upload a buffer to a raw R2/S3 key (no tenant/user prefix).
+ * @param {Buffer} buffer
+ * @param {string} key   e.g. "templates/uuid.html"
+ * @param {string} mimeType
+ * @returns {Promise<string>} The key.
+ */
+async function uploadAdmin(buffer, key, mimeType) {
+  const fullKey = S3_PREFIX ? `${S3_PREFIX}/${key}` : key;
+  if (BACKEND === 's3') {
+    const { PutObjectCommand } = require('@aws-sdk/client-s3');
+    await getS3Client().send(new PutObjectCommand({
+      Bucket:      S3_BUCKET,
+      Key:         fullKey,
+      Body:        buffer,
+      ContentType: mimeType,
+    }));
+  } else {
+    fs.writeFileSync(adminKeyToLocalPath(key), buffer);
+  }
+  return key;
+}
+
+/**
+ * Download a raw-key object as a Buffer.
+ * @param {string} key
+ * @returns {Promise<Buffer>}
+ */
+async function downloadAdmin(key) {
+  const fullKey = S3_PREFIX ? `${S3_PREFIX}/${key}` : key;
+  if (BACKEND === 's3') {
+    const { GetObjectCommand } = require('@aws-sdk/client-s3');
+    const resp = await getS3Client().send(new GetObjectCommand({
+      Bucket: S3_BUCKET,
+      Key:    fullKey,
+    }));
+    const chunks = [];
+    for await (const chunk of resp.Body) {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    }
+    return Buffer.concat(chunks);
+  } else {
+    const localPath = adminKeyToLocalPath(key);
+    if (!fs.existsSync(localPath)) {
+      const err = new Error('file_not_found');
+      err.code = 'ENOENT';
+      throw err;
+    }
+    return fs.readFileSync(localPath);
+  }
+}
+
+/**
+ * Delete a raw-key object.
+ * @param {string} key
+ * @returns {Promise<void>}
+ */
+async function removeAdmin(key) {
+  const fullKey = S3_PREFIX ? `${S3_PREFIX}/${key}` : key;
+  if (BACKEND === 's3') {
+    const { DeleteObjectCommand } = require('@aws-sdk/client-s3');
+    await getS3Client().send(new DeleteObjectCommand({
+      Bucket: S3_BUCKET,
+      Key:    fullKey,
+    }));
+  } else {
+    try { fs.unlinkSync(adminKeyToLocalPath(key)); } catch { /* already gone */ }
+  }
+}
+
+module.exports = {
+  buildKey, getBackend,
+  upload, download, delete: remove, copy, stream,
+  uploadAdmin, downloadAdmin, removeAdmin,
+};

@@ -13,6 +13,7 @@ const { extractMetricsContent, renderMetricsCard } = require('../services/metric
 const { extractClientWinContent, renderClientWin } = require('../services/clientWinGenerator');
 const { extractFrameworkContent, renderFramework } = require('../services/frameworkGenerator');
 const { renderProofScreenshot } = require('../services/proofScreenshotGenerator');
+const { renderTemplate, extractTemplateSlots } = require('../services/templateRenderer');
 const { canGenerateVisual, logVisualGeneration, getUserPlan } = require('../services/subscription');
 const { planHasFeature } = require('../lib/planFeatures');
 
@@ -31,7 +32,7 @@ router.post('/:postId', async (req, res) => {
     return res.status(401).json({ ok: false, error: 'unauthenticated' });
   }
 
-  if (!['quote_card', 'carousel', 'branded_quote', 'ai_image', 'infographic', 'metrics_card', 'client_win', 'framework'].includes(visual_type)) {
+  if (!['quote_card', 'carousel', 'branded_quote', 'ai_image', 'infographic', 'metrics_card', 'client_win', 'framework', 'template'].includes(visual_type)) {
     return res.status(400).json({ ok: false, error: 'invalid_visual_type' });
   }
 
@@ -174,6 +175,11 @@ router.post('/:postId', async (req, res) => {
         const extracted = await extractFrameworkContent(post);
         return res.json({ ok: true, mode: 'extract', visual_type, content: extracted });
       }
+      if (visual_type === 'template') {
+        if (!template_id) return res.status(400).json({ ok: false, error: 'template_id_required' });
+        const extracted = await extractTemplateSlots(post, template_id);
+        return res.json({ ok: true, mode: 'extract', visual_type, content: extracted });
+      }
       // carousel
       const extracted = await extractCarouselContent(post);
       return res.json({ ok: true, mode: 'extract', visual_type, content: extracted });
@@ -269,6 +275,13 @@ router.post('/:postId', async (req, res) => {
       const variant = content?._variant || 'dark';
       const renderContent = content || await extractFrameworkContent(post);
       const result = await renderFramework(post, brand, renderContent, { userId, tenantId }, variant);
+      await logVisualGeneration(userId, tenantId, postId, visual_type);
+      return res.json({ ok: true, ...result });
+    }
+
+    if (visual_type === 'template') {
+      if (!template_id) return res.status(400).json({ ok: false, error: 'template_id_required' });
+      const result = await renderTemplate(post, template_id, content || {}, brand, { userId, tenantId });
       await logVisualGeneration(userId, tenantId, postId, visual_type);
       return res.json({ ok: true, ...result });
     }

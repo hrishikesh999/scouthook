@@ -630,7 +630,8 @@ app.use('/api/profile',       requireWorkspaceMember, require('./routes/profile'
 app.use('/api/recipes',       requireWorkspaceMember, require('./routes/recipes'));
 app.use('/api/generate',      requireWorkspaceMember, requireWorkspaceActive, require('./routes/generate'));
 app.use('/api/visuals',           requireWorkspaceMember, require('./routes/visuals'));
-app.use('/api/placid-templates', requireWorkspaceMember, require('./routes/placidTemplates'));
+app.use('/api/placid-templates',   requireWorkspaceMember, require('./routes/placidTemplates'));
+app.use('/api/html-templates',     requireWorkspaceMember, require('./routes/htmlTemplates'));
 // /callback is exempt from workspace auth — identity comes from the state token,
 // so the flow works even when the browser session has expired mid-redirect.
 app.use('/api/linkedin',
@@ -658,6 +659,7 @@ app.use('/api', (req, res) => {
   res.status(404).json({ ok: false, error: 'api_not_found' });
 });
 
+app.use('/admin/html-templates', require('./routes/adminHtmlTemplates'));
 app.use('/admin', require('./routes/admin'));
 app.use('/affiliate-admin', require('./routes/affiliate-admin'));
 
@@ -1051,6 +1053,10 @@ if (require.main === module) (async () => {
     await runSeed();
   } catch (e) {
     console.warn('[seed] skipped/failed:', e.message);
+  }
+
+  if (!process.env.FLY_RENDER_URL) {
+    console.warn('[startup] FLY_RENDER_URL not set — HTML template rendering will fail at runtime');
   }
 
   const httpServer = app.listen(PORT, () => {

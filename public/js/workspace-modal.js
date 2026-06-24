@@ -283,6 +283,7 @@
       const data = await resp.json();
 
       if (data.ok && data.redirect) {
+        if (window.cachedFetch) cachedFetch.bustAll();
         window.location.href = data.redirect;
         return;
       }
@@ -449,6 +450,7 @@
         });
         const data = await resp.json();
         if (data.ok && data.redirect) {
+          if (window.cachedFetch) cachedFetch.bustAll();
           window.location.href = data.redirect;
           return;
         }

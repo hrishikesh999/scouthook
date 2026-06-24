@@ -1,21 +1,17 @@
 'use strict';
 
-const sharp = require('sharp');
 const { PDFDocument } = require('pdf-lib');
 const archiver = require('archiver');
 const Anthropic = require('@anthropic-ai/sdk');
 const { getSetting } = require('../db');
 const { extractJsonFromResponse, getAnthropicMessageText } = require('./voiceFingerprint');
 const storage = require('./storage');
-const { buildBackgroundSvg, buildFontFamily, fetchFontFaceBlock, FALLBACK_FONT } = require('./svgBrandBackground');
+const { resolveFonts, buildTheme, renderToBuffer, W_SQUARE, H_SQUARE } = require('./satoriRenderer');
 
-const BG = '#0F1A3C';
-const ACCENT = '#0D7A5F';
-const TEXT = '#F0F4FF';
-const TEXT_MUTED = '#8A9CC0';
-const BG_CARD = '#162040';
-const W = 1080;
-const H = 1080;
+const W = W_SQUARE;
+const H = W_SQUARE;
+
+// ── AI extraction (unchanged) ───────────────────────────────────────────────
 
 async function extractCarouselContent(post) {
   const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
@@ -75,23 +71,135 @@ ${post.content}`;
   return { slides };
 }
 
+// ── Satori slide builder ────────────────────────────────────────────────────
+
+function buildSlideElement(theme, slide, slideNum, totalSlides) {
+  const isTitle = slide.type === 'title';
+  const isClosing = slide.type === 'closing';
+
+  const headlineFontSize = isTitle ? 56 : 44;
+  const bodyFontSize = 24;
+  const counter = `${String(slideNum).padStart(2, '0')} / ${String(totalSlides).padStart(2, '0')}`;
+
+  const children = [
+    { type: 'div', props: { style: { position: 'absolute', top: -50, right: -50, width: 180, height: 180, borderRadius: 90, border: `1px solid ${theme.border}` } } },
+  ];
+
+  if (isTitle) {
+    children.push(
+      {
+        type: 'div',
+        props: {
+          style: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 },
+          children: [
+            { type: 'div', props: { style: { width: 28, height: 3, backgroundColor: theme.accent, borderRadius: 2 } } },
+            theme.brandName ? { type: 'span', props: { style: { fontSize: 13, letterSpacing: 2, color: theme.accent, textTransform: 'uppercase', fontWeight: 600 }, children: theme.brandName } } : null,
+          ].filter(Boolean),
+        },
+      },
+      {
+        type: 'div',
+        props: {
+          style: { display: 'flex', flex: 1, alignItems: 'center' },
+          children: [{ type: 'span', props: { style: { fontSize: headlineFontSize, fontWeight: 700, color: theme.text, lineHeight: 1.15, letterSpacing: -1.5, fontFamily: theme.fontHeading }, children: slide.headline || '' } }],
+        },
+      },
+      {
+        type: 'div',
+        props: {
+          style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
+          children: [
+            { type: 'span', props: { style: { fontSize: 16, color: theme.textMuted, opacity: 0.5 }, children: 'Swipe >' } },
+            { type: 'span', props: { style: { fontSize: 14, color: theme.textMuted, opacity: 0.4, letterSpacing: 1 }, children: counter } },
+          ],
+        },
+      },
+    );
+  } else {
+    children.push(
+      {
+        type: 'div',
+        props: {
+          style: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 },
+          children: [
+            { type: 'div', props: { style: { width: 32, height: 32, borderRadius: 16, backgroundColor: theme.badgeBg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }, children: [{ type: 'span', props: { style: { fontSize: 14, fontWeight: 700, color: theme.badgeText }, children: String(slideNum) } }] } },
+          ],
+        },
+      },
+      {
+        type: 'div',
+        props: {
+          style: { display: 'flex', flex: 1, flexDirection: 'column', justifyContent: 'center', gap: 20 },
+          children: [
+            {
+              type: 'div',
+              props: {
+                style: { display: 'flex', gap: 16 },
+                children: [
+                  { type: 'div', props: { style: { width: 3, backgroundColor: theme.accent, borderRadius: 2, flexShrink: 0 } } },
+                  { type: 'span', props: { style: { fontSize: headlineFontSize, fontWeight: 700, color: theme.text, lineHeight: 1.2, letterSpacing: -1, fontFamily: theme.fontHeading }, children: slide.headline || '' } },
+                ],
+              },
+            },
+            slide.body ? { type: 'span', props: { style: { fontSize: bodyFontSize, color: theme.textMuted, lineHeight: 1.55, fontFamily: theme.fontBody, padding: '0 8px' }, children: slide.body } } : null,
+          ].filter(Boolean),
+        },
+      },
+      {
+        type: 'div',
+        props: {
+          style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 12 },
+          children: [
+            theme.brandName ? { type: 'span', props: { style: { fontSize: 14, color: theme.textMuted, opacity: 0.35, letterSpacing: 1, fontWeight: 500 }, children: theme.brandName } } : { type: 'span', props: { children: '' } },
+            { type: 'span', props: { style: { fontSize: 14, color: theme.textMuted, opacity: 0.4, letterSpacing: 1 }, children: counter } },
+          ],
+        },
+      },
+    );
+  }
+
+  children.push(
+    { type: 'div', props: { style: { position: 'absolute', bottom: 0, left: 0, width: W, height: 3, backgroundImage: `linear-gradient(90deg, ${theme.accent}, transparent)` } } },
+  );
+
+  return {
+    type: 'div',
+    props: {
+      style: {
+        width: W,
+        height: H,
+        display: 'flex',
+        flexDirection: 'column',
+        padding: '48px 52px 36px',
+        backgroundImage: theme.bgGradient,
+        fontFamily: theme.fontBody,
+        position: 'relative',
+        overflow: 'hidden',
+      },
+      children,
+    },
+  };
+}
+
+// ── Render pipeline ─────────────────────────────────────────────────────────
+
 async function renderCarousel(post, brand = {}, content, ctx = {}) {
   const { userId, tenantId } = ctx;
   const { slides } = content;
+  const theme = buildTheme(brand, 'dark');
+  const fonts = await resolveFonts(brand);
 
-  const fontStyles = await fetchFontFaceBlock(brand.font_heading, brand.font_body);
   const timestamp = Date.now();
   const pngBuffers = [];
   const slideResults = [];
 
   for (let i = 0; i < slides.length; i++) {
-    const slide = slides[i];
-    const svg = buildSlideSvg(slide, i + 1, slides.length, brand, fontStyles);
+    const element = buildSlideElement(theme, slides[i], i + 1, slides.length);
+    const pngBuffer = await renderToBuffer(element, fonts);
     const filename = `carousel_${post.id}_${timestamp}_slide${i + 1}.png`;
-    const pngBuffer = await sharp(Buffer.from(svg)).png().toBuffer();
     await storage.upload(pngBuffer, { tenantId, userId, type: 'generated', filename, mimeType: 'image/png' });
     pngBuffers.push({ buffer: pngBuffer, filename });
-    slideResults.push({ svg, png_url: `/files/${filename}` });
+    slideResults.push({ png_url: `/files/${filename}` });
   }
 
   const zipFilename = `carousel_${post.id}_${timestamp}.zip`;
@@ -114,10 +222,6 @@ async function generateCarousel(post, brand = {}, ctx = {}) {
   return renderCarousel(post, brand, content, ctx);
 }
 
-/**
- * One PDF page per slide PNG buffer (LinkedIn document / swipeable PDF post).
- * @param {Buffer[]} pngBuffers
- */
 async function buildCarouselPdfFromBuffers(pngBuffers) {
   const pdfDoc = await PDFDocument.create();
   for (const pngBytes of pngBuffers) {
@@ -129,76 +233,6 @@ async function buildCarouselPdfFromBuffers(pngBuffers) {
   return Buffer.from(await pdfDoc.save());
 }
 
-function buildSlideSvg(slide, slideNum, totalSlides, brand = {}, fontStyles = '') {
-  const AC        = brand.accent || ACCENT;
-  const TX        = brand.text   || TEXT;
-  const headingFont = buildFontFamily(brand.font_heading, FALLBACK_FONT);
-  const bodyFont = buildFontFamily(brand.font_body, FALLBACK_FONT);
-
-  const isTitle = slide.type === 'title';
-  const isClosing = slide.type === 'closing';
-
-  const headlineMaxChars = isTitle ? 20 : 22;
-  const headlineLines = wrapText(slide.headline || '', headlineMaxChars);
-  const bodyLines = slide.body ? wrapText(slide.body, 38) : [];
-
-  const headlineFontSize = isTitle ? 72 : 56;
-  const headlineLineHeight = isTitle ? 86 : 68;
-  const bodyFontSize = 36;
-  const bodyLineHeight = 52;
-
-  const headlineBlockH = headlineLines.length * headlineLineHeight;
-  const bodyBlockH = bodyLines.length > 0 ? bodyLines.length * bodyLineHeight + 40 : 0;
-  const totalBlockH = headlineBlockH + bodyBlockH;
-  const startY = (H - totalBlockH) / 2;
-
-  const PAD = 80;
-  const textClipDef = `<clipPath id="textClip"><rect x="${PAD}" y="0" width="${W - PAD * 2}" height="${H}"/></clipPath>`;
-
-  const headlineXml = headlineLines.map((line, i) =>
-    `<text x="540" y="${startY + i * headlineLineHeight}" font-family="${headingFont}" font-size="${headlineFontSize}" font-weight="600" letter-spacing="-0.5" fill="${TX}" text-anchor="middle" dominant-baseline="hanging" clip-path="url(#textClip)">${escapeXml(line)}</text>`
-  ).join('\n  ');
-
-  const bodyStartY = startY + headlineBlockH + 40;
-  const bodyXml = bodyLines.map((line, i) =>
-    `<text x="540" y="${bodyStartY + i * bodyLineHeight}" font-family="${bodyFont}" font-size="${bodyFontSize}" font-weight="400" fill="${TX}" opacity="0.75" text-anchor="middle" dominant-baseline="hanging" clip-path="url(#textClip)">${escapeXml(line)}</text>`
-  ).join('\n  ');
-
-  const accentXml = isTitle
-    ? `<rect x="0" y="${H - 12}" width="${W}" height="12" fill="${AC}"/>`
-    : `<rect x="60" y="${startY - 20}" width="8" height="${headlineBlockH + 40}" fill="${AC}" rx="4"/>`;
-
-  const counterXml = `<text x="540" y="${H - 48}" font-family="${bodyFont}" font-size="24" fill="${TX}" opacity="0.45" text-anchor="middle">${slideNum} / ${totalSlides}</text>`;
-
-  const swipeHint = isTitle
-    ? `<text x="540" y="${H - 90}" font-family="${bodyFont}" font-size="24" fill="${TX}" opacity="0.45" text-anchor="middle">Swipe →</text>`
-    : '';
-
-  let brandXml = '';
-  if (brand.logo) {
-    brandXml = `<image xlink:href="${brand.logo}" x="${W - 420}" y="${H - 136}" width="360" height="96" preserveAspectRatio="xMidYMid meet"/>`;
-  } else if (brand.name) {
-    brandXml = `<text x="${W - 60}" y="${H - 56}" font-family="${headingFont}" font-size="22" font-weight="600" fill="${TX}" opacity="0.45" text-anchor="end">${escapeXml(brand.name)}</text>`;
-  }
-
-  const { defs: bgDefs, rects: bgRects } = buildBackgroundSvg(brand, W, H);
-
-  return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">
-  <defs>${fontStyles}${textClipDef}${bgDefs}</defs>
-  ${bgRects}
-  ${accentXml}
-  ${headlineXml}
-  ${bodyXml}
-  ${counterXml}
-  ${swipeHint}
-  ${brandXml}
-</svg>`;
-}
-
-/**
- * Build a ZIP from in-memory PNG buffers. Returns a Buffer.
- * @param {Array<{ buffer: Buffer, filename: string }>} files
- */
 function buildZipBuffer(files) {
   return new Promise((resolve, reject) => {
     const chunks = [];
@@ -211,31 +245,6 @@ function buildZipBuffer(files) {
     }
     archive.finalize();
   });
-}
-
-function wrapText(text, maxChars) {
-  const words = text.split(' ');
-  const lines = [];
-  let current = '';
-  for (const word of words) {
-    if ((current + ' ' + word).trim().length <= maxChars) {
-      current = (current + ' ' + word).trim();
-    } else {
-      if (current) lines.push(current);
-      current = word;
-    }
-  }
-  if (current) lines.push(current);
-  return lines;
-}
-
-function escapeXml(str) {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
 }
 
 module.exports = { generateCarousel, extractCarouselContent, renderCarousel };

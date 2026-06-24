@@ -1,136 +1,18 @@
 'use strict';
 
-const sharp = require('sharp');
 const Anthropic = require('@anthropic-ai/sdk');
 const { getSetting } = require('../db');
 const storage = require('./storage');
 const { getAnthropicMessageText } = require('./voiceFingerprint');
-const { buildBackgroundSvg, buildFontFamily, fetchFontFaceBlock, FALLBACK_FONT } = require('./svgBrandBackground');
+const { resolveFonts, buildTheme, renderToBuffer, W_SQUARE, H_SQUARE } = require('./satoriRenderer');
 
-const TEXT_MUTED = '#8A9CC0';
-const W = 1080;
-const H = 1080;
-
-const AVATAR = 88;
-const AVATAR_X = 72;
-/** Horizontal gap between avatar and name (name must not overlap the circle). */
-const AVATAR_TEXT_GAP = 36;
-/** Name + optional brand line — to the right of the avatar. */
-const HEADER_TEXT_LEFT = AVATAR_X + AVATAR + AVATAR_TEXT_GAP;
-/** Quote body — flush with the avatar’s left edge (same x as the photo box). */
-const QUOTE_TEXT_LEFT = AVATAR_X;
-/** Keep copy off the right edge of the square canvas. */
-const CONTENT_RIGHT_MARGIN = 88;
-const FONT_SIZE = 40;
-const NAME_FONT_SIZE = 32;
-const LINE_HEIGHT = 58;
-const MAX_LINES = 4;
-
-/** Minimum padding from top edge — used for vertical centering window. */
-const TOP_INSET_MIN = 118;
-/** Space reserved at bottom for brand mark + padding. */
-const FOOTER_RESERVE = 150;
-/** Gap between header cluster (name / brand) and quote body. */
-const GAP_HEADER_TO_BODY = 72;
-/** Minimum vertical gap between avatar bottom and first quote line. */
-const MIN_AVATAR_TO_BODY_GAP = 52;
-/** Shift the whole header + quote block upward vs pure vertical center. */
-const LAYOUT_UPWARD_BIAS = 44;
-/** Floor so the block does not clip the top of the canvas. */
-const MIN_BLOCK_TOP = 96;
-/** Vertical offsets within the content block (relative to block top = avatar top). */
-const NAME_Y_OFFSET = 36;
-const BRAND_Y_OFFSET = 80;
-
-const BRAND_LOGO_Y = H - 100;
-const BRAND_TEXT_Y = H - 72;
-
-/** ~avg Latin char width at `fontSize` for SVG word-wrap (sans, mixed case). */
-function approxCharsPerLine(fontSize, availablePx) {
-  const unit = fontSize * 0.53;
-  return Math.max(26, Math.floor(availablePx / unit));
-}
-
-function headerTextAvailableWidth() {
-  return W - HEADER_TEXT_LEFT - CONTENT_RIGHT_MARGIN;
-}
-
-function quoteTextAvailableWidth() {
-  return W - QUOTE_TEXT_LEFT - CONTENT_RIGHT_MARGIN;
-}
-
-function getBodyMaxChars() {
-  return approxCharsPerLine(FONT_SIZE, quoteTextAvailableWidth());
-}
-
-function getNameMaxChars() {
-  return approxCharsPerLine(NAME_FONT_SIZE, headerTextAvailableWidth());
-}
-
-function truncatePlain(str, maxLen) {
-  const s = String(str || '').trim();
-  if (s.length <= maxLen) return s;
-  const cut = Math.max(1, maxLen - 1);
-  return `${s.slice(0, cut).trimEnd()}\u2026`;
-}
-
-/**
- * Vertically center header + quote in the canvas minus top minimum and footer zone
- * so short quotes do not leave a huge empty band in the lower half.
- */
-function computeLayoutYs(lines, hasBrandHeader) {
-  const headerEndOffset = hasBrandHeader ? BRAND_Y_OFFSET + 28 : NAME_Y_OFFSET + 28;
-  const bodyStartOffset = headerEndOffset + GAP_HEADER_TO_BODY;
-  const n = Math.max(1, lines.length);
-  const quoteTextBottomOffset =
-    bodyStartOffset + (n - 1) * LINE_HEIGHT + FONT_SIZE + 16;
-  const blockHeight = Math.max(AVATAR, quoteTextBottomOffset);
-
-  const available = H - TOP_INSET_MIN - FOOTER_RESERVE;
-  const centeredTop = TOP_INSET_MIN + Math.max(0, (available - blockHeight) / 2);
-  const blockTop = Math.max(MIN_BLOCK_TOP, centeredTop - LAYOUT_UPWARD_BIAS);
-
-  const avatarY = blockTop;
-  const nameY = blockTop + NAME_Y_OFFSET;
-  const brandY = blockTop + BRAND_Y_OFFSET;
-  const minBodyStartY = blockTop + AVATAR + MIN_AVATAR_TO_BODY_GAP;
-  const bodyStartY = Math.max(blockTop + bodyStartOffset, minBodyStartY);
-  const fadeTop = Math.min(
-    H - 100,
-    bodyStartY + (n - 1) * LINE_HEIGHT + FONT_SIZE + 32
-  );
-
-  return { avatarY, nameY, brandY, bodyStartY, fadeTop };
-}
+const W = W_SQUARE;
+const H = H_SQUARE;
 
 async function extractBrandedQuoteContent(post) {
   return { quote: await extractBrandedQuoteText(post.content || '') };
 }
 
-async function renderBrandedQuote(post, brand = {}, content, linkedin = {}, ctx = {}) {
-  const { userId, tenantId } = ctx;
-  const bg = brand.bg || '#0F1A3C';
-  const text = brand.text || '#F0F4FF';
-
-  const fontStyles = await fetchFontFaceBlock(brand.font_heading, brand.font_body);
-  const previewLines = linesFromQuote(content.quote, MAX_LINES, getBodyMaxChars());
-  const svg = buildBrandedQuoteSvg(previewLines, brand, linkedin, bg, text, fontStyles);
-
-  const filename = `branded_quote_${post.id}_${Date.now()}.png`;
-  const pngBuffer = await sharp(Buffer.from(svg)).png().toBuffer();
-  await storage.upload(pngBuffer, { tenantId, userId, type: 'generated', filename, mimeType: 'image/png' });
-
-  return { svg, png_url: `/files/${filename}` };
-}
-
-async function generateBrandedQuote(post, brand = {}, linkedin = {}, ctx = {}) {
-  const content = await extractBrandedQuoteContent(post);
-  return renderBrandedQuote(post, brand, content, linkedin, ctx);
-}
-
-/**
- * One or two complete sentences — strongest idea from the full post (Haiku).
- */
 async function extractBrandedQuoteText(content) {
   const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
   if (!apiKey) return fallbackBrandedQuoteText(content);
@@ -163,19 +45,12 @@ ${content}`,
 }
 
 function sanitizeExtractedQuote(s) {
-  return s
-    .replace(/^[\s"'“”‘’]+|[\s"'“”‘’]+$/g, '')
-    .replace(/\n+/g, ' ')
-    .trim();
+  return s.replace(/^[\s"'""'']+|[\s"'""'']+$/g, '').replace(/\n+/g, ' ').trim();
 }
 
-/**
- * First complete sentence(s) from the post when AI is unavailable.
- */
 function fallbackBrandedQuoteText(content) {
   const text = (content || '').trim();
   if (!text) return '';
-
   const firstPara = text.split(/\n+/).map(p => p.trim()).find(Boolean) || text;
   const sentences = firstPara.match(/[^.!?]+[.!?]+/g);
   if (sentences && sentences.length) {
@@ -185,132 +60,95 @@ function fallbackBrandedQuoteText(content) {
     }
     return out;
   }
-  return trimToCompleteSentence(firstPara.slice(0, 160));
+  return firstPara.slice(0, 160);
 }
 
-function trimToCompleteSentence(text) {
-  for (let i = text.length - 1; i >= 0; i--) {
-    if (text[i] === '.' || text[i] === '!' || text[i] === '?') {
-      return text.slice(0, i + 1).trim();
-    }
-  }
-  return text;
+function buildBrandedQuoteElement(theme, quote, linkedin) {
+  const avatarEl = linkedin.photoDataUri
+    ? { type: 'img', props: { src: linkedin.photoDataUri, width: 72, height: 72, style: { borderRadius: 36, objectFit: 'cover' } } }
+    : { type: 'div', props: { style: { width: 72, height: 72, borderRadius: 36, backgroundColor: theme.accent, opacity: 0.3 } } };
+
+  return {
+    type: 'div',
+    props: {
+      style: {
+        width: W,
+        height: H,
+        display: 'flex',
+        flexDirection: 'column',
+        padding: '60px 64px',
+        backgroundImage: theme.bgGradient,
+        fontFamily: theme.fontBody,
+        position: 'relative',
+        overflow: 'hidden',
+      },
+      children: [
+        { type: 'div', props: { style: { position: 'absolute', top: -50, right: -50, width: 200, height: 200, borderRadius: 100, border: `1px solid ${theme.border}` } } },
+        { type: 'div', props: { style: { position: 'absolute', bottom: 60, left: -30, width: 140, height: 140, borderRadius: 70, border: `1px solid ${theme.border}` } } },
+        {
+          type: 'div',
+          props: {
+            style: { display: 'flex', alignItems: 'center', gap: 16, marginBottom: 32 },
+            children: [
+              avatarEl,
+              {
+                type: 'div',
+                props: {
+                  style: { display: 'flex', flexDirection: 'column', gap: 2 },
+                  children: [
+                    { type: 'span', props: { style: { fontSize: 24, fontWeight: 700, color: theme.text, fontFamily: theme.fontHeading }, children: linkedin.name || '' } },
+                    theme.brandName ? { type: 'span', props: { style: { fontSize: 16, color: theme.textMuted, fontFamily: theme.fontBody }, children: theme.brandName } } : null,
+                  ].filter(Boolean),
+                },
+              },
+            ],
+          },
+        },
+        {
+          type: 'div',
+          props: {
+            style: { display: 'flex', flex: 1, alignItems: 'center', padding: '0 8px' },
+            children: [
+              {
+                type: 'div',
+                props: {
+                  style: { display: 'flex', gap: 20 },
+                  children: [
+                    { type: 'div', props: { style: { width: 4, backgroundColor: theme.accent, borderRadius: 2, flexShrink: 0 } } },
+                    { type: 'span', props: { style: { fontSize: 36, fontWeight: 500, color: theme.text, lineHeight: 1.45, fontFamily: theme.fontHeading, letterSpacing: -0.3 }, children: quote } },
+                  ],
+                },
+              },
+            ],
+          },
+        },
+        theme.brandLogo ? {
+          type: 'div',
+          props: {
+            style: { display: 'flex', justifyContent: 'center', paddingTop: 20, marginTop: 'auto' },
+            children: [{ type: 'img', props: { src: theme.brandLogo, width: 140, height: 36, style: { objectFit: 'contain', opacity: 0.5 } } }],
+          },
+        } : null,
+        { type: 'div', props: { style: { position: 'absolute', bottom: 0, left: 0, width: W, height: 3, backgroundImage: `linear-gradient(90deg, ${theme.accent}, transparent)` } } },
+      ].filter(Boolean),
+    },
+  };
 }
 
-function linesFromQuote(text, maxLines, maxChars) {
-  const normalized = text.replace(/\s+/g, ' ').trim();
-  const wrapped = wrapText(normalized, maxChars);
-
-  if (wrapped.length <= maxLines) {
-    return wrapped.length ? wrapped : [''];
-  }
-
-  // Text overflows — trim the candidate to the last complete sentence, then re-wrap
-  const candidate = wrapped.slice(0, maxLines).join(' ');
-  const trimmed = trimToCompleteSentence(candidate);
-  const result = wrapText(trimmed, maxChars);
-  return result.length ? result.slice(0, maxLines) : [''];
+async function renderBrandedQuote(post, brand = {}, content, linkedin = {}, ctx = {}) {
+  const { userId, tenantId } = ctx;
+  const theme = buildTheme(brand, 'dark');
+  const fonts = await resolveFonts(brand);
+  const element = buildBrandedQuoteElement(theme, content.quote, linkedin);
+  const pngBuffer = await renderToBuffer(element, fonts);
+  const filename = `branded_quote_${post.id}_${Date.now()}.png`;
+  await storage.upload(pngBuffer, { tenantId, userId, type: 'generated', filename, mimeType: 'image/png' });
+  return { png_url: `/files/${filename}` };
 }
 
-function wrapText(text, maxChars) {
-  const words = String(text || '')
-    .split(/\s+/)
-    .filter(Boolean);
-  const lines = [];
-  let current = '';
-
-  for (let word of words) {
-    while (word.length > maxChars) {
-      if (current) {
-        lines.push(current);
-        current = '';
-      }
-      lines.push(word.slice(0, maxChars));
-      word = word.slice(maxChars);
-    }
-    const trial = current ? `${current} ${word}` : word;
-    if (trial.length <= maxChars) {
-      current = trial;
-    } else {
-      if (current) lines.push(current);
-      current = word;
-    }
-  }
-  if (current) lines.push(current);
-  return lines;
-}
-
-function buildBrandedQuoteSvg(lines, brand, linkedin, bg, text, fontStyles = '') {
-  const headingFont = buildFontFamily(brand.font_heading, FALLBACK_FONT);
-  const bodyFont = buildFontFamily(brand.font_body, FALLBACK_FONT);
-  const nameMax = getNameMaxChars();
-  const brandMax = approxCharsPerLine(24, headerTextAvailableWidth());
-  const memberName = escapeXml(truncatePlain(linkedin.name || '', nameMax));
-  const brandLabelRaw = brand.name ? truncatePlain(brand.name, brandMax) : '';
-  const brandLabel = brandLabelRaw ? escapeXml(brandLabelRaw) : '';
-
-  const { avatarY, nameY, brandY, bodyStartY, fadeTop } = computeLayoutYs(lines, !!brandLabel);
-
-  const cx = AVATAR_X + AVATAR / 2;
-  const cy = avatarY + AVATAR / 2;
-
-  const headerClipW = headerTextAvailableWidth();
-  const quoteClipW = quoteTextAvailableWidth();
-  const headerClipDef = `<clipPath id="headerTextClip"><rect x="${HEADER_TEXT_LEFT}" y="0" width="${headerClipW}" height="${H}"/></clipPath>`;
-  const quoteClipDef = `<clipPath id="quoteTextClip"><rect x="${QUOTE_TEXT_LEFT}" y="0" width="${quoteClipW}" height="${H}"/></clipPath>`;
-
-  const { defs: bgDefs, rects: bgRects } = buildBackgroundSvg(brand, W, H);
-
-  const avatarClipDef = linkedin.photoDataUri
-    ? `<clipPath id="avatarClip"><circle cx="${cx}" cy="${cy}" r="${AVATAR / 2}"/></clipPath>`
-    : '';
-
-  const avatarXml = linkedin.photoDataUri
-    ? `<image href="${linkedin.photoDataUri}" x="${AVATAR_X}" y="${avatarY}" width="${AVATAR}" height="${AVATAR}" clip-path="url(#avatarClip)" preserveAspectRatio="xMidYMid slice"/>`
-    : `<circle cx="${cx}" cy="${cy}" r="${AVATAR / 2}" fill="${TEXT_MUTED}" opacity="0.35"/>`;
-
-  const nameXml = `<text x="${HEADER_TEXT_LEFT}" y="${nameY}" font-family="${headingFont}" font-size="${NAME_FONT_SIZE}" font-weight="600" fill="${text}" dominant-baseline="middle" clip-path="url(#headerTextClip)">${memberName}</text>`;
-
-  const brandHeaderXml = brandLabel
-    ? `<text x="${HEADER_TEXT_LEFT}" y="${brandY}" font-family="${bodyFont}" font-size="24" font-weight="500" fill="${TEXT_MUTED}" dominant-baseline="middle" clip-path="url(#headerTextClip)">${brandLabel}</text>`
-    : '';
-
-  const bodyXml = lines.map((line, i) =>
-    `<text x="${QUOTE_TEXT_LEFT}" y="${bodyStartY + i * LINE_HEIGHT}" font-family="${headingFont}" font-size="${FONT_SIZE}" font-weight="500" fill="${text}" dominant-baseline="hanging" clip-path="url(#quoteTextClip)">${escapeXml(line)}</text>`
-  ).join('\n  ');
-
-  const fadeXml = `<linearGradient id="brandedFade" x1="0" y1="0" x2="0" y2="1">
-    <stop offset="0%" stop-color="${bg}" stop-opacity="0"/>
-    <stop offset="100%" stop-color="${bg}" stop-opacity="1"/>
-  </linearGradient>`;
-
-  let brandMarkXml;
-  if (brand.logo) {
-    brandMarkXml = `<image xlink:href="${brand.logo}" x="300" y="${H - 149}" width="480" height="109" preserveAspectRatio="xMidYMid meet"/>`;
-  } else {
-    const mark = escapeXml(brand.name || 'Scouthook');
-    brandMarkXml = `<text x="540" y="${BRAND_TEXT_Y}" font-family="${headingFont}" font-size="28" font-weight="600" fill="${TEXT_MUTED}" text-anchor="middle">${mark}</text>`;
-  }
-
-  return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">
-  <defs>${fontStyles}${avatarClipDef}${headerClipDef}${quoteClipDef}${bgDefs}${fadeXml}</defs>
-  ${bgRects}
-  ${avatarXml}
-  ${nameXml}
-  ${brandHeaderXml}
-  ${bodyXml}
-  <rect x="0" y="${fadeTop}" width="${W}" height="${H - fadeTop}" fill="url(#brandedFade)"/>
-  ${brandMarkXml}
-</svg>`;
-}
-
-function escapeXml(str) {
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
+async function generateBrandedQuote(post, brand = {}, linkedin = {}, ctx = {}) {
+  const content = await extractBrandedQuoteContent(post);
+  return renderBrandedQuote(post, brand, content, linkedin, ctx);
 }
 
 module.exports = { generateBrandedQuote, extractBrandedQuoteContent, renderBrandedQuote };

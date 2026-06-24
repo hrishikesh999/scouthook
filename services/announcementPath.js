@@ -37,16 +37,8 @@ LENGTH & STRUCTURE
 - Avoid heavy formatting, sections, or bullet lists.
 - The entire post should feel effortless to read on mobile.
 
-EMOJI GUIDELINES
-- Emojis are allowed and encouraged as warm or celebratory anchors.
-- Use 2-4 relevant emojis maximum.
-- Emojis should support the sentiment (gratitude, celebration, warmth).
-- Never use emojis on every line or mid-sentence.
-
-HASHTAGS
-- Include hashtags ONLY if they are naturally relevant to a widely recognized public occasion (e.g. major festivals or global days).
-- If included, limit to 1-2 subtle hashtags at the very end of the post.
-- Do not force hashtags.
+- Do not include any emojis in the post. Emojis may only be added manually by the user.
+- Include up to 3 relevant hashtags at the end of the post. Keep them specific and industry-relevant.
 
 OUTPUT RULES
 - Return only the LinkedIn post text.

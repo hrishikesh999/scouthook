@@ -64,6 +64,8 @@ let _currentPostTypeFilter = null;   // active filter chip in the idea engine
 let _authorityLengthPreference = 'Medium'; // length choice for Authority/Expertise posts (set via chat)
 let _authorityCtaIntent        = '';       // CTA intent for Authority/Expertise posts
 let _authorityIdeaBrief        = '';       // stores the user's idea while waiting for length selection
+let _authorityMisconception    = '';       // stores misconception answer (step 1)
+let _authorityChatStep         = 0;       // 0=idea, 1=misconception, 2=length
 let _storyChatStep          = 0;           // 0=event, 1=shift, 2=details, 3=length
 let _storyEvent             = '';
 let _storyShift             = '';
@@ -252,6 +254,13 @@ const EXTRACTION_QUESTIONS = {
       minChars:    20,
       errorMsg:    'Share the idea you want to explain — even a rough first draft is enough.',
     },
+    {
+      key:         'misconception',
+      question:    'What’s the common mistake or misconception people have about this?',
+      helpText:    'Think of what your audience gets wrong or overlooks — this gives your post a sharper angle.',
+      placeholder: 'e.g. They think SEO is just about keywords…',
+      required:    false,
+    },
   ],
   story: [
     {
@@ -384,7 +393,7 @@ const EXTRACTION_QUESTIONS = {
 
 /* ── Guided step dots ────────────────────────────────────────── */
 const GUIDED_STEP_TOTALS = {
-  trust: 2, story: 4, bts: 4, contrarian: 4, framework: 3,
+  trust: 3, story: 4, bts: 4, contrarian: 4, framework: 3,
   announcement: 2, lead_gen: 5, lessons_learned: 5, pis: 3, results: 4,
 };
 
@@ -872,7 +881,10 @@ const chat = (() => {
         chips.querySelectorAll('.length-chip').forEach(c => c.classList.remove('active'));
         btn.classList.add('active');
         addUser(label);
-        triggerGenerate({ enrichedIdea: _authorityIdeaBrief });
+        const ideaWithContext = _authorityMisconception
+          ? _authorityIdeaBrief + '\n\nCOMMON MISCONCEPTION: ' + _authorityMisconception
+          : _authorityIdeaBrief;
+        triggerGenerate({ enrichedIdea: ideaWithContext });
       });
       chips.appendChild(btn);
     });
@@ -1594,6 +1606,8 @@ const chat = (() => {
     _tensionResult = null;
     selectedVaultIdeaId    = null;
     _authorityIdeaBrief    = '';
+    _authorityMisconception = '';
+    _authorityChatStep     = 0;
     _authorityLengthPreference = 'Medium';
     _authorityCtaIntent    = '';
     _storyChatStep          = 0;
@@ -1728,16 +1742,35 @@ const chat = (() => {
       return;
     }
 
-    // Authority/Expertise: two-step chat flow.
-    // Step 1 — user submits their idea; show the length question as a bot bubble.
+    // Authority/Expertise: three-step chat flow.
+    // Step 0 — idea, Step 1 — misconception, Step 2 — length chips.
     if (selectedType === 'trust') {
-      _authorityIdeaBrief = val;
-      addUser(val);
-      chatThread.style.display = '';
-      chatInput.value       = '';
-      chatInput.style.height = '';
-      showAuthorityLengthQuestion();
-      renderStepDots(1, GUIDED_STEP_TOTALS.trust);
+      if (_authorityChatStep === 0) {
+        _authorityIdeaBrief = val;
+        _authorityChatStep = 1;
+        addUser(val);
+        chatThread.style.display = '';
+        chatInput.value       = '';
+        chatInput.style.height = '';
+        addQuestionBubble(
+          'What’s the common mistake or misconception people have about this?',
+          'Think of what your audience gets wrong or overlooks — this gives your post a sharper angle.'
+        );
+        chatInput.placeholder = 'e.g. They think SEO is just about keywords…';
+        renderStepDots(1, GUIDED_STEP_TOTALS.trust);
+        scrollChatToBottom();
+        return;
+      }
+      if (_authorityChatStep === 1) {
+        _authorityMisconception = val;
+        _authorityChatStep = 2;
+        addUser(val);
+        chatInput.value       = '';
+        chatInput.style.height = '';
+        showAuthorityLengthQuestion();
+        renderStepDots(2, GUIDED_STEP_TOTALS.trust);
+        return;
+      }
       return;
     }
 

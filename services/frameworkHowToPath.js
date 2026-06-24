@@ -57,14 +57,8 @@ Apply these formatting rules to the FINAL post text:
 - Use generous line breaks: add a blank line between major beats or sections.
 - Avoid walls of text: no paragraph longer than ~3 lines on mobile.
 - Use bullets or numbers only when listing items. Use "-" only.
-- Use emojis as visual anchors to improve scannability.
-- Emojis are encouraged at these positions:
-  - Optional hook anchor (top of post)
-  - Section transitions (e.g., before an insight or shift)
-  - Before a bullet or numbered list
-- You may use 2-5 emojis total when they improve impact.
-- Never use emojis mid-sentence.
-- Avoid decorative or random emojis; each emoji must signal structure or emphasis.
+- Do not include any emojis in the post. Emojis may only be added manually by the user.
+- Include up to 3 relevant hashtags at the end of the post. Keep them specific and industry-relevant.
 - Replace all em dashes with a space, comma, or normal dash (-).
 - The closing question is the final standalone line. No extra text after it.
 - Never insert more than one consecutive blank line.

@@ -76,8 +76,8 @@ Apply these formatting rules to the FINAL post text:
 - Use generous line breaks: add a blank line between major beats or sections.
 - Avoid walls of text: no paragraph longer than ~3 lines on mobile.
 - Use bullets or numbers only when listing items. Use "-" only.
-- Use emojis as visual anchors to improve scannability.
-- Emojis are optional — use as structural anchors only (2–4 max), never mid-sentence.
+- Do not include any emojis in the post. Emojis may only be added manually by the user.
+- Include up to 3 relevant hashtags at the end of the post. Keep them specific and industry-relevant.
 - Replace all em dashes with a space, comma, or normal dash (-).
 - Keep the CTA as a standalone final line (or final 2 lines max). No extra text after the CTA.
 - Never insert more than one consecutive blank line.

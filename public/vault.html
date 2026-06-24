@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <link rel="icon" type="image/png" href="/favicon.png">
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Content Vault — ScoutHook</title>
+  <title>Knowledge Vault — ScoutHook</title>
   <link rel="stylesheet" href="/css/main.css">
 </head>
 <body>
@@ -18,7 +18,7 @@
 
       <div class="vault-header page-header">
         <div>
-          <h1 class="vault-title">Content Vault</h1>
+          <h1 class="vault-title">Knowledge Vault</h1>
           <p class="vault-subtitle">Your document library. Upload case studies, service docs, and newsletters — ScoutHook uses them to generate posts in your voice.</p>
         </div>
         <button id="vault-add-btn" class="btn-teal-filled" type="button">+ Add Content</button>
@@ -473,7 +473,7 @@
     if (planData?.plan === 'pro') {
       return `Monthly vault limit reached (${planData.current}/${planData.limit} docs this month). Resets at the start of next month.`;
     }
-    return `Content Vault requires a paid plan. <button type="button" onclick="window.PricingModal?.open({ feature: 'vault' })" style="background:none;border:none;padding:0;color:var(--brand);font-weight:600;cursor:pointer;font-size:inherit">Upgrade →</button>`;
+    return `Knowledge Vault requires a paid plan. <button type="button" onclick="window.PricingModal?.open({ feature: 'vault' })" style="background:none;border:none;padding:0;color:var(--brand);font-weight:600;cursor:pointer;font-size:inherit">Upgrade →</button>`;
   }
 
   function guessMime(filename) {

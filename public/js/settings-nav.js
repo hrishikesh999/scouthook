@@ -13,6 +13,7 @@ if (!window._settingsNavLoaded) {
       { label: 'Brand settings', href: '/brand.html' },
       { label: 'Members',        href: '/members.html' },
       { label: 'Subscription',   href: '/billing.html' },
+      { label: 'Media',          href: '/Media.html' },
     ];
 
     var current = window.location.pathname;

@@ -9,6 +9,10 @@ const { generateCarousel, extractCarouselContent, renderCarousel } = require('..
 const { generateBrandedQuote, extractBrandedQuoteContent, renderBrandedQuote } = require('../services/brandedQuoteGenerator');
 const { extractPlacidContent, renderPlacidImage } = require('../services/placidGenerator');
 const { extractInfographicContent, renderInfographic } = require('../services/infographicGenerator');
+const { extractMetricsContent, renderMetricsCard } = require('../services/metricsCardGenerator');
+const { extractClientWinContent, renderClientWin } = require('../services/clientWinGenerator');
+const { extractFrameworkContent, renderFramework } = require('../services/frameworkGenerator');
+const { renderProofScreenshot } = require('../services/proofScreenshotGenerator');
 const { canGenerateVisual, logVisualGeneration, getUserPlan } = require('../services/subscription');
 const { planHasFeature } = require('../lib/planFeatures');
 
@@ -27,7 +31,7 @@ router.post('/:postId', async (req, res) => {
     return res.status(401).json({ ok: false, error: 'unauthenticated' });
   }
 
-  if (!['quote_card', 'carousel', 'branded_quote', 'ai_image', 'infographic'].includes(visual_type)) {
+  if (!['quote_card', 'carousel', 'branded_quote', 'ai_image', 'infographic', 'metrics_card', 'client_win', 'framework'].includes(visual_type)) {
     return res.status(400).json({ ok: false, error: 'invalid_visual_type' });
   }
 
@@ -158,6 +162,18 @@ router.post('/:postId', async (req, res) => {
         const extracted = await extractInfographicContent(post);
         return res.json({ ok: true, mode: 'extract', visual_type, content: extracted });
       }
+      if (visual_type === 'metrics_card') {
+        const extracted = await extractMetricsContent(post);
+        return res.json({ ok: true, mode: 'extract', visual_type, content: extracted });
+      }
+      if (visual_type === 'client_win') {
+        const extracted = await extractClientWinContent(post);
+        return res.json({ ok: true, mode: 'extract', visual_type, content: extracted });
+      }
+      if (visual_type === 'framework') {
+        const extracted = await extractFrameworkContent(post);
+        return res.json({ ok: true, mode: 'extract', visual_type, content: extracted });
+      }
       // carousel
       const extracted = await extractCarouselContent(post);
       return res.json({ ok: true, mode: 'extract', visual_type, content: extracted });
@@ -215,6 +231,30 @@ router.post('/:postId', async (req, res) => {
       const variant = content?._variant || 'dark';
       const renderContent = content || await extractInfographicContent(post);
       const result = await renderInfographic(post, brand, renderContent, { userId, tenantId }, variant);
+      await logVisualGeneration(userId, tenantId, postId, visual_type);
+      return res.json({ ok: true, ...result });
+    }
+
+    if (visual_type === 'metrics_card') {
+      const variant = content?._variant || 'accent';
+      const renderContent = content || await extractMetricsContent(post);
+      const result = await renderMetricsCard(post, brand, renderContent, { userId, tenantId }, variant);
+      await logVisualGeneration(userId, tenantId, postId, visual_type);
+      return res.json({ ok: true, ...result });
+    }
+
+    if (visual_type === 'client_win') {
+      const variant = content?._variant || 'dark';
+      const renderContent = content || await extractClientWinContent(post);
+      const result = await renderClientWin(post, brand, renderContent, { userId, tenantId }, variant);
+      await logVisualGeneration(userId, tenantId, postId, visual_type);
+      return res.json({ ok: true, ...result });
+    }
+
+    if (visual_type === 'framework') {
+      const variant = content?._variant || 'dark';
+      const renderContent = content || await extractFrameworkContent(post);
+      const result = await renderFramework(post, brand, renderContent, { userId, tenantId }, variant);
       await logVisualGeneration(userId, tenantId, postId, visual_type);
       return res.json({ ok: true, ...result });
     }

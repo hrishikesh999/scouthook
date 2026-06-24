@@ -132,6 +132,15 @@
                 <button class="ptb-btn" id="infographic-btn" title="Generate infographic" aria-label="Generate infographic">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
                 </button>
+                <button class="ptb-btn" id="metrics-btn" title="Generate metrics card" aria-label="Generate metrics card">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+                </button>
+                <button class="ptb-btn" id="client-win-btn" title="Generate client win card" aria-label="Generate client win card">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5C7 4 9 7 12 7s5-3 7.5-3a2.5 2.5 0 0 1 0 5H18"/><path d="M8 9h8l-1 10H9L8 9z"/></svg>
+                </button>
+                <button class="ptb-btn" id="framework-btn" title="Generate framework diagram" aria-label="Generate framework diagram">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="5" r="3"/><line x1="12" y1="8" x2="12" y2="16"/><circle cx="12" cy="19" r="3"/><line x1="6" y1="12" x2="18" y2="12"/><circle cx="4" cy="12" r="2"/><circle cx="20" cy="12" r="2"/></svg>
+                </button>
               </div>
             </div>
 
@@ -449,6 +458,21 @@
           <span class="vbo-tile-name">Infographic</span>
           <span class="vbo-tile-desc">Auto-generate a visual layout</span>
         </button>
+        <button class="vbo-tile" data-type="metrics_card">
+          <span class="vbo-tile-icon">📈</span>
+          <span class="vbo-tile-name">Metrics Card</span>
+          <span class="vbo-tile-desc">Highlight a key number or result</span>
+        </button>
+        <button class="vbo-tile" data-type="client_win">
+          <span class="vbo-tile-icon">🏆</span>
+          <span class="vbo-tile-name">Client Win</span>
+          <span class="vbo-tile-desc">Showcase a client result</span>
+        </button>
+        <button class="vbo-tile" data-type="framework">
+          <span class="vbo-tile-icon">🔄</span>
+          <span class="vbo-tile-name">Framework</span>
+          <span class="vbo-tile-desc">Visualize your process or steps</span>
+        </button>
         <button class="vbo-tile" data-type="media">
           <span class="vbo-tile-icon">📎</span>
           <span class="vbo-tile-name">Attach Image</span>
@@ -674,7 +698,7 @@ async function loadPost(id) {
       attachedPreviewUrl = p.assetPreviewUrl || (p.assetType !== 'carousel' ? p.assetUrl : null);
       attachedAssetType  = p.assetType || 'media_image';
       attachedSlideCount = p.assetSlideCount || 0;
-      const labelMap = { carousel: 'Carousel', media_pdf: 'PDF', media_image: 'Image', quote_card: 'Quote Card', branded_quote: 'Branded Quote', ai_image: 'AI Image', infographic: 'Infographic' };
+      const labelMap = { carousel: 'Carousel', media_pdf: 'PDF', media_image: 'Image', quote_card: 'Quote Card', branded_quote: 'Branded Quote', ai_image: 'AI Image', infographic: 'Infographic', metrics_card: 'Metrics', client_win: 'Client Win', framework: 'Framework' };
       const chipLabel = document.getElementById('asset-chip-label');
       const chip      = document.getElementById('asset-chip');
       if (chipLabel) chipLabel.textContent = labelMap[attachedAssetType] || attachedAssetType;
@@ -1022,7 +1046,7 @@ function applyScheduleLockUi(scheduledFor) {
   const schedBtn = document.getElementById('btn-schedule');
   if (schedBtn) { schedBtn.disabled = true; schedBtn.style.setProperty('display', 'none', 'important'); }
   document.getElementById('post-body').disabled = true;
-  ['quote-card-btn','carousel-btn','branded-quote-btn','ai-image-btn','infographic-btn','media-library-btn','fmt-undo','fmt-bold','fmt-italic','fmt-bullet','fmt-num'].forEach(id => {
+  ['quote-card-btn','carousel-btn','branded-quote-btn','ai-image-btn','infographic-btn','metrics-btn','client-win-btn','framework-btn','media-library-btn','fmt-undo','fmt-bold','fmt-italic','fmt-bullet','fmt-num'].forEach(id => {
     document.getElementById(id)?.classList.add('disabled');
   });
   const chipRemove = document.getElementById('asset-chip-remove');
@@ -1043,7 +1067,7 @@ function clearScheduleLockUi() {
   const schedBtnRestore = document.getElementById('btn-schedule');
   if (schedBtnRestore) schedBtnRestore.style.removeProperty('display');
   if (linkedinConnected && schedBtnRestore) schedBtnRestore.disabled = false;
-  ['quote-card-btn','carousel-btn','branded-quote-btn','ai-image-btn','infographic-btn','media-library-btn','fmt-undo','fmt-bold','fmt-italic','fmt-bullet','fmt-num'].forEach(id => {
+  ['quote-card-btn','carousel-btn','branded-quote-btn','ai-image-btn','infographic-btn','metrics-btn','client-win-btn','framework-btn','media-library-btn','fmt-undo','fmt-bold','fmt-italic','fmt-bullet','fmt-num'].forEach(id => {
     document.getElementById(id)?.classList.remove('disabled');
   });
   const chipRemove = document.getElementById('asset-chip-remove');
@@ -2001,6 +2025,67 @@ function renderEditorForm(type, content) {
     wrap.querySelectorAll('input, textarea, select').forEach(el => {
       el.addEventListener('input', () => _scheduleVisualPreview(type));
     });
+  } else if (type === 'metrics_card') {
+    const c = extractedContent || {};
+    wrap.innerHTML = `
+      <div class="so-editor-form">
+        <div style="margin-bottom:8px;font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px">Metrics Card</div>
+        <div class="so-field-group"><label class="field-label">Value (the big number)</label><input type="text" id="so-metric-value" class="field-input" value="${escHtml(c.value || '')}" maxlength="30" placeholder="e.g. 6x revenue"/></div>
+        <div class="so-field-group"><label class="field-label">Label</label><input type="text" id="so-metric-label" class="field-input" value="${escHtml(c.label || '')}" maxlength="80" placeholder="e.g. Growth in 90 days"/></div>
+        <div class="so-field-group"><label class="field-label">Context</label><input type="text" id="so-metric-context" class="field-input" value="${escHtml(c.context || '')}" maxlength="40" placeholder="e.g. Coaching Business"/></div>
+        <div class="so-field-group">
+          <label class="field-label">Theme</label>
+          <select id="so-metric-theme" class="field-input" style="padding:6px 10px">
+            <option value="accent" selected>Accent</option>
+            <option value="dark">Dark</option>
+            <option value="light">Light</option>
+          </select>
+        </div>
+      </div>`;
+    wrap.querySelectorAll('input, select').forEach(el => el.addEventListener('input', () => _scheduleVisualPreview(type)));
+  } else if (type === 'client_win') {
+    const c = extractedContent || {};
+    wrap.innerHTML = `
+      <div class="so-editor-form">
+        <div style="margin-bottom:8px;font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px">Client Win Card</div>
+        <div class="so-field-group"><label class="field-label">Result (the main win)</label><textarea id="so-cw-result" class="field-textarea" maxlength="100">${escHtml(c.result || '')}</textarea></div>
+        <div class="so-field-group"><label class="field-label">Client niche</label><input type="text" id="so-cw-niche" class="field-input" value="${escHtml(c.clientNiche || '')}" maxlength="50"/></div>
+        <div class="so-field-group"><label class="field-label">Timeframe</label><input type="text" id="so-cw-timeframe" class="field-input" value="${escHtml(c.timeframe || '')}" maxlength="30"/></div>
+        <div class="so-field-group"><label class="field-label">Method (optional)</label><textarea id="so-cw-method" class="field-textarea" maxlength="150">${escHtml(c.method || '')}</textarea></div>
+        <div class="so-field-group">
+          <label class="field-label">Theme</label>
+          <select id="so-cw-theme" class="field-input" style="padding:6px 10px">
+            <option value="dark" selected>Dark</option>
+            <option value="light">Light</option>
+            <option value="accent">Accent</option>
+          </select>
+        </div>
+      </div>`;
+    wrap.querySelectorAll('input, textarea, select').forEach(el => el.addEventListener('input', () => _scheduleVisualPreview(type)));
+  } else if (type === 'framework') {
+    const c = extractedContent || {};
+    const steps = c.steps || [];
+    const stepsHtml = steps.map((s, i) => `
+      <div class="so-slide-card" data-step-index="${i}">
+        <div class="so-slide-card-header"><span class="so-slide-badge so-slide-badge--content">Step ${i + 1}</span></div>
+        <div class="so-field-group"><label class="field-label">Title</label><input type="text" class="field-input so-step-title" value="${escHtml(s.title || '')}" maxlength="40"/></div>
+        <div class="so-field-group"><label class="field-label">Description</label><input type="text" class="field-input so-step-desc" value="${escHtml(s.description || '')}" maxlength="120"/></div>
+      </div>`).join('');
+    wrap.innerHTML = `
+      <div class="so-editor-form">
+        <div style="margin-bottom:8px;font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px">Framework Diagram</div>
+        <div class="so-field-group"><label class="field-label">Framework name</label><input type="text" id="so-fw-name" class="field-input" value="${escHtml(c.name || '')}" maxlength="60"/></div>
+        ${stepsHtml}
+        <div class="so-field-group">
+          <label class="field-label">Theme</label>
+          <select id="so-fw-theme" class="field-input" style="padding:6px 10px">
+            <option value="dark" selected>Dark</option>
+            <option value="light">Light</option>
+            <option value="accent">Accent</option>
+          </select>
+        </div>
+      </div>`;
+    wrap.querySelectorAll('input, select').forEach(el => el.addEventListener('input', () => _scheduleVisualPreview(type)));
   }
 
   if (!currentAssetUrl) _generateVisualPreviewSilently(type);
@@ -2041,6 +2126,34 @@ function readEditorContent(type) {
       }
     });
     return result;
+  }
+  if (type === 'metrics_card') {
+    return {
+      value: (document.getElementById('so-metric-value')?.value || '').trim(),
+      label: (document.getElementById('so-metric-label')?.value || '').trim(),
+      context: (document.getElementById('so-metric-context')?.value || '').trim() || undefined,
+      _variant: document.getElementById('so-metric-theme')?.value || 'accent',
+    };
+  }
+  if (type === 'client_win') {
+    return {
+      result: (document.getElementById('so-cw-result')?.value || '').trim(),
+      clientNiche: (document.getElementById('so-cw-niche')?.value || '').trim(),
+      timeframe: (document.getElementById('so-cw-timeframe')?.value || '').trim(),
+      method: (document.getElementById('so-cw-method')?.value || '').trim() || undefined,
+      _variant: document.getElementById('so-cw-theme')?.value || 'dark',
+    };
+  }
+  if (type === 'framework') {
+    const wrap = document.getElementById('visual-modal-form-pane');
+    return {
+      name: (document.getElementById('so-fw-name')?.value || '').trim(),
+      steps: Array.from(wrap.querySelectorAll('.so-slide-card')).map(card => ({
+        title: (card.querySelector('.so-step-title')?.value || '').trim(),
+        description: (card.querySelector('.so-step-desc')?.value || '').trim() || undefined,
+      })),
+      _variant: document.getElementById('so-fw-theme')?.value || 'dark',
+    };
   }
   return {};
 }
@@ -2105,7 +2218,7 @@ function _doSaveVisual(type) {
   attachedSlideCount = currentSlideCount;
   const chip      = document.getElementById('asset-chip');
   const chipLabel = document.getElementById('asset-chip-label');
-  if (chipLabel) chipLabel.textContent = type === 'carousel' ? 'Carousel' : type === 'quote_card' ? 'Quote' : type === 'infographic' ? 'Infographic' : 'Branded';
+  if (chipLabel) chipLabel.textContent = labelMap[type] || type;
   if (chip) chip.classList.remove('hidden');
   renderPreviewAsset();
   closeVisualModal();
@@ -2557,6 +2670,9 @@ function wireVisualButtons() {
   document.getElementById('carousel-btn').addEventListener('click', () => openSlideOver('carousel', 'CAROUSEL'));
   document.getElementById('ai-image-btn').addEventListener('click', () => openAiImageModal());
   document.getElementById('infographic-btn').addEventListener('click', () => openSlideOver('infographic', 'INFOGRAPHIC'));
+  document.getElementById('metrics-btn').addEventListener('click', () => openSlideOver('metrics_card', 'METRICS CARD'));
+  document.getElementById('client-win-btn').addEventListener('click', () => openSlideOver('client_win', 'CLIENT WIN'));
+  document.getElementById('framework-btn').addEventListener('click', () => openSlideOver('framework', 'FRAMEWORK'));
   document.getElementById('media-library-btn').addEventListener('click', () => {
     if (scheduleEditLocked) return;
     openMediaDrawer();
@@ -2631,6 +2747,9 @@ function wireVisualButtons() {
       else if (type === 'branded_quote')  openSlideOver('branded_quote', 'BRANDED QUOTE');
       else if (type === 'ai_image')       openAiImageModal();
       else if (type === 'infographic')   openSlideOver('infographic', 'INFOGRAPHIC');
+      else if (type === 'metrics_card')  openSlideOver('metrics_card', 'METRICS CARD');
+      else if (type === 'client_win')    openSlideOver('client_win', 'CLIENT WIN');
+      else if (type === 'framework')     openSlideOver('framework', 'FRAMEWORK');
       else if (type === 'media')          openMediaDrawer();
     });
   });

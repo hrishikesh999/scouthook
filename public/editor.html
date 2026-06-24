@@ -2064,9 +2064,22 @@ function renderEditorForm(type, content) {
     const layoutTypeLabel = (layout.type || 'card-grid').replace(/-/g, ' ');
     wrap.innerHTML = `
       <div class="so-editor-form">
-        <div style="margin-bottom:8px;font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px">Layout: ${escHtml(layoutTypeLabel)}</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <div style="font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px">Layout: ${escHtml(layoutTypeLabel)}</div>
+          <button type="button" id="so-infographic-change-layout" style="font-size:12px;color:var(--brand,#0F766E);background:none;border:none;cursor:pointer;font-family:inherit;font-weight:500;padding:2px 0">Change layout</button>
+        </div>
         ${themeSelect}${tagHtml}${titleHtml}${subtitleHtml}${itemsHtml}
       </div>`;
+    document.getElementById('so-infographic-change-layout')?.addEventListener('click', () => {
+      visualCache.delete(`${currentPostId}:infographic`);
+      extractedContent = null;
+      currentAssetUrl = null;
+      currentPreviewUrl = null;
+      document.getElementById('visual-modal-preview-pane').innerHTML = '';
+      const _vmInsert = document.getElementById('visual-modal-insert-btn');
+      if (_vmInsert) { _vmInsert.hidden = true; _vmInsert.disabled = true; }
+      openSlideOver('infographic', 'INFOGRAPHIC');
+    });
     wrap.querySelectorAll('input, textarea, select').forEach(el => {
       el.addEventListener('input', () => _scheduleVisualPreview(type));
     });

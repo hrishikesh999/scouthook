@@ -66,14 +66,10 @@
               <div id="pending-pin-error" style="display:none;font-size:12px;color:var(--score-fail,#dc2626);margin-top:6px"></div>
             </div>
 
-            <!-- Display name -->
+            <!-- Display name (read-only) -->
             <div style="margin-bottom:16px">
               <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:6px">Display name</label>
-              <div style="display:flex;gap:8px">
-                <input id="email-display-name" type="text" maxlength="100" class="field-input" style="flex:1;height:34px;font-size:13px">
-                <button id="email-save-name" type="button" class="btn-outlined" style="font-size:12px;height:34px;padding:0 14px">Save</button>
-              </div>
-              <div id="name-feedback" style="font-size:12px;margin-top:4px;display:none"></div>
+              <span id="email-display-name" style="font-size:14px;font-weight:600;color:var(--text)"></span>
             </div>
 
             <!-- Email address -->
@@ -301,19 +297,8 @@
           const emailView = document.getElementById('signin-email-view');
           emailView.style.display = 'block';
 
-          // Display name
-          const nameInput = document.getElementById('email-display-name');
-          nameInput.value = user.displayName || '';
-          document.getElementById('email-save-name').addEventListener('click', async () => {
-            const name = nameInput.value.trim();
-            if (!name) { showFeedback('name-feedback', 'Name is required.', true); return; }
-            try {
-              const r = await fetch('/auth/update-name', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify({ name }) });
-              const d = await r.json();
-              if (d.ok) { showFeedback('name-feedback', 'Name updated.', false); window.toast?.success('Name updated'); }
-              else showFeedback('name-feedback', d.error === 'name_required' ? 'Name is required.' : 'Failed to update.', true);
-            } catch { showFeedback('name-feedback', 'Request failed.', true); }
-          });
+          // Display name (read-only)
+          document.getElementById('email-display-name').textContent = user.displayName || '';
 
           // Email display
           document.getElementById('email-current').textContent = user.email || '';

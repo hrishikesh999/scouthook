@@ -481,30 +481,6 @@ const changeEmailLimiter = rateLimit({
   handler:       (req, res) => res.status(429).json({ ok: false, error: 'too_many_attempts' }),
 });
 
-// ── POST /auth/update-name ──────────────────────────────────────────────────
-router.post('/update-name', async (req, res) => {
-  try {
-    if (!requireEmailAuth(req, res)) return;
-    const { name } = req.body || {};
-    if (!name || typeof name !== 'string' || name.trim().length < 1 || name.trim().length > 100) {
-      return res.status(400).json({ ok: false, error: 'name_required' });
-    }
-    const displayName = name.trim();
-    await db.prepare(
-      'UPDATE user_profiles SET display_name = ? WHERE user_id = ?'
-    ).run(displayName, req.user.user_id);
-
-    req.user.displayName = displayName;
-    await new Promise((resolve, reject) =>
-      req.session.save(err => err ? reject(err) : resolve())
-    );
-    return res.json({ ok: true });
-  } catch (err) {
-    console.error('[email-auth] update-name error:', err.message);
-    return res.status(500).json({ ok: false, error: 'update_failed' });
-  }
-});
-
 // ── POST /auth/change-password ──────────────────────────────────────────────
 router.post('/change-password', changePasswordLimiter, async (req, res) => {
   try {

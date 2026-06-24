@@ -1,0 +1,1 @@
+ALTER TABLE auth_providers ADD COLUMN IF NOT EXISTS pending_email TEXT DEFAULT NULL;

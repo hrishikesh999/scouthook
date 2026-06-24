@@ -25,12 +25,14 @@
         </div>
       </div>
 
-      <!-- Google sign-in card -->
+      <!-- Sign-in card (provider-aware) -->
       <div class="profile-card" id="signin-card">
         <div class="profile-field" style="margin-bottom:0">
           <label class="field-label">Signed-in account</label>
           <div id="signin-loading" class="field-helper" style="margin-top:6px">Loading…</div>
-          <div id="signin-details" style="display:none;margin-top:10px;align-items:center;gap:12px">
+
+          <!-- Google read-only view -->
+          <div id="signin-google" style="display:none;margin-top:10px;align-items:center;gap:12px">
             <div id="signin-avatar" style="flex-shrink:0;width:44px;height:44px;border-radius:50%;overflow:hidden;background:var(--bg-pill);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:var(--text-muted)"></div>
             <div>
               <div id="signin-name" style="font-size:14px;font-weight:600;color:var(--text)"></div>
@@ -38,6 +40,73 @@
               <div style="display:flex;align-items:center;gap:5px;margin-top:5px">
                 <svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true" style="flex-shrink:0"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
                 <span style="font-size:12px;color:var(--text-muted)">Signed in with Google</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Email editable view -->
+          <div id="signin-email-view" style="display:none;margin-top:14px">
+            <div style="display:flex;align-items:center;gap:5px;margin-bottom:16px">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink:0;color:var(--text-muted)"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+              <span style="font-size:12px;color:var(--text-muted)">Signed in with email</span>
+            </div>
+
+            <!-- Pending email change banner -->
+            <div id="pending-email-banner" style="display:none;margin-bottom:16px;padding:12px 14px;border-radius:10px;border:1px solid var(--border);background:var(--bg-pill)">
+              <div style="font-size:13px;color:var(--text);margin-bottom:8px">
+                Verification pending for <strong id="pending-email-addr"></strong>. Check your inbox.
+              </div>
+              <div style="display:flex;gap:8px">
+                <div style="flex:1;display:flex;gap:6px">
+                  <input id="pending-pin-input" type="text" inputmode="numeric" maxlength="6" placeholder="Enter 6-digit code" style="flex:1;padding:6px 10px;font-size:13px;border-radius:8px;border:1px solid var(--border);background:var(--bg-input,#111);color:var(--text);outline:none">
+                  <button id="pending-pin-confirm" type="button" class="btn-outlined" style="font-size:12px;height:32px;padding:0 12px">Verify</button>
+                </div>
+                <button id="pending-email-cancel" type="button" style="font-size:12px;padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--text-muted);cursor:pointer">Cancel</button>
+              </div>
+              <div id="pending-pin-error" style="display:none;font-size:12px;color:var(--score-fail,#dc2626);margin-top:6px"></div>
+            </div>
+
+            <!-- Display name -->
+            <div style="margin-bottom:16px">
+              <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:6px">Display name</label>
+              <div style="display:flex;gap:8px">
+                <input id="email-display-name" type="text" maxlength="100" class="field-input" style="flex:1;height:34px;font-size:13px">
+                <button id="email-save-name" type="button" class="btn-outlined" style="font-size:12px;height:34px;padding:0 14px">Save</button>
+              </div>
+              <div id="name-feedback" style="font-size:12px;margin-top:4px;display:none"></div>
+            </div>
+
+            <!-- Email address -->
+            <div style="margin-bottom:16px">
+              <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:6px">Email address</label>
+              <div id="email-display-row" style="display:flex;align-items:center;gap:8px">
+                <span id="email-current" style="font-size:13px;color:var(--text)"></span>
+                <button id="email-change-toggle" type="button" style="font-size:12px;padding:2px 8px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--accent,#6366f1);cursor:pointer">Change</button>
+              </div>
+              <div id="email-change-form" style="display:none;margin-top:8px">
+                <input id="email-new" type="email" placeholder="New email address" class="field-input" style="height:34px;font-size:13px;margin-bottom:6px">
+                <input id="email-change-password" type="password" placeholder="Confirm your password" class="field-input" style="height:34px;font-size:13px;margin-bottom:8px">
+                <div style="display:flex;gap:8px">
+                  <button id="email-change-submit" type="button" class="btn-outlined" style="font-size:12px;height:32px;padding:0 14px">Send verification</button>
+                  <button id="email-change-cancel" type="button" style="font-size:12px;padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--text-muted);cursor:pointer">Cancel</button>
+                </div>
+                <div id="email-change-feedback" style="font-size:12px;margin-top:6px;display:none"></div>
+              </div>
+            </div>
+
+            <!-- Password -->
+            <div>
+              <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:6px">Password</label>
+              <button id="password-change-toggle" type="button" class="btn-outlined" style="font-size:12px;height:32px;padding:0 14px">Change password</button>
+              <div id="password-change-form" style="display:none;margin-top:8px">
+                <input id="pw-current" type="password" placeholder="Current password" class="field-input" style="height:34px;font-size:13px;margin-bottom:6px">
+                <input id="pw-new" type="password" placeholder="New password (min 8 characters)" class="field-input" style="height:34px;font-size:13px;margin-bottom:6px">
+                <input id="pw-confirm" type="password" placeholder="Confirm new password" class="field-input" style="height:34px;font-size:13px;margin-bottom:8px">
+                <div style="display:flex;gap:8px">
+                  <button id="pw-change-submit" type="button" class="btn-outlined" style="font-size:12px;height:32px;padding:0 14px">Update password</button>
+                  <button id="pw-change-cancel" type="button" style="font-size:12px;padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--text-muted);cursor:pointer">Cancel</button>
+                </div>
+                <div id="pw-change-feedback" style="font-size:12px;margin-top:6px;display:none"></div>
               </div>
             </div>
           </div>
@@ -209,33 +278,176 @@
       loadConnections();
     })();
 
-    // Google sign-in card
+    // Sign-in card (provider-aware)
     (async () => {
-      const loadingEl  = document.getElementById('signin-loading');
-      const detailsEl  = document.getElementById('signin-details');
-      const avatarEl   = document.getElementById('signin-avatar');
-      const nameEl     = document.getElementById('signin-name');
-      const emailEl    = document.getElementById('signin-email');
+      const loadingEl = document.getElementById('signin-loading');
+
+      function showFeedback(id, msg, isError) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.textContent = msg;
+        el.style.display = 'block';
+        el.style.color = isError ? 'var(--score-fail,#dc2626)' : 'var(--text-success,#10B981)';
+        if (!isError) setTimeout(() => { el.style.display = 'none'; }, 3000);
+      }
 
       try {
         const data = await window.scouthookAuthReady;
         const user = data?.user;
         loadingEl.style.display = 'none';
-        detailsEl.style.display = 'flex';
 
-        nameEl.textContent  = user?.displayName || '';
-        emailEl.textContent = user?.email || '';
+        if (user?.provider === 'email') {
+          // ── Email provider: editable view ──
+          const emailView = document.getElementById('signin-email-view');
+          emailView.style.display = 'block';
 
-        if (user?.photo) {
-          const img = document.createElement('img');
-          img.src = user.photo;
-          img.alt = user.displayName || 'Profile photo';
-          img.style.cssText = 'width:100%;height:100%;object-fit:cover';
-          avatarEl.appendChild(img);
+          // Display name
+          const nameInput = document.getElementById('email-display-name');
+          nameInput.value = user.displayName || '';
+          document.getElementById('email-save-name').addEventListener('click', async () => {
+            const name = nameInput.value.trim();
+            if (!name) { showFeedback('name-feedback', 'Name is required.', true); return; }
+            try {
+              const r = await fetch('/auth/update-name', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify({ name }) });
+              const d = await r.json();
+              if (d.ok) { showFeedback('name-feedback', 'Name updated.', false); window.toast?.success('Name updated'); }
+              else showFeedback('name-feedback', d.error === 'name_required' ? 'Name is required.' : 'Failed to update.', true);
+            } catch { showFeedback('name-feedback', 'Request failed.', true); }
+          });
+
+          // Email display
+          document.getElementById('email-current').textContent = user.email || '';
+
+          // Email change toggle
+          const emailForm = document.getElementById('email-change-form');
+          document.getElementById('email-change-toggle').addEventListener('click', () => {
+            emailForm.style.display = emailForm.style.display === 'none' ? 'block' : 'none';
+          });
+          document.getElementById('email-change-cancel').addEventListener('click', () => {
+            emailForm.style.display = 'none';
+            document.getElementById('email-change-feedback').style.display = 'none';
+          });
+          document.getElementById('email-change-submit').addEventListener('click', async () => {
+            const newEmail = document.getElementById('email-new').value.trim();
+            const password = document.getElementById('email-change-password').value;
+            if (!newEmail) { showFeedback('email-change-feedback', 'Enter an email address.', true); return; }
+            if (!password) { showFeedback('email-change-feedback', 'Password is required.', true); return; }
+            try {
+              const r = await fetch('/auth/change-email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify({ newEmail, password }) });
+              const d = await r.json();
+              if (d.ok) {
+                emailForm.style.display = 'none';
+                document.getElementById('email-new').value = '';
+                document.getElementById('email-change-password').value = '';
+                showPendingBanner(newEmail);
+                showFeedback('email-change-feedback', '', false);
+              } else {
+                const msgs = { invalid_email: 'Invalid email address.', invalid_password: 'Incorrect password.', email_already_registered: 'This email is already in use.', too_many_attempts: 'Too many attempts. Try again later.' };
+                showFeedback('email-change-feedback', msgs[d.error] || 'Failed to send verification.', true);
+              }
+            } catch { showFeedback('email-change-feedback', 'Request failed.', true); }
+          });
+
+          // Pending email banner
+          function showPendingBanner(pendingEmail) {
+            const banner = document.getElementById('pending-email-banner');
+            document.getElementById('pending-email-addr').textContent = pendingEmail;
+            document.getElementById('pending-pin-input').value = '';
+            document.getElementById('pending-pin-error').style.display = 'none';
+            banner.style.display = 'block';
+          }
+          if (user.pendingEmail) showPendingBanner(user.pendingEmail);
+
+          document.getElementById('pending-pin-confirm').addEventListener('click', async () => {
+            const pin = document.getElementById('pending-pin-input').value.trim();
+            if (!pin) return;
+            try {
+              const r = await fetch('/auth/confirm-email-change', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify({ pin }) });
+              const d = await r.json();
+              if (d.ok) {
+                document.getElementById('pending-email-banner').style.display = 'none';
+                document.getElementById('email-current').textContent = document.getElementById('pending-email-addr').textContent;
+                window.toast?.success('Email updated');
+              } else {
+                const errEl = document.getElementById('pending-pin-error');
+                errEl.textContent = d.error === 'invalid_code' ? 'Invalid or expired code.' : 'Verification failed.';
+                errEl.style.display = 'block';
+              }
+            } catch {
+              const errEl = document.getElementById('pending-pin-error');
+              errEl.textContent = 'Request failed.';
+              errEl.style.display = 'block';
+            }
+          });
+
+          document.getElementById('pending-email-cancel').addEventListener('click', async () => {
+            try {
+              await fetch('/auth/cancel-email-change', { method: 'POST', credentials: 'same-origin' });
+            } catch { /* best effort */ }
+            document.getElementById('pending-email-banner').style.display = 'none';
+          });
+
+          // Password change
+          const pwForm = document.getElementById('password-change-form');
+          const pwToggle = document.getElementById('password-change-toggle');
+          pwToggle.addEventListener('click', () => {
+            pwForm.style.display = pwForm.style.display === 'none' ? 'block' : 'none';
+            if (pwForm.style.display === 'block') pwToggle.style.display = 'none';
+          });
+          document.getElementById('pw-change-cancel').addEventListener('click', () => {
+            pwForm.style.display = 'none';
+            pwToggle.style.display = '';
+            document.getElementById('pw-change-feedback').style.display = 'none';
+            document.getElementById('pw-current').value = '';
+            document.getElementById('pw-new').value = '';
+            document.getElementById('pw-confirm').value = '';
+          });
+          document.getElementById('pw-change-submit').addEventListener('click', async () => {
+            const currentPassword = document.getElementById('pw-current').value;
+            const newPassword = document.getElementById('pw-new').value;
+            const confirm = document.getElementById('pw-confirm').value;
+            if (!currentPassword) { showFeedback('pw-change-feedback', 'Enter your current password.', true); return; }
+            if (newPassword.length < 8) { showFeedback('pw-change-feedback', 'New password must be at least 8 characters.', true); return; }
+            if (newPassword !== confirm) { showFeedback('pw-change-feedback', 'Passwords do not match.', true); return; }
+            try {
+              const r = await fetch('/auth/change-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify({ currentPassword, newPassword }) });
+              const d = await r.json();
+              if (d.ok) {
+                pwForm.style.display = 'none';
+                pwToggle.style.display = '';
+                document.getElementById('pw-current').value = '';
+                document.getElementById('pw-new').value = '';
+                document.getElementById('pw-confirm').value = '';
+                window.toast?.success('Password updated');
+              } else {
+                const msgs = { invalid_current_password: 'Current password is incorrect.', password_too_short: 'New password must be at least 8 characters.', too_many_attempts: 'Too many attempts. Try again later.' };
+                showFeedback('pw-change-feedback', msgs[d.error] || 'Failed to change password.', true);
+              }
+            } catch { showFeedback('pw-change-feedback', 'Request failed.', true); }
+          });
+
         } else {
-          const initials = (user?.displayName || user?.email || '?')
-            .split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
-          avatarEl.textContent = initials;
+          // ── Google provider: read-only view ──
+          const googleView = document.getElementById('signin-google');
+          const avatarEl   = document.getElementById('signin-avatar');
+          const nameEl     = document.getElementById('signin-name');
+          const emailEl    = document.getElementById('signin-email');
+          googleView.style.display = 'flex';
+
+          nameEl.textContent  = user?.displayName || '';
+          emailEl.textContent = user?.email || '';
+
+          if (user?.photo) {
+            const img = document.createElement('img');
+            img.src = user.photo;
+            img.alt = user.displayName || 'Profile photo';
+            img.style.cssText = 'width:100%;height:100%;object-fit:cover';
+            avatarEl.appendChild(img);
+          } else {
+            const initials = (user?.displayName || user?.email || '?')
+              .split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
+            avatarEl.textContent = initials;
+          }
         }
       } catch {
         loadingEl.textContent = 'Unable to load account info.';

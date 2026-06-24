@@ -38,12 +38,16 @@ async function createPersonalWorkspaceForUser(userId, displayName) {
 }
 
 async function establishSession(req, userId, workspaceId) {
+  const profile = await db.prepare(
+    'SELECT email, display_name FROM user_profiles WHERE user_id = ?'
+  ).get(userId);
+
   const user = {
     provider:    'email',
     user_id:     userId,
     tenant_id:   workspaceId,
-    displayName: '',
-    email:       '',
+    displayName: profile?.display_name || '',
+    email:       profile?.email || '',
   };
   // Use Passport's own logIn — same code path as Google OAuth callback.
   // req.session.regenerate() looked right but swaps the session ID mid-request,
@@ -446,6 +450,193 @@ router.post('/resend-verification', resendLimiter, async (req, res) => {
   } catch (err) {
     console.error('[email-auth] resend-verification error:', err.message);
     return res.json({ ok: true });
+  }
+});
+
+// ── Account management helpers ───────────────────────────────────────────────
+
+function requireEmailAuth(req, res) {
+  if (!req.isAuthenticated?.() || !req.user) {
+    res.status(401).json({ ok: false, error: 'not_authenticated' });
+    return false;
+  }
+  if (req.user.provider !== 'email') {
+    res.status(403).json({ ok: false, error: 'not_email_provider' });
+    return false;
+  }
+  return true;
+}
+
+const changePasswordLimiter = rateLimit({
+  windowMs:      15 * 60 * 1000,
+  max:           5,
+  keyGenerator:  (req, res) => ipKeyGenerator(req, res),
+  handler:       (req, res) => res.status(429).json({ ok: false, error: 'too_many_attempts' }),
+});
+
+const changeEmailLimiter = rateLimit({
+  windowMs:      60 * 60 * 1000,
+  max:           3,
+  keyGenerator:  (req, res) => req.user?.user_id || ipKeyGenerator(req, res),
+  handler:       (req, res) => res.status(429).json({ ok: false, error: 'too_many_attempts' }),
+});
+
+// ── POST /auth/update-name ──────────────────────────────────────────────────
+router.post('/update-name', async (req, res) => {
+  try {
+    if (!requireEmailAuth(req, res)) return;
+    const { name } = req.body || {};
+    if (!name || typeof name !== 'string' || name.trim().length < 1 || name.trim().length > 100) {
+      return res.status(400).json({ ok: false, error: 'name_required' });
+    }
+    const displayName = name.trim();
+    await db.prepare(
+      'UPDATE user_profiles SET display_name = ? WHERE user_id = ?'
+    ).run(displayName, req.user.user_id);
+
+    req.user.displayName = displayName;
+    await new Promise((resolve, reject) =>
+      req.session.save(err => err ? reject(err) : resolve())
+    );
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('[email-auth] update-name error:', err.message);
+    return res.status(500).json({ ok: false, error: 'update_failed' });
+  }
+});
+
+// ── POST /auth/change-password ──────────────────────────────────────────────
+router.post('/change-password', changePasswordLimiter, async (req, res) => {
+  try {
+    if (!requireEmailAuth(req, res)) return;
+    const { currentPassword, newPassword } = req.body || {};
+    if (!isValidPassword(newPassword)) {
+      return res.status(400).json({ ok: false, error: 'password_too_short' });
+    }
+
+    const row = await db.prepare(
+      "SELECT credential_hash FROM auth_providers WHERE user_id = ? AND provider = 'email'"
+    ).get(req.user.user_id);
+    if (!row) return res.status(400).json({ ok: false, error: 'no_email_provider' });
+
+    const valid = await bcrypt.compare(currentPassword || '', row.credential_hash);
+    if (!valid) return res.status(401).json({ ok: false, error: 'invalid_current_password' });
+
+    const credentialHash = await bcrypt.hash(newPassword, 12);
+    await db.prepare(
+      "UPDATE auth_providers SET credential_hash = ? WHERE user_id = ? AND provider = 'email'"
+    ).run(credentialHash, req.user.user_id);
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('[email-auth] change-password error:', err.message);
+    return res.status(500).json({ ok: false, error: 'change_failed' });
+  }
+});
+
+// ── POST /auth/change-email ─────────────────────────────────────────────────
+router.post('/change-email', changeEmailLimiter, async (req, res) => {
+  try {
+    if (!requireEmailAuth(req, res)) return;
+    const { newEmail, password } = req.body || {};
+    if (!isValidEmail(newEmail)) {
+      return res.status(400).json({ ok: false, error: 'invalid_email' });
+    }
+    const normalizedEmail = newEmail.trim().toLowerCase();
+
+    const row = await db.prepare(
+      "SELECT credential_hash FROM auth_providers WHERE user_id = ? AND provider = 'email'"
+    ).get(req.user.user_id);
+    if (!row) return res.status(400).json({ ok: false, error: 'no_email_provider' });
+
+    const valid = await bcrypt.compare(password || '', row.credential_hash);
+    if (!valid) return res.status(401).json({ ok: false, error: 'invalid_password' });
+
+    const existing = await db.prepare(
+      "SELECT user_id FROM auth_providers WHERE provider = 'email' AND provider_id = ? LIMIT 1"
+    ).get(normalizedEmail);
+    if (existing) {
+      return res.status(409).json({ ok: false, error: 'email_already_registered' });
+    }
+
+    const verifyToken     = String(crypto.randomInt(100000, 999999));
+    const verifyExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+    await db.prepare(`
+      UPDATE auth_providers
+      SET pending_email = ?, verify_token = ?, verify_expires_at = ?
+      WHERE user_id = ? AND provider = 'email'
+    `).run(normalizedEmail, verifyToken, verifyExpiresAt.toISOString(), req.user.user_id);
+
+    const profile = await db.prepare(
+      'SELECT display_name FROM user_profiles WHERE user_id = ?'
+    ).get(req.user.user_id);
+
+    sendEmail('verify-email-change', normalizedEmail, {
+      display_name: profile?.display_name || 'there',
+      verify_pin:   verifyToken,
+    }).catch(err => console.error('[email-auth] change-email verify failed:', err.message));
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('[email-auth] change-email error:', err.message);
+    return res.status(500).json({ ok: false, error: 'change_failed' });
+  }
+});
+
+// ── POST /auth/confirm-email-change ─────────────────────────────────────────
+router.post('/confirm-email-change', async (req, res) => {
+  try {
+    if (!requireEmailAuth(req, res)) return;
+    const { pin } = req.body || {};
+    if (!pin) return res.status(400).json({ ok: false, error: 'pin_required' });
+
+    const row = await db.prepare(`
+      SELECT pending_email FROM auth_providers
+      WHERE user_id = ? AND provider = 'email'
+        AND pending_email IS NOT NULL
+        AND verify_token = ?
+        AND verify_expires_at > now()
+      LIMIT 1
+    `).get(req.user.user_id, String(pin).trim());
+
+    if (!row) return res.status(400).json({ ok: false, error: 'invalid_code' });
+
+    await db.prepare(`
+      UPDATE auth_providers
+      SET provider_id = ?, pending_email = NULL, verify_token = NULL, verify_expires_at = NULL
+      WHERE user_id = ? AND provider = 'email'
+    `).run(row.pending_email, req.user.user_id);
+
+    await db.prepare(
+      'UPDATE user_profiles SET email = ? WHERE user_id = ?'
+    ).run(row.pending_email, req.user.user_id);
+
+    req.user.email = row.pending_email;
+    await new Promise((resolve, reject) =>
+      req.session.save(err => err ? reject(err) : resolve())
+    );
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('[email-auth] confirm-email-change error:', err.message);
+    return res.status(500).json({ ok: false, error: 'confirm_failed' });
+  }
+});
+
+// ── POST /auth/cancel-email-change ──────────────────────────────────────────
+router.post('/cancel-email-change', async (req, res) => {
+  try {
+    if (!requireEmailAuth(req, res)) return;
+    await db.prepare(`
+      UPDATE auth_providers
+      SET pending_email = NULL, verify_token = NULL, verify_expires_at = NULL
+      WHERE user_id = ? AND provider = 'email'
+    `).run(req.user.user_id);
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('[email-auth] cancel-email-change error:', err.message);
+    return res.status(500).json({ ok: false, error: 'cancel_failed' });
   }
 });
 

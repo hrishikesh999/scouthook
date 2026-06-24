@@ -544,9 +544,18 @@ app.post('/auth/logout', (req, res) => {
   }
 });
 
-app.get('/api/auth/me', (req, res) => {
+app.get('/api/auth/me', async (req, res) => {
   if (!req.isAuthenticated?.() || !req.user) return res.json({ ok: true, user: null });
-  return res.json({ ok: true, user: req.user });
+  const payload = { ...req.user };
+  if (req.user.provider === 'email') {
+    try {
+      const ap = await db.prepare(
+        "SELECT pending_email FROM auth_providers WHERE user_id = ? AND provider = 'email' LIMIT 1"
+      ).get(req.user.user_id);
+      if (ap?.pending_email) payload.pendingEmail = ap.pending_email;
+    } catch { /* pending_email column may not exist yet */ }
+  }
+  return res.json({ ok: true, user: payload });
 });
 
 

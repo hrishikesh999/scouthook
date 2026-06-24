@@ -15,6 +15,10 @@
     '/settings.html':   '/js/settings.js',
     '/account.html':    null,
     '/billing.html':    null,
+    '/workspaces.html': null,
+    '/members.html':    '/js/members.js',
+    '/linkedin.html':   null,
+    '/media.html':      null,
     '/workspace.html':  '/js/members.js',
     '/post.html':       '/js/post.js',
     '/help.html':       null,
@@ -57,20 +61,26 @@
 
   // Update sidebar active link without re-rendering the sidebar
   const ACTIVE_OVERRIDES = {
-    '/account.html':   '/settings.html',
-    '/billing.html':   '/settings.html',
     '/brand.html':     '/settings.html',
+    '/members.html':   '/settings.html',
+    '/linkedin.html':  '/settings.html',
+    '/media.html':     '/settings.html',
+    '/Media.html':     '/settings.html',
+    '/workspace.html': '/settings.html',
     '/voice-dna.html': '/settings.html',
+    '/account.html':   null,
+    '/billing.html':   null,
+    '/workspaces.html': null,
     '/schedule.html':  '/drafts.html',
     '/Published.html': '/drafts.html',
     '/post.html':      '/drafts.html',
   };
 
   function updateSidebarActiveLink(pathname) {
-    const target = ACTIVE_OVERRIDES[pathname] || pathname;
+    const target = pathname in ACTIVE_OVERRIDES ? ACTIVE_OVERRIDES[pathname] : pathname;
     document.querySelectorAll('.sidebar-link').forEach(a => {
       const linkPath = getPathname(a.href);
-      const isActive = linkPath === target;
+      const isActive = target !== null && linkPath === target;
       a.classList.toggle('active', isActive);
       if (isActive) {
         a.setAttribute('aria-current', 'page');
@@ -78,6 +88,12 @@
         a.removeAttribute('aria-current');
       }
     });
+
+    // Update sidebar account link active state
+    const accountLink = document.querySelector('.sidebar-account-foot-link-row');
+    if (accountLink) {
+      accountLink.classList.toggle('sidebar-account-foot--active', target === null);
+    }
   }
 
   // Re-execute inline <script> elements.

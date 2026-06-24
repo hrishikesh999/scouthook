@@ -313,6 +313,149 @@ body.has-trial-banner #main-content {
   color: var(--text-heading);
 }
 
+/* ── Settings nav wrapper (context heading + tabs) ────────────── */
+
+.settings-nav-wrapper {
+  margin-bottom: var(--space-5);
+}
+
+.settings-nav-heading {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+
+/* ── Workspace list cards (workspaces.html) ────────────────────── */
+
+.ws-list-card {
+  display: flex;
+  align-items: center;
+  padding: 16px 20px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-surface);
+  margin-bottom: 10px;
+  transition: border-color 0.15s ease;
+}
+
+.ws-list-card--active {
+  border-color: var(--brand);
+  background: rgba(15, 118, 110, 0.04);
+}
+
+.ws-list-card-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 16px;
+}
+
+.ws-list-card-info {
+  min-width: 0;
+  flex: 1;
+}
+
+.ws-list-card-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-heading);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ws-list-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.ws-list-card-role {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: capitalize;
+}
+
+.ws-list-card-badge {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--brand);
+  background: rgba(15, 118, 110, 0.1);
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+
+.ws-list-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.ws-list-switch-btn {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--brand);
+  background: transparent;
+  color: var(--brand);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.ws-list-switch-btn:hover {
+  background: var(--brand);
+  color: #fff;
+}
+
+.ws-list-action-btn {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.ws-list-action-btn:hover {
+  background: var(--bg-pill);
+  color: var(--text-heading);
+}
+
+.ws-list-action-btn--danger {
+  color: var(--score-fail, #dc2626);
+  border-color: transparent;
+}
+
+.ws-list-action-btn--danger:hover {
+  background: rgba(220, 38, 38, 0.08);
+  color: var(--score-fail, #dc2626);
+}
+
+@media (max-width: 640px) {
+  .ws-list-card-main {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .ws-list-card-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+
 .sidebar-accordion {
   border-radius: var(--radius-md);
   overflow: hidden;
@@ -5718,6 +5861,38 @@ a.stat-chip:hover {
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: #52525B;
+}
+
+.sidebar-account-foot-link-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  text-decoration: none;
+  padding: 6px 8px;
+  margin: -2px -8px;
+  border-radius: 8px;
+  transition: background 0.15s ease;
+  cursor: pointer;
+}
+
+.sidebar-account-foot-link-row:hover {
+  background: #18181B;
+}
+
+.sidebar-account-foot--active {
+  background: #18181B;
+}
+
+.sidebar-account-foot-chevron {
+  flex-shrink: 0;
+  color: #52525B;
+  margin-left: auto;
+  transition: color 0.15s ease;
+}
+
+.sidebar-account-foot-link-row:hover .sidebar-account-foot-chevron {
+  color: #A1A1AA;
 }
 
 .sidebar-account-foot-name {

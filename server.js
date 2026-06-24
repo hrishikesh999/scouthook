@@ -680,6 +680,7 @@ app.get([
   '/Published.html',
   '/post.html',
   '/Media.html',
+  '/media.html',
   '/profile.html',
   '/brand.html',
   '/account.html',
@@ -688,6 +689,9 @@ app.get([
   '/vault.html',
   '/ideas.html',
   '/workspace.html',
+  '/workspaces.html',
+  '/members.html',
+  '/linkedin.html',
 ], requireLoginHtml);
 
 // Post editor — path-based routing so postId is in the URL, not a query param

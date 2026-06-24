@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LinkedIn — Scouthook</title>
+  <link rel="stylesheet" href="/css/main.css">
+</head>
+<body>
+
+  <script src="/js/cached-fetch.js"></script>
+  <script src="/js/sidebar.js"></script>
+
+  <!-- ── Main content ──────────────────────────────────────── -->
+  <div id="main-content">
+
+    <div class="profile-page">
+      <div id="settings-nav"></div>
+      <div class="page-header">
+        <div>
+          <h1 class="profile-heading">LinkedIn</h1>
+          <p class="profile-subheading">Connect LinkedIn accounts for publishing in this workspace.</p>
+        </div>
+      </div>
+
+      <!-- LinkedIn connections card -->
+      <div class="profile-card" id="linkedin-card">
+        <div class="profile-field" style="margin-bottom:0">
+          <label class="field-label">Connections</label>
+          <p class="field-helper" style="margin:6px 0 16px">Connect your LinkedIn account for publishing. Your workspace Voice DNA is shared across all content.</p>
+          <div id="linkedin-conn-list" style="margin-bottom:12px"></div>
+          <div id="linkedin-company-section" style="display:none;margin-bottom:12px">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+              <span style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em">Company Pages</span>
+              <button type="button" id="linkedin-refresh-org-btn" style="background:none;border:none;padding:0;font-size:11px;color:var(--accent,#6366f1);cursor:pointer;text-decoration:underline">Refresh</button>
+              <span id="linkedin-refresh-status" style="font-size:11px;color:var(--text-muted)"></span>
+            </div>
+            <div id="linkedin-company-list"></div>
+          </div>
+          <div id="linkedin-company-hint" style="display:none;margin:0 0 12px">
+            <span id="linkedin-hint-msg" style="font-size:12px;color:var(--text-muted);line-height:1.5">No company pages found. If you admin a LinkedIn Company Page, </span><button type="button" id="linkedin-refresh-org-btn2" style="background:none;border:none;padding:0;font-size:12px;color:var(--accent,#6366f1);cursor:pointer;text-decoration:underline">click here to search for them</button><span id="linkedin-hint-status" style="font-size:12px;color:var(--text-muted);margin-left:6px"></span>
+          </div>
+          <button type="button" id="linkedin-connect-btn" class="btn-outlined" style="font-size:13px;height:32px;padding:0 14px;display:none">Connect LinkedIn</button>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /main-content -->
+
+  <script src="/js/session.js"></script>
+  <script src="/js/ui-toast.js"></script>
+  <script src="/js/account-bar.js"></script>
+  <script src="/js/app-router.js"></script>
+  <script src="/js/settings-nav.js"></script>
+  <script>
+    (async () => {
+      const listEl      = document.getElementById('linkedin-conn-list');
+      const connectBtn  = document.getElementById('linkedin-connect-btn');
+
+      function escapeHtml(s) {
+        return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+      }
+
+      function renderConnRow(c, confirmMsg) {
+        const expired = c.expires_at && new Date(c.expires_at) < new Date();
+        return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+          ${c.avatar_url ? `<img src="${escapeHtml(c.avatar_url)}" style="width:32px;height:32px;border-radius:50%;object-fit:cover" alt="" />` : '<div style="width:32px;height:32px;border-radius:50%;background:var(--bg-input,#111);border:1px solid var(--border);display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg></div>'}
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:600;color:var(--text)">${escapeHtml(c.display_name || c.account_key)}</div>
+            ${expired ? '<div style="font-size:11px;color:var(--text-danger)">Token expired — reconnect</div>' : '<div style="font-size:11px;color:var(--text-muted)">Connected</div>'}
+          </div>
+          <button data-disconnect="${c.id}" data-confirm="${escapeHtml(confirmMsg)}" type="button" style="font-size:12px;padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--text-danger);cursor:pointer">Disconnect</button>
+        </div>`;
+      }
+
+      async function loadConnections() {
+        const companySection = document.getElementById('linkedin-company-section');
+        const companyList    = document.getElementById('linkedin-company-list');
+        const companyHint    = document.getElementById('linkedin-company-hint');
+        try {
+          const r = await fetch('/api/linkedin/connections', { credentials: 'same-origin' });
+          const d = await r.json();
+          const personal = (d.connections || []).filter(c => c.account_type === 'personal');
+          const company  = (d.connections || []).filter(c => c.account_type === 'company');
+
+          if (personal.length === 0) {
+            listEl.innerHTML = '<p style="font-size:13px;color:var(--text-muted);margin:0">No LinkedIn account connected.</p>';
+            connectBtn.style.display = '';
+            companySection.style.display = 'none';
+            companyHint.style.display = 'none';
+          } else {
+            listEl.innerHTML = personal.map(c => renderConnRow(c, 'Disconnect this LinkedIn account? Any pending scheduled posts will be cancelled.')).join('');
+            connectBtn.style.display = 'none';
+
+            if (company.length > 0) {
+              companyList.innerHTML = company.map(c => renderConnRow(c, `Disconnect the "${c.display_name || 'company page'}" connection?`)).join('');
+              companySection.style.display = '';
+              companyHint.style.display = 'none';
+            } else {
+              companySection.style.display = 'none';
+              companyHint.style.display = '';
+            }
+
+            document.getElementById('linkedin-conn-list').querySelectorAll('[data-disconnect]').forEach(wireDisconnect);
+            companyList.querySelectorAll('[data-disconnect]').forEach(wireDisconnect);
+          }
+        } catch {
+          listEl.innerHTML = '<p style="font-size:13px;color:var(--text-muted);margin:0">Unable to load LinkedIn status.</p>';
+        }
+      }
+
+      function wireDisconnect(btn) {
+        btn.addEventListener('click', async () => {
+          if (!confirm(btn.dataset.confirm || 'Disconnect this LinkedIn connection?')) return;
+          const r2 = await fetch(`/api/linkedin/connections/${btn.dataset.disconnect}`, { method: 'DELETE', credentials: 'same-origin' });
+          const d2 = await r2.json();
+          if (d2.ok) loadConnections(); else alert(d2.error || 'Failed to disconnect.');
+        });
+      }
+
+      connectBtn.addEventListener('click', () => {
+        window.location.href = '/api/linkedin/connect';
+      });
+
+      function setRefreshStatus(msg) {
+        const s1 = document.getElementById('linkedin-refresh-status');
+        const s2 = document.getElementById('linkedin-hint-status');
+        if (s1) s1.textContent = msg;
+        if (s2) s2.textContent = msg;
+      }
+
+      async function refreshOrgPages() {
+        setRefreshStatus('Searching…');
+        try {
+          const r = await fetch('/api/linkedin/connections/refresh-org-pages', { method: 'POST', credentials: 'same-origin' });
+          const d = await r.json();
+          if (!d.ok) {
+            setRefreshStatus(`Error: ${d.discovery?.error || d.error || 'unknown'}`);
+            return;
+          }
+          const found = d.discovery?.found ?? 0;
+          setRefreshStatus(found > 0 ? `Found ${found}` : 'None found');
+          loadConnections();
+        } catch (e) {
+          setRefreshStatus('Request failed');
+        }
+      }
+
+      document.getElementById('linkedin-refresh-org-btn')?.addEventListener('click', refreshOrgPages);
+      document.getElementById('linkedin-refresh-org-btn2')?.addEventListener('click', refreshOrgPages);
+
+      loadConnections();
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Members — Scouthook</title>
+  <link rel="stylesheet" href="/css/main.css">
+  <link rel="stylesheet" href="/css/settings.css">
+</head>
+<body>
+
+  <script src="/js/cached-fetch.js"></script>
+  <script src="/js/sidebar.js"></script>
+
+  <!-- ── Main content ──────────────────────────────────────── -->
+  <div id="main-content">
+  <div class="profile-page">
+
+    <div id="settings-nav"></div>
+
+    <div class="page-header">
+      <div>
+        <h1 class="profile-heading">Members</h1>
+        <p class="profile-subheading">Manage team members and invitations for this workspace.</p>
+      </div>
+    </div>
+
+    <!-- Invite form -->
+    <div class="vw-stage-panel vw-stage-panel--active" style="max-width:640px;margin-bottom:32px">
+      <div class="vw-stage-header">
+        <h2 class="vw-stage-title">Invite someone</h2>
+      </div>
+      <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
+        <div style="flex:1;min-width:200px">
+          <label class="field-label" for="invite-email">Email address</label>
+          <input type="email" id="invite-email" class="field-input" placeholder="colleague@example.com" style="width:100%" />
+        </div>
+        <button id="invite-btn" class="vw-save-btn" type="button" style="margin-bottom:0;height:40px">Send invite</button>
+      </div>
+      <p class="field-helper" id="invite-status" hidden></p>
+    </div>
+
+    <!-- Current members -->
+    <div class="vw-stage-panel vw-stage-panel--active" style="max-width:640px;margin-bottom:32px">
+      <div class="vw-stage-header">
+        <h2 class="vw-stage-title">Members</h2>
+      </div>
+      <div id="members-list">
+        <p class="vw-chips-empty">Loading…</p>
+      </div>
+    </div>
+
+    <!-- Pending invites (shown only when there are pending invites) -->
+    <div class="vw-stage-panel vw-stage-panel--active" id="pending-invites-section" style="display:none;max-width:640px;margin-bottom:32px">
+      <div class="vw-stage-header">
+        <h2 class="vw-stage-title">Pending invitations</h2>
+      </div>
+      <div id="pending-invites-list"></div>
+    </div>
+
+  </div><!-- /.profile-page -->
+  </div><!-- /#main-content -->
+
+  <script src="/js/session.js"></script>
+  <script src="/js/account-bar.js"></script>
+  <script src="/js/app-router.js"></script>
+  <script src="/js/settings-nav.js"></script>
+  <script src="/js/members.js"></script>
+</body>
+</html>

@@ -251,7 +251,7 @@
   // global that gets clobbered by whichever page script ran last — so on a
   // second visit via SPA the router ends up calling the wrong page's init.
   document.addEventListener('spa:navigated', function (e) {
-    if (e.detail && e.detail.pathname === '/workspace.html') initMembers();
+    if (e.detail && (e.detail.pathname === '/members.html' || e.detail.pathname === '/workspace.html')) initMembers();
   });
 
 })();

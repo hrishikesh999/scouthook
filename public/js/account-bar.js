@@ -168,14 +168,16 @@
     const label = user.displayName || user.email || 'Google user';
     const email = user.email && user.email !== label ? user.email : '';
     const photoUrl = safeImageUrl(user.photo);
+    const isUserSettingsPage = ['/account.html', '/billing.html', '/workspaces.html'].includes(window.location.pathname);
+    const svgChevron = '<svg class="sidebar-account-foot-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>';
 
     slot.innerHTML = `
       <div class="sidebar-account-foot-inner">
-        <span class="sidebar-account-foot-label">Account</span>
-        <div class="sidebar-account-foot-row">
+        <a href="/account.html" class="sidebar-account-foot-link-row${isUserSettingsPage ? ' sidebar-account-foot--active' : ''}">
           <span class="sidebar-account-foot-avatar" aria-hidden="true"></span>
           <span class="sidebar-account-foot-name" title="${escapeAttr(user.email || '')}">${escapeHtml(label)}</span>
-        </div>
+          ${svgChevron}
+        </a>
         ${email ? `<span class="sidebar-account-foot-email" title="${escapeAttr(email)}">${escapeHtml(email)}</span>` : ''}
         <button type="button" class="sidebar-account-foot-logout">Log out</button>
       </div>

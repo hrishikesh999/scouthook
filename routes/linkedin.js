@@ -319,7 +319,7 @@ router.get('/connect', async (req, res) => {
     ? '/editor.html?linkedin=connected'
     : from === 'settings'
     ? '/settings.html?linkedin_connected=true#voice-stage-7'
-    : '/account.html';
+    : '/linkedin.html';
   await setOAuthState(state, { userId, tenantId, returnTo });
 
   const params = new URLSearchParams({
@@ -341,7 +341,7 @@ router.get('/callback', async (req, res) => {
   const { code, state, error: oauthError } = req.query;
 
   const stateData = state ? await getOAuthState(state) : null;
-  const errBase = stateData?.returnTo?.split('?')[0] || '/account.html';
+  const errBase = stateData?.returnTo?.split('?')[0] || '/linkedin.html';
 
   if (oauthError) {
     if (stateData) await deleteOAuthState(state);
@@ -349,7 +349,7 @@ router.get('/callback', async (req, res) => {
   }
 
   if (!stateData) {
-    return res.redirect('/account.html');
+    return res.redirect('/linkedin.html');
   }
   await deleteOAuthState(state);
 
@@ -519,7 +519,7 @@ router.get('/callback', async (req, res) => {
       );
     }
 
-    res.redirect(stateData.returnTo || '/account.html');
+    res.redirect(stateData.returnTo || '/linkedin.html');
 
   } catch (err) {
     console.error('[linkedin/callback] Error:', err.message);

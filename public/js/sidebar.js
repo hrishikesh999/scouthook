@@ -3,18 +3,22 @@
 (function () {
   // Pages that activate a nav link other than their own href
   var activeOverrides = {
-    '/account.html':    '/settings.html',
-    '/billing.html':    '/settings.html',
     '/brand.html':      '/settings.html',
+    '/members.html':    '/settings.html',
+    '/linkedin.html':   '/settings.html',
+    '/media.html':      '/settings.html',
     '/Media.html':      '/settings.html',
     '/workspace.html':  '/settings.html',
+    '/account.html':    null,
+    '/billing.html':    null,
+    '/workspaces.html': null,
     '/editor.html':     '/drafts.html',
     '/schedule.html':   '/drafts.html',
     '/Published.html':  '/drafts.html',
   };
 
   var pathname = window.location.pathname;
-  var activeHref = activeOverrides[pathname] || pathname;
+  var activeHref = pathname in activeOverrides ? activeOverrides[pathname] : pathname;
 
   function link(href, svg, label) {
     var isActive = activeHref === href;

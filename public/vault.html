@@ -21,7 +21,7 @@
           <h1 class="vault-title">Knowledge Vault</h1>
           <p class="vault-subtitle">Your document library. Upload case studies, service docs, and newsletters — ScoutHook uses them to generate posts in your voice.</p>
         </div>
-        <button id="vault-add-btn" class="btn-teal-filled" type="button">+ Add Content</button>
+        <button id="vault-add-btn" class="btn-teal-filled" type="button">+ Add Knowledge</button>
       </div>
 
       <div class="vault-layout vault-layout-single">
@@ -32,7 +32,7 @@
           <div id="vault-empty" class="vault-empty" aria-label="No documents yet">
             <svg class="vault-empty-icon" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
             <p class="vault-empty-label">No documents yet</p>
-            <p class="vault-empty-sub">Click <strong>+ Add Content</strong> to upload a file, blog article, YouTube video, or Google Doc.</p>
+            <p class="vault-empty-sub">Click <strong>+ Add Knowledge</strong> to upload a file, blog article, YouTube video, or Google Doc.</p>
           </div>
 
           <div id="vault-mine-banner-slot"></div>
@@ -54,7 +54,7 @@
     </footer>
 
 
-  <!-- ── Add Content modal ───────────────────────────────────────────────── -->
+  <!-- ── Add Knowledge modal ───────────────────────────────────────────────── -->
   <div id="vault-add-overlay" class="vault-add-overlay" style="display:none" role="dialog" aria-modal="true" aria-labelledby="vault-add-modal-title">
     <div class="vault-add-modal">
 
@@ -276,7 +276,7 @@
   let _pendingIdeaId   = null;
   let _pendingIdeaSeed = '';
 
-  // ── Add Content modal ─────────────────────────────────────────────────────
+  // ── Add Knowledge modal ─────────────────────────────────────────────────────
   addBtn.addEventListener('click', openAddModal);
 
   function openAddModal() {
@@ -351,7 +351,7 @@
     sourceGrid.style.display  = 'none';
     sourceInput.style.display = '';
     addBack.style.visibility  = 'visible';
-    addTitle.textContent      = SOURCE_LABELS[source] || 'Add Content';
+    addTitle.textContent      = SOURCE_LABELS[source] || 'Add Knowledge';
 
     // Show only the relevant input section
     document.getElementById('vault-input-file').style.display    = source === 'file'    ? '' : 'none';

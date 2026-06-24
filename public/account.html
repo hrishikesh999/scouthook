@@ -93,7 +93,10 @@
             <!-- Password -->
             <div>
               <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:6px">Password</label>
-              <button id="password-change-toggle" type="button" class="btn-outlined" style="font-size:12px;height:32px;padding:0 14px">Change password</button>
+              <div style="display:flex;align-items:center;gap:8px">
+                <span style="font-size:13px;color:var(--text)">••••••••</span>
+                <button id="password-change-toggle" type="button" style="font-size:12px;padding:2px 8px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--accent,#6366f1);cursor:pointer">Change</button>
+              </div>
               <div id="password-change-form" style="display:none;margin-top:8px">
                 <input id="pw-current" type="password" placeholder="Current password" class="field-input" style="height:34px;font-size:13px;margin-bottom:6px">
                 <input id="pw-new" type="password" placeholder="New password (min 8 characters)" class="field-input" style="height:34px;font-size:13px;margin-bottom:6px">
@@ -377,11 +380,9 @@
           const pwToggle = document.getElementById('password-change-toggle');
           pwToggle.addEventListener('click', () => {
             pwForm.style.display = pwForm.style.display === 'none' ? 'block' : 'none';
-            if (pwForm.style.display === 'block') pwToggle.style.display = 'none';
           });
           document.getElementById('pw-change-cancel').addEventListener('click', () => {
             pwForm.style.display = 'none';
-            pwToggle.style.display = '';
             document.getElementById('pw-change-feedback').style.display = 'none';
             document.getElementById('pw-current').value = '';
             document.getElementById('pw-new').value = '';
@@ -399,7 +400,6 @@
               const d = await r.json();
               if (d.ok) {
                 pwForm.style.display = 'none';
-                pwToggle.style.display = '';
                 document.getElementById('pw-current').value = '';
                 document.getElementById('pw-new').value = '';
                 document.getElementById('pw-confirm').value = '';

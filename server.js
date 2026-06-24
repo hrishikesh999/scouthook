@@ -549,10 +549,17 @@ app.get('/api/auth/me', async (req, res) => {
   const payload = { ...req.user };
   if (req.user.provider === 'email') {
     try {
-      const ap = await db.prepare(
-        "SELECT pending_email FROM auth_providers WHERE user_id = ? AND provider = 'email' LIMIT 1"
+      const row = await db.prepare(
+        `SELECT up.display_name, up.email, ap.pending_email
+         FROM user_profiles up
+         JOIN auth_providers ap ON ap.user_id = up.user_id AND ap.provider = 'email'
+         WHERE up.user_id = ?`
       ).get(req.user.user_id);
-      if (ap?.pending_email) payload.pendingEmail = ap.pending_email;
+      if (row) {
+        payload.displayName = row.display_name || '';
+        payload.email = row.email || '';
+        if (row.pending_email) payload.pendingEmail = row.pending_email;
+      }
     } catch { /* pending_email column may not exist yet */ }
   }
   return res.json({ ok: true, user: payload });

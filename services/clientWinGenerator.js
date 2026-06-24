@@ -47,12 +47,21 @@ ${post.content}`,
   };
 }
 
-function buildClientWinElement(theme, content) {
+function buildClientWinElement(theme, content, linkedin = {}) {
   const items = [
     { label: 'CLIENT', value: content.clientNiche },
     { label: 'RESULT', value: content.result },
     { label: 'TIMEFRAME', value: content.timeframe },
   ].filter(item => item.value);
+
+  const avatarEl = linkedin.photoDataUri
+    ? { type: 'img', props: { src: linkedin.photoDataUri, width: 48, height: 48, style: { borderRadius: 24, objectFit: 'cover', flexShrink: 0 } } }
+    : null;
+
+  const headerChildren = [
+    { type: 'div', props: { style: { width: 32, height: 3, backgroundColor: theme.accent, borderRadius: 2 } } },
+    { type: 'span', props: { style: { fontSize: 13, letterSpacing: 3, color: theme.accent, textTransform: 'uppercase', fontWeight: 600 }, children: 'CLIENT WIN' } },
+  ];
 
   return {
     type: 'div',
@@ -69,10 +78,12 @@ function buildClientWinElement(theme, content) {
           type: 'div',
           props: {
             style: { display: 'flex', alignItems: 'center', gap: 12, marginBottom: 32 },
-            children: [
-              { type: 'div', props: { style: { width: 32, height: 3, backgroundColor: theme.accent, borderRadius: 2 } } },
-              { type: 'span', props: { style: { fontSize: 13, letterSpacing: 3, color: theme.accent, textTransform: 'uppercase', fontWeight: 600 }, children: 'CLIENT WIN' } },
-            ],
+            children: avatarEl
+              ? [avatarEl, { type: 'div', props: { style: { display: 'flex', flexDirection: 'column', gap: 2 }, children: [
+                  linkedin.name ? { type: 'span', props: { style: { fontSize: 18, fontWeight: 700, color: theme.text, fontFamily: theme.fontHeading }, children: linkedin.name } } : null,
+                  { type: 'span', props: { style: { fontSize: 13, letterSpacing: 2, color: theme.accent, textTransform: 'uppercase', fontWeight: 600 }, children: 'CLIENT WIN' } },
+                ].filter(Boolean) } }]
+              : headerChildren,
           },
         },
         {
@@ -126,20 +137,20 @@ function buildClientWinElement(theme, content) {
   };
 }
 
-async function renderClientWin(post, brand = {}, content, ctx = {}, variant = 'dark') {
+async function renderClientWin(post, brand = {}, content, ctx = {}, variant = 'dark', linkedin = {}) {
   const { userId, tenantId } = ctx;
   const theme = buildTheme(brand, variant);
   const fonts = await resolveFonts(brand);
-  const element = buildClientWinElement(theme, content);
+  const element = buildClientWinElement(theme, content, linkedin);
   const pngBuffer = await renderToBuffer(element, fonts);
   const filename = `client_win_${post.id}_${Date.now()}.png`;
   await storage.upload(pngBuffer, { tenantId, userId, type: 'generated', filename, mimeType: 'image/png' });
   return { png_url: `/files/${filename}` };
 }
 
-async function generateClientWin(post, brand = {}, ctx = {}, variant = 'dark') {
+async function generateClientWin(post, brand = {}, ctx = {}, variant = 'dark', linkedin = {}) {
   const content = await extractClientWinContent(post);
-  return renderClientWin(post, brand, content, ctx, variant);
+  return renderClientWin(post, brand, content, ctx, variant, linkedin);
 }
 
 module.exports = { extractClientWinContent, renderClientWin, generateClientWin };

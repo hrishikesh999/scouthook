@@ -1326,6 +1326,50 @@ function openSlideOver(type, label) {
   formPane.hidden       = true;
   overlay.removeAttribute('aria-hidden');
 
+  if (type === 'infographic' && !visualCache.get(`${currentPostId}:${type}`)) {
+    formPane.hidden = false;
+    formPane.innerHTML = `
+      <div class="so-editor-form" style="padding:4px 0">
+        <p style="font-size:13px;color:var(--text-muted);margin:0 0 12px">Choose a layout style:</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <button class="so-layout-pick" data-layout="card-grid" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg-surface);cursor:pointer;font-family:inherit">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+            <span style="font-size:12px;font-weight:600;color:var(--text-heading)">Card Grid</span>
+            <span style="font-size:11px;color:var(--text-muted)">Tips, tools, features</span>
+          </button>
+          <button class="so-layout-pick" data-layout="numbered-list" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg-surface);cursor:pointer;font-family:inherit">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="10" y1="6" x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="18" x2="21" y2="18"/><circle cx="4" cy="6" r="2"/><circle cx="4" cy="12" r="2"/><circle cx="4" cy="18" r="2"/></svg>
+            <span style="font-size:12px;font-weight:600;color:var(--text-heading)">Numbered List</span>
+            <span style="font-size:11px;color:var(--text-muted)">Steps, habits, rules</span>
+          </button>
+          <button class="so-layout-pick" data-layout="two-column" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg-surface);cursor:pointer;font-family:inherit">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="8" height="18" rx="1"/><rect x="13" y="3" width="8" height="18" rx="1"/></svg>
+            <span style="font-size:12px;font-weight:600;color:var(--text-heading)">Two Column</span>
+            <span style="font-size:11px;color:var(--text-muted)">Compare, before/after</span>
+          </button>
+          <button class="so-layout-pick" data-layout="auto" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg-surface);cursor:pointer;font-family:inherit">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            <span style="font-size:12px;font-weight:600;color:var(--text-heading)">Auto (AI picks)</span>
+            <span style="font-size:11px;color:var(--text-muted)">Best layout for content</span>
+          </button>
+        </div>
+      </div>`;
+    formPane.querySelectorAll('.so-layout-pick').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const layoutPref = btn.dataset.layout;
+        if (layoutPref !== 'auto') {
+          window._infographicLayoutHint = layoutPref;
+        } else {
+          window._infographicLayoutHint = null;
+        }
+        formPane.innerHTML = `<div class="slide-over-skeleton" style="width:100%;border-radius:8px;min-height:220px"></div>`;
+        setSlideOverState('loading');
+        extractContent(type);
+      });
+    });
+    return;
+  }
+
   const cached = visualCache.get(`${currentPostId}:${type}`);
   if (cached?.assetUrl) {
     currentAssetUrl        = cached.assetUrl;
@@ -1799,8 +1843,9 @@ async function extractContent(type) {
       method: 'POST',
       headers: apiHeaders(),
       credentials: 'include',
-      body: JSON.stringify({ visual_type: type, mode: 'extract' }),
+      body: JSON.stringify({ visual_type: type, mode: 'extract', layout_hint: window._infographicLayoutHint || undefined }),
     });
+    window._infographicLayoutHint = null;
     let data;
     try { data = await res.json(); } catch { throw new Error('Could not read server response.'); }
     if (!res.ok || !data.ok) throw new Error(visualErrorMessage(data.error));

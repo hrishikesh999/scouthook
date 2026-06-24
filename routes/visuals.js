@@ -23,7 +23,7 @@ const { planHasFeature } = require('../lib/planFeatures');
 // ---------------------------------------------------------------------------
 router.post('/:postId', async (req, res) => {
   const { postId } = req.params;
-  const { visual_type, mode = 'render', content, template_id } = req.body;
+  const { visual_type, mode = 'render', content, template_id, layout_hint } = req.body;
   const tenantId = req.tenantId;
   const userId = req.userId;
 
@@ -159,7 +159,7 @@ router.post('/:postId', async (req, res) => {
         return res.json({ ok: true, mode: 'extract', visual_type, content: extracted });
       }
       if (visual_type === 'infographic') {
-        const extracted = await extractInfographicContent(post);
+        const extracted = await extractInfographicContent(post, layout_hint);
         return res.json({ ok: true, mode: 'extract', visual_type, content: extracted });
       }
       if (visual_type === 'metrics_card') {
@@ -246,7 +246,21 @@ router.post('/:postId', async (req, res) => {
     if (visual_type === 'client_win') {
       const variant = content?._variant || 'dark';
       const renderContent = content || await extractClientWinContent(post);
-      const result = await renderClientWin(post, brand, renderContent, { userId, tenantId }, variant);
+      const li = await db.prepare(
+        'SELECT display_name, avatar_url FROM linkedin_connections WHERE workspace_id = ? AND is_default = true'
+      ).get(tenantId);
+      let linkedinData = {};
+      if (li?.avatar_url) {
+        try {
+          const photoRes = await fetch(li.avatar_url.trim());
+          if (photoRes.ok) {
+            const buf = await photoRes.arrayBuffer();
+            const mime = (photoRes.headers.get('content-type') || 'image/jpeg').split(';')[0].trim();
+            linkedinData = { photoDataUri: `data:${mime};base64,${Buffer.from(buf).toString('base64')}`, name: li.display_name?.trim() || '' };
+          }
+        } catch {}
+      }
+      const result = await renderClientWin(post, brand, renderContent, { userId, tenantId }, variant, linkedinData);
       await logVisualGeneration(userId, tenantId, postId, visual_type);
       return res.json({ ok: true, ...result });
     }

@@ -80,12 +80,13 @@ Rules:
 POST:
 `;
 
-async function extractInfographicContent(post) {
+async function extractInfographicContent(post, layoutHint) {
   const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
   if (!apiKey) throw new Error('anthropic_api_key not configured');
 
   const client = new Anthropic({ apiKey });
-  const userPrompt = EXTRACT_PROMPT + post.content;
+  const hintLine = layoutHint ? `\n\nIMPORTANT: The user wants FORMAT "${layoutHint}". Use that format.\n` : '';
+  const userPrompt = EXTRACT_PROMPT + hintLine + post.content;
 
   const msg = await client.messages.create({
     model: 'claude-haiku-4-5',

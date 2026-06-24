@@ -36,37 +36,37 @@
       <button id="ws-new-btn" class="vw-save-btn" type="button">+ New workspace</button>
     </div>
 
+    <!-- Rename workspace overlay -->
+    <div id="ws-rename-overlay" class="ws-dialog-overlay" style="display:none">
+      <div class="ws-dialog" role="dialog" aria-modal="true" aria-labelledby="ws-rename-title">
+        <h2 id="ws-rename-title" class="ws-dialog-title">Rename workspace</h2>
+        <div style="margin-bottom:16px">
+          <label class="field-label" for="ws-rename-input">Workspace name</label>
+          <input type="text" id="ws-rename-input" class="field-input" maxlength="80" style="width:100%" />
+        </div>
+        <div id="ws-rename-error" class="ws-dialog-error" hidden></div>
+        <div class="ws-dialog-actions">
+          <button type="button" class="ws-dialog-cancel" id="ws-rename-cancel">Cancel</button>
+          <button type="button" class="ws-dialog-confirm" id="ws-rename-confirm">Save</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Delete workspace overlay -->
+    <div id="ws-delete-overlay" class="ws-dialog-overlay" style="display:none">
+      <div class="ws-dialog" role="dialog" aria-modal="true" aria-labelledby="ws-delete-title">
+        <h2 id="ws-delete-title" class="ws-dialog-title ws-dialog-title--danger">Delete workspace</h2>
+        <p class="ws-dialog-body" id="ws-delete-body"></p>
+        <div id="ws-delete-error" class="ws-dialog-error" hidden></div>
+        <div class="ws-dialog-actions">
+          <button type="button" class="ws-dialog-cancel" id="ws-delete-cancel">Cancel</button>
+          <button type="button" class="ws-dialog-confirm ws-dialog-confirm--danger" id="ws-delete-confirm">Delete workspace</button>
+        </div>
+      </div>
+    </div>
+
   </div><!-- /.profile-page -->
   </div><!-- /#main-content -->
-
-  <!-- Rename workspace overlay -->
-  <div id="ws-rename-overlay" class="ws-dialog-overlay" style="display:none">
-    <div class="ws-dialog" role="dialog" aria-modal="true" aria-labelledby="ws-rename-title">
-      <h2 id="ws-rename-title" class="ws-dialog-title">Rename workspace</h2>
-      <div style="margin-bottom:16px">
-        <label class="field-label" for="ws-rename-input">Workspace name</label>
-        <input type="text" id="ws-rename-input" class="field-input" maxlength="80" style="width:100%" />
-      </div>
-      <div id="ws-rename-error" class="ws-dialog-error" hidden></div>
-      <div class="ws-dialog-actions">
-        <button type="button" class="ws-dialog-cancel" id="ws-rename-cancel">Cancel</button>
-        <button type="button" class="ws-dialog-confirm" id="ws-rename-confirm">Save</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Delete workspace overlay -->
-  <div id="ws-delete-overlay" class="ws-dialog-overlay" style="display:none">
-    <div class="ws-dialog" role="dialog" aria-modal="true" aria-labelledby="ws-delete-title">
-      <h2 id="ws-delete-title" class="ws-dialog-title ws-dialog-title--danger">Delete workspace</h2>
-      <p class="ws-dialog-body" id="ws-delete-body"></p>
-      <div id="ws-delete-error" class="ws-dialog-error" hidden></div>
-      <div class="ws-dialog-actions">
-        <button type="button" class="ws-dialog-cancel" id="ws-delete-cancel">Cancel</button>
-        <button type="button" class="ws-dialog-confirm ws-dialog-confirm--danger" id="ws-delete-confirm">Delete workspace</button>
-      </div>
-    </div>
-  </div>
 
   <script src="/js/session.js"></script>
   <script src="/js/account-bar.js"></script>
@@ -76,6 +76,7 @@
   <script>
   (function () {
     var _renameId = null;
+    var _deleteId = null;
 
     function escapeHtml(s) {
       return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -83,12 +84,14 @@
 
     async function loadWorkspaces() {
       var listEl = document.getElementById('workspaces-list');
+      if (!listEl) return;
       try {
         var auth = window.scouthookAuthReady;
         var userData = auth && typeof auth.then === 'function' ? await auth : null;
         var tenantId = userData && userData.user && userData.user.tenant_id;
 
-        var d = await cachedFetch('/api/workspaces', { credentials: 'same-origin' });
+        var resp = await fetch('/api/workspaces', { credentials: 'same-origin' });
+        var d = await resp.json();
         if (!d || !d.ok || !Array.isArray(d.workspaces) || d.workspaces.length === 0) {
           listEl.innerHTML = '<p class="vw-chips-empty">No workspaces found.</p>';
           return;
@@ -121,13 +124,13 @@
             btn.disabled = true;
             btn.textContent = 'Switching…';
             try {
-              var resp = await fetch('/api/workspaces/' + btn.dataset.switchId + '/switch', { method: 'POST', credentials: 'same-origin' });
-              var data = await resp.json();
+              var r = await fetch('/api/workspaces/' + btn.dataset.switchId + '/switch', { method: 'POST', credentials: 'same-origin' });
+              var data = await r.json();
               if (data.ok) {
-                cachedFetch.bustAll();
+                if (typeof cachedFetch !== 'undefined' && cachedFetch.bustAll) cachedFetch.bustAll();
                 window.location.href = data.redirect || '/dashboard.html';
               }
-            } catch { btn.disabled = false; btn.textContent = 'Switch'; }
+            } catch (e) { btn.disabled = false; btn.textContent = 'Switch'; }
           });
         });
 
@@ -135,10 +138,14 @@
         listEl.querySelectorAll('[data-rename-id]').forEach(function (btn) {
           btn.addEventListener('click', function () {
             _renameId = btn.dataset.renameId;
-            document.getElementById('ws-rename-input').value = btn.dataset.renameName;
-            document.getElementById('ws-rename-error').hidden = true;
-            document.getElementById('ws-rename-overlay').style.display = 'flex';
-            document.getElementById('ws-rename-input').focus();
+            var overlay = document.getElementById('ws-rename-overlay');
+            var input = document.getElementById('ws-rename-input');
+            var errorEl = document.getElementById('ws-rename-error');
+            if (!overlay || !input) return;
+            input.value = btn.dataset.renameName;
+            if (errorEl) errorEl.hidden = true;
+            overlay.style.display = 'flex';
+            input.focus();
           });
         });
 
@@ -146,108 +153,126 @@
         listEl.querySelectorAll('[data-delete-id]').forEach(function (btn) {
           btn.addEventListener('click', function () {
             _deleteId = btn.dataset.deleteId;
-            document.getElementById('ws-delete-body').innerHTML =
+            var overlay = document.getElementById('ws-delete-overlay');
+            var bodyEl = document.getElementById('ws-delete-body');
+            var errorEl = document.getElementById('ws-delete-error');
+            var confirmBtn = document.getElementById('ws-delete-confirm');
+            if (!overlay || !bodyEl) return;
+            bodyEl.innerHTML =
               '<strong>' + escapeHtml(btn.dataset.deleteName) + '</strong> and all its posts, schedules, and files will be permanently deleted after a 30-day recovery window.';
-            document.getElementById('ws-delete-error').hidden = true;
-            document.getElementById('ws-delete-confirm').disabled = false;
-            document.getElementById('ws-delete-confirm').textContent = 'Delete workspace';
-            document.getElementById('ws-delete-overlay').style.display = 'flex';
+            if (errorEl) errorEl.hidden = true;
+            if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.textContent = 'Delete workspace'; }
+            overlay.style.display = 'flex';
           });
         });
 
       } catch (e) {
-        listEl.innerHTML = '<p class="vw-chips-empty">Failed to load workspaces.</p>';
+        if (listEl) listEl.innerHTML = '<p class="vw-chips-empty">Failed to load workspaces.</p>';
       }
     }
 
     // Rename modal
     var renameOverlay = document.getElementById('ws-rename-overlay');
-    document.getElementById('ws-rename-cancel').addEventListener('click', function () { renameOverlay.style.display = 'none'; });
-    renameOverlay.addEventListener('click', function (e) { if (e.target === renameOverlay) renameOverlay.style.display = 'none'; });
+    if (renameOverlay) {
+      document.getElementById('ws-rename-cancel').addEventListener('click', function () { renameOverlay.style.display = 'none'; });
+      renameOverlay.addEventListener('click', function (e) { if (e.target === renameOverlay) renameOverlay.style.display = 'none'; });
 
-    document.getElementById('ws-rename-confirm').addEventListener('click', async function () {
-      var btn = this;
-      var input = document.getElementById('ws-rename-input');
-      var errorEl = document.getElementById('ws-rename-error');
-      var name = input.value.trim();
-      if (!name) { errorEl.textContent = 'Name cannot be empty.'; errorEl.hidden = false; return; }
+      document.getElementById('ws-rename-confirm').addEventListener('click', async function () {
+        var btn = this;
+        var input = document.getElementById('ws-rename-input');
+        var errorEl = document.getElementById('ws-rename-error');
+        var name = input.value.trim();
+        if (!name) { errorEl.textContent = 'Name cannot be empty.'; errorEl.hidden = false; return; }
 
-      btn.disabled = true;
-      btn.textContent = 'Saving…';
-      errorEl.hidden = true;
+        btn.disabled = true;
+        btn.textContent = 'Saving…';
+        errorEl.hidden = true;
 
-      try {
-        var resp = await fetch('/api/workspaces/' + _renameId, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'same-origin',
-          body: JSON.stringify({ name: name }),
-        });
-        var data = await resp.json();
-        if (data.ok) {
-          renameOverlay.style.display = 'none';
-          cachedFetch.bustAll();
-          loadWorkspaces();
-        } else {
-          errorEl.textContent = data.error || 'Rename failed.';
+        try {
+          var resp = await fetch('/api/workspaces/' + _renameId, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({ name: name }),
+          });
+          var data = await resp.json();
+          if (data.ok) {
+            renameOverlay.style.display = 'none';
+            if (typeof cachedFetch !== 'undefined' && cachedFetch.bustAll) cachedFetch.bustAll();
+            loadWorkspaces();
+          } else {
+            errorEl.textContent = data.error || 'Rename failed.';
+            errorEl.hidden = false;
+          }
+        } catch (e) {
+          errorEl.textContent = 'Network error. Try again.';
           errorEl.hidden = false;
         }
-      } catch (e) {
-        errorEl.textContent = 'Network error. Try again.';
-        errorEl.hidden = false;
-      }
-      btn.disabled = false;
-      btn.textContent = 'Save';
-    });
+        btn.disabled = false;
+        btn.textContent = 'Save';
+      });
+    }
 
     // Delete modal
-    var _deleteId = null;
     var deleteOverlay = document.getElementById('ws-delete-overlay');
-    document.getElementById('ws-delete-cancel').addEventListener('click', function () { deleteOverlay.style.display = 'none'; });
-    deleteOverlay.addEventListener('click', function (e) { if (e.target === deleteOverlay) deleteOverlay.style.display = 'none'; });
+    if (deleteOverlay) {
+      document.getElementById('ws-delete-cancel').addEventListener('click', function () { deleteOverlay.style.display = 'none'; });
+      deleteOverlay.addEventListener('click', function (e) { if (e.target === deleteOverlay) deleteOverlay.style.display = 'none'; });
 
-    document.getElementById('ws-delete-confirm').addEventListener('click', async function () {
-      var btn = this;
-      var errorEl = document.getElementById('ws-delete-error');
-      btn.disabled = true;
-      btn.textContent = 'Deleting…';
-      errorEl.hidden = true;
+      document.getElementById('ws-delete-confirm').addEventListener('click', async function () {
+        var btn = this;
+        var errorEl = document.getElementById('ws-delete-error');
+        btn.disabled = true;
+        btn.textContent = 'Deleting…';
+        if (errorEl) errorEl.hidden = true;
 
-      try {
-        var resp = await fetch('/api/workspaces/' + _deleteId, {
-          method: 'DELETE',
-          credentials: 'same-origin',
-        });
-        var data = await resp.json();
-        if (data.ok) {
-          deleteOverlay.style.display = 'none';
-          cachedFetch.bustAll();
-          loadWorkspaces();
-        } else {
-          var msg = data.error === 'cannot_remove_last_owner'
-            ? 'You cannot delete your only workspace.'
-            : 'Delete failed. Please try again.';
-          errorEl.textContent = msg;
-          errorEl.hidden = false;
+        try {
+          var resp = await fetch('/api/workspaces/' + _deleteId, {
+            method: 'DELETE',
+            credentials: 'same-origin',
+          });
+          var data = await resp.json();
+          if (data.ok) {
+            deleteOverlay.style.display = 'none';
+            if (typeof cachedFetch !== 'undefined' && cachedFetch.bustAll) cachedFetch.bustAll();
+            loadWorkspaces();
+          } else {
+            var msg = data.error === 'cannot_remove_last_owner'
+              ? 'You cannot delete your only workspace.'
+              : 'Delete failed. Please try again.';
+            if (errorEl) { errorEl.textContent = msg; errorEl.hidden = false; }
+            btn.disabled = false;
+            btn.textContent = 'Delete workspace';
+          }
+        } catch (e) {
+          if (errorEl) { errorEl.textContent = 'Network error. Try again.'; errorEl.hidden = false; }
           btn.disabled = false;
           btn.textContent = 'Delete workspace';
         }
-      } catch (e) {
-        errorEl.textContent = 'Network error. Try again.';
-        errorEl.hidden = false;
-        btn.disabled = false;
-        btn.textContent = 'Delete workspace';
-      }
-    });
+      });
+    }
 
     // New workspace
-    document.getElementById('ws-new-btn').addEventListener('click', function () {
-      if (window.WorkspaceModal) {
-        window.WorkspaceModal.open();
-      } else {
-        setTimeout(function () { window.WorkspaceModal && window.WorkspaceModal.open(); }, 300);
-      }
-    });
+    var newBtn = document.getElementById('ws-new-btn');
+    if (newBtn) {
+      newBtn.addEventListener('click', function () {
+        if (window.WorkspaceModal) {
+          window.WorkspaceModal.open();
+        } else {
+          // workspace-modal.js is lazy-loaded by account-bar.js — wait for it
+          var attempts = 0;
+          var poll = setInterval(function () {
+            attempts++;
+            if (window.WorkspaceModal) {
+              clearInterval(poll);
+              window.WorkspaceModal.open();
+            } else if (attempts > 10) {
+              clearInterval(poll);
+            }
+          }, 200);
+        }
+      });
+    }
 
     loadWorkspaces();
   })();

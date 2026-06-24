@@ -32,6 +32,7 @@ if (!window._settingsNavLoaded) {
     var tabs = isUserContext ? _USER_TABS : _WORKSPACE_TABS;
 
     var wrapper = document.createElement('div');
+    wrapper.id = 'settings-nav';
     wrapper.className = 'settings-nav-wrapper';
 
     // Context heading

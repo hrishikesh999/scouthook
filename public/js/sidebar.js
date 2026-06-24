@@ -7,7 +7,7 @@
     '/billing.html':    '/settings.html',
     '/brand.html':      '/settings.html',
     '/Media.html':      '/settings.html',
-    '/members.html':    '/settings.html',
+    '/workspace.html':  '/settings.html',
     '/editor.html':     '/drafts.html',
     '/schedule.html':   '/drafts.html',
     '/Published.html':  '/drafts.html',

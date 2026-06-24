@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Workspace — Scouthook</title>
+  <link rel="stylesheet" href="/css/main.css">
+  <link rel="stylesheet" href="/css/settings.css">
+</head>
+<body>
+
+  <script src="/js/cached-fetch.js"></script>
+  <script src="/js/sidebar.js"></script>
+
+  <!-- ── Main content ──────────────────────────────────────── -->
+  <div id="main-content">
+  <div class="profile-page">
+
+    <div id="settings-nav"></div>
+
+    <div class="page-header">
+      <div>
+        <h1 class="profile-heading">Workspace</h1>
+        <p class="profile-subheading">Manage your workspace name, team members, and settings.</p>
+      </div>
+    </div>
+
+    <!-- Workspace name (owner only) -->
+    <div class="vw-stage-panel vw-stage-panel--active" id="ws-name-panel" style="display:none;max-width:640px;margin-bottom:32px">
+      <div class="vw-stage-header">
+        <h2 class="vw-stage-title">Workspace name</h2>
+      </div>
+      <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
+        <div style="flex:1;min-width:200px">
+          <input type="text" id="ws-name-input" class="field-input" maxlength="80" style="width:100%" />
+        </div>
+        <button id="ws-name-save-btn" class="vw-save-btn" type="button" style="margin-bottom:0;height:40px">Save</button>
+      </div>
+      <p class="field-helper" id="ws-name-status" hidden></p>
+    </div>
+
+    <!-- Create new workspace -->
+    <div class="vw-stage-panel vw-stage-panel--active" style="max-width:640px;margin-bottom:32px">
+      <div class="vw-stage-header">
+        <h2 class="vw-stage-title">Add workspace</h2>
+      </div>
+      <p class="field-helper" style="margin:0 0 12px">Create a separate workspace for a different brand, client, or project.</p>
+      <button id="ws-new-btn" class="vw-save-btn" type="button">+ New workspace</button>
+    </div>
+
+    <!-- Invite form -->
+    <div class="vw-stage-panel vw-stage-panel--active" style="max-width:640px;margin-bottom:32px">
+      <div class="vw-stage-header">
+        <h2 class="vw-stage-title">Invite someone</h2>
+      </div>
+      <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
+        <div style="flex:1;min-width:200px">
+          <label class="field-label" for="invite-email">Email address</label>
+          <input type="email" id="invite-email" class="field-input" placeholder="colleague@example.com" style="width:100%" />
+        </div>
+        <button id="invite-btn" class="vw-save-btn" type="button" style="margin-bottom:0;height:40px">Send invite</button>
+      </div>
+      <p class="field-helper" id="invite-status" hidden></p>
+    </div>
+
+    <!-- Current members -->
+    <div class="vw-stage-panel vw-stage-panel--active" style="max-width:640px;margin-bottom:32px">
+      <div class="vw-stage-header">
+        <h2 class="vw-stage-title">Members</h2>
+      </div>
+      <div id="members-list">
+        <p class="vw-chips-empty">Loading…</p>
+      </div>
+    </div>
+
+    <!-- Pending invites (shown only when there are pending invites) -->
+    <div class="vw-stage-panel vw-stage-panel--active" id="pending-invites-section" style="display:none;max-width:640px;margin-bottom:32px">
+      <div class="vw-stage-header">
+        <h2 class="vw-stage-title">Pending invitations</h2>
+      </div>
+      <div id="pending-invites-list"></div>
+    </div>
+
+    <!-- Danger zone (owner only) -->
+    <div class="profile-card profile-card--danger" id="ws-danger-card" style="display:none;max-width:640px">
+      <div class="profile-field" style="margin-bottom:0">
+        <label class="field-label profile-label--danger">Danger Zone</label>
+        <p class="field-helper" style="margin:8px 0 16px">Permanently deletes this workspace and all its posts, schedules, and files after a 30-day recovery window.</p>
+        <button id="ws-delete-btn" type="button" class="btn-danger-outline">Delete workspace</button>
+      </div>
+    </div>
+
+  </div><!-- /.profile-page -->
+  </div><!-- /#main-content -->
+
+  <!-- Delete confirmation overlay -->
+  <div id="ws-delete-overlay" class="ws-dialog-overlay" style="display:none">
+    <div class="ws-dialog" role="dialog" aria-modal="true" aria-labelledby="ws-delete-title">
+      <h2 id="ws-delete-title" class="ws-dialog-title ws-dialog-title--danger">Delete workspace</h2>
+      <p class="ws-dialog-body" id="ws-delete-body"></p>
+      <div id="ws-delete-error" class="ws-dialog-error" hidden></div>
+      <div class="ws-dialog-actions">
+        <button type="button" class="ws-dialog-cancel" id="ws-delete-cancel">Cancel</button>
+        <button type="button" class="ws-dialog-confirm ws-dialog-confirm--danger" id="ws-delete-confirm">Delete workspace</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/session.js"></script>
+  <script src="/js/account-bar.js"></script>
+  <script src="/js/app-router.js"></script>
+  <script src="/js/settings-nav.js"></script>
+  <script src="/js/members.js"></script>
+
+  <script>
+  (function () {
+    var _wsId = null;
+
+    async function initWorkspaceSettings() {
+      try {
+        var auth = window.scouthookAuthReady;
+        var userData = auth && typeof auth.then === 'function' ? await auth : null;
+        var tenantId = userData && userData.user && userData.user.tenant_id;
+        var d = await cachedFetch('/api/workspaces', { credentials: 'same-origin' });
+        if (!d || !d.ok || !Array.isArray(d.workspaces) || d.workspaces.length === 0) return;
+        var active = (tenantId && d.workspaces.find(function (w) { return w.id === tenantId; })) || d.workspaces[0];
+        _wsId = active.id;
+        if (active.role !== 'owner') return;
+
+        var namePanel = document.getElementById('ws-name-panel');
+        var nameInput = document.getElementById('ws-name-input');
+        var dangerCard = document.getElementById('ws-danger-card');
+
+        nameInput.value = active.name || '';
+        namePanel.style.display = '';
+        dangerCard.style.display = '';
+      } catch (e) { /* silent */ }
+    }
+
+    // Save workspace name
+    document.getElementById('ws-name-save-btn').addEventListener('click', async function () {
+      var btn = this;
+      var input = document.getElementById('ws-name-input');
+      var status = document.getElementById('ws-name-status');
+      var name = input.value.trim();
+      if (!name) { status.textContent = 'Name cannot be empty.'; status.hidden = false; return; }
+
+      btn.disabled = true;
+      btn.textContent = 'Saving…';
+      status.hidden = true;
+
+      try {
+        var resp = await fetch('/api/workspaces/' + _wsId, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ name: name }),
+        });
+        var data = await resp.json();
+        if (data.ok) {
+          status.textContent = 'Saved!';
+          status.style.color = 'var(--brand)';
+          status.hidden = false;
+          var sidebarLabel = document.querySelector('.ws-sw-name');
+          if (sidebarLabel) sidebarLabel.textContent = name;
+          cachedFetch.bustAll();
+          setTimeout(function () { status.hidden = true; }, 2000);
+        } else {
+          status.textContent = data.error || 'Save failed.';
+          status.style.color = 'var(--score-fail, #dc2626)';
+          status.hidden = false;
+        }
+      } catch (e) {
+        status.textContent = 'Network error. Try again.';
+        status.style.color = 'var(--score-fail, #dc2626)';
+        status.hidden = false;
+      }
+      btn.disabled = false;
+      btn.textContent = 'Save';
+    });
+
+    // New workspace
+    document.getElementById('ws-new-btn').addEventListener('click', function () {
+      if (window.WorkspaceModal) {
+        window.WorkspaceModal.open();
+      } else {
+        setTimeout(function () { window.WorkspaceModal && window.WorkspaceModal.open(); }, 300);
+      }
+    });
+
+    // Delete workspace
+    var overlay = document.getElementById('ws-delete-overlay');
+    var confirmBtn = document.getElementById('ws-delete-confirm');
+    var cancelBtn = document.getElementById('ws-delete-cancel');
+    var errorEl = document.getElementById('ws-delete-error');
+    var bodyEl = document.getElementById('ws-delete-body');
+
+    document.getElementById('ws-delete-btn').addEventListener('click', function () {
+      var name = document.getElementById('ws-name-input').value.trim() || 'this workspace';
+      bodyEl.innerHTML = '<strong>' + name.replace(/</g, '&lt;') + '</strong> and all its posts, schedules, and files will be permanently deleted after a 30-day recovery window.';
+      errorEl.hidden = true;
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = 'Delete workspace';
+      overlay.style.display = 'flex';
+    });
+
+    cancelBtn.addEventListener('click', function () { overlay.style.display = 'none'; });
+    overlay.addEventListener('click', function (e) { if (e.target === overlay) overlay.style.display = 'none'; });
+
+    confirmBtn.addEventListener('click', async function () {
+      confirmBtn.disabled = true;
+      confirmBtn.textContent = 'Deleting…';
+      errorEl.hidden = true;
+
+      try {
+        var resp = await fetch('/api/workspaces/' + _wsId, {
+          method: 'DELETE',
+          credentials: 'same-origin',
+        });
+        var data = await resp.json();
+        if (data.ok) {
+          cachedFetch.bustAll();
+          window.location.href = '/dashboard.html';
+        } else {
+          var msg = data.error === 'cannot_remove_last_owner'
+            ? 'You cannot delete the only workspace you own.'
+            : 'Delete failed. Please try again.';
+          errorEl.textContent = msg;
+          errorEl.hidden = false;
+          confirmBtn.disabled = false;
+          confirmBtn.textContent = 'Delete workspace';
+        }
+      } catch (e) {
+        errorEl.textContent = 'Network error. Try again.';
+        errorEl.hidden = false;
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = 'Delete workspace';
+      }
+    });
+
+    initWorkspaceSettings();
+  })();
+  </script>
+</body>
+</html>

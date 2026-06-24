@@ -11,7 +11,7 @@ if (!window._settingsNavLoaded) {
       { label: 'Brand voice',    href: '/settings.html' },
       { label: 'My account',     href: '/account.html' },
       { label: 'Brand settings', href: '/brand.html' },
-      { label: 'Members',        href: '/members.html' },
+      { label: 'Workspace',      href: '/workspace.html' },
       { label: 'Subscription',   href: '/billing.html' },
       { label: 'Media',          href: '/Media.html' },
     ];

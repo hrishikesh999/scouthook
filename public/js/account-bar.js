@@ -83,24 +83,12 @@
     const svgBuilding = '<svg class="ws-sw-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>';
     const svgChevron  = '<svg class="ws-sw-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>';
     const svgPlus     = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
-    const svgPen      = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
-    const svgTrash    = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>';
-
     const itemsHtml = workspaces.map(w => {
       const isActive = w.id === active.id;
       return `<button type="button" class="ws-sw-item${isActive ? ' ws-sw-active' : ''}" data-ws-id="${escapeAttr(w.id)}" role="menuitem">
         <span class="ws-sw-check">${isActive ? '&#10003;' : ''}</span>${escapeHtml(w.name)}
       </button>`;
     }).join('');
-
-    const manageHtml = isOwner ? `
-      <hr class="ws-sw-divider">
-      <button type="button" class="ws-sw-manage ws-sw-rename" id="ws-sw-rename" role="menuitem">
-        ${svgPen} Rename workspace
-      </button>
-      <button type="button" class="ws-sw-manage ws-sw-delete" id="ws-sw-delete" role="menuitem">
-        ${svgTrash} Delete workspace
-      </button>` : '';
 
     slot.innerHTML = `
       <div class="ws-sw" id="ws-sw">
@@ -109,7 +97,6 @@
         </button>
         <div class="ws-sw-menu" id="ws-sw-menu" hidden role="menu">
           ${itemsHtml}
-          ${manageHtml}
           <hr class="ws-sw-divider">
           <button type="button" class="ws-sw-new" id="ws-sw-new" role="menuitem">
             ${svgPlus} New workspace
@@ -168,164 +155,6 @@
       }
     });
 
-    // ── Rename workspace ──────────────────────────────────────
-    if (isOwner) {
-      slot.querySelector('#ws-sw-rename').addEventListener('click', e => {
-        e.stopPropagation();
-        closeMenu();
-        showRenameDialog(active.id, active.name);
-      });
-
-      slot.querySelector('#ws-sw-delete').addEventListener('click', e => {
-        e.stopPropagation();
-        closeMenu();
-        showDeleteDialog(active.id, active.name);
-      });
-    }
-  }
-
-  // ── Rename dialog ─────────────────────────────────────────────
-  function showRenameDialog(workspaceId, currentName) {
-    if (document.getElementById('ws-rename-overlay')) return;
-
-    const overlay = document.createElement('div');
-    overlay.id = 'ws-rename-overlay';
-    overlay.className = 'ws-dialog-overlay';
-    overlay.innerHTML = `
-      <div class="ws-dialog" role="dialog" aria-modal="true" aria-labelledby="ws-rename-title">
-        <h2 id="ws-rename-title" class="ws-dialog-title">Rename workspace</h2>
-        <input id="ws-rename-input" class="ws-dialog-input" type="text" value="${escapeAttr(currentName)}" maxlength="80" autocomplete="off" />
-        <div id="ws-rename-error" class="ws-dialog-error" hidden></div>
-        <div class="ws-dialog-actions">
-          <button type="button" class="ws-dialog-cancel" id="ws-rename-cancel">Cancel</button>
-          <button type="button" class="ws-dialog-confirm" id="ws-rename-confirm">Save</button>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(overlay);
-
-    const input   = overlay.querySelector('#ws-rename-input');
-    const errBox  = overlay.querySelector('#ws-rename-error');
-    const confirm = overlay.querySelector('#ws-rename-confirm');
-    const cancel  = overlay.querySelector('#ws-rename-cancel');
-
-    input.focus();
-    input.select();
-
-    function close() { overlay.remove(); }
-
-    cancel.addEventListener('click', close);
-    overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
-    input.addEventListener('keydown', e => {
-      if (e.key === 'Enter') confirm.click();
-      if (e.key === 'Escape') close();
-    });
-
-    confirm.addEventListener('click', async () => {
-      const name = input.value.trim();
-      if (!name) {
-        errBox.textContent = 'Name cannot be empty.';
-        errBox.hidden = false;
-        return;
-      }
-      confirm.disabled = true;
-      confirm.textContent = 'Saving…';
-      errBox.hidden = true;
-
-      try {
-        const resp = await fetch(`/api/workspaces/${workspaceId}`, {
-          method: 'PATCH',
-          credentials: 'same-origin',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name }),
-        });
-        const data = await resp.json();
-        if (data.ok) {
-          cachedFetch.bustAll();
-          close();
-          // Update the switcher button label without a full reload
-          const label = document.querySelector('.ws-sw-name');
-          if (label) label.textContent = name;
-        } else {
-          errBox.textContent = data.error || 'Save failed. Please try again.';
-          errBox.hidden = false;
-          confirm.disabled = false;
-          confirm.textContent = 'Save';
-        }
-      } catch {
-        errBox.textContent = 'Network error. Please try again.';
-        errBox.hidden = false;
-        confirm.disabled = false;
-        confirm.textContent = 'Save';
-      }
-    });
-  }
-
-  // ── Delete dialog ─────────────────────────────────────────────
-  function showDeleteDialog(workspaceId, workspaceName) {
-    if (document.getElementById('ws-delete-overlay')) return;
-
-    const overlay = document.createElement('div');
-    overlay.id = 'ws-delete-overlay';
-    overlay.className = 'ws-dialog-overlay';
-    overlay.innerHTML = `
-      <div class="ws-dialog" role="dialog" aria-modal="true" aria-labelledby="ws-delete-title">
-        <h2 id="ws-delete-title" class="ws-dialog-title ws-dialog-title--danger">Delete workspace</h2>
-        <p class="ws-dialog-body">
-          <strong>${escapeHtml(workspaceName)}</strong> and all its posts, schedules, and files will be
-          permanently deleted after a 30-day recovery window.
-        </p>
-        <div id="ws-delete-error" class="ws-dialog-error" hidden></div>
-        <div class="ws-dialog-actions">
-          <button type="button" class="ws-dialog-cancel" id="ws-delete-cancel">Cancel</button>
-          <button type="button" class="ws-dialog-confirm ws-dialog-confirm--danger" id="ws-delete-confirm">Delete workspace</button>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(overlay);
-
-    const errBox  = overlay.querySelector('#ws-delete-error');
-    const confirm = overlay.querySelector('#ws-delete-confirm');
-    const cancel  = overlay.querySelector('#ws-delete-cancel');
-
-    function close() { overlay.remove(); }
-
-    cancel.addEventListener('click', close);
-    overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
-    overlay.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
-
-    confirm.addEventListener('click', async () => {
-      confirm.disabled = true;
-      confirm.textContent = 'Deleting…';
-      errBox.hidden = true;
-
-      try {
-        const resp = await fetch(`/api/workspaces/${workspaceId}`, {
-          method: 'DELETE',
-          credentials: 'same-origin',
-        });
-        const data = await resp.json();
-        if (data.ok) {
-          cachedFetch.bustAll();
-          close();
-          // Server switched session to another workspace; reload to reflect it
-          window.location.href = '/dashboard.html';
-        } else {
-          const msg = data.error === 'cannot_remove_last_owner'
-            ? 'You cannot delete the only workspace you own.'
-            : (data.error || 'Delete failed. Please try again.');
-          errBox.textContent = msg;
-          errBox.hidden = false;
-          confirm.disabled = false;
-          confirm.textContent = 'Delete workspace';
-        }
-      } catch {
-        errBox.textContent = 'Network error. Please try again.';
-        errBox.hidden = false;
-        confirm.disabled = false;
-        confirm.textContent = 'Delete workspace';
-      }
-    });
   }
 
   // ── Sidebar account foot ─────────────────────────────────────

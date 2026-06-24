@@ -21,18 +21,16 @@
 
     <div class="page-header">
       <div>
-        <h1 class="profile-heading">Workspace</h1>
+        <h1 class="profile-heading" id="ws-heading">Workspace</h1>
         <p class="profile-subheading">Manage your workspace name, team members, and settings.</p>
       </div>
     </div>
 
-    <!-- Workspace name (owner only) -->
-    <div class="vw-stage-panel vw-stage-panel--active" id="ws-name-panel" style="display:none;max-width:640px;margin-bottom:32px">
-      <div class="vw-stage-header">
-        <h2 class="vw-stage-title">Workspace name</h2>
-      </div>
+    <!-- Rename workspace (owner only) -->
+    <div id="ws-rename-panel" style="display:none;max-width:640px;margin-bottom:32px">
       <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
         <div style="flex:1;min-width:200px">
+          <label class="field-label" for="ws-name-input">Workspace name</label>
           <input type="text" id="ws-name-input" class="field-input" maxlength="80" style="width:100%" />
         </div>
         <button id="ws-name-save-btn" class="vw-save-btn" type="button" style="margin-bottom:0;height:40px">Save</button>
@@ -126,14 +124,33 @@
         if (!d || !d.ok || !Array.isArray(d.workspaces) || d.workspaces.length === 0) return;
         var active = (tenantId && d.workspaces.find(function (w) { return w.id === tenantId; })) || d.workspaces[0];
         _wsId = active.id;
+
+        // Set dynamic heading: "Name's workspace"
+        var heading = document.getElementById('ws-heading');
+        var wsName = active.name || 'Workspace';
+        heading.textContent = wsName + '’s workspace';
+
         if (active.role !== 'owner') return;
 
-        var namePanel = document.getElementById('ws-name-panel');
+        // Show rename link next to heading
+        var renameLink = document.createElement('button');
+        renameLink.type = 'button';
+        renameLink.textContent = 'Rename';
+        renameLink.style.cssText = 'background:none;border:none;color:var(--brand);font-size:13px;font-weight:600;cursor:pointer;margin-left:12px;text-decoration:underline;text-underline-offset:2px;vertical-align:middle';
+        renameLink.addEventListener('click', function () {
+          var panel = document.getElementById('ws-rename-panel');
+          var isHidden = panel.style.display === 'none';
+          panel.style.display = isHidden ? '' : 'none';
+          if (isHidden) document.getElementById('ws-name-input').focus();
+        });
+        heading.appendChild(renameLink);
+
+        var renamePanel = document.getElementById('ws-rename-panel');
         var nameInput = document.getElementById('ws-name-input');
         var dangerCard = document.getElementById('ws-danger-card');
 
-        nameInput.value = active.name || '';
-        namePanel.style.display = '';
+        nameInput.value = wsName;
+        renamePanel.style.display = 'none';
         dangerCard.style.display = '';
       } catch (e) { /* silent */ }
     }
@@ -164,6 +181,13 @@
           status.hidden = false;
           var sidebarLabel = document.querySelector('.ws-sw-name');
           if (sidebarLabel) sidebarLabel.textContent = name;
+          // Update page heading
+          var h = document.getElementById('ws-heading');
+          var renameBtn = h.querySelector('button');
+          h.textContent = name + '’s workspace';
+          if (renameBtn) h.appendChild(renameBtn);
+          // Collapse rename panel
+          document.getElementById('ws-rename-panel').style.display = 'none';
           cachedFetch.bustAll();
           setTimeout(function () { status.hidden = true; }, 2000);
         } else {

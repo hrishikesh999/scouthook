@@ -115,13 +115,13 @@
     }
 
     grid.innerHTML = templates.map(t => {
-      const thumbSrc = t.thumbnail_r2_key ? `/admin/html-templates/${t.id}/thumbnail` : null;
+      const hasThumb = !!t.thumbnail_r2_key;
       const slots = t.slot_manifest?.slots ? Object.keys(t.slot_manifest.slots) : [];
       const escapedName = esc(t.name);
       return `
       <div class="ht-card" data-id="${t.id}" data-name="${escapedName}" data-active="${t.active}">
-        ${thumbSrc
-          ? `<img class="ht-card__thumb" src="${thumbSrc}" alt="${escapedName}" loading="lazy">`
+        ${hasThumb
+          ? `<img class="ht-card__thumb" data-thumb-url="/admin/html-templates/${t.id}/thumbnail" alt="${escapedName}">`
           : `<div class="thumb-placeholder">No thumbnail</div>`}
         <div class="ht-card__body">
           <div class="ht-card__name">${escapedName}</div>
@@ -153,6 +153,20 @@
       card.querySelector('.js-regen')?.addEventListener('click', e => regenThumb(id, e.currentTarget));
 
       card.querySelector('.js-delete').addEventListener('click', () => deleteTemplate(id, name));
+    });
+
+    // Load thumbnails via authenticated fetch (img tags can't send custom headers)
+    grid.querySelectorAll('.ht-card__thumb[data-thumb-url]').forEach(async (img) => {
+      try {
+        const r = await adminFetch(img.dataset.thumbUrl);
+        if (!r.ok) throw new Error();
+        const blob = await r.blob();
+        img.src = URL.createObjectURL(blob);
+      } catch {
+        img.replaceWith(Object.assign(document.createElement('div'), {
+          className: 'thumb-placeholder', textContent: 'No thumbnail',
+        }));
+      }
     });
   }
 

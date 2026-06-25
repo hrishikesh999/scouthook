@@ -295,9 +295,9 @@
       }
 
       setError(errorEl,
-        data.error === 'name_required'
-          ? 'Please enter a workspace name.'
-          : (data.error || 'Something went wrong. Please try again.')
+        data.error === 'name_required' ? 'Please enter a workspace name.' :
+        data.error === 'name_too_long' ? 'Workspace name must be 80 characters or fewer.' :
+        (data.error || 'Something went wrong. Please try again.')
       );
     } catch {
       setError(errorEl, 'Network error. Please check your connection and try again.');
@@ -497,6 +497,11 @@
     const name = nameInput.value.trim();
     if (!name) {
       setError(errorEl, 'Please enter a workspace name.');
+      nameInput.focus();
+      return;
+    }
+    if (name.length > 80) {
+      setError(errorEl, 'Workspace name must be 80 characters or fewer.');
       nameInput.focus();
       return;
     }

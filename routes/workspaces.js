@@ -85,6 +85,7 @@ router.get('/', requireAuth, async (req, res) => {
 router.post('/', requireAuth, async (req, res) => {
   const { name } = req.body || {};
   if (!name?.trim()) return res.status(400).json({ ok: false, error: 'name_required' });
+  if (name.trim().length > 80) return res.status(400).json({ ok: false, error: 'name_too_long' });
 
   try {
     // Plan limit check
@@ -148,6 +149,7 @@ router.post('/', requireAuth, async (req, res) => {
 router.patch('/:id', requireAuth, requireMemberOf, requireOwnerOf, async (req, res) => {
   const { name } = req.body || {};
   if (!name?.trim()) return res.status(400).json({ ok: false, error: 'name_required' });
+  if (name.trim().length > 80) return res.status(400).json({ ok: false, error: 'name_too_long' });
 
   try {
     await db.prepare(

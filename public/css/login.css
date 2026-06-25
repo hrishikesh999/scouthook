@@ -17,7 +17,11 @@ body {
 
 /* ── Left panel: dark ────────────────────────────────────── */
 .login-left {
-  background: #0F172A;
+  background-color: #071a18;
+  background-image:
+    radial-gradient(1100px 760px at 22% 52%, rgba(15, 118, 110, 0.65), rgba(15, 118, 110, 0) 68%),
+    radial-gradient(780px 540px at 86% 12%, rgba(15, 118, 110, 0.3), rgba(15, 118, 110, 0) 60%),
+    linear-gradient(135deg, #0a2420 0%, #071a18 72%);
   display: flex;
   flex-direction: column;
   justify-content: center;

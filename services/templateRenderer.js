@@ -298,4 +298,35 @@ async function renderTemplate(post, templateId, userOverrides = {}, brand = {}, 
   return { png_url: `/files/${filename}`, content: textSlots };
 }
 
-module.exports = { renderTemplate, extractTemplateSlots, generateTemplateThumbnail };
+// ---------------------------------------------------------------------------
+// Async render job queue — in-memory tracking for background Puppeteer renders
+// ---------------------------------------------------------------------------
+
+const renderJobs = new Map();
+
+const JOB_TTL_MS = 10 * 60 * 1000;
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, job] of renderJobs) {
+    if (now - job.createdAt > JOB_TTL_MS) renderJobs.delete(id);
+  }
+}, 60_000);
+
+function startRenderJob(jobId, post, templateId, userOverrides, brand, ctx) {
+  renderJobs.set(jobId, { status: 'rendering', png_url: null, error: null, createdAt: Date.now() });
+
+  renderTemplate(post, templateId, userOverrides, brand, ctx)
+    .then(result => {
+      renderJobs.set(jobId, { status: 'done', png_url: result.png_url, content: result.content, error: null, createdAt: Date.now() });
+    })
+    .catch(err => {
+      console.error('[templateRenderer] render job %s failed:', jobId, err.message);
+      renderJobs.set(jobId, { status: 'failed', png_url: null, error: err.message, createdAt: Date.now() });
+    });
+}
+
+function getRenderJobStatus(jobId) {
+  return renderJobs.get(jobId) || null;
+}
+
+module.exports = { renderTemplate, extractTemplateSlots, generateTemplateThumbnail, startRenderJob, getRenderJobStatus };

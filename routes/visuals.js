@@ -13,7 +13,7 @@ const { extractMetricsContent, renderMetricsCard } = require('../services/metric
 const { extractClientWinContent, renderClientWin } = require('../services/clientWinGenerator');
 const { extractFrameworkContent, renderFramework } = require('../services/frameworkGenerator');
 const { renderProofScreenshot } = require('../services/proofScreenshotGenerator');
-const { renderTemplate, extractTemplateSlots } = require('../services/templateRenderer');
+const { renderTemplate, extractTemplateSlots, startRenderJob, getRenderJobStatus } = require('../services/templateRenderer');
 const { canGenerateVisual, logVisualGeneration, getUserPlan } = require('../services/subscription');
 const { planHasFeature } = require('../lib/planFeatures');
 
@@ -285,9 +285,10 @@ router.post('/:postId', async (req, res) => {
 
     if (visual_type === 'template') {
       if (!template_id) return res.status(400).json({ ok: false, error: 'template_id_required' });
-      const result = await renderTemplate(post, template_id, content || {}, brand, { userId, tenantId });
+      const jobId = require('crypto').randomUUID();
+      startRenderJob(jobId, post, template_id, content || {}, brand, { userId, tenantId });
       await logVisualGeneration(userId, tenantId, postId, visual_type);
-      return res.json({ ok: true, ...result });
+      return res.json({ ok: true, status: 'rendering', job_id: jobId });
     }
 
     // carousel
@@ -299,6 +300,15 @@ router.post('/:postId', async (req, res) => {
     console.error('[visuals] generation error:', err.message);
     return res.status(500).json({ ok: false, error: err.message });
   }
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/visuals/jobs/:jobId — poll render job status
+// ---------------------------------------------------------------------------
+router.get('/jobs/:jobId', (req, res) => {
+  const job = getRenderJobStatus(req.params.jobId);
+  if (!job) return res.status(404).json({ ok: false, error: 'job_not_found' });
+  return res.json({ ok: true, status: job.status, png_url: job.png_url, content: job.content || null, error: job.error });
 });
 
 module.exports = router;

@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="/css/scouthook.css" />
   <link rel="stylesheet" href="/css/main.css" />
   <link rel="stylesheet" href="/css/admin.css" />
+  <script src="/js/admin-nav.js"></script>
   <style>
     .ht-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--space-md); }
     .ht-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
@@ -39,22 +40,7 @@
 
   <!-- Main app -->
   <div id="main" class="hidden">
-    <nav class="admin-nav">
-      <a href="/admin.html" class="admin-nav__brand"><img src="/images/sh-logo-dark.png" alt="ScoutHook" class="admin-nav__logo" /><span>Admin</span></a>
-      <div class="admin-nav__links">
-        <a href="/admin.html" class="admin-nav__link">Dashboard</a>
-        <a href="/admin-users.html" class="admin-nav__link">Users</a>
-        <a href="/admin-feedback.html" class="admin-nav__link">Feedback</a>
-        <a href="/admin-support.html" class="admin-nav__link">Support</a>
-        <div class="admin-nav__sep"></div>
-        <a href="/admin-settings.html" class="admin-nav__link">Settings</a>
-        <a href="/admin-templates.html" class="admin-nav__link">Templates</a>
-        <a href="/admin-html-templates.html" class="admin-nav__link admin-nav__link--active">HTML Templates</a>
-      </div>
-      <div class="admin-nav__bottom">
-        <a href="/admin-logout.html" class="admin-nav__logout">Log out</a>
-      </div>
-    </nav>
+    <div id="admin-nav-container"></div>
 
     <main class="admin-main">
       <div class="admin-templates-body">

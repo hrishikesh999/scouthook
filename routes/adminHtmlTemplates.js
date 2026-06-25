@@ -79,13 +79,14 @@ router.post('/', async (req, res) => {
 
     // Generate thumbnail synchronously (admin waits ~3–5s)
     let thumbnailKey = null;
+    let thumbnailWarning = null;
     try {
       const thumbBuf = await generateTemplateThumbnail(cleanHtml, manifest);
       thumbnailKey = storage.buildThumbnailKey(id);
       await storage.uploadAdmin(thumbBuf, thumbnailKey, 'image/png');
     } catch (thumbErr) {
       console.warn('[adminHtmlTemplates] thumbnail generation failed:', thumbErr.message);
-      // Thumbnail failure is non-fatal — admin can regenerate later
+      thumbnailWarning = thumbErr.message;
     }
 
     // Insert row
@@ -105,7 +106,7 @@ router.post('/', async (req, res) => {
       Number(sort_order),
     );
 
-    res.status(201).json({ ok: true, template: row });
+    res.status(201).json({ ok: true, template: row, thumbnail_warning: thumbnailWarning });
   } catch (err) {
     console.error('[adminHtmlTemplates] POST error:', err);
     res.status(500).json({ ok: false, error: err.message });
@@ -127,6 +128,7 @@ router.put('/:id', async (req, res) => {
     let htmlKey = existing.html_r2_key;
     let thumbnailKey = existing.thumbnail_r2_key;
     let manifest = existing.slot_manifest; // already parsed by pg
+    let thumbnailWarning = null;
 
     if (html) {
       if (Buffer.byteLength(html, 'utf8') > 500 * 1024) {
@@ -150,6 +152,7 @@ router.put('/:id', async (req, res) => {
         await storage.uploadAdmin(thumbBuf, thumbnailKey, 'image/png');
       } catch (thumbErr) {
         console.warn('[adminHtmlTemplates] thumbnail regen failed:', thumbErr.message);
+        thumbnailWarning = thumbErr.message;
       }
     }
 
@@ -175,7 +178,7 @@ router.put('/:id', async (req, res) => {
       updates.slot_manifest, updates.thumbnail_r2_key, id,
     );
 
-    res.json({ ok: true, template: row });
+    res.json({ ok: true, template: row, thumbnail_warning: thumbnailWarning });
   } catch (err) {
     console.error('[adminHtmlTemplates] PUT error:', err);
     res.status(500).json({ ok: false, error: err.message });
@@ -224,6 +227,22 @@ router.post('/:id/toggle', async (req, res) => {
     ).get(id);
     if (!row) return res.status(404).json({ ok: false, error: 'not_found' });
     res.json({ ok: true, template: row });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /:id/html — serve raw template HTML from R2
+// ---------------------------------------------------------------------------
+
+router.get('/:id/html', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const row = await db.prepare('SELECT html_r2_key FROM html_templates WHERE id = ?').get(id);
+    if (!row?.html_r2_key) return res.status(404).end();
+    const buf = await storage.downloadAdmin(row.html_r2_key);
+    res.set('Content-Type', 'text/plain; charset=utf-8').send(buf);
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }

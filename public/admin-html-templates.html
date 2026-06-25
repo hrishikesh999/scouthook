@@ -210,15 +210,18 @@
   document.getElementById('form-cancel').addEventListener('click', closeForm);
 
   async function editTemplate(id) {
-    const r = await adminFetch('/admin/html-templates');
-    const { templates } = await r.json();
+    const [metaRes, htmlRes] = await Promise.all([
+      adminFetch('/admin/html-templates'),
+      adminFetch(`/admin/html-templates/${id}/html`),
+    ]);
+    const { templates } = await metaRes.json();
     const t = templates.find(x => x.id === id);
     if (!t) return;
-    // We don't have the HTML body stored in DB — open a blank edit form for metadata only
-    openForm(t);
+    const html = htmlRes.ok ? await htmlRes.text() : '';
+    openForm(t, html);
   }
 
-  function openForm(t) {
+  function openForm(t, existingHtml = '') {
     const form = document.getElementById('template-form');
     document.getElementById('form-id').value = t ? t.id : '';
     document.getElementById('form-title').textContent = t ? `Edit: ${t.name}` : 'Add HTML Template';
@@ -226,7 +229,7 @@
     document.getElementById('f-description').value = t ? (t.description || '') : '';
     document.getElementById('f-category').value = t ? (t.category || '') : '';
     document.getElementById('f-sort').value = t ? (t.sort_order ?? 0) : 0;
-    document.getElementById('f-html').value = '';
+    document.getElementById('f-html').value = existingHtml;
     document.getElementById('manifest-preview').textContent = t
       ? JSON.stringify(t.slot_manifest, null, 2)
       : 'Paste HTML above to preview manifest…';
@@ -289,6 +292,9 @@
 
     if (!data.ok) { showFormError(data.error || 'Save failed.'); return; }
     closeForm();
+    if (data.thumbnail_warning) {
+      showGlobalWarning(`Template saved, but thumbnail generation failed: ${data.thumbnail_warning}. Start the render service and click ⟳ Thumbnail to retry.`);
+    }
     loadTemplates();
   });
 
@@ -296,6 +302,18 @@
     const el = document.getElementById('form-error');
     el.textContent = msg;
     el.classList.remove('hidden');
+  }
+
+  // Global warning banner shown above the template grid after a save with partial failure
+  let globalWarningEl = null;
+  function showGlobalWarning(msg) {
+    if (!globalWarningEl) {
+      globalWarningEl = document.createElement('div');
+      globalWarningEl.style.cssText = 'background:#fef9c3;border:1px solid #fde047;color:#713f12;border-radius:var(--radius);padding:var(--space-sm) var(--space-md);font-size:.85rem;margin-bottom:var(--space-md);display:flex;justify-content:space-between;align-items:flex-start;gap:var(--space-sm)';
+      const grid = document.getElementById('template-grid');
+      grid.parentNode.insertBefore(globalWarningEl, grid);
+    }
+    globalWarningEl.innerHTML = `<span>${msg}</span><button onclick="this.parentNode.remove();globalWarningEl=null" style="background:none;border:none;cursor:pointer;font-size:1rem;line-height:1;flex-shrink:0">✕</button>`;
   }
 </script>
 </body>

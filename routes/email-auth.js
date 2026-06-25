@@ -318,11 +318,31 @@ router.post('/forgot-password', async (req, res) => {
     const normalizedEmail = isValidEmail(email) ? email.trim().toLowerCase() : null;
 
     if (normalizedEmail) {
-      const row = await db.prepare(`
+      // First try a native email-auth account.
+      let row = await db.prepare(`
         SELECT user_id FROM auth_providers
         WHERE provider = 'email' AND provider_id = ? AND verified_at IS NOT NULL
         LIMIT 1
       `).get(normalizedEmail);
+
+      // If not found, check whether this email belongs to a Google (OAuth) user.
+      // In that case we create an email-provider row so they can set a password
+      // via the normal reset flow (effectively "add email login to your account").
+      if (!row) {
+        const upRow = await db.prepare(`
+          SELECT user_id FROM user_profiles WHERE email = ? LIMIT 1
+        `).get(normalizedEmail);
+
+        if (upRow) {
+          // Insert a verified-but-passwordless email-provider row for this user.
+          await db.prepare(`
+            INSERT INTO auth_providers (user_id, provider, provider_id, verified_at)
+            VALUES (?, 'email', ?, now())
+            ON CONFLICT (provider, provider_id) DO NOTHING
+          `).run(upRow.user_id, normalizedEmail);
+          row = { user_id: upRow.user_id };
+        }
+      }
 
       if (row) {
         const resetToken   = crypto.randomBytes(32).toString('hex');
@@ -336,6 +356,7 @@ router.post('/forgot-password', async (req, res) => {
 
         sendEmail('reset-password', normalizedEmail, {
           reset_url: `${APP_URL}/reset-password.html?token=${resetToken}`,
+          app_url:   APP_URL,
         }).catch(err => console.error('[email-auth] reset email failed:', err.message));
       }
     }

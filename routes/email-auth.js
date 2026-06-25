@@ -199,6 +199,7 @@ router.post('/verify-email', async (req, res) => {
         app_url: APP_URL,
       }).catch(() => {});
       require('../services/mailerlite').addFreeSubscriber(row.email, row.display_name).catch(() => {});
+      require('../emails').notifyAdminsNewSignup(row.email, row.display_name, 'email').catch(() => {});
     }
 
     await establishSession(req, row.user_id, workspaceId);

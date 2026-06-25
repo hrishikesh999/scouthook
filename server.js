@@ -211,6 +211,7 @@ if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
               const appUrl = process.env.APP_URL || '';
               sendEmail('welcome', email, { name: displayName.split(' ')[0] || displayName, app_url: appUrl });
               require('./services/mailerlite').addFreeSubscriber(email, displayName).catch(() => {});
+              require('./emails').notifyAdminsNewSignup(email, displayName, 'google').catch(() => {});
             }
           }
         }

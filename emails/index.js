@@ -158,4 +158,13 @@ async function sendEmailToUser(userId, templateName, vars = {}, { dedupKey = nul
   }
 }
 
-module.exports = { sendEmail, sendEmailToUser, getUserEmailInfo };
+const ADMIN_NOTIFY_EMAILS = ['chirag@scouthook.com', 'rishi@copypower.co'];
+
+async function notifyAdminsNewSignup(email, name, method = 'email') {
+  const date = new Date().toUTCString();
+  for (const admin of ADMIN_NOTIFY_EMAILS) {
+    sendEmail('admin-new-signup', admin, { name, email, method, date }).catch(() => {});
+  }
+}
+
+module.exports = { sendEmail, sendEmailToUser, getUserEmailInfo, notifyAdminsNewSignup };

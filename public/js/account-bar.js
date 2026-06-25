@@ -211,12 +211,49 @@
     header.appendChild(actions);
   }
 
-  // ── Trial banner (site-wide, dismissible) ────────────────────
+  // ── Trial banner (site-wide) ─────────────────────────────────
+  // Active trial: dismissible indigo bar with countdown.
+  // Expired trial: non-dismissible amber bar nudging upgrade.
   async function initTrialBanner() {
-    if (localStorage.getItem('trial_banner_dismissed')) return;
     try {
       const sub = await cachedFetch('/api/billing/subscription', { credentials: 'same-origin' });
-      if (!sub.ok || sub.status !== 'trialing' || !sub.trial_ends_at) return;
+      if (!sub.ok) return;
+
+      // ── Post-trial: show non-dismissible amber bar ──────────
+      if (sub.trial_expired) {
+        const banner = document.createElement('div');
+        banner.id = 'trial-banner';
+        banner.style.cssText = [
+          'position:fixed', 'top:0', 'left:0', 'right:0', 'z-index:8000',
+          'background:#b45309', 'color:#fff',
+          'display:flex', 'align-items:center', 'justify-content:center',
+          'gap:12px', 'padding:10px 16px',
+          'font-size:14px', 'font-weight:500',
+        ].join(';');
+        banner.innerHTML = `
+          <span>Your free trial has ended.</span>
+          <button type="button" class="trial-banner-upgrade"
+            style="background:#fff;border:none;color:#b45309;font-weight:700;cursor:pointer;font-size:13px;padding:4px 12px;border-radius:6px"
+          >Upgrade to Pro →</button>
+        `;
+        document.body.prepend(banner);
+        document.body.classList.add('has-trial-banner');
+        requestAnimationFrame(() => {
+          document.documentElement.style.setProperty('--trial-bar-h', banner.offsetHeight + 'px');
+        });
+        banner.querySelector('.trial-banner-upgrade').addEventListener('click', () => {
+          if (window.PricingModal) {
+            window.PricingModal.open();
+          } else {
+            window.location.href = '/billing.html?upgrade=1';
+          }
+        });
+        return;
+      }
+
+      // ── Active trial: dismissible countdown bar ─────────────
+      if (localStorage.getItem('trial_banner_dismissed')) return;
+      if (sub.status !== 'trialing' || !sub.trial_ends_at) return;
       const daysLeft = Math.max(0, Math.ceil((new Date(sub.trial_ends_at) - Date.now()) / 86400000));
       if (daysLeft <= 0) return;
 

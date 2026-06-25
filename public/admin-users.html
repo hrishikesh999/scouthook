@@ -157,7 +157,7 @@
       const data = await r.json();
       if (!data.ok) { document.getElementById('so-body').innerHTML = `<p class="save-error-msg">Failed to load.</p>`; return; }
 
-      const { profile, subscription, workspaces, connections, profiles, recent_posts } = data;
+      const { profile, subscription, workspaces, connections, profiles, recent_posts, usage } = data;
 
       document.getElementById('so-name').textContent  = profile.display_name || '—';
       document.getElementById('so-email').textContent = profile.email || '—';
@@ -184,6 +184,33 @@
           <div class="detail-row"><span class="detail-row__label">Plan</span><span>${statusBadge(subscription?.plan, subscription?.status)}</span></div>
           ${trialEnds ? `<div class="detail-row"><span class="detail-row__label">Trial ends</span><span>${trialEnds}</span></div>` : ''}
           ${periodEnd ? `<div class="detail-row"><span class="detail-row__label">Renewal</span><span>${periodEnd}</span></div>` : ''}
+        </div>
+
+        <!-- Usage this month (internal caps — not shown to users) -->
+        <div class="slide-over__section">
+          <div class="slide-over__section-title">Usage This Month</div>
+          ${(() => {
+            if (!usage) return '<p class="empty-section-text">No usage data.</p>';
+            const postPct  = usage.internal_post_cap   > 0 ? Math.round((usage.posts_this_month   / usage.internal_post_cap)   * 100) : 0;
+            const vissPct  = usage.internal_visual_cap > 0 ? Math.round((usage.visuals_this_month / usage.internal_visual_cap) * 100) : 0;
+            const postWarn  = postPct >= 80;
+            const vissWarn  = vissPct >= 80;
+            return `
+              <div class="detail-row">
+                <span class="detail-row__label">Posts generated</span>
+                <span class="${postWarn ? 'text-error-sm' : ''}" title="Internal cap: ${usage.internal_post_cap}/mo">
+                  ${usage.posts_this_month} <span class="text-xs-muted">/ ${usage.internal_post_cap} cap</span>
+                  ${postWarn ? '<span class="badge badge--pastdue badge--xs">HIGH</span>' : ''}
+                </span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-row__label">Visuals generated</span>
+                <span class="${vissWarn ? 'text-error-sm' : ''}" title="Internal cap: ${usage.internal_visual_cap}/mo">
+                  ${usage.visuals_this_month} <span class="text-xs-muted">/ ${usage.internal_visual_cap} cap</span>
+                  ${vissWarn ? '<span class="badge badge--pastdue badge--xs">HIGH</span>' : ''}
+                </span>
+              </div>`;
+          })()}
         </div>
 
         <!-- Trial extension -->

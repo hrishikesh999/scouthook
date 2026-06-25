@@ -4,6 +4,13 @@ const { db } = require('../db');
 const { Paddle, Environment } = require('@paddle/paddle-node-sdk');
 const { getMonthlyPostLimit } = require('../lib/planFeatures');
 
+// Internal hard caps — never shown to users; exist to prevent runaway abuse.
+// Env vars allow tuning without a deploy. Values are per user per calendar month.
+const INTERNAL_POST_CAP_FREE   = parseInt(process.env.INTERNAL_POST_CAP_FREE   || '25',  10);
+const INTERNAL_POST_CAP_PRO    = parseInt(process.env.INTERNAL_POST_CAP_PRO    || '500', 10);
+const INTERNAL_VISUAL_CAP_FREE = parseInt(process.env.INTERNAL_VISUAL_CAP_FREE || '25',  10);
+const INTERNAL_VISUAL_CAP_PRO  = parseInt(process.env.INTERNAL_VISUAL_CAP_PRO  || '800', 10);
+
 // ---------------------------------------------------------------------------
 // Paddle SDK singleton
 // ---------------------------------------------------------------------------
@@ -138,7 +145,10 @@ async function canGeneratePost(userId) {
     return { allowed: true, current: 0, limit, plan, resets_at: end };
   }
 
-  return { allowed: limit === null || current < limit, current, limit, plan, resets_at: end };
+  const internalCap = plan === 'pro' ? INTERNAL_POST_CAP_PRO : INTERNAL_POST_CAP_FREE;
+  const allowedByQuota = limit === null || current < limit;
+  const allowedByCap   = current < internalCap;
+  return { allowed: allowedByQuota && allowedByCap, current, limit, plan, resets_at: end };
 }
 
 // ---------------------------------------------------------------------------
@@ -168,7 +178,10 @@ async function canGenerateVisual(userId, tenantId = 'default') {
     console.error('[subscription] canGenerateVisual count error:', err.message);
     return { allowed: true, current: 0, limit, plan };
   }
-  return { allowed: limit === null || current < limit, current, limit, plan };
+  const internalCap = plan === 'pro' ? INTERNAL_VISUAL_CAP_PRO : INTERNAL_VISUAL_CAP_FREE;
+  const allowedByQuota = limit === null || current < limit;
+  const allowedByCap   = current < internalCap;
+  return { allowed: allowedByQuota && allowedByCap, current, limit, plan };
 }
 
 // ---------------------------------------------------------------------------
@@ -328,4 +341,8 @@ module.exports = {
   getPaddleCustomerId,
   upsertSubscription,
   forceSyncSubscriptionForUser,
+  INTERNAL_POST_CAP_FREE,
+  INTERNAL_POST_CAP_PRO,
+  INTERNAL_VISUAL_CAP_FREE,
+  INTERNAL_VISUAL_CAP_PRO,
 };

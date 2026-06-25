@@ -399,6 +399,9 @@
           if (data.name !== 'checkout.completed') return;
           const tid = checkoutCompletedTransactionId(data);
           try { if (tid) sessionStorage.setItem(PENDING_PADDLE_TXN_KEY, tid); } catch { /* private mode */ }
+          // Bust cached subscription so initTrialBanner() and renderSidebarUpgrade()
+          // don't serve a stale trial_expired:true response after the user upgrades.
+          if (window.cachedFetch) cachedFetch.bust('/api/billing/subscription');
           fetch('/api/billing/sync', {
             method: 'POST',
             credentials: 'same-origin',
@@ -581,7 +584,8 @@
     const sub = (subRes.status === 'fulfilled' ? subRes.value : null) || {};
     // Trial users should always go through checkout, not the management portal —
     // even if they have a stale price_id from a prior cancelled subscription.
-    const isAppTrial = sub.status === 'trialing';
+    // Exclude expired app-level trials so they're treated as Free, not active trial.
+    const isAppTrial = sub.status === 'trialing' && !sub.trial_expired;
     currentPlan = isAppTrial ? 'free' : (sub.plan || 'free');
 
     // — Apply plan state to UI

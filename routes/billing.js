@@ -117,7 +117,11 @@ router.get('/subscription', requireAuth, async (req, res) => {
           const paddle = getPaddle();
           const subscription = await paddle.subscriptions.get(row.paddle_subscription_id);
           if (subscription) {
-            const priceId = subscription.items?.[0]?.price?.id ?? null;
+            const addonPriceIdStale = process.env.PADDLE_PRICE_ID_WORKSPACE_ADDON || null;
+            const basePlanItemStale = addonPriceIdStale
+              ? (subscription.items?.find(i => i.price?.id !== addonPriceIdStale) ?? subscription.items?.[0])
+              : subscription.items?.[0];
+            const priceId = basePlanItemStale?.price?.id ?? null;
             const plan    = !priceId ? 'pro' : (proPriceIds.includes(priceId) ? 'pro' : 'free');
             await upsertSubscription({
               userId,
@@ -131,6 +135,18 @@ router.get('/subscription', requireAuth, async (req, res) => {
               canceledAt:           subscription.canceledAt ? new Date(subscription.canceledAt) : null,
               priceId,
             });
+
+            // Sync extra_workspaces from the live subscription so Paddle-side
+            // addon changes (refund, support removal) are reflected here too.
+            if (addonPriceIdStale) {
+              const addonItemStale = subscription.items?.find(i => i.price?.id === addonPriceIdStale);
+              const syncedExtra = addonItemStale?.quantity ?? 0;
+              billingDb.prepare(
+                'UPDATE user_subscriptions SET extra_workspaces = ?, updated_at = now() WHERE user_id = ?'
+              ).run(syncedExtra, userId).catch(err =>
+                console.warn('[billing] stale-refresh extra_workspaces sync error (non-fatal):', err.message)
+              );
+            }
 
             // Keep MailerLite groups in sync whenever the stale-refresh updates
             // subscription state (e.g. on renewal, plan change, or cancellation).
@@ -223,15 +239,23 @@ router.get('/subscription', requireAuth, async (req, res) => {
   ]);
 
   const extraWorkspaces = sub.extra_workspaces ?? 0;
+  // Only flag app-level trials (no price_id = no Paddle subscription yet).
+  // Paddle-managed trials have their own status lifecycle; excluding them here
+  // prevents a false-positive banner during the Paddle trial→active transition window.
+  const trialExpired = sub.status === 'trialing'
+    && !sub.price_id
+    && !!sub.trial_ends_at
+    && new Date(sub.trial_ends_at) <= new Date();
 
   return res.json({
     ok: true,
-    plan: genCheck.plan,  // effective plan: 'free' once grace period has expired
+    plan: genCheck.plan,  // effective plan: 'free' once trial/grace period has expired
     status: sub.status,
     price_id: sub.price_id ?? null,
     current_period_end: sub.current_period_end ?? null,
     canceled_at: sub.canceled_at ?? null,
     trial_ends_at: sub.trial_ends_at ?? null,
+    trial_expired: trialExpired,
     extra_workspaces: extraWorkspaces,
     workspace_limit: getWorkspaceLimit(genCheck.plan, extraWorkspaces),
     workspace_count: wsStats?.owned_count ?? 0,
@@ -430,7 +454,20 @@ router.post('/sync', requireAuth, async (req, res) => {
     return res.status(404).json({ ok: false, error: 'no_subscription_found' });
   }
 
-  const priceId = subscription.items?.[0]?.price?.id ?? null;
+  // Find the base plan price (first non-addon item) and the workspace addon item.
+  const addonPriceIdForSync = process.env.PADDLE_PRICE_ID_WORKSPACE_ADDON || null;
+  // When env var is unset, addonPriceIdForSync is null — the find predicate
+  // becomes (i.price?.id !== null) which is true for all items (correct: no
+  // addon to exclude, so the first item is the base plan item).
+  // When the env var IS set, the predicate correctly skips the addon item.
+  const basePlanItem  = addonPriceIdForSync
+    ? (subscription.items?.find(i => i.price?.id !== addonPriceIdForSync) ?? subscription.items?.[0])
+    : subscription.items?.[0];
+  const addonItemSync = addonPriceIdForSync
+    ? subscription.items?.find(i => i.price?.id === addonPriceIdForSync)
+    : null;
+
+  const priceId = basePlanItem?.price?.id ?? null;
   // Mirror the webhook's safe default: if priceId is absent from the REST payload
   // or not yet in our env list, keep the user on 'pro' rather than downgrading them.
   let plan;
@@ -460,6 +497,19 @@ router.post('/sync', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('[billing] sync upsert error:', err.message);
     return res.status(500).json({ ok: false, error: 'db_error', detail: err.message });
+  }
+
+  // Sync extra_workspaces from the live Paddle subscription. Always write the
+  // quantity (0 when the addon item is absent) so a Paddle-side removal is
+  // reflected in the DB. Skipping when addonItemSync==null would leave a stale
+  // non-zero value if the addon was voided or refunded outside the app.
+  if (addonPriceIdForSync) {
+    const syncedExtra = addonItemSync?.quantity ?? 0;
+    billingDb.prepare(
+      'UPDATE user_subscriptions SET extra_workspaces = ?, updated_at = now() WHERE user_id = ?'
+    ).run(syncedExtra, userId).catch(err =>
+      console.error('[billing] sync extra_workspaces error:', err.message)
+    );
   }
 
   console.log(`[billing] sync userId=${userId} plan=${plan} status=${subscription.status}`);
@@ -533,23 +583,178 @@ router.post('/upgrade', requireAuth, async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
-// POST /api/billing/add-workspace
-// Pro only: returns Paddle price config for the per-workspace add-on.
+// Shared helper: build the new items list for a workspace add-on update.
+// Takes the current Paddle subscription and returns the items array to pass
+// to subscriptions.update() or subscriptions.previewUpdate(). Keeps all
+// active existing items and either increments the workspace-addon quantity
+// or appends a new item if none exists yet.
 // ---------------------------------------------------------------------------
-router.post('/add-workspace', requireAuth, async (req, res) => {
-  const plan = await getUserPlan(req.userId);
-  if (plan !== 'pro') {
-    return res.status(403).json({ ok: false, error: 'pro_required' });
-  }
-  const priceId = process.env.PADDLE_PRICE_ID_WORKSPACE_ADDON;
-  if (!priceId) {
+function buildWorkspaceAddonItems(subscription, addonPriceId) {
+  const currentItems = subscription.items ?? [];
+  const newItems = currentItems
+    .filter(i => i.status === 'active' || i.status === 'trialing')
+    .map(i => ({
+      priceId: i.price.id,
+      quantity: i.price.id === addonPriceId ? i.quantity + 1 : i.quantity,
+    }));
+  // Check for the addon in the FILTERED list: an inactive addon would not be
+  // in newItems (excluded by the filter above), so we must append a fresh one.
+  // Using the unfiltered currentItems here would falsely suppress the append.
+  const alreadyHasAddon = newItems.some(i => i.priceId === addonPriceId);
+  if (!alreadyHasAddon) newItems.push({ priceId: addonPriceId, quantity: 1 });
+  return newItems;
+}
+
+// ---------------------------------------------------------------------------
+// POST /api/billing/workspace-preview
+// Pro only (active Paddle subscription required). Returns the exact prorated
+// charge Paddle will collect today and the new monthly total, so the UI can
+// show a confirmation modal before committing.
+// ---------------------------------------------------------------------------
+router.post('/workspace-preview', requireAuth, async (req, res) => {
+  const userId = req.userId;
+
+  const addonPriceId = process.env.PADDLE_PRICE_ID_WORKSPACE_ADDON;
+  if (!addonPriceId) {
     return res.status(500).json({ ok: false, error: 'price_not_configured' });
   }
+
+  // Use getUserPlan() for the effective plan check — it applies trial expiry,
+  // past_due grace window, and paused-status logic that sub.status alone doesn't.
+  const effectivePlan = await getUserPlan(userId);
+  if (effectivePlan !== 'pro') {
+    return res.status(403).json({ ok: false, error: 'pro_required' });
+  }
+
+  const sub = await getUserSubscription(userId);
+  if (!sub.paddle_subscription_id) {
+    return res.status(403).json({ ok: false, error: 'no_paddle_subscription' });
+  }
+
+  const paddle = getPaddle();
+  let liveSubscription;
+  try {
+    liveSubscription = await paddle.subscriptions.get(sub.paddle_subscription_id);
+  } catch (err) {
+    console.error('[billing] workspace-preview: subscriptions.get error:', err.message);
+    return res.status(502).json({ ok: false, error: 'paddle_error' });
+  }
+
+  const newItems = buildWorkspaceAddonItems(liveSubscription, addonPriceId);
+
+  let preview;
+  try {
+    preview = await paddle.subscriptions.previewUpdate(sub.paddle_subscription_id, {
+      items: newItems,
+      prorationBillingMode: 'prorated_immediately',
+    });
+  } catch (err) {
+    console.error('[billing] workspace-preview: previewUpdate error:', err.message);
+    return res.status(502).json({ ok: false, error: 'paddle_error' });
+  }
+
+  const immediate = preview.immediateTransaction;
+  const next      = preview.nextTransaction;
+
   return res.json({
     ok: true,
-    priceId,
-    customData: { userId: req.userId, type: 'extra_workspace', quantity: 1 },
+    immediate_total:    immediate?.details?.totals?.grandTotal ?? null,
+    immediate_currency: immediate?.details?.totals?.currencyCode ?? liveSubscription.currencyCode,
+    next_total:         next?.details?.totals?.grandTotal ?? null,
+    next_billed_at:     liveSubscription.nextBilledAt ?? sub.current_period_end ?? null,
   });
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/billing/add-workspace
+// Pro only (active Paddle subscription required). Adds one workspace slot to
+// the user's existing Paddle subscription via a subscription item update.
+// Paddle prorates the charge immediately for the remainder of the billing
+// period — no separate checkout, no second subscription.
+// After a successful Paddle update, syncs extra_workspaces from the live
+// subscription item quantity so the DB stays consistent.
+// ---------------------------------------------------------------------------
+router.post('/add-workspace', requireAuth, async (req, res) => {
+  const userId = req.userId;
+
+  const addonPriceId = process.env.PADDLE_PRICE_ID_WORKSPACE_ADDON;
+  if (!addonPriceId) {
+    return res.status(500).json({ ok: false, error: 'price_not_configured' });
+  }
+
+  // Use getUserPlan() for the effective plan check — it applies trial expiry,
+  // past_due grace window, and paused-status logic that sub.status alone doesn't.
+  const effectivePlan = await getUserPlan(userId);
+  if (effectivePlan !== 'pro') {
+    return res.status(403).json({ ok: false, error: 'pro_required' });
+  }
+
+  const sub = await getUserSubscription(userId);
+  if (!sub.paddle_subscription_id) {
+    return res.status(403).json({ ok: false, error: 'no_paddle_subscription' });
+  }
+
+  const paddle = getPaddle();
+  let liveSubscription;
+  try {
+    liveSubscription = await paddle.subscriptions.get(sub.paddle_subscription_id);
+  } catch (err) {
+    console.error('[billing] add-workspace: subscriptions.get error:', err.message);
+    return res.status(502).json({ ok: false, error: 'paddle_error' });
+  }
+
+  // Idempotency guard: compare the current Paddle quantity with what the DB
+  // expects. If they already match (e.g. a duplicate request arrived before
+  // the DB write completed), skip the Paddle update and return success.
+  const currentAddonItem    = liveSubscription.items.find(i => i.price.id === addonPriceId);
+  const currentPaddleQty    = currentAddonItem?.quantity ?? 0;
+  const currentDbExtra      = sub.extra_workspaces ?? 0;
+  if (currentPaddleQty > currentDbExtra) {
+    // Paddle already has a higher quantity than the DB — likely a prior request
+    // that succeeded in Paddle but failed to update the DB. Sync the DB and
+    // return success without firing another Paddle update.
+    const syncedLimit = getWorkspaceLimit(effectivePlan, currentPaddleQty);
+    await billingDb.prepare(
+      'UPDATE user_subscriptions SET extra_workspaces = ?, updated_at = now() WHERE user_id = ?'
+    ).run(currentPaddleQty, userId).catch(err =>
+      console.error('[billing] add-workspace idempotency sync error:', err.message)
+    );
+    console.log(`[billing] add-workspace idempotency: synced userId=${userId} extra=${currentPaddleQty}`);
+    return res.json({ ok: true, extra_workspaces: currentPaddleQty, workspace_limit: syncedLimit });
+  }
+
+  const newItems = buildWorkspaceAddonItems(liveSubscription, addonPriceId);
+
+  let updatedSubscription;
+  try {
+    updatedSubscription = await paddle.subscriptions.update(sub.paddle_subscription_id, {
+      items: newItems,
+      prorationBillingMode: 'prorated_immediately',
+    });
+  } catch (err) {
+    console.error('[billing] add-workspace: subscriptions.update error:', err.message);
+    return res.status(502).json({ ok: false, error: 'paddle_error', detail: err.message });
+  }
+
+  // Derive the new extra_workspaces count directly from the updated Paddle
+  // subscription item quantity. This is idempotent: if the DB update was
+  // previously skipped (e.g. server crash), re-running gives the right value.
+  const addonItem        = updatedSubscription.items.find(i => i.price.id === addonPriceId);
+  const newExtraCount    = addonItem?.quantity ?? 1;
+  const newWorkspaceLimit = getWorkspaceLimit(effectivePlan, newExtraCount);
+
+  try {
+    await billingDb.prepare(
+      'UPDATE user_subscriptions SET extra_workspaces = ?, updated_at = now() WHERE user_id = ?'
+    ).run(newExtraCount, userId);
+  } catch (dbErr) {
+    // Paddle succeeded — log but don't fail. The next subscription GET will
+    // re-read from Paddle and can correct the count.
+    console.error('[billing] add-workspace: DB update error (non-fatal):', dbErr.message);
+  }
+
+  console.log(`[billing] add-workspace userId=${userId} extra_workspaces=${newExtraCount}`);
+  return res.json({ ok: true, extra_workspaces: newExtraCount, workspace_limit: newWorkspaceLimit });
 });
 
 module.exports = router;

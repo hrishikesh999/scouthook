@@ -4,7 +4,11 @@ const express = require('express');
 const router  = express.Router();
 const { getSetting, setSetting, getAllSettings, db } = require('../db');
 const { pool } = require('../db/pg');
-const { getPaddle, upsertSubscription, getUserPlan } = require('../services/subscription');
+const {
+  getPaddle, upsertSubscription, getUserPlan,
+  INTERNAL_POST_CAP_FREE, INTERNAL_POST_CAP_PRO,
+  INTERNAL_VISUAL_CAP_FREE, INTERNAL_VISUAL_CAP_PRO,
+} = require('../services/subscription');
 const mailerlite = require('../services/mailerlite');
 const { getUserEmailInfo } = require('../emails');
 
@@ -727,7 +731,10 @@ router.get('/users/:userId', requireAdminPassword, (req, res) => {
   (async () => {
     const { userId } = req.params;
 
-    const [profile, subscription, workspaces, connections, profiles, recentPosts] =
+    const now = new Date();
+    const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
+
+    const [profile, subscription, workspaces, connections, profiles, recentPosts, postsThisMonth, visualsThisMonth] =
       await Promise.all([
         db.prepare('SELECT * FROM user_profiles WHERE user_id = ?').get(userId),
         db.prepare('SELECT plan, status, trial_ends_at, current_period_end, canceled_at FROM user_subscriptions WHERE user_id = ?').get(userId),
@@ -760,11 +767,29 @@ router.get('/users/:userId', requireAdminPassword, (req, res) => {
           ORDER BY gp.created_at DESC
           LIMIT 10
         `).all(userId),
+        db.prepare(`
+          SELECT COUNT(*) AS cnt
+          FROM generated_posts
+          WHERE user_id = ? AND passed_gate = 1 AND created_at >= ?
+        `).get(userId, monthStart),
+        db.prepare(`
+          SELECT COUNT(*) AS cnt
+          FROM visual_generation_log
+          WHERE user_id = ? AND created_at >= ?
+        `).get(userId, monthStart),
       ]);
 
     if (!profile) return res.status(404).json({ ok: false, error: 'user_not_found' });
 
-    return res.json({ ok: true, profile, subscription, workspaces, connections, profiles, recent_posts: recentPosts });
+    const userIsPro = subscription?.plan === 'pro';
+    const usage = {
+      posts_this_month:    parseInt(postsThisMonth?.cnt  ?? 0, 10),
+      visuals_this_month:  parseInt(visualsThisMonth?.cnt ?? 0, 10),
+      internal_post_cap:   userIsPro ? INTERNAL_POST_CAP_PRO   : INTERNAL_POST_CAP_FREE,
+      internal_visual_cap: userIsPro ? INTERNAL_VISUAL_CAP_PRO : INTERNAL_VISUAL_CAP_FREE,
+    };
+
+    return res.json({ ok: true, profile, subscription, workspaces, connections, profiles, recent_posts: recentPosts, usage });
   })().catch(err => res.status(500).json({ ok: false, error: err.message }));
 });
 

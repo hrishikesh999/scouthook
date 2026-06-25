@@ -38,8 +38,13 @@
         <div class="billing-card">
           <div class="skeleton-block">
             <div class="skeleton-line" style="width:40%"></div>
+            <div class="skeleton-line" style="width:30%;margin-top:4px"></div>
+          </div>
+        </div>
+        <div class="billing-card">
+          <div class="skeleton-block">
+            <div class="skeleton-line" style="width:40%"></div>
             <div class="skeleton-line" style="width:70%;margin-top:4px"></div>
-            <div class="skeleton-line" style="width:70%"></div>
             <div class="skeleton-line" style="width:70%"></div>
           </div>
         </div>
@@ -47,6 +52,12 @@
 
       <!-- ── Loaded content ───────────────────────────────── -->
       <div id="billing-content" style="display:none">
+
+        <!-- Trial-expired banner (shown when trial ended without upgrade) -->
+        <div id="trial-expired-banner" class="billing-alert warn" style="display:none;margin-bottom:20px">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <span>Your 7-day free trial has ended. Upgrade to Pro to restore unlimited access.</span>
+        </div>
 
         <!-- Post-checkout success banner (full width) -->
         <div id="success-banner" class="billing-alert success" style="display:none;margin-bottom:20px">
@@ -133,7 +144,43 @@
             </div>
           </div><!-- /plan-card -->
 
-          <!-- ── Card 2: Usage this period ──────────────── -->
+          <!-- ── Card 2: Workspaces ─────────────────────── -->
+          <div class="billing-card" id="workspace-card">
+            <div class="billing-card-header">
+              <span class="billing-card-title">Workspaces</span>
+            </div>
+            <div class="billing-card-body">
+              <div class="plan-main-row" style="align-items:center;margin-bottom:4px">
+                <div>
+                  <span id="ws-count-display" style="font-size:22px;font-weight:700;color:var(--text-primary)">1</span>
+                  <span id="ws-limit-display" style="font-size:14px;color:var(--text-muted);margin-left:4px">of 1</span>
+                  <span style="font-size:13px;color:var(--text-muted);margin-left:6px">workspace</span>
+                </div>
+              </div>
+
+              <!-- Grace period warning -->
+              <div id="ws-grace-alert" class="billing-alert warn" style="display:none;margin-top:8px">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                <span id="ws-grace-text"></span>
+              </div>
+
+              <!-- Pro: add workspace button -->
+              <div id="ws-add-row" class="plan-actions" style="display:none;margin-top:12px">
+                <button type="button" class="btn-secondary" id="btn-add-workspace">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="margin-right:5px"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                  Add workspace
+                </button>
+                <span class="field-helper" style="margin-left:8px">$29/mo each</span>
+              </div>
+
+              <!-- Free/trial: upsell note -->
+              <div id="ws-upsell-note" class="field-helper" style="display:none;margin-top:10px">
+                Additional workspaces are $29/mo — available on the Pro plan.
+              </div>
+            </div>
+          </div><!-- /workspace-card -->
+
+          <!-- ── Card 3: Usage this period ──────────────── -->
           <div class="billing-card">
             <div class="billing-card-header">
               <span class="billing-card-title">Usage this period</span>
@@ -249,6 +296,29 @@
 
     </div><!-- /billing-page -->
 
+    <!-- ── Add workspace confirmation modal ───────────────────── -->
+    <div class="cancel-overlay" id="ws-add-modal" role="dialog" aria-modal="true" aria-labelledby="ws-add-dialog-title">
+      <div class="cancel-dialog">
+        <div class="cancel-dialog-icon" style="background:var(--color-teal-50,#f0fdf9);color:var(--color-teal-600,#0d9488)">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+        </div>
+        <h2 id="ws-add-dialog-title">Add a workspace</h2>
+        <div id="ws-add-modal-body" style="font-size:14px;color:var(--text-secondary);line-height:1.6">
+          <div class="ws-add-loading" style="display:flex;align-items:center;gap:8px;color:var(--text-muted)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+            Calculating charge…
+          </div>
+        </div>
+        <div class="cancel-dialog-actions" style="margin-top:20px">
+          <button type="button" class="btn-secondary" id="btn-ws-add-cancel">Cancel</button>
+          <button type="button" class="btn-primary" id="btn-ws-add-confirm" disabled>
+            Confirm &amp; add
+          </button>
+        </div>
+        <div id="ws-add-error" class="cancel-dialog-error" style="display:none"></div>
+      </div>
+    </div>
+
     <!-- ── Cancel confirmation modal ──────────────────────────── -->
     <div class="cancel-overlay" id="cancel-modal" role="dialog" aria-modal="true" aria-labelledby="cancel-dialog-title">
       <div class="cancel-dialog">
@@ -360,10 +430,16 @@
 
     // ── Main render ────────────────────────────────────────────
     async function render(sub, priceMap) {
-      const isPro      = sub.plan === 'pro';
-      const isCanceled = sub.status === 'canceled';
+      const isPro        = sub.plan === 'pro';
+      const isCanceled   = sub.status === 'canceled';
+      const isTrialExpired = !!sub.trial_expired;
       // App-level trial: trialing status with no price_id means no Paddle subscription yet.
-      const isAppTrial = sub.status === 'trialing' && !sub.price_id;
+      const isAppTrial = sub.status === 'trialing' && !sub.price_id && !isTrialExpired;
+
+      // ── Trial-expired banner ───────────────────────────────
+      if (isTrialExpired) {
+        document.getElementById('trial-expired-banner').style.display = '';
+      }
 
       // ── Tier bar color ─────────────────────────────────────
       const tierBar = document.getElementById('plan-tier-bar');
@@ -479,6 +555,26 @@
         document.getElementById('upgrade-cta').style.display = '';
       }
 
+      // ── Workspace card ────────────────────────────────────────
+      const wsCount = sub.workspace_count ?? 1;
+      const wsLimit = sub.workspace_limit ?? 1;
+      const wsGrace = sub.workspaces_in_grace ?? 0;
+      document.getElementById('ws-count-display').textContent = wsCount;
+      document.getElementById('ws-limit-display').textContent = `of ${wsLimit}`;
+      if (wsGrace > 0) {
+        document.getElementById('ws-grace-alert').style.display = '';
+        document.getElementById('ws-grace-text').textContent =
+          `${wsGrace} workspace${wsGrace !== 1 ? 's are' : ' is'} in a grace period — upgrade to restore access.`;
+      }
+      // isPro = effective plan is pro (getUserPlan returned 'pro').
+      // A canceled-but-still-valid Pro user still has isPro=true until period end,
+      // so they should see the Add Workspace button, not the upsell note.
+      if (isPro && !isAppTrial) {
+        document.getElementById('ws-add-row').style.display = '';
+      } else {
+        document.getElementById('ws-upsell-note').style.display = '';
+      }
+
       // ── Trial upgrade box ─────────────────────────────────────
       if (isAppTrial && sub.trial_ends_at) {
         const box = document.getElementById('trial-upgrade-box');
@@ -536,7 +632,8 @@
           _subData  = d2;
           // Reset all dynamic elements before re-render
           ['canceled-banner','pro-actions','free-actions','plan-price-block','renewal-line',
-           'plan-tier-badge','usage-upgrade-nudge','cancel-zone','canceled-info','expired-info','upgrade-cta']
+           'plan-tier-badge','usage-upgrade-nudge','cancel-zone','canceled-info','expired-info','upgrade-cta',
+           'trial-expired-banner','ws-grace-alert','ws-add-row','ws-upsell-note']
             .forEach(id => {
               const el = document.getElementById(id);
               if (el) el.style.display = 'none';
@@ -567,6 +664,125 @@
     document.getElementById('btn-upgrade-cta').addEventListener('click', openModal);
     document.getElementById('btn-upgrade-nudge').addEventListener('click', openModal);
     document.getElementById('btn-trial-upgrade-box').addEventListener('click', openModal);
+
+    // ── Add workspace flow (preview → confirm → execute) ───────
+    (function () {
+      const addBtn     = document.getElementById('btn-add-workspace');
+      const modal      = document.getElementById('ws-add-modal');
+      const modalBody  = document.getElementById('ws-add-modal-body');
+      const confirmBtn = document.getElementById('btn-ws-add-confirm');
+      const cancelBtn  = document.getElementById('btn-ws-add-cancel');
+      const errDiv     = document.getElementById('ws-add-error');
+
+      function fmtMoney(amount, currency) {
+        try {
+          const num = parseFloat(amount);
+          if (isNaN(num)) return amount;
+          return new Intl.NumberFormat(undefined, { style: 'currency', currency: currency || 'USD', minimumFractionDigits: 2 }).format(num / 100);
+        } catch { return amount; }
+      }
+
+      function closeAddModal() {
+        modal.classList.remove('open');
+        errDiv.style.display = 'none';
+        errDiv.textContent = '';
+        confirmBtn.disabled = true;
+        modalBody.innerHTML = '<div class="ws-add-loading" style="display:flex;align-items:center;gap:8px;color:var(--text-muted)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>Calculating charge…</div>';
+      }
+
+      addBtn.addEventListener('click', async () => {
+        addBtn.disabled = true;
+        addBtn.innerHTML = '<span style="opacity:.6">Loading…</span>';
+        modal.classList.add('open');
+
+        let preview;
+        try {
+          const r = await fetch('/api/billing/workspace-preview', { method: 'POST', credentials: 'same-origin' });
+          preview = await r.json();
+        } catch {
+          closeAddModal();
+          addBtn.disabled = false;
+          addBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="margin-right:5px"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add workspace';
+          if (window.toast) window.toast.error('Could not load workspace pricing. Please try again.');
+          return;
+        }
+
+        if (!preview?.ok) {
+          closeAddModal();
+          addBtn.disabled = false;
+          addBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="margin-right:5px"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add workspace';
+          if (window.toast) window.toast.error('Could not load workspace pricing. Please try again.');
+          return;
+        }
+
+        // Render charge details inside the confirmation modal
+        const todayLine = preview.immediate_total != null
+          ? `<strong>${fmtMoney(preview.immediate_total, preview.immediate_currency)}</strong> charged today (prorated for the rest of this billing period)`
+          : 'A prorated charge will be collected today';
+        const nextLine = preview.next_total != null && preview.next_billed_at
+          ? `From ${new Date(preview.next_billed_at).toLocaleDateString()}: <strong>${fmtMoney(preview.next_total, preview.immediate_currency)}/mo</strong> (new monthly total)`
+          : 'Starting next renewal, your monthly total will increase by $29.';
+
+        modalBody.innerHTML = `
+          <p style="margin:0 0 12px">${todayLine}.</p>
+          <p style="margin:0;color:var(--text-muted)">${nextLine}</p>
+        `;
+        confirmBtn.disabled = false;
+        addBtn.disabled = false;
+        addBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="margin-right:5px"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add workspace';
+      });
+
+      cancelBtn.addEventListener('click', closeAddModal);
+      modal.addEventListener('click', e => { if (e.target === e.currentTarget) closeAddModal(); });
+
+      confirmBtn.addEventListener('click', async () => {
+        confirmBtn.disabled = true;
+        confirmBtn.textContent = 'Adding…';
+        errDiv.style.display = 'none';
+
+        let result;
+        try {
+          const r = await fetch('/api/billing/add-workspace', { method: 'POST', credentials: 'same-origin' });
+          result = await r.json();
+        } catch {
+          errDiv.textContent = 'Something went wrong. Please try again.';
+          errDiv.style.display = 'block';
+          confirmBtn.disabled = false;
+          confirmBtn.textContent = 'Confirm & add';
+          return;
+        }
+
+        if (!result?.ok) {
+          errDiv.textContent = result?.error === 'paddle_error'
+            ? 'Billing error — please try again or contact support.'
+            : 'Something went wrong. Please try again.';
+          errDiv.style.display = 'block';
+          confirmBtn.disabled = false;
+          confirmBtn.textContent = 'Confirm & add';
+          return;
+        }
+
+        closeAddModal();
+        if (window.cachedFetch) cachedFetch.bust('/api/billing/subscription');
+        if (window.toast) window.toast.success('Workspace added successfully!');
+        // Re-fetch subscription data and re-render the page
+        try {
+          const subR = await fetch('/api/billing/subscription', { credentials: 'same-origin' });
+          const freshSub = await subR.json();
+          _subData = freshSub;
+          // Reset toggleable elements before re-render. plan-tier-bar class is
+          // intentionally NOT reset here — render() sets it based on the real plan,
+          // so pre-setting it to 'free' would cause a visible flash for Pro users.
+          ['canceled-banner','pro-actions','free-actions','plan-price-block','renewal-line',
+           'plan-tier-badge','usage-upgrade-nudge','cancel-zone','canceled-info','expired-info','upgrade-cta',
+           'trial-expired-banner','ws-grace-alert','ws-add-row','ws-upsell-note']
+            .forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
+          await render(freshSub, _priceMap);
+        } catch (err) {
+          console.error('[billing] workspace add re-render failed:', err);
+        }
+      });
+    }());
 
     // ── Bootstrap ──────────────────────────────────────────────
     (async () => {

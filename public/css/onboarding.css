@@ -2191,3 +2191,77 @@ body.ob-shell {
 .ob-cel-cta:hover .ob-cel-cta-arrow {
   transform: translateX(4px);
 }
+
+/* ── Init overlay (blank-screen guard) ───────────────────── */
+#ob-init-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  background: var(--bg-app);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  transition: opacity 250ms ease;
+}
+
+#ob-init-overlay.ob-init-overlay--hiding {
+  opacity: 0;
+  pointer-events: none;
+}
+
+#ob-init-overlay img {
+  height: 32px;
+  opacity: 0.85;
+}
+
+#ob-init-overlay .ob-init-label {
+  font-size: 13px;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+}
+
+/* ── LinkedIn status micro-loader ────────────────────────── */
+#ob-li-status-loader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-muted);
+  font-style: italic;
+  min-height: 44px;
+}
+
+/* ── Button loading state (inline spinner) ───────────────── */
+.ob-btn-primary.ob-btn--loading {
+  pointer-events: none;
+  opacity: 0.75;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.ob-btn-primary.ob-btn--loading::before {
+  content: '';
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255,255,255,0.4);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: ob-spin 0.65s linear infinite;
+  flex-shrink: 0;
+}
+
+/* ── Save & finish loader ────────────────────────────────── */
+#ob-sw-saving {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  font-size: 14px;
+  color: var(--text-muted);
+  font-style: italic;
+}

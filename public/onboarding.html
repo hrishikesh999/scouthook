@@ -11,6 +11,13 @@
 </head>
 <body class="ob-shell">
 
+  <!-- Full-page loader shown while auth + profile checks run -->
+  <div id="ob-init-overlay" aria-live="polite" aria-label="Loading">
+    <img src="/images/sh-logo-dark.png" alt="Scouthook" />
+    <div class="ob-thinking-dots" aria-hidden="true"><span></span><span></span><span></span></div>
+    <span class="ob-init-label">Getting things ready<span class="ob-dots-anim">...</span></span>
+  </div>
+
   <header class="ob-header">
     <img src="/images/sh-logo-dark.png" alt="Scouthook" class="ob-logo-img">
     <nav id="ob-progress-track" class="ob-progress-track" hidden aria-label="Setup progress">
@@ -39,6 +46,12 @@
 
       <h1 class="ob-headline">Connect LinkedIn</h1>
       <p class="ob-subheadline">Connect once and publish directly from Scouthook — no copy-pasting.</p>
+
+      <!-- LinkedIn status micro-loader -->
+      <div id="ob-li-status-loader" hidden>
+        <div class="ob-thinking-dots" aria-hidden="true"><span></span><span></span><span></span></div>
+        <span>Checking connection<span class="ob-dots-anim">...</span></span>
+      </div>
 
       <!-- Connected state -->
       <div id="ob-li-connected" class="ob-li-connected-card" hidden>
@@ -246,6 +259,11 @@
                 placeholder="e.g. The best pipeline review I ever ran had nothing to do with the pipeline. We spent 90 minutes on the one deal that had been 'almost closed' for six months. Turns out the champion had left the company three weeks earlier. Nobody had told us. That's not a sales problem — that's a listening problem."></textarea>
       <p class="ob-char-count" id="ob-writing-char-count" aria-live="polite"></p>
       <p class="ob-skip-cost">Without this, voice matching relies only on your answers — adding a real sample sharpens it significantly.</p>
+
+      <div id="ob-sw-saving" hidden>
+        <div class="ob-thinking-dots" aria-hidden="true"><span></span><span></span><span></span></div>
+        <span>Saving your profile<span class="ob-dots-anim">...</span></span>
+      </div>
 
       <div class="ob-interview-actions" style="margin-top:16px">
         <button id="ob-sw-next" class="ob-btn-primary" type="button">Finish setup →</button>

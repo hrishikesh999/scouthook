@@ -81,6 +81,28 @@ function updateProgress(id) {
   });
 }
 
+// Puts a primary button into a loading state (spinner + dimmed) and restores it.
+function setButtonLoading(btn, loading) {
+  if (loading) {
+    btn.dataset.obOrigText = btn.textContent;
+    btn.textContent = 'One moment…';
+    btn.classList.add('ob-btn--loading');
+    btn.disabled = true;
+  } else {
+    btn.textContent = btn.dataset.obOrigText || btn.textContent;
+    btn.classList.remove('ob-btn--loading');
+    btn.disabled = false;
+  }
+}
+
+// Fades out and removes the init overlay.
+function hideInitOverlay() {
+  const overlay = document.getElementById('ob-init-overlay');
+  if (!overlay) return;
+  overlay.classList.add('ob-init-overlay--hiding');
+  setTimeout(() => overlay.remove(), 280);
+}
+
 async function apiPost(path, body) {
   const r = await fetch(path, {
     method: 'POST',
@@ -115,6 +137,9 @@ function initS2() {
 }
 
 async function initLinkedInScreen() {
+  const liLoader = document.getElementById('ob-li-status-loader');
+  const liDisc   = document.getElementById('ob-li-disconnected');
+  if (liLoader) { liLoader.hidden = false; liDisc.hidden = true; }
   try {
     const data = await fetch('/api/linkedin/status').then(r => r.json());
     if (data.connected) {
@@ -137,6 +162,8 @@ async function initLinkedInScreen() {
       document.getElementById('ob-li-connect-btn').href = '/api/linkedin/connect?from=onboarding';
     }
   } catch (_) {}
+
+  if (liLoader) { liLoader.hidden = true; liDisc.hidden = false; }
 }
 
 function checkLinkedInReturn() {
@@ -266,6 +293,7 @@ function initS6() {
       } else {
         state.brandPersonalityTraits = state.brandPersonalityTraits.filter(t => t !== chip.dataset.trait);
       }
+      countEl.style.color = '';
       countEl.textContent = state.brandPersonalityTraits.length + ' / 5 selected';
 
       // Auto-advance when 5 are selected
@@ -276,6 +304,11 @@ function initS6() {
   });
 
   document.getElementById('ob-s6-next').addEventListener('click', async () => {
+    if (state.brandPersonalityTraits.length === 0) {
+      countEl.textContent = 'Pick at least 1 trait to continue';
+      countEl.style.color = '#ef4444';
+      return;
+    }
     await runBrandVoiceExtraction();
   });
 }
@@ -285,7 +318,7 @@ async function runBrandVoiceExtraction() {
   const nextBtn = document.getElementById('ob-s6-next');
 
   spinner.hidden = false;
-  nextBtn.disabled = true;
+  setButtonLoading(nextBtn, true);
 
   try {
     await apiPost('/api/profile', {
@@ -313,7 +346,7 @@ async function runBrandVoiceExtraction() {
   } catch (_) {}
 
   spinner.hidden = true;
-  nextBtn.disabled = false;
+  setButtonLoading(nextBtn, false);
   showScreen('s7');
   initS7Prefill();
 }
@@ -343,7 +376,7 @@ async function runAudienceExtraction() {
   const nextBtn = document.getElementById('ob-s7-next');
 
   spinner.hidden = false;
-  nextBtn.disabled = true;
+  setButtonLoading(nextBtn, true);
 
   try {
     await apiPost('/api/profile', { audience_description: state.audienceDescription });
@@ -364,7 +397,7 @@ async function runAudienceExtraction() {
   } catch (_) {}
 
   spinner.hidden = true;
-  nextBtn.disabled = false;
+  setButtonLoading(nextBtn, false);
   showScreen('sw');
 }
 
@@ -393,10 +426,12 @@ function initSw() {
 }
 
 async function saveAndFinish() {
-  const nextBtn = document.getElementById('ob-sw-next');
-  const skipBtn = document.getElementById('ob-sw-skip');
-  nextBtn.disabled = true;
+  const nextBtn  = document.getElementById('ob-sw-next');
+  const skipBtn  = document.getElementById('ob-sw-skip');
+  const savingEl = document.getElementById('ob-sw-saving');
+  setButtonLoading(nextBtn, true);
   skipBtn.disabled = true;
+  if (savingEl) savingEl.hidden = false;
 
   try {
     const payload = {
@@ -407,15 +442,17 @@ async function saveAndFinish() {
     const result = await apiPost('/api/profile', payload);
     if (!result?.ok) throw new Error(result?.error || 'save_failed');
   } catch (err) {
-    nextBtn.disabled = false;
+    setButtonLoading(nextBtn, false);
     skipBtn.disabled = false;
+    if (savingEl) savingEl.hidden = true;
     alert('Something went wrong saving your profile. Please try again.');
     console.error('[onboarding] saveAndFinish failed:', err?.message);
     return;
   }
 
-  nextBtn.disabled = false;
+  setButtonLoading(nextBtn, false);
   skipBtn.disabled = false;
+  if (savingEl) savingEl.hidden = true;
 
   showScreen('s9');
   setTimeout(fireConfetti, 120);
@@ -485,6 +522,8 @@ async function init() {
     window.location.href = '/login.html';
     return;
   }
+
+  hideInitOverlay();
 
   initS2();
   initS3();

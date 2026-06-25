@@ -27,9 +27,16 @@
     <main class="container--wide admin-main">
       <h1 class="admin-page-title">Users</h1>
 
-      <div class="search-bar">
-        <input type="text" id="search-input" placeholder="Search by email or name…" />
-        <button id="search-btn" class="btn btn--secondary">Search</button>
+      <div class="admin-users-toolbar">
+        <div class="search-bar">
+          <input type="text" id="search-input" placeholder="Search by email or name…" />
+          <button id="search-btn" class="btn btn--secondary">Search</button>
+        </div>
+        <div class="sort-pills" role="group" aria-label="Sort users">
+          <button class="sort-pill sort-pill--active" data-sort="newest">Newest</button>
+          <button class="sort-pill" data-sort="active">Recently Active</button>
+          <button class="sort-pill" data-sort="az">A – Z</button>
+        </div>
       </div>
 
       <div class="card card--scrollable">
@@ -71,7 +78,9 @@
   </div>
 
   <script>
-    let adminPw = '';
+    let adminPw  = '';
+    let allUsers = [];
+    let sortMode = 'newest';
 
     function init() {
       const saved = sessionStorage.getItem('adminPw');
@@ -116,16 +125,26 @@
       return `<span class="badge badge--free">${esc(status)}</span>`;
     }
 
-    async function loadUsers(search = '') {
-      const params = search ? `?search=${encodeURIComponent(search)}` : '';
-      const r = await fetch(`/admin/users${params}`, { headers: { 'X-Admin-Password': adminPw } });
-      const data = await r.json();
+    function sortedUsers() {
+      const arr = [...allUsers];
+      if (sortMode === 'newest') {
+        arr.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+      } else if (sortMode === 'active') {
+        arr.sort((a, b) => new Date(b.last_active || 0) - new Date(a.last_active || 0));
+      } else if (sortMode === 'az') {
+        arr.sort((a, b) => (a.display_name || a.email || '').localeCompare(b.display_name || b.email || ''));
+      }
+      return arr;
+    }
+
+    function renderUsers() {
       const tbody = document.getElementById('users-tbody');
-      if (!data.ok || !data.users.length) {
+      const users = sortedUsers();
+      if (!users.length) {
         tbody.innerHTML = `<tr><td colspan="7" class="td-empty">No users found.</td></tr>`;
         return;
       }
-      tbody.innerHTML = data.users.map(u => `
+      tbody.innerHTML = users.map(u => `
         <tr data-uid="${esc(u.user_id)}">
           <td>${esc(u.display_name || '—')}</td>
           <td>${esc(u.email || '—')}</td>
@@ -139,6 +158,26 @@
         tr.addEventListener('click', () => openPanel(tr.dataset.uid));
       });
     }
+
+    async function loadUsers(search = '') {
+      const params = search ? `?search=${encodeURIComponent(search)}` : '';
+      const tbody  = document.getElementById('users-tbody');
+      tbody.innerHTML = `<tr><td colspan="7" class="td-empty">Loading…</td></tr>`;
+      const r    = await fetch(`/admin/users${params}`, { headers: { 'X-Admin-Password': adminPw } });
+      const data = await r.json();
+      if (!data.ok) { tbody.innerHTML = `<tr><td colspan="7" class="td-empty">No users found.</td></tr>`; return; }
+      allUsers = data.users || [];
+      renderUsers();
+    }
+
+    document.querySelectorAll('.sort-pill').forEach(pill => {
+      pill.addEventListener('click', () => {
+        document.querySelectorAll('.sort-pill').forEach(p => p.classList.remove('sort-pill--active'));
+        pill.classList.add('sort-pill--active');
+        sortMode = pill.dataset.sort;
+        renderUsers();
+      });
+    });
 
     document.getElementById('search-btn').addEventListener('click', () => {
       loadUsers(document.getElementById('search-input').value.trim());

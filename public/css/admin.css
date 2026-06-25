@@ -80,10 +80,13 @@ label, .field label { color: #111111; }
 
 /* ── Auth screen ───────────────────────────────────────────────────────── */
 .admin-auth {
+  position: fixed;
+  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 60vh;
+  background: var(--bg-app, #f9fafb);
+  z-index: 1000;
 }
 .admin-auth__card {
   width: 100%;
@@ -315,8 +318,45 @@ label, .field label { color: #111111; }
 .overlay--visible { display: block; }
 
 /* ── Search bar (admin-users) ──────────────────────────────────────────── */
+.admin-users-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  margin-bottom: var(--space-lg);
+  flex-wrap: wrap;
+}
+.admin-users-toolbar .search-bar { margin-bottom: 0; flex: 1; min-width: 220px; }
 .search-bar { display: flex; gap: var(--space-sm); margin-bottom: var(--space-lg); }
 .search-bar input { flex: 1; }
+
+/* Sort pills */
+.sort-pills {
+  display: flex;
+  gap: 4px;
+  background: #f3f4f6;
+  border-radius: 8px;
+  padding: 3px;
+  flex-shrink: 0;
+}
+.sort-pill {
+  padding: 5px 14px;
+  border: none;
+  border-radius: 6px;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  background: transparent;
+  color: #6b7280;
+  transition: background 150ms ease, color 150ms ease, box-shadow 150ms ease;
+  white-space: nowrap;
+}
+.sort-pill:hover { color: #111827; background: rgba(0,0,0,0.04); }
+.sort-pill--active {
+  background: #ffffff;
+  color: #111827;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+}
 
 /* ── Detail rows (admin-users slide-over) ──────────────────────────────── */
 .detail-row {

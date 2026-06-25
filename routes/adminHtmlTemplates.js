@@ -80,12 +80,18 @@ router.post('/', async (req, res) => {
     // Generate thumbnail synchronously (admin waits ~3–5s)
     let thumbnailKey = null;
     let thumbnailWarning = null;
+    const thumbStart = Date.now();
     try {
+      console.log('[adminHtmlTemplates] generating thumbnail for %s (html=%d bytes, slots=%d)',
+        id, Buffer.byteLength(cleanHtml, 'utf8'), Object.keys(manifest.slots || {}).length);
       const thumbBuf = await generateTemplateThumbnail(cleanHtml, manifest);
       thumbnailKey = storage.buildThumbnailKey(id);
       await storage.uploadAdmin(thumbBuf, thumbnailKey, 'image/png');
+      console.log('[adminHtmlTemplates] thumbnail generated for %s in %dms (%d bytes)',
+        id, Date.now() - thumbStart, thumbBuf.length);
     } catch (thumbErr) {
-      console.warn('[adminHtmlTemplates] thumbnail generation failed:', thumbErr.message);
+      console.warn('[adminHtmlTemplates] thumbnail failed for %s after %dms: %s',
+        id, Date.now() - thumbStart, thumbErr.message);
       thumbnailWarning = thumbErr.message;
     }
 
@@ -146,12 +152,18 @@ router.put('/:id', async (req, res) => {
       await storage.uploadAdmin(Buffer.from(cleanHtml, 'utf8'), htmlKey, 'text/html');
 
       // Regenerate thumbnail
+      const thumbStart = Date.now();
       try {
+        console.log('[adminHtmlTemplates] regenerating thumbnail for %s (html=%d bytes, slots=%d)',
+          id, Buffer.byteLength(cleanHtml, 'utf8'), Object.keys(manifest.slots || {}).length);
         const thumbBuf = await generateTemplateThumbnail(cleanHtml, manifest);
         thumbnailKey = storage.buildThumbnailKey(id);
         await storage.uploadAdmin(thumbBuf, thumbnailKey, 'image/png');
+        console.log('[adminHtmlTemplates] thumbnail regenerated for %s in %dms (%d bytes)',
+          id, Date.now() - thumbStart, thumbBuf.length);
       } catch (thumbErr) {
-        console.warn('[adminHtmlTemplates] thumbnail regen failed:', thumbErr.message);
+        console.warn('[adminHtmlTemplates] thumbnail regen failed for %s after %dms: %s',
+          id, Date.now() - thumbStart, thumbErr.message);
         thumbnailWarning = thumbErr.message;
       }
     }
@@ -278,10 +290,15 @@ router.post('/:id/regenerate-thumbnail', async (req, res) => {
     const html = htmlBuf.toString('utf8');
     const manifest = row.slot_manifest; // pre-parsed JSONB
 
+    const thumbStart = Date.now();
+    console.log('[adminHtmlTemplates] regenerate-thumbnail for %s (html=%d bytes, slots=%d)',
+      id, htmlBuf.length, Object.keys((manifest && manifest.slots) || {}).length);
     const thumbBuf = await generateTemplateThumbnail(html, manifest);
     const thumbnailKey = storage.buildThumbnailKey(id);
     await storage.uploadAdmin(thumbBuf, thumbnailKey, 'image/png');
     await db.prepare('UPDATE html_templates SET thumbnail_r2_key = ? WHERE id = ?').run(thumbnailKey, id);
+    console.log('[adminHtmlTemplates] regenerate-thumbnail done for %s in %dms (%d bytes)',
+      id, Date.now() - thumbStart, thumbBuf.length);
 
     res.json({ ok: true, thumbnail_r2_key: thumbnailKey });
   } catch (err) {

@@ -33,16 +33,19 @@ async function callRenderService(html, width, height) {
     });
   } catch (err) {
     clearTimeout(timer);
-    throw Object.assign(new Error('render_service_unavailable'), { status: 503 });
+    const reason = err.name === 'AbortError'
+      ? 'render_service_timeout (15s)'
+      : `render_service_unavailable: ${err.message}`;
+    throw Object.assign(new Error(reason), { status: 503, cause: err });
   }
   clearTimeout(timer);
 
   if (!res.ok) {
     const detail = await res.text().catch(() => '');
-    const err = new Error('render_service_error');
-    err.status = 503;
-    err.detail = detail;
-    throw err;
+    const msg = detail
+      ? `render_service_error (${res.status}): ${detail.slice(0, 200)}`
+      : `render_service_error (${res.status})`;
+    throw Object.assign(new Error(msg), { status: 503 });
   }
 
   const arrayBuf = await res.arrayBuffer();

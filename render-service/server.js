@@ -1,6 +1,6 @@
 'use strict';
 
-const fastify = require('fastify')({ logger: true });
+const fastify = require('fastify')({ logger: true, bodyLimit: 5 * 1024 * 1024 });
 const puppeteer = require('puppeteer-core');
 
 const CHROME_PATH = process.env.CHROME_PATH || '/usr/bin/chromium';
@@ -20,6 +20,7 @@ const LAUNCH_ARGS = [
 // ── Browser singleton ───────────────────────────────────────────────────────
 
 let browser = null;
+let browserLaunchPromise = null;
 
 async function launchBrowser() {
   browser = await puppeteer.launch({
@@ -30,15 +31,22 @@ async function launchBrowser() {
   browser.on('disconnected', () => {
     fastify.log.warn('[render] browser disconnected');
     browser = null;
+    browserLaunchPromise = null;
   });
   fastify.log.info('[render] browser launched');
+  return browser;
 }
 
 async function getBrowser() {
-  if (!browser || !browser.isConnected()) {
-    await launchBrowser();
+  if (browser && browser.isConnected()) return browser;
+  if (browserLaunchPromise) return browserLaunchPromise;
+  browserLaunchPromise = launchBrowser();
+  try {
+    return await browserLaunchPromise;
+  } catch (err) {
+    browserLaunchPromise = null;
+    throw err;
   }
-  return browser;
 }
 
 // ── Concurrency semaphore ───────────────────────────────────────────────────
@@ -73,6 +81,9 @@ async function renderHtml(html, width, height) {
     page = await b.newPage();
     await page.setViewport({ width, height, deviceScaleFactor: 2 });
     await page.setContent(html, { waitUntil: 'domcontentloaded', timeout: 10_000 });
+    await page.evaluate(() =>
+      Promise.race([document.fonts.ready, new Promise(r => setTimeout(r, 2000))])
+    );
     const png = await page.screenshot({
       type: 'png',
       clip: { x: 0, y: 0, width, height },
@@ -87,12 +98,15 @@ async function renderHtml(html, width, height) {
       if (browser) await browser.close();
     } catch (_) {}
     browser = null;
-    await launchBrowser();
+    browserLaunchPromise = null;
     // retry once with fresh browser
     const b2 = await getBrowser();
     page = await b2.newPage();
     await page.setViewport({ width, height, deviceScaleFactor: 2 });
     await page.setContent(html, { waitUntil: 'domcontentloaded', timeout: 10_000 });
+    await page.evaluate(() =>
+      Promise.race([document.fonts.ready, new Promise(r => setTimeout(r, 2000))])
+    );
     const png = await page.screenshot({
       type: 'png',
       clip: { x: 0, y: 0, width, height },
@@ -106,7 +120,7 @@ async function renderHtml(html, width, height) {
 
 // ── Routes ──────────────────────────────────────────────────────────────────
 
-fastify.addContentTypeParser('application/json', { parseAs: 'string' }, (req, body, done) => {
+fastify.addContentTypeParser('application/json', { parseAs: 'string', bodyLimit: 5 * 1024 * 1024 }, (req, body, done) => {
   try { done(null, JSON.parse(body)); } catch (e) { done(e); }
 });
 
@@ -142,7 +156,7 @@ async function start() {
   await fastify.listen({ port: PORT, host: '0.0.0.0' });
   fastify.log.info(`[render] listening on port ${PORT}`);
   // Launch browser after port is bound so Fly.io health check passes immediately
-  launchBrowser().catch(err => fastify.log.error('[render] browser launch failed:', err.message));
+  getBrowser().catch(err => fastify.log.error('[render] browser launch failed:', err.message));
 }
 
 start().catch(err => {

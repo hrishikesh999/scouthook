@@ -9,6 +9,14 @@
   <link rel="stylesheet" href="/css/main.css" />
   <link rel="stylesheet" href="/css/admin.css" />
   <script src="/js/admin-nav.js"></script>
+  <style>
+    .ht-row .template-row__thumb,
+    .ht-row .template-row__placeholder { width: 96px; height: 96px; }
+    .ht-badge { display: inline-block; padding: 1px 7px; border-radius: 99px; font-size: .7rem; font-weight: 600; }
+    .ht-badge--active { background: #d1fae5; color: #065f46; }
+    .ht-badge--inactive { background: #f3f4f6; color: #6b7280; }
+    .ht-badge--cat { background: #ede9fe; color: #5b21b6; }
+  </style>
 </head>
 <body>
 
@@ -105,18 +113,18 @@
       const slots = t.slot_manifest?.slots ? Object.keys(t.slot_manifest.slots) : [];
       const escapedName = esc(t.name);
       return `
-      <div class="template-row" data-id="${t.id}" data-name="${escapedName}" data-active="${t.active}">
+      <div class="template-row ht-row" data-id="${t.id}" data-name="${escapedName}" data-active="${t.active}">
         ${hasThumb
           ? `<img class="template-row__thumb" data-thumb-url="/admin/html-templates/${t.id}/thumbnail" alt="${escapedName}">`
           : `<div class="template-row__placeholder">${esc((t.name || '?').slice(0, 2).toUpperCase())}</div>`}
         <div class="template-row__info">
-          <div class="template-row__name">
-            ${escapedName}
-            <span style="display:inline-block;padding:1px 6px;border-radius:99px;font-size:.7rem;font-weight:600;margin-left:6px;${t.active ? 'background:#d1fae5;color:#065f46' : 'background:#f3f4f6;color:#6b7280'}">${t.active ? 'Active' : 'Inactive'}</span>
+          <div class="template-row__name">${escapedName}</div>
+          <div class="template-row__meta" style="margin-top:4px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            <span class="ht-badge ${t.active ? 'ht-badge--active' : 'ht-badge--inactive'}">${t.active ? 'Active' : 'Inactive'}</span>
+            ${t.category ? `<span class="ht-badge ht-badge--cat">${esc(t.category)}</span>` : ''}
+            <span>${slots.length} slot${slots.length !== 1 ? 's' : ''}</span>
           </div>
-          <div class="template-row__meta">
-            ${slots.length} slot${slots.length !== 1 ? 's' : ''}${t.category ? ` · <code>${esc(t.category)}</code>` : ''}
-          </div>
+          ${t.description ? `<div class="template-row__meta" style="margin-top:2px">${esc(t.description)}</div>` : ''}
         </div>
         <div class="template-row__actions">
           <button class="btn btn--secondary btn--sm js-edit">Edit</button>

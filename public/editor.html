@@ -2161,15 +2161,17 @@ function renderHtmlTemplateForm(slots) {
       if (!file) return;
       zone.innerHTML = '<span style="font-size:11px;color:var(--text-muted)">Uploading…</span>';
       try {
+        const headers = { 'Content-Type': file.type, 'X-Filename': encodeURIComponent(file.name) };
+        if (typeof getUserId   === 'function') headers['X-User-Id']   = getUserId();
+        if (typeof getTenantId === 'function') headers['X-Tenant-Id'] = getTenantId();
         const res = await fetch('/api/media/upload', {
-          method: 'POST', credentials: 'include',
-          headers: { 'Content-Type': file.type, 'X-Filename': encodeURIComponent(file.name) },
-          body: file,
+          method: 'POST', credentials: 'include', headers, body: file,
         });
         const data = await res.json();
-        if (data.ok) {
-          zone.dataset.storageKey = data.stored_name || data.key || '';
-          zone.innerHTML = `<img src="${escHtml(data.url || `/files/${data.stored_name}`)}" alt="" style="width:100%;height:100%;object-fit:contain">`;
+        if (data.ok && data.file) {
+          const storedName = data.file.url.replace(/^\/uploads\//, '');
+          zone.dataset.storageKey = storedName;
+          zone.innerHTML = `<img src="${escHtml(data.file.url)}" alt="" style="width:100%;height:100%;object-fit:contain">`;
           _scheduleHtmlTplPreview();
         } else {
           zone.innerHTML = '<span style="font-size:11px;color:var(--error,#e55)">Upload failed</span>';

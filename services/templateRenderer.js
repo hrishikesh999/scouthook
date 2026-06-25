@@ -274,8 +274,9 @@ async function renderTemplate(post, templateId, userOverrides = {}, brand = {}, 
   for (const [key, def] of Object.entries(slots)) {
     if (!key.startsWith('image:')) continue;
     const imageKey = key.slice('image:'.length);
-    const storageKey = overrideImages[key] || overrideImages[imageKey];
-    if (!storageKey) continue;
+    const rawImageKey = overrideImages[key] || overrideImages[imageKey];
+    if (!rawImageKey) continue;
+    const storageKey = rawImageKey.includes('/') ? rawImageKey : storage.buildMemberKey(tenantId, userId, 'uploads', rawImageKey);
     try {
       const buf = await storage.download(storageKey);
       // Detect MIME from buffer magic bytes

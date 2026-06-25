@@ -10,9 +10,43 @@
   <link rel="stylesheet" href="/css/admin.css" />
   <script src="/js/admin-nav.js"></script>
   <style>
-    .slot-preview { background: var(--neutral-50); border: 1px solid var(--border); border-radius: var(--radius); padding: var(--space-sm); font-family: monospace; font-size: .78rem; max-height: 160px; overflow-y: auto; white-space: pre; }
     .html-textarea { font-family: monospace; font-size: .78rem; resize: vertical; min-height: 280px; }
     .warn-banner { background:#fef9c3; border:1px solid #fde047; color:#713f12; border-radius:var(--radius); padding:var(--space-sm) var(--space-md); font-size:.85rem; margin-bottom:var(--space-md); display:flex; justify-content:space-between; align-items:flex-start; gap:var(--space-sm); }
+
+    /* Slot builder */
+    .slot-builder-empty { color: var(--text-muted); font-size: .85rem; padding: var(--space-sm) 0; }
+    .slot-card { border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: var(--space-sm); overflow: hidden; }
+    .slot-card__header { display: flex; align-items: center; gap: var(--space-sm); padding: 8px 12px; background: var(--neutral-50); border-bottom: 1px solid var(--border); }
+    .slot-card__key { font-family: monospace; font-size: .82rem; font-weight: 600; flex: 1; }
+    .slot-card__remove { background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 16px; padding: 2px 6px; border-radius: 4px; line-height: 1; }
+    .slot-card__remove:hover { color: #dc2626; background: #fef2f2; }
+    .slot-card__body { padding: 10px 12px; display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: flex-end; }
+    .slot-card__field { display: flex; flex-direction: column; gap: 3px; }
+    .slot-card__field label { font-size: .72rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: .03em; }
+    .slot-card__field input[type="number"] { width: 80px; }
+    .slot-card__field input[type="text"] { width: 160px; }
+    .slot-card__field input[type="color"] { width: 36px; height: 28px; border: 1px solid var(--border); border-radius: 4px; padding: 1px; cursor: pointer; }
+    .slot-card__field .hex-input { width: 80px; font-family: monospace; font-size: .8rem; }
+    .slot-type { display: inline-block; padding: 1px 7px; border-radius: 99px; font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; }
+    .slot-type--text { background: #d1fae5; color: #065f46; }
+    .slot-type--color { background: #ede9fe; color: #5b21b6; }
+    .slot-type--image { background: #dbeafe; color: #1e40af; }
+    .slot-type--repeating { background: #fef3c7; color: #92400e; }
+    .slot-fields-list { display: flex; gap: 4px; flex-wrap: wrap; }
+    .slot-field-pill { background: var(--neutral-100); padding: 2px 8px; border-radius: 99px; font-size: .72rem; font-weight: 500; font-family: monospace; }
+    .slot-dims-row { display: flex; gap: var(--space-sm); align-items: center; }
+    .slot-validation { margin-top: var(--space-sm); }
+    .slot-validation-item { font-size: .82rem; padding: 4px 0; color: #92400e; }
+    .slot-validation-item::before { content: '⚠ '; }
+    .slot-add-row { display: flex; gap: var(--space-sm); align-items: flex-end; margin-top: var(--space-sm); padding-top: var(--space-sm); border-top: 1px solid var(--border); }
+    .slot-add-row input { width: 160px; }
+    .slot-add-row select { width: 110px; }
+    .slot-preview-frame { width: 100%; border: 1px solid var(--border); border-radius: var(--radius); background: #fff; overflow: hidden; }
+    .slot-preview-frame iframe { width: 100%; border: none; display: block; }
+
+    details summary { cursor: pointer; font-size: .85rem; font-weight: 600; color: var(--text-muted); }
+    details[open] summary { margin-bottom: var(--space-sm); }
+    .manifest-json { background: var(--neutral-50); border: 1px solid var(--border); border-radius: var(--radius); padding: var(--space-sm); font-family: monospace; font-size: .75rem; max-height: 200px; overflow-y: auto; white-space: pre; }
   </style>
 </head>
 <body>
@@ -37,7 +71,7 @@
         <div class="admin-page-header">
           <div>
             <h1 id="page-title">Add HTML Template</h1>
-            <p class="text-muted admin-page-subtitle">Saving generates a thumbnail (~3–5 s) via the Puppeteer render service.</p>
+            <p class="text-muted admin-page-subtitle">Paste HTML with <code>data-slot</code> attributes. Slots are auto-detected and configurable below.</p>
           </div>
           <a href="/admin-html-templates.html" class="btn btn--secondary">← Back to list</a>
         </div>
@@ -66,14 +100,54 @@
 
           <div class="field">
             <label for="f-html">Template HTML <span class="required">*</span></label>
-            <p class="text-muted field-hint">Paste the full HTML from Canva. Add <code>data-slot="key"</code> attributes and a <code>&lt;script type="application/json" id="template-meta"&gt;</code> manifest block.</p>
-            <textarea id="f-html" class="html-textarea" placeholder='<!DOCTYPE html>&#10;<html>&#10;...your Canva HTML...&#10;</html>'></textarea>
+            <p class="text-muted field-hint">Paste the full HTML. Mark editable elements with <code>data-slot="key"</code>. Slots are auto-detected below.</p>
+            <textarea id="f-html" class="html-textarea" placeholder='<!DOCTYPE html>&#10;<html>&#10;...your template HTML...&#10;</html>'></textarea>
           </div>
 
+          <!-- Dimensions -->
           <div class="field">
-            <label>Manifest preview <span class="text-muted" style="font-weight:400">(live — auto-parses as you type)</span></label>
-            <pre id="manifest-preview" class="slot-preview">Paste HTML above to preview manifest…</pre>
+            <label>Dimensions</label>
+            <div class="slot-dims-row">
+              <input type="number" id="f-dim-w" value="1080" min="100" max="4096" style="width:90px">
+              <span style="color:var(--text-muted)">×</span>
+              <input type="number" id="f-dim-h" value="1080" min="100" max="4096" style="width:90px">
+              <span class="text-muted" style="font-size:.8rem">px (auto-detected from HTML)</span>
+            </div>
           </div>
+
+          <!-- Slot builder -->
+          <div class="field">
+            <label>Detected Slots <span class="text-muted" style="font-weight:400">(auto-scanned from HTML)</span></label>
+            <div id="slot-builder">
+              <p class="slot-builder-empty">Paste HTML above to detect slots…</p>
+            </div>
+
+            <!-- Add slot manually -->
+            <div class="slot-add-row" id="slot-add-row" style="display:none">
+              <div class="slot-card__field">
+                <label>Slot key</label>
+                <input type="text" id="add-slot-key" placeholder="e.g. color:accent">
+              </div>
+              <div class="slot-card__field">
+                <label>Type</label>
+                <select id="add-slot-type">
+                  <option value="text">Text</option>
+                  <option value="color">Color</option>
+                  <option value="image">Image</option>
+                </select>
+              </div>
+              <button class="btn btn--sm btn--secondary" id="add-slot-btn" type="button">+ Add</button>
+            </div>
+          </div>
+
+          <!-- Validation -->
+          <div id="slot-validation" class="slot-validation hidden"></div>
+
+          <!-- Collapsible raw JSON -->
+          <details class="field">
+            <summary>Raw manifest JSON</summary>
+            <pre id="manifest-preview" class="manifest-json">{}</pre>
+          </details>
 
           <div id="form-error" class="form-error hidden"></div>
           <div class="form-actions">
@@ -89,6 +163,8 @@
 <script>
   let adminPw = '';
   const templateId = new URLSearchParams(location.search).get('id');
+  let _slotState = []; // current slot card state
+  let _existingManifest = null; // from DB when editing
 
   // ── Auth ──────────────────────────────────────────────────────────────────
 
@@ -144,36 +220,399 @@
       document.getElementById('f-description').value = t.description || '';
       document.getElementById('f-category').value = t.category || '';
       document.getElementById('f-sort').value = t.sort_order ?? 0;
-      document.getElementById('manifest-preview').textContent = JSON.stringify(t.slot_manifest, null, 2);
+
+      _existingManifest = t.slot_manifest || {};
+
+      if (_existingManifest.dimensions) {
+        document.getElementById('f-dim-w').value = _existingManifest.dimensions.width || 1080;
+        document.getElementById('f-dim-h').value = _existingManifest.dimensions.height || 1080;
+      }
 
       if (htmlRes.ok) {
         const html = await htmlRes.text();
         document.getElementById('f-html').value = html;
+        runScan(html);
       }
     } catch (err) {
       showError('Failed to load template: ' + err.message);
     }
   }
 
-  // ── Live manifest preview ─────────────────────────────────────────────────
+  // ── Slot Scanner ─────────────────────────────────────────────────────────
 
-  document.getElementById('f-html').addEventListener('input', function () {
-    const html = this.value;
-    const preview = document.getElementById('manifest-preview');
+  const CSS_VAR_BLOCKLIST = new Set([
+    'font-sans','font-mono','font-heading','font-body',
+    'space-xs','space-sm','space-md','space-lg','space-xl','space-2','space-3','space-4','space-5','space-6',
+    'radius','radius-sm','radius-md','radius-lg',
+    'border','surface','surface-2','bg-surface','bg-subtle',
+    'text-heading','text-secondary','text-muted','text-primary',
+    'brand','color-primary','color-border','color-text','color-bg',
+    'neutral-50','neutral-100','neutral-200','neutral-300','neutral-400','neutral-500',
+    'error','success','warning',
+  ]);
+
+  function scanSlotsFromHtml(html) {
+    const slots = [];
+    const seen = new Set();
+
+    try {
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+
+      // Detect data-slot elements
+      doc.querySelectorAll('[data-slot]').forEach(el => {
+        const key = el.getAttribute('data-slot');
+        if (!key || seen.has(key)) return;
+        seen.add(key);
+
+        if (key.startsWith('image:')) {
+          slots.push({ key, type: 'image', config: {} });
+        } else if (el.hasAttribute('data-slot-container')) {
+          const fields = [];
+          el.querySelectorAll('[data-slot-field]').forEach(f => {
+            const fname = f.getAttribute('data-slot-field');
+            if (fname && !fields.includes(fname)) fields.push(fname);
+          });
+          slots.push({ key, type: 'repeating', config: { fields, min: 1, max: 10 } });
+        } else {
+          slots.push({ key, type: 'text', config: { maxLen: 0, default: '' } });
+        }
+      });
+
+      // Detect CSS var() references for color slots
+      let cssText = '';
+      doc.querySelectorAll('style').forEach(s => { cssText += ' ' + s.textContent; });
+      doc.querySelectorAll('[style]').forEach(el => { cssText += ' ' + el.getAttribute('style'); });
+      const varRe = /var\(--([a-zA-Z0-9_-]+)\)/g;
+      let m;
+      while ((m = varRe.exec(cssText)) !== null) {
+        const varName = m[1];
+        const colorKey = 'color:' + varName;
+        if (!CSS_VAR_BLOCKLIST.has(varName) && !seen.has(colorKey)) {
+          seen.add(colorKey);
+          slots.push({ key: colorKey, type: 'color', config: { default: '#cccccc' } });
+        }
+      }
+
+      // Auto-detect dimensions from viewport meta or root container
+      const vpMeta = doc.querySelector('meta[name="viewport"]');
+      if (vpMeta) {
+        const wMatch = vpMeta.content.match(/width=(\d+)/);
+        if (wMatch) document.getElementById('f-dim-w').value = parseInt(wMatch[1]);
+      }
+      const root = doc.querySelector('body > div, body > section');
+      if (root) {
+        const wMatch = root.getAttribute('style')?.match(/width:\s*(\d+)px/);
+        const hMatch = root.getAttribute('style')?.match(/height:\s*(\d+)px/);
+        if (wMatch) document.getElementById('f-dim-w').value = parseInt(wMatch[1]);
+        if (hMatch) document.getElementById('f-dim-h').value = parseInt(hMatch[1]);
+      }
+    } catch (e) {
+      // Fallback: regex-based detection for malformed HTML
+      const re = /data-slot=["']([^"']+)["']/g;
+      let rm;
+      while ((rm = re.exec(html)) !== null) {
+        const key = rm[1];
+        if (seen.has(key)) continue;
+        seen.add(key);
+        if (key.startsWith('image:')) slots.push({ key, type: 'image', config: {} });
+        else slots.push({ key, type: 'text', config: { maxLen: 0, default: '' } });
+      }
+    }
+
+    return slots;
+  }
+
+  function mergeExistingConfig(slots, manifest) {
+    const existingSlots = (manifest && manifest.slots) || {};
+    for (const slot of slots) {
+      const existing = existingSlots[slot.key];
+      if (!existing) continue;
+      if (slot.type === 'text') {
+        slot.config.maxLen = existing.maxLen || 0;
+        slot.config.default = existing.default || '';
+      } else if (slot.type === 'color') {
+        slot.config.default = existing.default || '#cccccc';
+      } else if (slot.type === 'repeating') {
+        slot.config.min = existing.min || 1;
+        slot.config.max = existing.max || 10;
+        if (existing.fields?.length) slot.config.fields = existing.fields;
+      }
+    }
+
+    // Add manifest-only slots not found in HTML (orphaned)
+    for (const [key, def] of Object.entries(existingSlots)) {
+      if (slots.find(s => s.key === key)) continue;
+      let type = 'text';
+      if (key.startsWith('color:')) type = 'color';
+      else if (key.startsWith('image:')) type = 'image';
+      else if (def.type === 'repeating') type = 'repeating';
+      slots.push({ key, type, config: def, orphaned: true });
+    }
+  }
+
+  // ── Slot Builder UI ──────────────────────────────────────────────────────
+
+  function renderSlotBuilder(slots) {
+    _slotState = slots;
+    const container = document.getElementById('slot-builder');
+    document.getElementById('slot-add-row').style.display = '';
+
+    if (!slots.length) {
+      container.innerHTML = '<p class="slot-builder-empty">No slots detected. Add <code>data-slot="key"</code> attributes to your HTML elements.</p>';
+      updateManifestPreview();
+      return;
+    }
+
+    container.innerHTML = slots.map((s, i) => {
+      const typeClass = `slot-type--${s.type}`;
+      const typeLabel = s.type.charAt(0).toUpperCase() + s.type.slice(1);
+      const orphanBadge = s.orphaned ? ' <span style="color:#92400e;font-size:.72rem;font-weight:600">⚠ Not in HTML</span>' : '';
+
+      let bodyHtml = '';
+      if (s.type === 'text') {
+        bodyHtml = `
+          <div class="slot-card__field">
+            <label>Max length</label>
+            <input type="number" data-idx="${i}" data-cfg="maxLen" value="${s.config.maxLen || ''}" min="0" max="5000" placeholder="No limit">
+          </div>
+          <div class="slot-card__field">
+            <label>Default value</label>
+            <input type="text" data-idx="${i}" data-cfg="default" value="${esc(s.config.default || '')}">
+          </div>`;
+      } else if (s.type === 'color') {
+        const isBrand = s.config.default === 'brand';
+        const colorVal = isBrand ? '#0f766e' : (s.config.default || '#cccccc');
+        bodyHtml = `
+          <div class="slot-card__field">
+            <label>Default</label>
+            <div style="display:flex;gap:6px;align-items:center">
+              <input type="color" data-idx="${i}" data-cfg="colorPicker" value="${esc(colorVal)}" ${isBrand ? 'disabled' : ''}>
+              <input type="text" class="hex-input" data-idx="${i}" data-cfg="colorHex" value="${esc(isBrand ? 'brand' : colorVal)}" maxlength="9" ${isBrand ? 'disabled' : ''}>
+            </div>
+          </div>
+          <div class="slot-card__field" style="align-self:center">
+            <label style="display:flex;gap:4px;align-items:center;cursor:pointer;white-space:nowrap">
+              <input type="checkbox" data-idx="${i}" data-cfg="brand" ${isBrand ? 'checked' : ''}> Use brand
+            </label>
+          </div>`;
+      } else if (s.type === 'image') {
+        bodyHtml = `<div class="slot-card__field"><span style="font-size:.8rem;color:var(--text-muted)">Image upload — no config needed</span></div>`;
+      } else if (s.type === 'repeating') {
+        const fields = s.config.fields || [];
+        bodyHtml = `
+          <div class="slot-card__field">
+            <label>Fields</label>
+            <div class="slot-fields-list">${fields.map(f => `<span class="slot-field-pill">${esc(f)}</span>`).join('') || '<span style="font-size:.8rem;color:var(--text-muted)">None detected</span>'}</div>
+          </div>
+          <div class="slot-card__field">
+            <label>Min items</label>
+            <input type="number" data-idx="${i}" data-cfg="min" value="${s.config.min || 1}" min="1" max="20">
+          </div>
+          <div class="slot-card__field">
+            <label>Max items</label>
+            <input type="number" data-idx="${i}" data-cfg="max" value="${s.config.max || 10}" min="1" max="50">
+          </div>`;
+      }
+
+      return `<div class="slot-card" data-idx="${i}">
+        <div class="slot-card__header">
+          <span class="slot-type ${typeClass}">${typeLabel}</span>
+          <span class="slot-card__key">${esc(s.key)}</span>${orphanBadge}
+          <button class="slot-card__remove" data-idx="${i}" title="Remove slot">&times;</button>
+        </div>
+        <div class="slot-card__body">${bodyHtml}</div>
+      </div>`;
+    }).join('');
+
+    wireSlotCardEvents();
+    updateManifestPreview();
+    runValidation();
+  }
+
+  function wireSlotCardEvents() {
+    const container = document.getElementById('slot-builder');
+
+    // Config field changes
+    container.querySelectorAll('input[data-cfg], select[data-cfg]').forEach(el => {
+      el.addEventListener('input', () => {
+        const idx = parseInt(el.dataset.idx);
+        const cfg = el.dataset.cfg;
+        const slot = _slotState[idx];
+        if (!slot) return;
+
+        if (cfg === 'maxLen') slot.config.maxLen = parseInt(el.value) || 0;
+        else if (cfg === 'default') slot.config.default = el.value;
+        else if (cfg === 'min') slot.config.min = parseInt(el.value) || 1;
+        else if (cfg === 'max') slot.config.max = parseInt(el.value) || 10;
+        else if (cfg === 'colorPicker') {
+          slot.config.default = el.value;
+          const hex = container.querySelector(`input[data-idx="${idx}"][data-cfg="colorHex"]`);
+          if (hex) hex.value = el.value;
+        }
+        else if (cfg === 'colorHex') {
+          if (/^#[0-9a-fA-F]{6}$/.test(el.value)) {
+            slot.config.default = el.value;
+            const picker = container.querySelector(`input[data-idx="${idx}"][data-cfg="colorPicker"]`);
+            if (picker) picker.value = el.value;
+          }
+        }
+        else if (cfg === 'brand') {
+          const picker = container.querySelector(`input[data-idx="${idx}"][data-cfg="colorPicker"]`);
+          const hex = container.querySelector(`input[data-idx="${idx}"][data-cfg="colorHex"]`);
+          if (el.checked) {
+            slot.config.default = 'brand';
+            if (picker) { picker.value = '#0f766e'; picker.disabled = true; }
+            if (hex) { hex.value = 'brand'; hex.disabled = true; }
+          } else {
+            slot.config.default = picker?.value || '#cccccc';
+            if (picker) picker.disabled = false;
+            if (hex) { hex.value = picker?.value || '#cccccc'; hex.disabled = false; }
+          }
+        }
+
+        updateManifestPreview();
+      });
+    });
+
+    // Remove buttons
+    container.querySelectorAll('.slot-card__remove').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx = parseInt(btn.dataset.idx);
+        _slotState.splice(idx, 1);
+        renderSlotBuilder(_slotState);
+      });
+    });
+  }
+
+  // ── Build manifest from UI state ─────────────────────────────────────────
+
+  function buildManifest() {
+    const slots = {};
+    for (const s of _slotState) {
+      const def = {};
+      if (s.type === 'text') {
+        if (s.config.maxLen > 0) def.maxLen = s.config.maxLen;
+        if (s.config.default) def.default = s.config.default;
+      } else if (s.type === 'color') {
+        def.default = s.config.default || '#cccccc';
+      } else if (s.type === 'image') {
+        // empty config
+      } else if (s.type === 'repeating') {
+        def.type = 'repeating';
+        def.fields = s.config.fields || [];
+        def.min = s.config.min || 1;
+        def.max = s.config.max || 10;
+      }
+      slots[s.key] = def;
+    }
+    return {
+      slots,
+      dimensions: {
+        width: parseInt(document.getElementById('f-dim-w').value) || 1080,
+        height: parseInt(document.getElementById('f-dim-h').value) || 1080,
+      }
+    };
+  }
+
+  function updateManifestPreview() {
+    const manifest = buildManifest();
+    document.getElementById('manifest-preview').textContent = JSON.stringify(manifest, null, 2);
+  }
+
+  // ── Inject manifest into HTML ────────────────────────────────────────────
+
+  function injectManifestIntoHtml(html, manifest) {
+    const json = JSON.stringify(manifest, null, 2);
+    const block = '<script type="application/json" id="template-meta">\n' + json + '\n</' + 'script>';
+
     const startTag = '<script type="application/json" id="template-meta">';
     const altTag   = "<script type='application/json' id='template-meta'>";
     let pos = html.indexOf(startTag);
     let tagLen = startTag.length;
     if (pos === -1) { pos = html.indexOf(altTag); tagLen = altTag.length; }
-    if (pos === -1) { preview.textContent = 'No <script id="template-meta"> found in HTML.'; return; }
-    const end = html.indexOf('</' + 'script>', pos + tagLen);
-    if (end === -1) { preview.textContent = 'Unclosed <script id="template-meta"> block.'; return; }
-    const raw = html.slice(pos + tagLen, end).trim();
-    try {
-      preview.textContent = JSON.stringify(JSON.parse(raw), null, 2);
-    } catch (e) {
-      preview.textContent = 'Invalid JSON: ' + e.message;
+
+    if (pos !== -1) {
+      const end = html.indexOf('</' + 'script>', pos + tagLen);
+      if (end !== -1) {
+        return html.slice(0, pos) + block + html.slice(end + ('</' + 'script>').length);
+      }
     }
+
+    // Inject before </head> or </body> or at end
+    const headClose = html.lastIndexOf('</head>');
+    if (headClose !== -1) return html.slice(0, headClose) + '  ' + block + '\n' + html.slice(headClose);
+    const bodyClose = html.lastIndexOf('</body>');
+    if (bodyClose !== -1) return html.slice(0, bodyClose) + block + '\n' + html.slice(bodyClose);
+    return html + '\n' + block;
+  }
+
+  // ── Validation ───────────────────────────────────────────────────────────
+
+  function runValidation() {
+    const warnings = [];
+    for (const s of _slotState) {
+      if (s.orphaned) warnings.push(`"${s.key}" is in the manifest but not found in the HTML.`);
+      if (s.type === 'color' && s.config.default && s.config.default !== 'brand' && !/^(#[0-9a-fA-F]{3,8}|rgba?\([^)]+\))$/.test(s.config.default)) {
+        warnings.push(`Color "${s.key}" has invalid default: ${s.config.default}`);
+      }
+      if (s.type === 'repeating' && (!s.config.fields || s.config.fields.length === 0)) {
+        warnings.push(`Repeating slot "${s.key}" has no fields detected. Add data-slot-field attributes inside the data-slot-item.`);
+      }
+    }
+
+    const el = document.getElementById('slot-validation');
+    if (warnings.length) {
+      el.innerHTML = warnings.map(w => `<div class="slot-validation-item">${esc(w)}</div>`).join('');
+      el.classList.remove('hidden');
+    } else {
+      el.classList.add('hidden');
+    }
+    return warnings;
+  }
+
+  // ── HTML textarea scan trigger ───────────────────────────────────────────
+
+  let _scanTimer;
+  function runScan(html) {
+    const slots = scanSlotsFromHtml(html);
+    if (_existingManifest) {
+      mergeExistingConfig(slots, _existingManifest);
+      _existingManifest = null; // merge only once
+    }
+    renderSlotBuilder(slots);
+  }
+
+  document.getElementById('f-html').addEventListener('input', function () {
+    clearTimeout(_scanTimer);
+    _scanTimer = setTimeout(() => {
+      const html = this.value.trim();
+      if (!html) {
+        document.getElementById('slot-builder').innerHTML = '<p class="slot-builder-empty">Paste HTML above to detect slots…</p>';
+        document.getElementById('slot-add-row').style.display = 'none';
+        document.getElementById('slot-validation').classList.add('hidden');
+        updateManifestPreview();
+        return;
+      }
+      runScan(html);
+    }, 400);
+  });
+
+  // ── Add slot manually ────────────────────────────────────────────────────
+
+  document.getElementById('add-slot-btn').addEventListener('click', () => {
+    const keyInput = document.getElementById('add-slot-key');
+    const typeSelect = document.getElementById('add-slot-type');
+    const key = keyInput.value.trim();
+    if (!key) return;
+    if (_slotState.find(s => s.key === key)) { alert('Slot "' + key + '" already exists.'); return; }
+
+    const type = typeSelect.value;
+    const config = type === 'text' ? { maxLen: 0, default: '' }
+                 : type === 'color' ? { default: '#cccccc' }
+                 : {};
+    _slotState.push({ key, type, config });
+    renderSlotBuilder(_slotState);
+    keyInput.value = '';
   });
 
   // ── Save ──────────────────────────────────────────────────────────────────
@@ -181,13 +620,22 @@
   document.getElementById('form-save').addEventListener('click', async () => {
     const id    = document.getElementById('form-id').value;
     const name  = document.getElementById('f-name').value.trim();
-    const html  = document.getElementById('f-html').value;
+    let   html  = document.getElementById('f-html').value;
     const sort_order = parseInt(document.getElementById('f-sort').value, 10) || 0;
     const description = document.getElementById('f-description').value.trim();
     const category    = document.getElementById('f-category').value.trim();
 
     if (!name) { showError('Name is required.'); return; }
     if (!id && !html) { showError('HTML is required for new templates.'); return; }
+
+    // Build and inject manifest
+    if (html) {
+      const manifest = buildManifest();
+      const warnings = runValidation();
+      if (warnings.length && !confirm('Warnings:\n' + warnings.join('\n') + '\n\nSave anyway?')) return;
+      html = injectManifestIntoHtml(html, manifest);
+      document.getElementById('f-html').value = html;
+    }
 
     hideError();
     const saveBtn = document.getElementById('form-save');
@@ -211,7 +659,6 @@
 
       if (data.thumbnail_warning) {
         showWarnBanner(`Template saved, but thumbnail generation failed: ${data.thumbnail_warning}. Use the ⟳ Thumbnail button on the list page to retry.`);
-        // Stay on page so user sees the warning
       } else {
         location.href = '/admin-html-templates.html';
       }
@@ -222,6 +669,10 @@
   });
 
   // ── Helpers ───────────────────────────────────────────────────────────────
+
+  function esc(s) {
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
 
   function showError(msg) {
     const el = document.getElementById('form-error');
@@ -237,7 +688,6 @@
     const el = document.getElementById('warn-banner');
     el.textContent = msg;
     el.classList.remove('hidden');
-    // Add a "Go to list" link
     const link = document.createElement('a');
     link.href = '/admin-html-templates.html';
     link.className = 'btn btn--sm btn--secondary';

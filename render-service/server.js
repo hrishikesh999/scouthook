@@ -72,7 +72,7 @@ async function renderHtml(html, width, height) {
     const b = await getBrowser();
     page = await b.newPage();
     await page.setViewport({ width, height, deviceScaleFactor: 2 });
-    await page.setContent(html, { waitUntil: 'networkidle0', timeout: 10_000 });
+    await page.setContent(html, { waitUntil: 'domcontentloaded', timeout: 10_000 });
     const png = await page.screenshot({
       type: 'png',
       clip: { x: 0, y: 0, width, height },
@@ -92,7 +92,7 @@ async function renderHtml(html, width, height) {
     const b2 = await getBrowser();
     page = await b2.newPage();
     await page.setViewport({ width, height, deviceScaleFactor: 2 });
-    await page.setContent(html, { waitUntil: 'networkidle0', timeout: 10_000 });
+    await page.setContent(html, { waitUntil: 'domcontentloaded', timeout: 10_000 });
     const png = await page.screenshot({
       type: 'png',
       clip: { x: 0, y: 0, width, height },

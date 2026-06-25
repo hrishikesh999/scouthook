@@ -44,7 +44,8 @@ function readSlotManifest(html) {
   }
   const end = html.indexOf('</script>', start + tagLen);
   if (end === -1) throw new Error('Unclosed <script id="template-meta"> block');
-  const raw = html.slice(start + tagLen, end).trim();
+  // Strip markdown code fences that AI tools sometimes add (```json ... ```)
+  const raw = html.slice(start + tagLen, end).trim().replace(/^```[a-z]*\n?/i, '').replace(/\n?```\s*$/, '').trim();
   let manifest;
   try { manifest = JSON.parse(raw); } catch (e) {
     throw new Error(`Invalid JSON in template-meta: ${e.message}`);

@@ -129,6 +129,9 @@
                 <button class="ptb-btn" id="ai-image-btn" title="Choose Template" aria-label="Choose Template">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l2.4 6.6H21l-5.7 4.1 2.2 6.7L12 15.3l-5.5 4.1 2.2-6.7L3 8.6h6.6z"/></svg>
                 </button>
+                <button class="ptb-btn" id="html-tpl-btn" title="Design Templates" aria-label="Design Templates">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+                </button>
                 <button class="ptb-btn" id="infographic-btn" title="Generate infographic" aria-label="Generate infographic">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
                 </button>
@@ -330,6 +333,27 @@
     </div>
   </div>
 
+  <!-- Design Templates Modal (HTML/Puppeteer templates) -->
+  <div id="html-tpl-overlay" class="ai-image-overlay" role="dialog" aria-modal="true" aria-label="Design Templates" aria-hidden="true">
+    <div class="ai-image-modal">
+      <div class="ai-image-modal-header">
+        <span class="ai-image-modal-title" id="html-tpl-modal-title">DESIGN TEMPLATES</span>
+        <button class="slide-over-close" id="html-tpl-modal-close" aria-label="Close">&#10005;</button>
+      </div>
+      <div class="ai-image-modal-body" id="html-tpl-modal-body">
+        <div class="ai-image-preview-pane" id="html-tpl-preview-pane"></div>
+        <div class="ai-image-form-pane"    id="html-tpl-form-pane" hidden></div>
+      </div>
+      <div class="ai-image-modal-footer">
+        <button id="html-tpl-back-btn"     class="btn-text"         hidden>&larr; Change template</button>
+        <div style="flex:1"></div>
+        <button id="html-tpl-cancel-btn"   class="slide-over-discard">Cancel</button>
+        <button id="html-tpl-insert-btn"   class="btn-secondary"    hidden disabled>Insert in Post</button>
+        <button id="html-tpl-generate-btn" class="btn-teal-filled"  hidden>Save &amp; Preview</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Schedule modal -->
   <div id="schedule-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="schedule-modal-heading" aria-hidden="true">
 
@@ -472,6 +496,11 @@
           <span class="vbo-tile-icon">🔄</span>
           <span class="vbo-tile-name">Framework</span>
           <span class="vbo-tile-desc">Visualize your process or steps</span>
+        </button>
+        <button class="vbo-tile" data-type="html_template">
+          <span class="vbo-tile-icon">🎨</span>
+          <span class="vbo-tile-name">Design Template</span>
+          <span class="vbo-tile-desc">Pro-designed visual from your post</span>
         </button>
         <button class="vbo-tile" data-type="media">
           <span class="vbo-tile-icon">📎</span>
@@ -698,7 +727,7 @@ async function loadPost(id) {
       attachedPreviewUrl = p.assetPreviewUrl || (p.assetType !== 'carousel' ? p.assetUrl : null);
       attachedAssetType  = p.assetType || 'media_image';
       attachedSlideCount = p.assetSlideCount || 0;
-      const labelMap = { carousel: 'Carousel', media_pdf: 'PDF', media_image: 'Image', quote_card: 'Quote Card', branded_quote: 'Branded Quote', ai_image: 'AI Image', infographic: 'Infographic', metrics_card: 'Metrics', client_win: 'Client Win', framework: 'Framework' };
+      const labelMap = { carousel: 'Carousel', media_pdf: 'PDF', media_image: 'Image', quote_card: 'Quote Card', branded_quote: 'Branded Quote', ai_image: 'AI Image', infographic: 'Infographic', metrics_card: 'Metrics', client_win: 'Client Win', framework: 'Framework', html_template: 'Design Template' };
       const chipLabel = document.getElementById('asset-chip-label');
       const chip      = document.getElementById('asset-chip');
       if (chipLabel) chipLabel.textContent = labelMap[attachedAssetType] || attachedAssetType;
@@ -1046,7 +1075,7 @@ function applyScheduleLockUi(scheduledFor) {
   const schedBtn = document.getElementById('btn-schedule');
   if (schedBtn) { schedBtn.disabled = true; schedBtn.style.setProperty('display', 'none', 'important'); }
   document.getElementById('post-body').disabled = true;
-  ['quote-card-btn','carousel-btn','branded-quote-btn','ai-image-btn','infographic-btn','metrics-btn','client-win-btn','framework-btn','media-library-btn','fmt-undo','fmt-bold','fmt-italic','fmt-bullet','fmt-num'].forEach(id => {
+  ['quote-card-btn','carousel-btn','branded-quote-btn','ai-image-btn','html-tpl-btn','infographic-btn','metrics-btn','client-win-btn','framework-btn','media-library-btn','fmt-undo','fmt-bold','fmt-italic','fmt-bullet','fmt-num'].forEach(id => {
     document.getElementById(id)?.classList.add('disabled');
   });
   const chipRemove = document.getElementById('asset-chip-remove');
@@ -1067,7 +1096,7 @@ function clearScheduleLockUi() {
   const schedBtnRestore = document.getElementById('btn-schedule');
   if (schedBtnRestore) schedBtnRestore.style.removeProperty('display');
   if (linkedinConnected && schedBtnRestore) schedBtnRestore.disabled = false;
-  ['quote-card-btn','carousel-btn','branded-quote-btn','ai-image-btn','infographic-btn','metrics-btn','client-win-btn','framework-btn','media-library-btn','fmt-undo','fmt-bold','fmt-italic','fmt-bullet','fmt-num'].forEach(id => {
+  ['quote-card-btn','carousel-btn','branded-quote-btn','ai-image-btn','html-tpl-btn','infographic-btn','metrics-btn','client-win-btn','framework-btn','media-library-btn','fmt-undo','fmt-bold','fmt-italic','fmt-bullet','fmt-num'].forEach(id => {
     document.getElementById(id)?.classList.remove('disabled');
   });
   const chipRemove = document.getElementById('asset-chip-remove');
@@ -1809,6 +1838,561 @@ function _reopenAiImageModal() {
   }
 }
 
+/* ════════════════════════════════════════════════════════════════════════
+   DESIGN TEMPLATES MODAL (HTML / Puppeteer templates)
+════════════════════════════════════════════════════════════════════════ */
+
+let _htmlTplModalState     = 'picker';
+let _htmlTplSelectedId     = null;
+let _htmlTplSelectedMeta   = null;
+let _htmlTplExtractedSlots = null;
+let _htmlTplAllTemplates   = null;
+let _htmlTplActiveCategory = null;
+let _htmlTplRenderJobId    = null;
+let _htmlTplPollTimer      = null;
+let _htmlTplPreviewTimer   = null;
+let _htmlTplAutoPreviewRunning = false;
+
+function _setHtmlTplModalState(state) {
+  _htmlTplModalState = state;
+  const body    = document.getElementById('html-tpl-modal-body');
+  const form    = document.getElementById('html-tpl-form-pane');
+  const back    = document.getElementById('html-tpl-back-btn');
+  const genBtn  = document.getElementById('html-tpl-generate-btn');
+
+  body.classList.toggle('is-picker', state === 'picker');
+  form.hidden = state === 'picker';
+  back.hidden = state === 'picker';
+  genBtn.hidden = state === 'picker';
+
+  if (state === 'generating') {
+    genBtn.disabled = true;
+    genBtn.textContent = 'Generating…';
+  } else if (state === 'editing') {
+    genBtn.disabled = false;
+    genBtn.innerHTML = 'Save &amp; Preview';
+  }
+}
+
+function openHtmlTemplateModal() {
+  if (scheduleEditLocked || !currentPostId) return;
+  currentAssetType = 'html_template';
+  const insertBtn = document.getElementById('html-tpl-insert-btn');
+  if (insertBtn) { insertBtn.hidden = true; insertBtn.disabled = true; }
+  document.getElementById('html-tpl-overlay').setAttribute('aria-hidden', 'false');
+
+  const cached = visualCache.get(`${currentPostId}:html_template`);
+  if (cached?.assetUrl) {
+    _htmlTplSelectedId   = cached.templateId;
+    _htmlTplSelectedMeta = cached.templateMeta;
+    _htmlTplExtractedSlots = cached.extractedContent;
+    currentAssetUrl  = cached.assetUrl;
+    currentPreviewUrl = cached.previewUrl;
+    _renderHtmlTplPreviewImage(cached.previewUrl || cached.assetUrl);
+    renderHtmlTemplateForm(_htmlTplExtractedSlots);
+    _setHtmlTplModalState('editing');
+    _showInsertBtn();
+    return;
+  }
+  _setHtmlTplModalState('picker');
+  loadHtmlTemplatePicker();
+}
+
+function closeHtmlTemplateModal() {
+  document.getElementById('html-tpl-overlay').setAttribute('aria-hidden', 'true');
+  clearInterval(_htmlTplPollTimer);
+  clearTimeout(_htmlTplPreviewTimer);
+  _htmlTplPollTimer = null;
+  _htmlTplPreviewTimer = null;
+  _htmlTplRenderJobId = null;
+  _htmlTplAutoPreviewRunning = false;
+  if (currentAssetType === 'html_template') currentAssetType = null;
+}
+
+async function loadHtmlTemplatePicker() {
+  const previewPane = document.getElementById('html-tpl-preview-pane');
+  previewPane.innerHTML = '<div class="ai-tpl-picker" style="width:100%;align-self:flex-start;overflow-y:auto"><div class="loading-text--padded">Loading templates…</div></div>';
+
+  try {
+    const r = await fetch('/api/html-templates', { credentials: 'include' });
+    const data = await r.json();
+    _htmlTplAllTemplates = data.templates || [];
+  } catch {
+    previewPane.innerHTML = '<p class="so-extract-error" style="padding:24px">Could not load templates.</p>';
+    return;
+  }
+
+  if (!_htmlTplAllTemplates.length) {
+    previewPane.innerHTML = '<p style="padding:24px;color:var(--text-muted)">No design templates available yet.</p>';
+    return;
+  }
+
+  _htmlTplActiveCategory = null;
+  _renderHtmlTplPicker(_htmlTplAllTemplates);
+}
+
+function _renderHtmlTplPicker(templates) {
+  const previewPane = document.getElementById('html-tpl-preview-pane');
+  const categories = [...new Set(templates.map(t => t.category).filter(Boolean))];
+
+  let chipsHtml = '';
+  if (categories.length > 0) {
+    chipsHtml = `<div class="html-tpl-category-chips">
+      <button class="html-tpl-category-chip ${!_htmlTplActiveCategory ? 'active' : ''}" data-cat="">All</button>
+      ${categories.map(c => `<button class="html-tpl-category-chip ${_htmlTplActiveCategory === c ? 'active' : ''}" data-cat="${escHtml(c)}">${escHtml(c)}</button>`).join('')}
+    </div>`;
+  }
+
+  const filtered = _htmlTplActiveCategory ? templates.filter(t => t.category === _htmlTplActiveCategory) : templates;
+
+  const gridHtml = filtered.map(t => {
+    const initials = escHtml((t.name || '?').slice(0, 2).toUpperCase());
+    return `<div class="ai-tpl-card" data-tpl-id="${t.id}" tabindex="0" role="button" aria-label="${escHtml(t.name)}">
+      ${t.thumbnail_r2_key
+        ? `<img src="/api/html-templates/${t.id}/thumbnail" alt="" loading="lazy" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px 8px 0 0;display:block">`
+        : `<div style="width:100%;aspect-ratio:1;background:var(--surface-2);display:flex;align-items:center;justify-content:center;border-radius:8px 8px 0 0"><span style="font-size:24px;font-weight:700;color:var(--text-muted)">${initials}</span></div>`}
+      <div style="padding:8px 12px 10px">
+        <div style="font-weight:600;font-size:13px">${escHtml(t.name)}</div>
+        ${t.description ? `<div style="font-size:11px;color:var(--text-muted);margin-top:2px">${escHtml(t.description)}</div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+
+  previewPane.innerHTML = `<div class="ai-tpl-picker" style="width:100%;align-self:flex-start;overflow-y:auto">
+    <div class="ai-tpl-picker-heading">Choose a design template</div>
+    ${chipsHtml}
+    <div class="ai-tpl-grid">${gridHtml}</div>
+  </div>`;
+
+  // Category chip click
+  previewPane.querySelectorAll('.html-tpl-category-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      _htmlTplActiveCategory = chip.dataset.cat || null;
+      _renderHtmlTplPicker(_htmlTplAllTemplates);
+    });
+  });
+
+  // Template card click
+  previewPane.querySelectorAll('.ai-tpl-card').forEach(card => {
+    card.addEventListener('click', () => _selectHtmlTemplate(card.dataset.tplId));
+    card.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); _selectHtmlTemplate(card.dataset.tplId); } });
+  });
+}
+
+async function _selectHtmlTemplate(templateId) {
+  const tpl = _htmlTplAllTemplates.find(t => t.id === templateId);
+  if (!tpl) return;
+  _htmlTplSelectedId = templateId;
+  _htmlTplSelectedMeta = tpl;
+  document.getElementById('html-tpl-modal-title').textContent = tpl.name.toUpperCase();
+
+  // Show thumbnail in preview while extracting
+  if (tpl.thumbnail_r2_key) {
+    _renderHtmlTplPreviewImage(`/api/html-templates/${templateId}/thumbnail`);
+  } else {
+    document.getElementById('html-tpl-preview-pane').innerHTML = '<div style="color:var(--text-muted)">Generating preview…</div>';
+  }
+
+  _setHtmlTplModalState('editing');
+  document.getElementById('html-tpl-form-pane').innerHTML = '<div class="so-editor-form"><div class="loading-text--padded">Analyzing your post…</div></div>';
+
+  try {
+    const r = await fetch(`/api/visuals/${encodeURIComponent(String(currentPostId))}`, {
+      method: 'POST', headers: apiHeaders(), credentials: 'include',
+      body: JSON.stringify({ visual_type: 'template', mode: 'extract', template_id: templateId }),
+    });
+    const data = await r.json();
+    if (!data.ok) throw new Error(data.error || 'Extraction failed');
+    _htmlTplExtractedSlots = data.content;
+    renderHtmlTemplateForm(_htmlTplExtractedSlots);
+    _scheduleHtmlTplPreview();
+  } catch (err) {
+    document.getElementById('html-tpl-form-pane').innerHTML = `<div class="so-editor-form"><p class="so-extract-error">${escHtml(err.message || 'Could not analyze post.')}</p></div>`;
+  }
+}
+
+function renderHtmlTemplateForm(slots) {
+  const manifest = _htmlTplSelectedMeta?.slot_manifest || {};
+  const slotDefs = manifest.slots || {};
+  const formPane = document.getElementById('html-tpl-form-pane');
+
+  let html = '<div class="so-editor-form">';
+
+  for (const [key, def] of Object.entries(slotDefs)) {
+    if (key.startsWith('color:')) {
+      const colorName = key.slice('color:'.length);
+      const label = _slotLabel(colorName);
+      const val = (slots && slots[key]) || def.default || '#cccccc';
+      const resolved = val === 'brand' ? '#0f766e' : val;
+      html += `<div class="so-field-group" style="margin-bottom:14px">
+        <label class="field-label">${escHtml(label)}</label>
+        <div class="html-tpl-color-row">
+          <div class="html-tpl-color-swatch"><input type="color" value="${escHtml(resolved)}" data-slot="${escHtml(key)}"></div>
+          <input type="text" class="field-input html-tpl-color-hex" value="${escHtml(resolved)}" data-slot="${escHtml(key)}" maxlength="9">
+          ${def.default === 'brand' ? `<button type="button" class="html-tpl-color-reset" data-slot="${escHtml(key)}" data-brand="${escHtml(resolved)}">Reset</button>` : ''}
+        </div>
+      </div>`;
+      continue;
+    }
+
+    if (key.startsWith('image:')) {
+      const imageName = key.slice('image:'.length);
+      const label = _slotLabel(imageName);
+      html += `<div class="so-field-group" style="margin-bottom:14px">
+        <label class="field-label">${escHtml(label)}</label>
+        <div class="html-tpl-img-zone">
+          <div class="html-tpl-img-preview" data-slot="${escHtml(key)}" role="button" tabindex="0" aria-label="Upload image">
+            <span style="font-size:12px;color:var(--text-muted)">Click to upload</span>
+          </div>
+          <input type="file" accept="image/*" data-slot="${escHtml(key)}" hidden>
+        </div>
+      </div>`;
+      continue;
+    }
+
+    if (def.type === 'repeating') {
+      const items = (slots && slots[key]) || [];
+      const fields = def.fields || ['title', 'body'];
+      const min = def.min || 1;
+      const max = def.max || 10;
+      html += `<div class="so-field-group" data-repeating="${escHtml(key)}" data-fields='${JSON.stringify(fields)}' data-min="${min}" data-max="${max}" style="margin-bottom:14px">
+        <label class="field-label">${escHtml(_slotLabel(key))}</label>
+        <div class="html-tpl-repeating-list">
+          ${items.map((item, i) => _buildRepeatingCard(key, fields, item, i, items.length > min)).join('')}
+        </div>
+        ${items.length < max ? `<button type="button" class="html-tpl-add-item-btn" data-slot="${escHtml(key)}">+ Add item</button>` : ''}
+      </div>`;
+      continue;
+    }
+
+    // Text slot
+    const label = _slotLabel(key);
+    const val = (slots && slots[key]) || '';
+    const maxLen = def.maxLen || 0;
+    const useTextarea = maxLen > 120 || (!maxLen && val.length > 80);
+    html += `<div class="so-field-group" style="margin-bottom:14px">
+      <label class="field-label">${escHtml(label)}</label>
+      ${useTextarea
+        ? `<textarea class="field-textarea" data-slot="${escHtml(key)}" ${maxLen ? `maxlength="${maxLen}"` : ''} rows="3">${escHtml(val)}</textarea>`
+        : `<input type="text" class="field-input" data-slot="${escHtml(key)}" value="${escHtml(val)}" ${maxLen ? `maxlength="${maxLen}"` : ''}>`}
+      ${maxLen ? `<div class="so-char-counter"><span class="htpl-char-cur">${val.length}</span> / ${maxLen}</div>` : ''}
+    </div>`;
+  }
+
+  html += '</div>';
+  formPane.innerHTML = html;
+  formPane.hidden = false;
+
+  // Wire text/textarea inputs
+  formPane.querySelectorAll('.field-input[data-slot], .field-textarea[data-slot]').forEach(el => {
+    el.addEventListener('input', () => {
+      const counter = el.closest('.so-field-group')?.querySelector('.htpl-char-cur');
+      if (counter) counter.textContent = el.value.length;
+      _scheduleHtmlTplPreview();
+    });
+  });
+
+  // Wire color pickers
+  formPane.querySelectorAll('.html-tpl-color-swatch input[type="color"]').forEach(picker => {
+    const hexInput = formPane.querySelector(`.html-tpl-color-hex[data-slot="${picker.dataset.slot}"]`);
+    picker.addEventListener('input', () => {
+      if (hexInput) hexInput.value = picker.value;
+      _scheduleHtmlTplPreview();
+    });
+    if (hexInput) {
+      hexInput.addEventListener('input', () => {
+        if (/^#[0-9a-fA-F]{6}$/.test(hexInput.value)) { picker.value = hexInput.value; _scheduleHtmlTplPreview(); }
+      });
+    }
+  });
+
+  // Wire color reset
+  formPane.querySelectorAll('.html-tpl-color-reset').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const slot = btn.dataset.slot;
+      const brand = btn.dataset.brand;
+      const picker = formPane.querySelector(`.html-tpl-color-swatch input[data-slot="${slot}"]`);
+      const hexInput = formPane.querySelector(`.html-tpl-color-hex[data-slot="${slot}"]`);
+      if (picker) picker.value = brand;
+      if (hexInput) hexInput.value = brand;
+      _scheduleHtmlTplPreview();
+    });
+  });
+
+  // Wire image uploads
+  formPane.querySelectorAll('.html-tpl-img-preview').forEach(zone => {
+    const fileInput = formPane.querySelector(`input[type="file"][data-slot="${zone.dataset.slot}"]`);
+    zone.addEventListener('click', () => fileInput?.click());
+    zone.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput?.click(); } });
+    fileInput?.addEventListener('change', async () => {
+      const file = fileInput.files[0];
+      if (!file) return;
+      zone.innerHTML = '<span style="font-size:11px;color:var(--text-muted)">Uploading…</span>';
+      try {
+        const res = await fetch('/api/media/upload', {
+          method: 'POST', credentials: 'include',
+          headers: { 'Content-Type': file.type, 'X-Filename': encodeURIComponent(file.name) },
+          body: file,
+        });
+        const data = await res.json();
+        if (data.ok) {
+          zone.dataset.storageKey = data.stored_name || data.key || '';
+          zone.innerHTML = `<img src="${escHtml(data.url || `/files/${data.stored_name}`)}" alt="" style="width:100%;height:100%;object-fit:contain">`;
+          _scheduleHtmlTplPreview();
+        } else {
+          zone.innerHTML = '<span style="font-size:11px;color:var(--error,#e55)">Upload failed</span>';
+        }
+      } catch {
+        zone.innerHTML = '<span style="font-size:11px;color:var(--error,#e55)">Upload failed</span>';
+      }
+      fileInput.value = '';
+    });
+  });
+
+  // Wire repeating add/remove
+  _wireRepeatingSlots(formPane);
+}
+
+function _buildRepeatingCard(slotKey, fields, item, idx, canRemove) {
+  let inner = fields.map(f => {
+    const val = (item && item[f]) || '';
+    return `<div style="margin-bottom:6px">
+      <label class="field-label" style="font-size:11px">${escHtml(_slotLabel(f))}</label>
+      <input type="text" class="field-input" data-rfield="${escHtml(f)}" value="${escHtml(val)}" style="font-size:13px">
+    </div>`;
+  }).join('');
+  return `<div class="html-tpl-repeating-card" data-idx="${idx}">
+    <div class="html-tpl-repeating-card-header">
+      <span style="font-size:12px;font-weight:600;color:var(--text-muted)">#${idx + 1}</span>
+      ${canRemove ? `<button type="button" class="html-tpl-remove-item-btn" data-idx="${idx}" aria-label="Remove">✕</button>` : ''}
+    </div>
+    ${inner}
+  </div>`;
+}
+
+function _wireRepeatingSlots(formPane) {
+  formPane.querySelectorAll('.html-tpl-add-item-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const group = formPane.querySelector(`[data-repeating="${btn.dataset.slot}"]`);
+      if (!group) return;
+      const fields = JSON.parse(group.dataset.fields);
+      const max = parseInt(group.dataset.max);
+      const min = parseInt(group.dataset.min);
+      const list = group.querySelector('.html-tpl-repeating-list');
+      const count = list.querySelectorAll('.html-tpl-repeating-card').length;
+      if (count >= max) return;
+      const newItem = {};
+      fields.forEach(f => { newItem[f] = ''; });
+      list.insertAdjacentHTML('beforeend', _buildRepeatingCard(btn.dataset.slot, fields, newItem, count, count + 1 > min));
+      if (count + 1 >= max) btn.hidden = true;
+      _wireRepeatingCardEvents(list);
+      _scheduleHtmlTplPreview();
+    });
+  });
+  formPane.querySelectorAll('.html-tpl-repeating-list').forEach(list => _wireRepeatingCardEvents(list));
+}
+
+function _wireRepeatingCardEvents(list) {
+  list.querySelectorAll('.html-tpl-remove-item-btn').forEach(btn => {
+    btn.onclick = () => {
+      btn.closest('.html-tpl-repeating-card')?.remove();
+      // Re-number remaining cards
+      list.querySelectorAll('.html-tpl-repeating-card').forEach((card, i) => {
+        card.dataset.idx = i;
+        card.querySelector('.html-tpl-repeating-card-header span').textContent = `#${i + 1}`;
+      });
+      _scheduleHtmlTplPreview();
+    };
+  });
+  list.querySelectorAll('.field-input[data-rfield]').forEach(el => {
+    el.oninput = () => _scheduleHtmlTplPreview();
+  });
+}
+
+function _slotLabel(key) {
+  return key.replace(/[_-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).trim();
+}
+
+function readHtmlTemplateFormContent() {
+  const formPane = document.getElementById('html-tpl-form-pane');
+  const content = {};
+  const colors = {};
+  const images = {};
+
+  // Text slots
+  formPane.querySelectorAll('.field-input[data-slot], .field-textarea[data-slot]').forEach(el => {
+    content[el.dataset.slot] = el.value;
+  });
+
+  // Color slots
+  formPane.querySelectorAll('.html-tpl-color-swatch input[type="color"]').forEach(el => {
+    colors[el.dataset.slot] = el.value;
+  });
+
+  // Image slots
+  formPane.querySelectorAll('.html-tpl-img-preview[data-storage-key]').forEach(el => {
+    if (el.dataset.storageKey) images[el.dataset.slot] = el.dataset.storageKey;
+  });
+
+  // Repeating slots
+  formPane.querySelectorAll('[data-repeating]').forEach(group => {
+    const key = group.dataset.repeating;
+    const items = [];
+    group.querySelectorAll('.html-tpl-repeating-card').forEach(card => {
+      const item = {};
+      card.querySelectorAll('.field-input[data-rfield]').forEach(el => {
+        item[el.dataset.rfield] = el.value;
+      });
+      items.push(item);
+    });
+    content[key] = items;
+  });
+
+  return { ...content, colors, images };
+}
+
+// ── Async rendering with job polling ──
+
+async function generateHtmlTplInModal() {
+  const content = readHtmlTemplateFormContent();
+  _setHtmlTplModalState('generating');
+
+  const pane = document.getElementById('html-tpl-preview-pane');
+  const existingImg = pane.querySelector('img');
+  if (existingImg) {
+    existingImg.style.opacity = '0.4';
+    pane.insertAdjacentHTML('beforeend', '<div class="html-tpl-progress"><div class="html-tpl-progress-spinner"></div>Rendering…</div>');
+  } else {
+    pane.innerHTML = '<div class="html-tpl-progress" style="margin:auto"><div class="html-tpl-progress-spinner"></div>Rendering…</div>';
+  }
+
+  try {
+    const r = await fetch(`/api/visuals/${encodeURIComponent(String(currentPostId))}`, {
+      method: 'POST', headers: apiHeaders(), credentials: 'include',
+      body: JSON.stringify({ visual_type: 'template', mode: 'render', template_id: _htmlTplSelectedId, content }),
+    });
+    const data = await r.json();
+    if (!data.ok) throw new Error(data.error || 'Render failed');
+    _htmlTplRenderJobId = data.job_id;
+    _startHtmlTplJobPoll(data.job_id);
+  } catch (err) {
+    _setHtmlTplModalState('editing');
+    pane.querySelector('.html-tpl-progress')?.remove();
+    if (existingImg) existingImg.style.opacity = '1';
+    alert('Rendering failed: ' + (err.message || 'Unknown error'));
+  }
+}
+
+function _startHtmlTplJobPoll(jobId) {
+  let polls = 0;
+  clearInterval(_htmlTplPollTimer);
+  _htmlTplPollTimer = setInterval(async () => {
+    polls++;
+    if (polls > 30) {
+      clearInterval(_htmlTplPollTimer);
+      _setHtmlTplModalState('editing');
+      document.getElementById('html-tpl-preview-pane').querySelector('.html-tpl-progress')?.remove();
+      alert('Rendering timed out. Please try again.');
+      return;
+    }
+    try {
+      const r = await fetch(`/api/visuals/jobs/${encodeURIComponent(jobId)}`, { credentials: 'include' });
+      const data = await r.json();
+      if (data.status === 'done') {
+        clearInterval(_htmlTplPollTimer);
+        currentAssetUrl = data.png_url;
+        currentPreviewUrl = data.png_url;
+        _htmlTplExtractedSlots = data.content || _htmlTplExtractedSlots;
+        _renderHtmlTplPreviewImage(data.png_url);
+        _setHtmlTplModalState('editing');
+        _showInsertBtn();
+        visualCache.set(`${currentPostId}:html_template`, {
+          extractedContent: _htmlTplExtractedSlots,
+          assetUrl: data.png_url,
+          previewUrl: data.png_url,
+          templateId: _htmlTplSelectedId,
+          templateMeta: _htmlTplSelectedMeta,
+        });
+      } else if (data.status === 'failed') {
+        clearInterval(_htmlTplPollTimer);
+        _setHtmlTplModalState('editing');
+        document.getElementById('html-tpl-preview-pane').querySelector('.html-tpl-progress')?.remove();
+        const img = document.getElementById('html-tpl-preview-pane').querySelector('img');
+        if (img) img.style.opacity = '1';
+        alert('Rendering failed: ' + (data.error || 'Unknown error'));
+      }
+    } catch { /* network blip — keep polling */ }
+  }, 1500);
+}
+
+function _scheduleHtmlTplPreview() {
+  clearTimeout(_htmlTplPreviewTimer);
+  _htmlTplPreviewTimer = setTimeout(() => _generateHtmlTplPreviewSilently(), 1500);
+}
+
+async function _generateHtmlTplPreviewSilently() {
+  if (_htmlTplAutoPreviewRunning || !_htmlTplSelectedId || !currentPostId) return;
+  _htmlTplAutoPreviewRunning = true;
+
+  try {
+    const content = readHtmlTemplateFormContent();
+    const r = await fetch(`/api/visuals/${encodeURIComponent(String(currentPostId))}`, {
+      method: 'POST', headers: apiHeaders(), credentials: 'include',
+      body: JSON.stringify({ visual_type: 'template', mode: 'render', template_id: _htmlTplSelectedId, content }),
+    });
+    const data = await r.json();
+    if (!data.ok || !data.job_id) { _htmlTplAutoPreviewRunning = false; return; }
+
+    let silentPolls = 0;
+    const silentTimer = setInterval(async () => {
+      silentPolls++;
+      if (silentPolls > 20) { clearInterval(silentTimer); _htmlTplAutoPreviewRunning = false; return; }
+      try {
+        const pr = await fetch(`/api/visuals/jobs/${encodeURIComponent(data.job_id)}`, { credentials: 'include' });
+        const pdata = await pr.json();
+        if (pdata.status === 'done') {
+          clearInterval(silentTimer);
+          currentAssetUrl = pdata.png_url;
+          currentPreviewUrl = pdata.png_url;
+          _renderHtmlTplPreviewImage(pdata.png_url);
+          _showInsertBtn();
+          visualCache.set(`${currentPostId}:html_template`, {
+            extractedContent: _htmlTplExtractedSlots,
+            assetUrl: pdata.png_url,
+            previewUrl: pdata.png_url,
+            templateId: _htmlTplSelectedId,
+            templateMeta: _htmlTplSelectedMeta,
+          });
+          _htmlTplAutoPreviewRunning = false;
+        } else if (pdata.status === 'failed') {
+          clearInterval(silentTimer);
+          _htmlTplAutoPreviewRunning = false;
+        }
+      } catch { /* keep polling */ }
+    }, 1500);
+  } catch {
+    _htmlTplAutoPreviewRunning = false;
+  }
+}
+
+function _renderHtmlTplPreviewImage(url) {
+  const pane = document.getElementById('html-tpl-preview-pane');
+  pane.innerHTML = `<img src="${escHtml(url)}" alt="Template preview" style="max-width:100%;max-height:100%;object-fit:contain;border-radius:8px">`;
+}
+
+function _doSaveHtmlTemplate() {
+  attachedAssetUrl   = currentAssetUrl;
+  attachedAssetType  = 'html_template';
+  attachedPreviewUrl = currentPreviewUrl;
+  attachedSlideCount = 0;
+  const chipLabel = document.getElementById('asset-chip-label');
+  const chip      = document.getElementById('asset-chip');
+  if (chipLabel) chipLabel.textContent = 'Design Template';
+  if (chip) chip.classList.remove('hidden');
+  renderPreviewAsset();
+  closeHtmlTemplateModal();
+}
+
 async function extractContent(type) {
   // ai_image uses the dedicated modal DOM — not the slide-over
   if (type === 'ai_image') {
@@ -2287,7 +2871,9 @@ function _doSaveVisual(type) {
 }
 
 function _showInsertBtn() {
-  const id = currentAssetType === 'ai_image' ? 'ai-image-insert-btn' : 'visual-modal-insert-btn';
+  const id = currentAssetType === 'ai_image' ? 'ai-image-insert-btn'
+           : currentAssetType === 'html_template' ? 'html-tpl-insert-btn'
+           : 'visual-modal-insert-btn';
   const btn = document.getElementById(id);
   if (btn) { btn.hidden = false; btn.disabled = false; }
 }
@@ -2593,6 +3179,7 @@ function bindEvents() {
     else if (document.getElementById('success-sheet').classList.contains('visible'))   closeSuccessSheet();
     else if (document.getElementById('schedule-modal').classList.contains('visible'))  closeModal();
     else if (document.getElementById('visual-modal-overlay')?.getAttribute('aria-hidden') !== 'true') closeVisualModal();
+    else if (document.getElementById('html-tpl-overlay')?.getAttribute('aria-hidden') !== 'true')     closeHtmlTemplateModal();
     else if (document.getElementById('media-modal-overlay')?.getAttribute('aria-hidden') !== 'true')  closeMediaDrawer();
   });
 
@@ -2796,6 +3383,29 @@ function wireVisualButtons() {
     if (e.target === e.currentTarget) closeAiImageModal();
   });
 
+  // Design Templates Modal buttons
+  document.getElementById('html-tpl-btn').addEventListener('click', () => openHtmlTemplateModal());
+  document.getElementById('html-tpl-modal-close').addEventListener('click', closeHtmlTemplateModal);
+  document.getElementById('html-tpl-cancel-btn').addEventListener('click', closeHtmlTemplateModal);
+  document.getElementById('html-tpl-generate-btn').addEventListener('click', generateHtmlTplInModal);
+  document.getElementById('html-tpl-insert-btn').addEventListener('click', _doSaveHtmlTemplate);
+  document.getElementById('html-tpl-back-btn').addEventListener('click', () => {
+    _htmlTplSelectedId = null;
+    _htmlTplSelectedMeta = null;
+    _htmlTplExtractedSlots = null;
+    currentAssetUrl = null;
+    currentPreviewUrl = null;
+    clearInterval(_htmlTplPollTimer);
+    document.getElementById('html-tpl-modal-title').textContent = 'DESIGN TEMPLATES';
+    const _ib = document.getElementById('html-tpl-insert-btn');
+    if (_ib) { _ib.hidden = true; _ib.disabled = true; }
+    _setHtmlTplModalState('picker');
+    loadHtmlTemplatePicker();
+  });
+  document.getElementById('html-tpl-overlay').addEventListener('click', e => {
+    if (e.target === e.currentTarget) closeHtmlTemplateModal();
+  });
+
   // Visual Boost Overlay tiles + backdrop click
   document.getElementById('visual-boost-overlay')?.addEventListener('click', e => {
     if (e.target === e.currentTarget) hideBoostOverlay();
@@ -2812,6 +3422,7 @@ function wireVisualButtons() {
       else if (type === 'metrics_card')  openSlideOver('metrics_card', 'METRICS CARD');
       else if (type === 'client_win')    openSlideOver('client_win', 'CLIENT WIN');
       else if (type === 'framework')     openSlideOver('framework', 'FRAMEWORK');
+      else if (type === 'html_template')  openHtmlTemplateModal();
       else if (type === 'media')          openMediaDrawer();
     });
   });

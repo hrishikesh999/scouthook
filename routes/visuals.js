@@ -305,8 +305,8 @@ router.post('/:postId', async (req, res) => {
 // ---------------------------------------------------------------------------
 // GET /api/visuals/jobs/:jobId — poll render job status
 // ---------------------------------------------------------------------------
-router.get('/jobs/:jobId', (req, res) => {
-  const job = getRenderJobStatus(req.params.jobId);
+router.get('/jobs/:jobId', async (req, res) => {
+  const job = await getRenderJobStatus(req.params.jobId);
   if (!job) return res.status(404).json({ ok: false, error: 'job_not_found' });
   return res.json({ ok: true, status: job.status, png_url: job.png_url, content: job.content || null, error: job.error });
 });

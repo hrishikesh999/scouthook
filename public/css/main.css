@@ -7850,6 +7850,81 @@ html[data-nav-dir="back"] #main-content.spa-entering {
   .ai-image-overlay { left: 0; align-items: flex-end; }
 }
 
+/* ── Design Templates modal additions ───────────────────────── */
+.html-tpl-category-chips {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  padding: 0 0 var(--space-4);
+}
+.html-tpl-category-chip {
+  font-size: 12px; font-weight: 500; padding: 4px 12px;
+  border: 1px solid var(--border); border-radius: 99px;
+  background: var(--bg-surface, var(--surface)); color: var(--text-secondary, var(--text-muted));
+  cursor: pointer; transition: all 0.15s; font-family: inherit; white-space: nowrap;
+}
+.html-tpl-category-chip:hover { border-color: var(--brand); color: var(--brand); }
+.html-tpl-category-chip.active { background: var(--brand); color: #fff; border-color: var(--brand); }
+
+.html-tpl-color-row { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.html-tpl-color-swatch {
+  width: 32px; height: 32px; border-radius: 6px; border: 1.5px solid var(--border);
+  overflow: hidden; flex-shrink: 0; position: relative;
+}
+.html-tpl-color-swatch input[type="color"] {
+  width: 48px; height: 48px; border: none; cursor: pointer;
+  position: absolute; top: -8px; left: -8px;
+}
+.html-tpl-color-hex {
+  width: 90px; font-family: var(--font-mono, monospace); font-size: 13px;
+  text-transform: uppercase;
+}
+.html-tpl-color-reset {
+  font-size: 11px; color: var(--brand); background: none; border: none;
+  cursor: pointer; font-family: inherit; padding: 0; white-space: nowrap;
+}
+.html-tpl-color-reset:hover { text-decoration: underline; }
+
+.html-tpl-repeating-card {
+  border: 1px solid var(--border); border-radius: 8px;
+  padding: 10px 12px; margin-bottom: 8px; background: var(--bg-surface, var(--surface));
+}
+.html-tpl-repeating-card-header {
+  display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;
+}
+.html-tpl-add-item-btn {
+  width: 100%; padding: 8px; border: 1px dashed var(--border);
+  border-radius: 8px; background: transparent; color: var(--brand);
+  font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit;
+  transition: border-color 0.15s, background 0.15s; margin-top: 4px;
+}
+.html-tpl-add-item-btn:hover { border-color: var(--brand); background: rgba(15,118,110,0.04); }
+.html-tpl-remove-item-btn {
+  background: none; border: none; cursor: pointer; color: var(--text-muted);
+  padding: 2px 6px; border-radius: 4px; font-size: 14px;
+}
+.html-tpl-remove-item-btn:hover { color: var(--error, #e55); background: rgba(0,0,0,0.04); }
+
+.html-tpl-img-zone { margin-top: 6px; }
+.html-tpl-img-preview {
+  width: 100%; max-height: 120px; aspect-ratio: 16/9;
+  border: 1px dashed var(--border); border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden; background: var(--surface-2); cursor: pointer;
+  transition: border-color 0.15s;
+}
+.html-tpl-img-preview:hover { border-color: var(--brand); }
+
+.html-tpl-progress {
+  display: flex; align-items: center; gap: 10px; padding: 12px 16px;
+  background: var(--surface-2); border-radius: 8px; font-size: 13px;
+  color: var(--text-secondary, var(--text-muted));
+}
+.html-tpl-progress-spinner {
+  width: 18px; height: 18px; border: 2px solid var(--border);
+  border-top-color: var(--brand); border-radius: 50%;
+  animation: htpl-spin 0.8s linear infinite;
+}
+@keyframes htpl-spin { to { transform: rotate(360deg); } }
+
 /* ── Media library modal ─────────────────────────────────────── */
 .media-modal { width: min(1040px, calc(100vw - 40px)); }
 

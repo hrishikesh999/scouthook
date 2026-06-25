@@ -299,33 +299,35 @@ async function renderTemplate(post, templateId, userOverrides = {}, brand = {}, 
 }
 
 // ---------------------------------------------------------------------------
-// Async render job queue — in-memory tracking for background Puppeteer renders
+// Async render job queue — Redis-backed with in-memory fallback
 // ---------------------------------------------------------------------------
 
-const renderJobs = new Map();
+const { redisSet, redisGet } = require('./redis');
+const renderJobs = new Map(); // fallback when Redis unavailable
 
-const JOB_TTL_MS = 10 * 60 * 1000;
-setInterval(() => {
-  const now = Date.now();
-  for (const [id, job] of renderJobs) {
-    if (now - job.createdAt > JOB_TTL_MS) renderJobs.delete(id);
-  }
-}, 60_000);
+const JOB_TTL_SECONDS = 600; // 10 minutes
+
+async function _setJob(jobId, data) {
+  const stored = await redisSet(`render_job:${jobId}`, data, JOB_TTL_SECONDS);
+  if (!stored) renderJobs.set(jobId, { ...data, createdAt: Date.now() });
+}
 
 function startRenderJob(jobId, post, templateId, userOverrides, brand, ctx) {
-  renderJobs.set(jobId, { status: 'rendering', png_url: null, error: null, createdAt: Date.now() });
+  _setJob(jobId, { status: 'rendering', png_url: null, error: null });
 
   renderTemplate(post, templateId, userOverrides, brand, ctx)
     .then(result => {
-      renderJobs.set(jobId, { status: 'done', png_url: result.png_url, content: result.content, error: null, createdAt: Date.now() });
+      _setJob(jobId, { status: 'done', png_url: result.png_url, content: result.content, error: null });
     })
     .catch(err => {
       console.error('[templateRenderer] render job %s failed:', jobId, err.message);
-      renderJobs.set(jobId, { status: 'failed', png_url: null, error: err.message, createdAt: Date.now() });
+      _setJob(jobId, { status: 'failed', png_url: null, error: err.message });
     });
 }
 
-function getRenderJobStatus(jobId) {
+async function getRenderJobStatus(jobId) {
+  const fromRedis = await redisGet(`render_job:${jobId}`);
+  if (fromRedis) return fromRedis;
   return renderJobs.get(jobId) || null;
 }
 

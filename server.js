@@ -739,9 +739,8 @@ function serveStoredFile(type) {
       ownerId = row.user_id;
     }
 
-    const key       = storage.buildMemberKey(req.tenantId, ownerId, type, filename);
-    const legacyKey = storage.buildLegacyKey(req.tenantId, ownerId, type, filename);
-    await storage.stream(key, res, next, legacyKey);
+    const key = storage.buildMemberKey(req.tenantId, ownerId, type, filename);
+    await storage.stream(key, res, next);
   };
 }
 

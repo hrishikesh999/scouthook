@@ -134,12 +134,11 @@ router.post('/save-generated', async (req, res) => {
     return res.status(400).json({ ok: false, error: 'invalid_file_url' });
   }
 
-  const srcKey    = storage.buildMemberKey(tenantId, userId, 'generated', relativeName);
-  const srcLegacy = storage.buildLegacyKey(tenantId, userId, 'generated', relativeName);
+  const srcKey = storage.buildMemberKey(tenantId, userId, 'generated', relativeName);
 
   let buffer;
   try {
-    buffer = await storage.download(srcKey, srcLegacy);
+    buffer = await storage.download(srcKey);
   } catch {
     return res.status(404).json({ ok: false, error: 'source_file_not_found' });
   }

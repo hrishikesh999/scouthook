@@ -53,7 +53,7 @@
           <!-- Email / password sign-up -->
           <form id="signupForm" class="login-email-form" novalidate>
             <label class="login-email-label" for="su-name">Name</label>
-            <input id="su-name" type="text" class="login-email-input" placeholder="Your name" autocomplete="name" required />
+            <input id="su-name" type="text" class="login-email-input" placeholder="Your name" autocomplete="name" maxlength="100" required />
 
             <label class="login-email-label" for="su-email" style="margin-top:10px">Email</label>
             <input id="su-email" type="email" class="login-email-input" placeholder="you@example.com" autocomplete="email" required />
@@ -99,6 +99,7 @@
 
     const ERROR_MESSAGES = {
       name_required:            'Please enter your name.',
+      name_too_long:            'Name must be 100 characters or fewer.',
       invalid_email:            'Enter a valid email address.',
       password_too_short:       'Password must be at least 8 characters.',
       email_already_registered: 'This email is already registered. Try <a href="/login.html">signing in</a>.',
@@ -114,6 +115,7 @@
       const password = document.getElementById('su-password').value;
 
       if (!name)                return showError('Please enter your name.');
+      if (name.length > 100)    return showError('Name must be 100 characters or fewer.');
       if (!email)               return showError('Enter a valid email address.');
       if (password.length < 8)  return showError('Password must be at least 8 characters.');
 

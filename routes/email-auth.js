@@ -89,6 +89,9 @@ router.post('/signup', async (req, res) => {
     if (!name || typeof name !== 'string' || name.trim().length < 1) {
       return res.status(400).json({ ok: false, error: 'name_required' });
     }
+    if (name.trim().length > 100) {
+      return res.status(400).json({ ok: false, error: 'name_too_long' });
+    }
     if (!isValidEmail(email)) {
       return res.status(400).json({ ok: false, error: 'invalid_email' });
     }

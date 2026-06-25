@@ -210,15 +210,19 @@
   document.getElementById('form-cancel').addEventListener('click', closeForm);
 
   async function editTemplate(id) {
-    const [metaRes, htmlRes] = await Promise.all([
-      adminFetch('/admin/html-templates'),
-      adminFetch(`/admin/html-templates/${id}/html`),
-    ]);
-    const { templates } = await metaRes.json();
-    const t = templates.find(x => x.id === id);
-    if (!t) return;
-    const html = htmlRes.ok ? await htmlRes.text() : '';
-    openForm(t, html);
+    try {
+      const [metaRes, htmlRes] = await Promise.all([
+        adminFetch('/admin/html-templates'),
+        adminFetch(`/admin/html-templates/${id}/html`),
+      ]);
+      const data = await metaRes.json();
+      const t = (data.templates || []).find(x => x.id === id);
+      if (!t) { alert('Template not found.'); return; }
+      const html = htmlRes.ok ? await htmlRes.text() : '';
+      openForm(t, html);
+    } catch (err) {
+      alert('Failed to load template for editing: ' + err.message);
+    }
   }
 
   function openForm(t, existingHtml = '') {

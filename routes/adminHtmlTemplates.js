@@ -60,16 +60,16 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ ok: false, error: 'html must be ≤ 500 KB' });
     }
 
-    // Strip all <script> blocks before storing
-    const cleanHtml = stripScriptTags(html);
-
-    // Parse manifest — must have valid JSON if the block is present
+    // Parse manifest from the original HTML before stripping scripts
     let manifest;
     try {
-      manifest = readSlotManifest(cleanHtml);
+      manifest = readSlotManifest(html);
     } catch (err) {
       return res.status(400).json({ ok: false, error: `invalid template-meta: ${err.message}` });
     }
+
+    // Strip all <script> blocks before storing (after manifest is read)
+    const cleanHtml = stripScriptTags(html);
 
     const id = crypto.randomUUID();
     const htmlKey = storage.buildTemplateKey(id);
@@ -134,13 +134,13 @@ router.put('/:id', async (req, res) => {
       if (Buffer.byteLength(html, 'utf8') > 500 * 1024) {
         return res.status(400).json({ ok: false, error: 'html must be ≤ 500 KB' });
       }
-      const cleanHtml = stripScriptTags(html);
-
       try {
-        manifest = readSlotManifest(cleanHtml);
+        manifest = readSlotManifest(html);
       } catch (err) {
         return res.status(400).json({ ok: false, error: `invalid template-meta: ${err.message}` });
       }
+
+      const cleanHtml = stripScriptTags(html);
 
       // Overwrite the same R2 key
       await storage.uploadAdmin(Buffer.from(cleanHtml, 'utf8'), htmlKey, 'text/html');

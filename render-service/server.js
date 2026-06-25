@@ -139,9 +139,10 @@ fastify.post('/render', async (req, reply) => {
 // ── Startup ─────────────────────────────────────────────────────────────────
 
 async function start() {
-  await launchBrowser();
   await fastify.listen({ port: PORT, host: '0.0.0.0' });
   fastify.log.info(`[render] listening on port ${PORT}`);
+  // Launch browser after port is bound so Fly.io health check passes immediately
+  launchBrowser().catch(err => fastify.log.error('[render] browser launch failed:', err.message));
 }
 
 start().catch(err => {

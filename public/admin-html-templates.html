@@ -262,7 +262,7 @@
     const pos = start !== -1 ? start : altStart;
     const tagLen = start !== -1 ? '<script type="application/json" id="template-meta">'.length : "<script type='application/json' id='template-meta'>".length;
     if (pos === -1) { preview.textContent = 'No <script id="template-meta"> found in HTML.'; return; }
-    const end = html.indexOf('</script>', pos + tagLen);
+    const end = html.indexOf('</' + 'script>', pos + tagLen);
     if (end === -1) { preview.textContent = 'Unclosed <script id="template-meta"> block.'; return; }
     const raw = html.slice(pos + tagLen, end).trim();
     try {

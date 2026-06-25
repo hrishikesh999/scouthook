@@ -39,6 +39,10 @@ const path = require('path');
 
 const BACKEND = (process.env.STORAGE_BACKEND || 'local').toLowerCase();
 
+if ((process.env.R2_BUCKET_NAME || process.env.S3_BUCKET_NAME) && BACKEND !== 's3') {
+  console.warn('[storage] R2/S3 bucket env vars are set but STORAGE_BACKEND is not "s3" — using local disk. Set STORAGE_BACKEND=s3 to enable cloud storage.');
+}
+
 const LOCAL_UPLOADS_DIR   = path.join(__dirname, '..', 'uploads');
 const LOCAL_GENERATED_DIR = path.join(__dirname, '..', 'generated');
 const LOCAL_ADMIN_DIR     = path.join(__dirname, '..', 'uploads', 'admin');
@@ -53,6 +57,8 @@ for (const dir of [LOCAL_UPLOADS_DIR, LOCAL_GENERATED_DIR, LOCAL_ADMIN_DIR]) {
 
 function resolveStorageConfig() {
   if (process.env.R2_BUCKET_NAME) {
+    const missing = ['R2_ENDPOINT', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY'].filter(k => !process.env[k]);
+    if (missing.length) throw new Error(`[storage] R2_BUCKET_NAME is set but missing: ${missing.join(', ')}`);
     return {
       endpoint:    process.env.R2_ENDPOINT,
       region:      'auto',
@@ -295,6 +301,11 @@ async function copy(srcKey, dstKey) {
   } else {
     const srcPath = keyToLocalPath(srcKey);
     const dstPath = keyToLocalPath(dstKey);
+    if (!fs.existsSync(srcPath)) {
+      const err = new Error('file_not_found');
+      err.code = 'ENOENT';
+      throw err;
+    }
     fs.copyFileSync(srcPath, dstPath);
   }
 }
@@ -329,6 +340,7 @@ async function stream(key, res, next, legacyKey = null) {
     }
     if (resp.ContentType)   res.setHeader('Content-Type',   resp.ContentType);
     if (resp.ContentLength) res.setHeader('Content-Length', String(resp.ContentLength));
+    resp.Body.on('error', () => { if (!res.headersSent) res.status(500).end(); });
     resp.Body.pipe(res);
   } else {
     const localPath = keyToLocalPath(key);

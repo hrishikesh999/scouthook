@@ -159,7 +159,7 @@ router.post('/save-generated', async (req, res) => {
   const url        = `/uploads/${storedName}`;
 
   const dstKey = storage.buildMemberKey(tenantId, userId, 'uploads', storedName);
-  await storage.copy(srcKey, dstKey);
+  await storage.uploadToKey(buffer, dstKey, mimeType);
 
   const row = await db.prepare(`
     INSERT INTO media_files

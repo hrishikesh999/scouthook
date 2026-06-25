@@ -241,6 +241,17 @@ async function renderTemplate(post, templateId, userOverrides = {}, brand = {}, 
   // 4. Extract text + repeating slots via Claude Haiku
   const textSlots = await extractSlotContent(post, manifest);
 
+  // 4b. Apply user text/repeating overrides (form edits take priority over AI)
+  for (const [key, val] of Object.entries(userOverrides)) {
+    if (key === 'colors' || key === 'images') continue;
+    if (key.startsWith('color:') || key.startsWith('image:')) continue;
+    if (typeof val === 'string' && val.trim()) {
+      textSlots[key] = val;
+    } else if (Array.isArray(val) && slots[key]?.type === 'repeating') {
+      textSlots[key] = val;
+    }
+  }
+
   // 5. Resolve color slots
   const colorSlots = {};
   const overrideColors = (userOverrides && userOverrides.colors) || {};
@@ -307,12 +318,22 @@ const renderJobs = new Map(); // fallback when Redis unavailable
 
 const JOB_TTL_SECONDS = 600; // 10 minutes
 
+// Clean up in-memory fallback Map every 60s
+setInterval(() => {
+  const cutoff = Date.now() - JOB_TTL_SECONDS * 1000;
+  for (const [id, job] of renderJobs) {
+    if (job.createdAt < cutoff) renderJobs.delete(id);
+  }
+}, 60_000);
+
 async function _setJob(jobId, data) {
   const stored = await redisSet(`render_job:${jobId}`, data, JOB_TTL_SECONDS);
   if (!stored) renderJobs.set(jobId, { ...data, createdAt: Date.now() });
 }
 
 function startRenderJob(jobId, post, templateId, userOverrides, brand, ctx) {
+  // Synchronously set in-memory so the first poll never misses
+  renderJobs.set(jobId, { status: 'rendering', png_url: null, error: null, createdAt: Date.now() });
   _setJob(jobId, { status: 'rendering', png_url: null, error: null });
 
   renderTemplate(post, templateId, userOverrides, brand, ctx)

@@ -1851,6 +1851,7 @@ let _htmlTplActiveCategory = null;
 let _htmlTplRenderJobId    = null;
 let _htmlTplPollTimer      = null;
 let _htmlTplPreviewTimer   = null;
+let _htmlTplSilentPollTimer = null;
 let _htmlTplAutoPreviewRunning = false;
 
 function _setHtmlTplModalState(state) {
@@ -1901,8 +1902,10 @@ function openHtmlTemplateModal() {
 function closeHtmlTemplateModal() {
   document.getElementById('html-tpl-overlay').setAttribute('aria-hidden', 'true');
   clearInterval(_htmlTplPollTimer);
+  clearInterval(_htmlTplSilentPollTimer);
   clearTimeout(_htmlTplPreviewTimer);
   _htmlTplPollTimer = null;
+  _htmlTplSilentPollTimer = null;
   _htmlTplPreviewTimer = null;
   _htmlTplRenderJobId = null;
   _htmlTplAutoPreviewRunning = false;
@@ -1997,6 +2000,10 @@ async function _selectHtmlTemplate(templateId) {
   document.getElementById('html-tpl-form-pane').innerHTML = '<div class="so-editor-form"><div class="loading-text--padded">Analyzing your post…</div></div>';
 
   try {
+    const [, brandColors] = await Promise.all([
+      Promise.resolve(), // placeholder for extract call below
+      _loadBrandColors(),
+    ]);
     const r = await fetch(`/api/visuals/${encodeURIComponent(String(currentPostId))}`, {
       method: 'POST', headers: apiHeaders(), credentials: 'include',
       body: JSON.stringify({ visual_type: 'template', mode: 'extract', template_id: templateId }),
@@ -2011,6 +2018,31 @@ async function _selectHtmlTemplate(templateId) {
   }
 }
 
+let _htmlTplBrandColors = null;
+
+async function _loadBrandColors() {
+  if (_htmlTplBrandColors) return _htmlTplBrandColors;
+  try {
+    const r = await fetch('/api/profile', { headers: apiHeaders(), credentials: 'include' });
+    const data = await r.json();
+    if (data.ok && data.profile) {
+      _htmlTplBrandColors = {
+        accent: data.profile.brand_accent || '#0D7A5F',
+        bg:     data.profile.brand_bg     || '#0F1A3C',
+        text:   data.profile.brand_text   || '#F0F4FF',
+      };
+    }
+  } catch { /* fallback */ }
+  if (!_htmlTplBrandColors) _htmlTplBrandColors = { accent: '#0D7A5F', bg: '#0F1A3C', text: '#F0F4FF' };
+  return _htmlTplBrandColors;
+}
+
+function _resolveBrandColor(key, def) {
+  if (def.default !== 'brand' || !_htmlTplBrandColors) return def.default || '#cccccc';
+  const role = key.slice('color:'.length);
+  return _htmlTplBrandColors[role] || _htmlTplBrandColors.accent;
+}
+
 function renderHtmlTemplateForm(slots) {
   const manifest = _htmlTplSelectedMeta?.slot_manifest || {};
   const slotDefs = manifest.slots || {};
@@ -2023,7 +2055,7 @@ function renderHtmlTemplateForm(slots) {
       const colorName = key.slice('color:'.length);
       const label = _slotLabel(colorName);
       const val = (slots && slots[key]) || def.default || '#cccccc';
-      const resolved = val === 'brand' ? '#0f766e' : val;
+      const resolved = val === 'brand' ? _resolveBrandColor(key, def) : val;
       html += `<div class="so-field-group" style="margin-bottom:14px">
         <label class="field-label">${escHtml(label)}</label>
         <div class="html-tpl-color-row">
@@ -2254,6 +2286,9 @@ function readHtmlTemplateFormContent() {
 // ── Async rendering with job polling ──
 
 async function generateHtmlTplInModal() {
+  clearTimeout(_htmlTplPreviewTimer);
+  clearInterval(_htmlTplSilentPollTimer);
+  _htmlTplAutoPreviewRunning = false;
   const content = readHtmlTemplateFormContent();
   _setHtmlTplModalState('generating');
 
@@ -2331,8 +2366,9 @@ function _scheduleHtmlTplPreview() {
 }
 
 async function _generateHtmlTplPreviewSilently() {
-  if (_htmlTplAutoPreviewRunning || !_htmlTplSelectedId || !currentPostId) return;
+  if (_htmlTplAutoPreviewRunning || _htmlTplModalState === 'generating' || !_htmlTplSelectedId || !currentPostId) return;
   _htmlTplAutoPreviewRunning = true;
+  clearInterval(_htmlTplSilentPollTimer);
 
   try {
     const content = readHtmlTemplateFormContent();
@@ -2344,14 +2380,14 @@ async function _generateHtmlTplPreviewSilently() {
     if (!data.ok || !data.job_id) { _htmlTplAutoPreviewRunning = false; return; }
 
     let silentPolls = 0;
-    const silentTimer = setInterval(async () => {
+    _htmlTplSilentPollTimer = setInterval(async () => {
       silentPolls++;
-      if (silentPolls > 20) { clearInterval(silentTimer); _htmlTplAutoPreviewRunning = false; return; }
+      if (silentPolls > 20) { clearInterval(_htmlTplSilentPollTimer); _htmlTplAutoPreviewRunning = false; return; }
       try {
         const pr = await fetch(`/api/visuals/jobs/${encodeURIComponent(data.job_id)}`, { credentials: 'include' });
         const pdata = await pr.json();
         if (pdata.status === 'done') {
-          clearInterval(silentTimer);
+          clearInterval(_htmlTplSilentPollTimer);
           currentAssetUrl = pdata.png_url;
           currentPreviewUrl = pdata.png_url;
           _renderHtmlTplPreviewImage(pdata.png_url);
@@ -2365,7 +2401,7 @@ async function _generateHtmlTplPreviewSilently() {
           });
           _htmlTplAutoPreviewRunning = false;
         } else if (pdata.status === 'failed') {
-          clearInterval(silentTimer);
+          clearInterval(_htmlTplSilentPollTimer);
           _htmlTplAutoPreviewRunning = false;
         }
       } catch { /* keep polling */ }

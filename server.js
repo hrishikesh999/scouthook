@@ -750,6 +750,14 @@ app.use('/files',   serveStoredFile('generated'));
 // Serve permanent user uploads (never auto-cleaned)
 app.use('/uploads', serveStoredFile('uploads'));
 
+// Serve feedback attachments — UUID filenames are unguessable so no session auth required.
+app.get('/feedback-attachment/:filename', async (req, res, next) => {
+  const filename = path.basename(req.params.filename);
+  if (!/^[0-9a-f-]+\.(jpg|jpeg|png|gif|webp)$/i.test(filename)) return res.status(404).end();
+  const key = storage.buildFeedbackKey(filename);
+  await storage.stream(key, res, next);
+});
+
 // JSON errors for API routes (Express 4 does not catch async throws without express-async-errors)
 app.use((err, req, res, next) => {
   if (res.headersSent) return next(err);

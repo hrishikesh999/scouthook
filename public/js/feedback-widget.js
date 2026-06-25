@@ -183,6 +183,76 @@
     line-height: 1;
   }
 
+  /* Attachment row */
+  .fb-attach-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+  }
+  .fb-attach-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: none;
+    border: 1px dashed var(--border, #E4E4E7);
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-muted, #71717A);
+    cursor: pointer;
+    font-family: inherit;
+    transition: border-color 0.12s, color 0.12s;
+  }
+  .fb-attach-btn:hover { border-color: #6366F1; color: #4F46E5; }
+  .fb-attach-preview {
+    display: none;
+    align-items: center;
+    gap: 8px;
+  }
+  .fb-attach-preview.visible { display: flex; }
+  .fb-attach-thumb {
+    width: 40px;
+    height: 40px;
+    object-fit: cover;
+    border-radius: 6px;
+    border: 1px solid var(--border, #E4E4E7);
+  }
+  .fb-attach-name {
+    font-size: 12px;
+    color: var(--text-muted, #71717A);
+    max-width: 140px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .fb-attach-remove {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-muted, #71717A);
+    padding: 2px 4px;
+    border-radius: 4px;
+    line-height: 1;
+    font-size: 14px;
+  }
+  .fb-attach-remove:hover { color: #ef4444; background: #fef2f2; }
+  .fb-attach-uploading {
+    font-size: 12px;
+    color: var(--text-muted, #71717A);
+    font-style: italic;
+    display: none;
+  }
+  .fb-attach-uploading.visible { display: block; }
+  .fb-attach-error {
+    font-size: 12px;
+    color: #ef4444;
+    display: none;
+  }
+  .fb-attach-error.visible { display: block; }
+
   .fb-actions {
     display: flex;
     justify-content: flex-end;
@@ -256,6 +326,20 @@
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
         </span>
       </div>
+      <div class="fb-attach-row">
+        <button type="button" class="fb-attach-btn" id="fb-attach-btn">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+          Attach image
+        </button>
+        <span class="fb-attach-uploading" id="fb-attach-uploading">Uploading…</span>
+        <span class="fb-attach-error" id="fb-attach-error"></span>
+        <div class="fb-attach-preview" id="fb-attach-preview">
+          <img class="fb-attach-thumb" id="fb-attach-thumb" src="" alt="Attachment preview" />
+          <span class="fb-attach-name" id="fb-attach-name"></span>
+          <button type="button" class="fb-attach-remove" id="fb-attach-remove" aria-label="Remove attachment">✕</button>
+        </div>
+        <input type="file" id="fb-attach-input" accept="image/jpeg,image/png,image/gif,image/webp" style="display:none" />
+      </div>
       <div class="fb-actions">
         <button id="fb-cancel">Cancel</button>
         <button id="fb-submit">Submit Feedback</button>
@@ -268,6 +352,8 @@
 
   // ── State ───────────────────────────────────────────────────────────────────
   let selectedCategory = 'feature_request';
+  let attachmentUrl    = null;   // set after successful upload
+  let uploading        = false;
 
   // ── Category tabs ────────────────────────────────────────────────────────────
   const catBtns = overlay.querySelectorAll('.fb-cat');
@@ -284,6 +370,17 @@
     overlay.querySelector('#fb-title').focus();
   }
 
+  function clearAttachment() {
+    attachmentUrl = null;
+    uploading     = false;
+    overlay.querySelector('#fb-attach-preview').classList.remove('visible');
+    overlay.querySelector('#fb-attach-uploading').classList.remove('visible');
+    overlay.querySelector('#fb-attach-error').classList.remove('visible');
+    overlay.querySelector('#fb-attach-input').value = '';
+    overlay.querySelector('#fb-attach-thumb').src = '';
+    overlay.querySelector('#fb-attach-name').textContent = '';
+  }
+
   function close() {
     overlay.classList.remove('visible');
     overlay.querySelector('#fb-title').value = '';
@@ -292,6 +389,7 @@
     catBtns.forEach((b) => b.classList.toggle('active', b.dataset.cat === 'feature_request'));
     overlay.querySelector('#fb-submit').disabled = false;
     overlay.querySelector('#fb-submit').textContent = 'Submit Feedback';
+    clearAttachment();
   }
 
   floatBtn.addEventListener('click', open);
@@ -306,12 +404,68 @@
     if (e.key === 'Escape' && overlay.classList.contains('visible')) close();
   });
 
+  // ── Attachment ───────────────────────────────────────────────────────────────
+  overlay.querySelector('#fb-attach-btn').addEventListener('click', () => {
+    overlay.querySelector('#fb-attach-input').click();
+  });
+
+  overlay.querySelector('#fb-attach-remove').addEventListener('click', clearAttachment);
+
+  overlay.querySelector('#fb-attach-input').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const errorEl     = overlay.querySelector('#fb-attach-error');
+    const uploadingEl = overlay.querySelector('#fb-attach-uploading');
+    const previewEl   = overlay.querySelector('#fb-attach-preview');
+    const thumbEl     = overlay.querySelector('#fb-attach-thumb');
+    const nameEl      = overlay.querySelector('#fb-attach-name');
+
+    clearAttachment();
+
+    if (file.size > 5 * 1024 * 1024) {
+      errorEl.textContent = 'Image must be under 5 MB.';
+      errorEl.classList.add('visible');
+      return;
+    }
+
+    // Show local preview immediately
+    thumbEl.src = URL.createObjectURL(file);
+    nameEl.textContent = file.name;
+    uploadingEl.classList.add('visible');
+    uploading = true;
+
+    try {
+      const res = await fetch('/api/feedback/upload', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': file.type },
+        body: file,
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || 'upload_failed');
+      attachmentUrl = data.url;
+      uploadingEl.classList.remove('visible');
+      previewEl.classList.add('visible');
+    } catch {
+      clearAttachment();
+      errorEl.textContent = 'Image upload failed — try again.';
+      errorEl.classList.add('visible');
+    } finally {
+      uploading = false;
+    }
+  });
+
   // ── Submit ───────────────────────────────────────────────────────────────────
   overlay.querySelector('#fb-submit').addEventListener('click', async () => {
     const title = overlay.querySelector('#fb-title').value.trim();
     const message = overlay.querySelector('#fb-message').value.trim();
     if (!message) {
       overlay.querySelector('#fb-message').focus();
+      return;
+    }
+    if (uploading) {
+      window.toast?.('Image is still uploading — please wait a moment.');
       return;
     }
 
@@ -324,7 +478,7 @@
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, message, category: selectedCategory, page_url: location.href }),
+        body: JSON.stringify({ title, message, category: selectedCategory, page_url: location.href, attachment_url: attachmentUrl }),
       });
 
       if (!res.ok) {

@@ -99,6 +99,11 @@ function buildAffiliateKey(userId, filename) {
   return prefixed(`affiliates/${userId}/${filename}`);
 }
 
+/** Feedback attachments — user-scoped, UUID filename so no auth guard needed. */
+function buildFeedbackKey(filename) {
+  return prefixed(`feedback/${filename}`);
+}
+
 /**
  * Admin template key (no prefix — prefix applied by uploadAdmin/downloadAdmin).
  * e.g. buildTemplateKey('uuid') → 'global/templates/uuid.html'
@@ -328,7 +333,7 @@ async function removeAdmin(rawKey) {
 
 module.exports = {
   // Key builders (full key with prefix)
-  buildMemberKey, buildWorkspaceAssetKey, buildVaultKey, buildAffiliateKey,
+  buildMemberKey, buildWorkspaceAssetKey, buildVaultKey, buildAffiliateKey, buildFeedbackKey,
   // Key builders (raw key, no prefix — for use with uploadAdmin/downloadAdmin)
   buildTemplateKey, buildThumbnailKey,
   // Utilities

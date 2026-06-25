@@ -433,7 +433,9 @@ async function readStoredFileBytes(urlPath, userId, tenantId) {
   if (!/^[a-zA-Z0-9._-]+$/.test(filename)) return null;
 
   try {
-    return await storage.download(storage.buildKey(tenantId, userId, type, filename));
+    const key       = storage.buildMemberKey(tenantId, userId, type, filename);
+    const legacyKey = storage.buildLegacyKey(tenantId, userId, type, filename);
+    return await storage.download(key, legacyKey);
   } catch {
     return null;
   }

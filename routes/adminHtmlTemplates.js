@@ -72,7 +72,7 @@ router.post('/', async (req, res) => {
     }
 
     const id = crypto.randomUUID();
-    const htmlKey = `templates/${id}.html`;
+    const htmlKey = storage.buildTemplateKey(id);
 
     // Upload HTML to R2
     await storage.uploadAdmin(Buffer.from(cleanHtml, 'utf8'), htmlKey, 'text/html');
@@ -81,7 +81,7 @@ router.post('/', async (req, res) => {
     let thumbnailKey = null;
     try {
       const thumbBuf = await generateTemplateThumbnail(cleanHtml, manifest);
-      thumbnailKey = `thumbnails/${id}.png`;
+      thumbnailKey = storage.buildThumbnailKey(id);
       await storage.uploadAdmin(thumbBuf, thumbnailKey, 'image/png');
     } catch (thumbErr) {
       console.warn('[adminHtmlTemplates] thumbnail generation failed:', thumbErr.message);
@@ -146,7 +146,7 @@ router.put('/:id', async (req, res) => {
       // Regenerate thumbnail
       try {
         const thumbBuf = await generateTemplateThumbnail(cleanHtml, manifest);
-        thumbnailKey = `thumbnails/${id}.png`;
+        thumbnailKey = storage.buildThumbnailKey(id);
         await storage.uploadAdmin(thumbBuf, thumbnailKey, 'image/png');
       } catch (thumbErr) {
         console.warn('[adminHtmlTemplates] thumbnail regen failed:', thumbErr.message);
@@ -260,7 +260,7 @@ router.post('/:id/regenerate-thumbnail', async (req, res) => {
     const manifest = row.slot_manifest; // pre-parsed JSONB
 
     const thumbBuf = await generateTemplateThumbnail(html, manifest);
-    const thumbnailKey = `thumbnails/${id}.png`;
+    const thumbnailKey = storage.buildThumbnailKey(id);
     await storage.uploadAdmin(thumbBuf, thumbnailKey, 'image/png');
     await db.prepare('UPDATE html_templates SET thumbnail_r2_key = ? WHERE id = ?').run(thumbnailKey, id);
 

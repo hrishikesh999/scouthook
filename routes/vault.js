@@ -147,11 +147,11 @@ router.post('/upload', async (req, res) => {
     }
 
     const sourceType  = MIME_TO_TYPE[mimeType];
-    const storageKey  = storage.buildKey(tenantId, userId, 'vault', filename);
+    const storageKey  = storage.buildVaultKey(tenantId, filename);
 
     // Upload to storage first
     try {
-      await storage.upload(req.body, { tenantId, userId, type: 'vault', filename, mimeType });
+      await storage.uploadToKey(req.body, storageKey, mimeType);
     } catch (err) {
       return res.status(500).json({ ok: false, error: 'storage_upload_failed', detail: err.message });
     }

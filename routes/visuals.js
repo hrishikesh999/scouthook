@@ -109,8 +109,11 @@ router.post('/:postId', async (req, res) => {
         }
       } else {
         const storedName = require('path').basename(logoUrl);
-        const key = storage.buildKey(tenantId, userId, 'uploads', storedName);
-        buf = await storage.download(key);
+        const ownerRow   = await db.prepare('SELECT user_id FROM media_files WHERE stored_name = ? AND tenant_id = ?').get(storedName, tenantId);
+        const ownerId    = ownerRow?.user_id || userId;
+        const key        = storage.buildMemberKey(tenantId, ownerId, 'uploads', storedName);
+        const legacyKey  = storage.buildLegacyKey(tenantId, ownerId, 'uploads', storedName);
+        buf = await storage.download(key, legacyKey);
         const ext = storedName.split('.').pop().toLowerCase();
         const mime = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif' }[ext] || 'image/png';
         brand.logo = `data:${mime};base64,${buf.toString('base64')}`;
@@ -133,8 +136,11 @@ router.post('/:postId', async (req, res) => {
         }
       } else {
         const storedName = require('path').basename(imgUrl);
-        const key = storage.buildKey(tenantId, userId, 'uploads', storedName);
-        const buf = await storage.download(key);
+        const ownerRow   = await db.prepare('SELECT user_id FROM media_files WHERE stored_name = ? AND tenant_id = ?').get(storedName, tenantId);
+        const ownerId    = ownerRow?.user_id || userId;
+        const key        = storage.buildMemberKey(tenantId, ownerId, 'uploads', storedName);
+        const legacyKey  = storage.buildLegacyKey(tenantId, ownerId, 'uploads', storedName);
+        const buf        = await storage.download(key, legacyKey);
         const ext = storedName.split('.').pop().toLowerCase();
         const mime = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif' }[ext] || 'image/jpeg';
         brand.bg_image = `data:${mime};base64,${buf.toString('base64')}`;

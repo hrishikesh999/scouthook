@@ -134,11 +134,12 @@ router.post('/save-generated', async (req, res) => {
     return res.status(400).json({ ok: false, error: 'invalid_file_url' });
   }
 
-  const srcKey = storage.buildKey(tenantId, userId, 'generated', relativeName);
+  const srcKey    = storage.buildMemberKey(tenantId, userId, 'generated', relativeName);
+  const srcLegacy = storage.buildLegacyKey(tenantId, userId, 'generated', relativeName);
 
   let buffer;
   try {
-    buffer = await storage.download(srcKey);
+    buffer = await storage.download(srcKey, srcLegacy);
   } catch {
     return res.status(404).json({ ok: false, error: 'source_file_not_found' });
   }
@@ -157,7 +158,7 @@ router.post('/save-generated', async (req, res) => {
   const storedName = `${Date.now()}_${crypto.randomBytes(6).toString('hex')}${ext}`;
   const url        = `/uploads/${storedName}`;
 
-  const dstKey = storage.buildKey(tenantId, userId, 'uploads', storedName);
+  const dstKey = storage.buildMemberKey(tenantId, userId, 'uploads', storedName);
   await storage.copy(srcKey, dstKey);
 
   const row = await db.prepare(`
@@ -196,7 +197,7 @@ router.delete('/:id', async (req, res) => {
 
   if (!file) return res.status(404).json({ ok: false, error: 'not_found' });
 
-  await storage.delete(storage.buildKey(tenantId, userId, 'uploads', file.stored_name));
+  await storage.delete(storage.buildMemberKey(tenantId, userId, 'uploads', file.stored_name));
   await db.prepare('DELETE FROM media_files WHERE id = ? AND user_id = ? AND tenant_id = ?').run(file.id, userId, tenantId);
 
   return res.json({ ok: true });

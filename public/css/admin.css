@@ -115,6 +115,7 @@ label, .field label { color: #111111; }
 .badge--pro       { background: #D1FAE5; color: #065F46; }
 .badge--trialing  { background: #FEF3C7; color: #92400E; }
 .badge--canceled, .badge--pastdue { background: #FEE2E2; color: #991B1B; }
+.badge--lifetime  { background: #F0FDFA; color: #0F766E; border: 1px solid #99F6E4; font-weight: 600; }
 .badge--new       { background: #DBEAFE; color: #1E40AF; }
 .badge--open      { background: #FEF3C7; color: #92400E; }
 .badge--resolved  { background: #D1FAE5; color: #065F46; }

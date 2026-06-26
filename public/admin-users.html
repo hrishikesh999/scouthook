@@ -264,6 +264,17 @@
           <div id="extend-msg" class="extend-msg"></div>
         </div>
 
+        <!-- Lifetime plan (admin-only) -->
+        <div class="slide-over__section">
+          <div class="slide-over__section-title">Lifetime Plan</div>
+          <p class="empty-section-text" style="margin-bottom:8px">Grant permanent Pro access. Never visible to the user.</p>
+          ${subscription?.status === 'lifetime'
+            ? `<button class="btn btn--danger btn--sm" id="revoke-lifetime-btn" data-email="${esc(profile.email)}">Revoke Lifetime</button>`
+            : `<button class="btn btn--secondary btn--sm" id="grant-lifetime-btn" data-email="${esc(profile.email)}">Grant Lifetime</button>`
+          }
+          <div id="lifetime-msg" class="extend-msg"></div>
+        </div>
+
         <!-- Workspaces -->
         <div class="slide-over__section">
           <div class="slide-over__section-title">Workspaces</div>
@@ -324,6 +335,51 @@
         const data = await r.json();
         msg.style.color = data.ok ? 'var(--color-success, #0FA87F)' : 'var(--color-error)';
         msg.textContent = data.ok ? `Trial extended by ${days} day${days !== 1 ? 's' : ''}.` : (data.error || 'Failed.');
+      });
+
+      document.getElementById('grant-lifetime-btn')?.addEventListener('click', async () => {
+        const email = document.getElementById('grant-lifetime-btn').dataset.email;
+        const msg   = document.getElementById('lifetime-msg');
+        msg.style.display = 'block';
+        msg.style.color = '#6B7280';
+        msg.textContent = 'Granting…';
+        const r = await fetch('/admin/grant-lifetime', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Admin-Password': adminPw },
+          body: JSON.stringify({ email }),
+        });
+        const data = await r.json();
+        if (data.ok) {
+          msg.style.color = 'var(--color-success, #0FA87F)';
+          msg.textContent = 'Lifetime plan granted.';
+          setTimeout(() => openPanel(data.userId), 800);
+        } else {
+          msg.style.color = 'var(--color-error)';
+          msg.textContent = data.error || 'Failed.';
+        }
+      });
+
+      document.getElementById('revoke-lifetime-btn')?.addEventListener('click', async () => {
+        if (!confirm('Revoke lifetime plan? The user will revert to Free immediately.')) return;
+        const email = document.getElementById('revoke-lifetime-btn').dataset.email;
+        const msg   = document.getElementById('lifetime-msg');
+        msg.style.display = 'block';
+        msg.style.color = '#6B7280';
+        msg.textContent = 'Revoking…';
+        const r = await fetch('/admin/revoke-lifetime', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Admin-Password': adminPw },
+          body: JSON.stringify({ email }),
+        });
+        const data = await r.json();
+        if (data.ok) {
+          msg.style.color = 'var(--color-success, #0FA87F)';
+          msg.textContent = 'Lifetime plan revoked.';
+          setTimeout(() => openPanel(data.userId), 800);
+        } else {
+          msg.style.color = 'var(--color-error)';
+          msg.textContent = data.error || 'Failed.';
+        }
       });
     }
 

@@ -101,7 +101,7 @@ router.get('/subscription', requireAuth, async (req, res) => {
 
   try {
     const row = await db.prepare(
-      'SELECT paddle_customer_id, paddle_subscription_id, current_period_end, updated_at FROM user_subscriptions WHERE user_id = ?'
+      'SELECT paddle_customer_id, paddle_subscription_id, status, current_period_end, updated_at FROM user_subscriptions WHERE user_id = ?'
     ).get(userId);
 
     if (row?.paddle_subscription_id && row?.status !== 'lifetime') {

@@ -72,9 +72,13 @@ RULE 4: TEXT SLOTS — Mark editable text with data-slot="key_name":
 RULE 5: IMAGE SLOTS — MUST follow this exact pattern:
    <img data-slot="image:photo" src="" alt="Photo description">
    - Key MUST start with "image:" prefix (e.g. image:photo, image:portrait, image:logo)
-   - src MUST be empty string "" — NEVER a filename like "photo.jpg"
+   - src MUST be empty string "" — the original photo will be cropped and injected automatically
    - Do NOT put data-slot-container on image parent elements — that is ONLY for repeating slots
-   - In the manifest, use "image:photo": {}
+   - In the manifest, include the bounding box of the image area in template pixel coordinates:
+     "image:photo": { "x": 60, "y": 120, "w": 400, "h": 500 }
+   - x, y = top-left corner of the image within the template (in px from top-left of root div)
+   - w, h = width and height of the image area (in px)
+   - Estimate carefully by analyzing where the photo/image appears in the design.
 
 RULE 6: REPEATING SLOTS — ONLY for lists, steps, or grids of similar items:
    <div data-slot="items" data-slot-container>
@@ -88,10 +92,10 @@ RULE 6: REPEATING SLOTS — ONLY for lists, steps, or grids of similar items:
 
 RULE 7: MANIFEST — Embed inside <head>:
    <script type="application/json" id="template-meta">
-   {"slots":{"headline":{"maxLen":80},"subtext":{"maxLen":200},"color:bg":{"default":"#1a1a2e"},"color:accent":{"default":"#e94560"},"color:text":{"default":"#ffffff"},"color:text_muted":{"default":"rgba(255,255,255,0.7)"},"image:photo":{},"items":{"type":"repeating","fields":["title","body"],"min":2,"max":6}},"dimensions":{"width":1080,"height":1080}}
+   {"slots":{"headline":{"maxLen":80},"subtext":{"maxLen":200},"color:bg":{"default":"#1a1a2e"},"color:accent":{"default":"#e94560"},"color:text":{"default":"#ffffff"},"color:text_muted":{"default":"rgba(255,255,255,0.7)"},"image:photo":{"x":60,"y":120,"w":400,"h":500},"items":{"type":"repeating","fields":["title","body"],"min":2,"max":6}},"dimensions":{"width":1080,"height":1080}}
    </script>
    - Include ALL color:* slots — one per CSS custom property defined
-   - Include ALL image:* slots with empty config {}
+   - Include ALL image:* slots with bounding box { "x":..., "y":..., "w":..., "h":... }
    - Include ALL text slots with appropriate maxLen
 
 RULE 8: VISUAL FIDELITY
@@ -114,6 +118,7 @@ Before returning, verify:
 □ Every hex color in the template appears ONLY in the root container's style=""
 □ Every CSS rule uses var(--name), never a literal hex value
 □ Every image element has data-slot="image:key" (with "image:" prefix) and src=""
+□ Every image:* slot in the manifest has x, y, w, h bounding box coordinates
 □ The manifest lists color:* for every CSS var defined
 □ No data-slot-container on non-repeating elements
 
@@ -197,7 +202,7 @@ async function generateTemplateFromImage(imageBuffer, options = {}) {
   const bufStr = imageBuffer.toString('utf8', 0, Math.min(200, imageBuffer.length));
   const isSvg = options.contentType === 'image/svg+xml' || bufStr.trimStart().startsWith('<svg') || bufStr.trimStart().startsWith('<?xml');
 
-  let imageBlock, mimeType;
+  let imageBlock, mimeType, originalMeta;
 
   const SVG_TEXT_MAX_BYTES = 80_000; // ~20K tokens — safe for text pipeline
 
@@ -237,6 +242,8 @@ async function generateTemplateFromImage(imageBuffer, options = {}) {
     if (!meta.format || !['png', 'jpeg', 'jpg', 'webp', 'gif', 'tiff'].includes(meta.format)) {
       throw new Error(`Unsupported image format: ${meta.format || 'unknown'}`);
     }
+
+    originalMeta = meta; // capture before any resize — used for image cropping later
 
     mimeType = meta.format === 'png' ? 'image/png'
              : meta.format === 'webp' ? 'image/webp'
@@ -415,7 +422,80 @@ async function generateTemplateFromImage(imageBuffer, options = {}) {
     }
   }
 
+  // ── Pass 3: Crop original photos and embed as default images ─────────────
+  // Only for Vision path (not SVG text pipeline — SVG already preserves images)
+  if (!useSvgTextPipeline && originalMeta) {
+    try {
+      html = await injectCroppedImages(html, manifest, imageBuffer, originalMeta);
+    } catch (err) {
+      console.warn('[templateFromImage] image injection failed:', err.message);
+    }
+  }
+
   return { html, manifest };
+}
+
+// ---------------------------------------------------------------------------
+// Crop image regions from the original design and inject as default src values.
+// Claude provides bounding boxes (x,y,w,h) in template coordinates; we scale
+// them to the original image pixel space and crop with Sharp.
+// ---------------------------------------------------------------------------
+
+async function injectCroppedImages(html, manifest, imageBuffer, originalMeta) {
+  const { width: tplW, height: tplH } = manifest.dimensions;
+  const { width: origW, height: origH } = originalMeta;
+  if (!origW || !origH || !tplW || !tplH) return html;
+
+  const scaleX = origW / tplW;
+  const scaleY = origH / tplH;
+
+  for (const [key, cfg] of Object.entries(manifest.slots)) {
+    if (!key.startsWith('image:')) continue;
+    if (cfg.x == null || cfg.y == null || cfg.w == null || cfg.h == null) {
+      console.log('[templateFromImage] no bbox for %s — skipping crop', key);
+      continue;
+    }
+
+    const left   = Math.max(0, Math.round(cfg.x * scaleX));
+    const top    = Math.max(0, Math.round(cfg.y * scaleY));
+    const width  = Math.min(Math.round(cfg.w * scaleX), origW - left);
+    const height = Math.min(Math.round(cfg.h * scaleY), origH - top);
+
+    if (width < 10 || height < 10) {
+      console.warn('[templateFromImage] crop too small for %s (%dx%d), skipping', key, width, height);
+      continue;
+    }
+
+    try {
+      const cropped = await sharp(imageBuffer)
+        .extract({ left, top, width, height })
+        .resize({ width: Math.min(Math.round(cfg.w), 1200), height: Math.min(Math.round(cfg.h), 1200), fit: 'inside' })
+        .jpeg({ quality: 85 })
+        .toBuffer();
+
+      const dataUri = `data:image/jpeg;base64,${cropped.toString('base64')}`;
+      // Escape the slot key for use in a regex (colons are fine but be safe)
+      const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+      // Replace src="" on <img data-slot="image:key"> — attribute order may vary
+      const beforeAttr = new RegExp(`(<img\\b[^>]*?data-slot="${escapedKey}"[^>]*?)src=""`, 'gs');
+      const afterAttr  = new RegExp(`(<img\\b[^>]*?)src=""([^>]*?data-slot="${escapedKey}"[^>]*?>)`, 'gs');
+      const prevLen = html.length;
+      html = html.replace(beforeAttr, `$1src="${dataUri}"`);
+      html = html.replace(afterAttr, `$1src="${dataUri}"$2`);
+
+      if (html.length !== prevLen) {
+        console.log('[templateFromImage] injected default image for %s (%dx%d, %d bytes JPEG)',
+          key, width, height, cropped.length);
+      } else {
+        console.warn('[templateFromImage] could not find img[data-slot="%s"] with src="" to inject into', key);
+      }
+    } catch (err) {
+      console.warn('[templateFromImage] crop failed for %s:', key, err.message);
+    }
+  }
+
+  return html;
 }
 
 module.exports = { generateTemplateFromImage };

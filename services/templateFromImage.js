@@ -40,8 +40,12 @@ G) DECORATIVE ELEMENTS: Lines, shapes, icons, badges — reproduce as inline SVG
 STEP 2 — GENERATE THE HTML TEMPLATE
 
 RULE 1: LAYOUT
-   - Root container: <div> with explicit width and height in px, overflow:hidden.
-   - Use Flexbox or CSS Grid as primary layout. You MAY use position:absolute for decorative overlays, badges, or layered elements when the design requires it.
+   - Root container: <div style="position:relative; width:Wpx; height:Hpx; overflow:hidden">.
+   - Use Flexbox or CSS Grid as primary layout.
+   - For LAYERED designs (photo background + text overlay, two panels, etc.) use position:absolute with z-index:
+       z-index:0 → background image layer
+       z-index:1 → overlay / gradient layer
+       z-index:2 → text / content layer
    - Use inline SVG for shapes, icons, dividers, and decorative elements — reproduce them faithfully.
 
 RULE 2: FONTS
@@ -50,18 +54,20 @@ RULE 2: FONTS
    - Always specify font-weight explicitly (400, 500, 600, 700, 800).
 
 RULE 3: COLORS — NON-NEGOTIABLE
-   WRONG ✗ (hardcoded hex in CSS rule):
+   WRONG ✗ (hardcoded hex OR rgba in CSS rule):
      .headline { color: #1a1a2e; }
      <p style="color:#e94560">...</p>
+     .overlay { background: rgba(0,0,0,0.5); }
 
    RIGHT ✓ (CSS custom property on root, var() everywhere else):
-     <div style="--bg:#1a1a2e; --accent:#e94560; --text:#ffffff; --text-muted:rgba(255,255,255,0.7)">
+     <div style="--bg:#1a1a2e; --accent:#e94560; --text:#ffffff; --text-muted:rgba(255,255,255,0.7); --overlay:rgba(0,0,0,0.5)">
      .headline { color: var(--text); }
      .badge { background: var(--accent); }
+     .overlay { background: var(--overlay); }
 
    RULES:
-   - ALL color hex values (#rrggbb or rgba()) MUST be in the root container's style="" attribute as CSS custom properties.
-   - In EVERY CSS rule and inline style on child elements: use var(--name) ONLY. Never repeat a hex value.
+   - ALL color values (#rrggbb, rgba(), hsla()) MUST be in the root container's style="" attribute as CSS custom properties.
+   - In EVERY CSS rule and inline style on child elements: use var(--name) ONLY. Never repeat a color literal.
    - One CSS custom property per distinct color. If two elements share a color, they share a var().
    - Add a "color:varname" entry in the manifest for EVERY CSS custom property you define.
 
@@ -69,16 +75,29 @@ RULE 4: TEXT SLOTS — Mark editable text with data-slot="key_name":
    <h1 data-slot="headline">Compelling Headline Here</h1>
    Use snake_case keys. Include realistic placeholder text that matches the image content.
 
-RULE 5: IMAGE SLOTS — MUST follow this exact pattern:
-   <img data-slot="image:photo" src="" alt="Photo description">
-   - Key MUST start with "image:" prefix (e.g. image:photo, image:portrait, image:logo)
-   - src MUST be empty string "" — the original photo will be cropped and injected automatically
-   - Do NOT put data-slot-container on image parent elements — that is ONLY for repeating slots
-   - In the manifest, include the bounding box of the image area in template pixel coordinates:
+RULE 5: IMAGE SLOTS — ALWAYS use <img> elements, NEVER CSS background-image
+   Pattern for a partial/contained image (portrait, logo, etc.):
+     <img data-slot="image:photo" src="" alt="Photo" style="width:400px;height:500px;object-fit:cover">
+
+   Pattern for a FULL-BLEED background photo (fills entire template or a full panel):
+     <img data-slot="image:photo" src="" alt="Background photo"
+          style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;z-index:0">
+     Then place overlay/text divs with position:absolute and z-index:1+.
+
+   NEVER do this:
+     <div style="background-image:url('photo.jpg')">   ← WRONG, slot injection won't work
+     background-image: url(...)                         ← WRONG even in CSS rules
+
+   ALWAYS use <img data-slot="image:key"> and style with object-fit:cover.
+   src MUST be empty string "" — the original photo will be cropped and injected automatically.
+   Do NOT put data-slot-container on image parent elements — that is ONLY for repeating slots.
+
+   In the manifest, include the bounding box of the image area in template pixel coordinates:
      "image:photo": { "x": 60, "y": 120, "w": 400, "h": 500 }
    - x, y = top-left corner of the image within the template (in px from top-left of root div)
    - w, h = width and height of the image area (in px)
-   - Estimate carefully by analyzing where the photo/image appears in the design.
+   - For full-bleed photos: x:0, y:0, w:<templateWidth>, h:<templateHeight>
+   Estimate carefully by analyzing where each photo/image appears in the design.
 
 RULE 6: REPEATING SLOTS — ONLY for lists, steps, or grids of similar items:
    <div data-slot="items" data-slot-container>
@@ -187,6 +206,7 @@ Scan every CSS rule and inline style in the HTML. If you find ANY hardcoded hex 
 
 INVIOLABLE RULES:
 - Keep ALL data-slot, data-slot-container, data-slot-item, data-slot-field attributes exactly as they are — do NOT modify slot keys or remove slot attributes
+- Keep src="" unchanged on ALL <img data-slot="image:*"> elements — src values are populated by a separate pipeline step after refinement; do NOT add placeholder URLs or remove the attribute
 - Keep the <script type="application/json" id="template-meta"> block — you may ADD new color:* entries but do NOT remove existing slots or change their keys
 - Keep all Google Font <link> tags in <head>
 - Return the COMPLETE corrected HTML document (not a JSON wrapper — just raw HTML starting with <!DOCTYPE html>)
@@ -202,7 +222,9 @@ async function generateTemplateFromImage(imageBuffer, options = {}) {
   const bufStr = imageBuffer.toString('utf8', 0, Math.min(200, imageBuffer.length));
   const isSvg = options.contentType === 'image/svg+xml' || bufStr.trimStart().startsWith('<svg') || bufStr.trimStart().startsWith('<?xml');
 
-  let imageBlock, mimeType, originalMeta;
+  // cropBuffer = what we crop photo regions from (original resolution, raster format)
+  // originalMeta = pixel dimensions of cropBuffer (for coordinate scaling)
+  let imageBlock, mimeType, originalMeta, cropBuffer;
 
   const SVG_TEXT_MAX_BYTES = 80_000; // ~20K tokens — safe for text pipeline
 
@@ -211,12 +233,16 @@ async function generateTemplateFromImage(imageBuffer, options = {}) {
     console.log('[templateFromImage] SVG text pipeline (%d bytes)', imageBuffer.length);
     mimeType = 'image/svg+xml';
     imageBlock = null;
+    // cropBuffer stays null — SVG text pipeline embeds images directly from markup
   } else if (isSvg) {
     // Large SVG (Canva exports with embedded images): render to PNG, use Vision
     console.log('[templateFromImage] SVG too large for text (%d bytes), converting to PNG', imageBuffer.length);
     try {
       const pngBuf = await sharp(imageBuffer).png().toBuffer();
       const meta = await sharp(pngBuf).metadata();
+      // Keep the full-res PNG as cropBuffer so we can crop photo regions from it
+      cropBuffer = pngBuf;
+      originalMeta = meta;
       let resizedBuf = pngBuf;
       if (meta.width > 2048 || meta.height > 2048) {
         resizedBuf = await sharp(pngBuf).resize(2048, 2048, { fit: 'inside' }).toBuffer();
@@ -227,7 +253,7 @@ async function generateTemplateFromImage(imageBuffer, options = {}) {
         cache_control: { type: 'ephemeral' },
       };
       mimeType = 'image/png';
-      console.log('[templateFromImage] SVG→PNG: %d bytes', resizedBuf.length);
+      console.log('[templateFromImage] SVG→PNG: %d bytes (crop source: %dx%d)', resizedBuf.length, meta.width, meta.height);
     } catch (err) {
       throw new Error('Could not render SVG — the file may be too complex or corrupted');
     }
@@ -243,7 +269,9 @@ async function generateTemplateFromImage(imageBuffer, options = {}) {
       throw new Error(`Unsupported image format: ${meta.format || 'unknown'}`);
     }
 
-    originalMeta = meta; // capture before any resize — used for image cropping later
+    // Capture full-res source before any resize — used for photo cropping
+    originalMeta = meta;
+    cropBuffer = imageBuffer;
 
     mimeType = meta.format === 'png' ? 'image/png'
              : meta.format === 'webp' ? 'image/webp'
@@ -423,10 +451,11 @@ async function generateTemplateFromImage(imageBuffer, options = {}) {
   }
 
   // ── Pass 3: Crop original photos and embed as default images ─────────────
-  // Only for Vision path (not SVG text pipeline — SVG already preserves images)
-  if (!useSvgTextPipeline && originalMeta) {
+  // Runs for Vision path (PNG/JPG input) and large-SVG-rasterized-to-PNG path.
+  // SVG text pipeline already preserves embedded images from the markup itself.
+  if (!useSvgTextPipeline && cropBuffer && originalMeta) {
     try {
-      html = await injectCroppedImages(html, manifest, imageBuffer, originalMeta);
+      html = await injectCroppedImages(html, manifest, cropBuffer, originalMeta);
     } catch (err) {
       console.warn('[templateFromImage] image injection failed:', err.message);
     }
@@ -441,7 +470,7 @@ async function generateTemplateFromImage(imageBuffer, options = {}) {
 // them to the original image pixel space and crop with Sharp.
 // ---------------------------------------------------------------------------
 
-async function injectCroppedImages(html, manifest, imageBuffer, originalMeta) {
+async function injectCroppedImages(html, manifest, cropBuffer, originalMeta) {
   const { width: tplW, height: tplH } = manifest.dimensions;
   const { width: origW, height: origH } = originalMeta;
   if (!origW || !origH || !tplW || !tplH) return html;
@@ -467,28 +496,39 @@ async function injectCroppedImages(html, manifest, imageBuffer, originalMeta) {
     }
 
     try {
-      const cropped = await sharp(imageBuffer)
+      const cropped = await sharp(cropBuffer)
         .extract({ left, top, width, height })
         .resize({ width: Math.min(Math.round(cfg.w), 1200), height: Math.min(Math.round(cfg.h), 1200), fit: 'inside' })
         .jpeg({ quality: 85 })
         .toBuffer();
 
       const dataUri = `data:image/jpeg;base64,${cropped.toString('base64')}`;
-      // Escape the slot key for use in a regex (colons are fine but be safe)
       const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-      // Replace src="" on <img data-slot="image:key"> — attribute order may vary
-      const beforeAttr = new RegExp(`(<img\\b[^>]*?data-slot="${escapedKey}"[^>]*?)src=""`, 'gs');
-      const afterAttr  = new RegExp(`(<img\\b[^>]*?)src=""([^>]*?data-slot="${escapedKey}"[^>]*?>)`, 'gs');
       const prevLen = html.length;
-      html = html.replace(beforeAttr, `$1src="${dataUri}"`);
-      html = html.replace(afterAttr, `$1src="${dataUri}"$2`);
+
+      // Case 1: data-slot comes before src → (<img ... data-slot="key" ...) src=""
+      html = html.replace(
+        new RegExp(`(<img\\b[^>]*?data-slot="${escapedKey}"[^>]*?)src=""`, 'gs'),
+        `$1src="${dataUri}"`
+      );
+      // Case 2: src comes before data-slot → (<img ...) src="" (... data-slot="key" ...>)
+      html = html.replace(
+        new RegExp(`(<img\\b[^>]*?)src=""([^>]*?data-slot="${escapedKey}"[^>]*?>)`, 'gs'),
+        `$1src="${dataUri}"$2`
+      );
+      // Case 3: no src attribute at all — inject src before the closing > of the img tag
+      if (html.length === prevLen) {
+        html = html.replace(
+          new RegExp(`(<img\\b[^>]*?data-slot="${escapedKey}"[^>]*?)(\\s*/?>)`, 'gs'),
+          `$1 src="${dataUri}"$2`
+        );
+      }
 
       if (html.length !== prevLen) {
         console.log('[templateFromImage] injected default image for %s (%dx%d, %d bytes JPEG)',
           key, width, height, cropped.length);
       } else {
-        console.warn('[templateFromImage] could not find img[data-slot="%s"] with src="" to inject into', key);
+        console.warn('[templateFromImage] could not inject src for img[data-slot="%s"] — element not found in HTML', key);
       }
     } catch (err) {
       console.warn('[templateFromImage] crop failed for %s:', key, err.message);

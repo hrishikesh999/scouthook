@@ -79,6 +79,20 @@
     .test-color-row .hex-input { width: 90px; font-family: monospace; font-size: .82rem; }
     .test-img-zone { width: 100%; height: 80px; border: 1px dashed var(--border); border-radius: 8px; display: flex; align-items: center; justify-content: center; cursor: pointer; margin-bottom: 14px; font-size: .8rem; color: var(--text-muted); overflow: hidden; }
     .test-img-zone:hover { border-color: var(--brand, #0f766e); }
+
+    /* Image upload zone */
+    .img-upload-zone { border: 2px dashed var(--border); border-radius: var(--radius); padding: 32px; text-align: center; cursor: pointer; transition: border-color 0.15s, background 0.15s; background: var(--neutral-50); }
+    .img-upload-zone:hover, .img-upload-zone.dragover { border-color: var(--brand, #0f766e); background: rgba(15,118,110,0.04); }
+    .img-upload-zone__icon { font-size: 28px; margin-bottom: 8px; }
+    .img-upload-zone__text { font-size: .85rem; color: var(--text-muted); }
+    .img-upload-zone__text strong { color: var(--brand, #0f766e); }
+    .img-upload-zone__hint { font-size: .75rem; color: var(--text-muted); margin-top: 4px; }
+    .img-upload-progress { display: flex; align-items: center; gap: 10px; padding: 16px; background: var(--neutral-50); border: 1px solid var(--border); border-radius: var(--radius); }
+    .img-upload-spinner { width: 20px; height: 20px; border: 2.5px solid var(--border); border-top-color: var(--brand, #0f766e); border-radius: 50%; animation: htpl-spin 0.8s linear infinite; flex-shrink: 0; }
+    @keyframes htpl-spin { to { transform: rotate(360deg); } }
+    .img-upload-error { padding: 12px 16px; background: #fef2f2; border: 1px solid #fecaca; border-radius: var(--radius); color: #991b1b; font-size: .85rem; display: flex; justify-content: space-between; align-items: center; }
+    .or-divider { display: flex; align-items: center; gap: 12px; margin: var(--space-md) 0; color: var(--text-muted); font-size: .8rem; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
+    .or-divider::before, .or-divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
   </style>
 </head>
 <body>
@@ -103,7 +117,7 @@
         <div class="admin-page-header">
           <div>
             <h1 id="page-title">Add HTML Template</h1>
-            <p class="text-muted admin-page-subtitle">Paste HTML with <code>data-slot</code> attributes. Slots are auto-detected and configurable below.</p>
+            <p class="text-muted admin-page-subtitle">Upload a design image or paste HTML. Slots are auto-detected and configurable below.</p>
           </div>
           <a href="/admin-html-templates.html" class="btn btn--secondary">← Back to list</a>
         </div>
@@ -130,9 +144,21 @@
             <input type="number" id="f-sort" value="0" min="0" max="9999" style="width:100px">
           </div>
 
+          <!-- Image upload zone -->
+          <div class="field" id="upload-field">
+            <label>Upload a design</label>
+            <div id="img-upload-zone" class="img-upload-zone" role="button" tabindex="0" aria-label="Upload design image">
+              <div class="img-upload-zone__icon">🎨</div>
+              <div class="img-upload-zone__text"><strong>Drop image here</strong> or click to browse</div>
+              <div class="img-upload-zone__hint">PNG, JPG, WebP — from Canva, Figma, or any design tool (max 10 MB)</div>
+            </div>
+            <input type="file" id="img-upload-input" accept="image/png,image/jpeg,image/webp" hidden>
+          </div>
+
+          <div class="or-divider">or paste HTML manually</div>
+
           <div class="field">
-            <label for="f-html">Template HTML <span class="required">*</span></label>
-            <p class="text-muted field-hint">Paste the full HTML. Mark editable elements with <code>data-slot="key"</code>. Slots are auto-detected below.</p>
+            <label for="f-html">Template HTML</label>
             <textarea id="f-html" class="html-textarea" placeholder='<!DOCTYPE html>&#10;<html>&#10;...your template HTML...&#10;</html>'></textarea>
           </div>
 
@@ -660,6 +686,111 @@
       runScan(html);
     }, 400);
   });
+
+  // ── Image upload → HTML conversion ──────────────────────────────────────
+
+  const imgZone = document.getElementById('img-upload-zone');
+  const imgInput = document.getElementById('img-upload-input');
+
+  imgZone.addEventListener('click', () => imgInput.click());
+  imgZone.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); imgInput.click(); } });
+  imgZone.addEventListener('dragover', e => { e.preventDefault(); imgZone.classList.add('dragover'); });
+  imgZone.addEventListener('dragleave', () => imgZone.classList.remove('dragover'));
+  imgZone.addEventListener('drop', e => {
+    e.preventDefault(); imgZone.classList.remove('dragover');
+    const file = e.dataTransfer.files[0];
+    if (file && file.type.startsWith('image/')) processImageUpload(file);
+  });
+  imgInput.addEventListener('change', () => {
+    if (imgInput.files[0]) processImageUpload(imgInput.files[0]);
+    imgInput.value = '';
+  });
+
+  async function processImageUpload(file) {
+    if (file.size > 10 * 1024 * 1024) { alert('Image must be under 10 MB.'); return; }
+
+    const uploadField = document.getElementById('upload-field');
+    uploadField.innerHTML = `
+      <label>Upload a design</label>
+      <div class="img-upload-progress">
+        <div class="img-upload-spinner"></div>
+        <div>
+          <div style="font-weight:600;font-size:.85rem">Analyzing design with AI…</div>
+          <div style="font-size:.78rem;color:var(--text-muted);margin-top:2px">Claude is converting your image to an editable HTML template. This takes 10–20 seconds.</div>
+        </div>
+      </div>`;
+
+    try {
+      const r = await adminFetch('/admin/html-templates/from-image', {
+        method: 'POST',
+        headers: { 'Content-Type': file.type, 'X-Admin-Password': adminPw },
+        body: file,
+      });
+      const data = await r.json();
+
+      if (!data.ok) throw new Error(data.error || 'Conversion failed');
+
+      // Populate the HTML textarea
+      document.getElementById('f-html').value = data.html;
+
+      // Set dimensions from manifest
+      if (data.manifest?.dimensions) {
+        document.getElementById('f-dim-w').value = data.manifest.dimensions.width || 1080;
+        document.getElementById('f-dim-h').value = data.manifest.dimensions.height || 1080;
+      }
+
+      // Show success state
+      uploadField.innerHTML = `
+        <label>Upload a design</label>
+        <div style="padding:12px 16px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:var(--radius);font-size:.85rem;color:#166534;display:flex;align-items:center;gap:8px">
+          <span style="font-size:18px">✓</span>
+          <div>
+            <div style="font-weight:600">Template generated successfully</div>
+            <div style="font-size:.78rem;color:#15803d;margin-top:1px">${Object.keys(data.manifest?.slots || {}).length} slots detected · ${data.html.length.toLocaleString()} bytes HTML</div>
+          </div>
+          <button class="btn btn--sm btn--secondary" style="margin-left:auto" onclick="resetUploadZone()">Upload different</button>
+        </div>`;
+
+      // Trigger scan
+      runScan(data.html);
+    } catch (err) {
+      uploadField.innerHTML = `
+        <label>Upload a design</label>
+        <div class="img-upload-error">
+          <span>Conversion failed: ${esc(err.message)}</span>
+          <button class="btn btn--sm btn--secondary" onclick="resetUploadZone()">Try again</button>
+        </div>`;
+    }
+  }
+
+  window.resetUploadZone = function() {
+    const uploadField = document.getElementById('upload-field');
+    uploadField.innerHTML = `
+      <label>Upload a design</label>
+      <div id="img-upload-zone" class="img-upload-zone" role="button" tabindex="0" aria-label="Upload design image">
+        <div class="img-upload-zone__icon">🎨</div>
+        <div class="img-upload-zone__text"><strong>Drop image here</strong> or click to browse</div>
+        <div class="img-upload-zone__hint">PNG, JPG, WebP — from Canva, Figma, or any design tool (max 10 MB)</div>
+      </div>
+      <input type="file" id="img-upload-input" accept="image/png,image/jpeg,image/webp" hidden>`;
+
+    // Re-wire events
+    const zone = document.getElementById('img-upload-zone');
+    const input = document.getElementById('img-upload-input');
+    zone.addEventListener('click', () => input.click());
+    zone.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); } });
+    zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
+    zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+    zone.addEventListener('drop', e => {
+      e.preventDefault(); zone.classList.remove('dragover');
+      const file = e.dataTransfer.files[0];
+      if (file && file.type.startsWith('image/')) processImageUpload(file);
+    });
+    input.addEventListener('change', () => {
+      if (input.files[0]) processImageUpload(input.files[0]);
+      input.value = '';
+    });
+  };
 
   // ── Add slot manually ────────────────────────────────────────────────────
 

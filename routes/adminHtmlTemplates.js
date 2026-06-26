@@ -7,6 +7,7 @@ const { db }  = require('../db');
 const storage = require('../services/storage');
 const { readSlotManifest, stripScriptTags } = require('../services/templateSlotInjector');
 const { generateTemplateThumbnail } = require('../services/templateRenderer');
+const { generateTemplateFromImage } = require('../services/templateFromImage');
 
 // ---------------------------------------------------------------------------
 // Auth
@@ -303,6 +304,34 @@ router.post('/:id/regenerate-thumbnail', async (req, res) => {
     res.json({ ok: true, thumbnail_r2_key: thumbnailKey });
   } catch (err) {
     console.error('[adminHtmlTemplates] regenerate-thumbnail error:', err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /from-image — convert a design image to HTML via Claude Vision
+// ---------------------------------------------------------------------------
+
+router.post('/from-image', express.raw({ type: '*/*', limit: '10mb' }), async (req, res) => {
+  try {
+    const buffer = req.body;
+    if (!Buffer.isBuffer(buffer) || buffer.length === 0) {
+      return res.status(400).json({ ok: false, error: 'empty_body' });
+    }
+
+    const instructions = req.headers['x-instructions'] || '';
+
+    console.log('[adminHtmlTemplates] from-image: %d bytes, instructions=%s',
+      buffer.length, instructions ? 'yes' : 'none');
+
+    const start = Date.now();
+    const { html, manifest } = await generateTemplateFromImage(buffer, { instructions });
+    console.log('[adminHtmlTemplates] from-image: generated in %dms (%d bytes HTML, %d slots)',
+      Date.now() - start, html.length, Object.keys(manifest.slots || {}).length);
+
+    res.json({ ok: true, html, manifest });
+  } catch (err) {
+    console.error('[adminHtmlTemplates] from-image error:', err.message);
     res.status(500).json({ ok: false, error: err.message });
   }
 });

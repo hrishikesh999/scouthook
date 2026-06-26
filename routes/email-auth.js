@@ -102,11 +102,17 @@ router.post('/signup', async (req, res) => {
     const normalizedEmail = email.trim().toLowerCase();
     const displayName     = name.trim();
 
-    // Check if email already registered (any auth method)
-    const existing = await db.prepare(
-      "SELECT user_id FROM auth_providers WHERE provider = 'email' AND provider_id = ? LIMIT 1"
+    // Check if email already registered via any auth method (email provider OR OAuth)
+    const existingProvider = await db.prepare(
+      'SELECT user_id FROM auth_providers WHERE provider_id = ? LIMIT 1'
     ).get(normalizedEmail);
-    if (existing) {
+    if (existingProvider) {
+      return res.status(409).json({ ok: false, error: 'email_already_registered' });
+    }
+    const existingProfile = await db.prepare(
+      'SELECT user_id FROM user_profiles WHERE email = ? LIMIT 1'
+    ).get(normalizedEmail);
+    if (existingProfile) {
       return res.status(409).json({ ok: false, error: 'email_already_registered' });
     }
 

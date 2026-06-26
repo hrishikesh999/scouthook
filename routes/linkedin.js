@@ -1388,6 +1388,7 @@ router.delete('/user-data', (req, res) => {
         ).run('linkedin_disconnect', userId, tenantId);
       } catch { /* platform_events table may not exist yet */ }
       await tx.prepare('DELETE FROM linkedin_connections WHERE workspace_id = ? AND authorized_by = ?').run(tenantId, userId);
+      await tx.prepare('DELETE FROM auth_providers WHERE user_id = ?').run(userId);
       await tx.prepare('DELETE FROM user_profiles WHERE user_id = ?').run(userId);
     });
 

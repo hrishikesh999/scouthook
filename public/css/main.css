@@ -7925,6 +7925,14 @@ html[data-nav-dir="back"] #main-content.spa-entering {
 }
 @keyframes htpl-spin { to { transform: rotate(360deg); } }
 
+.so-field-group--active {
+  border-left: 3px solid var(--brand, #0f766e);
+  padding-left: 8px;
+  background: rgba(15, 118, 110, 0.04);
+  border-radius: 6px;
+  transition: border-left 0.15s, background 0.15s;
+}
+
 /* ── Media library modal ─────────────────────────────────────── */
 .media-modal { width: min(1040px, calc(100vw - 40px)); }
 

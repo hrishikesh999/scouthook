@@ -354,14 +354,28 @@ router.post('/forgot-password', async (req, res) => {
       }
 
       if (row) {
-        const resetToken   = crypto.randomBytes(32).toString('hex');
-        const resetExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
-
-        await db.prepare(`
-          UPDATE auth_providers
-          SET reset_token = ?, reset_expires_at = ?
+        // If a valid token was issued recently (within last 10 min), reuse it so a
+        // second "forgot password" click doesn't invalidate the first email in transit.
+        const recent = await db.prepare(`
+          SELECT reset_token FROM auth_providers
           WHERE user_id = ? AND provider = 'email'
-        `).run(resetToken, resetExpires.toISOString(), row.user_id);
+            AND reset_token IS NOT NULL
+            AND reset_expires_at > now() + interval '23 hours 50 minutes'
+          LIMIT 1
+        `).get(row.user_id);
+
+        const resetToken = recent
+          ? recent.reset_token
+          : crypto.randomBytes(32).toString('hex');
+
+        if (!recent) {
+          const resetExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+          await db.prepare(`
+            UPDATE auth_providers
+            SET reset_token = ?, reset_expires_at = ?
+            WHERE user_id = ? AND provider = 'email'
+          `).run(resetToken, resetExpires.toISOString(), row.user_id);
+        }
 
         sendEmail('reset-password', normalizedEmail, {
           reset_url: `${APP_URL}/reset-password.html?token=${resetToken}`,

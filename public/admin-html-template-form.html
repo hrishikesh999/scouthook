@@ -90,9 +90,11 @@
   <div id="auth-screen" class="admin-auth">
     <div class="admin-auth__card card">
       <h2 class="admin-auth__title">ScoutHook Admin</h2>
-      <div class="field"><label for="pw-input">Admin password</label><input type="password" id="pw-input" placeholder="ADMIN_PASSWORD" /></div>
-      <div id="pw-error" class="admin-error-msg hidden"></div>
-      <button id="pw-btn" class="btn btn--primary">Unlock</button>
+      <form onsubmit="return false">
+        <div class="field"><label for="pw-input">Admin password</label><input type="password" id="pw-input" placeholder="ADMIN_PASSWORD" autocomplete="current-password" /></div>
+        <div id="pw-error" class="admin-error-msg hidden"></div>
+        <button id="pw-btn" class="btn btn--primary">Unlock</button>
+      </form>
     </div>
   </div>
 
@@ -653,7 +655,7 @@
     // Wrap iframe in a div sized to the visual dimensions so the flex container
     // centers the correct footprint. Without the wrapper, transform:scale keeps
     // the full 1080px layout box and justify-content:center pushes it off-screen.
-    pane.innerHTML = `<div style="width:${visW}px;height:${visH}px;overflow:hidden;flex-shrink:0"><iframe id="admin-tpl-iframe" sandbox="allow-same-origin allow-scripts" srcdoc="${esc(injected)}" style="width:${w}px;height:${h}px;border:none;display:block;transform:scale(${scale});transform-origin:top left" title="Preview"></iframe></div>`;
+    pane.innerHTML = `<div style="width:${visW}px;height:${visH}px;overflow:hidden;flex-shrink:0"><iframe id="admin-tpl-iframe" sandbox="allow-scripts" srcdoc="${esc(injected)}" style="width:${w}px;height:${h}px;border:none;display:block;transform:scale(${scale});transform-origin:top left" title="Preview"></iframe></div>`;
     pane.style.height = (visH + 24) + 'px';
 
     // After iframe loads, inject image overrides via postMessage (avoids bloating srcdoc)
@@ -696,7 +698,7 @@
       const injected = _templateHtml.replace('</body>', '<\/body>');
       pane.innerHTML = `<div style="display:flex;gap:8px;align-items:flex-start;padding:8px;width:100%">
         <div style="flex:1;text-align:center"><div style="font-size:.65rem;font-weight:700;text-transform:uppercase;color:var(--text-muted);margin-bottom:4px">Original</div><img src="${_originalImageDataUrl}" alt="Original" style="width:${visW}px;height:${visH}px;object-fit:contain;border:1px solid var(--border);border-radius:4px"></div>
-        <div style="flex:1;text-align:center"><div style="font-size:.65rem;font-weight:700;text-transform:uppercase;color:var(--text-muted);margin-bottom:4px">Preview</div><div style="width:${visW}px;height:${visH}px;overflow:hidden;display:inline-block"><iframe sandbox="allow-same-origin allow-scripts" srcdoc="${esc(_templateHtml)}" style="width:${w}px;height:${h}px;border:none;display:block;transform:scale(${scale});transform-origin:top left" title="Preview"></iframe></div></div>
+        <div style="flex:1;text-align:center"><div style="font-size:.65rem;font-weight:700;text-transform:uppercase;color:var(--text-muted);margin-bottom:4px">Preview</div><div style="width:${visW}px;height:${visH}px;overflow:hidden;display:inline-block"><iframe sandbox="allow-scripts" srcdoc="${esc(_templateHtml)}" style="width:${w}px;height:${h}px;border:none;display:block;transform:scale(${scale});transform-origin:top left" title="Preview"></iframe></div></div>
       </div>`;
       pane.style.height = '';
     } else {

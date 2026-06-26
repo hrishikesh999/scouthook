@@ -13,6 +13,7 @@
         <div class="admin-nav__sep"></div>
         <a href="/admin-settings.html" class="admin-nav__link">Settings</a>
         <a href="/admin-html-templates.html" class="admin-nav__link">HTML Templates</a>
+        <a href="/admin-carousel-packs.html" class="admin-nav__link">Carousel Packs</a>
       </div>
       <div class="admin-nav__bottom">
         <a href="/admin-logout.html" class="admin-nav__logout">Log out</a>

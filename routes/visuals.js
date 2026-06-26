@@ -13,6 +13,7 @@ const { extractClientWinContent, renderClientWin } = require('../services/client
 const { extractFrameworkContent, renderFramework } = require('../services/frameworkGenerator');
 const { renderProofScreenshot } = require('../services/proofScreenshotGenerator');
 const { renderTemplate, extractTemplateSlots, startRenderJob, getRenderJobStatus } = require('../services/templateRenderer');
+const { extractCarouselPackContent, startCarouselPackJob, getCarouselJobStatus, loadPack } = require('../services/carouselPackRenderer');
 const { canGenerateVisual, logVisualGeneration, getUserPlan } = require('../services/subscription');
 const { planHasFeature } = require('../lib/planFeatures');
 
@@ -31,7 +32,7 @@ router.post('/:postId', async (req, res) => {
     return res.status(401).json({ ok: false, error: 'unauthenticated' });
   }
 
-  if (!['quote_card', 'carousel', 'branded_quote', 'infographic', 'metrics_card', 'client_win', 'framework', 'template'].includes(visual_type)) {
+  if (!['quote_card', 'carousel', 'branded_quote', 'infographic', 'metrics_card', 'client_win', 'framework', 'template', 'carousel_pack'].includes(visual_type)) {
     return res.status(400).json({ ok: false, error: 'invalid_visual_type' });
   }
 
@@ -171,6 +172,13 @@ router.post('/:postId', async (req, res) => {
         const extracted = await extractTemplateSlots(post, template_id);
         return res.json({ ok: true, mode: 'extract', visual_type, content: extracted });
       }
+      if (visual_type === 'carousel_pack') {
+        if (!template_id) return res.status(400).json({ ok: false, error: 'pack_id_required' });
+        const loaded = await loadPack(template_id);
+        if (!loaded) return res.status(404).json({ ok: false, error: 'pack_not_found' });
+        const extracted = await extractCarouselPackContent(post, loaded.pack, loaded.slides);
+        return res.json({ ok: true, mode: 'extract', visual_type, content: extracted });
+      }
       // carousel
       const extracted = await extractCarouselContent(post);
       return res.json({ ok: true, mode: 'extract', visual_type, content: extracted });
@@ -271,6 +279,14 @@ router.post('/:postId', async (req, res) => {
       return res.json({ ok: true, status: 'rendering', job_id: jobId });
     }
 
+    if (visual_type === 'carousel_pack') {
+      if (!template_id) return res.status(400).json({ ok: false, error: 'pack_id_required' });
+      const jobId = require('crypto').randomUUID();
+      startCarouselPackJob(jobId, post, template_id, content || {}, brand, { userId, tenantId });
+      await logVisualGeneration(userId, tenantId, postId, visual_type);
+      return res.json({ ok: true, status: 'rendering', job_id: jobId });
+    }
+
     // carousel
     const renderContent = content || await extractCarouselContent(post);
     const result = await renderCarousel(post, brand, renderContent, { userId, tenantId });
@@ -286,9 +302,19 @@ router.post('/:postId', async (req, res) => {
 // GET /api/visuals/jobs/:jobId — poll render job status
 // ---------------------------------------------------------------------------
 router.get('/jobs/:jobId', async (req, res) => {
-  const job = await getRenderJobStatus(req.params.jobId);
+  let job = await getRenderJobStatus(req.params.jobId);
+  if (!job) job = await getCarouselJobStatus(req.params.jobId);
   if (!job) return res.status(404).json({ ok: false, error: 'job_not_found' });
-  return res.json({ ok: true, status: job.status, png_url: job.png_url, content: job.content || null, error: job.error });
+  return res.json({
+    ok: true,
+    status: job.status,
+    png_url: job.png_url || null,
+    slides: job.slides || null,
+    pdf_url: job.pdf_url || null,
+    progress: job.progress || null,
+    content: job.content || null,
+    error: job.error,
+  });
 });
 
 module.exports = router;

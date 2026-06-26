@@ -224,6 +224,9 @@ router.delete('/:id', async (req, res) => {
 
     res.json({ ok: true });
   } catch (err) {
+    if (err.code === '23503' || (err.message && err.message.includes('RESTRICT'))) {
+      return res.status(409).json({ ok: false, error: 'Cannot delete — this template is used in a carousel pack. Remove it from the pack first.' });
+    }
     res.status(500).json({ ok: false, error: err.message });
   }
 });

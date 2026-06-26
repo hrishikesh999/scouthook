@@ -632,6 +632,7 @@ app.use('/api/recipes',       requireWorkspaceMember, require('./routes/recipes'
 app.use('/api/generate',      requireWorkspaceMember, requireWorkspaceActive, require('./routes/generate'));
 app.use('/api/visuals',           requireWorkspaceMember, require('./routes/visuals'));
 app.use('/api/html-templates',     requireWorkspaceMember, require('./routes/htmlTemplates'));
+app.use('/api/carousel-packs',     requireWorkspaceMember, require('./routes/carouselPacks'));
 // /callback is exempt from workspace auth — identity comes from the state token,
 // so the flow works even when the browser session has expired mid-redirect.
 app.use('/api/linkedin',
@@ -660,6 +661,7 @@ app.use('/api', (req, res) => {
 });
 
 app.use('/admin/html-templates', require('./routes/adminHtmlTemplates'));
+app.use('/admin/carousel-packs', require('./routes/adminCarouselPacks'));
 app.use('/admin', require('./routes/admin'));
 app.use('/affiliate-admin', require('./routes/affiliate-admin'));
 

@@ -247,4 +247,4 @@ function buildZipBuffer(files) {
   });
 }
 
-module.exports = { generateCarousel, extractCarouselContent, renderCarousel };
+module.exports = { generateCarousel, extractCarouselContent, renderCarousel, buildCarouselPdfFromBuffers };

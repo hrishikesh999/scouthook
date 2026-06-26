@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Carousel Pack Form — ScoutHook Admin</title>
+  <link rel="stylesheet" href="/css/scouthook.css" />
+  <link rel="stylesheet" href="/css/main.css" />
+  <link rel="stylesheet" href="/css/admin.css" />
+  <script src="/js/admin-nav.js"></script>
+  <style>
+    .upload-zone { border: 2px dashed var(--border); border-radius: var(--radius); padding: 40px; text-align: center; cursor: pointer; transition: border-color .15s, background .15s; background: var(--neutral-50); }
+    .upload-zone:hover, .upload-zone.dragover { border-color: var(--brand); background: rgba(15,118,110,0.04); }
+    .upload-zone__icon { font-size: 32px; margin-bottom: 8px; }
+    .upload-zone__text { font-size: .85rem; color: var(--text-muted); }
+    .upload-zone__text strong { color: var(--brand); }
+    .upload-zone__hint { font-size: .75rem; color: var(--text-muted); margin-top: 4px; }
+
+    .slide-strip { display: flex; gap: 12px; flex-wrap: wrap; margin-top: var(--space-md); }
+    .slide-card { width: 140px; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; background: #fff; position: relative; }
+    .slide-card__img { width: 100%; height: 100px; object-fit: cover; background: var(--neutral-50); display: block; }
+    .slide-card__body { padding: 8px; }
+    .slide-card__num { font-size: .7rem; font-weight: 700; color: var(--text-muted); margin-bottom: 4px; }
+    .slide-card select { width: 100%; font-size: .78rem; padding: 3px 6px; }
+    .slide-card__remove { position: absolute; top: 4px; right: 4px; background: rgba(0,0,0,0.6); color: #fff; border: none; border-radius: 50%; width: 20px; height: 20px; font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+
+    .progress-bar { height: 6px; background: var(--neutral-100); border-radius: 99px; overflow: hidden; margin-top: 8px; }
+    .progress-bar__fill { height: 100%; background: var(--brand, #0f766e); border-radius: 99px; transition: width .3s; }
+
+    .map-table { width: 100%; border-collapse: collapse; font-size: .82rem; }
+    .map-table th, .map-table td { padding: 6px 10px; border: 1px solid var(--border); text-align: left; }
+    .map-table th { background: var(--neutral-50); font-weight: 600; font-size: .75rem; text-transform: uppercase; letter-spacing: .03em; }
+    .map-table td { font-family: monospace; font-size: .78rem; }
+    .map-swatch { display: inline-block; width: 14px; height: 14px; border-radius: 3px; border: 1px solid var(--border); vertical-align: middle; margin-right: 4px; }
+
+    .edit-tabs { display: flex; gap: 0; border-bottom: 2px solid var(--border); margin-bottom: var(--space-lg); }
+    .edit-tab { padding: 10px 20px; font-size: .85rem; font-weight: 600; color: var(--text-muted); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; transition: color .15s, border-color .15s; background: none; border-top: none; border-left: none; border-right: none; }
+    .edit-tab:hover { color: var(--brand, #0f766e); }
+    .edit-tab.active { color: var(--brand, #0f766e); border-bottom-color: var(--brand, #0f766e); }
+  </style>
+</head>
+<body>
+
+  <div id="auth-screen" class="admin-auth">
+    <div class="admin-auth__card card">
+      <h2 class="admin-auth__title">ScoutHook Admin</h2>
+      <div class="field"><label for="pw-input">Admin password</label><input type="password" id="pw-input" placeholder="ADMIN_PASSWORD" /></div>
+      <div id="pw-error" class="admin-error-msg hidden"></div>
+      <button id="pw-btn" class="btn btn--primary">Unlock</button>
+    </div>
+  </div>
+
+  <div id="main" class="hidden">
+    <div id="admin-nav-container"></div>
+    <main class="admin-main">
+      <div class="admin-templates-body">
+        <div class="admin-page-header">
+          <div>
+            <h1 id="page-title">Add Carousel Pack</h1>
+            <p class="text-muted admin-page-subtitle">Upload slide images from Canva. AI converts each into an HTML template.</p>
+          </div>
+          <a href="/admin-carousel-packs.html" class="btn btn--secondary">← Back to list</a>
+        </div>
+
+        <div class="card card--section-xl">
+
+          <!-- Tabs (edit mode) -->
+          <div class="edit-tabs" id="edit-tabs" style="display:none">
+            <button class="edit-tab active" data-tab="create">Details & Slides</button>
+            <button class="edit-tab" data-tab="mapping">Variable Mapping</button>
+          </div>
+
+          <!-- ═══ CREATE / DETAILS TAB ═══ -->
+          <div id="tab-create">
+            <div class="field">
+              <label for="f-name">Pack name <span class="required">*</span></label>
+              <input type="text" id="f-name" maxlength="120" placeholder="e.g. Dark Gradient Carousel">
+            </div>
+            <div class="field">
+              <label for="f-description">Description</label>
+              <input type="text" id="f-description" maxlength="255" placeholder="Optional — shown to users">
+            </div>
+            <div style="display:flex;gap:var(--space-md)">
+              <div class="field" style="flex:1">
+                <label for="f-category">Category</label>
+                <input type="text" id="f-category" maxlength="80" placeholder="e.g. Educational, Tips">
+              </div>
+              <div class="field" style="width:100px">
+                <label for="f-min-slides">Min slides</label>
+                <input type="number" id="f-min-slides" value="3" min="1" max="20">
+              </div>
+              <div class="field" style="width:100px">
+                <label for="f-max-slides">Max slides</label>
+                <input type="number" id="f-max-slides" value="8" min="1" max="20">
+              </div>
+            </div>
+
+            <!-- Multi-file upload -->
+            <div class="field" id="upload-field">
+              <label>Slide images</label>
+              <div id="upload-zone" class="upload-zone" role="button" tabindex="0">
+                <div class="upload-zone__icon">📑</div>
+                <div class="upload-zone__text"><strong>Drop slide images here</strong> or click to browse</div>
+                <div class="upload-zone__hint">PNG, JPG, WebP, or SVG. Select multiple files in order (title first, closing last). Max 10 MB each.</div>
+              </div>
+              <input type="file" id="file-input" accept="image/png,image/jpeg,image/webp,image/svg+xml" multiple hidden>
+            </div>
+
+            <!-- Slide strip (after files selected) -->
+            <div id="slide-strip" class="slide-strip" style="display:none"></div>
+
+            <!-- Edit mode: existing slides -->
+            <div id="existing-slides" style="display:none">
+              <label style="font-weight:600;font-size:.85rem;margin-bottom:8px;display:block">Slides</label>
+              <div id="existing-slide-strip" class="slide-strip"></div>
+            </div>
+
+            <!-- Conversion progress -->
+            <div id="convert-progress" style="display:none;margin-top:var(--space-md)">
+              <div style="font-weight:600;font-size:.85rem" id="convert-status">Converting...</div>
+              <div class="progress-bar"><div class="progress-bar__fill" id="convert-bar" style="width:0%"></div></div>
+            </div>
+
+            <div id="form-error" class="form-error hidden"></div>
+            <div class="form-actions" style="margin-top:var(--space-md)">
+              <button id="btn-convert" class="btn btn--primary" type="button" style="display:none">Convert & Save</button>
+              <button id="btn-save" class="btn btn--primary" type="button" style="display:none">Save changes</button>
+              <a href="/admin-carousel-packs.html" class="btn btn--secondary">Cancel</a>
+            </div>
+          </div>
+
+          <!-- ═══ MAPPING TAB ═══ -->
+          <div id="tab-mapping" style="display:none">
+            <h3 style="font-size:.9rem;margin-bottom:var(--space-md)">Variable Mapping</h3>
+            <p class="text-muted" style="font-size:.82rem;margin-bottom:var(--space-md)">
+              Maps canonical names to each template's internal CSS variables and slot keys. Auto-generated during conversion.
+            </p>
+
+            <h4 style="font-size:.82rem;font-weight:600;margin-bottom:8px">Color Variables</h4>
+            <table class="map-table" id="color-map-table">
+              <thead><tr><th>Canonical</th><th>Title</th><th>Content</th><th>Closing</th></tr></thead>
+              <tbody id="color-map-body"></tbody>
+            </table>
+
+            <h4 style="font-size:.82rem;font-weight:600;margin:var(--space-md) 0 8px">Slot Keys</h4>
+            <table class="map-table" id="slot-map-table">
+              <thead><tr><th>Canonical</th><th>Title</th><th>Content</th><th>Closing</th></tr></thead>
+              <tbody id="slot-map-body"></tbody>
+            </table>
+
+            <div class="form-actions" style="margin-top:var(--space-md)">
+              <button id="btn-save-map" class="btn btn--primary" type="button">Save mapping</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+<script>
+  let adminPw = '';
+  const packId = new URLSearchParams(location.search).get('id');
+  let _slideFiles = []; // { file, dataUrl, role }
+  let _variableMap = null;
+  let _packData = null;
+
+  // ── Auth ──────────────────────────────────────────────────────────────────
+
+  const saved = sessionStorage.getItem('adminPw');
+  if (saved) { adminPw = saved; showMain(); }
+
+  document.getElementById('pw-btn').addEventListener('click', async () => {
+    const pw = document.getElementById('pw-input').value.trim();
+    const r = await fetch('/admin/carousel-packs', { headers: { 'X-Admin-Password': pw } });
+    if (r.status === 401) { document.getElementById('pw-error').textContent = 'Wrong password'; document.getElementById('pw-error').classList.remove('hidden'); return; }
+    adminPw = pw; sessionStorage.setItem('adminPw', pw); showMain();
+  });
+  document.getElementById('pw-input').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('pw-btn').click(); });
+
+  function adminFetch(path, opts = {}) {
+    opts.headers = opts.headers || {};
+    opts.headers['X-Admin-Password'] = adminPw;
+    if (opts.body && typeof opts.body === 'string') opts.headers['Content-Type'] = opts.headers['Content-Type'] || 'application/json';
+    return fetch(path, opts);
+  }
+
+  async function showMain() {
+    document.getElementById('auth-screen').classList.add('hidden');
+    document.getElementById('main').classList.remove('hidden');
+    if (packId) await loadPack();
+  }
+
+  // ── Tabs ──────────────────────────────────────────────────────────────────
+
+  document.getElementById('edit-tabs').addEventListener('click', e => {
+    const tab = e.target.closest('.edit-tab');
+    if (!tab) return;
+    const target = tab.dataset.tab;
+    document.querySelectorAll('#edit-tabs .edit-tab').forEach(t => t.classList.toggle('active', t === tab));
+    document.getElementById('tab-create').style.display = target === 'create' ? '' : 'none';
+    document.getElementById('tab-mapping').style.display = target === 'mapping' ? '' : 'none';
+  });
+
+  // ── Load existing pack ────────────────────────────────────────────────────
+
+  async function loadPack() {
+    document.getElementById('page-title').textContent = 'Edit Carousel Pack';
+    document.getElementById('edit-tabs').style.display = '';
+    document.getElementById('upload-field').style.display = 'none';
+    document.getElementById('btn-convert').style.display = 'none';
+    document.getElementById('btn-save').style.display = '';
+
+    try {
+      const r = await adminFetch('/admin/carousel-packs');
+      const { packs } = await r.json();
+      const p = (packs || []).find(x => x.id === packId);
+      if (!p) { showError('Pack not found.'); return; }
+      _packData = p;
+      _variableMap = p.variable_map || {};
+
+      document.getElementById('f-name').value = p.name || '';
+      document.getElementById('f-description').value = p.description || '';
+      document.getElementById('f-category').value = p.category || '';
+      document.getElementById('f-min-slides').value = p.min_content_slides || 3;
+      document.getElementById('f-max-slides').value = p.max_content_slides || 8;
+
+      // Show existing slides
+      document.getElementById('existing-slides').style.display = '';
+      renderExistingSlides(p.slides || []);
+      renderMappingTables(_variableMap);
+    } catch (err) { showError('Failed to load: ' + err.message); }
+  }
+
+  function renderExistingSlides(slides) {
+    const strip = document.getElementById('existing-slide-strip');
+    strip.innerHTML = slides.map((s, i) => `
+      <div class="slide-card">
+        <img class="slide-card__img" data-thumb-url="/admin/html-templates/${s.template_id}/thumbnail" alt="Slide ${i+1}">
+        <div class="slide-card__body">
+          <div class="slide-card__num">Slide ${i + 1}</div>
+          <div style="font-size:.75rem;font-weight:600;text-transform:uppercase;color:var(--brand)">${esc(s.role)}</div>
+          <a href="/admin-html-template-form.html?id=${s.template_id}" class="btn btn--sm btn--secondary" style="margin-top:4px;width:100%;text-align:center;font-size:.72rem">Edit template</a>
+        </div>
+      </div>`).join('');
+
+    // Load thumbnails
+    strip.querySelectorAll('img[data-thumb-url]').forEach(async (img) => {
+      try {
+        const r = await adminFetch(img.dataset.thumbUrl);
+        if (!r.ok) throw new Error();
+        img.src = URL.createObjectURL(await r.blob());
+      } catch { img.style.background = 'var(--neutral-100)'; }
+    });
+  }
+
+  // ── Multi-file upload ─────────────────────────────────────────────────────
+
+  const uploadZone = document.getElementById('upload-zone');
+  const fileInput = document.getElementById('file-input');
+
+  uploadZone.addEventListener('click', () => fileInput.click());
+  uploadZone.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); } });
+  uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('dragover'); });
+  uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
+  uploadZone.addEventListener('drop', e => { e.preventDefault(); uploadZone.classList.remove('dragover'); handleFiles(e.dataTransfer.files); });
+  fileInput.addEventListener('change', () => { handleFiles(fileInput.files); fileInput.value = ''; });
+
+  function handleFiles(fileList) {
+    const files = Array.from(fileList).filter(f =>
+      ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'].includes(f.type) && f.size <= 10 * 1024 * 1024
+    );
+    if (!files.length) { alert('Select PNG, JPG, WebP, or SVG files (max 10 MB each).'); return; }
+
+    const promises = files.map(file => new Promise(resolve => {
+      const reader = new FileReader();
+      reader.onload = e => resolve({ file, dataUrl: e.target.result });
+      reader.readAsDataURL(file);
+    }));
+
+    Promise.all(promises).then(results => {
+      _slideFiles = results.map((r, i) => ({
+        file: r.file,
+        dataUrl: r.dataUrl,
+        role: i === 0 ? 'title' : (i === results.length - 1 ? 'closing' : 'content'),
+      }));
+      renderSlideStrip();
+    });
+  }
+
+  function renderSlideStrip() {
+    const strip = document.getElementById('slide-strip');
+    if (!_slideFiles.length) { strip.style.display = 'none'; document.getElementById('btn-convert').style.display = 'none'; return; }
+
+    strip.style.display = '';
+    document.getElementById('btn-convert').style.display = '';
+    strip.innerHTML = _slideFiles.map((s, i) => `
+      <div class="slide-card" data-i="${i}">
+        <button class="slide-card__remove" data-i="${i}" type="button">x</button>
+        <img class="slide-card__img" src="${s.dataUrl}" alt="Slide ${i+1}">
+        <div class="slide-card__body">
+          <div class="slide-card__num">Slide ${i + 1}</div>
+          <select data-i="${i}" data-c="role">
+            <option value="title" ${s.role==='title'?'selected':''}>Title</option>
+            <option value="content" ${s.role==='content'?'selected':''}>Content</option>
+            <option value="closing" ${s.role==='closing'?'selected':''}>Closing</option>
+          </select>
+        </div>
+      </div>`).join('');
+
+    strip.querySelectorAll('select[data-c="role"]').forEach(sel => {
+      sel.addEventListener('change', () => {
+        _slideFiles[parseInt(sel.dataset.i)].role = sel.value;
+      });
+    });
+    strip.querySelectorAll('.slide-card__remove').forEach(btn => {
+      btn.addEventListener('click', () => {
+        _slideFiles.splice(parseInt(btn.dataset.i), 1);
+        renderSlideStrip();
+      });
+    });
+  }
+
+  // ── Convert & Save ────────────────────────────────────────────────────────
+
+  document.getElementById('btn-convert').addEventListener('click', async () => {
+    const name = document.getElementById('f-name').value.trim();
+    if (!name) { showError('Pack name is required.'); return; }
+    if (_slideFiles.length < 2) { showError('At least 2 slide images required.'); return; }
+    hideError();
+
+    const btn = document.getElementById('btn-convert');
+    btn.disabled = true; btn.textContent = 'Converting...';
+    const progress = document.getElementById('convert-progress');
+    const bar = document.getElementById('convert-bar');
+    const status = document.getElementById('convert-status');
+    progress.style.display = '';
+
+    // Read files as base64
+    const slides = [];
+    for (let i = 0; i < _slideFiles.length; i++) {
+      status.textContent = `Reading slide ${i + 1} of ${_slideFiles.length}...`;
+      bar.style.width = `${((i) / _slideFiles.length) * 20}%`;
+
+      const base64 = _slideFiles[i].dataUrl.split(',')[1];
+      slides.push({
+        data: base64,
+        contentType: _slideFiles[i].file.type,
+        role: _slideFiles[i].role,
+      });
+    }
+
+    status.textContent = `Converting ${slides.length} slides... This may take 2-5 minutes.`;
+    bar.style.width = '20%';
+
+    try {
+      const r = await adminFetch('/admin/carousel-packs/from-images', {
+        body: JSON.stringify({
+          name,
+          description: document.getElementById('f-description').value.trim(),
+          category: document.getElementById('f-category').value.trim(),
+          min_content_slides: parseInt(document.getElementById('f-min-slides').value) || 3,
+          max_content_slides: parseInt(document.getElementById('f-max-slides').value) || 8,
+          slides,
+        }),
+      });
+
+      const data = await r.json();
+      bar.style.width = '100%';
+
+      if (!data.ok) throw new Error(data.error || 'Conversion failed');
+
+      status.textContent = `Done! ${data.slides_created} slides converted.`;
+      _variableMap = data.variable_map;
+
+      setTimeout(() => {
+        location.href = `/admin-carousel-pack-form.html?id=${data.pack_id}`;
+      }, 1500);
+    } catch (err) {
+      showError(err.message);
+      btn.disabled = false; btn.textContent = 'Convert & Save';
+      progress.style.display = 'none';
+    }
+  });
+
+  // ── Save changes (edit mode) ──────────────────────────────────────────────
+
+  document.getElementById('btn-save').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-save');
+    btn.disabled = true; btn.textContent = 'Saving...';
+    hideError();
+
+    try {
+      const r = await adminFetch(`/admin/carousel-packs/${packId}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          name: document.getElementById('f-name').value.trim(),
+          description: document.getElementById('f-description').value.trim(),
+          category: document.getElementById('f-category').value.trim(),
+          min_content_slides: parseInt(document.getElementById('f-min-slides').value) || 3,
+          max_content_slides: parseInt(document.getElementById('f-max-slides').value) || 8,
+          variable_map: _variableMap,
+        }),
+      });
+      const data = await r.json();
+      if (!data.ok) throw new Error(data.error || 'Save failed');
+      location.href = '/admin-carousel-packs.html';
+    } catch (err) {
+      showError(err.message);
+      btn.disabled = false; btn.textContent = 'Save changes';
+    }
+  });
+
+  // ── Save mapping ──────────────────────────────────────────────────────────
+
+  document.getElementById('btn-save-map').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-save-map');
+    btn.disabled = true; btn.textContent = 'Saving...';
+
+    try {
+      const r = await adminFetch(`/admin/carousel-packs/${packId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ variable_map: _variableMap }),
+      });
+      const data = await r.json();
+      if (!data.ok) throw new Error(data.error);
+      btn.textContent = 'Saved!';
+      setTimeout(() => { btn.textContent = 'Save mapping'; btn.disabled = false; }, 1500);
+    } catch (err) {
+      showError(err.message);
+      btn.disabled = false; btn.textContent = 'Save mapping';
+    }
+  });
+
+  // ── Mapping tables ────────────────────────────────────────────────────────
+
+  function renderMappingTables(map) {
+    if (!map) return;
+    const roles = ['title', 'content', 'closing'];
+
+    // Colors
+    const colorBody = document.getElementById('color-map-body');
+    const colors = map.colors || {};
+    colorBody.innerHTML = Object.entries(colors).map(([canonical, roleMap]) => {
+      return `<tr>
+        <td><strong>${esc(canonical)}</strong></td>
+        ${roles.map(role => {
+          const v = roleMap[role];
+          return `<td>${v ? esc(v) : '<span style="color:var(--text-muted)">—</span>'}</td>`;
+        }).join('')}
+      </tr>`;
+    }).join('') || '<tr><td colspan="4" style="color:var(--text-muted)">No color mappings</td></tr>';
+
+    // Slots
+    const slotBody = document.getElementById('slot-map-body');
+    const slots = map.slots || {};
+    slotBody.innerHTML = Object.entries(slots).map(([canonical, roleMap]) => {
+      return `<tr>
+        <td><strong>${esc(canonical)}</strong></td>
+        ${roles.map(role => {
+          const v = roleMap[role];
+          return `<td>${v ? esc(v) : '<span style="color:var(--text-muted)">—</span>'}</td>`;
+        }).join('')}
+      </tr>`;
+    }).join('') || '<tr><td colspan="4" style="color:var(--text-muted)">No slot mappings</td></tr>';
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+
+  function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function showError(msg) { const el = document.getElementById('form-error'); el.textContent = msg; el.classList.remove('hidden'); }
+  function hideError() { document.getElementById('form-error').classList.add('hidden'); }
+</script>
+</body>
+</html>

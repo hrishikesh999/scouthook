@@ -1392,6 +1392,7 @@ async function _selectHtmlTemplate(templateId) {
 }
 
 let _htmlTplBrandColors = null;
+let _pendingColorUpdates = {}; // color:key → value, flushed into iframe on load
 
 async function _loadBrandColors() {
   if (_htmlTplBrandColors) return _htmlTplBrandColors;
@@ -1423,8 +1424,9 @@ function _renderTemplateIframe(html, slots) {
   const manifest = _htmlTplSelectedMeta?.slot_manifest || {};
   const slotDefs = manifest.slots || {};
   const { width = 1080, height = 1080 } = manifest.dimensions || {};
-  const maxW = pane.clientWidth - 20 || 500;
-  const scale = Math.min(maxW / width, 0.55);
+  const maxW = pane.clientWidth  - 48 || 500;
+  const maxH = pane.clientHeight - 48 || 500;
+  const scale = Math.min(maxW / width, maxH / height, 1);
 
   // Inject click handlers + hover styles into the template
   const slotScript = `
@@ -1452,26 +1454,34 @@ function _renderTemplateIframe(html, slots) {
     `style="width:${width}px;height:${height}px;border:none;display:block;transform:scale(${scale});transform-origin:top left" ` +
     `title="Template preview"></iframe></div>`;
 
+  // Reset pending color updates for this new iframe
+  _pendingColorUpdates = {};
+
   // After iframe loads, inject AI-extracted content
   const iframe = document.getElementById('htpl-live-iframe');
   iframe.addEventListener('load', () => {
-    if (!slots) return;
     const doc = iframe.contentDocument;
     if (!doc) return;
     // Apply text slots
-    for (const [key, val] of Object.entries(slots)) {
-      if (typeof val === 'string' && !key.startsWith('color:') && !key.startsWith('image:')) {
-        const el = doc.querySelector(`[data-slot="${key}"]`);
-        if (el) el.textContent = val;
+    if (slots) {
+      for (const [key, val] of Object.entries(slots)) {
+        if (typeof val === 'string' && !key.startsWith('color:') && !key.startsWith('image:')) {
+          const el = doc.querySelector(`[data-slot="${key}"]`);
+          if (el) el.textContent = val;
+        }
       }
     }
-    // Apply color defaults from manifest
+    // Apply color defaults from manifest first, then any user edits on top
     for (const [key, def] of Object.entries(slotDefs)) {
       if (key.startsWith('color:')) {
         const varName = key.slice('color:'.length);
-        const val = _resolveBrandColor(key, def);
+        const val = _pendingColorUpdates[key] ?? _resolveBrandColor(key, def);
         doc.documentElement.style.setProperty('--' + varName, val);
       }
+    }
+    // Also flush any pending updates for keys not in the manifest
+    for (const [key, val] of Object.entries(_pendingColorUpdates)) {
+      doc.documentElement.style.setProperty('--' + key.slice('color:'.length), val);
     }
   });
 }
@@ -1723,10 +1733,15 @@ function _slotLabel(key) {
 
 function _applySlotToIframe(key, value, type) {
   const iframe = document.getElementById('htpl-live-iframe');
+  if (type === 'color') {
+    _pendingColorUpdates[key] = value; // always store so load-flush picks it up
+    if (!iframe?.contentDocument?.documentElement) return;
+    iframe.contentDocument.documentElement.style.setProperty('--' + key.slice('color:'.length), value);
+    return;
+  }
   if (!iframe?.contentDocument) return;
   const doc = iframe.contentDocument;
   if (type === 'text') { const el = doc.querySelector(`[data-slot="${key}"]`); if (el) el.textContent = value; }
-  else if (type === 'color') { doc.documentElement.style.setProperty('--' + key.slice('color:'.length), value); }
   else if (type === 'image') {
     const img = doc.querySelector(`img[data-slot="${key}"]`);
     if (img) { img.src = value; }

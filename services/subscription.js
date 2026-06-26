@@ -69,6 +69,8 @@ async function getUserSubscription(userId) {
 // ---------------------------------------------------------------------------
 async function getUserPlan(userId) {
   const sub = await getUserSubscription(userId);
+  // Lifetime plan: admin-granted, never expires, full Pro access.
+  if (sub.status === 'lifetime') return 'pro';
   // Normalise to the three known tiers; unknown values fall back to free.
   const tier = ['free', 'solo', 'pro'].includes(sub.plan) ? sub.plan : 'free';
   if (tier === 'free') return 'free';

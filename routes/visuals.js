@@ -7,7 +7,6 @@ const storage = require('../services/storage');
 const { generateQuoteCard, extractQuoteCardContent, renderQuoteCard } = require('../services/quoteCardGenerator');
 const { generateCarousel, extractCarouselContent, renderCarousel } = require('../services/carouselGenerator');
 const { generateBrandedQuote, extractBrandedQuoteContent, renderBrandedQuote } = require('../services/brandedQuoteGenerator');
-const { extractPlacidContent, renderPlacidImage } = require('../services/placidGenerator');
 const { extractInfographicContent, renderInfographic } = require('../services/infographicGenerator');
 const { extractMetricsContent, renderMetricsCard } = require('../services/metricsCardGenerator');
 const { extractClientWinContent, renderClientWin } = require('../services/clientWinGenerator');
@@ -32,16 +31,8 @@ router.post('/:postId', async (req, res) => {
     return res.status(401).json({ ok: false, error: 'unauthenticated' });
   }
 
-  if (!['quote_card', 'carousel', 'branded_quote', 'ai_image', 'infographic', 'metrics_card', 'client_win', 'framework', 'template'].includes(visual_type)) {
+  if (!['quote_card', 'carousel', 'branded_quote', 'infographic', 'metrics_card', 'client_win', 'framework', 'template'].includes(visual_type)) {
     return res.status(400).json({ ok: false, error: 'invalid_visual_type' });
-  }
-
-  // ai_image is Pro-only
-  if (visual_type === 'ai_image') {
-    const plan = await getUserPlan(userId);
-    if (!planHasFeature(plan, 'ai_image')) {
-      return res.status(403).json({ ok: false, error: 'feature_not_available', feature: 'ai_image', requiredPlan: 'pro' });
-    }
   }
 
   // Check visual generation limit only for render calls (extract produces no image)
@@ -159,10 +150,6 @@ router.post('/:postId', async (req, res) => {
         const extracted = await extractBrandedQuoteContent(post);
         return res.json({ ok: true, mode: 'extract', visual_type, content: extracted });
       }
-      if (visual_type === 'ai_image') {
-        const extracted = await extractPlacidContent(post);
-        return res.json({ ok: true, mode: 'extract', visual_type, content: extracted });
-      }
       if (visual_type === 'infographic') {
         const extracted = await extractInfographicContent(post, layout_hint);
         return res.json({ ok: true, mode: 'extract', visual_type, content: extracted });
@@ -226,13 +213,6 @@ router.post('/:postId', async (req, res) => {
     if (visual_type === 'quote_card') {
       const renderContent = content || await extractQuoteCardContent(post);
       const result = await renderQuoteCard(post, brand, renderContent, { userId, tenantId });
-      await logVisualGeneration(userId, tenantId, postId, visual_type);
-      return res.json({ ok: true, ...result });
-    }
-
-    if (visual_type === 'ai_image') {
-      const renderContent = content || await extractPlacidContent(post);
-      const result = await renderPlacidImage(post, renderContent, { userId, tenantId }, template_id || null);
       await logVisualGeneration(userId, tenantId, postId, visual_type);
       return res.json({ ok: true, ...result });
     }

@@ -104,7 +104,7 @@ router.get('/subscription', requireAuth, async (req, res) => {
       'SELECT paddle_customer_id, paddle_subscription_id, current_period_end, updated_at FROM user_subscriptions WHERE user_id = ?'
     ).get(userId);
 
-    if (row?.paddle_subscription_id) {
+    if (row?.paddle_subscription_id && row?.status !== 'lifetime') {
       // ── Existing row: refresh if stale ────────────────────────────────────
       const now = Date.now();
       const periodEnd  = row.current_period_end ? new Date(row.current_period_end).getTime() : 0;
@@ -247,10 +247,13 @@ router.get('/subscription', requireAuth, async (req, res) => {
     && !!sub.trial_ends_at
     && new Date(sub.trial_ends_at) <= new Date();
 
+  // Never expose the internal 'lifetime' status to users — they see 'active'.
+  const effectiveStatus = sub.status === 'lifetime' ? 'active' : sub.status;
+
   return res.json({
     ok: true,
     plan: genCheck.plan,  // effective plan: 'free' once trial/grace period has expired
-    status: sub.status,
+    status: effectiveStatus,
     price_id: sub.price_id ?? null,
     current_period_end: sub.current_period_end ?? null,
     canceled_at: sub.canceled_at ?? null,
@@ -283,6 +286,9 @@ router.post('/cancel', requireAuth, async (req, res) => {
   const userId = req.userId;
   const sub = await getUserSubscription(userId);
 
+  if (sub.status === 'lifetime') {
+    return res.status(403).json({ ok: false, error: 'cannot_cancel_lifetime' });
+  }
   if (!sub.paddle_subscription_id) {
     return res.status(400).json({ ok: false, error: 'no_active_subscription' });
   }

@@ -117,32 +117,8 @@
                 <button class="ptb-btn" id="media-library-btn"  title="Attach image / PDF" aria-label="Attach from media library">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
                 </button>
-                <button class="ptb-btn" id="carousel-btn" title="Generate carousel" aria-label="Generate carousel">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7" y="5" width="10" height="14" rx="1.5"/><rect x="3" y="8" width="3" height="8" rx="1"/><rect x="18" y="8" width="3" height="8" rx="1"/></svg>
-                </button>
-                <button class="ptb-btn" id="quote-card-btn" title="Generate quote card" aria-label="Generate quote card">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                </button>
-                <button class="ptb-btn" id="branded-quote-btn" title="Generate branded quote" aria-label="Generate branded quote">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M12 7l1.5 3.5L17 12l-3.5 1.5L12 17l-1.5-3.5L7 12l3.5-1.5z"/></svg>
-                </button>
-                <button class="ptb-btn" id="ai-image-btn" title="Choose Template" aria-label="Choose Template">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l2.4 6.6H21l-5.7 4.1 2.2 6.7L12 15.3l-5.5 4.1 2.2-6.7L3 8.6h6.6z"/></svg>
-                </button>
                 <button class="ptb-btn" id="html-tpl-btn" title="Design Templates" aria-label="Design Templates">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
-                </button>
-                <button class="ptb-btn" id="infographic-btn" title="Generate infographic" aria-label="Generate infographic">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-                </button>
-                <button class="ptb-btn" id="metrics-btn" title="Generate metrics card" aria-label="Generate metrics card">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-                </button>
-                <button class="ptb-btn" id="client-win-btn" title="Generate client win card" aria-label="Generate client win card">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5C7 4 9 7 12 7s5-3 7.5-3a2.5 2.5 0 0 1 0 5H18"/><path d="M8 9h8l-1 10H9L8 9z"/></svg>
-                </button>
-                <button class="ptb-btn" id="framework-btn" title="Generate framework diagram" aria-label="Generate framework diagram">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="5" r="3"/><line x1="12" y1="8" x2="12" y2="16"/><circle cx="12" cy="19" r="3"/><line x1="6" y1="12" x2="18" y2="12"/><circle cx="4" cy="12" r="2"/><circle cx="20" cy="12" r="2"/></svg>
                 </button>
               </div>
             </div>
@@ -292,47 +268,6 @@
   </div>
   <!-- /page-wrapper -->
 
-  <!-- Visual Modal (quote_card / carousel / branded_quote) -->
-  <div id="visual-modal-overlay" class="ai-image-overlay" role="dialog" aria-modal="true" aria-hidden="true">
-    <div class="ai-image-modal">
-      <div class="ai-image-modal-header">
-        <span class="ai-image-modal-title" id="visual-modal-title">QUOTE CARD</span>
-        <button class="slide-over-close" id="visual-modal-close" aria-label="Close">✕</button>
-      </div>
-      <div class="ai-image-modal-body" id="visual-modal-body">
-        <div class="ai-image-preview-pane" id="visual-modal-preview-pane"></div>
-        <div class="ai-image-form-pane"    id="visual-modal-form-pane" hidden></div>
-      </div>
-      <div class="ai-image-modal-footer">
-        <div style="flex:1"></div>
-        <button id="visual-modal-cancel-btn" class="slide-over-discard">Cancel</button>
-        <button id="visual-modal-insert-btn" class="btn-secondary" hidden disabled>Insert in Post</button>
-        <button id="visual-modal-save-btn"   class="btn-teal-filled" hidden>Save &amp; Preview</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- AI Image Modal (Choose Template) -->
-  <div id="ai-image-overlay" class="ai-image-overlay" role="dialog" aria-modal="true" aria-label="Choose Template" aria-hidden="true">
-    <div class="ai-image-modal">
-      <div class="ai-image-modal-header">
-        <span class="ai-image-modal-title">Choose Template</span>
-        <button class="slide-over-close" id="ai-image-modal-close" aria-label="Close">✕</button>
-      </div>
-      <div class="ai-image-modal-body" id="ai-image-modal-body">
-        <div class="ai-image-preview-pane" id="ai-image-preview-pane"></div>
-        <div class="ai-image-form-pane"    id="ai-image-form-pane"    hidden></div>
-      </div>
-      <div class="ai-image-modal-footer">
-        <button id="ai-image-back-btn"     class="btn-text"         hidden>← Change template</button>
-        <div style="flex:1"></div>
-        <button id="ai-image-cancel-btn"   class="slide-over-discard">Cancel</button>
-        <button id="ai-image-insert-btn"   class="btn-secondary"    hidden disabled>Insert in Post</button>
-        <button id="ai-image-generate-btn" class="btn-teal-filled"  hidden>Save &amp; Preview</button>
-      </div>
-    </div>
-  </div>
-
   <!-- Design Templates Modal (HTML/Puppeteer templates) -->
   <div id="html-tpl-overlay" class="ai-image-overlay" role="dialog" aria-modal="true" aria-label="Design Templates" aria-hidden="true">
     <div class="ai-image-modal">
@@ -461,43 +396,8 @@
         <p class="vbo-subtitle">LinkedIn posts with a visual get 3&times; more reach</p>
       </div>
       <div class="vbo-tiles">
-        <button class="vbo-tile vbo-tile--featured" data-type="carousel">
-          <span class="vbo-tile-badge">Most popular</span>
-          <span class="vbo-tile-icon">🎴</span>
-          <span class="vbo-tile-name">Carousel</span>
-          <span class="vbo-tile-desc">Swipeable slides from your post</span>
-        </button>
-        <button class="vbo-tile" data-type="quote_card">
-          <span class="vbo-tile-icon">💬</span>
-          <span class="vbo-tile-name">Quote Card</span>
-          <span class="vbo-tile-desc">Turn your best line into an image</span>
-        </button>
-        <button class="vbo-tile" data-type="branded_quote">
-          <span class="vbo-tile-icon">✨</span>
-          <span class="vbo-tile-name">Branded Quote</span>
-          <span class="vbo-tile-desc">Quote with your LinkedIn photo</span>
-        </button>
-        <button class="vbo-tile" data-type="infographic">
-          <span class="vbo-tile-icon">📊</span>
-          <span class="vbo-tile-name">Infographic</span>
-          <span class="vbo-tile-desc">Auto-generate a visual layout</span>
-        </button>
-        <button class="vbo-tile" data-type="metrics_card">
-          <span class="vbo-tile-icon">📈</span>
-          <span class="vbo-tile-name">Metrics Card</span>
-          <span class="vbo-tile-desc">Highlight a key number or result</span>
-        </button>
-        <button class="vbo-tile" data-type="client_win">
-          <span class="vbo-tile-icon">🏆</span>
-          <span class="vbo-tile-name">Client Win</span>
-          <span class="vbo-tile-desc">Showcase a client result</span>
-        </button>
-        <button class="vbo-tile" data-type="framework">
-          <span class="vbo-tile-icon">🔄</span>
-          <span class="vbo-tile-name">Framework</span>
-          <span class="vbo-tile-desc">Visualize your process or steps</span>
-        </button>
-        <button class="vbo-tile" data-type="html_template">
+        <button class="vbo-tile vbo-tile--featured" data-type="html_template">
+          <span class="vbo-tile-badge">Recommended</span>
           <span class="vbo-tile-icon">🎨</span>
           <span class="vbo-tile-name">Design Template</span>
           <span class="vbo-tile-desc">Pro-designed visual from your post</span>
@@ -545,11 +445,7 @@ let currentAssetUrl       = null;
 let currentPreviewUrl     = null;
 let currentSlideCount     = 0;
 let slideOverState        = 'loading';
-let selectedTemplateId    = null;  // set during ai_image template picker step
-let selectedTemplate      = null;
 let _mediaDrawerMode = 'attach';
-let _aiModalState         = 'picker'; // 'picker' | 'editing' | 'generating'
-let _aiAutoPreviewRunning   = false;
 let _visualPreviewDebounceTimer = null;
 let _visualAutoPreviewRunning   = false;
 let _carouselActiveSlide        = 0;
@@ -727,7 +623,7 @@ async function loadPost(id) {
       attachedPreviewUrl = p.assetPreviewUrl || (p.assetType !== 'carousel' ? p.assetUrl : null);
       attachedAssetType  = p.assetType || 'media_image';
       attachedSlideCount = p.assetSlideCount || 0;
-      const labelMap = { carousel: 'Carousel', media_pdf: 'PDF', media_image: 'Image', quote_card: 'Quote Card', branded_quote: 'Branded Quote', ai_image: 'AI Image', infographic: 'Infographic', metrics_card: 'Metrics', client_win: 'Client Win', framework: 'Framework', html_template: 'Design Template' };
+      const labelMap = { media_pdf: 'PDF', media_image: 'Image', html_template: 'Design Template' };
       const chipLabel = document.getElementById('asset-chip-label');
       const chip      = document.getElementById('asset-chip');
       if (chipLabel) chipLabel.textContent = labelMap[attachedAssetType] || attachedAssetType;
@@ -1075,7 +971,7 @@ function applyScheduleLockUi(scheduledFor) {
   const schedBtn = document.getElementById('btn-schedule');
   if (schedBtn) { schedBtn.disabled = true; schedBtn.style.setProperty('display', 'none', 'important'); }
   document.getElementById('post-body').disabled = true;
-  ['quote-card-btn','carousel-btn','branded-quote-btn','ai-image-btn','html-tpl-btn','infographic-btn','metrics-btn','client-win-btn','framework-btn','media-library-btn','fmt-undo','fmt-bold','fmt-italic','fmt-bullet','fmt-num'].forEach(id => {
+  ['html-tpl-btn','media-library-btn','fmt-undo','fmt-bold','fmt-italic','fmt-bullet','fmt-num'].forEach(id => {
     document.getElementById(id)?.classList.add('disabled');
   });
   const chipRemove = document.getElementById('asset-chip-remove');
@@ -1096,7 +992,7 @@ function clearScheduleLockUi() {
   const schedBtnRestore = document.getElementById('btn-schedule');
   if (schedBtnRestore) schedBtnRestore.style.removeProperty('display');
   if (linkedinConnected && schedBtnRestore) schedBtnRestore.disabled = false;
-  ['quote-card-btn','carousel-btn','branded-quote-btn','ai-image-btn','html-tpl-btn','infographic-btn','metrics-btn','client-win-btn','framework-btn','media-library-btn','fmt-undo','fmt-bold','fmt-italic','fmt-bullet','fmt-num'].forEach(id => {
+  ['html-tpl-btn','media-library-btn','fmt-undo','fmt-bold','fmt-italic','fmt-bullet','fmt-num'].forEach(id => {
     document.getElementById(id)?.classList.remove('disabled');
   });
   const chipRemove = document.getElementById('asset-chip-remove');
@@ -1332,8 +1228,6 @@ function openSlideOver(type, label) {
   if (!currentPostId) return;
   if (userPlan === 'free') { window.PricingModal?.open({ feature: 'scheduling' }); return; }
 
-  if (type === 'ai_image') { openAiImageModal(); return; }
-
   currentAssetType       = type;
   currentAssetUrl        = null;
   currentPreviewUrl      = null;
@@ -1460,382 +1354,7 @@ function visualErrorMessage(code) {
   if (code === 'branded_quote_photo_fetch_failed') return 'Could not load your LinkedIn photo. Try reconnecting LinkedIn in Account Settings.';
   if (code === 'post_not_found' || code === 'forbidden') return 'Post not found or access denied. Refresh the page and try again.';
   if (code === 'feature_not_available') return 'This feature requires a Pro plan. <a href="/billing.html" style="color:var(--brand);font-weight:600">Upgrade to Pro</a> to use AI image generation.';
-  if (code === 'placid_api_key not configured' || code === 'placid_template_id not configured') return 'AI image generation is not configured yet. Contact your admin to set up the integration.';
   return String(code);
-}
-
-/* ════════════════════════════════════════════════════════════════════════
-   AI IMAGE MODAL — Choose Template
-════════════════════════════════════════════════════════════════════════ */
-
-function openAiImageModal() {
-  if (scheduleEditLocked) return;
-  if (!currentPostId) return;
-  if (userPlan === 'free') { window.PricingModal?.open({ feature: 'scheduling' }); return; }
-
-  currentAssetType = 'ai_image';
-
-  // Reset insert button state
-  const _aiInsert = document.getElementById('ai-image-insert-btn');
-  if (_aiInsert) { _aiInsert.hidden = true; _aiInsert.disabled = true; }
-
-  const overlay = document.getElementById('ai-image-overlay');
-  overlay.removeAttribute('aria-hidden');
-
-  const cached = visualCache.get(`${currentPostId}:ai_image`);
-  if (cached?.assetUrl) {
-    currentAssetUrl    = cached.assetUrl;
-    currentPreviewUrl  = cached.previewUrl || null;
-    extractedContent   = cached.extractedContent || null;
-    selectedTemplateId = cached.templateId || selectedTemplateId;
-    selectedTemplate   = cached.template   || selectedTemplate;
-    _setAiModalState('editing');
-    _renderAiPreviewImage(cached.assetUrl);
-    if (extractedContent && selectedTemplate) renderAiImageFormInModal(extractedContent);
-    _showInsertBtn();
-    return;
-  }
-
-  if (!selectedTemplateId) {
-    currentAssetUrl        = null;
-    extractedContent       = null;
-    currentRenderedContent = null;
-    _setAiModalState('picker');
-    loadAiTemplatePicker();
-  } else if (selectedTemplateId && !extractedContent) {
-    _setAiModalState('editing');
-    _renderAiTemplatePreview();
-    _showAiFormSkeleton();
-    extractContent('ai_image');
-  } else {
-    _setAiModalState('editing');
-    _renderAiTemplatePreview();
-    renderAiImageFormInModal(extractedContent);
-  }
-}
-
-function closeAiImageModal() {
-  const overlay = document.getElementById('ai-image-overlay');
-  overlay.setAttribute('aria-hidden', 'true');
-  extractedContent       = null;
-  currentRenderedContent = null;
-  currentAssetUrl        = null;
-  currentPreviewUrl      = null;
-  selectedTemplateId     = null;
-  selectedTemplate       = null;
-  _mediaDrawerMode = 'attach';
-  _aiModalState          = 'picker';
-  _aiAutoPreviewRunning  = false;
-  currentAssetType       = null;
-  document.getElementById('ai-image-generate-btn').disabled = false;
-  document.getElementById('ai-image-generate-btn').textContent = 'Save & Preview';
-  const _aiInsert = document.getElementById('ai-image-insert-btn');
-  if (_aiInsert) { _aiInsert.hidden = true; _aiInsert.disabled = true; }
-}
-
-function _setAiModalState(state) {
-  _aiModalState = state;
-  const body     = document.getElementById('ai-image-modal-body');
-  const formPane = document.getElementById('ai-image-form-pane');
-  const backBtn  = document.getElementById('ai-image-back-btn');
-  const genBtn   = document.getElementById('ai-image-generate-btn');
-
-  body.classList.toggle('is-picker', state === 'picker');
-  formPane.hidden = (state === 'picker');
-  backBtn.hidden  = (state === 'picker');
-
-  if (state === 'editing') {
-    genBtn.hidden = false; genBtn.disabled = false; genBtn.textContent = 'Save & Preview';
-  } else if (state === 'generating') {
-    genBtn.hidden = false; genBtn.disabled = true;  genBtn.textContent = 'Saving…';
-  } else {
-    genBtn.hidden = true;
-  }
-}
-
-async function loadAiTemplatePicker() {
-  const previewPane = document.getElementById('ai-image-preview-pane');
-  previewPane.innerHTML = `<div class="slide-over-skeleton" style="width:80%;max-width:500px;height:300px;border-radius:8px"></div>`;
-
-  try {
-    const res  = await fetch('/api/placid-templates', { headers: apiHeaders(), credentials: 'include' });
-    const data = await res.json();
-    const tpls = data.templates || [];
-
-    if (tpls.length === 0) {
-      previewPane.innerHTML = `<div style="text-align:center;padding:40px 24px;color:var(--text-muted)">
-        <p style="margin:0;font-size:14px">No templates configured yet. Ask your admin to add templates.</p></div>`;
-      return;
-    }
-
-    if (tpls.length === 1) {
-      selectedTemplate   = tpls[0];
-      selectedTemplateId = String(tpls[0].id);
-      const _tplTitleEl = document.querySelector('#ai-image-overlay .ai-image-modal-title');
-      if (_tplTitleEl) _tplTitleEl.textContent = `Using ${selectedTemplate.name}`;
-      _setAiModalState('editing');
-      _renderAiTemplatePreview();
-      _showAiFormSkeleton();
-      extractContent('ai_image');
-      return;
-    }
-
-    const gridHtml = tpls.map(t => {
-      const previewHtml = t.preview_image_url
-        ? `<img src="${escHtml(t.preview_image_url)}" alt="" style="width:100%;height:100%;object-fit:cover;display:block">`
-        : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center"><span style="font-size:22px;font-weight:700;color:var(--text-muted)">${escHtml((t.name||'?').slice(0,2).toUpperCase())}</span></div>`;
-      const defBadge = t.is_default ? `<span style="font-size:10px;font-weight:700;text-transform:uppercase;background:var(--brand);color:#fff;padding:2px 5px;border-radius:4px;margin-left:6px">Default</span>` : '';
-      return `<div class="ai-tpl-card" data-tpl-id="${escHtml(String(t.id))}">
-        <div style="aspect-ratio:4/3;overflow:hidden;background:var(--surface)">${previewHtml}</div>
-        <div style="padding:10px 12px;font-size:13px;font-weight:600">${escHtml(t.name)}${defBadge}</div>
-      </div>`;
-    }).join('');
-
-    previewPane.innerHTML = `<div class="ai-tpl-picker">
-      <p class="ai-tpl-picker-heading">Choose a template to get started</p>
-      <div class="ai-tpl-grid">${gridHtml}</div>
-    </div>`;
-
-    previewPane.querySelectorAll('.ai-tpl-card').forEach(card => {
-      card.addEventListener('click', () => {
-        selectedTemplate   = tpls.find(t => String(t.id) === card.dataset.tplId) || null;
-        selectedTemplateId = card.dataset.tplId;
-        const _tplTitleEl = document.querySelector('#ai-image-overlay .ai-image-modal-title');
-        if (_tplTitleEl && selectedTemplate) _tplTitleEl.textContent = `Using ${selectedTemplate.name}`;
-        _setAiModalState('editing');
-        _renderAiTemplatePreview();
-        _showAiFormSkeleton();
-        extractContent('ai_image');
-      });
-    });
-  } catch (err) {
-    previewPane.innerHTML = `<p style="color:var(--error,#e55);font-size:13px;padding:24px">Failed to load templates: ${escHtml(err.message)}</p>`;
-  }
-}
-
-function _renderAiTemplatePreview() {
-  const previewPane = document.getElementById('ai-image-preview-pane');
-  if (selectedTemplate?.preview_image_url) {
-    previewPane.innerHTML = `<img src="${escHtml(selectedTemplate.preview_image_url)}" alt="Template preview">`;
-  } else {
-    previewPane.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;gap:10px;color:var(--text-muted)">
-      <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-      <span style="font-size:13px">No preview available</span>
-    </div>`;
-  }
-}
-
-function _renderAiPreviewImage(url) {
-  const previewPane = document.getElementById('ai-image-preview-pane');
-  previewPane.innerHTML = `<img src="${escHtml(url)}" alt="Generated image">`;
-}
-
-function _showAiFormSkeleton() {
-  const formPane = document.getElementById('ai-image-form-pane');
-  formPane.innerHTML = `<div class="slide-over-skeleton" style="width:100%;border-radius:8px;min-height:220px"></div>`;
-}
-
-function _showAiPreviewPaneLoading() {
-  const previewPane = document.getElementById('ai-image-preview-pane');
-  previewPane.innerHTML = `<div class="slide-over-skeleton" style="width:80%;max-width:460px;aspect-ratio:1;border-radius:8px"></div>`;
-}
-
-function renderAiImageFormInModal(content) {
-  const formPane = document.getElementById('ai-image-form-pane');
-  if (!content) {
-    formPane.innerHTML = '<p class="so-extract-error">Could not load suggestions — try again.</p>';
-    return;
-  }
-
-  const h           = content.headline || '';
-  const s           = content.subtext  || '';
-  const textLayers  = Array.isArray(selectedTemplate?.text_layers) ? selectedTemplate.text_layers : [];
-  const savedExtras = content.extra_fields || {};
-
-  const extraHtml = textLayers.map(field => {
-    const safeName  = field.layer_name.replace(/[^a-zA-Z0-9]/g, '_');
-    const fieldId   = `aim-extra-${safeName}`;
-    const maxChars  = field.max_chars || 200;
-    const existing  = savedExtras[field.layer_name] || '';
-    return `
-      <div style="margin-top:12px">
-        <label class="field-label" for="${escHtml(fieldId)}">${escHtml(field.label || field.layer_name)}</label>
-        <input type="text" id="${escHtml(fieldId)}" class="field-input aim-extra-text-input"
-          data-layer-name="${escHtml(field.layer_name)}" maxlength="${maxChars}" value="${escHtml(existing)}"/>
-        <div class="so-char-counter"><span id="${escHtml(fieldId)}-len">${existing.length}</span> / ${maxChars}</div>
-      </div>`;
-  }).join('');
-
-  formPane.innerHTML = `
-    <div class="so-editor-form">
-      <p class="so-field-hint">AI-extracted text for your image. Edit before generating.</p>
-      <label class="field-label" for="aim-headline-input">Headline</label>
-      <input type="text" id="aim-headline-input" class="field-input" maxlength="120" value="${escHtml(h)}"/>
-      <div class="so-char-counter"><span id="aim-hl-len">${h.length}</span> / 120</div>
-      <label class="field-label" for="aim-subtext-input" style="margin-top:12px">Subtext</label>
-      <textarea id="aim-subtext-input" class="field-textarea so-quote-textarea" maxlength="200">${escHtml(s)}</textarea>
-      <div class="so-char-counter"><span id="aim-st-len">${s.length}</span> / 200</div>
-      ${extraHtml}
-    </div>`;
-
-  const hlInput = document.getElementById('aim-headline-input');
-  const hlLen   = document.getElementById('aim-hl-len');
-  const stInput = document.getElementById('aim-subtext-input');
-  const stLen   = document.getElementById('aim-st-len');
-  if (hlInput) hlInput.addEventListener('input', () => { hlLen.textContent = hlInput.value.length; });
-  if (stInput) stInput.addEventListener('input', () => { stLen.textContent = stInput.value.length; });
-
-  formPane.querySelectorAll('.aim-extra-text-input').forEach(inp => {
-    const safeName = inp.dataset.layerName.replace(/[^a-zA-Z0-9]/g, '_');
-    const lenEl = document.getElementById(`aim-extra-${safeName}-len`);
-    if (lenEl) inp.addEventListener('input', () => { lenEl.textContent = inp.value.length; });
-  });
-}
-
-
-async function _generateInitialBrandedPreview() {
-  if (_aiAutoPreviewRunning || !currentPostId || !selectedTemplateId) return;
-  _aiAutoPreviewRunning = true;
-
-  const previewPane = document.getElementById('ai-image-preview-pane');
-  const loader = document.createElement('div');
-  loader.id = 'aim-preview-loader';
-  loader.className = 'aim-preview-loading-overlay';
-  loader.innerHTML = '<div class="slide-over-skeleton" style="width:36px;height:36px;border-radius:50%;flex-shrink:0"></div>';
-  document.getElementById('aim-preview-loader')?.remove();
-  previewPane.appendChild(loader);
-
-  try {
-    const content = readEditorContentFromModal();
-    const res = await fetch(`/api/visuals/${encodeURIComponent(String(currentPostId))}`, {
-      method: 'POST', headers: apiHeaders(), credentials: 'include',
-      body: JSON.stringify({ visual_type: 'ai_image', mode: 'render', content, template_id: selectedTemplateId }),
-    });
-    let data;
-    try { data = await res.json(); } catch { return; }
-    if (!res.ok || !data.ok) return;
-
-    if (document.getElementById('ai-image-overlay').getAttribute('aria-hidden') === 'true') return;
-
-    currentAssetUrl   = data.png_url;
-    currentPreviewUrl = data.png_url;
-    visualCache.set(`${currentPostId}:ai_image`, {
-      extractedContent, assetUrl: data.png_url, previewUrl: data.png_url, slideCount: 0,
-      templateId: selectedTemplateId, template: selectedTemplate,
-    });
-    _renderAiPreviewImage(data.png_url);
-    _showInsertBtn();
-  } catch {
-    if (!currentAssetUrl) _renderAiTemplatePreview();
-  } finally {
-    _aiAutoPreviewRunning = false;
-    document.getElementById('aim-preview-loader')?.remove();
-  }
-}
-
-function readEditorContentFromModal() {
-  const extra_fields = {};
-  document.querySelectorAll('#ai-image-form-pane .aim-extra-text-input[data-layer-name]').forEach(inp => {
-    const val = inp.value.trim();
-    if (val) extra_fields[inp.dataset.layerName] = val;
-  });
-  return {
-    headline: (document.getElementById('aim-headline-input')?.value || '').trim(),
-    subtext:  (document.getElementById('aim-subtext-input')?.value  || '').trim(),
-    ...(Object.keys(extra_fields).length > 0 ? { extra_fields } : {}),
-  };
-}
-
-function _doSaveAiImage() {
-  if (!currentAssetUrl) return;
-  attachedAssetUrl   = currentAssetUrl;
-  attachedAssetType  = 'ai_image';
-  attachedPreviewUrl = currentPreviewUrl;
-  attachedSlideCount = 0;
-  const chipLabel = document.getElementById('asset-chip-label');
-  const chip      = document.getElementById('asset-chip');
-  if (chipLabel) chipLabel.textContent = 'AI Image';
-  if (chip) chip.classList.remove('hidden');
-  renderPreviewAsset();
-  closeAiImageModal();
-}
-
-async function generateAiImageInModal() {
-  const content = readEditorContentFromModal();
-  extractedContent = content;
-
-  _setAiModalState('generating');
-  _showAiPreviewPaneLoading();
-
-  try {
-    const res = await fetch(`/api/visuals/${encodeURIComponent(String(currentPostId))}`, {
-      method: 'POST', headers: apiHeaders(), credentials: 'include',
-      body: JSON.stringify({ visual_type: 'ai_image', mode: 'render', content, template_id: selectedTemplateId }),
-    });
-    let data;
-    try { data = await res.json(); } catch { throw new Error('Could not read server response.'); }
-    if (!res.ok || !data.ok) throw new Error(visualErrorMessage(data.error));
-
-    currentAssetUrl   = data.png_url;
-    currentPreviewUrl = data.png_url;
-    currentSlideCount = 0;
-    visualCache.set(`${currentPostId}:ai_image`, {
-      extractedContent, assetUrl: data.png_url, previewUrl: data.png_url, slideCount: 0,
-      templateId: selectedTemplateId, template: selectedTemplate,
-    });
-    _renderAiPreviewImage(data.png_url);
-    _setAiModalState('editing');
-    _showInsertBtn();
-  } catch (e) {
-    _renderAiTemplatePreview();
-    renderAiImageFormInModal(extractedContent);
-    _setAiModalState('editing');
-    const formPane = document.getElementById('ai-image-form-pane');
-    const err = document.createElement('p');
-    err.className = 'so-extract-error';
-    err.innerHTML = (e instanceof Error && e.message) ? e.message : 'Could not generate image. Try again.';
-    formPane.insertBefore(err, formPane.firstChild);
-  }
-}
-
-async function _uploadInlineMediaFile(file, onSuccess) {
-  const headers = {
-    ...apiHeaders(),
-    'Content-Type': file.type || 'application/octet-stream',
-    'X-Filename':   encodeURIComponent(file.name),
-  };
-  try {
-    const res  = await fetch('/api/media/upload', { method: 'POST', credentials: 'include', headers, body: file });
-    let data;
-    try { data = await res.json(); } catch { throw new Error('Upload failed.'); }
-    if (!res.ok || !data.url) throw new Error(data.error || 'Upload failed.');
-    onSuccess(data.url);
-  } catch (err) {
-    alert(`Upload failed: ${err.message}`);
-  }
-}
-
-function _hideAiModalForMediaPicker() {
-  const current = readEditorContentFromModal();
-  if (current) extractedContent = current;
-  document.getElementById('ai-image-overlay').setAttribute('aria-hidden', 'true');
-}
-
-function _reopenAiImageModal() {
-  document.getElementById('ai-image-overlay').removeAttribute('aria-hidden');
-  _setAiModalState('editing');
-  // Show existing generated image if available, otherwise the template thumbnail
-  if (currentAssetUrl) {
-    _renderAiPreviewImage(currentAssetUrl);
-  } else {
-    _renderAiTemplatePreview();
-  }
-  if (extractedContent) {
-    renderAiImageFormInModal(extractedContent);
-  } else {
-    _showAiFormSkeleton();
-    extractContent('ai_image');
-  }
 }
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -2412,33 +1931,6 @@ function _doSaveHtmlTemplate() {
 
 
 async function extractContent(type) {
-  // ai_image uses the dedicated modal DOM — not the slide-over
-  if (type === 'ai_image') {
-    try {
-      const res = await fetch(`/api/visuals/${encodeURIComponent(String(currentPostId))}`, {
-        method: 'POST', headers: apiHeaders(), credentials: 'include',
-        body: JSON.stringify({ visual_type: 'ai_image', mode: 'extract' }),
-      });
-      let data;
-      try { data = await res.json(); } catch { throw new Error('Could not read server response.'); }
-      if (!res.ok || !data.ok) throw new Error(visualErrorMessage(data.error));
-      extractedContent = data.content;
-      visualCache.set(`${currentPostId}:ai_image`, { extractedContent });
-      renderAiImageFormInModal(extractedContent);
-      _generateInitialBrandedPreview();
-    } catch (e) {
-      const formPane = document.getElementById('ai-image-form-pane');
-      if (formPane) {
-        formPane.innerHTML = '';
-        const err = document.createElement('p');
-        err.className = 'so-extract-error';
-        err.innerHTML = (e instanceof Error && e.message) ? e.message : 'Could not load suggestions. Try again.';
-        formPane.appendChild(err);
-      }
-    }
-    return;
-  }
-
   const formPane = document.getElementById('visual-modal-form-pane');
   try {
     const res = await fetch(`/api/visuals/${encodeURIComponent(String(currentPostId))}`, {
@@ -2889,8 +2381,7 @@ function _doSaveVisual(type) {
 }
 
 function _showInsertBtn() {
-  const id = currentAssetType === 'ai_image' ? 'ai-image-insert-btn'
-           : currentAssetType === 'html_template' ? 'html-tpl-insert-btn'
+  const id = currentAssetType === 'html_template' ? 'html-tpl-insert-btn'
            : 'visual-modal-insert-btn';
   const btn = document.getElementById(id);
   if (btn) { btn.hidden = false; btn.disabled = false; }
@@ -3332,30 +2823,9 @@ function wireSchedule() {
 }
 
 function wireVisualButtons() {
-  document.getElementById('quote-card-btn').addEventListener('click', () => openSlideOver('quote_card', 'QUOTE CARD'));
-  document.getElementById('branded-quote-btn').addEventListener('click', () => openSlideOver('branded_quote', 'BRANDED QUOTE'));
-  document.getElementById('carousel-btn').addEventListener('click', () => openSlideOver('carousel', 'CAROUSEL'));
-  document.getElementById('ai-image-btn').addEventListener('click', () => openAiImageModal());
-  document.getElementById('infographic-btn').addEventListener('click', () => openSlideOver('infographic', 'INFOGRAPHIC'));
-  document.getElementById('metrics-btn').addEventListener('click', () => openSlideOver('metrics_card', 'METRICS CARD'));
-  document.getElementById('client-win-btn').addEventListener('click', () => openSlideOver('client_win', 'CLIENT WIN'));
-  document.getElementById('framework-btn').addEventListener('click', () => openSlideOver('framework', 'FRAMEWORK'));
   document.getElementById('media-library-btn').addEventListener('click', () => {
     if (scheduleEditLocked) return;
     openMediaDrawer();
-  });
-
-  // Visual modal buttons
-  document.getElementById('visual-modal-close').addEventListener('click', closeVisualModal);
-  document.getElementById('visual-modal-cancel-btn').addEventListener('click', closeVisualModal);
-  document.getElementById('visual-modal-save-btn').addEventListener('click', () => {
-    if (currentAssetType) generateFromEditor(currentAssetType);
-  });
-  document.getElementById('visual-modal-insert-btn').addEventListener('click', () => {
-    if (currentAssetType) _doSaveVisual(currentAssetType);
-  });
-  document.getElementById('visual-modal-overlay').addEventListener('click', e => {
-    if (e.target === e.currentTarget) closeVisualModal();
   });
 
   // Media modal buttons + upload zone
@@ -3377,28 +2847,6 @@ function wireVisualButtons() {
     e.preventDefault(); mediaZone.classList.remove('dragover');
     const files = Array.from(e.dataTransfer.files);
     if (files.length) drawerProcessFiles(files);
-  });
-
-  // AI Image Modal buttons
-  document.getElementById('ai-image-modal-close').addEventListener('click', closeAiImageModal);
-  document.getElementById('ai-image-cancel-btn').addEventListener('click', closeAiImageModal);
-  document.getElementById('ai-image-generate-btn').addEventListener('click', generateAiImageInModal);
-  document.getElementById('ai-image-insert-btn').addEventListener('click', _doSaveAiImage);
-  document.getElementById('ai-image-back-btn').addEventListener('click', () => {
-    selectedTemplate   = null;
-    selectedTemplateId = null;
-    extractedContent   = null;
-    currentAssetUrl    = null;
-    currentPreviewUrl  = null;
-    const _backTitleEl = document.querySelector('#ai-image-overlay .ai-image-modal-title');
-    if (_backTitleEl) _backTitleEl.textContent = 'Choose Template';
-    const _aiInsertBack = document.getElementById('ai-image-insert-btn');
-    if (_aiInsertBack) { _aiInsertBack.hidden = true; _aiInsertBack.disabled = true; }
-    _setAiModalState('picker');
-    loadAiTemplatePicker();
-  });
-  document.getElementById('ai-image-overlay').addEventListener('click', (e) => {
-    if (e.target === e.currentTarget) closeAiImageModal();
   });
 
   // Design Templates Modal buttons
@@ -3432,15 +2880,7 @@ function wireVisualButtons() {
     tile.addEventListener('click', () => {
       const type = tile.dataset.type;
       hideBoostOverlay();
-      if      (type === 'carousel')       openSlideOver('carousel', 'CAROUSEL');
-      else if (type === 'quote_card')     openSlideOver('quote_card', 'QUOTE CARD');
-      else if (type === 'branded_quote')  openSlideOver('branded_quote', 'BRANDED QUOTE');
-      else if (type === 'ai_image')       openAiImageModal();
-      else if (type === 'infographic')   openSlideOver('infographic', 'INFOGRAPHIC');
-      else if (type === 'metrics_card')  openSlideOver('metrics_card', 'METRICS CARD');
-      else if (type === 'client_win')    openSlideOver('client_win', 'CLIENT WIN');
-      else if (type === 'framework')     openSlideOver('framework', 'FRAMEWORK');
-      else if (type === 'html_template')  openHtmlTemplateModal();
+      if      (type === 'html_template')  openHtmlTemplateModal();
       else if (type === 'media')          openMediaDrawer();
     });
   });

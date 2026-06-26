@@ -58,7 +58,6 @@
         <div class="card metric-card"><div class="metric-card__num" id="m-cancels">—</div><div class="metric-card__label">Cancellations</div></div>
         <div class="card metric-card"><div class="metric-card__num" id="m-mrr">—</div><div class="metric-card__label">MRR (est.)</div></div>
         <div class="card metric-card"><div class="metric-card__num" id="m-posts">—</div><div class="metric-card__label">Posts Created</div></div>
-        <div class="card metric-card"><div class="metric-card__num" id="m-placid">—</div><div class="metric-card__label">Assets</div></div>
         <div class="card metric-card"><div class="metric-card__num" id="m-linkedin">—</div><div class="metric-card__label">LinkedIn Connects</div></div>
         <div class="card metric-card"><div class="metric-card__num" id="m-logins">—</div><div class="metric-card__label">Logins</div></div>
       </div>
@@ -92,7 +91,6 @@
         <div class="card chart-card"><div class="chart-card__title">Paid Upgrades</div><div class="chart-card__canvas"><canvas id="chart-upgrades"></canvas><div class="chart-empty-state" hidden>No data yet</div></div></div>
         <div class="card chart-card"><div class="chart-card__title">Cancellations</div><div class="chart-card__canvas"><canvas id="chart-cancels"></canvas><div class="chart-empty-state" hidden>No data yet</div></div></div>
         <div class="card chart-card"><div class="chart-card__title">Posts Created</div><div class="chart-card__canvas"><canvas id="chart-posts"></canvas><div class="chart-empty-state" hidden>No data yet</div></div></div>
-        <div class="card chart-card"><div class="chart-card__title">Assets by Type</div><div class="chart-card__canvas"><canvas id="chart-placid"></canvas><div class="chart-empty-state" hidden>No data yet</div></div></div>
         <div class="card chart-card"><div class="chart-card__title">LinkedIn Connections</div><div class="chart-card__canvas"><canvas id="chart-linkedin"></canvas><div class="chart-empty-state" hidden>No data yet</div></div></div>
         <div class="card chart-card"><div class="chart-card__title">Logins</div><div class="chart-card__canvas"><canvas id="chart-logins"></canvas><div class="chart-empty-state" hidden>No data yet</div></div></div>
         <div class="card chart-card"><div class="chart-card__title">LinkedIn Disconnects</div><div class="chart-card__canvas"><canvas id="chart-disconnects"></canvas><div class="chart-empty-state" hidden>No data yet</div></div></div>
@@ -212,7 +210,6 @@
       document.getElementById('m-cancels').textContent  = sum(s.cancellations).toLocaleString();
       document.getElementById('m-mrr').textContent      = '$' + (data.mrr_estimate || 0).toLocaleString() + '/mo';
       document.getElementById('m-posts').textContent    = sum(s.posts_created).toLocaleString();
-      document.getElementById('m-placid').textContent   = sum(s.placid_total).toLocaleString();
       document.getElementById('m-linkedin').textContent = sum(s.linkedin_connections).toLocaleString();
       document.getElementById('m-logins').textContent   = sum(s.logins).toLocaleString();
 
@@ -228,7 +225,6 @@
       safeRender(() => renderBar('chart-upgrades',    s.paid_upgrades,        COLORS.primary));
       safeRender(() => renderBar('chart-cancels',     s.cancellations,        COLORS.error));
       safeRender(() => renderBar('chart-posts',       s.posts_created,        COLORS.accent));
-      safeRender(() => renderPlacidStacked('chart-placid', s.placid_by_type));
       safeRender(() => renderBar('chart-linkedin',    s.linkedin_connections, COLORS.primary));
       safeRender(() => renderBar('chart-logins',      s.logins,               COLORS.accent));
       safeRender(() => renderBar('chart-disconnects', s.linkedin_disconnects, COLORS.amber));
@@ -294,32 +290,6 @@
 
     function renderBarWithEmpty(id, series, color) {
       renderBar(id, series, color);
-    }
-
-    function renderPlacidStacked(id, byType) {
-      destroyChart(id);
-      const ctx = document.getElementById(id);
-      if (!ctx) return;
-      const types = Object.keys(byType || {});
-      if (types.length === 0) {
-        showChartEmpty(ctx, true);
-        return;
-      }
-      showChartEmpty(ctx, false);
-      const allBuckets = [...new Set(types.flatMap(t => (byType[t]||[]).map(r => r.bucket)))].sort();
-      const typeColors = [COLORS.primary, COLORS.accent, COLORS.amber, COLORS.muted];
-      const datasets = types.map((t, i) => ({
-        label: t,
-        data: allBuckets.map(b => { const row = (byType[t]||[]).find(r => r.bucket === b); return row ? row.count : 0; }),
-        backgroundColor: (typeColors[i] || COLORS.muted) + 'CC',
-        borderColor: typeColors[i] || COLORS.muted,
-        borderWidth: 1,
-      }));
-      charts[id] = new Chart(ctx, {
-        type: 'bar',
-        data: { labels: allBuckets.map(formatBucket), datasets },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: true, labels: { color: '#6B7280', font: { size: 10 }, boxWidth: 10 } } }, scales: { x: { stacked: true, ticks: { color: '#6B7280', maxRotation: 0, font: { size: 10 } }, grid: { color: 'rgba(0,0,0,0.06)' } }, y: { stacked: true, ticks: { color: '#6B7280', font: { size: 10 } }, grid: { color: 'rgba(0,0,0,0.06)' }, beginAtZero: true } } },
-      });
     }
 
     function renderDonut(id, slices) {

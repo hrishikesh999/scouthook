@@ -36,7 +36,7 @@ app.use(helmet({
       defaultSrc:     ["'self'"],
       scriptSrc:      ["'self'", "'unsafe-inline'", "https://cdn.paddle.com", "https://public.profitwell.com", "https://assets.calendly.com"],
       styleSrc:       ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdn.paddle.com", "https://assets.calendly.com"],
-      imgSrc:         ["'self'", "data:", "blob:", "*.licdn.com", "media.licdn.com", "*.googleusercontent.com", "*.placid.app", "*.amazonaws.com"],
+      imgSrc:         ["'self'", "data:", "blob:", "*.licdn.com", "media.licdn.com", "*.googleusercontent.com", "*.amazonaws.com"],
       connectSrc:     ["'self'", "https://sandbox-api.paddle.com", "https://api.paddle.com", "https://cdn.paddle.com", "https://buy.paddle.com", "https://sandbox-buy.paddle.com", "https://calendly.com"],
       fontSrc:        ["'self'", "https://fonts.gstatic.com"],
       objectSrc:      ["'none'"],
@@ -631,7 +631,6 @@ app.use('/api/profile',       requireWorkspaceMember, require('./routes/profile'
 app.use('/api/recipes',       requireWorkspaceMember, require('./routes/recipes'));
 app.use('/api/generate',      requireWorkspaceMember, requireWorkspaceActive, require('./routes/generate'));
 app.use('/api/visuals',           requireWorkspaceMember, require('./routes/visuals'));
-app.use('/api/placid-templates',   requireWorkspaceMember, require('./routes/placidTemplates'));
 app.use('/api/html-templates',     requireWorkspaceMember, require('./routes/htmlTemplates'));
 // /callback is exempt from workspace auth — identity comes from the state token,
 // so the flow works even when the browser session has expired mid-redirect.

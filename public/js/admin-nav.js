@@ -12,7 +12,6 @@
         <a href="/admin-support.html" class="admin-nav__link">Support</a>
         <div class="admin-nav__sep"></div>
         <a href="/admin-settings.html" class="admin-nav__link">Settings</a>
-        <a href="/admin-templates.html" class="admin-nav__link">Templates</a>
         <a href="/admin-html-templates.html" class="admin-nav__link">HTML Templates</a>
       </div>
       <div class="admin-nav__bottom">

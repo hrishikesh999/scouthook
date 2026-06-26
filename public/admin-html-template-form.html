@@ -47,6 +47,38 @@
     details summary { cursor: pointer; font-size: .85rem; font-weight: 600; color: var(--text-muted); }
     details[open] summary { margin-bottom: var(--space-sm); }
     .manifest-json { background: var(--neutral-50); border: 1px solid var(--border); border-radius: var(--radius); padding: var(--space-sm); font-family: monospace; font-size: .75rem; max-height: 200px; overflow-y: auto; white-space: pre; }
+
+    /* Preview iframe */
+    .tpl-preview-section { margin-top: var(--space-md); }
+    .tpl-preview-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-sm); }
+    .tpl-preview-wrap { border: 1px solid var(--border); border-radius: var(--radius); background: #f9fafb; overflow: hidden; position: relative; }
+    .tpl-preview-wrap iframe { display: block; border: none; transform-origin: top left; }
+    .tpl-preview-empty { padding: 40px; text-align: center; color: var(--text-muted); font-size: .85rem; }
+    .tpl-slot-legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: .72rem; margin-top: 6px; }
+    .tpl-slot-legend span::before { content: ''; display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+    .tpl-slot-legend .leg-text::before { background: rgba(16,185,129,0.4); }
+    .tpl-slot-legend .leg-image::before { background: rgba(59,130,246,0.4); }
+    .tpl-slot-legend .leg-repeating::before { background: rgba(245,158,11,0.4); }
+
+    /* Test-as-user modal */
+    .test-overlay { position: fixed; inset: 0; background: rgba(9,9,11,0.65); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 400; }
+    .test-modal { width: min(1020px, calc(100vw - 40px)); height: min(720px, calc(100vh - 60px)); background: var(--surface, #fff); border-radius: 12px; box-shadow: 0 16px 60px rgba(0,0,0,0.24); display: flex; flex-direction: column; overflow: hidden; }
+    .test-modal__header { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; border-bottom: 1px solid var(--border); }
+    .test-modal__title { font-size: .82rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); }
+    .test-modal__close { background: none; border: none; cursor: pointer; font-size: 18px; color: var(--text-muted); padding: 4px 8px; border-radius: 4px; }
+    .test-modal__close:hover { background: var(--neutral-100); }
+    .test-modal__body { display: flex; flex: 1; min-height: 0; }
+    .test-modal__preview { flex: 1; background: #f3f4f6; display: flex; align-items: center; justify-content: center; overflow: hidden; border-right: 1px solid var(--border); padding: 20px; }
+    .test-modal__preview iframe { border: none; border-radius: 8px; box-shadow: 0 2px 12px rgba(0,0,0,0.1); }
+    .test-modal__form { width: 340px; flex-shrink: 0; overflow-y: auto; padding: 20px 24px; }
+    .test-modal__form .field-label { font-size: .78rem; font-weight: 600; margin-bottom: 4px; }
+    .test-modal__form .field-input, .test-modal__form .field-textarea { width: 100%; margin-bottom: 14px; }
+    .test-modal__form .so-char-counter { text-align: right; font-size: .72rem; color: var(--text-muted); margin-top: -10px; margin-bottom: 10px; }
+    .test-color-row { display: flex; gap: 8px; align-items: center; margin-bottom: 14px; }
+    .test-color-row input[type="color"] { width: 36px; height: 28px; border: 1px solid var(--border); border-radius: 4px; padding: 1px; cursor: pointer; }
+    .test-color-row .hex-input { width: 90px; font-family: monospace; font-size: .82rem; }
+    .test-img-zone { width: 100%; height: 80px; border: 1px dashed var(--border); border-radius: 8px; display: flex; align-items: center; justify-content: center; cursor: pointer; margin-bottom: 14px; font-size: .8rem; color: var(--text-muted); overflow: hidden; }
+    .test-img-zone:hover { border-color: var(--brand, #0f766e); }
   </style>
 </head>
 <body>
@@ -143,6 +175,22 @@
           <!-- Validation -->
           <div id="slot-validation" class="slot-validation hidden"></div>
 
+          <!-- Live preview -->
+          <div class="field tpl-preview-section" id="preview-section" style="display:none">
+            <div class="tpl-preview-header">
+              <label>Template Preview <span class="text-muted" style="font-weight:400">(slots highlighted)</span></label>
+              <button class="btn btn--sm btn--primary" id="test-as-user-btn" type="button">Test as User</button>
+            </div>
+            <div class="tpl-preview-wrap" id="preview-wrap">
+              <div class="tpl-preview-empty">Preview will appear when HTML is pasted</div>
+            </div>
+            <div class="tpl-slot-legend">
+              <span class="leg-text">Text slot</span>
+              <span class="leg-image">Image slot</span>
+              <span class="leg-repeating">Repeating slot</span>
+            </div>
+          </div>
+
           <!-- Collapsible raw JSON -->
           <details class="field">
             <summary>Raw manifest JSON</summary>
@@ -158,6 +206,20 @@
 
       </div>
     </main>
+  </div>
+
+  <!-- Test-as-user modal -->
+  <div id="test-overlay" class="test-overlay" style="display:none">
+    <div class="test-modal">
+      <div class="test-modal__header">
+        <span class="test-modal__title">Test as User</span>
+        <button class="test-modal__close" id="test-close-btn">&#10005;</button>
+      </div>
+      <div class="test-modal__body">
+        <div class="test-modal__preview" id="test-preview-pane"></div>
+        <div class="test-modal__form" id="test-form-pane"></div>
+      </div>
+    </div>
   </div>
 
 <script>
@@ -580,6 +642,7 @@
       _existingManifest = null; // merge only once
     }
     renderSlotBuilder(slots);
+    updatePreview();
   }
 
   document.getElementById('f-html').addEventListener('input', function () {
@@ -590,6 +653,7 @@
         document.getElementById('slot-builder').innerHTML = '<p class="slot-builder-empty">Paste HTML above to detect slots…</p>';
         document.getElementById('slot-add-row').style.display = 'none';
         document.getElementById('slot-validation').classList.add('hidden');
+        document.getElementById('preview-section').style.display = 'none';
         updateManifestPreview();
         return;
       }
@@ -669,6 +733,247 @@
   });
 
   // ── Helpers ───────────────────────────────────────────────────────────────
+
+  // ── Live Preview (iframe with slot highlighting) ──────────────────────────
+
+  let _previewTimer;
+
+  function updatePreview() {
+    clearTimeout(_previewTimer);
+    _previewTimer = setTimeout(_renderPreview, 300);
+  }
+
+  function _renderPreview() {
+    const html = document.getElementById('f-html').value.trim();
+    const section = document.getElementById('preview-section');
+    const wrap = document.getElementById('preview-wrap');
+
+    if (!html || !_slotState.length) {
+      section.style.display = 'none';
+      return;
+    }
+    section.style.display = '';
+
+    const w = parseInt(document.getElementById('f-dim-w').value) || 1080;
+    const h = parseInt(document.getElementById('f-dim-h').value) || 1080;
+    const maxW = wrap.clientWidth || 600;
+    const scale = Math.min(maxW / w, 0.5);
+    const displayH = Math.round(h * scale);
+
+    const highlightCss = `
+      <style>
+        [data-slot] { outline: 2px solid rgba(16,185,129,0.5) !important; outline-offset: 1px; position: relative; }
+        [data-slot^="image:"] { outline-color: rgba(59,130,246,0.5) !important; }
+        [data-slot-container] { outline-color: rgba(245,158,11,0.5) !important; }
+      </style>`;
+
+    const injected = html.replace('</head>', highlightCss + '</head>');
+
+    wrap.innerHTML = `<iframe sandbox="allow-same-origin" srcdoc="${esc(injected)}" style="width:${w}px;height:${h}px;transform:scale(${scale});pointer-events:none;" title="Template preview"></iframe>`;
+    wrap.style.height = displayH + 'px';
+  }
+
+  // ── Test as User Modal ───────────────────────────────────────────────────
+
+  function openTestModal() {
+    const html = document.getElementById('f-html').value.trim();
+    if (!html || !_slotState.length) { alert('Paste HTML with data-slot attributes first.'); return; }
+
+    document.getElementById('test-overlay').style.display = 'flex';
+    _renderTestPreview(html);
+    _renderTestForm();
+  }
+
+  function closeTestModal() {
+    document.getElementById('test-overlay').style.display = 'none';
+  }
+
+  function _renderTestPreview(html) {
+    const pane = document.getElementById('test-preview-pane');
+    const w = parseInt(document.getElementById('f-dim-w').value) || 1080;
+    const h = parseInt(document.getElementById('f-dim-h').value) || 1080;
+    const maxW = pane.clientWidth - 40 || 560;
+    const maxH = pane.clientHeight - 40 || 600;
+    const scale = Math.min(maxW / w, maxH / h, 0.6);
+
+    pane.innerHTML = `<iframe sandbox="allow-same-origin" id="test-iframe" srcdoc="${esc(html)}" style="width:${w}px;height:${h}px;transform:scale(${scale});transform-origin:center center;" title="Template preview"></iframe>`;
+  }
+
+  function _renderTestForm() {
+    const formPane = document.getElementById('test-form-pane');
+    let html = '';
+
+    for (const s of _slotState) {
+      const label = _slotLabel(s.key);
+
+      if (s.type === 'text') {
+        const val = s.config.default || '';
+        const maxLen = s.config.maxLen || 0;
+        const useTA = maxLen > 120;
+        html += `<div><div class="field-label">${esc(label)}</div>`;
+        html += useTA
+          ? `<textarea class="field-textarea" data-test-slot="${esc(s.key)}" ${maxLen ? `maxlength="${maxLen}"` : ''} rows="3">${esc(val)}</textarea>`
+          : `<input class="field-input" type="text" data-test-slot="${esc(s.key)}" value="${esc(val)}" ${maxLen ? `maxlength="${maxLen}"` : ''}>`;
+        if (maxLen) html += `<div class="so-char-counter">${val.length} / ${maxLen}</div>`;
+        html += '</div>';
+      } else if (s.type === 'color') {
+        const isBrand = s.config.default === 'brand';
+        const colorVal = isBrand ? '#0f766e' : (s.config.default || '#cccccc');
+        html += `<div><div class="field-label">${esc(label)}</div>
+          <div class="test-color-row">
+            <input type="color" data-test-slot="${esc(s.key)}" value="${esc(colorVal)}">
+            <input type="text" class="hex-input" data-test-hex="${esc(s.key)}" value="${esc(colorVal)}" maxlength="9">
+          </div></div>`;
+      } else if (s.type === 'image') {
+        html += `<div><div class="field-label">${esc(label)}</div>
+          <div class="test-img-zone" data-test-slot="${esc(s.key)}">Click to upload</div>
+          <input type="file" accept="image/*" data-test-file="${esc(s.key)}" hidden>
+          </div>`;
+      } else if (s.type === 'repeating') {
+        const fields = s.config.fields || [];
+        const min = s.config.min || 1;
+        html += `<div><div class="field-label">${esc(label)}</div>`;
+        for (let i = 0; i < min; i++) {
+          html += `<div style="border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:6px">
+            <span style="font-size:.72rem;font-weight:600;color:var(--text-muted)">#${i + 1}</span>`;
+          for (const f of fields) {
+            html += `<div style="margin-top:4px"><label class="field-label" style="font-size:.7rem">${esc(_slotLabel(f))}</label>
+              <input class="field-input" type="text" data-test-repeat="${esc(s.key)}" data-test-field="${esc(f)}" data-test-idx="${i}" style="font-size:.82rem"></div>`;
+          }
+          html += '</div>';
+        }
+        html += '</div>';
+      }
+    }
+
+    formPane.innerHTML = html;
+    _wireTestFormEvents();
+  }
+
+  function _wireTestFormEvents() {
+    const formPane = document.getElementById('test-form-pane');
+    let debounce;
+
+    function scheduleUpdate() {
+      clearTimeout(debounce);
+      debounce = setTimeout(() => _applyTestSlots(), 200);
+    }
+
+    // Text/textarea inputs
+    formPane.querySelectorAll('[data-test-slot]').forEach(el => {
+      if (el.tagName === 'DIV') return; // skip image zones
+      el.addEventListener('input', () => {
+        const counter = el.parentElement?.querySelector('.so-char-counter');
+        if (counter) { const max = el.getAttribute('maxlength'); counter.textContent = `${el.value.length} / ${max}`; }
+        scheduleUpdate();
+      });
+    });
+
+    // Color hex sync
+    formPane.querySelectorAll('[data-test-hex]').forEach(hex => {
+      const picker = formPane.querySelector(`[data-test-slot="${hex.dataset.testHex}"]`);
+      hex.addEventListener('input', () => {
+        if (/^#[0-9a-fA-F]{6}$/.test(hex.value) && picker) { picker.value = hex.value; scheduleUpdate(); }
+      });
+      picker?.addEventListener('input', () => { hex.value = picker.value; scheduleUpdate(); });
+    });
+
+    // Repeating field inputs
+    formPane.querySelectorAll('[data-test-repeat]').forEach(el => {
+      el.addEventListener('input', scheduleUpdate);
+    });
+
+    // Image upload zones
+    formPane.querySelectorAll('.test-img-zone').forEach(zone => {
+      const fileInput = formPane.querySelector(`[data-test-file="${zone.dataset.testSlot}"]`);
+      zone.addEventListener('click', () => fileInput?.click());
+      fileInput?.addEventListener('change', () => {
+        const file = fileInput.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+          zone.dataset.dataUri = reader.result;
+          zone.innerHTML = `<img src="${reader.result}" style="width:100%;height:100%;object-fit:contain">`;
+          _applyTestSlots();
+        };
+        reader.readAsDataURL(file);
+        fileInput.value = '';
+      });
+    });
+  }
+
+  function _applyTestSlots() {
+    const iframe = document.getElementById('test-iframe');
+    if (!iframe?.contentDocument) return;
+    const doc = iframe.contentDocument;
+
+    const formPane = document.getElementById('test-form-pane');
+
+    // Apply text slots
+    formPane.querySelectorAll('input[data-test-slot], textarea[data-test-slot]').forEach(el => {
+      const slot = el.dataset.testSlot;
+      if (slot.startsWith('color:') || slot.startsWith('image:')) return;
+      const target = doc.querySelector(`[data-slot="${slot}"]`);
+      if (target) target.textContent = el.value;
+    });
+
+    // Apply color slots via CSS vars
+    formPane.querySelectorAll('input[type="color"][data-test-slot]').forEach(el => {
+      const slot = el.dataset.testSlot;
+      if (!slot.startsWith('color:')) return;
+      const varName = slot.slice('color:'.length);
+      doc.documentElement.style.setProperty('--' + varName, el.value);
+    });
+
+    // Apply image slots
+    formPane.querySelectorAll('.test-img-zone[data-data-uri]').forEach(zone => {
+      const slot = zone.dataset.testSlot;
+      const dataUri = zone.dataset.dataUri;
+      if (!dataUri) return;
+      const target = doc.querySelector(`[data-slot="${slot}"]`);
+      if (target && target.tagName === 'IMG') target.src = dataUri;
+    });
+
+    // Apply repeating slots
+    const repeatingGroups = {};
+    formPane.querySelectorAll('[data-test-repeat]').forEach(el => {
+      const key = el.dataset.testRepeat;
+      const idx = parseInt(el.dataset.testIdx);
+      const field = el.dataset.testField;
+      if (!repeatingGroups[key]) repeatingGroups[key] = [];
+      if (!repeatingGroups[key][idx]) repeatingGroups[key][idx] = {};
+      repeatingGroups[key][idx][field] = el.value;
+    });
+    for (const [key, items] of Object.entries(repeatingGroups)) {
+      const container = doc.querySelector(`[data-slot="${key}"][data-slot-container]`);
+      if (!container) continue;
+      const template = container.querySelector('[data-slot-item]');
+      if (!template) continue;
+      container.innerHTML = '';
+      for (const item of items) {
+        const clone = template.cloneNode(true);
+        for (const [field, val] of Object.entries(item || {})) {
+          const target = clone.querySelector(`[data-slot-field="${field}"]`);
+          if (target) target.textContent = val;
+        }
+        container.appendChild(clone);
+      }
+    }
+  }
+
+  function _slotLabel(key) {
+    const clean = key.replace(/^(color:|image:)/, '');
+    return clean.replace(/[_-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).trim();
+  }
+
+  // ── Wire preview + test buttons ──────────────────────────────────────────
+
+  document.getElementById('test-as-user-btn').addEventListener('click', openTestModal);
+  document.getElementById('test-close-btn').addEventListener('click', closeTestModal);
+  document.getElementById('test-overlay').addEventListener('click', e => {
+    if (e.target === e.currentTarget) closeTestModal();
+  });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeTestModal(); });
 
   function esc(s) {
     return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');

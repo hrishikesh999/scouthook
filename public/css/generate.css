@@ -319,7 +319,7 @@
     @media (max-width: 600px) {
       .idea-engine-grid { grid-template-columns: 1fr; }
       .vault-panel-items { grid-template-columns: repeat(2, 1fr); }
-      #idea-page { padding: 24px 16px 40px; }
+      #idea-page { padding: 24px max(20px, env(safe-area-inset-right, 20px)) 40px max(20px, env(safe-area-inset-left, 20px)); }
     }
     @media (max-width: 480px) {
       .vault-panel-items { grid-template-columns: 1fr; }
@@ -1207,7 +1207,7 @@
 
     /* ── Responsive adjustments ──────────────────────────────────── */
     @media (max-width: 540px) {
-      #starting-pills { grid-template-columns: repeat(2, 1fr); }
+      #starting-pills { grid-template-columns: repeat(2, 1fr); gap: 8px; }
     }
     @media (max-width: 360px) {
       #starting-pills { grid-template-columns: 1fr; }

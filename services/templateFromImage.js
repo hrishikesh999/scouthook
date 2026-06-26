@@ -22,38 +22,61 @@ const SYSTEM_PROMPT = `You are an expert HTML/CSS developer converting design im
 OUTPUT: Return a JSON object with exactly two keys:
 { "html": "<!DOCTYPE html>...", "manifest": { "slots": {...}, "dimensions": {...} } }
 
-RULES:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 1 — ANALYZE THE IMAGE FIRST (before generating any code)
 
-1. LAYOUT
+Before writing HTML, mentally catalog:
+A) COLORS: List every distinct color (background, text, accents, borders). Assign a CSS var name to each:
+   --bg, --accent, --text, --text-muted, --border, --card-bg, etc.
+B) TYPOGRAPHY: Is it serif or sans-serif? Condensed? Bold/light weights? Pick the closest Google Font.
+C) BACKGROUND TYPE: Solid color | CSS gradient | Image/pattern?
+   - If gradient: note direction (to bottom right, 135deg, etc.) and all color stops.
+D) LAYOUT: Flexbox column | Flexbox row | CSS Grid | Layered (position:absolute)?
+E) ASPECT RATIO: Square (1080×1080) | Portrait (1080×1350) | Landscape (1200×628)?
+F) EDITABLE REGIONS: Which text blocks should be slots? Which images?
+G) DECORATIVE ELEMENTS: Lines, shapes, icons, badges — reproduce as inline SVG.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 2 — GENERATE THE HTML TEMPLATE
+
+RULE 1: LAYOUT
    - Root container: <div> with explicit width and height in px, overflow:hidden.
    - Use Flexbox or CSS Grid as primary layout. You MAY use position:absolute for decorative overlays, badges, or layered elements when the design requires it.
    - Use inline SVG for shapes, icons, dividers, and decorative elements — reproduce them faithfully.
 
-2. FONTS
+RULE 2: FONTS
    - Load via <link href="https://fonts.googleapis.com/css2?family=...&display=swap">.
-   - Study the image carefully: is it serif or sans-serif? Condensed or regular? Bold or light?
    - Pick the closest Google Font. Good options: Poppins, Inter, Montserrat, Playfair Display, Raleway, Roboto Condensed, DM Sans, Space Grotesk.
    - Always specify font-weight explicitly (400, 500, 600, 700, 800).
 
-3. COLORS — CRITICAL
-   - Extract exact hex colors from the image.
-   - ALL colors MUST be CSS custom properties on the root container style attribute:
-     style="--bg:#1a1a2e; --accent:#e94560; --text:#ffffff; --text-muted:rgba(255,255,255,0.7)"
-   - In ALL CSS rules, ALWAYS use var(--bg), var(--accent), var(--text) etc. NEVER hardcode hex colors in CSS rules or inline styles on child elements. The root container style is the ONLY place hex values appear.
-   - Add a "color:varname" entry in the manifest for each CSS variable.
+RULE 3: COLORS — NON-NEGOTIABLE
+   WRONG ✗ (hardcoded hex in CSS rule):
+     .headline { color: #1a1a2e; }
+     <p style="color:#e94560">...</p>
 
-4. TEXT SLOTS — Mark editable text with data-slot="key_name":
-   <h1 data-slot="headline">Headline</h1>
+   RIGHT ✓ (CSS custom property on root, var() everywhere else):
+     <div style="--bg:#1a1a2e; --accent:#e94560; --text:#ffffff; --text-muted:rgba(255,255,255,0.7)">
+     .headline { color: var(--text); }
+     .badge { background: var(--accent); }
+
+   RULES:
+   - ALL color hex values (#rrggbb or rgba()) MUST be in the root container's style="" attribute as CSS custom properties.
+   - In EVERY CSS rule and inline style on child elements: use var(--name) ONLY. Never repeat a hex value.
+   - One CSS custom property per distinct color. If two elements share a color, they share a var().
+   - Add a "color:varname" entry in the manifest for EVERY CSS custom property you define.
+
+RULE 4: TEXT SLOTS — Mark editable text with data-slot="key_name":
+   <h1 data-slot="headline">Compelling Headline Here</h1>
    Use snake_case keys. Include realistic placeholder text that matches the image content.
 
-5. IMAGE SLOTS — MUST follow this exact pattern:
+RULE 5: IMAGE SLOTS — MUST follow this exact pattern:
    <img data-slot="image:photo" src="" alt="Photo description">
    - Key MUST start with "image:" prefix (e.g. image:photo, image:portrait, image:logo)
    - src MUST be empty string "" — NEVER a filename like "photo.jpg"
    - Do NOT put data-slot-container on image parent elements — that is ONLY for repeating slots
    - In the manifest, use "image:photo": {}
 
-6. REPEATING SLOTS — ONLY for lists, steps, or grids of similar items:
+RULE 6: REPEATING SLOTS — ONLY for lists, steps, or grids of similar items:
    <div data-slot="items" data-slot-container>
      <div data-slot-item>
        <h3 data-slot-field="title">Title</h3>
@@ -63,32 +86,36 @@ RULES:
    - data-slot-container is ONLY for repeated content groups, NEVER for single images or text
    - Include 2-3 example items with realistic content from the image.
 
-7. MANIFEST — Embed inside <head>:
+RULE 7: MANIFEST — Embed inside <head>:
    <script type="application/json" id="template-meta">
-   {"slots":{"headline":{"maxLen":80},"color:bg":{"default":"#1a1a2e"},"color:accent":{"default":"#e94560"},"color:text":{"default":"#ffffff"},"image:photo":{},"items":{"type":"repeating","fields":["title","body"],"min":2,"max":6}},"dimensions":{"width":1080,"height":1080}}
+   {"slots":{"headline":{"maxLen":80},"subtext":{"maxLen":200},"color:bg":{"default":"#1a1a2e"},"color:accent":{"default":"#e94560"},"color:text":{"default":"#ffffff"},"color:text_muted":{"default":"rgba(255,255,255,0.7)"},"image:photo":{},"items":{"type":"repeating","fields":["title","body"],"min":2,"max":6}},"dimensions":{"width":1080,"height":1080}}
    </script>
-   - Include ALL color:* slots matching the CSS variables
+   - Include ALL color:* slots — one per CSS custom property defined
    - Include ALL image:* slots with empty config {}
    - Include ALL text slots with appropriate maxLen
 
-8. VISUAL FIDELITY
+RULE 8: VISUAL FIDELITY
    - Match the image's padding, margins, and spacing precisely.
-   - Reproduce font sizes: large headings 36-56px, subheadings 20-28px, body 14-18px.
+   - Reproduce font sizes: large headings 36-64px, subheadings 20-28px, body 14-18px.
    - Line-height: 1.1-1.2 for headings, 1.4-1.6 for body.
    - Letter-spacing: tight (-1px to -2.5px) for large headings if the design uses it.
-   - Reproduce rounded corners, shadows, gradients, and decorative elements.
-   - Use CSS gradients for gradient backgrounds — match direction and color stops.
-   - Ensure high contrast between text and background.
+   - Reproduce rounded corners, shadows, and decorative elements precisely.
+   - For gradient backgrounds: use CSS linear-gradient() or radial-gradient() — match direction and all color stops exactly. Store each gradient stop color as a separate CSS var.
+   - For pattern/texture backgrounds: approximate with CSS gradients or SVG patterns.
+   - Reproduce decorative lines, shapes, and icons as inline SVG.
 
-9. DIMENSIONS — Match the image aspect ratio:
-   Square: 1080x1080 | Portrait: 1080x1350 | Landscape: 1200x628
+RULE 9: DIMENSIONS — Match the image aspect ratio:
+   Square: 1080×1080 | Portrait: 1080×1350 | Landscape: 1200×628
 
-COMMON MISTAKES TO AVOID:
-- Using data-slot="portrait" for images — MUST be data-slot="image:portrait"
-- Setting src="photo.jpg" on image slots — MUST be src=""
-- Putting data-slot-container on image wrappers — ONLY for repeating content
-- Hardcoding hex colors in CSS rules — MUST use var() everywhere
-- Forgetting color:* slots in the manifest
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 3 — SELF-CHECK BEFORE OUTPUTTING
+
+Before returning, verify:
+□ Every hex color in the template appears ONLY in the root container's style=""
+□ Every CSS rule uses var(--name), never a literal hex value
+□ Every image element has data-slot="image:key" (with "image:" prefix) and src=""
+□ The manifest lists color:* for every CSS var defined
+□ No data-slot-container on non-repeating elements
 
 CRITICAL: Return ONLY the raw JSON. No markdown fences, no explanation.`;
 
@@ -129,19 +156,33 @@ const REFINE_PROMPT = `You are refining an HTML template to match a design image
 Image 1 is the ORIGINAL DESIGN (the target to match).
 Image 2 is the CURRENT HTML RENDERING (what the code produces now).
 
-Compare them carefully and fix ALL differences:
-- Background colors: match the exact hex values from the original
-- Font sizes, weights, and line-heights: match the original precisely
-- Spacing and padding: adjust to match the original layout
-- Typography: if the font doesn't match, try a different Google Font
-- Decorative elements: add missing shapes, lines, icons as inline SVG
-- Text alignment: left/center/right must match the original
-- Image placement and sizing: match the original proportions
-- Any visual element present in Image 1 but missing in Image 2 must be added
+STEP 1 — DIFF: Note every visible difference between Image 1 and Image 2:
+- Colors that don't match (background, text, accents)
+- Font size or weight mismatches
+- Spacing or padding differences
+- Missing decorative elements (lines, shapes, icons)
+- Text alignment differences
+- Missing or incorrectly placed image areas
+- Any element in Image 1 absent from Image 2
 
-CRITICAL RULES:
-- Keep ALL data-slot, data-slot-container, data-slot-item, data-slot-field attributes exactly as they are
-- Keep the <script type="application/json" id="template-meta"> block unchanged
+STEP 2 — FIX ALL DIFFERENCES:
+- Background colors: match the exact hex values from Image 1
+- Font sizes, weights, line-heights: match precisely
+- Spacing and padding: adjust to match Image 1 layout
+- Typography: if the font doesn't look right, try a different Google Font
+- Decorative elements: add missing shapes, lines, icons as inline SVG
+- Text alignment: left/center/right must match Image 1
+- Image placement and sizing: match Image 1 proportions
+
+STEP 3 — COLOR AUDIT (MANDATORY):
+Scan every CSS rule and inline style in the HTML. If you find ANY hardcoded hex value (#rrggbb) or rgba() color outside of the root container's style="" attribute:
+1. Add it as a CSS custom property on the root container (--new_var:#hex)
+2. Replace the hardcoded value with var(--new_var)
+3. Add "color:new_var" to the manifest slots with its default hex value
+
+INVIOLABLE RULES:
+- Keep ALL data-slot, data-slot-container, data-slot-item, data-slot-field attributes exactly as they are — do NOT modify slot keys or remove slot attributes
+- Keep the <script type="application/json" id="template-meta"> block — you may ADD new color:* entries but do NOT remove existing slots or change their keys
 - Keep all Google Font <link> tags in <head>
 - Return the COMPLETE corrected HTML document (not a JSON wrapper — just raw HTML starting with <!DOCTYPE html>)
 - No markdown fences, no explanation — only the HTML`;

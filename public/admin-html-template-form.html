@@ -425,8 +425,10 @@
     if (!_templateHtml) { pane.innerHTML = '<div style="color:var(--text-muted);font-size:.85rem">No HTML to preview</div>'; return; }
     const w = parseInt(document.getElementById('f-dim-w').value) || 1080;
     const h = parseInt(document.getElementById('f-dim-h').value) || 1080;
-    const maxW = Math.max(pane.clientWidth - 20, 400);
-    const scale = Math.min(maxW / w, 0.5);
+    const maxW = Math.max(pane.clientWidth - 32, 320);
+    const scale = Math.min(maxW / w, 1);
+    const visW = Math.round(w * scale);
+    const visH = Math.round(h * scale);
 
     const slotScript = `
       <style>
@@ -446,8 +448,11 @@
       <\/script>`;
 
     const injected = _templateHtml.replace('</body>', slotScript + '</body>');
-    pane.innerHTML = `<iframe sandbox="allow-same-origin allow-scripts" srcdoc="${esc(injected)}" style="width:${w}px;height:${h}px;transform:scale(${scale})" title="Preview"></iframe>`;
-    pane.style.height = Math.round(h * scale) + 'px';
+    // Wrap iframe in a div sized to the visual dimensions so the flex container
+    // centers the correct footprint. Without the wrapper, transform:scale keeps
+    // the full 1080px layout box and justify-content:center pushes it off-screen.
+    pane.innerHTML = `<div style="width:${visW}px;height:${visH}px;overflow:hidden;flex-shrink:0"><iframe sandbox="allow-same-origin allow-scripts" srcdoc="${esc(injected)}" style="width:${w}px;height:${h}px;border:none;display:block;transform:scale(${scale});transform-origin:top left" title="Preview"></iframe></div>`;
+    pane.style.height = (visH + 24) + 'px';
   }
 
   window.addEventListener('message', e => {

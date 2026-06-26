@@ -158,11 +158,33 @@ async function generateTemplateFromImage(imageBuffer, options = {}) {
 
   let imageBlock, mimeType;
 
-  if (isSvg) {
-    // SVG: use text-based pipeline (no Vision needed)
-    console.log('[templateFromImage] detected SVG input (%d bytes)', imageBuffer.length);
+  const SVG_TEXT_MAX_BYTES = 80_000; // ~20K tokens — safe for text pipeline
+
+  if (isSvg && imageBuffer.length <= SVG_TEXT_MAX_BYTES) {
+    // Small SVG: use text-based pipeline (exact fonts/colors from markup)
+    console.log('[templateFromImage] SVG text pipeline (%d bytes)', imageBuffer.length);
     mimeType = 'image/svg+xml';
-    imageBlock = null; // will use text message instead
+    imageBlock = null;
+  } else if (isSvg) {
+    // Large SVG (Canva exports with embedded images): render to PNG, use Vision
+    console.log('[templateFromImage] SVG too large for text (%d bytes), converting to PNG', imageBuffer.length);
+    try {
+      const pngBuf = await sharp(imageBuffer).png().toBuffer();
+      const meta = await sharp(pngBuf).metadata();
+      let resizedBuf = pngBuf;
+      if (meta.width > 2048 || meta.height > 2048) {
+        resizedBuf = await sharp(pngBuf).resize(2048, 2048, { fit: 'inside' }).toBuffer();
+      }
+      imageBlock = {
+        type: 'image',
+        source: { type: 'base64', media_type: 'image/png', data: resizedBuf.toString('base64') },
+        cache_control: { type: 'ephemeral' },
+      };
+      mimeType = 'image/png';
+      console.log('[templateFromImage] SVG→PNG: %d bytes', resizedBuf.length);
+    } catch (err) {
+      throw new Error('Could not render SVG — the file may be too complex or corrupted');
+    }
   } else {
     let meta;
     try {
@@ -208,7 +230,9 @@ async function generateTemplateFromImage(imageBuffer, options = {}) {
   const pass1Start = Date.now();
   let pass1Messages, pass1System;
 
-  if (isSvg) {
+  const useSvgTextPipeline = isSvg && !imageBlock;
+
+  if (useSvgTextPipeline) {
     console.log('[templateFromImage] pass 1: generating HTML from SVG (text-based)');
     const svgText = imageBuffer.toString('utf8');
     const svgPrompt = options.instructions

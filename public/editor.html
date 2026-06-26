@@ -1428,7 +1428,7 @@ function _renderTemplateIframe(html, slots) {
   const maxH = pane.clientHeight - 48 || 500;
   const scale = Math.min(maxW / width, maxH / height, 1);
 
-  // Inject click handlers + hover styles into the template
+  // Inject click handlers, hover styles, and parent→iframe update channel
   const slotScript = `
     <style>
       [data-slot] { cursor:pointer; transition:outline .12s; }
@@ -1443,6 +1443,26 @@ function _renderTemplateIframe(html, slots) {
           el.classList.add('htpl-active');
           window.parent.postMessage({ type:'htpl-slot-click', key:el.getAttribute('data-slot') }, '*');
         });
+      });
+      // Receive live updates from parent (color vars, text content)
+      window.addEventListener('message', e => {
+        const d = e.data;
+        if (!d) return;
+        if (d.type === 'htpl-set-var') {
+          document.documentElement.style.setProperty(d.name, d.value);
+        } else if (d.type === 'htpl-set-text') {
+          const el = document.querySelector('[data-slot="' + d.key + '"]');
+          if (el) el.textContent = d.value;
+        } else if (d.type === 'htpl-set-bg') {
+          const el = document.querySelector('[data-slot="' + d.key + '"]');
+          if (el) el.style.backgroundImage = "url('" + d.value + "')";
+          const img = document.querySelector('img[data-slot="' + d.key + '"]');
+          if (img) img.src = d.value;
+        } else if (d.type === 'htpl-highlight') {
+          document.querySelectorAll('.htpl-active').forEach(x => x.classList.remove('htpl-active'));
+          const t = document.querySelector('[data-slot="' + d.key + '"]');
+          if (t) t.classList.add('htpl-active');
+        }
       });
     <\/script>`;
   const injected = html.replace('</body>', slotScript + '</body>');
@@ -1733,29 +1753,20 @@ function _slotLabel(key) {
 
 function _applySlotToIframe(key, value, type) {
   const iframe = document.getElementById('htpl-live-iframe');
+  if (!iframe?.contentWindow) return;
   if (type === 'color') {
-    _pendingColorUpdates[key] = value; // always store so load-flush picks it up
-    if (!iframe?.contentDocument?.documentElement) return;
-    iframe.contentDocument.documentElement.style.setProperty('--' + key.slice('color:'.length), value);
-    return;
-  }
-  if (!iframe?.contentDocument) return;
-  const doc = iframe.contentDocument;
-  if (type === 'text') { const el = doc.querySelector(`[data-slot="${key}"]`); if (el) el.textContent = value; }
-  else if (type === 'image') {
-    const img = doc.querySelector(`img[data-slot="${key}"]`);
-    if (img) { img.src = value; }
-    else { const el = doc.querySelector(`[data-slot="${key}"]`); if (el) el.style.backgroundImage = `url('${value}')`; }
+    _pendingColorUpdates[key] = value; // persist so load-flush can replay it
+    iframe.contentWindow.postMessage({ type: 'htpl-set-var', name: '--' + key.slice('color:'.length), value }, '*');
+  } else if (type === 'text') {
+    iframe.contentWindow.postMessage({ type: 'htpl-set-text', key, value }, '*');
+  } else if (type === 'image') {
+    iframe.contentWindow.postMessage({ type: 'htpl-set-bg', key, value }, '*');
   }
 }
 
 function _highlightSlotInIframe(key) {
   const iframe = document.getElementById('htpl-live-iframe');
-  if (!iframe?.contentDocument) return;
-  const doc = iframe.contentDocument;
-  doc.querySelectorAll('.htpl-active').forEach(x => x.classList.remove('htpl-active'));
-  const target = doc.querySelector(`[data-slot="${key}"]`);
-  if (target) target.classList.add('htpl-active');
+  iframe?.contentWindow?.postMessage({ type: 'htpl-highlight', key }, '*');
 }
 
 function _applyBrandColors() {

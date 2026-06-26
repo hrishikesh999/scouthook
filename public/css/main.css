@@ -2587,6 +2587,22 @@ body.has-trial-banner #main-content {
   color: var(--text-primary);
 }
 
+.btn-text {
+  font-size: 13px;
+  font-family: var(--font-sans);
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: color 0.15s;
+}
+.btn-text:hover { color: var(--text-primary); }
+
 /* Swipe handle (mobile) */
 .slide-over-handle {
   display: none;

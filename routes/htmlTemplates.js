@@ -20,6 +20,20 @@ router.get('/', async (req, res) => {
   }
 });
 
+// GET /api/html-templates/:id/html — serve raw template HTML from R2
+router.get('/:id/html', async (req, res) => {
+  try {
+    const row = await db.prepare(
+      'SELECT html_r2_key FROM html_templates WHERE id = ? AND active = TRUE'
+    ).get(req.params.id);
+    if (!row?.html_r2_key) return res.status(404).end();
+    const buf = await storage.downloadAdmin(row.html_r2_key);
+    res.set('Content-Type', 'text/plain; charset=utf-8').send(buf);
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 // GET /api/html-templates/:id/thumbnail — proxy thumbnail for authenticated users
 router.get('/:id/thumbnail', async (req, res) => {
   try {

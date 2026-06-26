@@ -316,6 +316,112 @@
     } catch { /* ignore */ }
   }
 
+  // ── Refer & Earn button ──────────────────────────────────────
+  function renderSidebarRefer() {
+    const sidebarBottom = document.querySelector('#sidebar .sidebar-bottom');
+    if (!sidebarBottom) return;
+    if (sidebarBottom.querySelector('.sidebar-refer-btn')) return;
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'sidebar-refer-btn';
+    btn.innerHTML = `
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>
+      Refer &amp; Earn
+    `;
+    btn.addEventListener('click', async () => {
+      try {
+        const resp = await fetch('/api/affiliates/me', { credentials: 'same-origin' });
+        if (resp.ok) {
+          const d = await resp.json();
+          if (d.ok) { window.open('/partner.html', '_blank'); return; }
+        }
+        showReferModal();
+      } catch {
+        showReferModal();
+      }
+    });
+    sidebarBottom.insertBefore(btn, sidebarBottom.querySelector('#sidebar-account-slot'));
+  }
+
+  function showReferModal() {
+    if (document.getElementById('refer-modal-overlay')) return;
+
+    const overlay = document.createElement('div');
+    overlay.id = 'refer-modal-overlay';
+    overlay.style.cssText = [
+      'position:fixed', 'inset:0', 'z-index:9000',
+      'background:rgba(0,0,0,0.45)', 'display:flex',
+      'align-items:center', 'justify-content:center', 'padding:16px',
+    ].join(';');
+
+    overlay.innerHTML = `
+      <div role="dialog" aria-modal="true" aria-labelledby="refer-modal-title"
+           style="background:var(--bg-surface,#fff);border-radius:12px;padding:32px;max-width:420px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.2);position:relative;">
+        <h2 id="refer-modal-title" style="font-size:18px;font-weight:700;color:var(--text-primary,#111827);margin:0 0 8px">
+          Share ScoutHook, earn rewards
+        </h2>
+        <p style="font-size:14px;color:var(--text-secondary,#6b7280);margin:0 0 24px;line-height:1.6">
+          Love using ScoutHook? Invite your friends — you'll earn a commission every time
+          someone you refer subscribes to a paid plan. No limits, no strings attached.
+        </p>
+        <div id="refer-modal-error" style="display:none;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:6px;padding:10px 12px;font-size:13px;color:#EF4444;margin-bottom:12px"></div>
+        <div style="display:flex;align-items:center;justify-content:flex-end;gap:12px">
+          <button id="refer-modal-cancel" type="button"
+            style="background:none;border:1px solid var(--border,#d1d5db);border-radius:8px;padding:10px 18px;font-size:14px;color:var(--text-secondary,#6b7280);cursor:pointer;font-family:inherit">
+            Maybe Later
+          </button>
+          <button id="refer-modal-join" type="button"
+            style="background:#F59E0B;color:#1C1C1E;border:none;border-radius:8px;padding:10px 20px;font-size:14px;font-weight:600;cursor:pointer;transition:background 0.15s;font-family:inherit">
+            Join &amp; Start Earning
+          </button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    function closeModal() { overlay.remove(); }
+
+    overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(); });
+    document.addEventListener('keydown', function onEsc(e) {
+      if (e.key === 'Escape') { closeModal(); document.removeEventListener('keydown', onEsc); }
+    });
+
+    document.getElementById('refer-modal-cancel').addEventListener('click', closeModal);
+
+    document.getElementById('refer-modal-join').addEventListener('click', async () => {
+      const btn = document.getElementById('refer-modal-join');
+      const errBox = document.getElementById('refer-modal-error');
+      errBox.style.display = 'none';
+      btn.disabled = true;
+      btn.textContent = 'Joining…';
+
+      try {
+        const resp = await fetch('/api/affiliates/join', {
+          method: 'POST',
+          credentials: 'same-origin',
+        });
+        const data = await resp.json();
+
+        if (data.ok || (data.error && data.error.includes('already'))) {
+          closeModal();
+          window.open('/partner.html', '_blank');
+        } else {
+          errBox.textContent = data.error || 'Something went wrong. Please try again.';
+          errBox.style.display = 'block';
+          btn.disabled = false;
+          btn.textContent = 'Join & Start Earning';
+        }
+      } catch {
+        errBox.textContent = 'Network error. Please try again.';
+        errBox.style.display = 'block';
+        btn.disabled = false;
+        btn.textContent = 'Join & Start Earning';
+      }
+    });
+  }
+
   // ── Load shared scripts ──────────────────────────────────────
   if (!document.getElementById('pricing-modal-script')) {
     const s = document.createElement('script');
@@ -492,6 +598,7 @@
         renderWorkspaceSwitcher(user.tenant_id);
         renderSidebarAccount(user);
         renderSidebarUpgrade();
+        renderSidebarRefer();
         initTrialBanner();
         initMiniOnboarding();
       })

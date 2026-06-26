@@ -5999,6 +5999,29 @@ a.stat-chip:hover {
   background: rgba(20, 184, 166, 0.14);
   border-color: rgba(20, 184, 166, 0.38);
 }
+.sidebar-refer-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 10px;
+  margin-bottom: 6px;
+  background: rgba(245, 158, 11, 0.08);
+  color: #FBBF24;
+  border: 1px solid rgba(245, 158, 11, 0.22);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  text-align: left;
+  box-sizing: border-box;
+}
+.sidebar-refer-btn:hover {
+  background: rgba(245, 158, 11, 0.14);
+  border-color: rgba(245, 158, 11, 0.38);
+}
 .sidebar-onboarding-btn {
   display: flex;
   align-items: center;

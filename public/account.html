@@ -58,7 +58,7 @@
               </div>
               <div style="display:flex;gap:8px">
                 <div style="flex:1;display:flex;gap:6px">
-                  <input id="pending-pin-input" type="text" inputmode="numeric" maxlength="6" placeholder="Enter 6-digit code" style="flex:1;padding:6px 10px;font-size:13px;border-radius:8px;border:1px solid var(--border);background:var(--bg-input,#111);color:var(--text);outline:none">
+                  <input id="pending-pin-input" type="text" inputmode="numeric" maxlength="6" placeholder="Enter 6-digit code" style="flex:1;padding:6px 10px;font-size:13px;border-radius:8px;border:1px solid var(--border);background:var(--bg-surface);color:var(--text);outline:none">
                   <button id="pending-pin-confirm" type="button" class="btn-outlined" style="font-size:12px;height:32px;padding:0 12px">Verify</button>
                 </div>
                 <button id="pending-email-cancel" type="button" style="font-size:12px;padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--text-muted);cursor:pointer">Cancel</button>
@@ -128,7 +128,7 @@
         <h2 id="delete-modal-title" style="font-size:16px;font-weight:700;color:var(--score-fail,#dc2626);margin:0 0 12px">Delete account</h2>
         <p style="font-size:13px;color:var(--text-muted);margin:0 0 20px;line-height:1.6">This will permanently delete <strong style="color:var(--text)">all your ScoutHook data</strong> — posts, drafts, scheduled posts, and your account. You will be signed out immediately. There is no undo.</p>
         <label for="delete-confirm-input" style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:6px">Type <strong style="color:var(--text)">DELETE</strong> to confirm</label>
-        <input id="delete-confirm-input" type="text" autocomplete="off" placeholder="DELETE" style="width:100%;box-sizing:border-box;padding:8px 12px;font-size:13px;border-radius:8px;border:1px solid var(--border);background:var(--bg-input,#111);color:var(--text);outline:none;margin-bottom:20px">
+        <input id="delete-confirm-input" type="text" autocomplete="off" placeholder="DELETE" style="width:100%;box-sizing:border-box;padding:8px 12px;font-size:13px;border-radius:8px;border:1px solid var(--border);background:var(--bg-surface);color:var(--text);outline:none;margin-bottom:20px">
         <div style="display:flex;gap:10px;justify-content:flex-end">
           <button id="delete-cancel-btn" type="button" style="padding:7px 16px;font-size:13px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text-muted);cursor:pointer">Cancel</button>
           <button id="delete-confirm-btn" type="button" disabled style="padding:7px 16px;font-size:13px;border-radius:8px;border:none;background:var(--score-fail,#dc2626);color:#fff;cursor:pointer;font-weight:600;opacity:0.4">Delete everything</button>
@@ -354,6 +354,8 @@
           const r = await fetch('/api/linkedin/user-data', { method: 'DELETE' });
           if (!r.ok) throw new Error('server_error');
           await fetch('/auth/logout', { method: 'POST' });
+          try { localStorage.clear(); } catch {}
+          try { sessionStorage.clear(); } catch {}
           window.location.href = '/';
         } catch {
           errorMsg.style.display = 'block';

@@ -12,7 +12,7 @@
         <a href="/admin-support.html" class="admin-nav__link">Support</a>
         <div class="admin-nav__sep"></div>
         <a href="/admin-settings.html" class="admin-nav__link">Settings</a>
-        <a href="/admin-html-templates.html" class="admin-nav__link">HTML Templates</a>
+        <a href="/admin-html-templates.html" class="admin-nav__link">Templates</a>
         <a href="/admin-carousel-packs.html" class="admin-nav__link">Carousel Packs</a>
       </div>
       <div class="admin-nav__bottom">

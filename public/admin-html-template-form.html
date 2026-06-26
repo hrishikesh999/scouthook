@@ -214,6 +214,7 @@
   let _uploadInProgress = false;
   let _uploadAbort = null;
   let _activeSlotKey = null;
+  let _imageOverrides = {}; // key → data URI ('data:...') or '' (cleared)
 
   // ── Auth ──────────────────────────────────────────────────────────────────
 
@@ -295,6 +296,7 @@
   // ── Step 2 initialization ────────────────────────────────────────────────
 
   function initStep2() {
+    _imageOverrides = {};
     const slots = scanSlotsFromHtml(_templateHtml);
     if (_existingManifest) { mergeExistingConfig(slots, _existingManifest); _existingManifest = null; }
     _slotState = slots;
@@ -317,7 +319,10 @@
         const key = el.getAttribute('data-slot');
         if (!key || seen.has(key)) return;
         seen.add(key);
-        if (key.startsWith('image:')) slots.push({ key, type: 'image', config: {} });
+        if (key.startsWith('image:')) {
+          const existingSrc = el.getAttribute('src') || '';
+          slots.push({ key, type: 'image', config: existingSrc.startsWith('data:image/') ? { src: existingSrc } : {} });
+        }
         else if (el.hasAttribute('data-slot-container')) {
           const fields = [];
           el.querySelectorAll('[data-slot-field]').forEach(f => { const n = f.getAttribute('data-slot-field'); if (n && !fields.includes(n)) fields.push(n); });
@@ -372,7 +377,20 @@
           <input type="text" class="hex-input" data-i="${i}" data-c="colorHex" value="${esc(ib?'brand':cv)}" maxlength="9" ${ib?'disabled':''}></div></div>
           <div class="slot-card__field" style="align-self:center"><label style="display:flex;gap:3px;align-items:center;cursor:pointer;white-space:nowrap"><input type="checkbox" data-i="${i}" data-c="brand" ${ib?'checked':''}> Brand</label></div>`;
       } else if (s.type === 'image') {
-        body = '<span style="font-size:.78rem;color:var(--text-muted)">Image upload slot</span>';
+        const _ov = _imageOverrides[s.key];
+        const _hasSrc = _ov !== undefined ? !!_ov : !!(s.config.src);
+        body = `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          ${_hasSrc
+            ? `<img data-slot-thumb="${esc(s.key)}" alt="" style="width:60px;height:60px;object-fit:cover;border-radius:6px;border:1px solid var(--border);flex-shrink:0">`
+            : `<div style="width:60px;height:60px;border-radius:6px;border:2px dashed var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--text-muted);font-size:.7rem;text-align:center;padding:4px">No image</div>`}
+          <div style="display:flex;flex-direction:column;gap:5px">
+            <label style="cursor:pointer;display:inline-flex;align-items:center;gap:4px" class="btn btn--sm btn--secondary">
+              ${_hasSrc ? 'Replace' : 'Upload default'}
+              <input type="file" accept="image/png,image/jpeg,image/webp" hidden data-i="${i}" data-c="uploadImg">
+            </label>
+            ${_hasSrc ? `<button type="button" data-i="${i}" data-c="clearImg" style="font-size:.72rem;color:var(--text-muted);background:none;border:none;cursor:pointer;padding:0;text-align:left">x Remove</button>` : ''}
+          </div>
+        </div>`;
       } else if (s.type === 'repeating') {
         const f = s.config.fields || [];
         body = `<div class="slot-card__field"><label>Fields</label><div class="slot-fields-list">${f.map(x => `<span class="slot-field-pill">${esc(x)}</span>`).join('') || '—'}</div></div>
@@ -384,6 +402,14 @@
         <div class="slot-card__header"><span class="slot-type ${tc}">${tl}</span><span class="slot-card__key">${esc(s.key)}</span>${s.orphaned?'<span style="color:#92400e;font-size:.7rem">⚠</span>':''}</div>
         <div class="slot-card__body">${body}</div></div>`;
     }).join('');
+
+    // Set img src via DOM (avoids embedding large base64 strings inside innerHTML)
+    list.querySelectorAll('img[data-slot-thumb]').forEach(img => {
+      const key = img.dataset.slotThumb;
+      const ov = _imageOverrides[key];
+      const sEntry = _slotState.find(s => s.key === key);
+      img.src = ov !== undefined ? ov : (sEntry?.config.src || '');
+    });
 
     wireSlotEvents();
     updateManifest();
@@ -416,6 +442,56 @@
         highlightSlotInPreview(_activeSlotKey);
       });
     });
+
+    // Image slot: upload a default image
+    list.querySelectorAll('input[data-c="uploadImg"]').forEach(inp => {
+      inp.addEventListener('change', () => {
+        const i = parseInt(inp.dataset.i), s = _slotState[i]; if (!s) return;
+        const file = inp.files[0]; if (!file) return;
+        if (file.size > 5 * 1024 * 1024) { alert('Max 5 MB per slot image.'); return; }
+        const reader = new FileReader();
+        reader.onload = ev => {
+          _imageOverrides[s.key] = ev.target.result;
+          renderSlotCards();
+          renderPreview();
+        };
+        reader.readAsDataURL(file);
+        inp.value = '';
+      });
+    });
+
+    // Image slot: remove default image
+    list.querySelectorAll('[data-c="clearImg"]').forEach(btn => {
+      btn.addEventListener('click', ev => {
+        ev.stopPropagation();
+        const i = parseInt(btn.dataset.i), s = _slotState[i]; if (!s) return;
+        _imageOverrides[s.key] = ''; // '' = explicitly cleared
+        s.config.src = '';
+        renderSlotCards();
+        renderPreview();
+      });
+    });
+  }
+
+  // ── Image overrides (admin-uploaded defaults) ────────────────────────────
+
+  function applyImageOverrides(html) {
+    let result = html;
+    for (const [key, dataUri] of Object.entries(_imageOverrides)) {
+      const ek = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      if (dataUri) {
+        // Inject: replace any existing src (both quote styles), or add if absent
+        const prev = result.length;
+        result = result.replace(new RegExp(`(<img\\b[^>]*?data-slot="${ek}"[^>]*?)src=["'][^"']*["']`, 'g'), `$1src="${dataUri}"`);
+        result = result.replace(new RegExp(`(<img\\b[^>]*?)src=["'][^"']*["']([^>]*?data-slot="${ek}"[^>]*?>)`, 'g'), `$1src="${dataUri}"$2`);
+        if (result.length === prev) result = result.replace(new RegExp(`(<img\\b[^>]*?data-slot="${ek}"[^>]*?)(\\s*/?>)`, 'g'), `$1 src="${dataUri}"$2`);
+      } else {
+        // Clear: set src="" to remove whatever default was there
+        result = result.replace(new RegExp(`(<img\\b[^>]*?data-slot="${ek}"[^>]*?)src=["'][^"']*["']`, 'g'), `$1src=""`);
+        result = result.replace(new RegExp(`(<img\\b[^>]*?)src=["'][^"']*["']([^>]*?data-slot="${ek}"[^>]*?>)`, 'g'), `$1src=""$2`);
+      }
+    }
+    return result;
   }
 
   // ── Preview (iframe with click-to-select) ────────────────────────────────
@@ -447,7 +523,7 @@
         });
       <\/script>`;
 
-    const injected = _templateHtml.replace('</body>', slotScript + '</body>');
+    const injected = applyImageOverrides(_templateHtml).replace('</body>', slotScript + '</body>');
     // Wrap iframe in a div sized to the visual dimensions so the flex container
     // centers the correct footprint. Without the wrapper, transform:scale keeps
     // the full 1080px layout box and justify-content:center pushes it off-screen.
@@ -595,6 +671,7 @@
     if (!id && !html) { showError('form-error-2', 'HTML is required.'); return; }
 
     if (html) {
+      html = applyImageOverrides(html);
       const manifest = buildManifest();
       html = injectManifestIntoHtml(html, manifest);
     }

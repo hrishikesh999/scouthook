@@ -314,10 +314,7 @@ function initS6() {
 }
 
 async function runBrandVoiceExtraction() {
-  const spinner = document.getElementById('ob-bv-generating');
   const nextBtn = document.getElementById('ob-s6-next');
-
-  spinner.hidden = false;
   setButtonLoading(nextBtn, true);
 
   try {
@@ -328,24 +325,23 @@ async function runBrandVoiceExtraction() {
       elevator_main_result:     state.elevatorResult,
       elevator_mechanism:       state.elevatorMechanism,
     });
-
-    const result = await apiPost('/api/profile/brand-voice/generate', { mode: 'prefill' });
-
-    if (result.prefill) {
-      const p    = result.prefill;
-      const save = {};
-      if (p.elevator_main_result)         save.elevator_main_result  = p.elevator_main_result;
-      if (p.elevator_mechanism)           save.elevator_mechanism    = p.elevator_mechanism;
-      if (p.brand_archetype)              save.brand_archetype       = p.brand_archetype;
-      if (p.brand_core_beliefs?.length)   save.brand_core_beliefs    = JSON.stringify(p.brand_core_beliefs);
-      if (p.brand_phrases_to_use?.length) save.brand_phrases_to_use  = JSON.stringify(p.brand_phrases_to_use);
-      if (p.brand_story_origin)           save.brand_story_origin    = p.brand_story_origin;
-      if (p.brand_emotional_tone)         save.brand_emotional_tone  = p.brand_emotional_tone;
-      if (Object.keys(save).length) await apiPost('/api/profile', save);
-    }
   } catch (_) {}
 
-  spinner.hidden = true;
+  // Fire prefill generation in background — don't block progression
+  apiPost('/api/profile/brand-voice/generate', { mode: 'prefill' }).then(result => {
+    if (!result?.prefill) return;
+    const p    = result.prefill;
+    const save = {};
+    if (p.elevator_main_result)         save.elevator_main_result  = p.elevator_main_result;
+    if (p.elevator_mechanism)           save.elevator_mechanism    = p.elevator_mechanism;
+    if (p.brand_archetype)              save.brand_archetype       = p.brand_archetype;
+    if (p.brand_core_beliefs?.length)   save.brand_core_beliefs    = JSON.stringify(p.brand_core_beliefs);
+    if (p.brand_phrases_to_use?.length) save.brand_phrases_to_use  = JSON.stringify(p.brand_phrases_to_use);
+    if (p.brand_story_origin)           save.brand_story_origin    = p.brand_story_origin;
+    if (p.brand_emotional_tone)         save.brand_emotional_tone  = p.brand_emotional_tone;
+    if (Object.keys(save).length) apiPost('/api/profile', save).catch(() => {});
+  }).catch(() => {});
+
   setButtonLoading(nextBtn, false);
   showScreen('s7');
   initS7Prefill();

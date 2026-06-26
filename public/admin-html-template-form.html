@@ -300,8 +300,9 @@
     _slotState = slots;
     document.getElementById('raw-html').value = _templateHtml;
     renderSlotCards();
-    renderPreview();
     updateManifest();
+    // Delay preview until browser has painted the panel (clientWidth needs layout)
+    requestAnimationFrame(() => requestAnimationFrame(() => renderPreview()));
   }
 
   // ── Slot scanner ─────────────────────────────────────────────────────────
@@ -421,9 +422,10 @@
 
   function renderPreview() {
     const pane = document.getElementById('config-preview');
+    if (!_templateHtml) { pane.innerHTML = '<div style="color:var(--text-muted);font-size:.85rem">No HTML to preview</div>'; return; }
     const w = parseInt(document.getElementById('f-dim-w').value) || 1080;
     const h = parseInt(document.getElementById('f-dim-h').value) || 1080;
-    const maxW = pane.clientWidth - 20 || 500;
+    const maxW = Math.max(pane.clientWidth - 20, 400);
     const scale = Math.min(maxW / w, 0.5);
 
     const slotScript = `

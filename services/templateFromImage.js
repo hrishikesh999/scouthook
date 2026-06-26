@@ -288,22 +288,23 @@ async function generateTemplateFromImage(imageBuffer, options = {}) {
 
   // ── Post-processing: fix common Claude mistakes ─────────────────────────
 
-  // Fix image slots missing "image:" prefix (preserve existing src if it's a data URI)
-  html = html.replace(/data-slot="(?!image:)([\w]+)"(\s+src\s*=\s*"([^"]*)")/g, (match, key, srcAttr, srcVal) => {
+  // Fix <img> tags with data-slot missing "image:" prefix
+  // Handles multi-line attributes (Claude often puts each attr on its own line)
+  html = html.replace(/<img\b([^>]*?)data-slot="(?!image:)([\w]+)"([^>]*?)>/gs, (match, before, key, after) => {
     console.log('[templateFromImage] fixing image slot: %s → image:%s', key, key);
     manifest.slots[`image:${key}`] = manifest.slots[key] || {};
     delete manifest.slots[key];
-    const preservedSrc = srcVal.startsWith('data:') ? srcVal : '';
-    return `data-slot="image:${key}" src="${preservedSrc}"`;
+    // Also fix src — clear non-data-URI filenames
+    let fixed = `<img${before}data-slot="image:${key}"${after}>`;
+    fixed = fixed.replace(/src="(?!data:)[^"]*"/g, 'src=""');
+    return fixed;
   });
 
-  // Fix image src that has a filename instead of empty string
-  html = html.replace(/(data-slot="image:[^"]+"\s+)src="(?!data:)[^"]+"/g, '$1src=""');
+  // Fix remaining image slots with filename src (already have image: prefix)
+  html = html.replace(/(<img\b[^>]*data-slot="image:[^"]*"[^>]*?)src="(?!data:)[^"]*"/gs, '$1src=""');
 
   // Remove bogus data-slot-container on non-repeating elements
-  html = html.replace(/data-slot-container="[^"]*"/g, (match) => {
-    return 'data-slot-container';
-  });
+  html = html.replace(/data-slot-container="[^"]*"/g, 'data-slot-container');
 
   // Sync manifest: ensure all data-slot keys in HTML exist in manifest
   const slotMatches = html.matchAll(/data-slot="([^"]+)"/g);

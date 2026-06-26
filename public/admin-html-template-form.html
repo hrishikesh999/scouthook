@@ -663,7 +663,7 @@
     uf.innerHTML = `<label>Upload a design</label>
       <div class="img-upload-progress"><div class="img-upload-spinner"></div>
       <div style="flex:1"><div style="font-weight:600;font-size:.85rem">Converting design to template…</div>
-      <div style="font-size:.78rem;color:var(--text-muted);margin-top:2px">AI is analyzing, generating HTML, then refining. 30–60 seconds.</div></div>
+      <div style="font-size:.78rem;color:var(--text-muted);margin-top:2px">AI is analyzing, generating HTML, then refining. 45–90 seconds.</div></div>
       <button class="btn btn--sm btn--secondary" id="upload-cancel" type="button">Cancel</button></div>`;
     document.getElementById('upload-cancel')?.addEventListener('click', () => { _uploadAbort?.abort(); _uploadInProgress = false; resetUploadZone(); });
 

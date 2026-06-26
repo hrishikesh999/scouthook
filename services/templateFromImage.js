@@ -179,26 +179,42 @@ const REFINE_PROMPT = `You are refining an HTML template to match a design image
 
 Image 1 is the ORIGINAL DESIGN (the target to match).
 Image 2 is the CURRENT HTML RENDERING (what the code produces now).
+The current HTML source code is provided after the images.
 
-STEP 1 — DIFF: Note every visible difference between Image 1 and Image 2:
-- Colors that don't match (background, text, accents)
-- Font size or weight mismatches
-- Spacing or padding differences
-- Missing decorative elements (lines, shapes, icons)
-- Text alignment differences
-- Missing or incorrectly placed image areas
-- Any element in Image 1 absent from Image 2
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 1 — SYSTEMATIC DIFF (check EVERY category below)
 
-STEP 2 — FIX ALL DIFFERENCES:
-- Background colors: match the exact hex values from Image 1
-- Font sizes, weights, line-heights: match precisely
-- Spacing and padding: adjust to match Image 1 layout
-- Typography: if the font doesn't look right, try a different Google Font
-- Decorative elements: add missing shapes, lines, icons as inline SVG
-- Text alignment: left/center/right must match Image 1
-- Image placement and sizing: match Image 1 proportions
+Go through this checklist and note EVERY difference between Image 1 and Image 2:
 
-STEP 3 — COLOR AUDIT (MANDATORY):
+A) BACKGROUND: Solid color? Gradient (direction, stops, opacity)? Pattern? Multiple layers?
+   - Gradients are commonly missed — check if Image 1 has a gradient that Image 2 renders as flat.
+B) TYPOGRAPHY: Font family match? Size? Weight (400/500/600/700/800/900)? Letter-spacing? Line-height? Text-transform (uppercase)?
+   - Check EACH text element separately — headings, subheadings, body, labels, captions.
+C) COLORS: Compare every text color, background, accent, border, shadow color.
+D) LAYOUT & SPACING: Padding, margins, gaps between elements. Element alignment (left/center/right). Vertical positioning.
+E) DECORATIVE ELEMENTS: Lines, dividers, shapes, badges, icons, dots, circles, underlines, borders.
+   - These are the MOST commonly missed elements. Check every edge, corner, and divider in Image 1.
+   - Reproduce as inline SVG with position:absolute if needed.
+F) BORDERS & SHADOWS: Border-radius values, border widths/colors, box-shadows, text-shadows.
+G) IMAGE AREAS: Correct size, position, border-radius, and aspect ratio of photo regions.
+H) LAYERING: Overlays, semi-transparent layers, z-index stacking. Does Image 1 have a dark/light overlay over a photo?
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 2 — FIX EVERY DIFFERENCE
+
+Apply ALL fixes to the HTML. Common fixes:
+- Flat background → CSS linear-gradient() or radial-gradient() with exact direction and stops
+- Missing decorative elements → inline SVG with position:absolute
+- Wrong font weight → change font-weight and update Google Fonts URL to load that weight
+- Missing letter-spacing → add letter-spacing in px or em
+- Missing text-transform → add text-transform:uppercase
+- Wrong spacing → adjust padding/margin values in px
+- Missing borders → add border with correct width, style, color
+- Missing shadows → add box-shadow or text-shadow
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 3 — COLOR AUDIT (MANDATORY)
+
 Scan every CSS rule and inline style in the HTML. If you find ANY hardcoded hex value (#rrggbb) or rgba() color outside of the root container's style="" attribute:
 1. Add it as a CSS custom property on the root container (--new_var:#hex)
 2. Replace the hardcoded value with var(--new_var)
@@ -212,7 +228,7 @@ INVIOLABLE RULES:
 - Return the COMPLETE corrected HTML document (not a JSON wrapper — just raw HTML starting with <!DOCTYPE html>)
 - No markdown fences, no explanation — only the HTML`;
 
-const VISION_TIMEOUT_MS = 90_000;
+const VISION_TIMEOUT_MS = 120_000;
 
 /**
  * Strip AI commentary from a response that should be raw HTML.
@@ -327,7 +343,7 @@ async function generateTemplateFromImage(imageBuffer, options = {}) {
     return Promise.race([
       client.messages.create(params),
       new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('AI conversion timed out after 90 seconds')), VISION_TIMEOUT_MS)
+        setTimeout(() => reject(new Error('AI conversion timed out after 120 seconds')), VISION_TIMEOUT_MS)
       ),
     ]);
   };
@@ -358,7 +374,7 @@ async function generateTemplateFromImage(imageBuffer, options = {}) {
 
   const msg = await callWithTimeout({
     model: 'claude-sonnet-4-6',
-    max_tokens: 12000,
+    max_tokens: 16000,
     system: pass1System,
     messages: pass1Messages,
   });
@@ -376,7 +392,7 @@ async function generateTemplateFromImage(imageBuffer, options = {}) {
     ];
     const retry = await callWithTimeout({
       model: 'claude-sonnet-4-6',
-      max_tokens: 12000,
+      max_tokens: 16000,
       system: pass1System,
       messages: retryMessages,
     });
@@ -450,7 +466,7 @@ async function generateTemplateFromImage(imageBuffer, options = {}) {
 
       const refineMsg = await callWithTimeout({
         model: 'claude-sonnet-4-6',
-        max_tokens: 12000,
+        max_tokens: 16000,
         system: REFINE_PROMPT,
         messages: [{
           role: 'user',
@@ -459,7 +475,7 @@ async function generateTemplateFromImage(imageBuffer, options = {}) {
             imageBlock,
             { type: 'text', text: 'Image 2 — Current HTML rendering:' },
             { type: 'image', source: { type: 'base64', media_type: 'image/png', data: renderedBase64 } },
-            { type: 'text', text: 'Return the complete corrected HTML document. Keep all data-slot attributes and the template-meta script block intact.' },
+            { type: 'text', text: `Current HTML source code:\n\`\`\`html\n${html}\n\`\`\`\n\nFix every difference between Image 1 and Image 2. Return the complete corrected HTML document. Keep all data-slot attributes and the template-meta script block intact.` },
           ],
         }],
       });

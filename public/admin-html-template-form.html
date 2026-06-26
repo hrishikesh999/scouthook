@@ -55,7 +55,10 @@
     .slot-card:hover { border-color:var(--brand); }
     .slot-card--active { border-color:var(--brand); box-shadow:0 0 0 2px rgba(15,118,110,0.15); border-left:3px solid var(--brand); }
     .slot-card__header { display:flex; align-items:center; gap:8px; padding:8px 12px; background:var(--neutral-50); border-bottom:1px solid var(--border); }
-    .slot-card__key { font-family:monospace; font-size:.8rem; font-weight:600; flex:1; }
+    .slot-card__key { font-family:monospace; font-size:.8rem; font-weight:600; flex:1; cursor:default; }
+    .slot-card__key--editing { background:transparent; border:1px solid var(--border); border-radius:3px; padding:1px 4px; font-family:monospace; font-size:.8rem; font-weight:600; flex:1; outline:none; }
+    .slot-card__delete { background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:.85rem; padding:0 2px; line-height:1; opacity:0.5; transition:opacity .15s, color .15s; }
+    .slot-card__delete:hover { opacity:1; color:#991b1b; }
     .slot-card__body { padding:10px 12px; display:flex; flex-wrap:wrap; gap:6px 14px; align-items:flex-end; }
     .slot-card__field { display:flex; flex-direction:column; gap:3px; }
     .slot-card__field label { font-size:.7rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:.03em; }
@@ -74,6 +77,9 @@
     .config-add-row input { width:120px; }
     .config-add-row select { width:90px; }
 
+    .preview-mode-btn { background:var(--neutral-50); color:var(--text-muted); font-size:.72rem; font-weight:600; padding:4px 10px; cursor:pointer; }
+    .preview-mode-btn.active { background:var(--brand,#0f766e); color:#fff; }
+    .preview-mode-btn:hover:not(.active) { background:var(--neutral-100); }
     .manifest-json { background:var(--neutral-50); border:1px solid var(--border); border-radius:var(--radius); padding:var(--space-sm); font-family:monospace; font-size:.72rem; max-height:180px; overflow-y:auto; white-space:pre; }
     details summary { cursor:pointer; font-size:.82rem; font-weight:600; color:var(--text-muted); }
     details[open] summary { margin-bottom:var(--space-sm); }
@@ -179,6 +185,17 @@
               </div>
             </div>
 
+            <!-- Preview mode toggle + refine -->
+            <div id="preview-toolbar" style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+              <div style="display:flex;gap:0;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden">
+                <button class="btn btn--sm preview-mode-btn active" data-mode="preview" type="button" style="border-radius:0;border:none">Preview</button>
+                <button class="btn btn--sm preview-mode-btn" data-mode="original" type="button" style="border-radius:0;border:none;border-left:1px solid var(--border)" id="btn-show-original">Original</button>
+                <button class="btn btn--sm preview-mode-btn" data-mode="sideBySide" type="button" style="border-radius:0;border:none;border-left:1px solid var(--border)" id="btn-show-sbs">Side by Side</button>
+              </div>
+              <div style="flex:1"></div>
+              <button class="btn btn--sm btn--secondary" id="btn-refine" type="button">Refine template</button>
+            </div>
+
             <!-- Two-panel editor -->
             <div class="config-panels">
               <!-- Left: preview -->
@@ -224,6 +241,8 @@
   let _slotState = [];
   let _existingManifest = null;
   let _templateHtml = '';
+  let _originalImageDataUrl = null;
+  let _previewMode = 'preview'; // 'preview' | 'original' | 'sideBySide'
   let _uploadInProgress = false;
   let _uploadAbort = null;
   let _activeSlotKey = null;
@@ -449,7 +468,7 @@
       }
 
       return `<div class="slot-card${active}" data-slot-key="${esc(s.key)}" data-i="${i}">
-        <div class="slot-card__header"><span class="slot-type ${tc}">${tl}</span><span class="slot-card__key">${esc(s.key)}</span>${s.orphaned?'<span style="color:#92400e;font-size:.7rem">⚠</span>':''}</div>
+        <div class="slot-card__header"><span class="slot-type ${tc}">${tl}</span><span class="slot-card__key" data-i="${i}" title="Double-click to rename">${esc(s.key)}</span>${s.orphaned?'<span style="color:#92400e;font-size:.7rem">⚠</span>':''}<button class="slot-card__delete" data-i="${i}" title="Delete slot">×</button></div>
         <div class="slot-card__body">${body}</div></div>`;
     }).join('');
 
@@ -490,6 +509,46 @@
         _activeSlotKey = card.dataset.slotKey;
         list.querySelectorAll('.slot-card').forEach(c => c.classList.toggle('slot-card--active', c === card));
         highlightSlotInPreview(_activeSlotKey);
+      });
+    });
+
+    // Slot delete
+    list.querySelectorAll('.slot-card__delete').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        const i = parseInt(btn.dataset.i);
+        if (i >= 0 && i < _slotState.length) {
+          _slotState.splice(i, 1);
+          renderSlotCards();
+          renderPreview();
+        }
+      });
+    });
+
+    // Slot rename (double-click key label)
+    list.querySelectorAll('.slot-card__key').forEach(span => {
+      span.addEventListener('dblclick', e => {
+        e.stopPropagation();
+        const i = parseInt(span.dataset.i), s = _slotState[i];
+        if (!s) return;
+        const input = document.createElement('input');
+        input.className = 'slot-card__key--editing';
+        input.value = s.key;
+        span.replaceWith(input);
+        input.focus();
+        input.select();
+        const commit = () => {
+          const newKey = input.value.trim();
+          if (newKey && newKey !== s.key && !_slotState.some((x, j) => j !== i && x.key === newKey)) {
+            s.key = newKey;
+            if (newKey.startsWith('color:')) s.type = 'color';
+            else if (newKey.startsWith('image:')) s.type = 'image';
+          }
+          renderSlotCards();
+          updateManifest();
+        };
+        input.addEventListener('blur', commit);
+        input.addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); commit(); } if (ev.key === 'Escape') { renderSlotCards(); } });
       });
     });
 
@@ -607,6 +666,74 @@
     }
   }
 
+  // ── Preview mode toggle (Preview / Original / Side by Side) ──────────────
+
+  document.querySelectorAll('.preview-mode-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      _previewMode = btn.dataset.mode;
+      document.querySelectorAll('.preview-mode-btn').forEach(b => b.classList.toggle('active', b === btn));
+      applyPreviewMode();
+    });
+  });
+
+  function applyPreviewMode() {
+    const pane = document.getElementById('config-preview');
+    const w = parseInt(document.getElementById('f-dim-w').value) || 1080;
+    const h = parseInt(document.getElementById('f-dim-h').value) || 1080;
+    const maxW = Math.max(pane.clientWidth - 32, 320);
+
+    if (_previewMode === 'original') {
+      if (!_originalImageDataUrl) { pane.innerHTML = '<div style="color:var(--text-muted);font-size:.85rem;padding:16px">No original image available. Upload a design first.</div>'; return; }
+      const scale = Math.min(maxW / w, 1);
+      pane.innerHTML = `<img src="${_originalImageDataUrl}" alt="Original design" style="max-width:${Math.round(w * scale)}px;max-height:${Math.round(h * scale)}px;object-fit:contain;border-radius:4px">`;
+      pane.style.height = '';
+    } else if (_previewMode === 'sideBySide') {
+      if (!_originalImageDataUrl) { renderPreview(); return; }
+      const halfW = Math.max((maxW - 12) / 2, 160);
+      const scale = Math.min(halfW / w, 1);
+      const visW = Math.round(w * scale), visH = Math.round(h * scale);
+      const injected = _templateHtml.replace('</body>', '<\/body>');
+      pane.innerHTML = `<div style="display:flex;gap:8px;align-items:flex-start;padding:8px;width:100%">
+        <div style="flex:1;text-align:center"><div style="font-size:.65rem;font-weight:700;text-transform:uppercase;color:var(--text-muted);margin-bottom:4px">Original</div><img src="${_originalImageDataUrl}" alt="Original" style="width:${visW}px;height:${visH}px;object-fit:contain;border:1px solid var(--border);border-radius:4px"></div>
+        <div style="flex:1;text-align:center"><div style="font-size:.65rem;font-weight:700;text-transform:uppercase;color:var(--text-muted);margin-bottom:4px">Preview</div><div style="width:${visW}px;height:${visH}px;overflow:hidden;display:inline-block"><iframe sandbox="allow-same-origin allow-scripts" srcdoc="${esc(_templateHtml)}" style="width:${w}px;height:${h}px;border:none;display:block;transform:scale(${scale});transform-origin:top left" title="Preview"></iframe></div></div>
+      </div>`;
+      pane.style.height = '';
+    } else {
+      renderPreview();
+    }
+  }
+
+  // ── Refine template (re-run Pass 2) ─────────────────────────────────────
+
+  document.getElementById('btn-refine').addEventListener('click', async () => {
+    if (!_originalImageDataUrl || !_templateHtml) { alert('Upload a design first.'); return; }
+    const btn = document.getElementById('btn-refine');
+    btn.disabled = true; btn.textContent = 'Refining...';
+
+    try {
+      const blob = await (await fetch(_originalImageDataUrl)).blob();
+      const r = await fetch('/admin/html-templates/from-image', {
+        method: 'POST',
+        headers: { 'Content-Type': blob.type, 'X-Admin-Password': adminPw, 'X-Instructions': 'Refine only — improve accuracy of the existing HTML' },
+        body: blob,
+      });
+      const data = await r.json();
+      if (!data.ok) throw new Error(data.error || 'Refinement failed');
+
+      _templateHtml = data.html;
+      document.getElementById('f-html').value = data.html;
+      document.getElementById('raw-html').value = data.html;
+      _step2Initialized = false;
+      initStep2();
+
+      btn.textContent = 'Refined!';
+      setTimeout(() => { btn.textContent = 'Refine template'; btn.disabled = false; }, 2000);
+    } catch (err) {
+      alert('Refinement failed: ' + err.message);
+      btn.textContent = 'Refine template'; btn.disabled = false;
+    }
+  });
+
   window.addEventListener('message', e => {
     if (e.data?.type === 'slot-click') {
       _activeSlotKey = e.data.key;
@@ -685,6 +812,11 @@
     if (file.size > 10 * 1024 * 1024) { alert('Max 10 MB.'); return; }
     const allowed = ['image/png','image/jpeg','image/webp','image/svg+xml'];
     if (!allowed.includes(file.type)) { alert('PNG, JPG, WebP, or SVG only.'); return; }
+
+    // Store original image for comparison view
+    const origReader = new FileReader();
+    origReader.onload = () => { _originalImageDataUrl = origReader.result; };
+    origReader.readAsDataURL(file);
 
     _uploadInProgress = true;
     _uploadAbort = new AbortController();

@@ -261,6 +261,47 @@ function extractHtmlFromResponse(text) {
   return s.trim() || null;
 }
 
+/**
+ * Extract dominant colors from an image buffer using Sharp pixel sampling.
+ * Returns up to 8 hex color strings sorted by frequency.
+ */
+async function extractDominantColors(buffer) {
+  try {
+    const { data, info } = await sharp(buffer)
+      .resize(80, 80, { fit: 'cover' })
+      .removeAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+
+    const buckets = new Map();
+    const THRESHOLD = 30;
+
+    for (let i = 0; i < data.length; i += 3) {
+      const r = data[i], g = data[i + 1], b = data[i + 2];
+      let matched = false;
+      for (const [key, bucket] of buckets) {
+        const dr = r - bucket.r, dg = g - bucket.g, db = b - bucket.b;
+        if (Math.sqrt(dr * dr + dg * dg + db * db) < THRESHOLD) {
+          bucket.count++;
+          matched = true;
+          break;
+        }
+      }
+      if (!matched) {
+        const hex = '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+        buckets.set(hex, { r, g, b, count: 1 });
+      }
+    }
+
+    return [...buckets.entries()]
+      .sort((a, b) => b[1].count - a[1].count)
+      .slice(0, 8)
+      .map(([hex]) => hex);
+  } catch {
+    return [];
+  }
+}
+
 async function generateTemplateFromImage(imageBuffer, options = {}) {
   const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
   if (!apiKey) throw new Error('anthropic_api_key not configured');
@@ -348,6 +389,17 @@ async function generateTemplateFromImage(imageBuffer, options = {}) {
     ]);
   };
 
+  // ── Extract dominant colors from the image ────────────────────────────────
+
+  let colorHint = '';
+  if (!isSvg) {
+    const colors = await extractDominantColors(imageBuffer);
+    if (colors.length) {
+      colorHint = `\n\nEXACT COLORS extracted from this design (use these precise hex values as CSS custom properties — do NOT approximate): ${colors.join(', ')}`;
+      console.log('[templateFromImage] extracted %d dominant colors: %s', colors.length, colors.join(', '));
+    }
+  }
+
   // ── Pass 1: Design → HTML ────────────────────────────────────────────────
 
   const pass1Start = Date.now();
@@ -365,9 +417,10 @@ async function generateTemplateFromImage(imageBuffer, options = {}) {
     pass1Messages = [{ role: 'user', content: svgPrompt }];
   } else {
     console.log('[templateFromImage] pass 1: generating HTML from image (Vision)');
-    const userPrompt = options.instructions
+    const basePrompt = options.instructions
       ? `Convert this design image into an HTML template. Additional instructions: ${options.instructions}`
       : 'Convert this design image into an HTML template. Reproduce the layout, typography, colors, and structure as closely as possible.';
+    const userPrompt = basePrompt + colorHint;
     pass1System = SYSTEM_PROMPT;
     pass1Messages = [{ role: 'user', content: [imageBlock, { type: 'text', text: userPrompt }] }];
   }

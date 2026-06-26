@@ -465,7 +465,7 @@ async function generateTemplateFromImage(imageBuffer, options = {}) {
         Date.now() - pass2Start, renderedPng.length);
 
       const refineMsg = await callWithTimeout({
-        model: 'claude-haiku-4-5',
+        model: 'claude-sonnet-4-6',
         max_tokens: 16000,
         system: REFINE_PROMPT,
         messages: [{

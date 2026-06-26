@@ -618,7 +618,7 @@ async function loadPost(id) {
       attachedPreviewUrl = p.assetPreviewUrl || (p.assetType !== 'carousel' ? p.assetUrl : null);
       attachedAssetType  = p.assetType || 'media_image';
       attachedSlideCount = p.assetSlideCount || 0;
-      const labelMap = { media_pdf: 'PDF', media_image: 'Image', html_template: 'Design Template' };
+      const labelMap = { media_pdf: 'PDF', media_image: 'Image', html_template: 'Design Template', carousel_pack: 'Carousel' };
       const chipLabel = document.getElementById('asset-chip-label');
       const chip      = document.getElementById('asset-chip');
       if (chipLabel) chipLabel.textContent = labelMap[attachedAssetType] || attachedAssetType;
@@ -1218,6 +1218,7 @@ let _htmlTplSelectedId     = null;
 let _htmlTplSelectedMeta   = null;
 let _htmlTplExtractedSlots = null;
 let _htmlTplAllTemplates   = null;
+let _htmlTplAllCarousels   = null;
 let _htmlTplActiveCategory = null;
 let _htmlTplRenderJobId    = null;
 let _htmlTplPollTimer      = null;
@@ -1287,15 +1288,22 @@ async function loadHtmlTemplatePicker() {
   previewPane.innerHTML = '<div class="ai-tpl-picker" style="width:100%;align-self:flex-start;overflow-y:auto"><div class="loading-text--padded">Loading templates…</div></div>';
 
   try {
-    const r = await fetch('/api/html-templates', { credentials: 'include' });
-    const data = await r.json();
-    _htmlTplAllTemplates = data.templates || [];
+    const [tplRes, cpRes] = await Promise.all([
+      fetch('/api/html-templates', { credentials: 'include' }),
+      fetch('/api/carousel-packs', { credentials: 'include' }),
+    ]);
+    const tplData = await tplRes.json();
+    _htmlTplAllTemplates = tplData.templates || [];
+    try {
+      const cpData = await cpRes.json();
+      _htmlTplAllCarousels = cpData.packs || [];
+    } catch { _htmlTplAllCarousels = []; }
   } catch {
     previewPane.innerHTML = '<p class="so-extract-error" style="padding:24px">Could not load templates.</p>';
     return;
   }
 
-  if (!_htmlTplAllTemplates.length) {
+  if (!_htmlTplAllTemplates.length && !_htmlTplAllCarousels.length) {
     previewPane.innerHTML = '<p style="padding:24px;color:var(--text-muted)">No design templates available yet.</p>';
     return;
   }
@@ -1307,29 +1315,58 @@ async function loadHtmlTemplatePicker() {
 function _renderHtmlTplPicker(templates) {
   const previewPane = document.getElementById('html-tpl-preview-pane');
   const categories = [...new Set(templates.map(t => t.category).filter(Boolean))];
+  const hasCarousels = _htmlTplAllCarousels && _htmlTplAllCarousels.length > 0;
 
-  let chipsHtml = '';
-  if (categories.length > 0) {
-    chipsHtml = `<div class="html-tpl-category-chips">
-      <button class="html-tpl-category-chip ${!_htmlTplActiveCategory ? 'active' : ''}" data-cat="">All</button>
-      ${categories.map(c => `<button class="html-tpl-category-chip ${_htmlTplActiveCategory === c ? 'active' : ''}" data-cat="${escHtml(c)}">${escHtml(c)}</button>`).join('')}
-    </div>`;
+  const isCarouselFilter = _htmlTplActiveCategory === '__carousel__';
+
+  let chipsHtml = '<div class="html-tpl-category-chips">';
+  chipsHtml += `<button class="html-tpl-category-chip ${!_htmlTplActiveCategory ? 'active' : ''}" data-cat="">All</button>`;
+  if (hasCarousels) {
+    chipsHtml += `<button class="html-tpl-category-chip ${isCarouselFilter ? 'active' : ''}" data-cat="__carousel__">Carousel</button>`;
+  }
+  chipsHtml += categories.map(c =>
+    `<button class="html-tpl-category-chip ${_htmlTplActiveCategory === c ? 'active' : ''}" data-cat="${escHtml(c)}">${escHtml(c)}</button>`
+  ).join('');
+  chipsHtml += '</div>';
+
+  let gridHtml = '';
+
+  if (!isCarouselFilter) {
+    // Show regular templates (filtered by category or all)
+    const filtered = _htmlTplActiveCategory ? templates.filter(t => t.category === _htmlTplActiveCategory) : templates;
+    gridHtml += filtered.map(t => {
+      const initials = escHtml((t.name || '?').slice(0, 2).toUpperCase());
+      return `<div class="ai-tpl-card" data-tpl-id="${t.id}" tabindex="0" role="button" aria-label="${escHtml(t.name)}">
+        ${t.thumbnail_r2_key
+          ? `<img src="/api/html-templates/${t.id}/thumbnail" alt="" loading="lazy" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px 8px 0 0;display:block">`
+          : `<div style="width:100%;aspect-ratio:1;background:var(--surface-2);display:flex;align-items:center;justify-content:center;border-radius:8px 8px 0 0"><span style="font-size:24px;font-weight:700;color:var(--text-muted)">${initials}</span></div>`}
+        <div style="padding:8px 12px 10px">
+          <div style="font-weight:600;font-size:13px">${escHtml(t.name)}</div>
+          ${t.description ? `<div style="font-size:11px;color:var(--text-muted);margin-top:2px">${escHtml(t.description)}</div>` : ''}
+        </div>
+      </div>`;
+    }).join('');
   }
 
-  const filtered = _htmlTplActiveCategory ? templates.filter(t => t.category === _htmlTplActiveCategory) : templates;
-
-  const gridHtml = filtered.map(t => {
-    const initials = escHtml((t.name || '?').slice(0, 2).toUpperCase());
-    return `<div class="ai-tpl-card" data-tpl-id="${t.id}" tabindex="0" role="button" aria-label="${escHtml(t.name)}">
-      ${t.thumbnail_r2_key
-        ? `<img src="/api/html-templates/${t.id}/thumbnail" alt="" loading="lazy" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px 8px 0 0;display:block">`
-        : `<div style="width:100%;aspect-ratio:1;background:var(--surface-2);display:flex;align-items:center;justify-content:center;border-radius:8px 8px 0 0"><span style="font-size:24px;font-weight:700;color:var(--text-muted)">${initials}</span></div>`}
-      <div style="padding:8px 12px 10px">
-        <div style="font-weight:600;font-size:13px">${escHtml(t.name)}</div>
-        ${t.description ? `<div style="font-size:11px;color:var(--text-muted);margin-top:2px">${escHtml(t.description)}</div>` : ''}
-      </div>
-    </div>`;
-  }).join('');
+  if (!_htmlTplActiveCategory || isCarouselFilter) {
+    // Show carousel packs (on "All" or "Carousel" filter)
+    const carousels = _htmlTplAllCarousels || [];
+    gridHtml += carousels.map(p => {
+      const slideCount = (p.slides || []).length;
+      const firstSlide = (p.slides || [])[0];
+      const thumbSrc = firstSlide ? `/api/html-templates/${firstSlide.template_id}/thumbnail` : '';
+      const initials = escHtml((p.name || '?').slice(0, 2).toUpperCase());
+      return `<div class="ai-tpl-card" data-carousel-id="${p.id}" tabindex="0" role="button" aria-label="${escHtml(p.name)}">
+        ${thumbSrc
+          ? `<div style="position:relative"><img src="${thumbSrc}" alt="" loading="lazy" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px 8px 0 0;display:block"><span style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,0.7);color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px">${slideCount} slides</span></div>`
+          : `<div style="width:100%;aspect-ratio:1;background:var(--surface-2);display:flex;align-items:center;justify-content:center;border-radius:8px 8px 0 0"><span style="font-size:24px;font-weight:700;color:var(--text-muted)">${initials}</span></div>`}
+        <div style="padding:8px 12px 10px">
+          <div style="font-weight:600;font-size:13px;display:flex;align-items:center;gap:5px">${escHtml(p.name)} <span style="background:var(--brand,#0f766e);color:#fff;font-size:9px;font-weight:700;padding:1px 6px;border-radius:99px;text-transform:uppercase">Carousel</span></div>
+          ${p.description ? `<div style="font-size:11px;color:var(--text-muted);margin-top:2px">${escHtml(p.description)}</div>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+  }
 
   previewPane.innerHTML = `<div class="ai-tpl-picker" style="width:100%;align-self:flex-start;overflow-y:auto">
     <div class="ai-tpl-picker-heading">Choose a design template</div>
@@ -1347,8 +1384,15 @@ function _renderHtmlTplPicker(templates) {
 
   // Template card click
   previewPane.querySelectorAll('.ai-tpl-card').forEach(card => {
-    card.addEventListener('click', () => _selectHtmlTemplate(card.dataset.tplId));
-    card.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); _selectHtmlTemplate(card.dataset.tplId); } });
+    const handler = () => {
+      if (card.dataset.carouselId) {
+        _selectCarouselPack(card.dataset.carouselId);
+      } else if (card.dataset.tplId) {
+        _selectHtmlTemplate(card.dataset.tplId);
+      }
+    };
+    card.addEventListener('click', handler);
+    card.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handler(); } });
   });
 }
 
@@ -1388,6 +1432,138 @@ async function _selectHtmlTemplate(templateId) {
     renderHtmlTemplateForm(_htmlTplExtractedSlots);
   } catch (err) {
     document.getElementById('html-tpl-form-pane').innerHTML = `<div class="so-editor-form"><p class="so-extract-error">${escHtml(err.message || 'Could not analyze post.')}</p></div>`;
+  }
+}
+
+// ── Carousel pack selection ─────────────────────────────────────────────
+
+async function _selectCarouselPack(packId) {
+  const pack = (_htmlTplAllCarousels || []).find(p => p.id === packId);
+  if (!pack) return;
+
+  document.getElementById('html-tpl-modal-title').textContent = pack.name.toUpperCase();
+  _setHtmlTplModalState('editing');
+
+  const previewPane = document.getElementById('html-tpl-preview-pane');
+  const formPane = document.getElementById('html-tpl-form-pane');
+  previewPane.innerHTML = '<div style="color:var(--text-muted);font-size:.85rem;padding:24px">Analyzing your post for carousel slides…</div>';
+  formPane.innerHTML = '<div class="so-editor-form"><div class="loading-text--padded">Extracting content for each slide…</div></div>';
+
+  // Hide the generate button, show a "Generate Carousel" button instead
+  const genBtn = document.getElementById('html-tpl-generate-btn');
+  genBtn.hidden = false;
+  genBtn.disabled = false;
+  genBtn.innerHTML = 'Generate Carousel';
+
+  try {
+    const extractRes = await fetch(`/api/visuals/${encodeURIComponent(String(currentPostId))}`, {
+      method: 'POST', headers: apiHeaders(), credentials: 'include',
+      body: JSON.stringify({ visual_type: 'carousel_pack', mode: 'extract', template_id: packId }),
+    });
+    const extractData = await extractRes.json();
+    if (!extractData.ok) throw new Error(extractData.error || 'Extraction failed');
+
+    const content = extractData.content;
+    const slideCount = 1 + (content.content_slides || []).length + (content.closing ? 1 : 0);
+
+    // Show slide preview cards
+    const slideSummaries = [];
+    if (content.title) slideSummaries.push({ role: 'Title', data: content.title });
+    for (let i = 0; i < (content.content_slides || []).length; i++) {
+      slideSummaries.push({ role: `Content ${i + 1}`, data: content.content_slides[i] });
+    }
+    if (content.closing) slideSummaries.push({ role: 'Closing', data: content.closing });
+
+    previewPane.innerHTML = `<div style="padding:20px;width:100%;overflow-y:auto">
+      <div style="font-weight:600;font-size:14px;margin-bottom:12px">${slideCount} slides extracted</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        ${slideSummaries.map((s, i) => {
+          const firstField = Object.entries(s.data).find(([k,v]) => typeof v === 'string' && v);
+          const preview = firstField ? firstField[1].slice(0, 80) : '';
+          return `<div style="border:1px solid var(--border);border-radius:8px;padding:10px 14px">
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--brand,#0f766e);margin-bottom:3px">${escHtml(s.role)}</div>
+            <div style="font-size:13px;color:var(--text-secondary)">${escHtml(preview)}${preview.length >= 80 ? '…' : ''}</div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+
+    formPane.innerHTML = `<div class="so-editor-form" style="padding:20px">
+      <p style="font-size:.85rem;color:var(--text-muted)">Click <strong>Generate Carousel</strong> to render all ${slideCount} slides as images and a PDF.</p>
+    </div>`;
+
+    // Wire generate button for carousel
+    const handler = async () => {
+      genBtn.disabled = true;
+      genBtn.textContent = 'Rendering slides…';
+      formPane.innerHTML = `<div class="so-editor-form" style="padding:20px">
+        <div style="font-weight:600;font-size:.85rem" id="carousel-render-status">Starting render…</div>
+        <div style="height:6px;background:var(--neutral-100);border-radius:99px;overflow:hidden;margin-top:8px">
+          <div id="carousel-render-bar" style="height:100%;background:var(--brand,#0f766e);border-radius:99px;transition:width .3s;width:0%"></div>
+        </div>
+      </div>`;
+
+      try {
+        const renderRes = await fetch(`/api/visuals/${encodeURIComponent(String(currentPostId))}`, {
+          method: 'POST', headers: apiHeaders(), credentials: 'include',
+          body: JSON.stringify({ visual_type: 'carousel_pack', mode: 'render', template_id: packId, content }),
+        });
+        const renderData = await renderRes.json();
+        if (!renderData.ok) throw new Error(renderData.error || 'Render failed');
+
+        const jobId = renderData.job_id;
+        const pollTimer = setInterval(async () => {
+          try {
+            const jr = await fetch(`/api/visuals/jobs/${jobId}`, { headers: apiHeaders(), credentials: 'include' });
+            const job = await jr.json();
+            const statusEl = document.getElementById('carousel-render-status');
+            const barEl = document.getElementById('carousel-render-bar');
+
+            if (job.progress && job.progress.total > 0) {
+              const pct = Math.round((job.progress.current / job.progress.total) * 100);
+              if (barEl) barEl.style.width = `${pct}%`;
+              if (statusEl) statusEl.textContent = `Rendering slide ${job.progress.current} of ${job.progress.total}…`;
+            }
+
+            if (job.status === 'done') {
+              clearInterval(pollTimer);
+              if (barEl) barEl.style.width = '100%';
+
+              // Show results
+              const slides = job.slides || [];
+              let resultHtml = `<div style="padding:20px;width:100%;overflow-y:auto">
+                <div style="font-weight:600;font-size:14px;margin-bottom:12px">${slides.length} slides ready</div>
+                <div style="display:flex;gap:10px;flex-wrap:wrap">
+                  ${slides.map(s => `<a href="${s.png_url}" target="_blank" download style="display:block;width:120px">
+                    <img src="${s.png_url}" alt="Slide ${s.slide_index}" style="width:100%;border-radius:6px;border:1px solid var(--border)">
+                    <div style="font-size:10px;text-align:center;margin-top:3px;text-transform:capitalize;color:var(--text-muted)">${escHtml(s.role)}</div>
+                  </a>`).join('')}
+                </div>`;
+              if (job.pdf_url) {
+                resultHtml += `<a href="${job.pdf_url}" target="_blank" download class="btn-teal-filled" style="display:inline-flex;margin-top:16px;font-size:13px;padding:8px 16px;text-decoration:none">Download PDF</a>`;
+              }
+              resultHtml += '</div>';
+              previewPane.innerHTML = resultHtml;
+              formPane.innerHTML = '';
+              genBtn.hidden = true;
+            } else if (job.status === 'failed') {
+              clearInterval(pollTimer);
+              if (statusEl) statusEl.textContent = `Failed: ${job.error}`;
+              genBtn.disabled = false;
+              genBtn.textContent = 'Retry';
+            }
+          } catch { /* keep polling */ }
+        }, 3000);
+      } catch (err) {
+        formPane.innerHTML = `<div class="so-editor-form"><p class="so-extract-error" style="padding:20px">${escHtml(err.message)}</p></div>`;
+        genBtn.disabled = false;
+        genBtn.textContent = 'Generate Carousel';
+      }
+    };
+
+    genBtn.onclick = handler;
+  } catch (err) {
+    formPane.innerHTML = `<div class="so-editor-form"><p class="so-extract-error" style="padding:20px">${escHtml(err.message || 'Could not analyze post.')}</p></div>`;
   }
 }
 
@@ -1567,6 +1743,7 @@ function renderHtmlTemplateForm(slots) {
             <span style="font-size:12px;color:var(--text-muted)">Click to upload</span>
           </div>
           <input type="file" accept="image/*" data-slot="${escHtml(key)}" hidden>
+          <button type="button" class="htpl-remove-bg-btn" data-slot="${escHtml(key)}" hidden>✦ Remove background</button>
         </div>
       </div>`;
       continue;
@@ -1584,6 +1761,7 @@ function renderHtmlTemplateForm(slots) {
             <span style="font-size:12px;color:var(--text-muted)">Click to upload</span>
           </div>
           <input type="file" accept="image/*" data-slot="${escHtml(effectiveKey)}" hidden>
+          <button type="button" class="htpl-remove-bg-btn" data-slot="${escHtml(effectiveKey)}" hidden>✦ Remove background</button>
         </div>
       </div>`;
       continue;

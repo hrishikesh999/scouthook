@@ -5,71 +5,102 @@ const { getSetting } = require('../db');
 const { extractJsonFromResponse, getAnthropicMessageText } = require('./voiceFingerprint');
 const sharp = require('sharp');
 
-const SYSTEM_PROMPT = `You are an expert HTML/CSS developer who converts design images into Puppeteer-compatible HTML templates for a LinkedIn visual content tool called ScoutHook.
-
-OUTPUT FORMAT:
-Return a JSON object with exactly two keys:
-{
-  "html": "<!DOCTYPE html>...",
-  "manifest": { "slots": {...}, "dimensions": {...} }
+let _callRenderService = null;
+function getRenderService() {
+  if (!_callRenderService) {
+    _callRenderService = require('./templateRenderer').callRenderService;
+  }
+  return _callRenderService;
 }
 
-TEMPLATE REQUIREMENTS:
+// ---------------------------------------------------------------------------
+// Pass 1 prompt — generate HTML from image
+// ---------------------------------------------------------------------------
 
-1. LAYOUT — Use a single root container <div> with explicit width and height in px. Use CSS Flexbox or Grid for layout. NEVER use position:absolute. Use overflow:hidden on root.
+const SYSTEM_PROMPT = `You are an expert HTML/CSS developer who converts design images into pixel-perfect, Puppeteer-compatible HTML templates.
 
-2. FONTS — Load Google Fonts via <link> in <head>. Recommended: Poppins (headings, weight 600-800), Inter (body, weight 400-500). Always specify font-weight explicitly.
+OUTPUT: Return a JSON object with exactly two keys:
+{ "html": "<!DOCTYPE html>...", "manifest": { "slots": {...}, "dimensions": {...} } }
 
-3. COLORS — Define all colors as CSS custom properties on the root container:
-   style="--bg:#1a1a2e; --accent:#e94560; --text:#ffffff; --text-muted:rgba(255,255,255,0.7)"
-   Use var(--bg), var(--accent), etc. in all child elements. This allows user color customization.
+RULES:
 
-4. EDITABLE SLOTS — Mark user-editable text elements with data-slot="key_name":
-   <h1 data-slot="headline">Headline Text</h1>
-   <p data-slot="subtitle">Supporting text</p>
-   Use snake_case for slot keys. Include realistic placeholder text matching the image.
+1. LAYOUT
+   - Root container: <div> with explicit width and height in px, overflow:hidden.
+   - Use Flexbox or CSS Grid as primary layout. You MAY use position:absolute for decorative overlays, badges, or layered elements when the design requires it.
+   - Use inline SVG for shapes, icons, dividers, and decorative elements — reproduce them faithfully.
 
-5. IMAGE SLOTS — For user-uploadable images:
-   <img data-slot="image:photo" src="" alt="Photo" style="width:100%;height:200px;object-fit:cover;border-radius:12px">
-   Key must start with "image:".
+2. FONTS
+   - Load via <link href="https://fonts.googleapis.com/css2?family=...&display=swap">.
+   - Study the image carefully: is it serif or sans-serif? Condensed or regular? Bold or light?
+   - Pick the closest Google Font. Good options: Poppins, Inter, Montserrat, Playfair Display, Raleway, Roboto Condensed, DM Sans, Space Grotesk.
+   - Always specify font-weight explicitly (400, 500, 600, 700, 800).
 
-6. REPEATING SLOTS — For lists, steps, or repeated items:
+3. COLORS
+   - Extract exact hex colors from the image — be precise, not approximate.
+   - Define as CSS custom properties on the root container style attribute:
+     style="--bg:#1a1a2e; --accent:#e94560; --text:#ffffff; --text-muted:rgba(255,255,255,0.7)"
+   - Use var(--bg), var(--accent), etc. everywhere. This enables user color customization.
+
+4. TEXT SLOTS — Mark editable text with data-slot="key_name":
+   <h1 data-slot="headline">Headline</h1>
+   Use snake_case keys. Include realistic placeholder text that matches the image content.
+
+5. IMAGE SLOTS — For uploadable images, key starts with "image:":
+   <img data-slot="image:photo" src="" alt="" style="width:100%;height:200px;object-fit:cover;border-radius:12px">
+
+6. REPEATING SLOTS — For lists/steps/items:
    <div data-slot="items" data-slot-container>
      <div data-slot-item>
-       <h3 data-slot-field="title">Step 1</h3>
-       <p data-slot-field="body">Description</p>
+       <h3 data-slot-field="title">Title</h3>
+       <p data-slot-field="body">Body</p>
      </div>
    </div>
-   Include 2-3 example items with realistic placeholder content.
+   Include 2-3 example items with realistic content from the image.
 
-7. MANIFEST — Include in the HTML as:
+7. MANIFEST — Embed in the HTML:
    <script type="application/json" id="template-meta">
-   {"slots":{...},"dimensions":{"width":W,"height":H}}
+   {"slots":{"headline":{"maxLen":80},"color:accent":{"default":"#e94560"},"image:photo":{},"items":{"type":"repeating","fields":["title","body"],"min":2,"max":6}},"dimensions":{"width":1080,"height":1080}}
    </script>
 
-   Slot definitions:
-   - Text: { "maxLen": 80 } (set appropriate limits)
-   - Color: { "default": "#hexcolor" } (key starts with "color:")
-   - Image: {} (key starts with "image:")
-   - Repeating: { "type": "repeating", "fields": ["title","body"], "min": 2, "max": 6 }
+8. VISUAL FIDELITY
+   - Match the image's padding, margins, and spacing precisely.
+   - Reproduce font sizes: large headings 36-56px, subheadings 20-28px, body 14-18px.
+   - Line-height: 1.1-1.2 for headings, 1.4-1.6 for body.
+   - Letter-spacing: tight (-1px to -2.5px) for large headings if the design uses it.
+   - Reproduce rounded corners, shadows, gradients, and decorative elements.
+   - Use CSS gradients for gradient backgrounds — match direction and color stops.
+   - Ensure high contrast between text and background.
 
-8. VISUAL QUALITY:
-   - Generous padding (40-60px outer, 20-30px between sections)
-   - Clear font hierarchy: heading 36-48px, subheading 20-28px, body 14-18px
-   - Line-height: 1.15 for headings, 1.5 for body
-   - Letter-spacing: -1px to -2px for large headings
-   - Rounded corners on images and cards (8-16px)
-   - Subtle shadows for depth where appropriate
-   - Background patterns or gradients for visual interest
-   - Ensure high contrast between text and background
+9. DIMENSIONS — Match the image aspect ratio:
+   Square: 1080x1080 | Portrait: 1080x1350 | Landscape: 1200x628
 
-9. DIMENSIONS — Common LinkedIn sizes:
-   - Square: 1080x1080 (default)
-   - Portrait: 1080x1350
-   - Landscape: 1200x628
-   Choose the size that best matches the uploaded image's aspect ratio.
+CRITICAL: Return ONLY the raw JSON. No markdown fences, no explanation.`;
 
-CRITICAL: Return ONLY the JSON object. No markdown, no code fences, no explanation.`;
+// ---------------------------------------------------------------------------
+// Pass 2 prompt — refine HTML by comparing original vs rendered
+// ---------------------------------------------------------------------------
+
+const REFINE_PROMPT = `You are refining an HTML template to match a design image more precisely.
+
+Image 1 is the ORIGINAL DESIGN (the target to match).
+Image 2 is the CURRENT HTML RENDERING (what the code produces now).
+
+Compare them carefully and fix ALL differences:
+- Background colors: match the exact hex values from the original
+- Font sizes, weights, and line-heights: match the original precisely
+- Spacing and padding: adjust to match the original layout
+- Typography: if the font doesn't match, try a different Google Font
+- Decorative elements: add missing shapes, lines, icons as inline SVG
+- Text alignment: left/center/right must match the original
+- Image placement and sizing: match the original proportions
+- Any visual element present in Image 1 but missing in Image 2 must be added
+
+CRITICAL RULES:
+- Keep ALL data-slot, data-slot-container, data-slot-item, data-slot-field attributes exactly as they are
+- Keep the <script type="application/json" id="template-meta"> block unchanged
+- Keep all Google Font <link> tags in <head>
+- Return the COMPLETE corrected HTML document (not a JSON wrapper — just raw HTML starting with <!DOCTYPE html>)
+- No markdown fences, no explanation — only the HTML`;
 
 const VISION_TIMEOUT_MS = 90_000;
 
@@ -119,6 +150,11 @@ async function generateTemplateFromImage(imageBuffer, options = {}) {
     ]);
   };
 
+  // ── Pass 1: Image → HTML ────────────────────────────────────────────────
+
+  console.log('[templateFromImage] pass 1: generating HTML from image');
+  const pass1Start = Date.now();
+
   const msg = await callWithTimeout({
     model: 'claude-sonnet-4-6',
     max_tokens: 12000,
@@ -156,7 +192,66 @@ async function generateTemplateFromImage(imageBuffer, options = {}) {
   if (!manifest.slots) manifest.slots = {};
   if (!manifest.dimensions) manifest.dimensions = { width: 1080, height: 1080 };
 
-  return { html: result.html, manifest };
+  let html = result.html;
+
+  console.log('[templateFromImage] pass 1 done in %dms (%d bytes, %d slots)',
+    Date.now() - pass1Start, html.length, Object.keys(manifest.slots).length);
+
+  // ── Pass 2: Render → Compare → Refine ──────────────────────────────────
+
+  const shouldRefine = options.refine !== false;
+
+  if (shouldRefine) {
+    try {
+      const callRenderService = getRenderService();
+      const { width = 1080, height = 1080 } = manifest.dimensions;
+
+      console.log('[templateFromImage] pass 2: rendering HTML for comparison (%dx%d)', width, height);
+      const pass2Start = Date.now();
+
+      const renderedPng = await callRenderService(html, width, height);
+      const renderedBase64 = renderedPng.toString('base64');
+
+      console.log('[templateFromImage] pass 2: rendered in %dms (%d bytes PNG), sending for refinement',
+        Date.now() - pass2Start, renderedPng.length);
+
+      const refineMsg = await callWithTimeout({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 12000,
+        system: REFINE_PROMPT,
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'text', text: 'Image 1 — Original design:' },
+            imageBlock,
+            { type: 'text', text: 'Image 2 — Current HTML rendering:' },
+            { type: 'image', source: { type: 'base64', media_type: 'image/png', data: renderedBase64 } },
+            { type: 'text', text: 'Return the complete corrected HTML document. Keep all data-slot attributes and the template-meta script block intact.' },
+          ],
+        }],
+      });
+
+      const refinedText = getAnthropicMessageText(refineMsg);
+
+      // Extract raw HTML — strip markdown fences if present
+      let refinedHtml = refinedText.trim()
+        .replace(/^```(?:html)?\s*/m, '')
+        .replace(/\s*```\s*$/m, '')
+        .trim();
+
+      if (refinedHtml.includes('<!DOCTYPE') || refinedHtml.includes('<html')) {
+        html = refinedHtml;
+        console.log('[templateFromImage] pass 2 refinement applied (%d bytes, total %dms)',
+          html.length, Date.now() - pass2Start);
+      } else {
+        console.warn('[templateFromImage] pass 2 refinement skipped — response did not contain valid HTML');
+      }
+    } catch (err) {
+      console.warn('[templateFromImage] pass 2 refinement failed (using pass 1 result):', err.message);
+    }
+  }
+
+  return { html, manifest };
 }
 
 module.exports = { generateTemplateFromImage };

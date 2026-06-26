@@ -353,4 +353,4 @@ async function getRenderJobStatus(jobId) {
   return renderJobs.get(jobId) || null;
 }
 
-module.exports = { renderTemplate, extractTemplateSlots, generateTemplateThumbnail, startRenderJob, getRenderJobStatus };
+module.exports = { renderTemplate, extractTemplateSlots, generateTemplateThumbnail, startRenderJob, getRenderJobStatus, callRenderService };

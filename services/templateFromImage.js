@@ -99,20 +99,24 @@ You are given the SVG source code of a design. Extract EXACT values from the SVG
 - fill/stroke hex colors → use those exact hex values as CSS custom properties
 - viewBox/width/height → use for template dimensions
 - text elements → make editable with data-slot attributes
-- image/rect elements → identify image slots
+- <image> elements with embedded base64 data → PRESERVE as image slots with the original data
 
 OUTPUT: Return a JSON object: { "html": "<!DOCTYPE html>...", "manifest": { "slots": {...}, "dimensions": {...} } }
 
-Follow ALL the same rules as for image conversion:
+RULES:
 1. Root <div> with explicit width/height and overflow:hidden
 2. ALL colors as CSS custom properties on root: style="--bg:#hex; --accent:#hex; --text:#hex"
 3. Text slots: data-slot="key_name" with snake_case keys
-4. Image slots: data-slot="image:key" with src=""
+4. Image slots: data-slot="image:key" — if the SVG contains a <image> element with href="data:image/..." (base64 embedded image), PRESERVE that data URI as the src value:
+   <img data-slot="image:photo" src="data:image/png;base64,..." alt="Photo">
+   This keeps the original image as a default that users can optionally replace.
+   If the image href is an external URL, also preserve it as the src value.
+   Only use src="" if there is no image data to preserve.
 5. Repeating slots: data-slot-container + data-slot-item + data-slot-field
 6. Embed manifest as <script type="application/json" id="template-meta"> in <head>
 7. Include color:* slots in manifest for each CSS variable
 
-ADVANTAGE: You have the exact SVG source — use the EXACT font-family, EXACT hex colors, and EXACT dimensions. Do not approximate.
+ADVANTAGE: You have the exact SVG source — use the EXACT font-family, EXACT hex colors, EXACT dimensions, and PRESERVE embedded images. Do not approximate anything.
 
 CRITICAL: Return ONLY the raw JSON. No markdown fences, no explanation.`;
 
@@ -260,15 +264,13 @@ async function generateTemplateFromImage(imageBuffer, options = {}) {
 
   // ── Post-processing: fix common Claude mistakes ─────────────────────────
 
-  // Fix image slots missing "image:" prefix
-  html = html.replace(/data-slot="(?!image:)([\w]+)"\s*(src\s*=\s*"[^"]*")/g, (match, key, srcAttr) => {
-    if (srcAttr.includes('src=')) {
-      console.log('[templateFromImage] fixing image slot: %s → image:%s', key, key);
-      manifest.slots[`image:${key}`] = manifest.slots[key] || {};
-      delete manifest.slots[key];
-      return `data-slot="image:${key}" src=""`;
-    }
-    return match;
+  // Fix image slots missing "image:" prefix (preserve existing src if it's a data URI)
+  html = html.replace(/data-slot="(?!image:)([\w]+)"(\s+src\s*=\s*"([^"]*)")/g, (match, key, srcAttr, srcVal) => {
+    console.log('[templateFromImage] fixing image slot: %s → image:%s', key, key);
+    manifest.slots[`image:${key}`] = manifest.slots[key] || {};
+    delete manifest.slots[key];
+    const preservedSrc = srcVal.startsWith('data:') ? srcVal : '';
+    return `data-slot="image:${key}" src="${preservedSrc}"`;
   });
 
   // Fix image src that has a filename instead of empty string

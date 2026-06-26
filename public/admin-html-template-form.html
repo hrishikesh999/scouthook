@@ -715,7 +715,7 @@
       console.log('[refine] sending %s (%d bytes)', _originalImageFile.type, _originalImageFile.size);
       const r = await fetch('/admin/html-templates/from-image', {
         method: 'POST',
-        headers: { 'Content-Type': _originalImageFile.type, 'X-Admin-Password': adminPw, 'X-Instructions': 'Refine only — improve accuracy of the existing HTML' },
+        headers: { 'Content-Type': _originalImageFile.type, 'X-Admin-Password': adminPw, 'X-Instructions': 'Refine only - improve accuracy of the existing HTML' },
         body: _originalImageFile,
       });
       console.log('[refine] response status:', r.status);

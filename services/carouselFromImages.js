@@ -14,7 +14,7 @@ const { generateTemplateFromImage } = require('./templateFromImage');
  * @param {string[]} roles - parallel array: 'title' | 'content' | 'closing'
  * @returns {{ templates: { html: string, manifest: object, role: string }[], variableMap: object }}
  */
-async function convertCarouselImages(images, roles) {
+async function convertCarouselImages(images, roles, onProgress) {
   if (!images.length) throw new Error('No images provided');
 
   const templates = [];
@@ -23,12 +23,15 @@ async function convertCarouselImages(images, roles) {
   console.log('[carouselFromImages] converting slide 1/%d (role=%s, %d bytes)',
     images.length, roles[0], images[0].buffer.length);
 
+  if (onProgress) await onProgress(0);
+
   const first = await generateTemplateFromImage(images[0].buffer, {
     contentType: images[0].contentType,
     instructions: `This is a ${roles[0]} slide in a multi-slide carousel template. Mark all editable text as data-slot and all colors as CSS custom properties.`,
   });
 
   templates.push({ html: first.html, manifest: first.manifest, role: roles[0] });
+  if (onProgress) await onProgress(1);
 
   // Extract reference set from the first template's manifest
   const ref = extractReferenceSet(first.manifest, first.html);
@@ -48,6 +51,7 @@ async function convertCarouselImages(images, roles) {
     });
 
     templates.push({ html: result.html, manifest: result.manifest, role });
+    if (onProgress) await onProgress(i + 1);
   }
 
   // ── Build variable map ──────────────────────────────────────────────────

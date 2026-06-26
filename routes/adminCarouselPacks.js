@@ -8,6 +8,32 @@ const storage = require('../services/storage');
 const { readSlotManifest, stripScriptTags } = require('../services/templateSlotInjector');
 const { generateTemplateThumbnail } = require('../services/templateRenderer');
 const { convertCarouselImages } = require('../services/carouselFromImages');
+const { redisSet, redisGet } = require('../services/redis');
+
+// ---------------------------------------------------------------------------
+// Async conversion job queue
+// ---------------------------------------------------------------------------
+
+const conversionJobs = new Map();
+const JOB_TTL_SECONDS = 900; // 15 minutes
+
+setInterval(() => {
+  const cutoff = Date.now() - JOB_TTL_SECONDS * 1000;
+  for (const [id, job] of conversionJobs) {
+    if (job.createdAt < cutoff) conversionJobs.delete(id);
+  }
+}, 60_000);
+
+async function _setConversionJob(jobId, data) {
+  const stored = await redisSet(`carousel_convert:${jobId}`, data, JOB_TTL_SECONDS);
+  if (!stored) conversionJobs.set(jobId, { ...data, createdAt: Date.now() });
+}
+
+async function _getConversionJob(jobId) {
+  const fromRedis = await redisGet(`carousel_convert:${jobId}`);
+  if (fromRedis) return fromRedis;
+  return conversionJobs.get(jobId) || null;
+}
 
 // ---------------------------------------------------------------------------
 // Auth (same pattern as adminHtmlTemplates.js)
@@ -88,40 +114,64 @@ router.post('/from-images', express.json({ limit: '60mb' }), async (req, res) =>
       }
     }
 
-    // Convert base64 to buffers
+    // Convert base64 to buffers before starting the background job
     const images = slides.map(s => ({
       buffer: Buffer.from(s.data, 'base64'),
       contentType: s.contentType,
     }));
     const roles = slides.map(s => s.role);
 
-    console.log('[adminCarouselPacks] from-images: %d slides, name=%s', slides.length, name);
-    const start = Date.now();
+    const jobId = crypto.randomUUID();
+    const total = slides.length;
+
+    // Set initial job state synchronously
+    conversionJobs.set(jobId, {
+      status: 'converting', progress: { current: 0, total }, pack_id: null, error: null, createdAt: Date.now(),
+    });
+    _setConversionJob(jobId, { status: 'converting', progress: { current: 0, total }, pack_id: null, error: null });
+
+    // Return immediately — frontend polls /jobs/:jobId
+    res.json({ ok: true, job_id: jobId });
+
+    // Run conversion in background
+    _runConversionJob(jobId, images, roles, { name: name.trim(), description, category, min_content_slides, max_content_slides });
+  } catch (err) {
+    console.error('[adminCarouselPacks] from-images error:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+async function _runConversionJob(jobId, images, roles, meta) {
+  const start = Date.now();
+  const total = images.length;
+
+  try {
+    console.log('[adminCarouselPacks] job %s: converting %d slides, name=%s', jobId, total, meta.name);
 
     // Convert all images (carousel-aware)
-    const { templates, variableMap } = await convertCarouselImages(images, roles);
+    const { templates, variableMap } = await convertCarouselImages(images, roles, async (i) => {
+      await _setConversionJob(jobId, {
+        status: 'converting', progress: { current: i, total }, pack_id: null, error: null,
+      });
+    });
 
-    console.log('[adminCarouselPacks] conversion done in %dms', Date.now() - start);
+    console.log('[adminCarouselPacks] job %s: conversion done in %dms, saving templates', jobId, Date.now() - start);
+    await _setConversionJob(jobId, { status: 'saving', progress: { current: total, total }, pack_id: null, error: null });
 
-    // Save each template to html_templates
+    // Save each template to html_templates (flagged as carousel slide)
     const savedSlides = [];
     for (let i = 0; i < templates.length; i++) {
       const t = templates[i];
       const role = roles[i];
 
       let manifest;
-      try {
-        manifest = readSlotManifest(t.html);
-      } catch {
-        manifest = t.manifest;
-      }
+      try { manifest = readSlotManifest(t.html); } catch { manifest = t.manifest; }
 
       const cleanHtml = stripScriptTags(t.html);
       const templateId = crypto.randomUUID();
       const htmlKey = storage.buildTemplateKey(templateId);
       await storage.uploadAdmin(Buffer.from(cleanHtml, 'utf8'), htmlKey, 'text/html');
 
-      // Generate thumbnail
       let thumbnailKey = null;
       try {
         const thumbBuf = await generateTemplateThumbnail(cleanHtml, manifest);
@@ -133,13 +183,13 @@ router.post('/from-images', express.json({ limit: '60mb' }), async (req, res) =>
 
       await db.prepare(
         `INSERT INTO html_templates
-           (id, name, description, category, html_r2_key, thumbnail_r2_key, slot_manifest, sort_order)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+           (id, name, description, category, html_r2_key, thumbnail_r2_key, slot_manifest, sort_order, is_carousel_slide)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, TRUE)`
       ).run(
         templateId,
-        `${name.trim()} — ${role} slide`,
-        description || null,
-        category || null,
+        `${meta.name} — ${role} slide`,
+        meta.description || null,
+        meta.category || null,
         htmlKey,
         thumbnailKey,
         JSON.stringify(manifest),
@@ -162,17 +212,11 @@ router.post('/from-images', express.json({ limit: '60mb' }), async (req, res) =>
           min_content_slides, max_content_slides, sort_order)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`
     ).run(
-      packId,
-      name.trim(),
-      description || null,
-      packThumbnail,
-      category || null,
-      JSON.stringify(variableMap),
-      min_content_slides || 3,
-      max_content_slides || 8,
+      packId, meta.name, meta.description || null, packThumbnail,
+      meta.category || null, JSON.stringify(variableMap),
+      meta.min_content_slides || 3, meta.max_content_slides || 8,
     );
 
-    // Create slide links
     for (const s of savedSlides) {
       await db.prepare(
         `INSERT INTO carousel_pack_slides (id, pack_id, template_id, role, slide_order)
@@ -180,19 +224,27 @@ router.post('/from-images', express.json({ limit: '60mb' }), async (req, res) =>
       ).run(crypto.randomUUID(), packId, s.templateId, s.role, s.slideOrder);
     }
 
-    console.log('[adminCarouselPacks] pack %s created with %d slides in %dms',
-      packId, savedSlides.length, Date.now() - start);
+    console.log('[adminCarouselPacks] job %s: pack %s created with %d slides in %dms',
+      jobId, packId, savedSlides.length, Date.now() - start);
 
-    res.status(201).json({
-      ok: true,
-      pack_id: packId,
-      slides_created: savedSlides.length,
-      variable_map: variableMap,
+    await _setConversionJob(jobId, {
+      status: 'done', progress: { current: total, total }, pack_id: packId,
+      slides_created: savedSlides.length, variable_map: variableMap, error: null,
     });
   } catch (err) {
-    console.error('[adminCarouselPacks] from-images error:', err.message);
-    res.status(500).json({ ok: false, error: err.message });
+    console.error('[adminCarouselPacks] job %s failed:', jobId, err.message);
+    await _setConversionJob(jobId, { status: 'failed', progress: null, pack_id: null, error: err.message });
   }
+}
+
+// ---------------------------------------------------------------------------
+// GET /jobs/:jobId — poll conversion job status
+// ---------------------------------------------------------------------------
+
+router.get('/jobs/:jobId', async (req, res) => {
+  const job = await _getConversionJob(req.params.jobId);
+  if (!job) return res.status(404).json({ ok: false, error: 'job_not_found' });
+  res.json({ ok: true, ...job });
 });
 
 // ---------------------------------------------------------------------------

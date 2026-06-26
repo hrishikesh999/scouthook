@@ -350,7 +350,7 @@
       });
     }
 
-    status.textContent = `Converting ${slides.length} slides... This may take 2-5 minutes.`;
+    status.textContent = `Uploading ${slides.length} slides...`;
     bar.style.width = '20%';
 
     try {
@@ -367,16 +367,46 @@
       });
 
       const data = await r.json();
-      bar.style.width = '100%';
+      if (!data.ok) throw new Error(data.error || 'Upload failed');
 
-      if (!data.ok) throw new Error(data.error || 'Conversion failed');
+      // Poll the conversion job
+      const jobId = data.job_id;
+      status.textContent = `Converting slide 1 of ${slides.length}...`;
 
-      status.textContent = `Done! ${data.slides_created} slides converted.`;
-      _variableMap = data.variable_map;
+      const poll = setInterval(async () => {
+        try {
+          const jr = await adminFetch(`/admin/carousel-packs/jobs/${jobId}`);
+          const job = await jr.json();
+          if (!job.ok) { clearInterval(poll); throw new Error(job.error || 'Job not found'); }
 
-      setTimeout(() => {
-        location.href = `/admin-carousel-pack-form.html?id=${data.pack_id}`;
-      }, 1500);
+          if (job.status === 'converting' && job.progress) {
+            const pct = 20 + (job.progress.current / job.progress.total) * 70;
+            bar.style.width = `${pct}%`;
+            status.textContent = `Converting slide ${job.progress.current} of ${job.progress.total}...`;
+          } else if (job.status === 'saving') {
+            bar.style.width = '90%';
+            status.textContent = 'Saving templates...';
+          } else if (job.status === 'done') {
+            clearInterval(poll);
+            bar.style.width = '100%';
+            status.textContent = `Done! ${job.slides_created} slides converted.`;
+            _variableMap = job.variable_map;
+            setTimeout(() => {
+              location.href = `/admin-carousel-pack-form.html?id=${job.pack_id}`;
+            }, 1500);
+          } else if (job.status === 'failed') {
+            clearInterval(poll);
+            showError(job.error || 'Conversion failed');
+            btn.disabled = false; btn.textContent = 'Convert & Save';
+            progress.style.display = 'none';
+          }
+        } catch (pollErr) {
+          clearInterval(poll);
+          showError(pollErr.message);
+          btn.disabled = false; btn.textContent = 'Convert & Save';
+          progress.style.display = 'none';
+        }
+      }, 3000);
     } catch (err) {
       showError(err.message);
       btn.disabled = false; btn.textContent = 'Convert & Save';

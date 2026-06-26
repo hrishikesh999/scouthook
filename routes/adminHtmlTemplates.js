@@ -38,6 +38,7 @@ router.get('/', async (req, res) => {
       `SELECT id, name, description, category, active, sort_order,
               slot_manifest, html_r2_key, thumbnail_r2_key, created_at
        FROM html_templates
+       WHERE is_carousel_slide = FALSE
        ORDER BY sort_order ASC, created_at ASC`
     ).all();
     res.json({ ok: true, templates: rows });

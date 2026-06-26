@@ -716,12 +716,18 @@
         }
 
         // Render charge details inside the confirmation modal
-        const todayLine = preview.immediate_total != null
-          ? `<strong>${fmtMoney(preview.immediate_total, preview.immediate_currency)}</strong> charged today (prorated for the rest of this billing period)`
-          : 'A prorated charge will be collected today';
-        const nextLine = preview.next_total != null && preview.next_billed_at
-          ? `From ${new Date(preview.next_billed_at).toLocaleDateString()}: <strong>${fmtMoney(preview.next_total, preview.immediate_currency)}/mo</strong> (new monthly total)`
-          : 'Starting next renewal, your monthly total will increase by $29.';
+        let todayLine, nextLine;
+        if (preview.lifetime) {
+          todayLine = '<strong>No charge</strong> — included in your Lifetime plan';
+          nextLine  = 'Extra workspaces are included at no cost.';
+        } else {
+          todayLine = preview.immediate_total != null
+            ? `<strong>${fmtMoney(preview.immediate_total, preview.immediate_currency)}</strong> charged today (prorated for the rest of this billing period)`
+            : 'A prorated charge will be collected today';
+          nextLine = preview.next_total != null && preview.next_billed_at
+            ? `From ${new Date(preview.next_billed_at).toLocaleDateString()}: <strong>${fmtMoney(preview.next_total, preview.immediate_currency)}/mo</strong> (new monthly total)`
+            : 'Starting next renewal, your monthly total will increase by $29.';
+        }
 
         modalBody.innerHTML = `
           <p style="margin:0 0 12px">${todayLine}.</p>

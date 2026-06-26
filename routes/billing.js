@@ -633,6 +633,12 @@ router.post('/workspace-preview', requireAuth, async (req, res) => {
   }
 
   const sub = await getUserSubscription(userId);
+
+  // Lifetime users have no Paddle subscription — workspace slots are free for them.
+  if (sub.status === 'lifetime') {
+    return res.json({ ok: true, lifetime: true, immediate_total: null, immediate_currency: null, next_total: null, next_billed_at: null });
+  }
+
   if (!sub.paddle_subscription_id) {
     return res.status(403).json({ ok: false, error: 'no_paddle_subscription' });
   }
@@ -696,6 +702,18 @@ router.post('/add-workspace', requireAuth, async (req, res) => {
   }
 
   const sub = await getUserSubscription(userId);
+
+  // Lifetime users have no Paddle subscription — grant the extra slot directly in the DB.
+  if (sub.status === 'lifetime') {
+    const newExtra = (sub.extra_workspaces ?? 0) + 1;
+    const newLimit = getWorkspaceLimit('pro', newExtra);
+    await billingDb.prepare(
+      'UPDATE user_subscriptions SET extra_workspaces = ?, updated_at = now() WHERE user_id = ?'
+    ).run(newExtra, userId);
+    console.log(`[billing] add-workspace (lifetime) userId=${userId} extra_workspaces=${newExtra}`);
+    return res.json({ ok: true, extra_workspaces: newExtra, workspace_limit: newLimit });
+  }
+
   if (!sub.paddle_subscription_id) {
     return res.status(403).json({ ok: false, error: 'no_paddle_subscription' });
   }

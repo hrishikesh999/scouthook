@@ -329,10 +329,19 @@
         fetch('/api/billing/add-workspace', { method: 'POST', credentials: 'same-origin' }).then(r => r.json()),
       ]);
 
-      if (!addonRes.ok || !addonRes.priceId) {
+      if (!addonRes.ok) {
         throw new Error(addonRes.error === 'pro_required'
           ? 'This add-on requires an active Pro subscription.'
           : (addonRes.error || 'price_not_configured'));
+      }
+
+      // Lifetime users: workspace slot granted directly in the DB — no Paddle checkout needed.
+      if (!addonRes.priceId) {
+        let pendingName;
+        try { pendingName = sessionStorage.getItem(PENDING_NAME_KEY); } catch {}
+        if (pendingName) await handlePostCheckout(null, pendingName);
+        setBtn(btn, false);
+        return;
       }
 
       await loadPaddle();

@@ -214,6 +214,37 @@ INVIOLABLE RULES:
 
 const VISION_TIMEOUT_MS = 90_000;
 
+/**
+ * Strip AI commentary from a response that should be raw HTML.
+ * Handles: markdown fences, explanatory text before/after the HTML document.
+ * Returns null if no valid HTML document found.
+ */
+function extractHtmlFromResponse(text) {
+  let s = String(text || '').trim();
+
+  // Strip markdown code fences wrapping the entire response
+  s = s.replace(/^```(?:html)?\s*/m, '').replace(/\s*```\s*$/m, '').trim();
+
+  // Find where the actual HTML document begins
+  const doctypeIdx = s.indexOf('<!DOCTYPE');
+  const htmlIdx = s.indexOf('<html');
+  let startIdx = -1;
+  if (doctypeIdx >= 0 && htmlIdx >= 0) startIdx = Math.min(doctypeIdx, htmlIdx);
+  else if (doctypeIdx >= 0) startIdx = doctypeIdx;
+  else if (htmlIdx >= 0) startIdx = htmlIdx;
+
+  if (startIdx < 0) return null;
+
+  // Truncate everything before the HTML document
+  s = s.slice(startIdx);
+
+  // Strip any trailing commentary after </html>
+  const closeIdx = s.lastIndexOf('</html>');
+  if (closeIdx >= 0) s = s.slice(0, closeIdx + '</html>'.length);
+
+  return s.trim() || null;
+}
+
 async function generateTemplateFromImage(imageBuffer, options = {}) {
   const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
   if (!apiKey) throw new Error('anthropic_api_key not configured');
@@ -435,13 +466,9 @@ async function generateTemplateFromImage(imageBuffer, options = {}) {
 
       const refinedText = getAnthropicMessageText(refineMsg);
 
-      // Extract raw HTML — strip markdown fences if present
-      let refinedHtml = refinedText.trim()
-        .replace(/^```(?:html)?\s*/m, '')
-        .replace(/\s*```\s*$/m, '')
-        .trim();
+      const refinedHtml = extractHtmlFromResponse(refinedText);
 
-      if (refinedHtml.includes('<!DOCTYPE') || refinedHtml.includes('<html')) {
+      if (refinedHtml) {
         // Apply same post-processing to Pass 2 output — it can re-introduce mistakes
         html = applyPostProcessing(refinedHtml);
         console.log('[templateFromImage] pass 2 refinement applied (%d bytes, total %dms)',

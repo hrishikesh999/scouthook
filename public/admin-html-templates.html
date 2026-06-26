@@ -101,9 +101,10 @@
   async function loadTemplates() {
     const list = document.getElementById('template-list');
     const r = await adminFetch('/admin/html-templates');
-    const { templates } = await r.json();
+    const { templates: allTemplates } = await r.json();
+    const templates = (allTemplates || []).filter(t => !t.is_carousel_slide);
 
-    if (!templates || templates.length === 0) {
+    if (!templates.length) {
       list.innerHTML = '<p class="text-muted loading-text--padded">No templates yet. Click "+ Add template" to create one.</p>';
       return;
     }

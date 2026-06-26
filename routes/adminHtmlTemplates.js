@@ -38,10 +38,27 @@ router.get('/', async (req, res) => {
       `SELECT id, name, description, category, active, sort_order,
               slot_manifest, html_r2_key, thumbnail_r2_key, created_at
        FROM html_templates
-       WHERE is_carousel_slide = FALSE
        ORDER BY sort_order ASC, created_at ASC`
     ).all();
     res.json({ ok: true, templates: rows });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /:id — single template metadata (used by the edit form)
+// ---------------------------------------------------------------------------
+
+router.get('/:id', async (req, res) => {
+  try {
+    const row = await db.prepare(
+      `SELECT id, name, description, category, active, sort_order,
+              slot_manifest, html_r2_key, thumbnail_r2_key, created_at
+       FROM html_templates WHERE id = ?`
+    ).get(req.params.id);
+    if (!row) return res.status(404).json({ ok: false, error: 'not_found' });
+    res.json(row);
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }

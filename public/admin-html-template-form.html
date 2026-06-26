@@ -316,12 +316,11 @@
     enableEditMode();
     try {
       const [metaRes, htmlRes] = await Promise.all([
-        adminFetch('/admin/html-templates'),
+        adminFetch(`/admin/html-templates/${templateId}`),
         adminFetch(`/admin/html-templates/${templateId}/html`),
       ]);
-      const { templates } = await metaRes.json();
-      const t = (templates || []).find(x => x.id === templateId);
-      if (!t) { showError('form-error', 'Template not found.'); return; }
+      if (!metaRes.ok) { showError('form-error', 'Template not found.'); return; }
+      const t = await metaRes.json();
       document.getElementById('f-name').value = t.name || '';
       document.getElementById('f-description').value = t.description || '';
       document.getElementById('f-category').value = t.category || '';

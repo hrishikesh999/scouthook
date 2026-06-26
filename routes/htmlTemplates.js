@@ -11,7 +11,7 @@ router.get('/', async (req, res) => {
     const rows = await db.prepare(
       `SELECT id, name, description, category, slot_manifest, sort_order, thumbnail_r2_key
        FROM html_templates
-       WHERE active = TRUE AND is_carousel_slide = FALSE
+       WHERE active = TRUE AND is_carousel_slide IS NOT TRUE
        ORDER BY sort_order ASC, created_at ASC`
     ).all();
     res.json({ ok: true, templates: rows });

@@ -59,7 +59,10 @@ if (allowedOrigin) {
 // Middleware
 // ---------------------------------------------------------------------------
 
-app.use(express.json({ limit: '30mb' }));
+app.use((req, res, next) => {
+  if (req.path.startsWith('/admin/carousel-packs')) return next();
+  express.json({ limit: '30mb' })(req, res, next);
+});
 app.use(express.urlencoded({ extended: false }));
 
 // ---------------------------------------------------------------------------

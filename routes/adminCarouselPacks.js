@@ -133,8 +133,9 @@ router.post('/from-images', express.json({ limit: '60mb' }), async (req, res) =>
     // Return immediately — frontend polls /jobs/:jobId
     res.json({ ok: true, job_id: jobId });
 
-    // Run conversion in background
-    _runConversionJob(jobId, images, roles, { name: name.trim(), description, category, min_content_slides, max_content_slides });
+    // Run conversion in background (with catch to prevent unhandled rejection)
+    _runConversionJob(jobId, images, roles, { name: name.trim(), description, category, min_content_slides, max_content_slides })
+      .catch(err => console.error('[adminCarouselPacks] unhandled job error:', err));
   } catch (err) {
     console.error('[adminCarouselPacks] from-images error:', err.message);
     res.status(500).json({ ok: false, error: err.message });
@@ -148,7 +149,7 @@ async function _runConversionJob(jobId, images, roles, meta) {
   try {
     console.log('[adminCarouselPacks] job %s: converting %d slides, name=%s', jobId, total, meta.name);
 
-    // Convert all images (carousel-aware)
+    // Phase 1: Convert all images (carousel-aware) — this is the slow part
     const { templates, variableMap } = await convertCarouselImages(images, roles, async (i) => {
       await _setConversionJob(jobId, {
         status: 'converting', progress: { current: i, total }, pack_id: null, error: null,
@@ -158,8 +159,8 @@ async function _runConversionJob(jobId, images, roles, meta) {
     console.log('[adminCarouselPacks] job %s: conversion done in %dms, saving templates', jobId, Date.now() - start);
     await _setConversionJob(jobId, { status: 'saving', progress: { current: total, total }, pack_id: null, error: null });
 
-    // Save each template to html_templates (flagged as carousel slide)
-    const savedSlides = [];
+    // Phase 2: Upload HTML + thumbnails to R2 (outside transaction — R2 isn't transactional)
+    const prepared = [];
     for (let i = 0; i < templates.length; i++) {
       const t = templates[i];
       const role = roles[i];
@@ -181,58 +182,69 @@ async function _runConversionJob(jobId, images, roles, meta) {
         console.warn('[adminCarouselPacks] thumbnail failed for slide %d: %s', i + 1, err.message);
       }
 
-      await db.prepare(
-        `INSERT INTO html_templates
-           (id, name, description, category, html_r2_key, thumbnail_r2_key, slot_manifest, sort_order, is_carousel_slide)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, TRUE)`
+      prepared.push({ templateId, role, slideOrder: i, htmlKey, thumbnailKey, manifest });
+    }
+
+    // Phase 3: All DB inserts in a single transaction
+    const packId = crypto.randomUUID();
+
+    await db.transaction(async (tx) => {
+      for (const p of prepared) {
+        try {
+          await tx.prepare(
+            `INSERT INTO html_templates
+               (id, name, description, category, html_r2_key, thumbnail_r2_key, slot_manifest, sort_order, is_carousel_slide)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, TRUE)`
+          ).run(
+            p.templateId, `${meta.name} — ${p.role} slide`,
+            meta.description || null, meta.category || null,
+            p.htmlKey, p.thumbnailKey, JSON.stringify(p.manifest), p.slideOrder,
+          );
+        } catch (colErr) {
+          // Fallback: is_carousel_slide column may not exist (migration 065 not applied)
+          await tx.prepare(
+            `INSERT INTO html_templates
+               (id, name, description, category, html_r2_key, thumbnail_r2_key, slot_manifest, sort_order)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+          ).run(
+            p.templateId, `${meta.name} — ${p.role} slide`,
+            meta.description || null, meta.category || null,
+            p.htmlKey, p.thumbnailKey, JSON.stringify(p.manifest), p.slideOrder,
+          );
+        }
+      }
+
+      const packThumbnail = prepared.length > 0 ? prepared[0].thumbnailKey : null;
+
+      await tx.prepare(
+        `INSERT INTO carousel_packs
+           (id, name, description, thumbnail_r2_key, category, variable_map,
+            min_content_slides, max_content_slides, sort_order)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`
       ).run(
-        templateId,
-        `${meta.name} — ${role} slide`,
-        meta.description || null,
-        meta.category || null,
-        htmlKey,
-        thumbnailKey,
-        JSON.stringify(manifest),
-        i,
+        packId, meta.name, meta.description || null, packThumbnail,
+        meta.category || null, JSON.stringify(variableMap),
+        meta.min_content_slides || 3, meta.max_content_slides || 8,
       );
 
-      savedSlides.push({ templateId, role, slideOrder: i });
-    }
-
-    // Create the carousel pack
-    const packId = crypto.randomUUID();
-    const packThumbnail = savedSlides.length > 0
-      ? (await db.prepare('SELECT thumbnail_r2_key FROM html_templates WHERE id = ?')
-          .get(savedSlides[0].templateId))?.thumbnail_r2_key
-      : null;
-
-    await db.prepare(
-      `INSERT INTO carousel_packs
-         (id, name, description, thumbnail_r2_key, category, variable_map,
-          min_content_slides, max_content_slides, sort_order)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`
-    ).run(
-      packId, meta.name, meta.description || null, packThumbnail,
-      meta.category || null, JSON.stringify(variableMap),
-      meta.min_content_slides || 3, meta.max_content_slides || 8,
-    );
-
-    for (const s of savedSlides) {
-      await db.prepare(
-        `INSERT INTO carousel_pack_slides (id, pack_id, template_id, role, slide_order)
-         VALUES (?, ?, ?, ?, ?)`
-      ).run(crypto.randomUUID(), packId, s.templateId, s.role, s.slideOrder);
-    }
+      for (const p of prepared) {
+        await tx.prepare(
+          `INSERT INTO carousel_pack_slides (id, pack_id, template_id, role, slide_order)
+           VALUES (?, ?, ?, ?, ?)`
+        ).run(crypto.randomUUID(), packId, p.templateId, p.role, p.slideOrder);
+      }
+    });
 
     console.log('[adminCarouselPacks] job %s: pack %s created with %d slides in %dms',
-      jobId, packId, savedSlides.length, Date.now() - start);
+      jobId, packId, prepared.length, Date.now() - start);
 
     await _setConversionJob(jobId, {
       status: 'done', progress: { current: total, total }, pack_id: packId,
-      slides_created: savedSlides.length, variable_map: variableMap, error: null,
+      slides_created: prepared.length, variable_map: variableMap, error: null,
     });
   } catch (err) {
-    console.error('[adminCarouselPacks] job %s failed:', jobId, err.message);
+    console.error('[adminCarouselPacks] job %s failed (%d/%d templates prepared):',
+      jobId, 0, total, err.stack || err.message);
     await _setConversionJob(jobId, { status: 'failed', progress: null, pack_id: null, error: err.message });
   }
 }

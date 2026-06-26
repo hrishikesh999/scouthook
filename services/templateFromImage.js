@@ -17,7 +17,7 @@ function getRenderService() {
 // Pass 1 prompt — generate HTML from image
 // ---------------------------------------------------------------------------
 
-const SYSTEM_PROMPT = `You are an expert HTML/CSS developer who converts design images into pixel-perfect, Puppeteer-compatible HTML templates.
+const SYSTEM_PROMPT = `You are an expert HTML/CSS developer converting design images into Puppeteer-compatible HTML templates.
 
 OUTPUT: Return a JSON object with exactly two keys:
 { "html": "<!DOCTYPE html>...", "manifest": { "slots": {...}, "dimensions": {...} } }
@@ -35,32 +35,41 @@ RULES:
    - Pick the closest Google Font. Good options: Poppins, Inter, Montserrat, Playfair Display, Raleway, Roboto Condensed, DM Sans, Space Grotesk.
    - Always specify font-weight explicitly (400, 500, 600, 700, 800).
 
-3. COLORS
-   - Extract exact hex colors from the image — be precise, not approximate.
-   - Define as CSS custom properties on the root container style attribute:
+3. COLORS — CRITICAL
+   - Extract exact hex colors from the image.
+   - ALL colors MUST be CSS custom properties on the root container style attribute:
      style="--bg:#1a1a2e; --accent:#e94560; --text:#ffffff; --text-muted:rgba(255,255,255,0.7)"
-   - Use var(--bg), var(--accent), etc. everywhere. This enables user color customization.
+   - In ALL CSS rules, ALWAYS use var(--bg), var(--accent), var(--text) etc. NEVER hardcode hex colors in CSS rules or inline styles on child elements. The root container style is the ONLY place hex values appear.
+   - Add a "color:varname" entry in the manifest for each CSS variable.
 
 4. TEXT SLOTS — Mark editable text with data-slot="key_name":
    <h1 data-slot="headline">Headline</h1>
    Use snake_case keys. Include realistic placeholder text that matches the image content.
 
-5. IMAGE SLOTS — For uploadable images, key starts with "image:":
-   <img data-slot="image:photo" src="" alt="" style="width:100%;height:200px;object-fit:cover;border-radius:12px">
+5. IMAGE SLOTS — MUST follow this exact pattern:
+   <img data-slot="image:photo" src="" alt="Photo description">
+   - Key MUST start with "image:" prefix (e.g. image:photo, image:portrait, image:logo)
+   - src MUST be empty string "" — NEVER a filename like "photo.jpg"
+   - Do NOT put data-slot-container on image parent elements — that is ONLY for repeating slots
+   - In the manifest, use "image:photo": {}
 
-6. REPEATING SLOTS — For lists/steps/items:
+6. REPEATING SLOTS — ONLY for lists, steps, or grids of similar items:
    <div data-slot="items" data-slot-container>
      <div data-slot-item>
        <h3 data-slot-field="title">Title</h3>
        <p data-slot-field="body">Body</p>
      </div>
    </div>
-   Include 2-3 example items with realistic content from the image.
+   - data-slot-container is ONLY for repeated content groups, NEVER for single images or text
+   - Include 2-3 example items with realistic content from the image.
 
-7. MANIFEST — Embed in the HTML:
+7. MANIFEST — Embed inside <head>:
    <script type="application/json" id="template-meta">
-   {"slots":{"headline":{"maxLen":80},"color:accent":{"default":"#e94560"},"image:photo":{},"items":{"type":"repeating","fields":["title","body"],"min":2,"max":6}},"dimensions":{"width":1080,"height":1080}}
+   {"slots":{"headline":{"maxLen":80},"color:bg":{"default":"#1a1a2e"},"color:accent":{"default":"#e94560"},"color:text":{"default":"#ffffff"},"image:photo":{},"items":{"type":"repeating","fields":["title","body"],"min":2,"max":6}},"dimensions":{"width":1080,"height":1080}}
    </script>
+   - Include ALL color:* slots matching the CSS variables
+   - Include ALL image:* slots with empty config {}
+   - Include ALL text slots with appropriate maxLen
 
 8. VISUAL FIDELITY
    - Match the image's padding, margins, and spacing precisely.
@@ -73,6 +82,13 @@ RULES:
 
 9. DIMENSIONS — Match the image aspect ratio:
    Square: 1080x1080 | Portrait: 1080x1350 | Landscape: 1200x628
+
+COMMON MISTAKES TO AVOID:
+- Using data-slot="portrait" for images — MUST be data-slot="image:portrait"
+- Setting src="photo.jpg" on image slots — MUST be src=""
+- Putting data-slot-container on image wrappers — ONLY for repeating content
+- Hardcoding hex colors in CSS rules — MUST use var() everywhere
+- Forgetting color:* slots in the manifest
 
 CRITICAL: Return ONLY the raw JSON. No markdown fences, no explanation.`;
 
@@ -193,6 +209,38 @@ async function generateTemplateFromImage(imageBuffer, options = {}) {
   if (!manifest.dimensions) manifest.dimensions = { width: 1080, height: 1080 };
 
   let html = result.html;
+
+  // ── Post-processing: fix common Claude mistakes ─────────────────────────
+
+  // Fix image slots missing "image:" prefix
+  html = html.replace(/data-slot="(?!image:)([\w]+)"\s*(src\s*=\s*"[^"]*")/g, (match, key, srcAttr) => {
+    if (srcAttr.includes('src=')) {
+      console.log('[templateFromImage] fixing image slot: %s → image:%s', key, key);
+      manifest.slots[`image:${key}`] = manifest.slots[key] || {};
+      delete manifest.slots[key];
+      return `data-slot="image:${key}" src=""`;
+    }
+    return match;
+  });
+
+  // Fix image src that has a filename instead of empty string
+  html = html.replace(/(data-slot="image:[^"]+"\s+)src="(?!data:)[^"]+"/g, '$1src=""');
+
+  // Remove bogus data-slot-container on non-repeating elements
+  html = html.replace(/data-slot-container="[^"]*"/g, (match) => {
+    return 'data-slot-container';
+  });
+
+  // Sync manifest: ensure all data-slot keys in HTML exist in manifest
+  const slotMatches = html.matchAll(/data-slot="([^"]+)"/g);
+  for (const m of slotMatches) {
+    const key = m[1];
+    if (key === 'data-slot-container' || key === 'data-slot-item') continue;
+    if (!manifest.slots[key]) {
+      if (key.startsWith('image:')) manifest.slots[key] = {};
+      else manifest.slots[key] = { maxLen: 200 };
+    }
+  }
 
   console.log('[templateFromImage] pass 1 done in %dms (%d bytes, %d slots)',
     Date.now() - pass1Start, html.length, Object.keys(manifest.slots).length);

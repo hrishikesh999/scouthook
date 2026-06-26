@@ -245,6 +245,7 @@
   let _templateHtml = '';
   let _originalImageDataUrl = null;
   let _originalImageFile = null;
+  let _originalImageId = null;
   let _previewMode = 'preview'; // 'preview' | 'original' | 'sideBySide'
   let _uploadInProgress = false;
   let _uploadAbort = null;
@@ -357,6 +358,15 @@
         _templateHtml = await htmlRes.text();
         document.getElementById('f-html').value = _templateHtml;
       }
+
+      // Load original image for comparison/refinement (non-blocking)
+      _originalImageId = templateId;
+      adminFetch(`/admin/html-templates/${templateId}/original`).then(async r => {
+        if (!r.ok) return;
+        const blob = await r.blob();
+        _originalImageFile = new File([blob], 'original.png', { type: blob.type });
+        _originalImageDataUrl = URL.createObjectURL(blob);
+      }).catch(() => {});
     } catch (err) {
       console.error('[loadTemplate]', err);
       showError('form-error', 'Failed to load: ' + err.message);
@@ -841,6 +851,7 @@
       if (!data.ok) throw new Error(data.error || 'Conversion failed');
 
       _templateHtml = data.html;
+      if (data.original_image_id) _originalImageId = data.original_image_id;
       document.getElementById('f-html').value = data.html;
       if (data.manifest?.dimensions) { document.getElementById('f-dim-w').value = data.manifest.dimensions.width || 1080; document.getElementById('f-dim-h').value = data.manifest.dimensions.height || 1080; }
 
@@ -898,11 +909,21 @@
     if (category) body.category = category;
     if (html) body.html = html;
 
+    if (_originalImageId) body.original_image_id = _originalImageId;
+
     try {
       const r = await adminFetch(id ? `/admin/html-templates/${id}` : '/admin/html-templates', { method: id ? 'PUT' : 'POST', body: JSON.stringify(body) });
       const data = await r.json();
       btn.textContent = 'Save template'; btn.disabled = false;
       if (!data.ok) { showError('form-error-2', data.error || 'Save failed.'); return; }
+
+      // Copy original image to the template's actual ID (for new templates)
+      if (!id && data.template?.id && _originalImageFile) {
+        adminFetch(`/admin/html-templates/upload-original/${data.template.id}`, {
+          method: 'POST', headers: { 'Content-Type': _originalImageFile.type }, body: _originalImageFile,
+        }).catch(() => {});
+      }
+
       if (data.thumbnail_warning) { showWarnBanner(`Saved, but thumbnail failed: ${data.thumbnail_warning}`); }
       else location.href = '/admin-html-templates.html';
     } catch (err) { btn.textContent = 'Save template'; btn.disabled = false; showError('form-error-2', err.message); }

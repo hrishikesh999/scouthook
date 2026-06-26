@@ -120,6 +120,10 @@ function buildThumbnailKey(templateId) {
   return `global/thumbnails/${templateId}.png`;
 }
 
+function buildOriginalImageKey(templateId) {
+  return `global/originals/${templateId}.bin`;
+}
+
 // ---------------------------------------------------------------------------
 // Local path helpers
 // ---------------------------------------------------------------------------
@@ -335,7 +339,7 @@ module.exports = {
   // Key builders (full key with prefix)
   buildMemberKey, buildWorkspaceAssetKey, buildVaultKey, buildAffiliateKey, buildFeedbackKey,
   // Key builders (raw key, no prefix — for use with uploadAdmin/downloadAdmin)
-  buildTemplateKey, buildThumbnailKey,
+  buildTemplateKey, buildThumbnailKey, buildOriginalImageKey,
   // Utilities
   getBackend,
   // User-content API

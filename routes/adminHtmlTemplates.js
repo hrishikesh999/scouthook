@@ -333,6 +333,41 @@ router.post('/:id/regenerate-thumbnail', async (req, res) => {
 // POST /from-image — convert a design image to HTML via Claude Vision
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// POST /upload-original/:id — store original image for a template
+// ---------------------------------------------------------------------------
+
+router.post('/upload-original/:id', express.raw({ type: ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'], limit: '10mb' }), async (req, res) => {
+  try {
+    const buffer = req.body;
+    if (!Buffer.isBuffer(buffer) || buffer.length === 0) return res.status(400).json({ ok: false, error: 'No image' });
+    const key = storage.buildOriginalImageKey(req.params.id);
+    await storage.uploadAdmin(buffer, key, (req.headers['content-type'] || '').split(';')[0].trim());
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /:id/original — serve original uploaded image from R2
+// ---------------------------------------------------------------------------
+
+router.get('/:id/original', async (req, res) => {
+  try {
+    const key = storage.buildOriginalImageKey(req.params.id);
+    const buf = await storage.downloadAdmin(key);
+    const magic = buf[0] === 0x89 ? 'image/png' : buf[0] === 0xFF ? 'image/jpeg' : buf[0] === 0x52 ? 'image/webp' : 'application/octet-stream';
+    res.set('Content-Type', magic).set('Cache-Control', 'public, max-age=3600').send(buf);
+  } catch {
+    res.status(404).end();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /from-image — convert a design image to HTML via Claude Vision
+// ---------------------------------------------------------------------------
+
 router.post('/from-image', express.raw({ type: ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'], limit: '10mb' }), async (req, res) => {
   try {
     const buffer = req.body;
@@ -355,7 +390,14 @@ router.post('/from-image', express.raw({ type: ['image/png', 'image/jpeg', 'imag
     console.log('[adminHtmlTemplates] from-image: generated in %dms (%d bytes HTML, %d slots)',
       Date.now() - start, html.length, Object.keys(manifest.slots || {}).length);
 
-    res.json({ ok: true, html, manifest });
+    // Store original image so it's available for refinement later
+    const origId = req.headers['x-template-id'] || require('crypto').randomUUID();
+    const origKey = storage.buildOriginalImageKey(origId);
+    const mimeToExt = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/svg+xml': 'svg' };
+    storage.uploadAdmin(buffer, origKey, contentType).catch(e =>
+      console.warn('[adminHtmlTemplates] original image upload failed:', e.message));
+
+    res.json({ ok: true, html, manifest, original_image_id: origId });
   } catch (err) {
     console.error('[adminHtmlTemplates] from-image error:', err.message);
     res.status(500).json({ ok: false, error: err.message });

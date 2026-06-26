@@ -61,7 +61,7 @@ if (allowedOrigin) {
 
 app.use((req, res, next) => {
   if (req.path.startsWith('/admin/carousel-packs')) return next();
-  if (req.path === '/admin/html-templates/from-image') return next();
+  if (req.path.startsWith('/admin/html-templates/from-image') || req.path.startsWith('/admin/html-templates/upload-original')) return next();
   express.json({ limit: '30mb' })(req, res, next);
 });
 app.use(express.urlencoded({ extended: false }));

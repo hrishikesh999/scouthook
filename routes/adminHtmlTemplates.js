@@ -312,11 +312,16 @@ router.post('/:id/regenerate-thumbnail', async (req, res) => {
 // POST /from-image — convert a design image to HTML via Claude Vision
 // ---------------------------------------------------------------------------
 
-router.post('/from-image', express.raw({ type: '*/*', limit: '10mb' }), async (req, res) => {
+router.post('/from-image', express.raw({ type: ['image/png', 'image/jpeg', 'image/webp'], limit: '10mb' }), async (req, res) => {
   try {
     const buffer = req.body;
     if (!Buffer.isBuffer(buffer) || buffer.length === 0) {
-      return res.status(400).json({ ok: false, error: 'empty_body' });
+      return res.status(400).json({ ok: false, error: 'Upload an image file (PNG, JPG, or WebP)' });
+    }
+
+    const contentType = (req.headers['content-type'] || '').split(';')[0].trim();
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(contentType)) {
+      return res.status(400).json({ ok: false, error: 'Unsupported file type. Upload a PNG, JPG, or WebP image.' });
     }
 
     const instructions = req.headers['x-instructions'] || '';

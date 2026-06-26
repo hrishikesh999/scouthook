@@ -71,11 +71,23 @@ TEMPLATE REQUIREMENTS:
 
 CRITICAL: Return ONLY the JSON object. No markdown, no code fences, no explanation.`;
 
+const VISION_TIMEOUT_MS = 90_000;
+
 async function generateTemplateFromImage(imageBuffer, options = {}) {
   const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
   if (!apiKey) throw new Error('anthropic_api_key not configured');
 
-  const meta = await sharp(imageBuffer).metadata();
+  let meta;
+  try {
+    meta = await sharp(imageBuffer).metadata();
+  } catch (err) {
+    throw new Error('Invalid image file — could not read image metadata');
+  }
+
+  if (!meta.format || !['png', 'jpeg', 'jpg', 'webp', 'gif', 'tiff'].includes(meta.format)) {
+    throw new Error(`Unsupported image format: ${meta.format || 'unknown'}`);
+  }
+
   const mimeType = meta.format === 'png' ? 'image/png'
                  : meta.format === 'webp' ? 'image/webp'
                  : 'image/jpeg';
@@ -90,17 +102,30 @@ async function generateTemplateFromImage(imageBuffer, options = {}) {
     ? `Convert this design image into an HTML template. Additional instructions: ${options.instructions}`
     : 'Convert this design image into an HTML template. Reproduce the layout, typography, colors, and structure as closely as possible.';
 
+  const imageBlock = {
+    type: 'image',
+    source: { type: 'base64', media_type: mimeType, data: base64 },
+    cache_control: { type: 'ephemeral' },
+  };
+
   const client = new Anthropic({ apiKey });
-  const msg = await client.messages.create({
+
+  const callWithTimeout = (params) => {
+    return Promise.race([
+      client.messages.create(params),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('AI conversion timed out after 90 seconds')), VISION_TIMEOUT_MS)
+      ),
+    ]);
+  };
+
+  const msg = await callWithTimeout({
     model: 'claude-sonnet-4-6',
-    max_tokens: 8000,
+    max_tokens: 12000,
     system: SYSTEM_PROMPT,
     messages: [{
       role: 'user',
-      content: [
-        { type: 'image', source: { type: 'base64', media_type: mimeType, data: base64 } },
-        { type: 'text', text: userPrompt },
-      ],
+      content: [imageBlock, { type: 'text', text: userPrompt }],
     }],
   });
 
@@ -110,18 +135,12 @@ async function generateTemplateFromImage(imageBuffer, options = {}) {
   try {
     result = extractJsonFromResponse(rawText);
   } catch (e) {
-    const retry = await client.messages.create({
+    const retry = await callWithTimeout({
       model: 'claude-sonnet-4-6',
-      max_tokens: 8000,
+      max_tokens: 12000,
       system: SYSTEM_PROMPT,
       messages: [
-        {
-          role: 'user',
-          content: [
-            { type: 'image', source: { type: 'base64', media_type: mimeType, data: base64 } },
-            { type: 'text', text: userPrompt },
-          ],
-        },
+        { role: 'user', content: [imageBlock, { type: 'text', text: userPrompt }] },
         { role: 'assistant', content: msg.content },
         { role: 'user', content: 'Return only the JSON object with "html" and "manifest" keys. No markdown, no code fences.' },
       ],
@@ -130,7 +149,7 @@ async function generateTemplateFromImage(imageBuffer, options = {}) {
   }
 
   if (!result.html || typeof result.html !== 'string') {
-    throw new Error('Claude did not return valid HTML');
+    throw new Error('AI did not return valid HTML — please try again');
   }
 
   const manifest = result.manifest || { slots: {}, dimensions: { width: 1080, height: 1080 } };

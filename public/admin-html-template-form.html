@@ -706,27 +706,46 @@
     imgInput.value = '';
   });
 
+  let _uploadInProgress = false;
+  let _uploadAbort = null;
+
   async function processImageUpload(file) {
+    if (_uploadInProgress) return;
     if (file.size > 10 * 1024 * 1024) { alert('Image must be under 10 MB.'); return; }
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) { alert('Only PNG, JPG, and WebP images are supported.'); return; }
+
+    _uploadInProgress = true;
+    _uploadAbort = new AbortController();
 
     const uploadField = document.getElementById('upload-field');
     uploadField.innerHTML = `
       <label>Upload a design</label>
       <div class="img-upload-progress">
         <div class="img-upload-spinner"></div>
-        <div>
+        <div style="flex:1">
           <div style="font-weight:600;font-size:.85rem">Analyzing design with AI…</div>
-          <div style="font-size:.78rem;color:var(--text-muted);margin-top:2px">Claude is converting your image to an editable HTML template. This takes 10–20 seconds.</div>
+          <div style="font-size:.78rem;color:var(--text-muted);margin-top:2px">Converting your image to an editable HTML template. This takes 10–30 seconds.</div>
         </div>
+        <button class="btn btn--sm btn--secondary" id="upload-cancel-btn" type="button">Cancel</button>
       </div>`;
 
+    document.getElementById('upload-cancel-btn')?.addEventListener('click', () => {
+      _uploadAbort?.abort();
+      _uploadInProgress = false;
+      resetUploadZone();
+    });
+
     try {
-      const r = await adminFetch('/admin/html-templates/from-image', {
+      const r = await fetch('/admin/html-templates/from-image', {
         method: 'POST',
         headers: { 'Content-Type': file.type, 'X-Admin-Password': adminPw },
         body: file,
+        signal: _uploadAbort.signal,
       });
-      const data = await r.json();
+
+      let data;
+      try { data = await r.json(); }
+      catch { throw new Error(`Server returned HTTP ${r.status} — not a valid response`); }
 
       if (!data.ok) throw new Error(data.error || 'Conversion failed');
 
@@ -754,12 +773,16 @@
       // Trigger scan
       runScan(data.html);
     } catch (err) {
+      if (err.name === 'AbortError') { _uploadInProgress = false; return; }
       uploadField.innerHTML = `
         <label>Upload a design</label>
         <div class="img-upload-error">
           <span>Conversion failed: ${esc(err.message)}</span>
           <button class="btn btn--sm btn--secondary" onclick="resetUploadZone()">Try again</button>
         </div>`;
+    } finally {
+      _uploadInProgress = false;
+      _uploadAbort = null;
     }
   }
 

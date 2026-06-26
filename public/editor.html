@@ -1625,7 +1625,8 @@ function _renderTemplateIframe(html, slots) {
         const d = e.data;
         if (!d) return;
         if (d.type === 'htpl-set-var') {
-          document.documentElement.style.setProperty(d.name, d.value);
+          var root = document.body.firstElementChild || document.documentElement;
+          root.style.setProperty(d.name, d.value);
         } else if (d.type === 'htpl-set-text') {
           const el = document.querySelector('[data-slot="' + d.key + '"]');
           if (el) el.textContent = d.value;
@@ -1668,16 +1669,18 @@ function _renderTemplateIframe(html, slots) {
       }
     }
     // Apply color defaults from manifest first, then any user edits on top
+    // Target the root container div (where CSS vars are defined inline),
+    // not documentElement — inline style on the div has higher specificity.
+    const colorRoot = doc.body.firstElementChild || doc.documentElement;
     for (const [key, def] of Object.entries(slotDefs)) {
       if (key.startsWith('color:')) {
         const varName = key.slice('color:'.length);
         const val = _pendingColorUpdates[key] ?? _resolveBrandColor(key, def);
-        doc.documentElement.style.setProperty('--' + varName, val);
+        colorRoot.style.setProperty('--' + varName, val);
       }
     }
-    // Also flush any pending updates for keys not in the manifest
     for (const [key, val] of Object.entries(_pendingColorUpdates)) {
-      doc.documentElement.style.setProperty('--' + key.slice('color:'.length), val);
+      colorRoot.style.setProperty('--' + key.slice('color:'.length), val);
     }
   });
 }
@@ -1846,75 +1849,104 @@ function renderHtmlTemplateForm(slots) {
     }
   });
 
-  // Wire image uploads — instant preview + background removal via HF API
+  // Wire image uploads — show original, explicit bg-removal toggle
   formPane.querySelectorAll('.html-tpl-img-preview').forEach(zone => {
-    const fileInput = formPane.querySelector(`input[type="file"][data-slot="${zone.dataset.slot}"]`);
+    const slot = zone.dataset.slot;
+    const fileInput = formPane.querySelector(`input[type="file"][data-slot="${slot}"]`);
+    const bgBtn = formPane.querySelector(`.htpl-remove-bg-btn[data-slot="${slot}"]`);
     zone.addEventListener('click', () => fileInput?.click());
     zone.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput?.click(); } });
+
     fileInput?.addEventListener('change', async () => {
       const file = fileInput.files[0];
       if (!file) return;
       fileInput.value = '';
 
-      // Track whether bg removal finished before FileReader.onload fires
-      let serverDone = false;
-      let serverResult = null; // { pngDataUrl, storageKey } | null
-
-      // 1. Read file locally — show original or bg-removed depending on timing
+      // Read file locally for instant preview
       const reader = new FileReader();
       reader.onload = () => {
-        if (serverDone && serverResult) {
-          // Server already returned bg-removed image — use it directly
-          zone.innerHTML = `<img src="${serverResult.pngDataUrl}" alt="" style="width:100%;height:100%;object-fit:contain">`;
-          _applySlotToIframe(zone.dataset.slot, serverResult.pngDataUrl, 'image');
-        } else if (serverDone) {
-          // Server returned but no bg-removed result — show original at full opacity
-          zone.innerHTML = `<img src="${reader.result}" alt="" style="width:100%;height:100%;object-fit:contain">`;
-          _applySlotToIframe(zone.dataset.slot, reader.result, 'image');
-        } else {
-          // Still waiting — show original dimmed with spinner
-          zone.innerHTML =
-            `<img src="${reader.result}" alt="" style="width:100%;height:100%;object-fit:contain;opacity:0.45">` +
-            `<div class="htpl-bg-removing"><span class="htpl-bg-spinner"></span>Removing background…</div>`;
-          _applySlotToIframe(zone.dataset.slot, reader.result, 'image');
-        }
+        zone.dataset.originalDataUrl = reader.result;
+        zone.dataset.noBgDataUrl = '';
+        zone.dataset.bgRemoved = '';
+        zone.innerHTML = `<img src="${reader.result}" alt="" style="width:100%;height:100%;object-fit:contain">`;
+        _applySlotToIframe(slot, reader.result, 'image');
+        if (bgBtn) { bgBtn.hidden = false; bgBtn.textContent = '✦ Remove background'; }
       };
       reader.readAsDataURL(file);
 
-      // 2. Try background removal on the server
-      try {
-        const headers = { 'Content-Type': file.type, 'X-Filename': encodeURIComponent(file.name) };
-        if (typeof getUserId === 'function') headers['X-User-Id'] = getUserId();
-        if (typeof getTenantId === 'function') headers['X-Tenant-Id'] = getTenantId();
-        const res = await fetch('/api/media/remove-bg', { method: 'POST', credentials: 'include', headers, body: file });
-        const data = await res.json();
-        if (data.ok && data.pngDataUrl) {
-          serverDone = true;
-          serverResult = { pngDataUrl: data.pngDataUrl };
-          zone.innerHTML = `<img src="${data.pngDataUrl}" alt="" style="width:100%;height:100%;object-fit:contain">`;
-          _applySlotToIframe(zone.dataset.slot, data.pngDataUrl, 'image');
-          if (data.file) zone.dataset.storageKey = data.file.url.replace(/^\/uploads\//, '');
-          return;
-        }
-      } catch { /* fall through */ }
-
-      serverDone = true;
-
-      // 3. Fallback — store original
+      // Upload original to storage
       try {
         const headers = { 'Content-Type': file.type, 'X-Filename': encodeURIComponent(file.name) };
         if (typeof getUserId === 'function') headers['X-User-Id'] = getUserId();
         if (typeof getTenantId === 'function') headers['X-Tenant-Id'] = getTenantId();
         const res = await fetch('/api/media/upload', { method: 'POST', credentials: 'include', headers, body: file });
         const data = await res.json();
-        if (data.ok && data.file) zone.dataset.storageKey = data.file.url.replace(/^\/uploads\//, '');
+        if (data.ok && data.file) {
+          zone.dataset.storageKey = data.file.url.replace(/^\/uploads\//, '');
+          zone.dataset.originalStorageKey = zone.dataset.storageKey;
+        }
       } catch { /* non-fatal */ }
-
-      // If reader.onload already ran, clear spinner and restore opacity
-      const img = zone.querySelector('img');
-      if (img) img.style.opacity = '1';
-      zone.querySelector('.htpl-bg-removing')?.remove();
     });
+
+    // Wire bg-removal toggle button
+    if (bgBtn) {
+      bgBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+
+        // Toggle: if already bg-removed, restore original
+        if (zone.dataset.bgRemoved === 'true' && zone.dataset.originalDataUrl) {
+          zone.dataset.bgRemoved = '';
+          zone.innerHTML = `<img src="${zone.dataset.originalDataUrl}" alt="" style="width:100%;height:100%;object-fit:contain">`;
+          _applySlotToIframe(slot, zone.dataset.originalDataUrl, 'image');
+          if (zone.dataset.originalStorageKey) zone.dataset.storageKey = zone.dataset.originalStorageKey;
+          bgBtn.textContent = '✦ Remove background';
+          return;
+        }
+
+        // If we already have a bg-removed version cached, use it
+        if (zone.dataset.noBgDataUrl) {
+          zone.dataset.bgRemoved = 'true';
+          zone.innerHTML = `<img src="${zone.dataset.noBgDataUrl}" alt="" style="width:100%;height:100%;object-fit:contain">`;
+          _applySlotToIframe(slot, zone.dataset.noBgDataUrl, 'image');
+          if (zone.dataset.noBgStorageKey) zone.dataset.storageKey = zone.dataset.noBgStorageKey;
+          bgBtn.textContent = '↩ Restore original';
+          return;
+        }
+
+        // Call bg removal API
+        const origText = bgBtn.textContent;
+        bgBtn.disabled = true;
+        bgBtn.textContent = '⟳ Removing…';
+
+        try {
+          const imgSrc = zone.dataset.originalDataUrl;
+          if (!imgSrc) throw new Error('No image to process');
+          const blob = await (await fetch(imgSrc)).blob();
+          const headers = { 'Content-Type': blob.type, 'X-Filename': 'image.png' };
+          if (typeof getUserId === 'function') headers['X-User-Id'] = getUserId();
+          if (typeof getTenantId === 'function') headers['X-Tenant-Id'] = getTenantId();
+          const res = await fetch('/api/media/remove-bg', { method: 'POST', credentials: 'include', headers, body: blob });
+          const data = await res.json();
+
+          if (data.ok && data.pngDataUrl) {
+            zone.dataset.noBgDataUrl = data.pngDataUrl;
+            zone.dataset.bgRemoved = 'true';
+            zone.innerHTML = `<img src="${data.pngDataUrl}" alt="" style="width:100%;height:100%;object-fit:contain">`;
+            _applySlotToIframe(slot, data.pngDataUrl, 'image');
+            if (data.file) {
+              zone.dataset.noBgStorageKey = data.file.url.replace(/^\/uploads\//, '');
+              zone.dataset.storageKey = zone.dataset.noBgStorageKey;
+            }
+            bgBtn.textContent = '↩ Restore original';
+          } else {
+            bgBtn.textContent = origText;
+          }
+        } catch {
+          bgBtn.textContent = origText;
+        }
+        bgBtn.disabled = false;
+      });
+    }
   });
 
   _wireRepeatingSlots(formPane);

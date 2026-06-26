@@ -315,17 +315,33 @@
     document.getElementById('form-id').value = templateId;
     enableEditMode();
     try {
+      // Fetch template metadata + HTML in parallel
       const [metaRes, htmlRes] = await Promise.all([
         adminFetch(`/admin/html-templates/${templateId}`),
         adminFetch(`/admin/html-templates/${templateId}/html`),
       ]);
-      if (!metaRes.ok) { showError('form-error', 'Template not found.'); return; }
-      const t = await metaRes.json();
+
+      // Parse template metadata — try direct endpoint first, fall back to list
+      let t;
+      if (metaRes.ok) {
+        const body = await metaRes.json();
+        t = body.ok === false ? null : (body.id ? body : null);
+      }
+      if (!t) {
+        const listRes = await adminFetch('/admin/html-templates');
+        const listData = await listRes.json();
+        t = (listData.templates || []).find(x => x.id === templateId);
+      }
+      if (!t) { showError('form-error', 'Template not found.'); return; }
+
       document.getElementById('f-name').value = t.name || '';
       document.getElementById('f-description').value = t.description || '';
       document.getElementById('f-category').value = t.category || '';
       document.getElementById('f-sort').value = t.sort_order ?? 0;
       _existingManifest = t.slot_manifest || {};
+      if (typeof _existingManifest === 'string') {
+        try { _existingManifest = JSON.parse(_existingManifest); } catch { _existingManifest = {}; }
+      }
       if (_existingManifest.dimensions) {
         document.getElementById('f-dim-w').value = _existingManifest.dimensions.width || 1080;
         document.getElementById('f-dim-h').value = _existingManifest.dimensions.height || 1080;

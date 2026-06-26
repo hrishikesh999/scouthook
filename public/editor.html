@@ -1668,7 +1668,7 @@ function renderHtmlTemplateForm(slots) {
     }
   });
 
-  // Wire image uploads — INSTANT preview via FileReader + background server upload
+  // Wire image uploads — instant preview + background removal via HF API
   formPane.querySelectorAll('.html-tpl-img-preview').forEach(zone => {
     const fileInput = formPane.querySelector(`input[type="file"][data-slot="${zone.dataset.slot}"]`);
     zone.addEventListener('click', () => fileInput?.click());
@@ -1676,12 +1676,34 @@ function renderHtmlTemplateForm(slots) {
     fileInput?.addEventListener('change', async () => {
       const file = fileInput.files[0];
       if (!file) return;
+      fileInput.value = '';
+
+      // 1. Show original instantly at reduced opacity + spinner
       const reader = new FileReader();
       reader.onload = () => {
-        zone.innerHTML = `<img src="${reader.result}" alt="" style="width:100%;height:100%;object-fit:contain">`;
+        zone.innerHTML =
+          `<img src="${reader.result}" alt="" style="width:100%;height:100%;object-fit:contain;opacity:0.45">` +
+          `<div class="htpl-bg-removing"><span class="htpl-bg-spinner"></span>Removing background…</div>`;
         _applySlotToIframe(zone.dataset.slot, reader.result, 'image');
       };
       reader.readAsDataURL(file);
+
+      // 2. Try background removal
+      try {
+        const headers = { 'Content-Type': file.type, 'X-Filename': encodeURIComponent(file.name) };
+        if (typeof getUserId === 'function') headers['X-User-Id'] = getUserId();
+        if (typeof getTenantId === 'function') headers['X-Tenant-Id'] = getTenantId();
+        const res = await fetch('/api/media/remove-bg', { method: 'POST', credentials: 'include', headers, body: file });
+        const data = await res.json();
+        if (data.ok && data.pngDataUrl) {
+          zone.innerHTML = `<img src="${data.pngDataUrl}" alt="" style="width:100%;height:100%;object-fit:contain">`;
+          _applySlotToIframe(zone.dataset.slot, data.pngDataUrl, 'image');
+          if (data.file) zone.dataset.storageKey = data.file.url.replace(/^\/uploads\//, '');
+          return;
+        }
+      } catch { /* fall through to plain upload */ }
+
+      // 3. Fallback — store original if bg removal failed/unavailable
       try {
         const headers = { 'Content-Type': file.type, 'X-Filename': encodeURIComponent(file.name) };
         if (typeof getUserId === 'function') headers['X-User-Id'] = getUserId();
@@ -1689,8 +1711,12 @@ function renderHtmlTemplateForm(slots) {
         const res = await fetch('/api/media/upload', { method: 'POST', credentials: 'include', headers, body: file });
         const data = await res.json();
         if (data.ok && data.file) zone.dataset.storageKey = data.file.url.replace(/^\/uploads\//, '');
-      } catch { /* server upload failed — instant preview still works */ }
-      fileInput.value = '';
+      } catch { /* non-fatal */ }
+
+      // Clear spinner, keep original image visible at full opacity
+      const img = zone.querySelector('img');
+      if (img) img.style.opacity = '1';
+      zone.querySelector('.htpl-bg-removing')?.remove();
     });
   });
 

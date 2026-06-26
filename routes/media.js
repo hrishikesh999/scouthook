@@ -202,4 +202,67 @@ router.delete('/:id', async (req, res) => {
   return res.json({ ok: true });
 });
 
+// ---------------------------------------------------------------------------
+// POST /api/media/remove-bg
+// Raw binary body; proxies to Hugging Face briaai/RMBG-1.4, stores result PNG.
+// Returns { ok, pngDataUrl, file } on success or { ok: false, error } on failure.
+// ---------------------------------------------------------------------------
+router.post('/remove-bg', express.raw({ type: '*/*', limit: '25mb' }), async (req, res) => {
+  const { userId, tenantId } = req;
+  if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
+
+  const buffer = req.body;
+  if (!Buffer.isBuffer(buffer) || buffer.length === 0)
+    return res.status(400).json({ ok: false, error: 'empty_body' });
+
+  const hfToken = process.env.HF_TOKEN;
+  if (!hfToken) return res.status(503).json({ ok: false, error: 'bg_removal_not_configured' });
+
+  const mimeType = (req.headers['content-type'] || 'image/jpeg').split(';')[0].trim();
+
+  let pngBuffer;
+  try {
+    const hfRes = await fetch(
+      'https://api-inference.huggingface.co/models/briaai/RMBG-1.4',
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${hfToken}`, 'Content-Type': mimeType },
+        body: buffer,
+        signal: AbortSignal.timeout(60_000),
+      }
+    );
+    if (!hfRes.ok) {
+      const msg = await hfRes.text().catch(() => '');
+      return res.status(502).json({ ok: false, error: `hf_api: ${msg.slice(0, 200)}` });
+    }
+    pngBuffer = Buffer.from(await hfRes.arrayBuffer());
+  } catch (err) {
+    return res.status(502).json({ ok: false, error: err.message });
+  }
+
+  let width = null, height = null;
+  try {
+    const meta = await sharp(pngBuffer).metadata();
+    width = meta.width || null;
+    height = meta.height || null;
+  } catch { /* non-fatal */ }
+
+  const storedName = `${Date.now()}_${crypto.randomBytes(6).toString('hex')}_nobg.png`;
+  const url        = `/uploads/${storedName}`;
+
+  await storage.upload(pngBuffer, {
+    tenantId, userId, type: 'uploads', filename: storedName, mimeType: 'image/png',
+  });
+
+  await db.prepare(`
+    INSERT INTO media_files
+      (user_id, tenant_id, filename, stored_name, mime_type, file_size, width, height, format_tag, url)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(userId, tenantId, storedName, storedName, 'image/png',
+         pngBuffer.length, width, height, 'nobg', url);
+
+  const pngDataUrl = `data:image/png;base64,${pngBuffer.toString('base64')}`;
+  return res.json({ ok: true, pngDataUrl, file: { url } });
+});
+
 module.exports = router;

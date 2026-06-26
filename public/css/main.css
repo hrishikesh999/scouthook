@@ -8028,3 +8028,42 @@ html[data-nav-dir="back"] #main-content.spa-entering {
   }
   .media-modal-grid-pane { width: 100%; }
 }
+
+/* ── Design Templates modal tabs ─────────────────────────────────────────── */
+.htpl-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 12px;
+  gap: 0;
+}
+.htpl-tab {
+  flex: 1;
+  padding: 8px 12px;
+  border: none;
+  background: none;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: color 0.15s, border-color 0.15s;
+}
+.htpl-tab--active {
+  color: var(--brand, #0f766e);
+  border-bottom-color: var(--brand, #0f766e);
+}
+.htpl-tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-2);
+  color: var(--text-muted);
+  border-radius: 9px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 6px;
+  margin-left: 4px;
+}
+.htpl-panel--hidden { display: none; }

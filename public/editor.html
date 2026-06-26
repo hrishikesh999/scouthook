@@ -1445,8 +1445,12 @@ function _renderTemplateIframe(html, slots) {
     <\/script>`;
   const injected = html.replace('</body>', slotScript + '</body>');
 
-  pane.innerHTML = `<iframe id="htpl-live-iframe" sandbox="allow-same-origin allow-scripts" srcdoc="${escHtml(injected)}" style="width:${width}px;height:${height}px;transform:scale(${scale})" title="Template preview"></iframe>`;
-  pane.style.height = Math.round(height * scale) + 'px';
+  const visW = Math.round(width * scale);
+  const visH = Math.round(height * scale);
+  pane.innerHTML = `<div style="width:${visW}px;height:${visH}px;overflow:hidden;flex-shrink:0">` +
+    `<iframe id="htpl-live-iframe" sandbox="allow-same-origin allow-scripts" srcdoc="${escHtml(injected)}" ` +
+    `style="width:${width}px;height:${height}px;border:none;display:block;transform:scale(${scale});transform-origin:top left" ` +
+    `title="Template preview"></iframe></div>`;
 
   // After iframe loads, inject AI-extracted content
   const iframe = document.getElementById('htpl-live-iframe');
@@ -1488,15 +1492,22 @@ window.addEventListener('message', e => {
   }
 });
 
+const IMAGE_LIKE_KEYS = new Set(['image','photo','portrait','background','bg',
+  'thumbnail','cover','hero','picture','avatar','headshot','banner']);
+
 function renderHtmlTemplateForm(slots) {
   const manifest = _htmlTplSelectedMeta?.slot_manifest || {};
   const slotDefs = manifest.slots || {};
   const formPane = document.getElementById('html-tpl-form-pane');
 
-  const hasColorSlots = Object.keys(slotDefs).some(k => k.startsWith('color:'));
-  let html = '<div class="so-editor-form">';
+  const colorSlotKeys = Object.keys(slotDefs).filter(k => k.startsWith('color:'));
+  const hasColorSlots = colorSlotKeys.length > 0;
+
+  let contentHtml = '';
+  let colorsHtml = '';
+
   if (hasColorSlots && _htmlTplBrandColors) {
-    html += '<button type="button" id="htpl-apply-brand" class="btn btn--sm btn--secondary" style="margin-bottom:14px;width:100%">Apply Your Brand Colors</button>';
+    colorsHtml += '<button type="button" id="htpl-apply-brand" class="btn btn--sm btn--secondary" style="margin-bottom:14px;width:100%">Apply Your Brand Colors</button>';
   }
 
   for (const [key, def] of Object.entries(slotDefs)) {
@@ -1507,7 +1518,7 @@ function renderHtmlTemplateForm(slots) {
       const label = _slotLabel(colorName);
       const val = (slots && slots[key]) || def.default || '#cccccc';
       const resolved = val === 'brand' ? _resolveBrandColor(key, def) : val;
-      html += `<div class="so-field-group${active}" data-slot-key="${escHtml(key)}" style="margin-bottom:14px">
+      colorsHtml += `<div class="so-field-group${active}" data-slot-key="${escHtml(key)}" style="margin-bottom:14px">
         <label class="field-label">${escHtml(label)}</label>
         <div class="html-tpl-color-row">
           <div class="html-tpl-color-swatch"><input type="color" value="${escHtml(resolved)}" data-slot="${escHtml(key)}"></div>
@@ -1519,7 +1530,7 @@ function renderHtmlTemplateForm(slots) {
 
     if (key.startsWith('image:')) {
       const label = _slotLabel(key.slice('image:'.length));
-      html += `<div class="so-field-group${active}" data-slot-key="${escHtml(key)}" style="margin-bottom:14px">
+      contentHtml += `<div class="so-field-group${active}" data-slot-key="${escHtml(key)}" style="margin-bottom:14px">
         <label class="field-label">${escHtml(label)}</label>
         <div class="html-tpl-img-zone">
           <div class="html-tpl-img-preview" data-slot="${escHtml(key)}" role="button" tabindex="0">
@@ -1531,11 +1542,28 @@ function renderHtmlTemplateForm(slots) {
       continue;
     }
 
+    // Promote bare image-like keys (e.g. slot key "image" or "photo") to upload zones
+    const isPromotedImage = IMAGE_LIKE_KEYS.has(key) && !def.maxLen && !def.default && def.type !== 'repeating';
+    if (isPromotedImage) {
+      const effectiveKey = `image:${key}`;
+      const label = _slotLabel(key);
+      contentHtml += `<div class="so-field-group${active}" data-slot-key="${escHtml(effectiveKey)}" style="margin-bottom:14px">
+        <label class="field-label">${escHtml(label)}</label>
+        <div class="html-tpl-img-zone">
+          <div class="html-tpl-img-preview" data-slot="${escHtml(effectiveKey)}" role="button" tabindex="0">
+            <span style="font-size:12px;color:var(--text-muted)">Click to upload</span>
+          </div>
+          <input type="file" accept="image/*" data-slot="${escHtml(effectiveKey)}" hidden>
+        </div>
+      </div>`;
+      continue;
+    }
+
     if (def.type === 'repeating') {
       const items = (slots && slots[key]) || [];
       const fields = def.fields || ['title', 'body'];
       const min = def.min || 1, max = def.max || 10;
-      html += `<div class="so-field-group${active}" data-slot-key="${escHtml(key)}" data-repeating="${escHtml(key)}" data-fields='${JSON.stringify(fields)}' data-min="${min}" data-max="${max}" style="margin-bottom:14px">
+      contentHtml += `<div class="so-field-group${active}" data-slot-key="${escHtml(key)}" data-repeating="${escHtml(key)}" data-fields='${JSON.stringify(fields)}' data-min="${min}" data-max="${max}" style="margin-bottom:14px">
         <label class="field-label">${escHtml(_slotLabel(key))}</label>
         <div class="html-tpl-repeating-list">
           ${items.map((item, i) => _buildRepeatingCard(key, fields, item, i, items.length > min)).join('')}
@@ -1550,7 +1578,7 @@ function renderHtmlTemplateForm(slots) {
     const val = (slots && slots[key]) || '';
     const maxLen = def.maxLen || 0;
     const useTextarea = maxLen > 120 || (!maxLen && val.length > 80);
-    html += `<div class="so-field-group${active}" data-slot-key="${escHtml(key)}" style="margin-bottom:14px">
+    contentHtml += `<div class="so-field-group${active}" data-slot-key="${escHtml(key)}" style="margin-bottom:14px">
       <label class="field-label">${escHtml(label)}</label>
       ${useTextarea
         ? `<textarea class="field-textarea" data-slot="${escHtml(key)}" ${maxLen ? `maxlength="${maxLen}"` : ''} rows="3">${escHtml(val)}</textarea>`
@@ -1559,9 +1587,30 @@ function renderHtmlTemplateForm(slots) {
     </div>`;
   }
 
-  html += '</div>';
+  let html = '';
+  if (hasColorSlots) {
+    html += `<div class="htpl-tabs">
+      <button class="htpl-tab htpl-tab--active" data-tab="content">Content</button>
+      <button class="htpl-tab" data-tab="colors">Colors <span class="htpl-tab-badge">${colorSlotKeys.length}</span></button>
+    </div>`;
+  }
+  html += `<div class="so-editor-form htpl-panel" data-panel="content">${contentHtml}</div>`;
+  if (hasColorSlots) {
+    html += `<div class="so-editor-form htpl-panel htpl-panel--hidden" data-panel="colors">${colorsHtml}</div>`;
+  }
+
   formPane.innerHTML = html;
   formPane.hidden = false;
+
+  if (hasColorSlots) {
+    formPane.querySelectorAll('.htpl-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        formPane.querySelectorAll('.htpl-tab').forEach(t => t.classList.toggle('htpl-tab--active', t === tab));
+        formPane.querySelectorAll('.htpl-panel').forEach(p =>
+          p.classList.toggle('htpl-panel--hidden', p.dataset.panel !== tab.dataset.tab));
+      });
+    });
+  }
 
   // Wire text/textarea — INSTANT iframe DOM update (no Puppeteer)
   formPane.querySelectorAll('.field-input[data-slot], .field-textarea[data-slot]').forEach(el => {
@@ -1678,7 +1727,11 @@ function _applySlotToIframe(key, value, type) {
   const doc = iframe.contentDocument;
   if (type === 'text') { const el = doc.querySelector(`[data-slot="${key}"]`); if (el) el.textContent = value; }
   else if (type === 'color') { doc.documentElement.style.setProperty('--' + key.slice('color:'.length), value); }
-  else if (type === 'image') { const el = doc.querySelector(`[data-slot="${key}"]`); if (el && el.tagName === 'IMG') el.src = value; }
+  else if (type === 'image') {
+    const img = doc.querySelector(`img[data-slot="${key}"]`);
+    if (img) { img.src = value; }
+    else { const el = doc.querySelector(`[data-slot="${key}"]`); if (el) el.style.backgroundImage = `url('${value}')`; }
+  }
 }
 
 function _highlightSlotInIframe(key) {

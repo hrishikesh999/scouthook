@@ -312,16 +312,16 @@ router.post('/:id/regenerate-thumbnail', async (req, res) => {
 // POST /from-image — convert a design image to HTML via Claude Vision
 // ---------------------------------------------------------------------------
 
-router.post('/from-image', express.raw({ type: ['image/png', 'image/jpeg', 'image/webp'], limit: '10mb' }), async (req, res) => {
+router.post('/from-image', express.raw({ type: ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'], limit: '10mb' }), async (req, res) => {
   try {
     const buffer = req.body;
     if (!Buffer.isBuffer(buffer) || buffer.length === 0) {
-      return res.status(400).json({ ok: false, error: 'Upload an image file (PNG, JPG, or WebP)' });
+      return res.status(400).json({ ok: false, error: 'Upload an image file (PNG, JPG, WebP, or SVG)' });
     }
 
     const contentType = (req.headers['content-type'] || '').split(';')[0].trim();
-    if (!['image/png', 'image/jpeg', 'image/webp'].includes(contentType)) {
-      return res.status(400).json({ ok: false, error: 'Unsupported file type. Upload a PNG, JPG, or WebP image.' });
+    if (!['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'].includes(contentType)) {
+      return res.status(400).json({ ok: false, error: 'Unsupported file type. Upload a PNG, JPG, WebP, or SVG.' });
     }
 
     const instructions = req.headers['x-instructions'] || '';
@@ -330,7 +330,7 @@ router.post('/from-image', express.raw({ type: ['image/png', 'image/jpeg', 'imag
       buffer.length, instructions ? 'yes' : 'none');
 
     const start = Date.now();
-    const { html, manifest } = await generateTemplateFromImage(buffer, { instructions });
+    const { html, manifest } = await generateTemplateFromImage(buffer, { instructions, contentType });
     console.log('[adminHtmlTemplates] from-image: generated in %dms (%d bytes HTML, %d slots)',
       Date.now() - start, html.length, Object.keys(manifest.slots || {}).length);
 

@@ -92,6 +92,30 @@ COMMON MISTAKES TO AVOID:
 
 CRITICAL: Return ONLY the raw JSON. No markdown fences, no explanation.`;
 
+const SVG_SYSTEM_PROMPT = `You are an expert HTML/CSS developer converting an SVG design into a Puppeteer-compatible HTML template.
+
+You are given the SVG source code of a design. Extract EXACT values from the SVG:
+- font-family attributes → use those exact fonts (load via Google Fonts <link>)
+- fill/stroke hex colors → use those exact hex values as CSS custom properties
+- viewBox/width/height → use for template dimensions
+- text elements → make editable with data-slot attributes
+- image/rect elements → identify image slots
+
+OUTPUT: Return a JSON object: { "html": "<!DOCTYPE html>...", "manifest": { "slots": {...}, "dimensions": {...} } }
+
+Follow ALL the same rules as for image conversion:
+1. Root <div> with explicit width/height and overflow:hidden
+2. ALL colors as CSS custom properties on root: style="--bg:#hex; --accent:#hex; --text:#hex"
+3. Text slots: data-slot="key_name" with snake_case keys
+4. Image slots: data-slot="image:key" with src=""
+5. Repeating slots: data-slot-container + data-slot-item + data-slot-field
+6. Embed manifest as <script type="application/json" id="template-meta"> in <head>
+7. Include color:* slots in manifest for each CSS variable
+
+ADVANTAGE: You have the exact SVG source — use the EXACT font-family, EXACT hex colors, and EXACT dimensions. Do not approximate.
+
+CRITICAL: Return ONLY the raw JSON. No markdown fences, no explanation.`;
+
 // ---------------------------------------------------------------------------
 // Pass 2 prompt — refine HTML by comparing original vs rendered
 // ---------------------------------------------------------------------------
@@ -124,36 +148,45 @@ async function generateTemplateFromImage(imageBuffer, options = {}) {
   const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
   if (!apiKey) throw new Error('anthropic_api_key not configured');
 
-  let meta;
-  try {
-    meta = await sharp(imageBuffer).metadata();
-  } catch (err) {
-    throw new Error('Invalid image file — could not read image metadata');
+  // Detect SVG input
+  const bufStr = imageBuffer.toString('utf8', 0, Math.min(200, imageBuffer.length));
+  const isSvg = options.contentType === 'image/svg+xml' || bufStr.trimStart().startsWith('<svg') || bufStr.trimStart().startsWith('<?xml');
+
+  let imageBlock, mimeType;
+
+  if (isSvg) {
+    // SVG: use text-based pipeline (no Vision needed)
+    console.log('[templateFromImage] detected SVG input (%d bytes)', imageBuffer.length);
+    mimeType = 'image/svg+xml';
+    imageBlock = null; // will use text message instead
+  } else {
+    let meta;
+    try {
+      meta = await sharp(imageBuffer).metadata();
+    } catch (err) {
+      throw new Error('Invalid image file — could not read image metadata');
+    }
+
+    if (!meta.format || !['png', 'jpeg', 'jpg', 'webp', 'gif', 'tiff'].includes(meta.format)) {
+      throw new Error(`Unsupported image format: ${meta.format || 'unknown'}`);
+    }
+
+    mimeType = meta.format === 'png' ? 'image/png'
+             : meta.format === 'webp' ? 'image/webp'
+             : 'image/jpeg';
+
+    let resizedBuf = imageBuffer;
+    if (meta.width > 2048 || meta.height > 2048) {
+      resizedBuf = await sharp(imageBuffer).resize(2048, 2048, { fit: 'inside' }).toBuffer();
+    }
+    const base64 = resizedBuf.toString('base64');
+
+    imageBlock = {
+      type: 'image',
+      source: { type: 'base64', media_type: mimeType, data: base64 },
+      cache_control: { type: 'ephemeral' },
+    };
   }
-
-  if (!meta.format || !['png', 'jpeg', 'jpg', 'webp', 'gif', 'tiff'].includes(meta.format)) {
-    throw new Error(`Unsupported image format: ${meta.format || 'unknown'}`);
-  }
-
-  const mimeType = meta.format === 'png' ? 'image/png'
-                 : meta.format === 'webp' ? 'image/webp'
-                 : 'image/jpeg';
-
-  let resizedBuf = imageBuffer;
-  if (meta.width > 2048 || meta.height > 2048) {
-    resizedBuf = await sharp(imageBuffer).resize(2048, 2048, { fit: 'inside' }).toBuffer();
-  }
-  const base64 = resizedBuf.toString('base64');
-
-  const userPrompt = options.instructions
-    ? `Convert this design image into an HTML template. Additional instructions: ${options.instructions}`
-    : 'Convert this design image into an HTML template. Reproduce the layout, typography, colors, and structure as closely as possible.';
-
-  const imageBlock = {
-    type: 'image',
-    source: { type: 'base64', media_type: mimeType, data: base64 },
-    cache_control: { type: 'ephemeral' },
-  };
 
   const client = new Anthropic({ apiKey });
 
@@ -166,19 +199,33 @@ async function generateTemplateFromImage(imageBuffer, options = {}) {
     ]);
   };
 
-  // ── Pass 1: Image → HTML ────────────────────────────────────────────────
+  // ── Pass 1: Design → HTML ────────────────────────────────────────────────
 
-  console.log('[templateFromImage] pass 1: generating HTML from image');
   const pass1Start = Date.now();
+  let pass1Messages, pass1System;
+
+  if (isSvg) {
+    console.log('[templateFromImage] pass 1: generating HTML from SVG (text-based)');
+    const svgText = imageBuffer.toString('utf8');
+    const svgPrompt = options.instructions
+      ? `Convert this SVG design into an HTML template. Additional instructions: ${options.instructions}\n\nSVG SOURCE:\n${svgText}`
+      : `Convert this SVG design into an HTML template. Use the EXACT font-family, fill colors, and dimensions from the SVG.\n\nSVG SOURCE:\n${svgText}`;
+    pass1System = SVG_SYSTEM_PROMPT;
+    pass1Messages = [{ role: 'user', content: svgPrompt }];
+  } else {
+    console.log('[templateFromImage] pass 1: generating HTML from image (Vision)');
+    const userPrompt = options.instructions
+      ? `Convert this design image into an HTML template. Additional instructions: ${options.instructions}`
+      : 'Convert this design image into an HTML template. Reproduce the layout, typography, colors, and structure as closely as possible.';
+    pass1System = SYSTEM_PROMPT;
+    pass1Messages = [{ role: 'user', content: [imageBlock, { type: 'text', text: userPrompt }] }];
+  }
 
   const msg = await callWithTimeout({
     model: 'claude-sonnet-4-6',
     max_tokens: 12000,
-    system: SYSTEM_PROMPT,
-    messages: [{
-      role: 'user',
-      content: [imageBlock, { type: 'text', text: userPrompt }],
-    }],
+    system: pass1System,
+    messages: pass1Messages,
   });
 
   const rawText = getAnthropicMessageText(msg);
@@ -187,15 +234,16 @@ async function generateTemplateFromImage(imageBuffer, options = {}) {
   try {
     result = extractJsonFromResponse(rawText);
   } catch (e) {
+    const retryMessages = [
+      ...pass1Messages,
+      { role: 'assistant', content: msg.content },
+      { role: 'user', content: 'Return only the JSON object with "html" and "manifest" keys. No markdown, no code fences.' },
+    ];
     const retry = await callWithTimeout({
       model: 'claude-sonnet-4-6',
       max_tokens: 12000,
-      system: SYSTEM_PROMPT,
-      messages: [
-        { role: 'user', content: [imageBlock, { type: 'text', text: userPrompt }] },
-        { role: 'assistant', content: msg.content },
-        { role: 'user', content: 'Return only the JSON object with "html" and "manifest" keys. No markdown, no code fences.' },
-      ],
+      system: pass1System,
+      messages: retryMessages,
     });
     result = extractJsonFromResponse(getAnthropicMessageText(retry));
   }

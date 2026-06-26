@@ -10,94 +10,71 @@
   <link rel="stylesheet" href="/css/admin.css" />
   <script src="/js/admin-nav.js"></script>
   <style>
-    .html-textarea { font-family: monospace; font-size: .78rem; resize: vertical; min-height: 280px; }
+    .html-textarea { font-family: monospace; font-size: .78rem; resize: vertical; min-height: 200px; }
     .warn-banner { background:#fef9c3; border:1px solid #fde047; color:#713f12; border-radius:var(--radius); padding:var(--space-sm) var(--space-md); font-size:.85rem; margin-bottom:var(--space-md); display:flex; justify-content:space-between; align-items:flex-start; gap:var(--space-sm); }
 
-    /* Slot builder */
-    .slot-builder-empty { color: var(--text-muted); font-size: .85rem; padding: var(--space-sm) 0; }
-    .slot-card { border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: var(--space-sm); overflow: hidden; }
-    .slot-card__header { display: flex; align-items: center; gap: var(--space-sm); padding: 8px 12px; background: var(--neutral-50); border-bottom: 1px solid var(--border); }
-    .slot-card__key { font-family: monospace; font-size: .82rem; font-weight: 600; flex: 1; }
-    .slot-card__remove { background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 16px; padding: 2px 6px; border-radius: 4px; line-height: 1; }
-    .slot-card__remove:hover { color: #dc2626; background: #fef2f2; }
-    .slot-card__body { padding: 10px 12px; display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: flex-end; }
-    .slot-card__field { display: flex; flex-direction: column; gap: 3px; }
-    .slot-card__field label { font-size: .72rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: .03em; }
-    .slot-card__field input[type="number"] { width: 80px; }
-    .slot-card__field input[type="text"] { width: 160px; }
-    .slot-card__field input[type="color"] { width: 36px; height: 28px; border: 1px solid var(--border); border-radius: 4px; padding: 1px; cursor: pointer; }
-    .slot-card__field .hex-input { width: 80px; font-family: monospace; font-size: .8rem; }
-    .slot-type { display: inline-block; padding: 1px 7px; border-radius: 99px; font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; }
-    .slot-type--text { background: #d1fae5; color: #065f46; }
-    .slot-type--color { background: #ede9fe; color: #5b21b6; }
-    .slot-type--image { background: #dbeafe; color: #1e40af; }
-    .slot-type--repeating { background: #fef3c7; color: #92400e; }
-    .slot-fields-list { display: flex; gap: 4px; flex-wrap: wrap; }
-    .slot-field-pill { background: var(--neutral-100); padding: 2px 8px; border-radius: 99px; font-size: .72rem; font-weight: 500; font-family: monospace; }
-    .slot-dims-row { display: flex; gap: var(--space-sm); align-items: center; }
-    .slot-validation { margin-top: var(--space-sm); }
-    .slot-validation-item { font-size: .82rem; padding: 4px 0; color: #92400e; }
-    .slot-validation-item::before { content: '⚠ '; }
-    .slot-add-row { display: flex; gap: var(--space-sm); align-items: flex-end; margin-top: var(--space-sm); padding-top: var(--space-sm); border-top: 1px solid var(--border); }
-    .slot-add-row input { width: 160px; }
-    .slot-add-row select { width: 110px; }
-    .slot-preview-frame { width: 100%; border: 1px solid var(--border); border-radius: var(--radius); background: #fff; overflow: hidden; }
-    .slot-preview-frame iframe { width: 100%; border: none; display: block; }
+    /* Wizard steps */
+    .wz-steps { display:flex; align-items:center; gap:12px; margin-bottom:var(--space-lg); }
+    .wz-step { display:flex; align-items:center; gap:8px; font-size:.85rem; color:var(--text-muted); cursor:default; }
+    .wz-step.active { color:var(--brand, #0f766e); font-weight:600; }
+    .wz-step.done { color:var(--brand, #0f766e); }
+    .wz-num { width:24px; height:24px; border-radius:50%; border:2px solid var(--border); display:flex; align-items:center; justify-content:center; font-size:.72rem; font-weight:700; }
+    .wz-step.active .wz-num { border-color:var(--brand); background:var(--brand); color:#fff; }
+    .wz-step.done .wz-num { border-color:var(--brand); background:var(--brand); color:#fff; }
+    .wz-line { flex:1; height:2px; background:var(--border); min-width:40px; }
 
-    details summary { cursor: pointer; font-size: .85rem; font-weight: 600; color: var(--text-muted); }
-    details[open] summary { margin-bottom: var(--space-sm); }
-    .manifest-json { background: var(--neutral-50); border: 1px solid var(--border); border-radius: var(--radius); padding: var(--space-sm); font-family: monospace; font-size: .75rem; max-height: 200px; overflow-y: auto; white-space: pre; }
+    /* Upload zone */
+    .img-upload-zone { border:2px dashed var(--border); border-radius:var(--radius); padding:32px; text-align:center; cursor:pointer; transition:border-color .15s, background .15s; background:var(--neutral-50); }
+    .img-upload-zone:hover, .img-upload-zone.dragover { border-color:var(--brand); background:rgba(15,118,110,0.04); }
+    .img-upload-zone__icon { font-size:28px; margin-bottom:8px; }
+    .img-upload-zone__text { font-size:.85rem; color:var(--text-muted); }
+    .img-upload-zone__text strong { color:var(--brand); }
+    .img-upload-zone__hint { font-size:.75rem; color:var(--text-muted); margin-top:4px; }
+    .img-upload-progress { display:flex; align-items:center; gap:10px; padding:16px; background:var(--neutral-50); border:1px solid var(--border); border-radius:var(--radius); }
+    .img-upload-spinner { width:20px; height:20px; border:2.5px solid var(--border); border-top-color:var(--brand); border-radius:50%; animation:spin .8s linear infinite; flex-shrink:0; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    .img-upload-error { padding:12px 16px; background:#fef2f2; border:1px solid #fecaca; border-radius:var(--radius); color:#991b1b; font-size:.85rem; }
+    .or-divider { display:flex; align-items:center; gap:12px; margin:var(--space-md) 0; color:var(--text-muted); font-size:.8rem; font-weight:600; text-transform:uppercase; letter-spacing:.05em; }
+    .or-divider::before, .or-divider::after { content:''; flex:1; height:1px; background:var(--border); }
 
-    /* Preview iframe */
-    .tpl-preview-section { margin-top: var(--space-md); }
-    .tpl-preview-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-sm); }
-    .tpl-preview-wrap { border: 1px solid var(--border); border-radius: var(--radius); background: #f9fafb; overflow: hidden; position: relative; }
-    .tpl-preview-wrap iframe { display: block; border: none; transform-origin: top left; }
-    .tpl-preview-empty { padding: 40px; text-align: center; color: var(--text-muted); font-size: .85rem; }
-    .tpl-slot-legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: .72rem; margin-top: 6px; }
-    .tpl-slot-legend span::before { content: ''; display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
-    .tpl-slot-legend .leg-text::before { background: rgba(16,185,129,0.4); }
-    .tpl-slot-legend .leg-image::before { background: rgba(59,130,246,0.4); }
-    .tpl-slot-legend .leg-repeating::before { background: rgba(245,158,11,0.4); }
+    /* Step 2: two-panel layout */
+    .config-panels { display:flex; gap:0; min-height:500px; border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; }
+    .config-preview { flex:1; background:#f3f4f6; display:flex; align-items:center; justify-content:center; overflow:hidden; position:relative; border-right:1px solid var(--border); }
+    .config-preview iframe { border:none; display:block; transform-origin:top left; }
+    .config-slots { width:360px; flex-shrink:0; overflow-y:auto; padding:16px 20px; max-height:600px; }
+    .config-slots-title { font-size:.82rem; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:.04em; margin-bottom:12px; }
 
-    /* Test-as-user modal */
-    .test-overlay { position: fixed; inset: 0; background: rgba(9,9,11,0.65); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 400; }
-    .test-modal { width: min(1020px, calc(100vw - 40px)); height: min(720px, calc(100vh - 60px)); background: var(--surface, #fff); border-radius: 12px; box-shadow: 0 16px 60px rgba(0,0,0,0.24); display: flex; flex-direction: column; overflow: hidden; }
-    .test-modal__header { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; border-bottom: 1px solid var(--border); }
-    .test-modal__title { font-size: .82rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); }
-    .test-modal__close { background: none; border: none; cursor: pointer; font-size: 18px; color: var(--text-muted); padding: 4px 8px; border-radius: 4px; }
-    .test-modal__close:hover { background: var(--neutral-100); }
-    .test-modal__body { display: flex; flex: 1; min-height: 0; }
-    .test-modal__preview { flex: 1; background: #f3f4f6; display: flex; align-items: center; justify-content: center; overflow: hidden; border-right: 1px solid var(--border); padding: 20px; }
-    .test-modal__preview iframe { border: none; border-radius: 8px; box-shadow: 0 2px 12px rgba(0,0,0,0.1); }
-    .test-modal__form { width: 340px; flex-shrink: 0; overflow-y: auto; padding: 20px 24px; }
-    .test-modal__form .field-label { font-size: .78rem; font-weight: 600; margin-bottom: 4px; }
-    .test-modal__form .field-input, .test-modal__form .field-textarea { width: 100%; margin-bottom: 14px; }
-    .test-modal__form .so-char-counter { text-align: right; font-size: .72rem; color: var(--text-muted); margin-top: -10px; margin-bottom: 10px; }
-    .test-color-row { display: flex; gap: 8px; align-items: center; margin-bottom: 14px; }
-    .test-color-row input[type="color"] { width: 36px; height: 28px; border: 1px solid var(--border); border-radius: 4px; padding: 1px; cursor: pointer; }
-    .test-color-row .hex-input { width: 90px; font-family: monospace; font-size: .82rem; }
-    .test-img-zone { width: 100%; height: 80px; border: 1px dashed var(--border); border-radius: 8px; display: flex; align-items: center; justify-content: center; cursor: pointer; margin-bottom: 14px; font-size: .8rem; color: var(--text-muted); overflow: hidden; }
-    .test-img-zone:hover { border-color: var(--brand, #0f766e); }
+    /* Slot cards */
+    .slot-card { border:1px solid var(--border); border-radius:var(--radius); margin-bottom:10px; overflow:hidden; transition:border-color .15s, box-shadow .15s; cursor:pointer; }
+    .slot-card:hover { border-color:var(--brand); }
+    .slot-card--active { border-color:var(--brand); box-shadow:0 0 0 2px rgba(15,118,110,0.15); border-left:3px solid var(--brand); }
+    .slot-card__header { display:flex; align-items:center; gap:8px; padding:8px 12px; background:var(--neutral-50); border-bottom:1px solid var(--border); }
+    .slot-card__key { font-family:monospace; font-size:.8rem; font-weight:600; flex:1; }
+    .slot-card__body { padding:10px 12px; display:flex; flex-wrap:wrap; gap:6px 14px; align-items:flex-end; }
+    .slot-card__field { display:flex; flex-direction:column; gap:3px; }
+    .slot-card__field label { font-size:.7rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:.03em; }
+    .slot-card__field input[type="number"] { width:70px; }
+    .slot-card__field input[type="text"] { width:140px; }
+    .slot-card__field input[type="color"] { width:32px; height:26px; border:1px solid var(--border); border-radius:4px; padding:1px; cursor:pointer; }
+    .slot-card__field .hex-input { width:80px; font-family:monospace; font-size:.78rem; }
+    .slot-type { display:inline-block; padding:1px 6px; border-radius:99px; font-size:.65rem; font-weight:700; text-transform:uppercase; letter-spacing:.03em; }
+    .slot-type--text { background:#d1fae5; color:#065f46; }
+    .slot-type--color { background:#ede9fe; color:#5b21b6; }
+    .slot-type--image { background:#dbeafe; color:#1e40af; }
+    .slot-type--repeating { background:#fef3c7; color:#92400e; }
+    .slot-fields-list { display:flex; gap:4px; flex-wrap:wrap; }
+    .slot-field-pill { background:var(--neutral-100); padding:1px 6px; border-radius:99px; font-size:.7rem; font-weight:500; font-family:monospace; }
+    .config-add-row { display:flex; gap:8px; align-items:flex-end; padding-top:10px; border-top:1px solid var(--border); margin-top:6px; }
+    .config-add-row input { width:120px; }
+    .config-add-row select { width:90px; }
 
-    /* Image upload zone */
-    .img-upload-zone { border: 2px dashed var(--border); border-radius: var(--radius); padding: 32px; text-align: center; cursor: pointer; transition: border-color 0.15s, background 0.15s; background: var(--neutral-50); }
-    .img-upload-zone:hover, .img-upload-zone.dragover { border-color: var(--brand, #0f766e); background: rgba(15,118,110,0.04); }
-    .img-upload-zone__icon { font-size: 28px; margin-bottom: 8px; }
-    .img-upload-zone__text { font-size: .85rem; color: var(--text-muted); }
-    .img-upload-zone__text strong { color: var(--brand, #0f766e); }
-    .img-upload-zone__hint { font-size: .75rem; color: var(--text-muted); margin-top: 4px; }
-    .img-upload-progress { display: flex; align-items: center; gap: 10px; padding: 16px; background: var(--neutral-50); border: 1px solid var(--border); border-radius: var(--radius); }
-    .img-upload-spinner { width: 20px; height: 20px; border: 2.5px solid var(--border); border-top-color: var(--brand, #0f766e); border-radius: 50%; animation: htpl-spin 0.8s linear infinite; flex-shrink: 0; }
-    @keyframes htpl-spin { to { transform: rotate(360deg); } }
-    .img-upload-error { padding: 12px 16px; background: #fef2f2; border: 1px solid #fecaca; border-radius: var(--radius); color: #991b1b; font-size: .85rem; display: flex; justify-content: space-between; align-items: center; }
-    .or-divider { display: flex; align-items: center; gap: 12px; margin: var(--space-md) 0; color: var(--text-muted); font-size: .8rem; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
-    .or-divider::before, .or-divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+    .manifest-json { background:var(--neutral-50); border:1px solid var(--border); border-radius:var(--radius); padding:var(--space-sm); font-family:monospace; font-size:.72rem; max-height:180px; overflow-y:auto; white-space:pre; }
+    details summary { cursor:pointer; font-size:.82rem; font-weight:600; color:var(--text-muted); }
+    details[open] summary { margin-bottom:var(--space-sm); }
   </style>
 </head>
 <body>
 
-  <!-- Auth screen -->
   <div id="auth-screen" class="admin-auth">
     <div class="admin-auth__card card">
       <h2 class="admin-auth__title">ScoutHook Admin</h2>
@@ -107,152 +84,136 @@
     </div>
   </div>
 
-  <!-- Main app -->
   <div id="main" class="hidden">
     <div id="admin-nav-container"></div>
-
     <main class="admin-main">
       <div class="admin-templates-body">
-
         <div class="admin-page-header">
           <div>
             <h1 id="page-title">Add HTML Template</h1>
-            <p class="text-muted admin-page-subtitle">Upload a design image or paste HTML. Slots are auto-detected and configurable below.</p>
+            <p class="text-muted admin-page-subtitle">Upload a design or paste HTML. Configure editable slots, then save.</p>
           </div>
           <a href="/admin-html-templates.html" class="btn btn--secondary">← Back to list</a>
         </div>
-
         <div id="warn-banner" class="warn-banner hidden"></div>
 
         <div class="card card--section-xl">
           <input type="hidden" id="form-id" />
 
-          <div class="field">
-            <label for="f-name">Template name <span class="required">*</span></label>
-            <input type="text" id="f-name" maxlength="120" placeholder="e.g. Dark Insight Card">
-          </div>
-          <div class="field">
-            <label for="f-description">Description</label>
-            <input type="text" id="f-description" maxlength="255" placeholder="Optional — shown to users">
-          </div>
-          <div class="field">
-            <label for="f-category">Category</label>
-            <input type="text" id="f-category" maxlength="80" placeholder="e.g. Quote, Infographic, Stats">
-          </div>
-          <div class="field">
-            <label for="f-sort">Sort order</label>
-            <input type="number" id="f-sort" value="0" min="0" max="9999" style="width:100px">
+          <!-- Wizard step indicator -->
+          <div class="wz-steps">
+            <div class="wz-step active" id="wz-s1"><span class="wz-num">1</span> Upload &amp; Details</div>
+            <div class="wz-line"></div>
+            <div class="wz-step" id="wz-s2"><span class="wz-num">2</span> Configure Slots</div>
           </div>
 
-          <!-- Image upload zone -->
-          <div class="field" id="upload-field">
-            <label>Upload a design</label>
-            <div id="img-upload-zone" class="img-upload-zone" role="button" tabindex="0" aria-label="Upload design image">
-              <div class="img-upload-zone__icon">🎨</div>
-              <div class="img-upload-zone__text"><strong>Drop image here</strong> or click to browse</div>
-              <div class="img-upload-zone__hint">PNG, JPG, WebP — from Canva, Figma, or any design tool (max 10 MB)</div>
+          <!-- ═══ STEP 1: Upload & Metadata ═══ -->
+          <div id="step-1">
+            <div class="field">
+              <label for="f-name">Template name <span class="required">*</span></label>
+              <input type="text" id="f-name" maxlength="120" placeholder="e.g. Dark Insight Card">
             </div>
-            <input type="file" id="img-upload-input" accept="image/png,image/jpeg,image/webp" hidden>
-          </div>
-
-          <div class="or-divider">or paste HTML manually</div>
-
-          <div class="field">
-            <label for="f-html">Template HTML</label>
-            <textarea id="f-html" class="html-textarea" placeholder='<!DOCTYPE html>&#10;<html>&#10;...your template HTML...&#10;</html>'></textarea>
-          </div>
-
-          <!-- Dimensions -->
-          <div class="field">
-            <label>Dimensions</label>
-            <div class="slot-dims-row">
-              <input type="number" id="f-dim-w" value="1080" min="100" max="4096" style="width:90px">
-              <span style="color:var(--text-muted)">×</span>
-              <input type="number" id="f-dim-h" value="1080" min="100" max="4096" style="width:90px">
-              <span class="text-muted" style="font-size:.8rem">px (auto-detected from HTML)</span>
+            <div class="field">
+              <label for="f-description">Description</label>
+              <input type="text" id="f-description" maxlength="255" placeholder="Optional — shown to users">
             </div>
-          </div>
-
-          <!-- Slot builder -->
-          <div class="field">
-            <label>Detected Slots <span class="text-muted" style="font-weight:400">(auto-scanned from HTML)</span></label>
-            <div id="slot-builder">
-              <p class="slot-builder-empty">Paste HTML above to detect slots…</p>
-            </div>
-
-            <!-- Add slot manually -->
-            <div class="slot-add-row" id="slot-add-row" style="display:none">
-              <div class="slot-card__field">
-                <label>Slot key</label>
-                <input type="text" id="add-slot-key" placeholder="e.g. color:accent">
+            <div style="display:flex;gap:var(--space-md)">
+              <div class="field" style="flex:1">
+                <label for="f-category">Category</label>
+                <input type="text" id="f-category" maxlength="80" placeholder="e.g. Quote, Stats">
               </div>
-              <div class="slot-card__field">
-                <label>Type</label>
-                <select id="add-slot-type">
-                  <option value="text">Text</option>
-                  <option value="color">Color</option>
-                  <option value="image">Image</option>
-                </select>
+              <div class="field" style="width:100px">
+                <label for="f-sort">Sort order</label>
+                <input type="number" id="f-sort" value="0" min="0" max="9999">
               </div>
-              <button class="btn btn--sm btn--secondary" id="add-slot-btn" type="button">+ Add</button>
+            </div>
+
+            <div class="field" id="upload-field">
+              <label>Upload a design</label>
+              <div id="img-upload-zone" class="img-upload-zone" role="button" tabindex="0">
+                <div class="img-upload-zone__icon">🎨</div>
+                <div class="img-upload-zone__text"><strong>Drop file here</strong> or click to browse</div>
+                <div class="img-upload-zone__hint">PNG, JPG, WebP, or SVG — from Canva, Figma, etc. (max 10 MB)</div>
+              </div>
+              <input type="file" id="img-upload-input" accept="image/png,image/jpeg,image/webp,image/svg+xml" hidden>
+            </div>
+
+            <div class="or-divider">or paste HTML manually</div>
+
+            <div class="field">
+              <label for="f-html">Template HTML</label>
+              <textarea id="f-html" class="html-textarea" placeholder='<!DOCTYPE html>&#10;<html>&#10;...&#10;</html>'></textarea>
+            </div>
+
+            <div id="form-error" class="form-error hidden"></div>
+            <div class="form-actions">
+              <button id="btn-next" class="btn btn--primary" type="button">Next →</button>
+              <a href="/admin-html-templates.html" class="btn btn--secondary">Cancel</a>
             </div>
           </div>
 
-          <!-- Validation -->
-          <div id="slot-validation" class="slot-validation hidden"></div>
+          <!-- ═══ STEP 2: Configure Slots ═══ -->
+          <div id="step-2" style="display:none">
 
-          <!-- Live preview -->
-          <div class="field tpl-preview-section" id="preview-section" style="display:none">
-            <div class="tpl-preview-header">
-              <label>Template Preview <span class="text-muted" style="font-weight:400">(slots highlighted)</span></label>
-              <button class="btn btn--sm btn--primary" id="test-as-user-btn" type="button">Test as User</button>
+            <!-- Dimensions -->
+            <div class="field" style="margin-bottom:var(--space-md)">
+              <label>Dimensions</label>
+              <div style="display:flex;gap:8px;align-items:center">
+                <input type="number" id="f-dim-w" value="1080" min="100" max="4096" style="width:80px">
+                <span style="color:var(--text-muted)">×</span>
+                <input type="number" id="f-dim-h" value="1080" min="100" max="4096" style="width:80px">
+                <span class="text-muted" style="font-size:.78rem">px</span>
+              </div>
             </div>
-            <div class="tpl-preview-wrap" id="preview-wrap">
-              <div class="tpl-preview-empty">Preview will appear when HTML is pasted</div>
+
+            <!-- Two-panel editor -->
+            <div class="config-panels">
+              <!-- Left: preview -->
+              <div class="config-preview" id="config-preview">
+                <div style="color:var(--text-muted);font-size:.85rem">Loading preview…</div>
+              </div>
+              <!-- Right: slot cards -->
+              <div class="config-slots" id="config-slots">
+                <div class="config-slots-title">Slots (<span id="slot-count">0</span>)</div>
+                <div id="slot-list"></div>
+                <div class="config-add-row">
+                  <div class="slot-card__field"><label>Key</label><input type="text" id="add-slot-key" placeholder="color:accent"></div>
+                  <div class="slot-card__field"><label>Type</label>
+                    <select id="add-slot-type"><option value="text">Text</option><option value="color">Color</option><option value="image">Image</option></select>
+                  </div>
+                  <button class="btn btn--sm btn--secondary" id="add-slot-btn" type="button">+</button>
+                </div>
+              </div>
             </div>
-            <div class="tpl-slot-legend">
-              <span class="leg-text">Text slot</span>
-              <span class="leg-image">Image slot</span>
-              <span class="leg-repeating">Repeating slot</span>
+
+            <!-- Collapsible raw views -->
+            <div style="margin-top:var(--space-md)">
+              <details><summary>Raw HTML</summary><textarea id="raw-html" class="html-textarea" style="margin-top:8px;min-height:120px"></textarea></details>
+              <details style="margin-top:8px"><summary>Raw manifest JSON</summary><pre id="manifest-preview" class="manifest-json" style="margin-top:8px">{}</pre></details>
+            </div>
+
+            <div id="form-error-2" class="form-error hidden"></div>
+            <div class="form-actions" style="margin-top:var(--space-md)">
+              <button id="btn-back" class="btn btn--secondary" type="button">← Back</button>
+              <button id="btn-save" class="btn btn--primary" type="button">Save template</button>
+              <a href="/admin-html-templates.html" class="btn btn--secondary">Cancel</a>
             </div>
           </div>
 
-          <!-- Collapsible raw JSON -->
-          <details class="field">
-            <summary>Raw manifest JSON</summary>
-            <pre id="manifest-preview" class="manifest-json">{}</pre>
-          </details>
-
-          <div id="form-error" class="form-error hidden"></div>
-          <div class="form-actions">
-            <button id="form-save" class="btn btn--primary" type="button">Save template</button>
-            <a href="/admin-html-templates.html" class="btn btn--secondary">Cancel</a>
-          </div>
         </div>
-
       </div>
     </main>
-  </div>
-
-  <!-- Test-as-user modal -->
-  <div id="test-overlay" class="test-overlay" style="display:none">
-    <div class="test-modal">
-      <div class="test-modal__header">
-        <span class="test-modal__title">Test as User</span>
-        <button class="test-modal__close" id="test-close-btn">&#10005;</button>
-      </div>
-      <div class="test-modal__body">
-        <div class="test-modal__preview" id="test-preview-pane"></div>
-        <div class="test-modal__form" id="test-form-pane"></div>
-      </div>
-    </div>
   </div>
 
 <script>
   let adminPw = '';
   const templateId = new URLSearchParams(location.search).get('id');
-  let _slotState = []; // current slot card state
-  let _existingManifest = null; // from DB when editing
+  let _slotState = [];
+  let _existingManifest = null;
+  let _templateHtml = '';
+  let _uploadInProgress = false;
+  let _uploadAbort = null;
+  let _activeSlotKey = null;
 
   // ── Auth ──────────────────────────────────────────────────────────────────
 
@@ -262,23 +223,15 @@
   document.getElementById('pw-btn').addEventListener('click', async () => {
     const pw = document.getElementById('pw-input').value.trim();
     const r = await fetch('/admin/html-templates', { headers: { 'X-Admin-Password': pw } });
-    if (r.status === 401) {
-      document.getElementById('pw-error').textContent = 'Wrong password';
-      document.getElementById('pw-error').classList.remove('hidden');
-      return;
-    }
+    if (r.status === 401) { document.getElementById('pw-error').textContent = 'Wrong password'; document.getElementById('pw-error').classList.remove('hidden'); return; }
     adminPw = pw; sessionStorage.setItem('adminPw', pw); showMain();
   });
-  document.getElementById('pw-input').addEventListener('keydown', e => {
-    if (e.key === 'Enter') document.getElementById('pw-btn').click();
-  });
+  document.getElementById('pw-input').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('pw-btn').click(); });
 
   function adminFetch(path, opts = {}) {
     opts.headers = opts.headers || {};
     opts.headers['X-Admin-Password'] = adminPw;
-    if (opts.body && !opts.headers['Content-Type']) {
-      opts.headers['Content-Type'] = 'application/json';
-    }
+    if (opts.body && typeof opts.body === 'string') opts.headers['Content-Type'] = opts.headers['Content-Type'] || 'application/json';
     return fetch(path, opts);
   }
 
@@ -288,872 +241,382 @@
     if (templateId) await loadTemplate();
   }
 
-  // ── Load existing template for edit mode ──────────────────────────────────
+  // ── Wizard navigation ────────────────────────────────────────────────────
+
+  function goToStep(n) {
+    document.getElementById('step-1').style.display = n === 1 ? '' : 'none';
+    document.getElementById('step-2').style.display = n === 2 ? '' : 'none';
+    document.getElementById('wz-s1').className = `wz-step ${n === 1 ? 'active' : 'done'}`;
+    document.getElementById('wz-s2').className = `wz-step ${n === 2 ? 'active' : ''}`;
+  }
+
+  document.getElementById('btn-next').addEventListener('click', () => {
+    const name = document.getElementById('f-name').value.trim();
+    const html = document.getElementById('f-html').value.trim();
+    if (!name) { showError('form-error', 'Template name is required.'); return; }
+    if (!templateId && !html) { showError('form-error', 'Upload a design or paste HTML.'); return; }
+    hideError('form-error');
+    if (html) _templateHtml = html;
+    goToStep(2);
+    initStep2();
+  });
+
+  document.getElementById('btn-back').addEventListener('click', () => goToStep(1));
+
+  // ── Load existing template ───────────────────────────────────────────────
 
   async function loadTemplate() {
     document.getElementById('page-title').textContent = 'Edit HTML Template';
     document.getElementById('form-id').value = templateId;
-
     try {
       const [metaRes, htmlRes] = await Promise.all([
         adminFetch('/admin/html-templates'),
         adminFetch(`/admin/html-templates/${templateId}/html`),
       ]);
-
       const { templates } = await metaRes.json();
       const t = (templates || []).find(x => x.id === templateId);
-      if (!t) { showError('Template not found.'); return; }
-
+      if (!t) { showError('form-error', 'Template not found.'); return; }
       document.getElementById('f-name').value = t.name || '';
       document.getElementById('f-description').value = t.description || '';
       document.getElementById('f-category').value = t.category || '';
       document.getElementById('f-sort').value = t.sort_order ?? 0;
-
       _existingManifest = t.slot_manifest || {};
-
       if (_existingManifest.dimensions) {
         document.getElementById('f-dim-w').value = _existingManifest.dimensions.width || 1080;
         document.getElementById('f-dim-h').value = _existingManifest.dimensions.height || 1080;
       }
-
       if (htmlRes.ok) {
-        const html = await htmlRes.text();
-        document.getElementById('f-html').value = html;
-        runScan(html);
+        _templateHtml = await htmlRes.text();
+        document.getElementById('f-html').value = _templateHtml;
       }
-    } catch (err) {
-      showError('Failed to load template: ' + err.message);
-    }
+    } catch (err) { showError('form-error', 'Failed to load: ' + err.message); }
   }
 
-  // ── Slot Scanner ─────────────────────────────────────────────────────────
+  // ── Step 2 initialization ────────────────────────────────────────────────
 
-  const CSS_VAR_BLOCKLIST = new Set([
-    'font-sans','font-mono','font-heading','font-body',
-    'space-xs','space-sm','space-md','space-lg','space-xl','space-2','space-3','space-4','space-5','space-6',
-    'radius','radius-sm','radius-md','radius-lg',
-    'border','surface','surface-2','bg-surface','bg-subtle',
-    'text-heading','text-secondary','text-muted','text-primary',
-    'brand','color-primary','color-border','color-text','color-bg',
-    'neutral-50','neutral-100','neutral-200','neutral-300','neutral-400','neutral-500',
-    'error','success','warning',
-  ]);
+  function initStep2() {
+    const slots = scanSlotsFromHtml(_templateHtml);
+    if (_existingManifest) { mergeExistingConfig(slots, _existingManifest); _existingManifest = null; }
+    _slotState = slots;
+    document.getElementById('raw-html').value = _templateHtml;
+    renderSlotCards();
+    renderPreview();
+    updateManifest();
+  }
+
+  // ── Slot scanner ─────────────────────────────────────────────────────────
+
+  const CSS_VAR_SKIP = new Set(['font-sans','font-mono','font-heading','font-body','space-xs','space-sm','space-md','space-lg','space-xl','radius','radius-sm','radius-md','radius-lg','border','surface','surface-2','bg-surface','bg-subtle','text-heading','text-secondary','text-muted','text-primary','brand','neutral-50','neutral-100','error','success','warning']);
 
   function scanSlotsFromHtml(html) {
-    const slots = [];
-    const seen = new Set();
-
+    const slots = [], seen = new Set();
     try {
       const doc = new DOMParser().parseFromString(html, 'text/html');
-
-      // Detect data-slot elements
       doc.querySelectorAll('[data-slot]').forEach(el => {
         const key = el.getAttribute('data-slot');
         if (!key || seen.has(key)) return;
         seen.add(key);
-
-        if (key.startsWith('image:')) {
-          slots.push({ key, type: 'image', config: {} });
-        } else if (el.hasAttribute('data-slot-container')) {
-          const fields = [];
-          el.querySelectorAll('[data-slot-field]').forEach(f => {
-            const fname = f.getAttribute('data-slot-field');
-            if (fname && !fields.includes(fname)) fields.push(fname);
-          });
-          slots.push({ key, type: 'repeating', config: { fields, min: 1, max: 10 } });
-        } else {
-          slots.push({ key, type: 'text', config: { maxLen: 0, default: '' } });
-        }
-      });
-
-      // Detect CSS var() references for color slots
-      let cssText = '';
-      doc.querySelectorAll('style').forEach(s => { cssText += ' ' + s.textContent; });
-      doc.querySelectorAll('[style]').forEach(el => { cssText += ' ' + el.getAttribute('style'); });
-      const varRe = /var\(--([a-zA-Z0-9_-]+)\)/g;
-      let m;
-      while ((m = varRe.exec(cssText)) !== null) {
-        const varName = m[1];
-        const colorKey = 'color:' + varName;
-        if (!CSS_VAR_BLOCKLIST.has(varName) && !seen.has(colorKey)) {
-          seen.add(colorKey);
-          slots.push({ key: colorKey, type: 'color', config: { default: '#cccccc' } });
-        }
-      }
-
-      // Auto-detect dimensions from viewport meta or root container
-      const vpMeta = doc.querySelector('meta[name="viewport"]');
-      if (vpMeta) {
-        const wMatch = vpMeta.content.match(/width=(\d+)/);
-        if (wMatch) document.getElementById('f-dim-w').value = parseInt(wMatch[1]);
-      }
-      const root = doc.querySelector('body > div, body > section');
-      if (root) {
-        const wMatch = root.getAttribute('style')?.match(/width:\s*(\d+)px/);
-        const hMatch = root.getAttribute('style')?.match(/height:\s*(\d+)px/);
-        if (wMatch) document.getElementById('f-dim-w').value = parseInt(wMatch[1]);
-        if (hMatch) document.getElementById('f-dim-h').value = parseInt(hMatch[1]);
-      }
-    } catch (e) {
-      // Fallback: regex-based detection for malformed HTML
-      const re = /data-slot=["']([^"']+)["']/g;
-      let rm;
-      while ((rm = re.exec(html)) !== null) {
-        const key = rm[1];
-        if (seen.has(key)) continue;
-        seen.add(key);
         if (key.startsWith('image:')) slots.push({ key, type: 'image', config: {} });
-        else slots.push({ key, type: 'text', config: { maxLen: 0, default: '' } });
+        else if (el.hasAttribute('data-slot-container')) {
+          const fields = [];
+          el.querySelectorAll('[data-slot-field]').forEach(f => { const n = f.getAttribute('data-slot-field'); if (n && !fields.includes(n)) fields.push(n); });
+          slots.push({ key, type: 'repeating', config: { fields, min: 1, max: 10 } });
+        } else slots.push({ key, type: 'text', config: { maxLen: 0, default: '' } });
+      });
+      let css = '';
+      doc.querySelectorAll('style').forEach(s => { css += ' ' + s.textContent; });
+      doc.querySelectorAll('[style]').forEach(el => { css += ' ' + el.getAttribute('style'); });
+      let m; const re = /var\(--([a-zA-Z0-9_-]+)\)/g;
+      while ((m = re.exec(css)) !== null) {
+        const v = m[1], ck = 'color:' + v;
+        if (!CSS_VAR_SKIP.has(v) && !seen.has(ck)) { seen.add(ck); slots.push({ key: ck, type: 'color', config: { default: '#cccccc' } }); }
       }
+      const vp = doc.querySelector('meta[name="viewport"]');
+      if (vp) { const wm = vp.content.match(/width=(\d+)/); if (wm) document.getElementById('f-dim-w').value = parseInt(wm[1]); }
+      const root = doc.querySelector('body > div, body > section');
+      if (root) { const ws = root.getAttribute('style'); if (ws) { const wm = ws.match(/width:\s*(\d+)px/); const hm = ws.match(/height:\s*(\d+)px/); if (wm) document.getElementById('f-dim-w').value = parseInt(wm[1]); if (hm) document.getElementById('f-dim-h').value = parseInt(hm[1]); } }
+    } catch (e) {
+      let rm; const re = /data-slot=["']([^"']+)["']/g;
+      while ((rm = re.exec(html)) !== null) { const k = rm[1]; if (!seen.has(k)) { seen.add(k); slots.push({ key: k, type: k.startsWith('image:') ? 'image' : 'text', config: k.startsWith('image:') ? {} : { maxLen: 0, default: '' } }); } }
     }
-
     return slots;
   }
 
   function mergeExistingConfig(slots, manifest) {
-    const existingSlots = (manifest && manifest.slots) || {};
-    for (const slot of slots) {
-      const existing = existingSlots[slot.key];
-      if (!existing) continue;
-      if (slot.type === 'text') {
-        slot.config.maxLen = existing.maxLen || 0;
-        slot.config.default = existing.default || '';
-      } else if (slot.type === 'color') {
-        slot.config.default = existing.default || '#cccccc';
-      } else if (slot.type === 'repeating') {
-        slot.config.min = existing.min || 1;
-        slot.config.max = existing.max || 10;
-        if (existing.fields?.length) slot.config.fields = existing.fields;
-      }
-    }
-
-    // Add manifest-only slots not found in HTML (orphaned)
-    for (const [key, def] of Object.entries(existingSlots)) {
-      if (slots.find(s => s.key === key)) continue;
-      let type = 'text';
-      if (key.startsWith('color:')) type = 'color';
-      else if (key.startsWith('image:')) type = 'image';
-      else if (def.type === 'repeating') type = 'repeating';
-      slots.push({ key, type, config: def, orphaned: true });
-    }
+    const es = (manifest && manifest.slots) || {};
+    for (const s of slots) { const e = es[s.key]; if (!e) continue; if (s.type === 'text') { s.config.maxLen = e.maxLen || 0; s.config.default = e.default || ''; } else if (s.type === 'color') { s.config.default = e.default || '#cccccc'; } else if (s.type === 'repeating') { s.config.min = e.min || 1; s.config.max = e.max || 10; if (e.fields?.length) s.config.fields = e.fields; } }
+    for (const [k, d] of Object.entries(es)) { if (slots.find(s => s.key === k)) continue; let t = 'text'; if (k.startsWith('color:')) t = 'color'; else if (k.startsWith('image:')) t = 'image'; else if (d.type === 'repeating') t = 'repeating'; slots.push({ key: k, type: t, config: d, orphaned: true }); }
   }
 
-  // ── Slot Builder UI ──────────────────────────────────────────────────────
+  // ── Slot card rendering ──────────────────────────────────────────────────
 
-  function renderSlotBuilder(slots) {
-    _slotState = slots;
-    const container = document.getElementById('slot-builder');
-    document.getElementById('slot-add-row').style.display = '';
+  function renderSlotCards() {
+    const list = document.getElementById('slot-list');
+    document.getElementById('slot-count').textContent = _slotState.length;
+    if (!_slotState.length) { list.innerHTML = '<p style="font-size:.85rem;color:var(--text-muted)">No slots detected.</p>'; updateManifest(); return; }
 
-    if (!slots.length) {
-      container.innerHTML = '<p class="slot-builder-empty">No slots detected. Add <code>data-slot="key"</code> attributes to your HTML elements.</p>';
-      updateManifestPreview();
-      return;
-    }
+    list.innerHTML = _slotState.map((s, i) => {
+      const tc = `slot-type--${s.type}`;
+      const tl = s.type.charAt(0).toUpperCase() + s.type.slice(1);
+      const active = s.key === _activeSlotKey ? ' slot-card--active' : '';
+      let body = '';
 
-    container.innerHTML = slots.map((s, i) => {
-      const typeClass = `slot-type--${s.type}`;
-      const typeLabel = s.type.charAt(0).toUpperCase() + s.type.slice(1);
-      const orphanBadge = s.orphaned ? ' <span style="color:#92400e;font-size:.72rem;font-weight:600">⚠ Not in HTML</span>' : '';
-
-      let bodyHtml = '';
       if (s.type === 'text') {
-        bodyHtml = `
-          <div class="slot-card__field">
-            <label>Max length</label>
-            <input type="number" data-idx="${i}" data-cfg="maxLen" value="${s.config.maxLen || ''}" min="0" max="5000" placeholder="No limit">
-          </div>
-          <div class="slot-card__field">
-            <label>Default value</label>
-            <input type="text" data-idx="${i}" data-cfg="default" value="${esc(s.config.default || '')}">
-          </div>`;
+        body = `<div class="slot-card__field"><label>Max</label><input type="number" data-i="${i}" data-c="maxLen" value="${s.config.maxLen || ''}" min="0" max="5000" placeholder="—"></div>
+                <div class="slot-card__field"><label>Default</label><input type="text" data-i="${i}" data-c="default" value="${esc(s.config.default || '')}"></div>`;
       } else if (s.type === 'color') {
-        const isBrand = s.config.default === 'brand';
-        const colorVal = isBrand ? '#0f766e' : (s.config.default || '#cccccc');
-        bodyHtml = `
-          <div class="slot-card__field">
-            <label>Default</label>
-            <div style="display:flex;gap:6px;align-items:center">
-              <input type="color" data-idx="${i}" data-cfg="colorPicker" value="${esc(colorVal)}" ${isBrand ? 'disabled' : ''}>
-              <input type="text" class="hex-input" data-idx="${i}" data-cfg="colorHex" value="${esc(isBrand ? 'brand' : colorVal)}" maxlength="9" ${isBrand ? 'disabled' : ''}>
-            </div>
-          </div>
-          <div class="slot-card__field" style="align-self:center">
-            <label style="display:flex;gap:4px;align-items:center;cursor:pointer;white-space:nowrap">
-              <input type="checkbox" data-idx="${i}" data-cfg="brand" ${isBrand ? 'checked' : ''}> Use brand
-            </label>
-          </div>`;
+        const ib = s.config.default === 'brand', cv = ib ? '#0f766e' : (s.config.default || '#cccccc');
+        body = `<div class="slot-card__field"><label>Color</label><div style="display:flex;gap:4px;align-items:center">
+          <input type="color" data-i="${i}" data-c="colorPicker" value="${esc(cv)}" ${ib?'disabled':''}>
+          <input type="text" class="hex-input" data-i="${i}" data-c="colorHex" value="${esc(ib?'brand':cv)}" maxlength="9" ${ib?'disabled':''}></div></div>
+          <div class="slot-card__field" style="align-self:center"><label style="display:flex;gap:3px;align-items:center;cursor:pointer;white-space:nowrap"><input type="checkbox" data-i="${i}" data-c="brand" ${ib?'checked':''}> Brand</label></div>`;
       } else if (s.type === 'image') {
-        bodyHtml = `<div class="slot-card__field"><span style="font-size:.8rem;color:var(--text-muted)">Image upload — no config needed</span></div>`;
+        body = '<span style="font-size:.78rem;color:var(--text-muted)">Image upload slot</span>';
       } else if (s.type === 'repeating') {
-        const fields = s.config.fields || [];
-        bodyHtml = `
-          <div class="slot-card__field">
-            <label>Fields</label>
-            <div class="slot-fields-list">${fields.map(f => `<span class="slot-field-pill">${esc(f)}</span>`).join('') || '<span style="font-size:.8rem;color:var(--text-muted)">None detected</span>'}</div>
-          </div>
-          <div class="slot-card__field">
-            <label>Min items</label>
-            <input type="number" data-idx="${i}" data-cfg="min" value="${s.config.min || 1}" min="1" max="20">
-          </div>
-          <div class="slot-card__field">
-            <label>Max items</label>
-            <input type="number" data-idx="${i}" data-cfg="max" value="${s.config.max || 10}" min="1" max="50">
-          </div>`;
+        const f = s.config.fields || [];
+        body = `<div class="slot-card__field"><label>Fields</label><div class="slot-fields-list">${f.map(x => `<span class="slot-field-pill">${esc(x)}</span>`).join('') || '—'}</div></div>
+          <div class="slot-card__field"><label>Min</label><input type="number" data-i="${i}" data-c="min" value="${s.config.min||1}" min="1" max="20"></div>
+          <div class="slot-card__field"><label>Max</label><input type="number" data-i="${i}" data-c="max" value="${s.config.max||10}" min="1" max="50"></div>`;
       }
 
-      return `<div class="slot-card" data-idx="${i}">
-        <div class="slot-card__header">
-          <span class="slot-type ${typeClass}">${typeLabel}</span>
-          <span class="slot-card__key">${esc(s.key)}</span>${orphanBadge}
-          <button class="slot-card__remove" data-idx="${i}" title="Remove slot">&times;</button>
-        </div>
-        <div class="slot-card__body">${bodyHtml}</div>
-      </div>`;
+      return `<div class="slot-card${active}" data-slot-key="${esc(s.key)}" data-i="${i}">
+        <div class="slot-card__header"><span class="slot-type ${tc}">${tl}</span><span class="slot-card__key">${esc(s.key)}</span>${s.orphaned?'<span style="color:#92400e;font-size:.7rem">⚠</span>':''}</div>
+        <div class="slot-card__body">${body}</div></div>`;
     }).join('');
 
-    wireSlotCardEvents();
-    updateManifestPreview();
-    runValidation();
+    wireSlotEvents();
+    updateManifest();
   }
 
-  function wireSlotCardEvents() {
-    const container = document.getElementById('slot-builder');
-
-    // Config field changes
-    container.querySelectorAll('input[data-cfg], select[data-cfg]').forEach(el => {
+  function wireSlotEvents() {
+    const list = document.getElementById('slot-list');
+    list.querySelectorAll('input[data-c], select[data-c]').forEach(el => {
       el.addEventListener('input', () => {
-        const idx = parseInt(el.dataset.idx);
-        const cfg = el.dataset.cfg;
-        const slot = _slotState[idx];
-        if (!slot) return;
-
-        if (cfg === 'maxLen') slot.config.maxLen = parseInt(el.value) || 0;
-        else if (cfg === 'default') slot.config.default = el.value;
-        else if (cfg === 'min') slot.config.min = parseInt(el.value) || 1;
-        else if (cfg === 'max') slot.config.max = parseInt(el.value) || 10;
-        else if (cfg === 'colorPicker') {
-          slot.config.default = el.value;
-          const hex = container.querySelector(`input[data-idx="${idx}"][data-cfg="colorHex"]`);
-          if (hex) hex.value = el.value;
+        const i = parseInt(el.dataset.i), c = el.dataset.c, s = _slotState[i]; if (!s) return;
+        if (c === 'maxLen') s.config.maxLen = parseInt(el.value) || 0;
+        else if (c === 'default') s.config.default = el.value;
+        else if (c === 'min') s.config.min = parseInt(el.value) || 1;
+        else if (c === 'max') s.config.max = parseInt(el.value) || 10;
+        else if (c === 'colorPicker') { s.config.default = el.value; const h = list.querySelector(`[data-i="${i}"][data-c="colorHex"]`); if (h) h.value = el.value; }
+        else if (c === 'colorHex') { if (/^#[0-9a-fA-F]{6}$/.test(el.value)) { s.config.default = el.value; const p = list.querySelector(`[data-i="${i}"][data-c="colorPicker"]`); if (p) p.value = el.value; } }
+        else if (c === 'brand') {
+          const p = list.querySelector(`[data-i="${i}"][data-c="colorPicker"]`), h = list.querySelector(`[data-i="${i}"][data-c="colorHex"]`);
+          if (el.checked) { s.config.default = 'brand'; if (p) { p.value = '#0f766e'; p.disabled = true; } if (h) { h.value = 'brand'; h.disabled = true; } }
+          else { s.config.default = p?.value || '#cccccc'; if (p) p.disabled = false; if (h) { h.value = p?.value || '#cccccc'; h.disabled = false; } }
         }
-        else if (cfg === 'colorHex') {
-          if (/^#[0-9a-fA-F]{6}$/.test(el.value)) {
-            slot.config.default = el.value;
-            const picker = container.querySelector(`input[data-idx="${idx}"][data-cfg="colorPicker"]`);
-            if (picker) picker.value = el.value;
-          }
-        }
-        else if (cfg === 'brand') {
-          const picker = container.querySelector(`input[data-idx="${idx}"][data-cfg="colorPicker"]`);
-          const hex = container.querySelector(`input[data-idx="${idx}"][data-cfg="colorHex"]`);
-          if (el.checked) {
-            slot.config.default = 'brand';
-            if (picker) { picker.value = '#0f766e'; picker.disabled = true; }
-            if (hex) { hex.value = 'brand'; hex.disabled = true; }
-          } else {
-            slot.config.default = picker?.value || '#cccccc';
-            if (picker) picker.disabled = false;
-            if (hex) { hex.value = picker?.value || '#cccccc'; hex.disabled = false; }
-          }
-        }
-
-        updateManifestPreview();
+        updateManifest();
       });
+      el.addEventListener('click', e => e.stopPropagation());
     });
-
-    // Remove buttons
-    container.querySelectorAll('.slot-card__remove').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const idx = parseInt(btn.dataset.idx);
-        _slotState.splice(idx, 1);
-        renderSlotBuilder(_slotState);
+    list.querySelectorAll('.slot-card').forEach(card => {
+      card.addEventListener('click', () => {
+        _activeSlotKey = card.dataset.slotKey;
+        list.querySelectorAll('.slot-card').forEach(c => c.classList.toggle('slot-card--active', c === card));
+        highlightSlotInPreview(_activeSlotKey);
       });
     });
   }
 
-  // ── Build manifest from UI state ─────────────────────────────────────────
+  // ── Preview (iframe with click-to-select) ────────────────────────────────
+
+  function renderPreview() {
+    const pane = document.getElementById('config-preview');
+    const w = parseInt(document.getElementById('f-dim-w').value) || 1080;
+    const h = parseInt(document.getElementById('f-dim-h').value) || 1080;
+    const maxW = pane.clientWidth - 20 || 500;
+    const scale = Math.min(maxW / w, 0.5);
+
+    const slotScript = `
+      <style>
+        [data-slot] { cursor:pointer; transition:outline .15s; }
+        [data-slot]:hover { outline:2px dashed rgba(15,118,110,0.5); outline-offset:2px; }
+        [data-slot].slot-active { outline:3px solid #0f766e; outline-offset:2px; }
+      </style>
+      <script>
+        document.querySelectorAll('[data-slot]').forEach(el => {
+          el.addEventListener('click', e => {
+            e.preventDefault(); e.stopPropagation();
+            document.querySelectorAll('[data-slot].slot-active').forEach(x => x.classList.remove('slot-active'));
+            el.classList.add('slot-active');
+            window.parent.postMessage({ type:'slot-click', key:el.getAttribute('data-slot') }, '*');
+          });
+        });
+      <\/script>`;
+
+    const injected = _templateHtml.replace('</body>', slotScript + '</body>');
+    pane.innerHTML = `<iframe sandbox="allow-same-origin allow-scripts" srcdoc="${esc(injected)}" style="width:${w}px;height:${h}px;transform:scale(${scale})" title="Preview"></iframe>`;
+    pane.style.height = Math.round(h * scale) + 'px';
+  }
+
+  window.addEventListener('message', e => {
+    if (e.data?.type === 'slot-click') {
+      _activeSlotKey = e.data.key;
+      const card = document.querySelector(`.slot-card[data-slot-key="${e.data.key}"]`);
+      if (card) {
+        document.querySelectorAll('.slot-card').forEach(c => c.classList.remove('slot-card--active'));
+        card.classList.add('slot-card--active');
+        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+  });
+
+  function highlightSlotInPreview(key) {
+    const iframe = document.querySelector('#config-preview iframe');
+    if (!iframe?.contentDocument) return;
+    const doc = iframe.contentDocument;
+    doc.querySelectorAll('[data-slot].slot-active').forEach(x => x.classList.remove('slot-active'));
+    const target = doc.querySelector(`[data-slot="${key}"]`);
+    if (target) target.classList.add('slot-active');
+  }
+
+  // ── Manifest builder ─────────────────────────────────────────────────────
 
   function buildManifest() {
     const slots = {};
     for (const s of _slotState) {
-      const def = {};
-      if (s.type === 'text') {
-        if (s.config.maxLen > 0) def.maxLen = s.config.maxLen;
-        if (s.config.default) def.default = s.config.default;
-      } else if (s.type === 'color') {
-        def.default = s.config.default || '#cccccc';
-      } else if (s.type === 'image') {
-        // empty config
-      } else if (s.type === 'repeating') {
-        def.type = 'repeating';
-        def.fields = s.config.fields || [];
-        def.min = s.config.min || 1;
-        def.max = s.config.max || 10;
-      }
-      slots[s.key] = def;
+      const d = {};
+      if (s.type === 'text') { if (s.config.maxLen > 0) d.maxLen = s.config.maxLen; if (s.config.default) d.default = s.config.default; }
+      else if (s.type === 'color') { d.default = s.config.default || '#cccccc'; }
+      else if (s.type === 'repeating') { d.type = 'repeating'; d.fields = s.config.fields || []; d.min = s.config.min || 1; d.max = s.config.max || 10; }
+      slots[s.key] = d;
     }
-    return {
-      slots,
-      dimensions: {
-        width: parseInt(document.getElementById('f-dim-w').value) || 1080,
-        height: parseInt(document.getElementById('f-dim-h').value) || 1080,
-      }
-    };
+    return { slots, dimensions: { width: parseInt(document.getElementById('f-dim-w').value) || 1080, height: parseInt(document.getElementById('f-dim-h').value) || 1080 } };
   }
 
-  function updateManifestPreview() {
-    const manifest = buildManifest();
-    document.getElementById('manifest-preview').textContent = JSON.stringify(manifest, null, 2);
+  function updateManifest() {
+    document.getElementById('manifest-preview').textContent = JSON.stringify(buildManifest(), null, 2);
   }
-
-  // ── Inject manifest into HTML ────────────────────────────────────────────
 
   function injectManifestIntoHtml(html, manifest) {
     const json = JSON.stringify(manifest, null, 2);
     const block = '<script type="application/json" id="template-meta">\n' + json + '\n</' + 'script>';
-
-    const startTag = '<script type="application/json" id="template-meta">';
-    const altTag   = "<script type='application/json' id='template-meta'>";
-    let pos = html.indexOf(startTag);
-    let tagLen = startTag.length;
-    if (pos === -1) { pos = html.indexOf(altTag); tagLen = altTag.length; }
-
-    if (pos !== -1) {
-      const end = html.indexOf('</' + 'script>', pos + tagLen);
-      if (end !== -1) {
-        return html.slice(0, pos) + block + html.slice(end + ('</' + 'script>').length);
-      }
-    }
-
-    // Inject before </head> or </body> or at end
-    const headClose = html.lastIndexOf('</head>');
-    if (headClose !== -1) return html.slice(0, headClose) + '  ' + block + '\n' + html.slice(headClose);
-    const bodyClose = html.lastIndexOf('</body>');
-    if (bodyClose !== -1) return html.slice(0, bodyClose) + block + '\n' + html.slice(bodyClose);
+    const st = '<script type="application/json" id="template-meta">'; const at = "<script type='application/json' id='template-meta'>";
+    let p = html.indexOf(st), tl = st.length;
+    if (p === -1) { p = html.indexOf(at); tl = at.length; }
+    if (p !== -1) { const e = html.indexOf('</' + 'script>', p + tl); if (e !== -1) return html.slice(0, p) + block + html.slice(e + ('</' + 'script>').length); }
+    const hc = html.lastIndexOf('</head>'); if (hc !== -1) return html.slice(0, hc) + '  ' + block + '\n' + html.slice(hc);
+    const bc = html.lastIndexOf('</body>'); if (bc !== -1) return html.slice(0, bc) + block + '\n' + html.slice(bc);
     return html + '\n' + block;
   }
-
-  // ── Validation ───────────────────────────────────────────────────────────
-
-  function runValidation() {
-    const warnings = [];
-    for (const s of _slotState) {
-      if (s.orphaned) warnings.push(`"${s.key}" is in the manifest but not found in the HTML.`);
-      if (s.type === 'color' && s.config.default && s.config.default !== 'brand' && !/^(#[0-9a-fA-F]{3,8}|rgba?\([^)]+\))$/.test(s.config.default)) {
-        warnings.push(`Color "${s.key}" has invalid default: ${s.config.default}`);
-      }
-      if (s.type === 'repeating' && (!s.config.fields || s.config.fields.length === 0)) {
-        warnings.push(`Repeating slot "${s.key}" has no fields detected. Add data-slot-field attributes inside the data-slot-item.`);
-      }
-    }
-
-    const el = document.getElementById('slot-validation');
-    if (warnings.length) {
-      el.innerHTML = warnings.map(w => `<div class="slot-validation-item">${esc(w)}</div>`).join('');
-      el.classList.remove('hidden');
-    } else {
-      el.classList.add('hidden');
-    }
-    return warnings;
-  }
-
-  // ── HTML textarea scan trigger ───────────────────────────────────────────
-
-  let _scanTimer;
-  function runScan(html) {
-    const slots = scanSlotsFromHtml(html);
-    if (_existingManifest) {
-      mergeExistingConfig(slots, _existingManifest);
-      _existingManifest = null; // merge only once
-    }
-    renderSlotBuilder(slots);
-    updatePreview();
-  }
-
-  document.getElementById('f-html').addEventListener('input', function () {
-    clearTimeout(_scanTimer);
-    _scanTimer = setTimeout(() => {
-      const html = this.value.trim();
-      if (!html) {
-        document.getElementById('slot-builder').innerHTML = '<p class="slot-builder-empty">Paste HTML above to detect slots…</p>';
-        document.getElementById('slot-add-row').style.display = 'none';
-        document.getElementById('slot-validation').classList.add('hidden');
-        document.getElementById('preview-section').style.display = 'none';
-        updateManifestPreview();
-        return;
-      }
-      runScan(html);
-    }, 400);
-  });
-
-  // ── Image upload → HTML conversion ──────────────────────────────────────
-
-  const imgZone = document.getElementById('img-upload-zone');
-  const imgInput = document.getElementById('img-upload-input');
-
-  imgZone.addEventListener('click', () => imgInput.click());
-  imgZone.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); imgInput.click(); } });
-  imgZone.addEventListener('dragover', e => { e.preventDefault(); imgZone.classList.add('dragover'); });
-  imgZone.addEventListener('dragleave', () => imgZone.classList.remove('dragover'));
-  imgZone.addEventListener('drop', e => {
-    e.preventDefault(); imgZone.classList.remove('dragover');
-    const file = e.dataTransfer.files[0];
-    if (file && file.type.startsWith('image/')) processImageUpload(file);
-  });
-  imgInput.addEventListener('change', () => {
-    if (imgInput.files[0]) processImageUpload(imgInput.files[0]);
-    imgInput.value = '';
-  });
-
-  let _uploadInProgress = false;
-  let _uploadAbort = null;
-
-  async function processImageUpload(file) {
-    if (_uploadInProgress) return;
-    if (file.size > 10 * 1024 * 1024) { alert('Image must be under 10 MB.'); return; }
-    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) { alert('Only PNG, JPG, and WebP images are supported.'); return; }
-
-    _uploadInProgress = true;
-    _uploadAbort = new AbortController();
-
-    const uploadField = document.getElementById('upload-field');
-    uploadField.innerHTML = `
-      <label>Upload a design</label>
-      <div class="img-upload-progress">
-        <div class="img-upload-spinner"></div>
-        <div style="flex:1">
-          <div style="font-weight:600;font-size:.85rem">Converting design to template…</div>
-          <div style="font-size:.78rem;color:var(--text-muted);margin-top:2px">AI is analyzing your design, generating HTML, then refining for accuracy. This takes 30–60 seconds.</div>
-        </div>
-        <button class="btn btn--sm btn--secondary" id="upload-cancel-btn" type="button">Cancel</button>
-      </div>`;
-
-    document.getElementById('upload-cancel-btn')?.addEventListener('click', () => {
-      _uploadAbort?.abort();
-      _uploadInProgress = false;
-      resetUploadZone();
-    });
-
-    try {
-      const r = await fetch('/admin/html-templates/from-image', {
-        method: 'POST',
-        headers: { 'Content-Type': file.type, 'X-Admin-Password': adminPw },
-        body: file,
-        signal: _uploadAbort.signal,
-      });
-
-      let data;
-      try { data = await r.json(); }
-      catch { throw new Error(`Server returned HTTP ${r.status} — not a valid response`); }
-
-      if (!data.ok) throw new Error(data.error || 'Conversion failed');
-
-      // Populate the HTML textarea
-      document.getElementById('f-html').value = data.html;
-
-      // Set dimensions from manifest
-      if (data.manifest?.dimensions) {
-        document.getElementById('f-dim-w').value = data.manifest.dimensions.width || 1080;
-        document.getElementById('f-dim-h').value = data.manifest.dimensions.height || 1080;
-      }
-
-      // Show success state
-      uploadField.innerHTML = `
-        <label>Upload a design</label>
-        <div style="padding:12px 16px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:var(--radius);font-size:.85rem;color:#166534;display:flex;align-items:center;gap:8px">
-          <span style="font-size:18px">✓</span>
-          <div>
-            <div style="font-weight:600">Template generated successfully</div>
-            <div style="font-size:.78rem;color:#15803d;margin-top:1px">${Object.keys(data.manifest?.slots || {}).length} slots detected · ${data.html.length.toLocaleString()} bytes HTML</div>
-          </div>
-          <button class="btn btn--sm btn--secondary" style="margin-left:auto" onclick="resetUploadZone()">Upload different</button>
-        </div>`;
-
-      // Trigger scan
-      runScan(data.html);
-    } catch (err) {
-      if (err.name === 'AbortError') { _uploadInProgress = false; return; }
-      uploadField.innerHTML = `
-        <label>Upload a design</label>
-        <div class="img-upload-error">
-          <span>Conversion failed: ${esc(err.message)}</span>
-          <button class="btn btn--sm btn--secondary" onclick="resetUploadZone()">Try again</button>
-        </div>`;
-    } finally {
-      _uploadInProgress = false;
-      _uploadAbort = null;
-    }
-  }
-
-  window.resetUploadZone = function() {
-    const uploadField = document.getElementById('upload-field');
-    uploadField.innerHTML = `
-      <label>Upload a design</label>
-      <div id="img-upload-zone" class="img-upload-zone" role="button" tabindex="0" aria-label="Upload design image">
-        <div class="img-upload-zone__icon">🎨</div>
-        <div class="img-upload-zone__text"><strong>Drop image here</strong> or click to browse</div>
-        <div class="img-upload-zone__hint">PNG, JPG, WebP — from Canva, Figma, or any design tool (max 10 MB)</div>
-      </div>
-      <input type="file" id="img-upload-input" accept="image/png,image/jpeg,image/webp" hidden>`;
-
-    // Re-wire events
-    const zone = document.getElementById('img-upload-zone');
-    const input = document.getElementById('img-upload-input');
-    zone.addEventListener('click', () => input.click());
-    zone.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); } });
-    zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
-    zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
-    zone.addEventListener('drop', e => {
-      e.preventDefault(); zone.classList.remove('dragover');
-      const file = e.dataTransfer.files[0];
-      if (file && file.type.startsWith('image/')) processImageUpload(file);
-    });
-    input.addEventListener('change', () => {
-      if (input.files[0]) processImageUpload(input.files[0]);
-      input.value = '';
-    });
-  };
 
   // ── Add slot manually ────────────────────────────────────────────────────
 
   document.getElementById('add-slot-btn').addEventListener('click', () => {
-    const keyInput = document.getElementById('add-slot-key');
-    const typeSelect = document.getElementById('add-slot-type');
-    const key = keyInput.value.trim();
+    const key = document.getElementById('add-slot-key').value.trim();
     if (!key) return;
-    if (_slotState.find(s => s.key === key)) { alert('Slot "' + key + '" already exists.'); return; }
-
-    const type = typeSelect.value;
-    const config = type === 'text' ? { maxLen: 0, default: '' }
-                 : type === 'color' ? { default: '#cccccc' }
-                 : {};
-    _slotState.push({ key, type, config });
-    renderSlotBuilder(_slotState);
-    keyInput.value = '';
+    if (_slotState.find(s => s.key === key)) { alert('Slot "' + key + '" exists.'); return; }
+    const type = document.getElementById('add-slot-type').value;
+    _slotState.push({ key, type, config: type === 'text' ? { maxLen: 0, default: '' } : type === 'color' ? { default: '#cccccc' } : {} });
+    renderSlotCards(); document.getElementById('add-slot-key').value = '';
   });
+
+  // ── Image upload ─────────────────────────────────────────────────────────
+
+  const imgZone = document.getElementById('img-upload-zone');
+  const imgInput = document.getElementById('img-upload-input');
+  imgZone.addEventListener('click', () => imgInput.click());
+  imgZone.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); imgInput.click(); } });
+  imgZone.addEventListener('dragover', e => { e.preventDefault(); imgZone.classList.add('dragover'); });
+  imgZone.addEventListener('dragleave', () => imgZone.classList.remove('dragover'));
+  imgZone.addEventListener('drop', e => { e.preventDefault(); imgZone.classList.remove('dragover'); const f = e.dataTransfer.files[0]; if (f) processUpload(f); });
+  imgInput.addEventListener('change', () => { if (imgInput.files[0]) processUpload(imgInput.files[0]); imgInput.value = ''; });
+
+  async function processUpload(file) {
+    if (_uploadInProgress) return;
+    if (file.size > 10 * 1024 * 1024) { alert('Max 10 MB.'); return; }
+    const allowed = ['image/png','image/jpeg','image/webp','image/svg+xml'];
+    if (!allowed.includes(file.type)) { alert('PNG, JPG, WebP, or SVG only.'); return; }
+
+    _uploadInProgress = true;
+    _uploadAbort = new AbortController();
+    const uf = document.getElementById('upload-field');
+    uf.innerHTML = `<label>Upload a design</label>
+      <div class="img-upload-progress"><div class="img-upload-spinner"></div>
+      <div style="flex:1"><div style="font-weight:600;font-size:.85rem">Converting design to template…</div>
+      <div style="font-size:.78rem;color:var(--text-muted);margin-top:2px">AI is analyzing, generating HTML, then refining. 30–60 seconds.</div></div>
+      <button class="btn btn--sm btn--secondary" id="upload-cancel" type="button">Cancel</button></div>`;
+    document.getElementById('upload-cancel')?.addEventListener('click', () => { _uploadAbort?.abort(); _uploadInProgress = false; resetUploadZone(); });
+
+    try {
+      const r = await fetch('/admin/html-templates/from-image', {
+        method: 'POST', headers: { 'Content-Type': file.type, 'X-Admin-Password': adminPw }, body: file, signal: _uploadAbort.signal,
+      });
+      let data; try { data = await r.json(); } catch { throw new Error(`Server error (HTTP ${r.status})`); }
+      if (!data.ok) throw new Error(data.error || 'Conversion failed');
+
+      _templateHtml = data.html;
+      document.getElementById('f-html').value = data.html;
+      if (data.manifest?.dimensions) { document.getElementById('f-dim-w').value = data.manifest.dimensions.width || 1080; document.getElementById('f-dim-h').value = data.manifest.dimensions.height || 1080; }
+
+      uf.innerHTML = `<label>Upload a design</label>
+        <div style="padding:12px 16px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:var(--radius);font-size:.85rem;color:#166534;display:flex;align-items:center;gap:8px">
+        <span style="font-size:18px">✓</span><div><div style="font-weight:600">Template generated</div>
+        <div style="font-size:.78rem;color:#15803d;margin-top:1px">${Object.keys(data.manifest?.slots||{}).length} slots · ${data.html.length.toLocaleString()} bytes</div></div>
+        <button class="btn btn--sm btn--secondary" style="margin-left:auto" onclick="resetUploadZone()">Change</button></div>`;
+    } catch (err) {
+      if (err.name === 'AbortError') { _uploadInProgress = false; return; }
+      uf.innerHTML = `<label>Upload a design</label><div class="img-upload-error">${esc(err.message)} <button class="btn btn--sm btn--secondary" style="margin-left:auto" onclick="resetUploadZone()">Retry</button></div>`;
+    } finally { _uploadInProgress = false; _uploadAbort = null; }
+  }
+
+  window.resetUploadZone = function() {
+    document.getElementById('upload-field').innerHTML = `<label>Upload a design</label>
+      <div id="img-upload-zone" class="img-upload-zone" role="button" tabindex="0">
+      <div class="img-upload-zone__icon">🎨</div><div class="img-upload-zone__text"><strong>Drop file here</strong> or click to browse</div>
+      <div class="img-upload-zone__hint">PNG, JPG, WebP, or SVG (max 10 MB)</div></div>
+      <input type="file" id="img-upload-input" accept="image/png,image/jpeg,image/webp,image/svg+xml" hidden>`;
+    const z = document.getElementById('img-upload-zone'), inp = document.getElementById('img-upload-input');
+    z.addEventListener('click', () => inp.click());
+    z.addEventListener('dragover', e => { e.preventDefault(); z.classList.add('dragover'); });
+    z.addEventListener('dragleave', () => z.classList.remove('dragover'));
+    z.addEventListener('drop', e => { e.preventDefault(); z.classList.remove('dragover'); const f = e.dataTransfer.files[0]; if (f) processUpload(f); });
+    inp.addEventListener('change', () => { if (inp.files[0]) processUpload(inp.files[0]); inp.value = ''; });
+  };
 
   // ── Save ──────────────────────────────────────────────────────────────────
 
-  document.getElementById('form-save').addEventListener('click', async () => {
-    const id    = document.getElementById('form-id').value;
-    const name  = document.getElementById('f-name').value.trim();
-    let   html  = document.getElementById('f-html').value;
-    const sort_order = parseInt(document.getElementById('f-sort').value, 10) || 0;
+  document.getElementById('btn-save').addEventListener('click', async () => {
+    const id = document.getElementById('form-id').value;
+    const name = document.getElementById('f-name').value.trim();
     const description = document.getElementById('f-description').value.trim();
-    const category    = document.getElementById('f-category').value.trim();
+    const category = document.getElementById('f-category').value.trim();
+    const sort_order = parseInt(document.getElementById('f-sort').value, 10) || 0;
 
-    if (!name) { showError('Name is required.'); return; }
-    if (!id && !html) { showError('HTML is required for new templates.'); return; }
+    // Use raw HTML from textarea (admin may have edited it)
+    let html = document.getElementById('raw-html').value || _templateHtml;
+    if (!name) { showError('form-error-2', 'Name is required.'); return; }
+    if (!id && !html) { showError('form-error-2', 'HTML is required.'); return; }
 
-    // Build and inject manifest
     if (html) {
       const manifest = buildManifest();
-      const warnings = runValidation();
-      if (warnings.length && !confirm('Warnings:\n' + warnings.join('\n') + '\n\nSave anyway?')) return;
       html = injectManifestIntoHtml(html, manifest);
-      document.getElementById('f-html').value = html;
     }
 
-    hideError();
-    const saveBtn = document.getElementById('form-save');
-    saveBtn.textContent = 'Saving…'; saveBtn.disabled = true;
+    hideError('form-error-2');
+    const btn = document.getElementById('btn-save');
+    btn.textContent = 'Saving…'; btn.disabled = true;
 
     const body = { name, sort_order };
     if (description) body.description = description;
-    if (category)    body.category    = category;
-    if (html)        body.html        = html;
-
-    const url    = id ? `/admin/html-templates/${id}` : '/admin/html-templates';
-    const method = id ? 'PUT' : 'POST';
+    if (category) body.category = category;
+    if (html) body.html = html;
 
     try {
-      const r    = await adminFetch(url, { method, body: JSON.stringify(body) });
+      const r = await adminFetch(id ? `/admin/html-templates/${id}` : '/admin/html-templates', { method: id ? 'PUT' : 'POST', body: JSON.stringify(body) });
       const data = await r.json();
-
-      saveBtn.textContent = 'Save template'; saveBtn.disabled = false;
-
-      if (!data.ok) { showError(data.error || 'Save failed.'); return; }
-
-      if (data.thumbnail_warning) {
-        showWarnBanner(`Template saved, but thumbnail generation failed: ${data.thumbnail_warning}. Use the ⟳ Thumbnail button on the list page to retry.`);
-      } else {
-        location.href = '/admin-html-templates.html';
-      }
-    } catch (err) {
-      saveBtn.textContent = 'Save template'; saveBtn.disabled = false;
-      showError('Request failed: ' + err.message);
-    }
+      btn.textContent = 'Save template'; btn.disabled = false;
+      if (!data.ok) { showError('form-error-2', data.error || 'Save failed.'); return; }
+      if (data.thumbnail_warning) { showWarnBanner(`Saved, but thumbnail failed: ${data.thumbnail_warning}`); }
+      else location.href = '/admin-html-templates.html';
+    } catch (err) { btn.textContent = 'Save template'; btn.disabled = false; showError('form-error-2', err.message); }
   });
 
   // ── Helpers ───────────────────────────────────────────────────────────────
 
-  // ── Live Preview (iframe with slot highlighting) ──────────────────────────
-
-  let _previewTimer;
-
-  function updatePreview() {
-    clearTimeout(_previewTimer);
-    _previewTimer = setTimeout(_renderPreview, 300);
-  }
-
-  function _renderPreview() {
-    const html = document.getElementById('f-html').value.trim();
-    const section = document.getElementById('preview-section');
-    const wrap = document.getElementById('preview-wrap');
-
-    if (!html || !_slotState.length) {
-      section.style.display = 'none';
-      return;
-    }
-    section.style.display = '';
-
-    const w = parseInt(document.getElementById('f-dim-w').value) || 1080;
-    const h = parseInt(document.getElementById('f-dim-h').value) || 1080;
-    const maxW = wrap.clientWidth || 600;
-    const scale = Math.min(maxW / w, 0.5);
-    const displayH = Math.round(h * scale);
-
-    const highlightCss = `
-      <style>
-        [data-slot] { outline: 2px solid rgba(16,185,129,0.5) !important; outline-offset: 1px; position: relative; }
-        [data-slot^="image:"] { outline-color: rgba(59,130,246,0.5) !important; }
-        [data-slot-container] { outline-color: rgba(245,158,11,0.5) !important; }
-      </style>`;
-
-    const injected = html.replace('</head>', highlightCss + '</head>');
-
-    wrap.innerHTML = `<iframe sandbox="allow-same-origin" srcdoc="${esc(injected)}" style="width:${w}px;height:${h}px;transform:scale(${scale});pointer-events:none;" title="Template preview"></iframe>`;
-    wrap.style.height = displayH + 'px';
-  }
-
-  // ── Test as User Modal ───────────────────────────────────────────────────
-
-  function openTestModal() {
-    const html = document.getElementById('f-html').value.trim();
-    if (!html || !_slotState.length) { alert('Paste HTML with data-slot attributes first.'); return; }
-
-    document.getElementById('test-overlay').style.display = 'flex';
-    _renderTestPreview(html);
-    _renderTestForm();
-  }
-
-  function closeTestModal() {
-    document.getElementById('test-overlay').style.display = 'none';
-  }
-
-  function _renderTestPreview(html) {
-    const pane = document.getElementById('test-preview-pane');
-    const w = parseInt(document.getElementById('f-dim-w').value) || 1080;
-    const h = parseInt(document.getElementById('f-dim-h').value) || 1080;
-    const maxW = pane.clientWidth - 40 || 560;
-    const maxH = pane.clientHeight - 40 || 600;
-    const scale = Math.min(maxW / w, maxH / h, 0.6);
-
-    pane.innerHTML = `<iframe sandbox="allow-same-origin" id="test-iframe" srcdoc="${esc(html)}" style="width:${w}px;height:${h}px;transform:scale(${scale});transform-origin:center center;" title="Template preview"></iframe>`;
-  }
-
-  function _renderTestForm() {
-    const formPane = document.getElementById('test-form-pane');
-    let html = '';
-
-    for (const s of _slotState) {
-      const label = _slotLabel(s.key);
-
-      if (s.type === 'text') {
-        const val = s.config.default || '';
-        const maxLen = s.config.maxLen || 0;
-        const useTA = maxLen > 120;
-        html += `<div><div class="field-label">${esc(label)}</div>`;
-        html += useTA
-          ? `<textarea class="field-textarea" data-test-slot="${esc(s.key)}" ${maxLen ? `maxlength="${maxLen}"` : ''} rows="3">${esc(val)}</textarea>`
-          : `<input class="field-input" type="text" data-test-slot="${esc(s.key)}" value="${esc(val)}" ${maxLen ? `maxlength="${maxLen}"` : ''}>`;
-        if (maxLen) html += `<div class="so-char-counter">${val.length} / ${maxLen}</div>`;
-        html += '</div>';
-      } else if (s.type === 'color') {
-        const isBrand = s.config.default === 'brand';
-        const colorVal = isBrand ? '#0f766e' : (s.config.default || '#cccccc');
-        html += `<div><div class="field-label">${esc(label)}</div>
-          <div class="test-color-row">
-            <input type="color" data-test-slot="${esc(s.key)}" value="${esc(colorVal)}">
-            <input type="text" class="hex-input" data-test-hex="${esc(s.key)}" value="${esc(colorVal)}" maxlength="9">
-          </div></div>`;
-      } else if (s.type === 'image') {
-        html += `<div><div class="field-label">${esc(label)}</div>
-          <div class="test-img-zone" data-test-slot="${esc(s.key)}">Click to upload</div>
-          <input type="file" accept="image/*" data-test-file="${esc(s.key)}" hidden>
-          </div>`;
-      } else if (s.type === 'repeating') {
-        const fields = s.config.fields || [];
-        const min = s.config.min || 1;
-        html += `<div><div class="field-label">${esc(label)}</div>`;
-        for (let i = 0; i < min; i++) {
-          html += `<div style="border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:6px">
-            <span style="font-size:.72rem;font-weight:600;color:var(--text-muted)">#${i + 1}</span>`;
-          for (const f of fields) {
-            html += `<div style="margin-top:4px"><label class="field-label" style="font-size:.7rem">${esc(_slotLabel(f))}</label>
-              <input class="field-input" type="text" data-test-repeat="${esc(s.key)}" data-test-field="${esc(f)}" data-test-idx="${i}" style="font-size:.82rem"></div>`;
-          }
-          html += '</div>';
-        }
-        html += '</div>';
-      }
-    }
-
-    formPane.innerHTML = html;
-    _wireTestFormEvents();
-  }
-
-  function _wireTestFormEvents() {
-    const formPane = document.getElementById('test-form-pane');
-    let debounce;
-
-    function scheduleUpdate() {
-      clearTimeout(debounce);
-      debounce = setTimeout(() => _applyTestSlots(), 200);
-    }
-
-    // Text/textarea inputs
-    formPane.querySelectorAll('[data-test-slot]').forEach(el => {
-      if (el.tagName === 'DIV') return; // skip image zones
-      el.addEventListener('input', () => {
-        const counter = el.parentElement?.querySelector('.so-char-counter');
-        if (counter) { const max = el.getAttribute('maxlength'); counter.textContent = `${el.value.length} / ${max}`; }
-        scheduleUpdate();
-      });
-    });
-
-    // Color hex sync
-    formPane.querySelectorAll('[data-test-hex]').forEach(hex => {
-      const picker = formPane.querySelector(`[data-test-slot="${hex.dataset.testHex}"]`);
-      hex.addEventListener('input', () => {
-        if (/^#[0-9a-fA-F]{6}$/.test(hex.value) && picker) { picker.value = hex.value; scheduleUpdate(); }
-      });
-      picker?.addEventListener('input', () => { hex.value = picker.value; scheduleUpdate(); });
-    });
-
-    // Repeating field inputs
-    formPane.querySelectorAll('[data-test-repeat]').forEach(el => {
-      el.addEventListener('input', scheduleUpdate);
-    });
-
-    // Image upload zones
-    formPane.querySelectorAll('.test-img-zone').forEach(zone => {
-      const fileInput = formPane.querySelector(`[data-test-file="${zone.dataset.testSlot}"]`);
-      zone.addEventListener('click', () => fileInput?.click());
-      fileInput?.addEventListener('change', () => {
-        const file = fileInput.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = () => {
-          zone.dataset.dataUri = reader.result;
-          zone.innerHTML = `<img src="${reader.result}" style="width:100%;height:100%;object-fit:contain">`;
-          _applyTestSlots();
-        };
-        reader.readAsDataURL(file);
-        fileInput.value = '';
-      });
-    });
-  }
-
-  function _applyTestSlots() {
-    const iframe = document.getElementById('test-iframe');
-    if (!iframe?.contentDocument) return;
-    const doc = iframe.contentDocument;
-
-    const formPane = document.getElementById('test-form-pane');
-
-    // Apply text slots
-    formPane.querySelectorAll('input[data-test-slot], textarea[data-test-slot]').forEach(el => {
-      const slot = el.dataset.testSlot;
-      if (slot.startsWith('color:') || slot.startsWith('image:')) return;
-      const target = doc.querySelector(`[data-slot="${slot}"]`);
-      if (target) target.textContent = el.value;
-    });
-
-    // Apply color slots via CSS vars
-    formPane.querySelectorAll('input[type="color"][data-test-slot]').forEach(el => {
-      const slot = el.dataset.testSlot;
-      if (!slot.startsWith('color:')) return;
-      const varName = slot.slice('color:'.length);
-      doc.documentElement.style.setProperty('--' + varName, el.value);
-    });
-
-    // Apply image slots
-    formPane.querySelectorAll('.test-img-zone[data-data-uri]').forEach(zone => {
-      const slot = zone.dataset.testSlot;
-      const dataUri = zone.dataset.dataUri;
-      if (!dataUri) return;
-      const target = doc.querySelector(`[data-slot="${slot}"]`);
-      if (target && target.tagName === 'IMG') target.src = dataUri;
-    });
-
-    // Apply repeating slots
-    const repeatingGroups = {};
-    formPane.querySelectorAll('[data-test-repeat]').forEach(el => {
-      const key = el.dataset.testRepeat;
-      const idx = parseInt(el.dataset.testIdx);
-      const field = el.dataset.testField;
-      if (!repeatingGroups[key]) repeatingGroups[key] = [];
-      if (!repeatingGroups[key][idx]) repeatingGroups[key][idx] = {};
-      repeatingGroups[key][idx][field] = el.value;
-    });
-    for (const [key, items] of Object.entries(repeatingGroups)) {
-      const container = doc.querySelector(`[data-slot="${key}"][data-slot-container]`);
-      if (!container) continue;
-      const template = container.querySelector('[data-slot-item]');
-      if (!template) continue;
-      container.innerHTML = '';
-      for (const item of items) {
-        const clone = template.cloneNode(true);
-        for (const [field, val] of Object.entries(item || {})) {
-          const target = clone.querySelector(`[data-slot-field="${field}"]`);
-          if (target) target.textContent = val;
-        }
-        container.appendChild(clone);
-      }
-    }
-  }
-
-  function _slotLabel(key) {
-    const clean = key.replace(/^(color:|image:)/, '');
-    return clean.replace(/[_-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).trim();
-  }
-
-  // ── Wire preview + test buttons ──────────────────────────────────────────
-
-  document.getElementById('test-as-user-btn').addEventListener('click', openTestModal);
-  document.getElementById('test-close-btn').addEventListener('click', closeTestModal);
-  document.getElementById('test-overlay').addEventListener('click', e => {
-    if (e.target === e.currentTarget) closeTestModal();
-  });
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeTestModal(); });
-
-  function esc(s) {
-    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  }
-
-  function showError(msg) {
-    const el = document.getElementById('form-error');
-    el.textContent = msg;
-    el.classList.remove('hidden');
-  }
-
-  function hideError() {
-    document.getElementById('form-error').classList.add('hidden');
-  }
-
-  function showWarnBanner(msg) {
-    const el = document.getElementById('warn-banner');
-    el.textContent = msg;
-    el.classList.remove('hidden');
-    const link = document.createElement('a');
-    link.href = '/admin-html-templates.html';
-    link.className = 'btn btn--sm btn--secondary';
-    link.style.marginLeft = 'var(--space-sm)';
-    link.textContent = 'Go to list';
-    el.appendChild(link);
-  }
+  function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function showError(id, msg) { const el = document.getElementById(id); el.textContent = msg; el.classList.remove('hidden'); }
+  function hideError(id) { document.getElementById(id).classList.add('hidden'); }
+  function showWarnBanner(msg) { const el = document.getElementById('warn-banner'); el.textContent = msg; el.classList.remove('hidden'); const a = document.createElement('a'); a.href = '/admin-html-templates.html'; a.className = 'btn btn--sm btn--secondary'; a.style.marginLeft = 'var(--space-sm)'; a.textContent = 'Go to list'; el.appendChild(a); }
 </script>
 </body>
 </html>

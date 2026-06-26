@@ -362,45 +362,48 @@ async function generateTemplateFromImage(imageBuffer, options = {}) {
 
   let html = result.html;
 
-  // ── Post-processing: fix common Claude mistakes ─────────────────────────
+  // Post-processing applied twice: once after Pass 1, once after Pass 2.
+  // Extracted as a function so both passes produce clean, consistent HTML.
+  function applyPostProcessing(h) {
+    // Fix <img> tags with data-slot missing "image:" prefix (multi-line safe via /s flag)
+    h = h.replace(/<img\b([^>]*?)data-slot="(?!image:)([\w]+)"([^>]*?)>/gs, (match, before, key, after) => {
+      console.log('[templateFromImage] fixing image slot prefix: %s → image:%s', key, key);
+      manifest.slots[`image:${key}`] = manifest.slots[key] || {};
+      delete manifest.slots[key];
+      let fixed = `<img${before}data-slot="image:${key}"${after}>`;
+      // Clear non-data-URI filenames in src (both quote styles)
+      fixed = fixed.replace(/src=["'](?!data:)[^"']*["']/g, 'src=""');
+      return fixed;
+    });
 
-  // Fix <img> tags with data-slot missing "image:" prefix
-  // Handles multi-line attributes (Claude often puts each attr on its own line)
-  html = html.replace(/<img\b([^>]*?)data-slot="(?!image:)([\w]+)"([^>]*?)>/gs, (match, before, key, after) => {
-    console.log('[templateFromImage] fixing image slot: %s → image:%s', key, key);
-    manifest.slots[`image:${key}`] = manifest.slots[key] || {};
-    delete manifest.slots[key];
-    // Also fix src — clear non-data-URI filenames
-    let fixed = `<img${before}data-slot="image:${key}"${after}>`;
-    fixed = fixed.replace(/src="(?!data:)[^"]*"/g, 'src=""');
-    return fixed;
-  });
+    // Fix remaining image slots with a non-empty non-data-URI src (both quote styles)
+    h = h.replace(/(<img\b[^>]*data-slot="image:[^"]*"[^>]*?)src=["'](?!data:)[^"']*["']/gs, '$1src=""');
 
-  // Fix remaining image slots with filename src (already have image: prefix)
-  html = html.replace(/(<img\b[^>]*data-slot="image:[^"]*"[^>]*?)src="(?!data:)[^"]*"/gs, '$1src=""');
+    // Remove bogus data-slot-container="value" → data-slot-container (boolean attr)
+    h = h.replace(/data-slot-container="[^"]*"/g, 'data-slot-container');
 
-  // Remove bogus data-slot-container on non-repeating elements
-  html = html.replace(/data-slot-container="[^"]*"/g, 'data-slot-container');
-
-  // Sync manifest: ensure all data-slot keys in HTML exist in manifest
-  const slotMatches = html.matchAll(/data-slot="([^"]+)"/g);
-  for (const m of slotMatches) {
-    const key = m[1];
-    if (key === 'data-slot-container' || key === 'data-slot-item') continue;
-    if (!manifest.slots[key]) {
-      if (key.startsWith('image:')) manifest.slots[key] = {};
-      else manifest.slots[key] = { maxLen: 200 };
+    // Sync manifest: ensure every data-slot key in HTML exists in manifest
+    for (const m of h.matchAll(/data-slot="([^"]+)"/g)) {
+      const key = m[1];
+      if (key === 'data-slot-container' || key === 'data-slot-item') continue;
+      if (!manifest.slots[key]) {
+        manifest.slots[key] = key.startsWith('image:') ? {} : { maxLen: 200 };
+      }
     }
+    return h;
   }
+
+  html = applyPostProcessing(html);
 
   console.log('[templateFromImage] pass 1 done in %dms (%d bytes, %d slots)',
     Date.now() - pass1Start, html.length, Object.keys(manifest.slots).length);
 
   // ── Pass 2: Render → Compare → Refine ──────────────────────────────────
+  // Only runs when we have an image to compare against (not SVG text pipeline).
 
   const shouldRefine = options.refine !== false;
 
-  if (shouldRefine) {
+  if (shouldRefine && imageBlock) {
     try {
       const callRenderService = getRenderService();
       const { width = 1080, height = 1080 } = manifest.dimensions;
@@ -439,7 +442,8 @@ async function generateTemplateFromImage(imageBuffer, options = {}) {
         .trim();
 
       if (refinedHtml.includes('<!DOCTYPE') || refinedHtml.includes('<html')) {
-        html = refinedHtml;
+        // Apply same post-processing to Pass 2 output — it can re-introduce mistakes
+        html = applyPostProcessing(refinedHtml);
         console.log('[templateFromImage] pass 2 refinement applied (%d bytes, total %dms)',
           html.length, Date.now() - pass2Start);
       } else {
@@ -496,27 +500,32 @@ async function injectCroppedImages(html, manifest, cropBuffer, originalMeta) {
     }
 
     try {
+      // Max 600px keeps embedded images well under the 3MB HTML storage limit
+      // while remaining large enough for Puppeteer renders at template resolution.
       const cropped = await sharp(cropBuffer)
         .extract({ left, top, width, height })
-        .resize({ width: Math.min(Math.round(cfg.w), 1200), height: Math.min(Math.round(cfg.h), 1200), fit: 'inside' })
-        .jpeg({ quality: 85 })
+        .resize({ width: Math.min(Math.round(cfg.w), 600), height: Math.min(Math.round(cfg.h), 600), fit: 'inside' })
+        .jpeg({ quality: 80 })
         .toBuffer();
 
       const dataUri = `data:image/jpeg;base64,${cropped.toString('base64')}`;
       const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const prevLen = html.length;
 
-      // Case 1: data-slot comes before src → (<img ... data-slot="key" ...) src=""
+      // Matches src="" or src='' (Claude uses both quote styles)
+      const srcEmpty = `src=(?:""|'')`;
+
+      // Case 1: data-slot comes before src
       html = html.replace(
-        new RegExp(`(<img\\b[^>]*?data-slot="${escapedKey}"[^>]*?)src=""`, 'gs'),
+        new RegExp(`(<img\\b[^>]*?data-slot="${escapedKey}"[^>]*?)${srcEmpty}`, 'gs'),
         `$1src="${dataUri}"`
       );
-      // Case 2: src comes before data-slot → (<img ...) src="" (... data-slot="key" ...>)
+      // Case 2: src comes before data-slot
       html = html.replace(
-        new RegExp(`(<img\\b[^>]*?)src=""([^>]*?data-slot="${escapedKey}"[^>]*?>)`, 'gs'),
+        new RegExp(`(<img\\b[^>]*?)${srcEmpty}([^>]*?data-slot="${escapedKey}"[^>]*?>)`, 'gs'),
         `$1src="${dataUri}"$2`
       );
-      // Case 3: no src attribute at all — inject src before the closing > of the img tag
+      // Case 3: no src attribute at all — inject before the closing > of the img tag
       if (html.length === prevLen) {
         html = html.replace(
           new RegExp(`(<img\\b[^>]*?data-slot="${escapedKey}"[^>]*?)(\\s*/?>)`, 'gs'),

@@ -57,8 +57,8 @@ router.post('/', async (req, res) => {
     if (!name || !html) {
       return res.status(400).json({ ok: false, error: 'name and html are required' });
     }
-    if (Buffer.byteLength(html, 'utf8') > 500 * 1024) {
-      return res.status(400).json({ ok: false, error: 'html must be ≤ 500 KB' });
+    if (Buffer.byteLength(html, 'utf8') > 3 * 1024 * 1024) {
+      return res.status(400).json({ ok: false, error: 'html must be ≤ 3 MB' });
     }
 
     // Parse manifest from the original HTML before stripping scripts
@@ -138,8 +138,8 @@ router.put('/:id', async (req, res) => {
     let thumbnailWarning = null;
 
     if (html) {
-      if (Buffer.byteLength(html, 'utf8') > 500 * 1024) {
-        return res.status(400).json({ ok: false, error: 'html must be ≤ 500 KB' });
+      if (Buffer.byteLength(html, 'utf8') > 3 * 1024 * 1024) {
+        return res.status(400).json({ ok: false, error: 'html must be ≤ 3 MB' });
       }
       try {
         manifest = readSlotManifest(html);

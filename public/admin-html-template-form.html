@@ -228,6 +228,8 @@
   let _uploadAbort = null;
   let _activeSlotKey = null;
   let _imageOverrides = {}; // key → data URI ('data:...') or '' (cleared)
+  let _editMode = false;
+  let _step2Initialized = false;
 
   // ── Auth ──────────────────────────────────────────────────────────────────
 
@@ -256,9 +258,6 @@
   }
 
   // ── Wizard navigation (new) / Tab navigation (edit) ──────────────────────
-
-  let _editMode = false;
-  let _step2Initialized = false;
 
   function goToStep(n) {
     document.getElementById('step-1').style.display = n === 1 ? '' : 'none';

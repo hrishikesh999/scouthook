@@ -242,6 +242,7 @@
   let _existingManifest = null;
   let _templateHtml = '';
   let _originalImageDataUrl = null;
+  let _originalImageFile = null;
   let _previewMode = 'preview'; // 'preview' | 'original' | 'sideBySide'
   let _uploadInProgress = false;
   let _uploadAbort = null;
@@ -706,18 +707,17 @@
   // ── Refine template (re-run Pass 2) ─────────────────────────────────────
 
   document.getElementById('btn-refine').addEventListener('click', async () => {
-    if (!_originalImageDataUrl || !_templateHtml) { alert('Upload a design first.'); return; }
+    if (!_originalImageFile || !_templateHtml) { alert('Upload a design first.'); return; }
     const btn = document.getElementById('btn-refine');
-    btn.disabled = true; btn.textContent = 'Refining...';
+    btn.disabled = true; btn.textContent = 'Refining... (45-90s)';
 
     try {
-      const blob = await (await fetch(_originalImageDataUrl)).blob();
       const r = await fetch('/admin/html-templates/from-image', {
         method: 'POST',
-        headers: { 'Content-Type': blob.type, 'X-Admin-Password': adminPw, 'X-Instructions': 'Refine only — improve accuracy of the existing HTML' },
-        body: blob,
+        headers: { 'Content-Type': _originalImageFile.type, 'X-Admin-Password': adminPw, 'X-Instructions': 'Refine only — improve accuracy of the existing HTML' },
+        body: _originalImageFile,
       });
-      const data = await r.json();
+      let data; try { data = await r.json(); } catch { throw new Error(`Server error (HTTP ${r.status})`); }
       if (!data.ok) throw new Error(data.error || 'Refinement failed');
 
       _templateHtml = data.html;
@@ -813,7 +813,8 @@
     const allowed = ['image/png','image/jpeg','image/webp','image/svg+xml'];
     if (!allowed.includes(file.type)) { alert('PNG, JPG, WebP, or SVG only.'); return; }
 
-    // Store original image for comparison view
+    // Store original image for comparison view + refine
+    _originalImageFile = file;
     const origReader = new FileReader();
     origReader.onload = () => { _originalImageDataUrl = origReader.result; };
     origReader.readAsDataURL(file);

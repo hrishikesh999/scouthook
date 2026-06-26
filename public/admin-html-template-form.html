@@ -576,14 +576,35 @@
             window.parent.postMessage({ type:'slot-click', key:el.getAttribute('data-slot') }, '*');
           });
         });
+        window.addEventListener('message', e => {
+          var d = e.data;
+          if (!d) return;
+          if (d.type === 'admin-set-img') {
+            var img = document.querySelector('img[data-slot="' + d.key + '"]');
+            if (img) img.src = d.value;
+          } else if (d.type === 'admin-set-var') {
+            var root = document.body.firstElementChild || document.documentElement;
+            root.style.setProperty(d.name, d.value);
+          }
+        });
       <\/script>`;
 
-    const injected = applyImageOverrides(_templateHtml).replace('</body>', slotScript + '</body>');
+    const injected = _templateHtml.replace('</body>', slotScript + '</body>');
     // Wrap iframe in a div sized to the visual dimensions so the flex container
     // centers the correct footprint. Without the wrapper, transform:scale keeps
     // the full 1080px layout box and justify-content:center pushes it off-screen.
-    pane.innerHTML = `<div style="width:${visW}px;height:${visH}px;overflow:hidden;flex-shrink:0"><iframe sandbox="allow-same-origin allow-scripts" srcdoc="${esc(injected)}" style="width:${w}px;height:${h}px;border:none;display:block;transform:scale(${scale});transform-origin:top left" title="Preview"></iframe></div>`;
+    pane.innerHTML = `<div style="width:${visW}px;height:${visH}px;overflow:hidden;flex-shrink:0"><iframe id="admin-tpl-iframe" sandbox="allow-same-origin allow-scripts" srcdoc="${esc(injected)}" style="width:${w}px;height:${h}px;border:none;display:block;transform:scale(${scale});transform-origin:top left" title="Preview"></iframe></div>`;
     pane.style.height = (visH + 24) + 'px';
+
+    // After iframe loads, inject image overrides via postMessage (avoids bloating srcdoc)
+    const iframe = document.getElementById('admin-tpl-iframe');
+    if (iframe) {
+      iframe.addEventListener('load', () => {
+        for (const [key, dataUri] of Object.entries(_imageOverrides)) {
+          if (dataUri) iframe.contentWindow.postMessage({ type: 'admin-set-img', key, value: dataUri }, '*');
+        }
+      });
+    }
   }
 
   window.addEventListener('message', e => {

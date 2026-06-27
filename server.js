@@ -36,7 +36,7 @@ app.use(helmet({
       defaultSrc:     ["'self'"],
       scriptSrc:      ["'self'", "'unsafe-inline'", "https://cdn.paddle.com", "https://public.profitwell.com", "https://assets.calendly.com"],
       styleSrc:       ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdn.paddle.com", "https://assets.calendly.com"],
-      imgSrc:         ["'self'", "data:", "blob:", "*.licdn.com", "media.licdn.com", "*.googleusercontent.com", "*.amazonaws.com", "images.pexels.com", "api.iconify.design"],
+      imgSrc:         ["'self'", "data:", "blob:", "*.licdn.com", "media.licdn.com", "*.googleusercontent.com", "*.amazonaws.com", "images.pexels.com", "api.iconify.design", "*.r2.dev"],
       connectSrc:     ["'self'", "https://sandbox-api.paddle.com", "https://api.paddle.com", "https://cdn.paddle.com", "https://buy.paddle.com", "https://sandbox-buy.paddle.com", "https://calendly.com"],
       fontSrc:        ["'self'", "https://fonts.gstatic.com"],
       objectSrc:      ["'none'"],

@@ -13,7 +13,8 @@
       #improver-chat { max-height: 150px !important; }
       #edit-content-wrap { max-width: 100% !important; }
       #edit-main { flex: none !important; width: 100% !important; }
-      #visual-action-bar { flex-direction: row !important; flex: none !important; width: 100% !important; height: auto !important; padding: 8px 16px !important; border-left: none !important; border-top: 1px solid var(--border) !important; }
+      #visual-action-bar { position: static !important; transform: none !important; flex-direction: row !important; width: 100% !important; padding: 8px 16px !important; justify-content: center; border-top: 1px solid var(--border) !important; background: var(--bg-surface, #fff) !important; }
+      .vab-btn { box-shadow: none !important; }
     }
     @media (max-width: 767px) {
       /* Account for 56px mobile topbar outside #main-content */
@@ -39,22 +40,22 @@
     /* Improver panel: full-height sidebar, persists across tab switches */
     #edit-meta { flex: 0 0 322px; display: flex; flex-direction: column; gap: 0; border-left: 1px solid var(--border); height: 100%; background: var(--bg-surface, #fff); }
 
-    /* Visual action bar — between editor and improver */
+    /* Visual action bar — floating between editor and improver */
     #visual-action-bar {
-      flex: 0 0 56px; display: flex; flex-direction: column; align-items: center;
-      padding: 28px 6px 16px; gap: 8px;
-      border-left: 1px solid var(--border);
-      background: var(--bg-surface, #fff);
-      height: 100%; box-sizing: border-box;
+      position: absolute; right: 322px; top: 50%;
+      transform: translate(50%, -50%);
+      display: flex; flex-direction: column; align-items: center;
+      gap: 10px; z-index: 10;
     }
     .vab-btn {
       display: flex; flex-direction: column; align-items: center; justify-content: center;
-      gap: 3px; width: 46px; height: 52px; border: 1.5px solid var(--border);
-      border-radius: 10px; background: var(--bg-surface, #fff); cursor: pointer;
+      gap: 3px; width: 48px; height: 54px; border: 1.5px solid var(--border);
+      border-radius: 12px; background: var(--bg-surface, #fff); cursor: pointer;
       color: var(--text-secondary); transition: border-color 0.15s, background 0.15s, color 0.15s, transform 0.1s;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
     }
-    .vab-btn:hover { border-color: var(--brand, #0f766e); color: var(--brand, #0f766e); background: rgba(15,118,110,0.04); transform: scale(1.05); }
-    .vab-btn:active { transform: scale(0.97); }
+    .vab-btn:hover { border-color: var(--brand, #0f766e); color: var(--brand, #0f766e); background: rgba(15,118,110,0.04); transform: scale(1.08); }
+    .vab-btn:active { transform: scale(0.95); }
     .vab-label { font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; line-height: 1; }
     #linkedin-preview:not([hidden]) { display: block; padding: 28px 64px 48px; }
     .post-body-wrapper { position: relative; }

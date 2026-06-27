@@ -1369,10 +1369,9 @@ function _renderHtmlTplPicker(templates) {
     const filtered = _htmlTplActiveCategory ? templates.filter(t => t.category === _htmlTplActiveCategory) : templates;
     gridHtml += filtered.map(t => {
       const initials = escHtml((t.name || '?').slice(0, 2).toUpperCase());
-      const thumbSrc = t.thumbnail_url || (t.thumbnail_r2_key ? `/api/html-templates/${t.id}/thumbnail` : null);
       return `<div class="ai-tpl-card" data-tpl-id="${t.id}" tabindex="0" role="button" aria-label="${escHtml(t.name)}">
-        ${thumbSrc
-          ? `<img src="${escHtml(thumbSrc)}" alt="" loading="lazy" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px 8px 0 0;display:block">`
+        ${t.thumbnail_r2_key
+          ? `<img src="/api/html-templates/${t.id}/thumbnail" alt="" loading="lazy" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px 8px 0 0;display:block">`
           : `<div style="width:100%;aspect-ratio:1;background:var(--surface-2);display:flex;align-items:center;justify-content:center;border-radius:8px 8px 0 0"><span style="font-size:24px;font-weight:700;color:var(--text-muted)">${initials}</span></div>`}
         <div style="padding:8px 12px 10px">
           <div style="font-weight:600;font-size:13px">${escHtml(t.name)}</div>
@@ -1388,8 +1387,7 @@ function _renderHtmlTplPicker(templates) {
     gridHtml += carousels.map(p => {
       const slideCount = (p.slides || []).length;
       const firstSlide = (p.slides || [])[0];
-      const firstTpl = firstSlide && (_htmlTplAllTemplates || []).find(t => t.id === firstSlide.template_id);
-      const thumbSrc = firstTpl?.thumbnail_url || (firstSlide ? `/api/html-templates/${firstSlide.template_id}/thumbnail` : '');
+      const thumbSrc = firstSlide ? `/api/html-templates/${firstSlide.template_id}/thumbnail` : '';
       const initials = escHtml((p.name || '?').slice(0, 2).toUpperCase());
       return `<div class="ai-tpl-card" data-carousel-id="${p.id}" tabindex="0" role="button" aria-label="${escHtml(p.name)}">
         ${thumbSrc

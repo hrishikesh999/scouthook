@@ -14,11 +14,7 @@ router.get('/', async (req, res) => {
        WHERE active = TRUE AND is_carousel_slide IS NOT TRUE
        ORDER BY sort_order ASC, created_at ASC`
     ).all();
-    const templates = rows.map(t => ({
-      ...t,
-      thumbnail_url: t.thumbnail_r2_key ? storage.getPublicUrl(t.thumbnail_r2_key) : null,
-    }));
-    res.json({ ok: true, templates });
+    res.json({ ok: true, templates: rows });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }

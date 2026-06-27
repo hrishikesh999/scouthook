@@ -277,12 +277,14 @@
   const currentScript = PAGE_SCRIPTS[location.pathname];
   if (currentScript) {
     _loadedScripts.add(currentScript);
-    // Capture __pageInit after the page script has executed (next microtask)
-    Promise.resolve().then(() => {
-      if (typeof window.__pageInit === 'function') {
+    // Capture __pageInit after all synchronous scripts have executed.
+    // setTimeout(0) queues a macrotask that runs after the page script sets __pageInit.
+    // (Promise.resolve microtasks fire between scripts — too early.)
+    setTimeout(() => {
+      if (typeof window.__pageInit === 'function' && !_pageInitFns.has(currentScript)) {
         _pageInitFns.set(currentScript, window.__pageInit);
       }
-    });
+    }, 0);
   }
 
 })();

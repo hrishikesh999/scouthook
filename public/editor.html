@@ -2175,11 +2175,11 @@ async function _openMediaPicker(zone, slot, fileInput, bgBtn) {
   _activeMediaPicker = picker;
 
   const tabs = [];
+  tabs.push({ id: 'library', label: 'Media', icon: _MP_TAB_ICONS.library });
   tabs.push({ id: 'upload', label: 'Upload', icon: _MP_TAB_ICONS.upload });
   tabs.push({ id: 'photos', label: 'Photos', icon: _MP_TAB_ICONS.photos });
   tabs.push({ id: 'icons', label: 'Icons', icon: _MP_TAB_ICONS.icons });
   tabs.push({ id: 'patterns', label: 'Patterns', icon: _MP_TAB_ICONS.patterns });
-  tabs.push({ id: 'library', label: 'Library', icon: _MP_TAB_ICONS.library });
 
   picker.innerHTML = `
     <div class="htpl-mp-tabs">
@@ -2210,7 +2210,7 @@ async function _openMediaPicker(zone, slot, fileInput, bgBtn) {
     tab.addEventListener('click', () => switchTab(tab.dataset.mpTab));
   });
 
-  switchTab('upload');
+  switchTab('library');
 }
 
 function _mpRenderUpload(body, fileInput) {

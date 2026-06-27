@@ -587,6 +587,15 @@
         updateManifest();
       });
       el.addEventListener('click', e => e.stopPropagation());
+      if (el.dataset.c === 'colorPicker') {
+        el.addEventListener('focus', () => {
+          const i = parseInt(el.dataset.i), s = _slotState[i];
+          if (!s || !s.key.startsWith('color:')) return;
+          const varName = s.key.slice('color:'.length);
+          const iframe = document.getElementById('admin-tpl-iframe');
+          iframe?.contentWindow?.postMessage({ type: 'admin-highlight-var', varName }, '*');
+        });
+      }
     });
     list.querySelectorAll('.slot-card').forEach(card => {
       card.addEventListener('click', () => {

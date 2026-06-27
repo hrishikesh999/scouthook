@@ -589,9 +589,10 @@
       el.addEventListener('click', e => e.stopPropagation());
     });
 
-    // Color swatch click → flash elements using that variable in the preview
+    // Color swatch mousedown → flash elements using that variable in the preview
+    // (mousedown fires before the native color dialog consumes the click)
     list.querySelectorAll('input[data-c="colorPicker"]').forEach(picker => {
-      picker.addEventListener('click', () => {
+      picker.addEventListener('mousedown', () => {
         const i = parseInt(picker.dataset.i), s = _slotState[i];
         if (!s || !s.key.startsWith('color:')) return;
         const varName = s.key.slice('color:'.length);
@@ -599,6 +600,8 @@
         if (iframe?.contentWindow) {
           console.log('[color-highlight] flashing --' + varName);
           iframe.contentWindow.postMessage({ type: 'admin-highlight-var', varName: varName }, '*');
+        } else {
+          console.warn('[color-highlight] iframe not found');
         }
       });
     });

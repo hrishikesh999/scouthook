@@ -77,6 +77,7 @@
     .config-add-row input { width:120px; }
     .config-add-row select { width:90px; }
 
+    .add-slot-popover { background:#f0fdf4; border:1px solid #bbf7d0; border-radius:var(--radius); padding:12px 14px; margin-bottom:12px; }
     .preview-mode-btn { background:var(--neutral-50); color:var(--text-muted); font-size:.72rem; font-weight:600; padding:4px 10px; cursor:pointer; }
     .preview-mode-btn.active { background:var(--brand,#0f766e); color:#fff; }
     .preview-mode-btn:hover:not(.active) { background:var(--neutral-100); }
@@ -206,6 +207,22 @@
               </div>
               <!-- Right: slot cards -->
               <div class="config-slots" id="config-slots">
+                <!-- Click-to-add-slot popover -->
+                <div id="add-slot-popover" class="add-slot-popover" style="display:none">
+                  <div style="font-weight:600;font-size:.8rem;margin-bottom:6px">Add this element as a slot?</div>
+                  <div style="font-size:.75rem;color:var(--text-muted);margin-bottom:8px"><strong id="add-slot-tag-label">H1</strong>: "<span id="add-slot-text-preview"></span>"</div>
+                  <div style="display:flex;gap:6px;align-items:flex-end;margin-bottom:8px">
+                    <div class="slot-card__field" style="flex:1"><label>Slot key</label><input type="text" id="add-slot-click-key" placeholder="headline" style="width:100%"></div>
+                    <div class="slot-card__field"><label>Type</label>
+                      <select id="add-slot-click-type"><option value="text">Text</option><option value="color">Color</option><option value="image">Image</option></select>
+                    </div>
+                  </div>
+                  <div style="display:flex;gap:6px">
+                    <button class="btn btn--sm btn--primary" id="add-slot-click-confirm" type="button">Add slot</button>
+                    <button class="btn btn--sm btn--secondary" id="add-slot-click-cancel" type="button">Cancel</button>
+                  </div>
+                </div>
+
                 <div class="config-slots-title">Slots (<span id="slot-count">0</span>)</div>
                 <div id="slot-list"></div>
                 <div class="config-add-row">
@@ -438,52 +455,101 @@
 
   // ── Slot card rendering ──────────────────────────────────────────────────
 
+  const COLOR_GROUPS = {
+    'Background': ['bg', 'background', 'card_bg', 'card-bg', 'surface', 'overlay'],
+    'Accent': ['accent', 'brand', 'highlight', 'primary', 'cta', 'button'],
+    'Text': ['text', 'text_muted', 'text-muted', 'heading', 'label', 'heading_color', 'caption'],
+    'Borders': ['border', 'line', 'divider', 'separator', 'stroke'],
+  };
+
+  function _getColorGroup(varName) {
+    const lower = varName.toLowerCase();
+    for (const [group, patterns] of Object.entries(COLOR_GROUPS)) {
+      if (patterns.some(p => lower === p || lower.startsWith(p + '_') || lower.startsWith(p + '-') || lower.endsWith('_' + p) || lower.endsWith('-' + p))) return group;
+    }
+    return 'Other';
+  }
+
+  function _renderSlotCard(s, i) {
+    const tc = `slot-type--${s.type}`;
+    const tl = s.type.charAt(0).toUpperCase() + s.type.slice(1);
+    const active = s.key === _activeSlotKey ? ' slot-card--active' : '';
+    let body = '';
+
+    if (s.type === 'text') {
+      body = `<div class="slot-card__field"><label>Max</label><input type="number" data-i="${i}" data-c="maxLen" value="${s.config.maxLen || ''}" min="0" max="5000" placeholder="—"></div>
+              <div class="slot-card__field"><label>Default</label><input type="text" data-i="${i}" data-c="default" value="${esc(s.config.default || '')}"></div>`;
+    } else if (s.type === 'color') {
+      const ib = s.config.default === 'brand', cv = ib ? '#0f766e' : (s.config.default || '#cccccc');
+      body = `<div class="slot-card__field"><label>Color</label><div style="display:flex;gap:4px;align-items:center">
+        <input type="color" data-i="${i}" data-c="colorPicker" value="${esc(cv)}" ${ib?'disabled':''}>
+        <input type="text" class="hex-input" data-i="${i}" data-c="colorHex" value="${esc(ib?'brand':cv)}" maxlength="9" ${ib?'disabled':''}></div></div>
+        <div class="slot-card__field" style="align-self:center"><label style="display:flex;gap:3px;align-items:center;cursor:pointer;white-space:nowrap"><input type="checkbox" data-i="${i}" data-c="brand" ${ib?'checked':''}> Brand</label></div>`;
+    } else if (s.type === 'image') {
+      const _ov = _imageOverrides[s.key];
+      const _hasSrc = _ov !== undefined ? !!_ov : !!(s.config.src);
+      body = `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        ${_hasSrc
+          ? `<img data-slot-thumb="${esc(s.key)}" alt="" style="width:60px;height:60px;object-fit:cover;border-radius:6px;border:1px solid var(--border);flex-shrink:0">`
+          : `<div style="width:60px;height:60px;border-radius:6px;border:2px dashed var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--text-muted);font-size:.7rem;text-align:center;padding:4px">No image</div>`}
+        <div style="display:flex;flex-direction:column;gap:5px">
+          <label style="cursor:pointer;display:inline-flex;align-items:center;gap:4px" class="btn btn--sm btn--secondary">
+            ${_hasSrc ? 'Replace' : 'Upload default'}
+            <input type="file" accept="image/png,image/jpeg,image/webp" hidden data-i="${i}" data-c="uploadImg">
+          </label>
+          ${_hasSrc ? `<button type="button" data-i="${i}" data-c="clearImg" style="font-size:.72rem;color:var(--text-muted);background:none;border:none;cursor:pointer;padding:0;text-align:left">x Remove</button>` : ''}
+        </div>
+      </div>`;
+    } else if (s.type === 'repeating') {
+      const f = s.config.fields || [];
+      body = `<div class="slot-card__field"><label>Fields</label><div class="slot-fields-list">${f.map(x => `<span class="slot-field-pill">${esc(x)}</span>`).join('') || '—'}</div></div>
+        <div class="slot-card__field"><label>Min</label><input type="number" data-i="${i}" data-c="min" value="${s.config.min||1}" min="1" max="20"></div>
+        <div class="slot-card__field"><label>Max</label><input type="number" data-i="${i}" data-c="max" value="${s.config.max||10}" min="1" max="50"></div>`;
+    }
+
+    return `<div class="slot-card${active}" data-slot-key="${esc(s.key)}" data-i="${i}">
+      <div class="slot-card__header"><span class="slot-type ${tc}">${tl}</span><span class="slot-card__key" data-i="${i}" title="Double-click to rename">${esc(s.key)}</span>${s.orphaned?'<span style="color:#92400e;font-size:.7rem">⚠</span>':''}<button class="slot-card__delete" data-i="${i}" title="Delete slot">x</button></div>
+      <div class="slot-card__body">${body}</div></div>`;
+  }
+
   function renderSlotCards() {
     const list = document.getElementById('slot-list');
     document.getElementById('slot-count').textContent = _slotState.length;
-    if (!_slotState.length) { list.innerHTML = '<p style="font-size:.85rem;color:var(--text-muted)">No slots detected.</p>'; updateManifest(); return; }
+    if (!_slotState.length) { list.innerHTML = '<p style="font-size:.85rem;color:var(--text-muted)">No slots detected. Click elements in the preview to add slots.</p>'; updateManifest(); return; }
 
-    list.innerHTML = _slotState.map((s, i) => {
-      const tc = `slot-type--${s.type}`;
-      const tl = s.type.charAt(0).toUpperCase() + s.type.slice(1);
-      const active = s.key === _activeSlotKey ? ' slot-card--active' : '';
-      let body = '';
+    // Separate colors from other slots for grouped rendering
+    const nonColorSlots = _slotState.filter(s => s.type !== 'color');
+    const colorSlots = _slotState.filter(s => s.type === 'color');
 
-      if (s.type === 'text') {
-        body = `<div class="slot-card__field"><label>Max</label><input type="number" data-i="${i}" data-c="maxLen" value="${s.config.maxLen || ''}" min="0" max="5000" placeholder="—"></div>
-                <div class="slot-card__field"><label>Default</label><input type="text" data-i="${i}" data-c="default" value="${esc(s.config.default || '')}"></div>`;
-      } else if (s.type === 'color') {
-        const ib = s.config.default === 'brand', cv = ib ? '#0f766e' : (s.config.default || '#cccccc');
-        body = `<div class="slot-card__field"><label>Color</label><div style="display:flex;gap:4px;align-items:center">
-          <input type="color" data-i="${i}" data-c="colorPicker" value="${esc(cv)}" ${ib?'disabled':''}>
-          <input type="text" class="hex-input" data-i="${i}" data-c="colorHex" value="${esc(ib?'brand':cv)}" maxlength="9" ${ib?'disabled':''}></div></div>
-          <div class="slot-card__field" style="align-self:center"><label style="display:flex;gap:3px;align-items:center;cursor:pointer;white-space:nowrap"><input type="checkbox" data-i="${i}" data-c="brand" ${ib?'checked':''}> Brand</label></div>`;
-      } else if (s.type === 'image') {
-        const _ov = _imageOverrides[s.key];
-        const _hasSrc = _ov !== undefined ? !!_ov : !!(s.config.src);
-        body = `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-          ${_hasSrc
-            ? `<img data-slot-thumb="${esc(s.key)}" alt="" style="width:60px;height:60px;object-fit:cover;border-radius:6px;border:1px solid var(--border);flex-shrink:0">`
-            : `<div style="width:60px;height:60px;border-radius:6px;border:2px dashed var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--text-muted);font-size:.7rem;text-align:center;padding:4px">No image</div>`}
-          <div style="display:flex;flex-direction:column;gap:5px">
-            <label style="cursor:pointer;display:inline-flex;align-items:center;gap:4px" class="btn btn--sm btn--secondary">
-              ${_hasSrc ? 'Replace' : 'Upload default'}
-              <input type="file" accept="image/png,image/jpeg,image/webp" hidden data-i="${i}" data-c="uploadImg">
-            </label>
-            ${_hasSrc ? `<button type="button" data-i="${i}" data-c="clearImg" style="font-size:.72rem;color:var(--text-muted);background:none;border:none;cursor:pointer;padding:0;text-align:left">x Remove</button>` : ''}
-          </div>
-        </div>`;
-      } else if (s.type === 'repeating') {
-        const f = s.config.fields || [];
-        body = `<div class="slot-card__field"><label>Fields</label><div class="slot-fields-list">${f.map(x => `<span class="slot-field-pill">${esc(x)}</span>`).join('') || '—'}</div></div>
-          <div class="slot-card__field"><label>Min</label><input type="number" data-i="${i}" data-c="min" value="${s.config.min||1}" min="1" max="20"></div>
-          <div class="slot-card__field"><label>Max</label><input type="number" data-i="${i}" data-c="max" value="${s.config.max||10}" min="1" max="50"></div>`;
-      }
+    // Group colors by role
+    const colorGroups = {};
+    for (const s of colorSlots) {
+      const varName = s.key.slice('color:'.length);
+      const group = _getColorGroup(varName);
+      if (!colorGroups[group]) colorGroups[group] = [];
+      colorGroups[group].push(s);
+    }
 
-      return `<div class="slot-card${active}" data-slot-key="${esc(s.key)}" data-i="${i}">
-        <div class="slot-card__header"><span class="slot-type ${tc}">${tl}</span><span class="slot-card__key" data-i="${i}" title="Double-click to rename">${esc(s.key)}</span>${s.orphaned?'<span style="color:#92400e;font-size:.7rem">⚠</span>':''}<button class="slot-card__delete" data-i="${i}" title="Delete slot">×</button></div>
-        <div class="slot-card__body">${body}</div></div>`;
+    // Render non-color slots first
+    let html = nonColorSlots.map((s, idx) => {
+      const i = _slotState.indexOf(s);
+      return _renderSlotCard(s, i);
     }).join('');
+
+    // Render grouped color slots
+    if (colorSlots.length) {
+      html += '<div style="margin-top:14px;padding-top:10px;border-top:1px solid var(--border)"><div style="font-size:.75rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">Colors</div>';
+      for (const [group, slots] of Object.entries(colorGroups)) {
+        html += `<div style="font-size:.68rem;font-weight:600;color:var(--brand,#0f766e);text-transform:uppercase;letter-spacing:.03em;margin:8px 0 4px">${esc(group)}</div>`;
+        html += slots.map(s => {
+          const i = _slotState.indexOf(s);
+          return _renderSlotCard(s, i);
+        }).join('');
+      }
+      html += '</div>';
+    }
+
+    list.innerHTML = html;
 
     // Set img src via DOM (avoids embedding large base64 strings inside innerHTML)
     list.querySelectorAll('img[data-slot-thumb]').forEach(img => {
@@ -638,17 +704,47 @@
         [data-slot] { cursor:pointer; transition:outline .15s; }
         [data-slot]:hover { outline:2px dashed rgba(15,118,110,0.5); outline-offset:2px; }
         [data-slot].slot-active { outline:3px solid #0f766e; outline-offset:2px; }
+        body *:not([data-slot]):not(style):not(script):not(link) { cursor:pointer; }
+        body *:not([data-slot]):not(style):not(script):not(link):hover { outline:1px dashed rgba(15,118,110,0.25); outline-offset:1px; }
+        .slot-highlight { outline:3px solid #0f766e !important; outline-offset:2px; }
       </style>
       <script>
-        document.querySelectorAll('[data-slot]').forEach(el => {
-          el.addEventListener('click', e => {
-            e.preventDefault(); e.stopPropagation();
-            document.querySelectorAll('[data-slot].slot-active').forEach(x => x.classList.remove('slot-active'));
-            el.classList.add('slot-active');
-            window.parent.postMessage({ type:'slot-click', key:el.getAttribute('data-slot') }, '*');
-          });
+        function buildSelector(el) {
+          var parts = [];
+          while (el && el !== document.body && el !== document.documentElement) {
+            var tag = el.tagName.toLowerCase();
+            if (el.id) { parts.unshift(tag + '#' + el.id); break; }
+            var parent = el.parentElement;
+            if (parent) {
+              var siblings = Array.from(parent.children).filter(function(c) { return c.tagName === el.tagName; });
+              if (siblings.length > 1) tag += ':nth-of-type(' + (siblings.indexOf(el) + 1) + ')';
+            }
+            parts.unshift(tag);
+            el = parent;
+          }
+          return parts.join(' > ');
+        }
+        document.body.addEventListener('click', function(e) {
+          e.preventDefault(); e.stopPropagation();
+          var el = e.target;
+          while (el && el !== document.body && el.tagName === 'SPAN' && !el.getAttribute('data-slot')) el = el.parentElement;
+          if (!el || el === document.body) return;
+          document.querySelectorAll('.slot-active, .slot-highlight').forEach(function(x) { x.classList.remove('slot-active'); x.classList.remove('slot-highlight'); });
+          el.classList.add('slot-active');
+          var existing = el.getAttribute('data-slot');
+          if (existing) {
+            window.parent.postMessage({ type:'slot-click', key: existing }, '*');
+          } else {
+            window.parent.postMessage({
+              type: 'slot-add-request',
+              tag: el.tagName,
+              text: (el.textContent || '').trim().slice(0, 60),
+              isImg: el.tagName === 'IMG',
+              selector: buildSelector(el)
+            }, '*');
+          }
         });
-        window.addEventListener('message', e => {
+        window.addEventListener('message', function(e) {
           var d = e.data;
           if (!d) return;
           if (d.type === 'admin-set-img') {
@@ -657,6 +753,14 @@
           } else if (d.type === 'admin-set-var') {
             var root = document.body.firstElementChild || document.documentElement;
             root.style.setProperty(d.name, d.value);
+          } else if (d.type === 'admin-highlight-var') {
+            document.querySelectorAll('.slot-highlight').forEach(function(x) { x.classList.remove('slot-highlight'); });
+            document.querySelectorAll('*').forEach(function(el) {
+              var style = getComputedStyle(el);
+              var raw = el.getAttribute('style') || '';
+              if (raw.indexOf('var(--' + d.varName + ')') >= 0) el.classList.add('slot-highlight');
+            });
+            setTimeout(function() { document.querySelectorAll('.slot-highlight').forEach(function(x) { x.classList.remove('slot-highlight'); }); }, 1500);
           }
         });
       <\/script>`;
@@ -748,8 +852,11 @@
     }
   });
 
+  let _pendingSlotSelector = null;
+
   window.addEventListener('message', e => {
     if (e.data?.type === 'slot-click') {
+      _hideAddSlotPopover();
       _activeSlotKey = e.data.key;
       const card = document.querySelector(`.slot-card[data-slot-key="${e.data.key}"]`);
       if (card) {
@@ -757,7 +864,82 @@
         card.classList.add('slot-card--active');
         card.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
+    } else if (e.data?.type === 'slot-add-request') {
+      _showAddSlotPopover(e.data);
     }
+  });
+
+  function _suggestSlotKey(tag, text) {
+    const t = (text || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
+    if (tag === 'IMG') return 'image:photo';
+    if (tag === 'H1') return 'headline';
+    if (tag === 'H2') return 'subheading';
+    if (tag === 'H3') return 'heading_3';
+    if (tag === 'H4' || tag === 'H5' || tag === 'H6') return 'heading';
+    if (t.length <= 30) {
+      const words = t.split(/\s+/).slice(0, 3).join('_');
+      if (words) return words;
+    }
+    if (tag === 'P') return 'body_text';
+    if (tag === 'SPAN') return 'label';
+    return 'text_' + Math.random().toString(36).slice(2, 6);
+  }
+
+  function _suggestSlotType(tag, isImg) {
+    if (isImg || tag === 'IMG') return 'image';
+    return 'text';
+  }
+
+  function _showAddSlotPopover(data) {
+    _pendingSlotSelector = data.selector;
+    const popover = document.getElementById('add-slot-popover');
+    document.getElementById('add-slot-tag-label').textContent = data.tag;
+    document.getElementById('add-slot-text-preview').textContent = data.text || '(empty)';
+    const suggestedKey = _suggestSlotKey(data.tag, data.text);
+    const suggestedType = _suggestSlotType(data.tag, data.isImg);
+    document.getElementById('add-slot-click-key').value = suggestedKey;
+    document.getElementById('add-slot-click-type').value = suggestedType;
+    popover.style.display = '';
+    document.getElementById('add-slot-click-key').focus();
+    document.getElementById('add-slot-click-key').select();
+  }
+
+  function _hideAddSlotPopover() {
+    document.getElementById('add-slot-popover').style.display = 'none';
+    _pendingSlotSelector = null;
+  }
+
+  document.getElementById('add-slot-click-cancel').addEventListener('click', _hideAddSlotPopover);
+
+  document.getElementById('add-slot-click-confirm').addEventListener('click', () => {
+    const key = document.getElementById('add-slot-click-key').value.trim();
+    const type = document.getElementById('add-slot-click-type').value;
+    if (!key) { alert('Slot key is required.'); return; }
+    if (_slotState.find(s => s.key === key)) { alert('Slot "' + key + '" already exists.'); return; }
+    if (!_pendingSlotSelector) return;
+
+    // Inject data-slot attribute into _templateHtml via DOMParser
+    const effectiveKey = type === 'image' && !key.startsWith('image:') ? 'image:' + key : key;
+    try {
+      const doc = new DOMParser().parseFromString(_templateHtml, 'text/html');
+      const el = doc.querySelector(_pendingSlotSelector);
+      if (!el) { alert('Could not find the element in HTML. Try clicking it again.'); return; }
+      el.setAttribute('data-slot', effectiveKey);
+      _templateHtml = '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
+      document.getElementById('f-html').value = _templateHtml;
+      if (document.getElementById('raw-html')) document.getElementById('raw-html').value = _templateHtml;
+    } catch (err) {
+      alert('Failed to inject slot: ' + err.message);
+      return;
+    }
+
+    // Add to slot state
+    const config = type === 'text' ? { maxLen: 0, default: '' } : type === 'color' ? { default: '#cccccc' } : {};
+    _slotState.push({ key: effectiveKey, type, config });
+
+    _hideAddSlotPopover();
+    renderSlotCards();
+    renderPreview();
   });
 
   function highlightSlotInPreview(key) {

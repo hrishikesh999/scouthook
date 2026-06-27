@@ -130,4 +130,4 @@ async function truncateAll() {
   `).run();
 }
 
-module.exports = { getApp, agent, createUser, loginAs, truncateAll };
+module.exports = { getApp, getDb, agent, createUser, loginAs, truncateAll };

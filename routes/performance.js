@@ -7,6 +7,57 @@ const { getUserPlan } = require('../services/subscription');
 
 const VALID_TAGS = new Set(['strong', 'decent', 'weak']);
 
+// GET /api/posts/:id
+// Fetches a single post by ID — used by post.html and generate.html.
+// Must be in THIS router (mounted at /api/posts) so the route is explicit;
+// stats.js (mounted at /api) would require falling through the performance
+// router with no guarantee of reaching it.
+router.get('/:id(\\d+)', async (req, res) => {
+  const tenantId = req.tenantId;
+  const postId   = req.params.id;
+
+  try {
+    let post;
+    try {
+      post = await db.prepare(`
+        SELECT id, content, format_slug, quality_score, quality_flags, passed_gate, status, created_at,
+               idea_input, funnel_type, asset_url, asset_preview_url, asset_type, asset_slide_count,
+               published_at, linkedin_post_id, performance_tag, performance_note, archetype_used
+        FROM   generated_posts
+        WHERE  id = ? AND tenant_id = ?
+      `).get(postId, tenantId);
+    } catch {
+      post = await db.prepare(`
+        SELECT id, content, format_slug, quality_score, quality_flags, passed_gate, status, created_at,
+               idea_input, funnel_type
+        FROM   generated_posts
+        WHERE  id = ? AND tenant_id = ?
+      `).get(postId, tenantId);
+    }
+
+    if (!post) return res.status(404).json({ ok: false, error: 'post_not_found' });
+
+    const sched = await db.prepare(`
+      SELECT id AS scheduled_post_id, scheduled_for, status AS scheduled_status, first_comment
+      FROM   scheduled_posts
+      WHERE  post_id = ? AND tenant_id = ? AND status IN ('pending', 'processing')
+    `).get(postId, tenantId);
+
+    const payload = {
+      ...post,
+      scheduled_post_id: sched?.scheduled_post_id ?? null,
+      scheduled_for:     sched?.scheduled_for ?? null,
+      scheduled_status:  sched?.scheduled_status ?? null,
+      first_comment:     sched?.first_comment ?? null,
+    };
+
+    return res.json({ ok: true, post: payload });
+  } catch (err) {
+    console.error('[performance] GET /api/posts/:id error:', err);
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 // POST /api/posts/:postId/performance
 // Body: { tag: 'strong'|'decent'|'weak', note?: string }
 router.post('/:postId/performance', async (req, res) => {

@@ -1,6 +1,6 @@
 'use strict';
 
-const { createUser, loginAs, truncateAll } = require('./helpers/setup');
+const { createUser, loginAs, truncateAll, getDb } = require('./helpers/setup');
 
 afterEach(truncateAll);
 
@@ -101,6 +101,60 @@ describe('API — posts', () => {
     const user = await createUser();
     const ag   = await loginAs(user);
     const res  = await ag.patch('/api/posts/999999/type').send({ post_type: 'reach' });
+    expect(res.status).toBe(404);
+  });
+
+  test('GET /api/posts/:id returns the post for an existing published post', async () => {
+    const user = await createUser();
+    const db   = getDb();
+
+    const runRow = await db.prepare(
+      `INSERT INTO generation_runs (user_id, tenant_id, path) VALUES (?, ?, '/api/generate') RETURNING id`
+    ).get(user.userId, user.workspaceId);
+
+    const postRow = await db.prepare(`
+      INSERT INTO generated_posts
+        (run_id, user_id, tenant_id, format_slug, content, status, published_at)
+      VALUES (?, ?, ?, 'thought-leader', 'Test post content', 'published', NOW())
+      RETURNING id
+    `).get(runRow.id, user.userId, user.workspaceId);
+
+    const ag  = await loginAs(user);
+    const res = await ag.get(`/api/posts/${postRow.id}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(res.body.post).toBeDefined();
+    expect(res.body.post.content).toBe('Test post content');
+    expect(res.body.post.status).toBe('published');
+  });
+
+  test('GET /api/posts/:id returns 404 for non-existent post', async () => {
+    const user = await createUser();
+    const ag   = await loginAs(user);
+    const res  = await ag.get('/api/posts/999999');
+    expect(res.status).toBe(404);
+    expect(res.body.ok).toBe(false);
+  });
+
+  test('GET /api/posts/:id cannot access another workspace\'s post', async () => {
+    const owner  = await createUser();
+    const other  = await createUser();
+    const db     = getDb();
+
+    const runRow = await db.prepare(
+      `INSERT INTO generation_runs (user_id, tenant_id, path) VALUES (?, ?, '/api/generate') RETURNING id`
+    ).get(owner.userId, owner.workspaceId);
+
+    const postRow = await db.prepare(`
+      INSERT INTO generated_posts
+        (run_id, user_id, tenant_id, format_slug, content, status)
+      VALUES (?, ?, ?, 'thought-leader', 'Owner post', 'published')
+      RETURNING id
+    `).get(runRow.id, owner.userId, owner.workspaceId);
+
+    const ag  = await loginAs(other);
+    const res = await ag.get(`/api/posts/${postRow.id}`);
     expect(res.status).toBe(404);
   });
 });

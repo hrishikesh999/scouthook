@@ -43,7 +43,7 @@
     /* Visual action bar — own column between editor and improver */
     #visual-action-bar {
       flex: 0 0 64px; display: flex; flex-direction: column; align-items: center;
-      padding-top: 8px; gap: 10px;
+      padding-top: 0; gap: 10px;
     }
     .vab-btn {
       display: flex; flex-direction: column; align-items: center; justify-content: center;

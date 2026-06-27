@@ -146,8 +146,12 @@ async function init() {
   }
 
   try {
+    // Use a prefetch started by the router (fired in parallel with the HTML fetch),
+    // falling back to a fresh request if navigated directly or prefetch isn't available.
+    const prefetchedPost = window.__routerConsumePrefetch?.(`/api/posts/${POST_ID}`);
+
     const [postResult, profileResult] = await Promise.allSettled([
-      fetch(`/api/posts/${POST_ID}`, { headers: apiHeaders() }).then(r => r.json()),
+      prefetchedPost || fetch(`/api/posts/${POST_ID}`, { headers: apiHeaders() }).then(r => r.json()),
       fetch('/api/linkedin/status', { headers: apiHeaders() }).then(r => r.json()),
     ]);
 

@@ -26,6 +26,19 @@ function detectFormat(mimeType, width, height) {
 }
 
 // ---------------------------------------------------------------------------
+// Thumbnail helper — 400px max, JPEG, non-fatal
+// ---------------------------------------------------------------------------
+async function generateThumbnail(buffer, mimeType) {
+  if (!mimeType.startsWith('image/') || mimeType === 'image/gif') return null;
+  try {
+    return await sharp(buffer)
+      .resize(400, 400, { fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: 80, progressive: true })
+      .toBuffer();
+  } catch { return null; }
+}
+
+// ---------------------------------------------------------------------------
 // GET /api/media  —  list the current user's uploaded files
 // ---------------------------------------------------------------------------
 router.get('/', (req, res) => {
@@ -34,10 +47,11 @@ router.get('/', (req, res) => {
 
   (async () => {
     const files = await db.prepare(`
-      SELECT id, filename, mime_type, file_size, width, height, format_tag, url, created_at
+      SELECT id, filename, mime_type, file_size, width, height, format_tag, url, thumbnail_url, created_at
       FROM   media_files
       WHERE  user_id = ? AND tenant_id = ?
       ORDER  BY created_at DESC
+      LIMIT  200
     `).all(userId, tenantId);
 
     return res.json({ ok: true, files });
@@ -89,25 +103,35 @@ router.post('/upload', express.raw({ type: '*/*', limit: '25mb' }), async (req, 
 
   await storage.upload(buffer, { tenantId, userId, type: 'uploads', filename: storedName, mimeType });
 
+  // Generate and store thumbnail for image files
+  let thumbnailUrl = null;
+  const thumbBuffer = await generateThumbnail(buffer, mimeType);
+  if (thumbBuffer) {
+    const thumbName = `thumb_${Date.now()}_${crypto.randomBytes(4).toString('hex')}.jpg`;
+    thumbnailUrl = `/uploads/${thumbName}`;
+    await storage.upload(thumbBuffer, { tenantId, userId, type: 'uploads', filename: thumbName, mimeType: 'image/jpeg' });
+  }
+
   const row = await db.prepare(`
     INSERT INTO media_files
-      (user_id, tenant_id, filename, stored_name, mime_type, file_size, width, height, format_tag, url)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (user_id, tenant_id, filename, stored_name, mime_type, file_size, width, height, format_tag, url, thumbnail_url)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     RETURNING id
-  `).run(userId, tenantId, filename, storedName, mimeType, buffer.length, width, height, formatTag, url);
+  `).run(userId, tenantId, filename, storedName, mimeType, buffer.length, width, height, formatTag, url, thumbnailUrl);
 
   return res.json({
     ok: true,
     file: {
       id: row.lastInsertRowid,
       filename,
-      mime_type:  mimeType,
-      file_size:  buffer.length,
+      mime_type:    mimeType,
+      file_size:    buffer.length,
       width,
       height,
-      format_tag: formatTag,
+      format_tag:   formatTag,
       url,
-      created_at: new Date().toISOString(),
+      thumbnail_url: thumbnailUrl,
+      created_at:   new Date().toISOString(),
     },
   });
 });
@@ -160,25 +184,35 @@ router.post('/save-generated', async (req, res) => {
   const dstKey = storage.buildMemberKey(tenantId, userId, 'uploads', storedName);
   await storage.uploadToKey(buffer, dstKey, mimeType);
 
+  // Generate and store thumbnail
+  let thumbnailUrl = null;
+  const thumbBuffer = await generateThumbnail(buffer, mimeType);
+  if (thumbBuffer) {
+    const thumbName = `thumb_${Date.now()}_${crypto.randomBytes(4).toString('hex')}.jpg`;
+    thumbnailUrl = `/uploads/${thumbName}`;
+    await storage.upload(thumbBuffer, { tenantId, userId, type: 'uploads', filename: thumbName, mimeType: 'image/jpeg' });
+  }
+
   const row = await db.prepare(`
     INSERT INTO media_files
-      (user_id, tenant_id, filename, stored_name, mime_type, file_size, width, height, format_tag, url)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (user_id, tenant_id, filename, stored_name, mime_type, file_size, width, height, format_tag, url, thumbnail_url)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     RETURNING id
-  `).run(userId, tenantId, filename, storedName, mimeType, buffer.length, width, height, formatTag, url);
+  `).run(userId, tenantId, filename, storedName, mimeType, buffer.length, width, height, formatTag, url, thumbnailUrl);
 
   return res.json({
     ok: true,
     file: {
-      id:         row.lastInsertRowid,
+      id:            row.lastInsertRowid,
       filename,
-      mime_type:  mimeType,
-      file_size:  buffer.length,
+      mime_type:     mimeType,
+      file_size:     buffer.length,
       width,
       height,
-      format_tag: formatTag,
+      format_tag:    formatTag,
       url,
-      created_at: new Date().toISOString(),
+      thumbnail_url: thumbnailUrl,
+      created_at:    new Date().toISOString(),
     },
   });
 });
@@ -191,12 +225,21 @@ router.delete('/:id', async (req, res) => {
   if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
 
   const file = await db.prepare(
-    'SELECT id, stored_name FROM media_files WHERE id = ? AND user_id = ? AND tenant_id = ?'
+    'SELECT id, stored_name, thumbnail_url FROM media_files WHERE id = ? AND user_id = ? AND tenant_id = ?'
   ).get(req.params.id, userId, tenantId);
 
   if (!file) return res.status(404).json({ ok: false, error: 'not_found' });
 
   await storage.delete(storage.buildMemberKey(tenantId, userId, 'uploads', file.stored_name));
+
+  // Also delete thumbnail if one exists
+  if (file.thumbnail_url) {
+    const thumbName = file.thumbnail_url.split('/').pop();
+    if (thumbName) {
+      try { await storage.delete(storage.buildMemberKey(tenantId, userId, 'uploads', thumbName)); } catch { /* non-fatal */ }
+    }
+  }
+
   await db.prepare('DELETE FROM media_files WHERE id = ? AND user_id = ? AND tenant_id = ?').run(file.id, userId, tenantId);
 
   return res.json({ ok: true });

@@ -44,6 +44,17 @@
   // Capture each page's __pageInit keyed by script src so re-visits call the right init
   const _pageInitFns = new Map();
 
+  // In-flight prefetch promises keyed by API URL — consumed once by the page script
+  const _prefetches = new Map();
+
+  // Expose a consume helper so page scripts can pick up a prefetched response
+  // without re-fetching. Deletes the entry so it's used at most once.
+  window.__routerConsumePrefetch = function (apiUrl) {
+    const p = _prefetches.get(apiUrl);
+    _prefetches.delete(apiUrl);
+    return p || null;
+  };
+
   // Monotonic nav index for direction detection
   let _navIndex = 0;
 
@@ -146,6 +157,22 @@
 
     // Set direction for CSS animation
     document.documentElement.dataset.navDir = isPopState ? 'back' : 'forward';
+
+    // For post detail pages, fire the API call immediately — parallel with the HTML fetch.
+    // post.js will consume this via __routerConsumePrefetch so no double-fetch occurs.
+    if (pathname === '/post.html') {
+      const id = new URL(url, location.origin).searchParams.get('id');
+      if (id) {
+        const apiUrl = `/api/posts/${id}`;
+        if (!_prefetches.has(apiUrl)) {
+          _prefetches.set(apiUrl,
+            fetch(apiUrl, { credentials: 'same-origin' })
+              .then(r => r.json())
+              .catch(() => null)
+          );
+        }
+      }
+    }
 
     // Fetch the new page HTML first — only push history on success
     let html;

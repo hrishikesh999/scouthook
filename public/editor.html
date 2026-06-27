@@ -2777,23 +2777,27 @@ async function loadDrawerMedia() {
   const grid     = document.getElementById('media-modal-grid');
   const emptyMsg = document.getElementById('media-modal-empty-msg');
   const errMsg   = document.getElementById('media-modal-error-msg');
-  grid.innerHTML = '';
   if (emptyMsg) emptyMsg.style.display = 'none';
   if (errMsg)   errMsg.style.display   = 'none';
+  // Show skeleton placeholders while loading
+  grid.innerHTML = Array(8).fill('<div class="media-card media-card-skeleton"><div class="media-thumb media-skeleton-thumb"></div><div class="media-card-info"><span class="media-skeleton-bar"></span></div></div>').join('');
   try {
     const res  = await fetch('/api/media', { credentials: 'include' });
     const data = await res.json();
     if (!data.ok) throw new Error(data.error);
+    grid.innerHTML = '';
     if (!data.files.length) { if (emptyMsg) emptyMsg.style.display = ''; }
     else data.files.forEach(f => grid.appendChild(buildDrawerCard(f)));
   } catch {
+    grid.innerHTML = '';
     if (errMsg) { errMsg.textContent = 'Could not load media. Try again.'; errMsg.style.display = ''; }
   }
 }
 
 function buildDrawerCard(file) {
-  const isPdf = file.mime_type === 'application/pdf';
-  const card  = document.createElement('div');
+  const isPdf    = file.mime_type === 'application/pdf';
+  const thumbSrc = file.thumbnail_url || file.url;
+  const card     = document.createElement('div');
   card.className = 'media-card';
   card.dataset.id = file.id;
   card.setAttribute('role', 'button');
@@ -2803,7 +2807,12 @@ function buildDrawerCard(file) {
     <div class="media-thumb">
       ${isPdf
         ? `<div class="media-pdf-thumb" aria-hidden="true"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><span>PDF</span></div>`
-        : `<img src="${file.url}" alt="${escHtml(file.filename)}" loading="lazy">`}
+        : `<img src="${escHtml(thumbSrc)}" alt="${escHtml(file.filename)}" loading="lazy">`}
+      <div class="media-card-actions" aria-hidden="true">
+        <button class="media-action-btn delete-btn" title="Delete" tabindex="-1" aria-label="Delete ${escHtml(file.filename)}">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+        </button>
+      </div>
     </div>
     <div class="media-card-info">
       <span class="media-filename" title="${escHtml(file.filename)}">${escHtml(truncMediaName(file.filename))}</span>
@@ -2823,7 +2832,27 @@ function buildDrawerCard(file) {
   };
   card.addEventListener('click', attach);
   card.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); attach(); } });
+  card.querySelector('.delete-btn').addEventListener('click', async e => {
+    e.stopPropagation();
+    if (!confirm(`Delete "${file.filename}"?`)) return;
+    await drawerDeleteFile(file.id, card);
+  });
   return card;
+}
+
+async function drawerDeleteFile(id, cardEl) {
+  const errMsg = document.getElementById('media-modal-error-msg');
+  try {
+    const res  = await fetch(`/api/media/${id}`, { method: 'DELETE', credentials: 'include' });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'Delete failed');
+    cardEl.remove();
+    const grid     = document.getElementById('media-modal-grid');
+    const emptyMsg = document.getElementById('media-modal-empty-msg');
+    if (grid && emptyMsg && grid.children.length === 0) emptyMsg.style.display = '';
+  } catch (err) {
+    if (errMsg) { errMsg.textContent = err.message || 'Delete failed'; errMsg.style.display = ''; }
+  }
 }
 
 async function drawerProcessFiles(files) {

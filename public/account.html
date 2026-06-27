@@ -17,7 +17,14 @@
 
     <div class="profile-page">
       <div id="account-banner" role="status" aria-live="polite" style="display:none;margin-bottom:16px;padding:12px 14px;border-radius:12px;border:1px solid var(--border);background:var(--bg-surface);font-size:13px;font-weight:600;"></div>
-      <div id="settings-nav"></div>
+      <div id="settings-nav" class="settings-nav-wrapper">
+        <div class="settings-nav-heading">My account</div>
+        <nav class="account-tabs" aria-label="Account settings">
+          <a href="/account.html" class="account-tab active" aria-current="page">Profile</a>
+          <a href="/billing.html" class="account-tab">Subscription</a>
+          <a href="/workspaces.html" class="account-tab">Workspaces</a>
+        </nav>
+      </div>
       <div class="page-header">
         <div>
           <h1 class="profile-heading">My account</h1>

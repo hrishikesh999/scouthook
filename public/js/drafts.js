@@ -94,6 +94,7 @@ function bindDeleteButtons(container) {
         const data = await parseJsonResponse(res);
         if (!res.ok || !data.ok) throw new Error(deleteDraftErrorMessage(data.error));
 
+        cachedFetch.bust('/api/posts');
         const row = btn.closest('.draft-row');
         row?.remove();
 
@@ -126,6 +127,8 @@ function bindRowClicks(container) {
 async function init() {
   if (sessionStorage.getItem('sh_just_published') === '1') {
     sessionStorage.removeItem('sh_just_published');
+    cachedFetch.bust('/api/posts');
+    cachedFetch.bust('/api/posts?status=published');
     if (window.toast?.success) window.toast.success('Post published successfully.');
     else {
       const banner = document.getElementById('publish-banner');
@@ -134,8 +137,7 @@ async function init() {
   }
 
   try {
-    const res  = await fetch('/api/posts', { headers: apiHeaders() });
-    const data = await res.json();
+    const data = await cachedFetch('/api/posts', { headers: apiHeaders() }, 60_000);
 
     if (!data.ok || !Array.isArray(data.posts) || data.posts.length === 0) {
       renderEmpty();

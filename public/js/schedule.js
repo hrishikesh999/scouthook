@@ -298,8 +298,7 @@ async function checkLinkedInStatus() {
 
 async function reloadStream() {
   try {
-    const res  = await fetch('/api/linkedin/scheduled', { headers: apiHeaders() });
-    const data = await res.json();
+    const data = await cachedFetch('/api/linkedin/scheduled', { headers: apiHeaders() }, 60_000);
     renderStream(data.ok && Array.isArray(data.posts) ? data.posts : []);
   } catch {
     renderStream([]);
@@ -328,6 +327,7 @@ async function init() {
         });
         const data = await res.json();
         if (data.ok) {
+          cachedFetch.bust('/api/linkedin/scheduled');
           stream.querySelector(`.sched-failed-row[data-id="${id}"]`)?.remove();
         } else {
           alert(`Could not dismiss: ${data.error}`);
@@ -365,6 +365,7 @@ async function init() {
         });
         const data = await res.json();
         if (data.ok) {
+          cachedFetch.bust('/api/linkedin/scheduled');
           await reloadStream();
         } else {
           const msgs = {
@@ -388,6 +389,7 @@ async function init() {
         });
         const data = await res.json();
         if (data.ok) {
+          cachedFetch.bust('/api/linkedin/scheduled');
           await reloadStream();
         } else {
           alert(`Could not publish: ${data.error}`);

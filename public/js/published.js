@@ -71,8 +71,7 @@ function renderList(posts) {
 
 async function init() {
   try {
-    const res  = await fetch('/api/posts?status=published', { headers: apiHeaders() });
-    const data = await res.json();
+    const data = await cachedFetch('/api/posts?status=published', { headers: apiHeaders() }, 60_000);
 
     if (!data.ok || !Array.isArray(data.posts) || data.posts.length === 0) {
       renderEmpty();

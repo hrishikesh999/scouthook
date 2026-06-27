@@ -8159,9 +8159,9 @@ html[data-nav-dir="back"] #main-content.spa-entering {
 
 .htpl-wand-btn {
   background: none; border: 1px solid var(--border); border-radius: 4px;
-  color: var(--brand, #0f766e); cursor: pointer; font-size: 13px;
-  padding: 2px 8px; transition: background 0.15s, border-color 0.15s;
-  line-height: 1;
+  color: var(--brand, #0f766e); cursor: pointer; font-size: 11px;
+  padding: 3px 8px; transition: background 0.15s, border-color 0.15s;
+  line-height: 1; font-family: inherit; font-weight: 500; white-space: nowrap;
 }
 .htpl-wand-btn:hover { background: rgba(15,118,110,0.08); border-color: var(--brand, #0f766e); }
 .htpl-wand-btn:disabled { opacity: 0.5; cursor: default; }
@@ -8370,3 +8370,8 @@ html[data-nav-dir="back"] #main-content.spa-entering {
 /* panels below tabs — remove double top-padding, so-editor-form handles bottom */
 .htpl-panel { padding-top: var(--space-4); }
 .htpl-panel--hidden { display: none !important; }
+
+.htpl-panel .field-input,
+.htpl-panel .field-textarea { font-size: 13px; line-height: 1.5; }
+.htpl-panel .field-input { height: 36px; }
+.htpl-panel .field-textarea { min-height: 80px; }

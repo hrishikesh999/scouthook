@@ -53,6 +53,28 @@ async function callRenderService(html, width, height) {
 }
 
 // ---------------------------------------------------------------------------
+// Brand color role mapping
+// ---------------------------------------------------------------------------
+
+function blendHex(hexA, hexB, ratio) {
+  const parse = h => [parseInt(h.slice(1,3),16), parseInt(h.slice(3,5),16), parseInt(h.slice(5,7),16)];
+  const a = parse(hexA), b = parse(hexB);
+  return '#' + a.map((v, i) => Math.round(v * ratio + b[i] * (1 - ratio)).toString(16).padStart(2, '0')).join('');
+}
+
+function resolveBrandRole(role, brand) {
+  const r = role.toLowerCase();
+  if (brand[r]) return brand[r];
+  if (/^(bg|background|card_bg|card-bg|surface|secondary_bg|secondary-bg)$/.test(r)) return brand.bg;
+  if (/^(text|heading|heading_color|title|subtitle|body|label|caption)$/.test(r)) return brand.text;
+  if (/^(text_muted|text-muted|muted|secondary_text|secondary-text)$/.test(r)) return blendHex(brand.text, brand.bg, 0.45);
+  if (/^(accent|brand|highlight|primary|cta|button|badge|tag|link)$/.test(r)) return brand.accent;
+  if (/^(border|line|divider|separator|rule)$/.test(r)) return blendHex(brand.text, brand.bg, 0.2);
+  if (/^(overlay)$/.test(r)) return 'rgba(0,0,0,0.5)';
+  return brand.accent || '#0f766e';
+}
+
+// ---------------------------------------------------------------------------
 // Placeholder text for thumbnail generation (deterministic, no AI)
 // ---------------------------------------------------------------------------
 
@@ -262,8 +284,7 @@ async function renderTemplate(post, templateId, userOverrides = {}, brand = {}, 
     if (overrideColors[key] && /^(#[0-9a-fA-F]{3,8}|rgba?\([^)]+\))$/.test(overrideColors[key])) {
       colorSlots[key] = overrideColors[key];
     } else if (def.default === 'brand') {
-      const colorRole = key.slice('color:'.length);
-      colorSlots[key] = brand[colorRole] || brand.accent || '#0f766e';
+      colorSlots[key] = resolveBrandRole(key.slice('color:'.length), brand);
     }
     // Skip generic defaults — the template HTML already has the real values
   }

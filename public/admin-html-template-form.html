@@ -457,18 +457,21 @@
 
   // ── Slot card rendering ──────────────────────────────────────────────────
 
-  const COLOR_GROUPS = {
-    'Background': ['bg', 'background', 'card_bg', 'card-bg', 'surface', 'overlay'],
-    'Accent': ['accent', 'brand', 'highlight', 'primary', 'cta', 'button'],
-    'Text': ['text', 'text_muted', 'text-muted', 'heading', 'label', 'heading_color', 'caption'],
-    'Borders': ['border', 'line', 'divider', 'separator', 'stroke'],
-  };
+  const COLOR_GROUP_RULES = [
+    ['Background', /^(bg|background|card[_-]?bg|surface|overlay|cream|light|dark|container[_-]?bg|panel|section[_-]?bg)/i],
+    ['Accent', /^(accent|brand|highlight|primary|cta|button|red|coral|orange|green|blue|teal|purple|pink|secondary)/i],
+    ['Text', /^(text|heading|label|caption|title[_-]?color|body[_-]?color|muted|subtitle|paragraph|font[_-]?color)/i],
+    ['Borders', /^(border|line|divider|separator|stroke|rule|outline)/i],
+  ];
 
   function _getColorGroup(varName) {
-    const lower = varName.toLowerCase();
-    for (const [group, patterns] of Object.entries(COLOR_GROUPS)) {
-      if (patterns.some(p => lower === p || lower.startsWith(p + '_') || lower.startsWith(p + '-') || lower.endsWith('_' + p) || lower.endsWith('-' + p))) return group;
+    const lower = varName.toLowerCase().replace(/^-+/, '');
+    for (const [group, regex] of COLOR_GROUP_RULES) {
+      if (regex.test(lower)) return group;
     }
+    if (lower.includes('bg') || lower.includes('background')) return 'Background';
+    if (lower.includes('text') || lower.includes('font')) return 'Text';
+    if (lower.includes('border') || lower.includes('line')) return 'Borders';
     return 'Other';
   }
 

@@ -198,7 +198,9 @@
     };
 
     if (document.startViewTransition && !isReducedMotion()) {
-      await document.startViewTransition(swap).finished;
+      // The swap callback runs synchronously — new DOM is in place immediately after this call.
+      // Don't await .finished; start page init in parallel with the visual animation.
+      document.startViewTransition(swap);
     } else {
       newContent.classList.add('spa-entering');
       swap();

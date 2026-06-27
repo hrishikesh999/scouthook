@@ -2286,16 +2286,14 @@ async function _mpLoadPhotos(grid, query, zone, slot, bgBtn) {
 }
 
 async function _mpSelectPhoto(photo, zone, slot, bgBtn) {
-  zone.innerHTML = `<img src="${photo.src_medium}" alt="" style="width:100%;height:100%;object-fit:cover">`;
-  _applySlotToIframe(slot, photo.src_medium, 'image');
+  zone.innerHTML = `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--text-muted)">Downloading…</div>`;
+  _closeMediaPicker();
 
   const attrEl = zone.closest('.html-tpl-img-zone')?.querySelector('.htpl-mp-attribution');
   if (attrEl) {
     attrEl.innerHTML = `Photo by <a href="${photo.photographer_url}" target="_blank" rel="noopener">${photo.photographer}</a> on <a href="https://www.pexels.com" target="_blank" rel="noopener">Pexels</a>`;
     attrEl.hidden = false;
   }
-
-  _closeMediaPicker();
 
   try {
     const r = await fetch('/api/media/stock/photos/download', {
@@ -2305,18 +2303,21 @@ async function _mpSelectPhoto(photo, zone, slot, bgBtn) {
     });
     const data = await r.json();
     if (data.ok && data.file) {
+      const src = data.file.dataUrl || data.file.url;
+      zone.innerHTML = `<img src="${src}" alt="" style="width:100%;height:100%;object-fit:cover">`;
       zone.dataset.storageKey = data.file.storageKey || data.file.url.replace(/^\/uploads\//, '');
       zone.dataset.originalStorageKey = zone.dataset.storageKey;
-      zone.dataset.originalDataUrl = data.file.dataUrl || photo.src_large;
+      zone.dataset.originalDataUrl = src;
       zone.dataset.noBgDataUrl = '';
       zone.dataset.bgRemoved = '';
-      if (data.file.dataUrl) {
-        zone.innerHTML = `<img src="${data.file.dataUrl}" alt="" style="width:100%;height:100%;object-fit:cover">`;
-        _applySlotToIframe(slot, data.file.dataUrl, 'image');
-      }
+      _applySlotToIframe(slot, src, 'image');
       if (bgBtn) { bgBtn.hidden = false; bgBtn.textContent = '✦ Remove background'; }
+    } else {
+      zone.innerHTML = `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:11px;color:#991b1b">Download failed</div>`;
     }
-  } catch { /* non-fatal — preview already shown */ }
+  } catch {
+    zone.innerHTML = `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:11px;color:#991b1b">Download failed</div>`;
+  }
 }
 
 let _mpIconDebounce = null;
@@ -2377,8 +2378,7 @@ async function _mpLoadIcons(grid, query, zone, slot, bgBtn) {
 }
 
 async function _mpSelectIcon(prefix, name, zone, slot, bgBtn) {
-  const previewUrl = `https://api.iconify.design/${prefix}/${name}.svg?width=128&height=128`;
-  zone.innerHTML = `<img src="${previewUrl}" alt="${prefix}:${name}" style="width:60%;height:60%;object-fit:contain">`;
+  zone.innerHTML = `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--text-muted)">Downloading…</div>`;
   _closeMediaPicker();
 
   try {
@@ -2398,8 +2398,12 @@ async function _mpSelectIcon(prefix, name, zone, slot, bgBtn) {
       zone.dataset.bgRemoved = '';
       _applySlotToIframe(slot, src, 'image');
       if (bgBtn) { bgBtn.hidden = false; bgBtn.textContent = '✦ Remove background'; }
+    } else {
+      zone.innerHTML = `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:11px;color:#991b1b">Download failed</div>`;
     }
-  } catch { /* preview already shown */ }
+  } catch {
+    zone.innerHTML = `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:11px;color:#991b1b">Download failed</div>`;
+  }
 }
 
 function _mpRenderPatterns(body, zone, slot, bgBtn) {

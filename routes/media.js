@@ -315,8 +315,16 @@ router.post('/stock/photos/download', express.json(), async (req, res) => {
     const { src_url, photographer, photographer_url } = req.body;
     if (!src_url) return res.status(400).json({ ok: false, error: 'src_url required' });
 
-    const userId   = req.headers['x-user-id']   || 'anon';
-    const tenantId = req.headers['x-tenant-id'] || null;
+    // Only allow Pexels CDN URLs to prevent SSRF
+    try {
+      const parsed = new URL(src_url);
+      if (!parsed.hostname.endsWith('.pexels.com')) {
+        return res.status(400).json({ ok: false, error: 'src_url must be a pexels.com URL' });
+      }
+    } catch { return res.status(400).json({ ok: false, error: 'invalid src_url' }); }
+
+    const userId   = req.userId   || 'anon';
+    const tenantId = req.tenantId || null;
 
     const imgRes = await fetch(src_url);
     if (!imgRes.ok) return res.status(502).json({ ok: false, error: 'Failed to download image' });
@@ -377,8 +385,13 @@ router.post('/stock/icons/download', express.json(), async (req, res) => {
     const { prefix, name } = req.body;
     if (!prefix || !name) return res.status(400).json({ ok: false, error: 'prefix and name required' });
 
-    const userId   = req.headers['x-user-id']   || 'anon';
-    const tenantId = req.headers['x-tenant-id'] || null;
+    // Validate prefix/name to prevent path traversal
+    if (!/^[a-z0-9-]+$/.test(prefix) || !/^[a-z0-9-]+$/.test(name)) {
+      return res.status(400).json({ ok: false, error: 'invalid prefix or name' });
+    }
+
+    const userId   = req.userId   || 'anon';
+    const tenantId = req.tenantId || null;
 
     const svgRes = await fetch(`https://api.iconify.design/${prefix}/${name}.svg?width=512&height=512`);
     if (!svgRes.ok) return res.status(502).json({ ok: false, error: 'Failed to fetch icon SVG' });
@@ -414,11 +427,17 @@ router.post('/stock/patterns/render', express.json(), async (req, res) => {
   try {
     const { svgDataUrl, name } = req.body;
     if (!svgDataUrl) return res.status(400).json({ ok: false, error: 'svgDataUrl required' });
+    if (!svgDataUrl.startsWith('data:image/svg+xml,')) {
+      return res.status(400).json({ ok: false, error: 'svgDataUrl must be a data:image/svg+xml URI' });
+    }
 
-    const userId   = req.headers['x-user-id']   || 'anon';
-    const tenantId = req.headers['x-tenant-id'] || null;
+    const userId   = req.userId   || 'anon';
+    const tenantId = req.tenantId || null;
 
     const svgText = decodeURIComponent(svgDataUrl.replace(/^data:image\/svg\+xml,/, ''));
+    if (svgText.length > 50000) {
+      return res.status(400).json({ ok: false, error: 'SVG too large' });
+    }
     const pngBuffer = await sharp(Buffer.from(svgText))
       .resize(1080, 1080)
       .png()

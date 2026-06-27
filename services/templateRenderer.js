@@ -252,7 +252,9 @@ async function renderTemplate(post, templateId, userOverrides = {}, brand = {}, 
     }
   }
 
-  // 5. Resolve color slots
+  // 5. Resolve color slots — only inject user overrides and brand mappings.
+  //    Never inject generic manifest defaults (#cccccc) — let the template's
+  //    own inline CSS variables provide the original design colors.
   const colorSlots = {};
   const overrideColors = (userOverrides && userOverrides.colors) || {};
   for (const [key, def] of Object.entries(slots)) {
@@ -260,12 +262,10 @@ async function renderTemplate(post, templateId, userOverrides = {}, brand = {}, 
     if (overrideColors[key] && /^(#[0-9a-fA-F]{3,8}|rgba?\([^)]+\))$/.test(overrideColors[key])) {
       colorSlots[key] = overrideColors[key];
     } else if (def.default === 'brand') {
-      // Map color:accent → brand.accent, color:bg → brand.bg, etc.
       const colorRole = key.slice('color:'.length);
       colorSlots[key] = brand[colorRole] || brand.accent || '#0f766e';
-    } else if (def.default) {
-      colorSlots[key] = def.default;
     }
+    // Skip generic defaults — the template HTML already has the real values
   }
 
   // 6. Resolve image slots

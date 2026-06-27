@@ -1369,9 +1369,10 @@ function _renderHtmlTplPicker(templates) {
     const filtered = _htmlTplActiveCategory ? templates.filter(t => t.category === _htmlTplActiveCategory) : templates;
     gridHtml += filtered.map(t => {
       const initials = escHtml((t.name || '?').slice(0, 2).toUpperCase());
+      const thumbSrc = t.thumbnail_url || (t.thumbnail_r2_key ? `/api/html-templates/${t.id}/thumbnail` : null);
       return `<div class="ai-tpl-card" data-tpl-id="${t.id}" tabindex="0" role="button" aria-label="${escHtml(t.name)}">
-        ${t.thumbnail_r2_key
-          ? `<img src="/api/html-templates/${t.id}/thumbnail" alt="" loading="lazy" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px 8px 0 0;display:block">`
+        ${thumbSrc
+          ? `<img src="${escHtml(thumbSrc)}" alt="" loading="lazy" onerror="this.onerror=null;this.src='/api/html-templates/${t.id}/thumbnail'" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px 8px 0 0;display:block">`
           : `<div style="width:100%;aspect-ratio:1;background:var(--surface-2);display:flex;align-items:center;justify-content:center;border-radius:8px 8px 0 0"><span style="font-size:24px;font-weight:700;color:var(--text-muted)">${initials}</span></div>`}
         <div style="padding:8px 12px 10px">
           <div style="font-weight:600;font-size:13px">${escHtml(t.name)}</div>

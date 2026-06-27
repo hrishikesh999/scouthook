@@ -553,6 +553,7 @@ router.get('/posts', async (req, res) => {
         FROM   generated_posts
         WHERE  tenant_id = ? AND status = 'published'
         ORDER  BY published_at DESC
+        LIMIT  100
       `).all(tenantId);
     } else {
       posts = await db.prepare(`
@@ -560,6 +561,7 @@ router.get('/posts', async (req, res) => {
         FROM   generated_posts
         WHERE  tenant_id = ? AND status = 'draft'
         ORDER  BY created_at DESC
+        LIMIT  100
       `).all(tenantId);
     }
 

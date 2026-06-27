@@ -292,12 +292,17 @@ async function requireWorkspaceMember(req, res, next) {
     if (!req.userId)   return res.status(401).json({ ok: false, error: 'not_authenticated' });
     if (!req.tenantId) return res.status(401).json({ ok: false, error: 'no_workspace_context' });
 
+    // Fast path: reuse workspace role cached in session (avoids 2 DB queries per request)
+    const cacheKey = `ws_role:${req.tenantId}:${req.userId}`;
+    if (req.session?.[cacheKey]) {
+      req.workspaceRole = req.session[cacheKey];
+      return next();
+    }
+
     const ws = await db.prepare(
       'SELECT deleted_at, created_by FROM workspaces WHERE id = ?'
     ).get(req.tenantId);
     if (!ws || ws.deleted_at) {
-      // Stale session — workspace no longer valid. Force re-auth so the user
-      // gets a fresh session pointing to a valid workspace.
       req.session?.destroy?.(() => {});
       res.clearCookie('scouthook.sid');
       return res.status(401).json({ ok: false, error: 'workspace_not_found' });
@@ -308,8 +313,6 @@ async function requireWorkspaceMember(req, res, next) {
     ).get(req.tenantId, req.userId);
 
     if (!member) {
-      // Self-heal: workspace creator missing from workspace_members (migration 036
-      // backfill not yet applied — common in dev or after a DB restore).
       if (ws.created_by === req.userId) {
         await db.prepare(
           'INSERT INTO workspace_members (workspace_id, user_id, role, joined_at) VALUES (?, ?, ?, now()) ON CONFLICT DO NOTHING'
@@ -321,6 +324,7 @@ async function requireWorkspaceMember(req, res, next) {
     }
 
     req.workspaceRole = member.role;
+    if (req.session) req.session[cacheKey] = member.role;
     next();
   } catch (err) {
     next(err);

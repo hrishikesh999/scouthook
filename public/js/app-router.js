@@ -55,6 +55,14 @@
     return p || null;
   };
 
+  // Pages whose primary API call uses cachedFetch — warm the cache at click-time
+  // so init() finds the data ready or in-flight (cachedFetch deduplicates).
+  const ROUTE_PREFETCHES = {
+    '/drafts.html':    () => cachedFetch('/api/posts',                    { credentials: 'same-origin' }, 60_000),
+    '/Published.html': () => cachedFetch('/api/posts?status=published',   { credentials: 'same-origin' }, 60_000),
+    '/schedule.html':  () => cachedFetch('/api/linkedin/scheduled',       { credentials: 'same-origin' }, 60_000),
+  };
+
   // Monotonic nav index for direction detection
   let _navIndex = 0;
 
@@ -158,8 +166,10 @@
     // Set direction for CSS animation
     document.documentElement.dataset.navDir = isPopState ? 'back' : 'forward';
 
-    // For post detail pages, fire the API call immediately — parallel with the HTML fetch.
-    // post.js will consume this via __routerConsumePrefetch so no double-fetch occurs.
+    // Fire data prefetches immediately — parallel with the HTML fetch below.
+    // List pages use cachedFetch (deduplicates in-flight requests automatically).
+    // Post detail uses _prefetches map, consumed once by post.js init().
+    ROUTE_PREFETCHES[pathname]?.();
     if (pathname === '/post.html') {
       const id = new URL(url, location.origin).searchParams.get('id');
       if (id) {

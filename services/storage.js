@@ -42,8 +42,9 @@ for (const dir of [LOCAL_UPLOADS_DIR, LOCAL_GENERATED_DIR, LOCAL_ADMIN_DIR]) {
 // R2 config
 // ---------------------------------------------------------------------------
 
-const R2_BUCKET = process.env.R2_BUCKET_NAME || '';
-const R2_PREFIX = (process.env.R2_KEY_PREFIX || '').replace(/\/$/, '');
+const R2_BUCKET     = process.env.R2_BUCKET_NAME || '';
+const R2_PREFIX     = (process.env.R2_KEY_PREFIX || '').replace(/\/$/, '');
+const R2_PUBLIC_URL = (process.env.R2_PUBLIC_URL || '').replace(/\/$/, '');
 
 if (BACKEND === 's3') {
   const missing = ['R2_ENDPOINT', 'R2_BUCKET_NAME', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY'].filter(k => !process.env[k]);
@@ -122,6 +123,18 @@ function buildThumbnailKey(templateId) {
 
 function buildOriginalImageKey(templateId) {
   return `global/originals/${templateId}.bin`;
+}
+
+/**
+ * Returns a direct public URL for a raw admin key, or null if R2_PUBLIC_URL is not configured.
+ * Requires the R2 bucket to have a public domain (custom domain or pub-*.r2.dev) set via R2_PUBLIC_URL.
+ * @param {string} rawKey  e.g. 'global/thumbnails/uuid.png'
+ * @returns {string|null}
+ */
+function getPublicUrl(rawKey) {
+  if (!R2_PUBLIC_URL) return null;
+  const fullKey = R2_PREFIX ? `${R2_PREFIX}/${rawKey}` : rawKey;
+  return `${R2_PUBLIC_URL}/${fullKey}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -341,7 +354,7 @@ module.exports = {
   // Key builders (raw key, no prefix — for use with uploadAdmin/downloadAdmin)
   buildTemplateKey, buildThumbnailKey, buildOriginalImageKey,
   // Utilities
-  getBackend,
+  getBackend, getPublicUrl,
   // User-content API
   upload, uploadToKey, download, delete: remove, copy, stream,
   // Admin API

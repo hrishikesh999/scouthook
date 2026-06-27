@@ -1,14 +1,10 @@
-/* media.js — Media Library page logic */
+/* media.js — Media Library page logic (SPA-safe: all DOM refs resolved in init) */
 
-/* ── DOM refs ─────────────────────────────────────────────────── */
-const mediaGrid      = document.getElementById('media-grid');
-const uploadZone     = document.getElementById('media-upload-zone');
-const fileInput      = document.getElementById('media-file-input');
-const uploadProgress = document.getElementById('upload-progress');
-const emptyMediaMsg  = document.getElementById('empty-media-msg');
+'use strict';
 
-/* ── State ────────────────────────────────────────────────────── */
+/* ── Module-level state only (no DOM refs) ─────────────────────── */
 let uploading = false;
+let _abortCtrl = null; // AbortController for current visit's listeners
 
 /* ── LinkedIn status ──────────────────────────────────────────── */
 function buildLinkedInChip(name, photoUrl) {
@@ -40,44 +36,78 @@ async function checkLinkedInStatus() {
 
 /* ── Init ─────────────────────────────────────────────────────── */
 async function init() {
+  uploading = false;
+
+  // Re-query DOM refs fresh on every visit (SPA swaps the DOM on each navigation)
+  const mediaGrid      = document.getElementById('media-grid');
+  const uploadZone     = document.getElementById('media-upload-zone');
+  const fileInput      = document.getElementById('media-file-input');
+  const uploadProgress = document.getElementById('upload-progress');
+  const emptyMediaMsg  = document.getElementById('empty-media-msg');
+
+  if (!mediaGrid || !uploadZone) return;
+
+  // Abort previous visit's listeners before attaching new ones
+  if (_abortCtrl) _abortCtrl.abort();
+  _abortCtrl = new AbortController();
+  const { signal } = _abortCtrl;
+
+  uploadZone.addEventListener('click', () => { if (!uploading) fileInput.click(); }, { signal });
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files.length) processFiles(fileInput, uploadZone, uploadProgress, mediaGrid, emptyMediaMsg);
+    fileInput.value = '';
+  }, { signal });
+  uploadZone.addEventListener('dragover', (e) => { e.preventDefault(); uploadZone.classList.add('dragover'); }, { signal });
+  uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'), { signal });
+  uploadZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    uploadZone.classList.remove('dragover');
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length) processFiles(files, uploadZone, uploadProgress, mediaGrid, emptyMediaMsg);
+  }, { signal });
+
   await checkLinkedInStatus();
-  await loadMedia();
+  await loadMedia(mediaGrid, emptyMediaMsg);
 }
 
-window.__pageInit = init;
-window.__pageCleanup = null;
+window.__pageInit    = init;
+window.__pageCleanup = () => { if (_abortCtrl) { _abortCtrl.abort(); _abortCtrl = null; } };
+
+// Called on first hard load of the page
 init();
 
 /* ── Load & render ────────────────────────────────────────────── */
-async function loadMedia() {
+async function loadMedia(mediaGrid, emptyMediaMsg) {
   try {
-    const res  = await fetch('/api/media', { headers: apiHeaders() });
+    const res  = await fetch('/api/media', { credentials: 'same-origin' });
     const data = await res.json();
     if (!data.ok) throw new Error(data.error);
-    renderMedia(data.files);
-  } catch {
-    // Leave grid showing upload zone only
+    renderMedia(data.files, mediaGrid, emptyMediaMsg);
+  } catch (err) {
+    if (window.toast && typeof window.toast.error === 'function') {
+      window.toast.error('Could not load media: ' + (err.message || 'unknown error'));
+    }
   }
 }
 
-function renderMedia(files) {
+function renderMedia(files, mediaGrid, emptyMediaMsg) {
   // Remove all existing cards (keep upload zone as first child)
-  const existing = mediaGrid.querySelectorAll('.media-card');
-  existing.forEach(c => c.remove());
+  mediaGrid.querySelectorAll('.media-card').forEach(c => c.remove());
 
   if (emptyMediaMsg) {
     emptyMediaMsg.style.display = files.length === 0 ? '' : 'none';
   }
 
-  files.forEach(f => mediaGrid.appendChild(buildCard(f)));
+  files.forEach(f => mediaGrid.appendChild(buildCard(f, mediaGrid, emptyMediaMsg)));
 }
 
-function buildCard(file) {
+function buildCard(file, mediaGrid, emptyMediaMsg) {
   const card = document.createElement('div');
   card.className = 'media-card';
   card.dataset.id = file.id;
 
-  const isPdf = file.mime_type === 'application/pdf';
+  const isPdf    = file.mime_type === 'application/pdf';
+  const thumbSrc = file.thumbnail_url || file.url;
 
   card.innerHTML = `
     <div class="media-thumb">
@@ -92,7 +122,7 @@ function buildCard(file) {
              </svg>
              <span>PDF</span>
            </div>`
-        : `<img src="${file.url}" alt="${escHtml(file.filename)}" loading="lazy">`
+        : `<img src="${escHtml(thumbSrc)}" alt="${escHtml(file.filename)}" loading="lazy">`
       }
       <div class="media-card-actions">
         <button class="media-action-btn copy-btn" aria-label="Copy link" title="Copy link">
@@ -124,39 +154,14 @@ function buildCard(file) {
 
   card.querySelector('.delete-btn').addEventListener('click', (e) => {
     e.stopPropagation();
-    deleteMedia(file.id, card);
+    deleteMedia(file.id, card, mediaGrid, emptyMediaMsg);
   });
 
   return card;
 }
 
 /* ── Upload ───────────────────────────────────────────────────── */
-uploadZone.addEventListener('click', () => {
-  if (!uploading) fileInput.click();
-});
-
-fileInput.addEventListener('change', () => {
-  if (fileInput.files.length) processFiles(Array.from(fileInput.files));
-  fileInput.value = '';
-});
-
-uploadZone.addEventListener('dragover', (e) => {
-  e.preventDefault();
-  uploadZone.classList.add('dragover');
-});
-
-uploadZone.addEventListener('dragleave', () => {
-  uploadZone.classList.remove('dragover');
-});
-
-uploadZone.addEventListener('drop', (e) => {
-  e.preventDefault();
-  uploadZone.classList.remove('dragover');
-  const files = Array.from(e.dataTransfer.files);
-  if (files.length) processFiles(files);
-});
-
-async function processFiles(files) {
+async function processFiles(files, uploadZone, uploadProgress, mediaGrid, emptyMediaMsg) {
   if (uploading) return;
   uploading = true;
   uploadZone.classList.add('uploading');
@@ -164,7 +169,7 @@ async function processFiles(files) {
 
   for (const file of files) {
     try {
-      await uploadFile(file);
+      await uploadFile(file, uploadZone, mediaGrid, emptyMediaMsg);
     } catch (err) {
       showUploadError(err.message || 'Upload failed');
     }
@@ -175,7 +180,7 @@ async function processFiles(files) {
   if (uploadProgress) uploadProgress.style.display = 'none';
 }
 
-async function uploadFile(file) {
+async function uploadFile(file, uploadZone, mediaGrid, emptyMediaMsg) {
   const ALLOWED = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
   if (!ALLOWED.includes(file.type)) {
     throw new Error(`${file.name}: unsupported type (JPG, PNG, GIF, WebP, PDF only)`);
@@ -187,13 +192,11 @@ async function uploadFile(file) {
   const headers = {
     'Content-Type': file.type,
     'X-Filename':   encodeURIComponent(file.name),
-    'X-User-Id':    getUserId(),
-    'X-Tenant-Id':  getTenantId(),
   };
 
   let res;
   try {
-    res = await fetch('/api/media/upload', { method: 'POST', headers, body: file });
+    res = await fetch('/api/media/upload', { method: 'POST', credentials: 'same-origin', headers, body: file });
   } catch {
     throw new Error('Network error — could not reach server');
   }
@@ -207,20 +210,19 @@ async function uploadFile(file) {
 
   if (!data.ok) throw new Error(data.error || 'Upload failed');
 
-  const card = buildCard(data.file);
+  const card = buildCard(data.file, mediaGrid, emptyMediaMsg);
   uploadZone.insertAdjacentElement('afterend', card);
   if (emptyMediaMsg) emptyMediaMsg.style.display = 'none';
 }
 
 /* ── Delete ───────────────────────────────────────────────────── */
-async function deleteMedia(id, cardEl) {
+async function deleteMedia(id, cardEl, mediaGrid, emptyMediaMsg) {
   if (!confirm('Delete this file? This cannot be undone.')) return;
   try {
-    const res  = await fetch(`/api/media/${id}`, { method: 'DELETE', headers: apiHeaders() });
+    const res  = await fetch(`/api/media/${id}`, { method: 'DELETE', credentials: 'same-origin' });
     const data = await res.json();
     if (!data.ok) throw new Error(data.error);
     cardEl.remove();
-    // Show empty state if no cards left
     const remaining = mediaGrid.querySelectorAll('.media-card');
     if (emptyMediaMsg && remaining.length === 0) emptyMediaMsg.style.display = '';
     if (window.toast && typeof window.toast.success === 'function') {
@@ -228,7 +230,7 @@ async function deleteMedia(id, cardEl) {
     }
   } catch (err) {
     if (window.toast && typeof window.toast.error === 'function') {
-      window.toast.error(err.message || 'Couldn’t delete file. Please try again.');
+      window.toast.error(err.message || 'Couldn\'t delete file. Please try again.');
     } else {
       alert(err.message || 'Could not delete file');
     }

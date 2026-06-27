@@ -18,7 +18,7 @@
     '/workspaces.html': null,
     '/members.html':    '/js/members.js',
     '/linkedin.html':   null,
-    '/media.html':      null,
+    '/media.html':      '/js/media.js',
     '/workspace.html':  '/js/members.js',
     '/post.html':       '/js/post.js',
     '/help.html':       null,

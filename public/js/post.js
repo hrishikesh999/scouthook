@@ -124,6 +124,13 @@ async function submitRating(tag) {
 // Boot
 // ---------------------------------------------------------------------------
 
+function showPostError(msg) {
+  const body = document.getElementById('post-li-body');
+  if (body) body.innerHTML = `<p style="color:#666;font-size:14px;padding:12px 0">${msg}</p>`;
+  const meta = document.getElementById('post-page-meta');
+  if (meta) meta.innerHTML = '';
+}
+
 async function init() {
   const POST_ID = new URLSearchParams(window.location.search).get('id');
   if (!POST_ID) { window.location.replace('/Published.html'); return; }
@@ -138,37 +145,38 @@ async function init() {
     });
   }
 
-  // Fetch post and LinkedIn profile in parallel
-  const [postResult, profileResult] = await Promise.allSettled([
-    fetch(`/api/posts/${POST_ID}`, { headers: apiHeaders() }).then(r => r.json()),
-    fetch('/api/linkedin/status', { credentials: 'include' }).then(r => r.json()),
-  ]);
+  try {
+    const [postResult, profileResult] = await Promise.allSettled([
+      fetch(`/api/posts/${POST_ID}`, { headers: apiHeaders() }).then(r => r.json()),
+      fetch('/api/linkedin/status', { headers: apiHeaders() }).then(r => r.json()),
+    ]);
 
-  // Redirect on error
-  const postData = postResult.status === 'fulfilled' ? postResult.value : null;
-  if (!postData?.ok || !postData.post) {
-    window.location.replace('/Published.html');
-    return;
+    const postData = postResult.status === 'fulfilled' ? postResult.value : null;
+    if (!postData?.ok || !postData.post) {
+      showPostError('Could not load this post. <a href="/Published.html" style="color:var(--teal)">Back to Published</a>');
+      return;
+    }
+
+    const post = postData.post;
+
+    let profile = null;
+    if (profileResult.status === 'fulfilled' && profileResult.value?.connected) {
+      const p = profileResult.value;
+      profile = {
+        name:     p.name     || '',
+        headline: p.headline || '',
+        photoUrl: p.photo_url || null,
+        initials: p.name ? p.name.charAt(0).toUpperCase() : '',
+      };
+    }
+
+    populateMeta(post);
+    populateLiCard(post, profile);
+    populateLinkedInLink(post);
+    renderRating(post.performance_tag || null);
+  } catch {
+    showPostError('Something went wrong loading this post. <a href="/Published.html" style="color:var(--teal)">Back to Published</a>');
   }
-
-  const post = postData.post;
-
-  // Build LinkedIn profile object
-  let profile = null;
-  if (profileResult.status === 'fulfilled' && profileResult.value?.connected) {
-    const p = profileResult.value;
-    profile = {
-      name:     p.name     || '',
-      headline: p.headline || '',
-      photoUrl: p.photo_url || null,
-      initials: p.name ? p.name.charAt(0).toUpperCase() : '',
-    };
-  }
-
-  populateMeta(post);
-  populateLiCard(post, profile);
-  populateLinkedInLink(post);
-  renderRating(post.performance_tag || null);
 }
 
 window.__pageInit = init;

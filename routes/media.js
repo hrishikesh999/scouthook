@@ -410,4 +410,39 @@ router.post('/stock/icons/download', express.json(), async (req, res) => {
   }
 });
 
+router.post('/stock/patterns/render', express.json(), async (req, res) => {
+  try {
+    const { svgDataUrl, name } = req.body;
+    if (!svgDataUrl) return res.status(400).json({ ok: false, error: 'svgDataUrl required' });
+
+    const userId   = req.headers['x-user-id']   || 'anon';
+    const tenantId = req.headers['x-tenant-id'] || null;
+
+    const svgText = decodeURIComponent(svgDataUrl.replace(/^data:image\/svg\+xml,/, ''));
+    const pngBuffer = await sharp(Buffer.from(svgText))
+      .resize(1080, 1080)
+      .png()
+      .toBuffer();
+
+    const storedName = `${Date.now()}_${crypto.randomBytes(6).toString('hex')}_pattern.png`;
+    const url        = `/uploads/${storedName}`;
+
+    await storage.upload(pngBuffer, {
+      tenantId, userId, type: 'uploads', filename: storedName, mimeType: 'image/png',
+    });
+
+    await db.prepare(`
+      INSERT INTO media_files
+        (user_id, tenant_id, filename, stored_name, mime_type, file_size, width, height, format_tag, url)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(userId, tenantId, name || storedName, storedName, 'image/png',
+           pngBuffer.length, 1080, 1080, 'pattern', url);
+
+    const dataUrl = `data:image/png;base64,${pngBuffer.toString('base64')}`;
+    return res.json({ ok: true, file: { url, storageKey: storedName, dataUrl } });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 module.exports = router;

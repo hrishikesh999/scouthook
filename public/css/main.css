@@ -7972,10 +7972,10 @@ html[data-nav-dir="back"] #main-content.spa-entering {
 .htpl-img-empty-sub { font-size: 11px; color: var(--text-muted, #999); }
 
 .htpl-media-picker {
-  position: absolute; top: 100%; left: 0; right: 0; z-index: 60;
-  margin-top: 6px;
+  position: absolute; bottom: 100%; left: 0; right: 0; z-index: 60;
+  margin-bottom: 6px;
   background: var(--surface-1, #fff); border: 1px solid var(--border);
-  border-radius: 10px; box-shadow: 0 8px 30px rgba(0,0,0,0.13);
+  border-radius: 10px; box-shadow: 0 -4px 30px rgba(0,0,0,0.13);
   overflow: hidden;
 }
 .htpl-mp-tabs {

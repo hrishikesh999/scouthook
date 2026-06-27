@@ -1396,42 +1396,67 @@ function _renderHtmlTplPicker(templates) {
   });
 }
 
+let _htmlTplAiCache = null; // cached AI extraction for wand buttons
+
 async function _selectHtmlTemplate(templateId) {
   const tpl = _htmlTplAllTemplates.find(t => t.id === templateId);
   if (!tpl) return;
   _htmlTplSelectedId = templateId;
   _htmlTplSelectedMeta = tpl;
   _htmlTplActiveSlotKey = null;
+  _htmlTplAiCache = null;
   document.getElementById('html-tpl-modal-title').textContent = tpl.name.toUpperCase();
 
   _setHtmlTplModalState('editing');
-  document.getElementById('html-tpl-preview-pane').innerHTML = '<div style="color:var(--text-muted);font-size:.85rem">Loading…</div>';
-  document.getElementById('html-tpl-form-pane').innerHTML = '<div class="so-editor-form"><div class="loading-text--padded">Analyzing your post…</div></div>';
+  document.getElementById('html-tpl-preview-pane').innerHTML = '<div style="color:var(--text-muted);font-size:.85rem">Loading...</div>';
+  document.getElementById('html-tpl-form-pane').innerHTML = '<div class="so-editor-form"><div class="loading-text--padded">Loading template...</div></div>';
 
   try {
-    // Fetch template HTML + AI extraction + brand colors in parallel
-    const [htmlRes, extractRes] = await Promise.all([
+    const [htmlRes] = await Promise.all([
       fetch(`/api/html-templates/${templateId}/html`, { credentials: 'include' }),
-      fetch(`/api/visuals/${encodeURIComponent(String(currentPostId))}`, {
-        method: 'POST', headers: apiHeaders(), credentials: 'include',
-        body: JSON.stringify({ visual_type: 'template', mode: 'extract', template_id: templateId }),
-      }),
       _loadBrandColors(),
     ]);
 
     if (!htmlRes.ok) throw new Error('Could not load template HTML');
     _htmlTplTemplateHtml = await htmlRes.text();
+    _htmlTplExtractedSlots = {};
 
-    const extractData = await extractRes.json();
-    if (!extractData.ok) throw new Error(extractData.error || 'Extraction failed');
-    _htmlTplExtractedSlots = extractData.content;
+    _renderTemplateIframe(_htmlTplTemplateHtml, null);
+    renderHtmlTemplateForm(null);
+  } catch (err) {
+    document.getElementById('html-tpl-form-pane').innerHTML = `<div class="so-editor-form"><p class="so-extract-error">${escHtml(err.message || 'Could not load template.')}</p></div>`;
+  }
+}
 
-    // Render live iframe preview with AI content injected
+async function _aiExtractAll() {
+  if (_htmlTplAiCache) return _htmlTplAiCache;
+  const r = await fetch(`/api/visuals/${encodeURIComponent(String(currentPostId))}`, {
+    method: 'POST', headers: apiHeaders(), credentials: 'include',
+    body: JSON.stringify({ visual_type: 'template', mode: 'extract', template_id: _htmlTplSelectedId }),
+  });
+  const data = await r.json();
+  if (!data.ok) throw new Error(data.error || 'Extraction failed');
+  _htmlTplAiCache = data.content || {};
+  return _htmlTplAiCache;
+}
+
+async function _aiFillField(slotKey) {
+  try {
+    const extracted = await _aiExtractAll();
+    return extracted[slotKey] || '';
+  } catch {
+    return '';
+  }
+}
+
+async function _aiFillAllFields() {
+  try {
+    const extracted = await _aiExtractAll();
+    _htmlTplExtractedSlots = extracted;
     _renderTemplateIframe(_htmlTplTemplateHtml, _htmlTplExtractedSlots);
-    // Render form with instant update wiring
     renderHtmlTemplateForm(_htmlTplExtractedSlots);
   } catch (err) {
-    document.getElementById('html-tpl-form-pane').innerHTML = `<div class="so-editor-form"><p class="so-extract-error">${escHtml(err.message || 'Could not analyze post.')}</p></div>`;
+    alert('AI extraction failed: ' + err.message);
   }
 }
 
@@ -1816,10 +1841,10 @@ function renderHtmlTemplateForm(slots) {
     const maxLen = def.maxLen || 0;
     const useTextarea = maxLen > 120 || (!maxLen && val.length > 80);
     contentHtml += `<div class="so-field-group${active}" data-slot-key="${escHtml(key)}" style="margin-bottom:14px">
-      <label class="field-label">${escHtml(label)}</label>${hintHtml}
+      <div style="display:flex;align-items:center;gap:4px"><label class="field-label" style="flex:1">${escHtml(label)}</label><button type="button" class="htpl-wand-btn" data-slot="${escHtml(key)}" title="AI fill from post">✦</button></div>${hintHtml}
       ${useTextarea
-        ? `<textarea class="field-textarea" data-slot="${escHtml(key)}" ${maxLen ? `maxlength="${maxLen}"` : ''} rows="3">${escHtml(val)}</textarea>`
-        : `<input type="text" class="field-input" data-slot="${escHtml(key)}" value="${escHtml(val)}" ${maxLen ? `maxlength="${maxLen}"` : ''}>`}
+        ? `<textarea class="field-textarea" data-slot="${escHtml(key)}" ${maxLen ? `maxlength="${maxLen}"` : ''} rows="3" placeholder="Type or click ✦ to fill from your post">${escHtml(val)}</textarea>`
+        : `<input type="text" class="field-input" data-slot="${escHtml(key)}" value="${escHtml(val)}" ${maxLen ? `maxlength="${maxLen}"` : ''} placeholder="Type or click ✦ to fill from your post">`}
       ${maxLen ? `<div class="so-char-counter"><span class="htpl-char-cur">${val.length}</span> / ${maxLen}</div>` : ''}
     </div>`;
   }
@@ -1831,7 +1856,21 @@ function renderHtmlTemplateForm(slots) {
       <button class="htpl-tab" data-tab="colors">Colors <span class="htpl-tab-badge">${colorSlotKeys.length}</span></button>
     </div>`;
   }
-  html += `<div class="so-editor-form htpl-panel" data-panel="content">${contentHtml}</div>`;
+  // Post content reference + Fill all button
+  const postText = getPostContent();
+  const postPreview = postText.length > 200 ? postText.slice(0, 200) + '...' : postText;
+  let contentTop = '';
+  if (postText) {
+    contentTop += `<div style="margin-bottom:14px">
+      <button type="button" id="htpl-fill-all" class="btn btn--sm btn--primary" style="width:100%;margin-bottom:8px">✦ Fill all fields with AI</button>
+      <details style="background:var(--neutral-50);border:1px solid var(--border);border-radius:6px;padding:8px 12px">
+        <summary style="font-size:.72rem;font-weight:600;color:var(--text-muted);cursor:pointer">Your post content</summary>
+        <div style="font-size:.78rem;color:var(--text-secondary);margin-top:6px;white-space:pre-wrap;max-height:150px;overflow-y:auto;line-height:1.5">${escHtml(postText)}</div>
+      </details>
+    </div>`;
+  }
+
+  html += `<div class="so-editor-form htpl-panel" data-panel="content">${contentTop}${contentHtml}</div>`;
   if (hasColorSlots) {
     html += `<div class="so-editor-form htpl-panel htpl-panel--hidden" data-panel="colors">${colorsHtml}</div>`;
   }
@@ -1977,6 +2016,33 @@ function renderHtmlTemplateForm(slots) {
 
   _wireRepeatingSlots(formPane);
   document.getElementById('htpl-apply-brand')?.addEventListener('click', _applyBrandColors);
+
+  // Wire per-field AI wand buttons
+  formPane.querySelectorAll('.htpl-wand-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const slot = btn.dataset.slot;
+      btn.disabled = true; btn.textContent = '...';
+      try {
+        const val = await _aiFillField(slot);
+        if (val) {
+          const input = formPane.querySelector(`.field-input[data-slot="${slot}"], .field-textarea[data-slot="${slot}"]`);
+          if (input) {
+            input.tagName === 'TEXTAREA' ? (input.value = val) : (input.value = val);
+            input.dispatchEvent(new Event('input'));
+          }
+        }
+      } catch { /* silent */ }
+      btn.disabled = false; btn.textContent = '✦';
+    });
+  });
+
+  // Wire "Fill all with AI" button
+  document.getElementById('htpl-fill-all')?.addEventListener('click', async () => {
+    const btn = document.getElementById('htpl-fill-all');
+    btn.disabled = true; btn.textContent = '✦ Filling...';
+    await _aiFillAllFields();
+    btn.disabled = false; btn.textContent = '✦ Fill all fields with AI';
+  });
 
   // Wire slot card clicks to highlight in preview
   formPane.querySelectorAll('.so-field-group[data-slot-key]').forEach(card => {

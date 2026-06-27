@@ -7966,6 +7966,15 @@ html[data-nav-dir="back"] #main-content.spa-entering {
   animation: htpl-spin 0.7s linear infinite;
 }
 
+.htpl-wand-btn {
+  background: none; border: 1px solid var(--border); border-radius: 4px;
+  color: var(--brand, #0f766e); cursor: pointer; font-size: 13px;
+  padding: 2px 8px; transition: background 0.15s, border-color 0.15s;
+  line-height: 1;
+}
+.htpl-wand-btn:hover { background: rgba(15,118,110,0.08); border-color: var(--brand, #0f766e); }
+.htpl-wand-btn:disabled { opacity: 0.5; cursor: default; }
+
 .html-tpl-progress {
   display: flex; align-items: center; gap: 10px; padding: 12px 16px;
   background: var(--surface-2); border-radius: 8px; font-size: 13px;

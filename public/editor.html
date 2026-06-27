@@ -1712,6 +1712,20 @@ function renderHtmlTemplateForm(slots) {
   const colorSlotKeys = Object.keys(slotDefs).filter(k => k.startsWith('color:'));
   const hasColorSlots = colorSlotKeys.length > 0;
 
+  let contentEntries = [];
+  let colorEntries = [];
+
+  for (const [key, def] of Object.entries(slotDefs)) {
+    if (key.startsWith('color:')) {
+      colorEntries.push({ key, def });
+    } else {
+      contentEntries.push({ key, def });
+    }
+  }
+
+  // Sort content entries by visual importance
+  contentEntries.sort((a, b) => _slotSortKey(a.key) - _slotSortKey(b.key));
+
   let contentHtml = '';
   let colorsHtml = '';
 
@@ -1719,26 +1733,39 @@ function renderHtmlTemplateForm(slots) {
     colorsHtml += '<button type="button" id="htpl-apply-brand" class="btn btn--sm btn--secondary" style="margin-bottom:14px;width:100%">Apply Your Brand Colors</button>';
   }
 
-  for (const [key, def] of Object.entries(slotDefs)) {
-    const active = key === _htmlTplActiveSlotKey ? ' so-field-group--active' : '';
-
-    if (key.startsWith('color:')) {
+  // Render grouped colors
+  const colorGroups = {};
+  for (const { key, def } of colorEntries) {
+    const varName = key.slice('color:'.length);
+    const group = _getColorGroupUser(varName);
+    if (!colorGroups[group]) colorGroups[group] = [];
+    colorGroups[group].push({ key, def });
+  }
+  for (const [group, entries] of Object.entries(colorGroups)) {
+    colorsHtml += `<div style="font-size:.7rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;margin:12px 0 6px">${escHtml(group)}</div>`;
+    for (const { key, def } of entries) {
+      const active = key === _htmlTplActiveSlotKey ? ' so-field-group--active' : '';
       const colorName = key.slice('color:'.length);
-      const label = _slotLabel(colorName);
+      const label = _friendlyColorLabel(colorName);
       const val = (slots && slots[key]) || def.default || '#cccccc';
       const resolved = val === 'brand' ? _resolveBrandColor(key, def) : val;
-      colorsHtml += `<div class="so-field-group${active}" data-slot-key="${escHtml(key)}" style="margin-bottom:14px">
+      colorsHtml += `<div class="so-field-group${active}" data-slot-key="${escHtml(key)}" style="margin-bottom:10px">
         <label class="field-label">${escHtml(label)}</label>
         <div class="html-tpl-color-row">
           <div class="html-tpl-color-swatch"><input type="color" value="${escHtml(resolved)}" data-slot="${escHtml(key)}"></div>
           <input type="text" class="field-input html-tpl-color-hex" value="${escHtml(resolved)}" data-slot="${escHtml(key)}" maxlength="9">
         </div>
       </div>`;
-      continue;
     }
+  }
+
+  for (const { key, def } of contentEntries) {
+    const active = key === _htmlTplActiveSlotKey ? ' so-field-group--active' : '';
+    const hint = _slotHint(key);
+    const hintHtml = hint ? `<div style="font-size:.7rem;color:var(--text-muted);margin-top:2px">${escHtml(hint)}</div>` : '';
 
     if (key.startsWith('image:')) {
-      const label = _slotLabel(key.slice('image:'.length));
+      const label = _friendlyLabel(key);
       contentHtml += `<div class="so-field-group${active}" data-slot-key="${escHtml(key)}" style="margin-bottom:14px">
         <label class="field-label">${escHtml(label)}</label>
         <div class="html-tpl-img-zone">
@@ -1752,11 +1779,10 @@ function renderHtmlTemplateForm(slots) {
       continue;
     }
 
-    // Promote bare image-like keys (e.g. slot key "image" or "photo") to upload zones
     const isPromotedImage = IMAGE_LIKE_KEYS.has(key) && !def.maxLen && !def.default && def.type !== 'repeating';
     if (isPromotedImage) {
       const effectiveKey = `image:${key}`;
-      const label = _slotLabel(key);
+      const label = _friendlyLabel(key);
       contentHtml += `<div class="so-field-group${active}" data-slot-key="${escHtml(effectiveKey)}" style="margin-bottom:14px">
         <label class="field-label">${escHtml(label)}</label>
         <div class="html-tpl-img-zone">
@@ -1775,7 +1801,7 @@ function renderHtmlTemplateForm(slots) {
       const fields = def.fields || ['title', 'body'];
       const min = def.min || 1, max = def.max || 10;
       contentHtml += `<div class="so-field-group${active}" data-slot-key="${escHtml(key)}" data-repeating="${escHtml(key)}" data-fields='${JSON.stringify(fields)}' data-min="${min}" data-max="${max}" style="margin-bottom:14px">
-        <label class="field-label">${escHtml(_slotLabel(key))}</label>
+        <label class="field-label">${escHtml(_friendlyLabel(key))}</label>
         <div class="html-tpl-repeating-list">
           ${items.map((item, i) => _buildRepeatingCard(key, fields, item, i, items.length > min)).join('')}
         </div>
@@ -1785,12 +1811,12 @@ function renderHtmlTemplateForm(slots) {
     }
 
     // Text slot
-    const label = _slotLabel(key);
+    const label = _friendlyLabel(key);
     const val = (slots && slots[key]) || '';
     const maxLen = def.maxLen || 0;
     const useTextarea = maxLen > 120 || (!maxLen && val.length > 80);
     contentHtml += `<div class="so-field-group${active}" data-slot-key="${escHtml(key)}" style="margin-bottom:14px">
-      <label class="field-label">${escHtml(label)}</label>
+      <label class="field-label">${escHtml(label)}</label>${hintHtml}
       ${useTextarea
         ? `<textarea class="field-textarea" data-slot="${escHtml(key)}" ${maxLen ? `maxlength="${maxLen}"` : ''} rows="3">${escHtml(val)}</textarea>`
         : `<input type="text" class="field-input" data-slot="${escHtml(key)}" value="${escHtml(val)}" ${maxLen ? `maxlength="${maxLen}"` : ''}>`}
@@ -2002,6 +2028,80 @@ function _wireRepeatingCardEvents(list) {
 
 function _slotLabel(key) {
   return key.replace(/^(color:|image:)/, '').replace(/[_-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).trim();
+}
+
+const _SLOT_LABELS = {
+  headline: 'Headline', main_title: 'Headline', title: 'Title', heading: 'Heading',
+  subheading: 'Subheading', subtitle: 'Subtitle', subtext: 'Subtitle',
+  body: 'Body Text', body_text: 'Body Text', description: 'Description', paragraph: 'Body Text',
+  cta: 'Call to Action', cta_text: 'Call to Action',
+  company_name: 'Company / Brand Name', company: 'Company Name', brand_name: 'Brand Name', author: 'Author Name',
+  stat_value: 'Stat Value', stat_label: 'Stat Label', stat_number: 'Stat Number',
+  'image:photo': 'Photo', 'image:background': 'Background Image', 'image:avatar': 'Profile Photo', 'image:logo': 'Logo',
+};
+
+const _SLOT_HINTS = {
+  headline: 'Main heading — keep it short and impactful',
+  subheading: 'Supporting line below the headline',
+  subtitle: 'Supporting line below the headline',
+  subtext: 'Supporting line below the headline',
+  body: 'Main body copy', body_text: 'Main body copy', description: 'Description text',
+  cta: 'What should the reader do?', cta_text: 'What should the reader do?',
+  company_name: 'Your business or personal brand name',
+  stat_value: 'e.g. 95%, $1.2M, 10x', stat_label: 'e.g. client satisfaction, revenue growth',
+};
+
+const _SLOT_SORT_ORDER = {
+  headline: 0, main_title: 0, title: 1, heading: 1,
+  subheading: 2, subtitle: 2, subtext: 2,
+  body: 3, body_text: 3, description: 3,
+  company_name: 4, company: 4, brand_name: 4, author: 5,
+  cta: 6, cta_text: 6,
+};
+
+function _friendlyLabel(key) {
+  return _SLOT_LABELS[key] || _slotLabel(key);
+}
+
+function _slotHint(key) {
+  const bare = key.replace(/^(color:|image:)/, '');
+  return _SLOT_HINTS[bare] || '';
+}
+
+function _slotSortKey(key) {
+  const bare = key.replace(/^(color:|image:)/, '');
+  if (bare in _SLOT_SORT_ORDER) return _SLOT_SORT_ORDER[bare];
+  if (key.startsWith('image:')) return 50;
+  return 10;
+}
+
+const _COLOR_GROUP_RULES = [
+  ['Background', /^(bg|background|card[_-]?bg|surface|overlay|cream|light|dark)/i],
+  ['Accent', /^(accent|brand|highlight|primary|cta|button|red|coral|orange|green|blue|teal|purple|pink|secondary)/i],
+  ['Text', /^(text|heading|label|caption|muted|subtitle|paragraph|font[_-]?color|white)/i],
+  ['Borders', /^(border|line|divider|separator|stroke|rule)/i],
+];
+
+function _getColorGroupUser(varName) {
+  const lower = varName.toLowerCase();
+  for (const [group, regex] of _COLOR_GROUP_RULES) {
+    if (regex.test(lower)) return group;
+  }
+  if (lower.includes('bg') || lower.includes('background')) return 'Background';
+  if (lower.includes('text') || lower.includes('font')) return 'Text';
+  return 'Theme';
+}
+
+const _COLOR_LABELS = {
+  bg: 'Background', background: 'Background', card_bg: 'Card Background', 'card-bg': 'Card Background',
+  accent: 'Accent', brand: 'Brand', highlight: 'Highlight', primary: 'Primary',
+  text: 'Text', 'text_muted': 'Muted Text', 'text-muted': 'Muted Text', heading: 'Heading', 'heading_color': 'Heading',
+  border: 'Border', line: 'Line',
+  overlay: 'Overlay', surface: 'Surface',
+};
+
+function _friendlyColorLabel(varName) {
+  return _COLOR_LABELS[varName] || _slotLabel(varName);
 }
 
 // ── Instant DOM updates to the live iframe (no Puppeteer) ─────────────────

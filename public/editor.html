@@ -1865,8 +1865,8 @@ function renderHtmlTemplateForm(slots) {
     contentHtml += `<div class="so-field-group${active}" data-slot-key="${escHtml(key)}" style="margin-bottom:14px">
       <div style="display:flex;align-items:center;gap:4px"><label class="field-label" style="flex:1">${escHtml(label)}</label><button type="button" class="htpl-wand-btn" data-slot="${escHtml(key)}" title="AI fill from post">✦</button></div>${hintHtml}
       ${useTextarea
-        ? `<textarea class="field-textarea" data-slot="${escHtml(key)}" ${maxLen ? `maxlength="${maxLen}"` : ''} rows="3" placeholder="Type or click ✦ to fill from your post">${escHtml(val)}</textarea>`
-        : `<input type="text" class="field-input" data-slot="${escHtml(key)}" value="${escHtml(val)}" ${maxLen ? `maxlength="${maxLen}"` : ''} placeholder="Type or click ✦ to fill from your post">`}
+        ? `<textarea class="field-textarea" data-slot="${escHtml(key)}" ${maxLen ? `maxlength="${maxLen}"` : ''} rows="3">${escHtml(val)}</textarea>`
+        : `<input type="text" class="field-input" data-slot="${escHtml(key)}" value="${escHtml(val)}" ${maxLen ? `maxlength="${maxLen}"` : ''}>`}
       ${maxLen ? `<div class="so-char-counter"><span class="htpl-char-cur">${val.length}</span> / ${maxLen}</div>` : ''}
     </div>`;
   }

@@ -806,13 +806,12 @@
             var root = document.body.firstElementChild || document.documentElement;
             root.style.setProperty(d.name, d.value);
           } else if (d.type === 'admin-highlight-var') {
-            document.querySelectorAll('.slot-highlight').forEach(function(x) { x.classList.remove('slot-highlight'); });
-            document.querySelectorAll('*').forEach(function(el) {
-              var style = getComputedStyle(el);
-              var raw = el.getAttribute('style') || '';
-              if (raw.indexOf('var(--' + d.varName + ')') >= 0) el.classList.add('slot-highlight');
-            });
-            setTimeout(function() { document.querySelectorAll('.slot-highlight').forEach(function(x) { x.classList.remove('slot-highlight'); }); }, 1500);
+            var root = document.body.firstElementChild || document.documentElement;
+            var orig = root.style.getPropertyValue('--' + d.varName);
+            root.style.setProperty('--' + d.varName, '#ff00ff');
+            setTimeout(function() { root.style.setProperty('--' + d.varName, orig || ''); }, 600);
+            setTimeout(function() { root.style.setProperty('--' + d.varName, '#ff00ff'); }, 900);
+            setTimeout(function() { root.style.setProperty('--' + d.varName, orig || ''); }, 1200);
           }
         });
       <\/script>`;

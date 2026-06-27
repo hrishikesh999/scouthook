@@ -33,6 +33,7 @@ router.get('/settings', requireAdminPassword, (req, res) => {
     'anthropic_api_key',
     'linkedin_client_secret',
     'token_encryption_key',
+    'pexels_api_key',
   ];
 
   (async () => {
@@ -65,6 +66,7 @@ router.post('/settings', requireAdminPassword, (req, res) => {
     'token_encryption_key',
     'redis_url',
     'scheduling_enabled',
+    'pexels_api_key',
   ];
 
   (async () => {

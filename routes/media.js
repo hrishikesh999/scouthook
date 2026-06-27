@@ -265,4 +265,149 @@ router.post('/remove-bg', express.raw({ type: '*/*', limit: '25mb' }), async (re
   return res.json({ ok: true, pngDataUrl, file: { url } });
 });
 
+// ---------------------------------------------------------------------------
+// Stock Photos (Pexels) & Icons (Iconify) — server-side proxy
+// ---------------------------------------------------------------------------
+const { getSetting } = require('../db');
+
+async function getPexelsKey() {
+  return (process.env.PEXELS_API_KEY || '').trim() || (await getSetting('pexels_api_key'));
+}
+
+router.get('/stock/photos', async (req, res) => {
+  try {
+    const apiKey = await getPexelsKey();
+    if (!apiKey) return res.json({ ok: false, error: 'pexels_not_configured' });
+
+    const q       = (req.query.q || '').trim();
+    const page    = Math.max(1, parseInt(req.query.page) || 1);
+    const perPage = Math.min(30, Math.max(1, parseInt(req.query.per_page) || 15));
+
+    const url = q
+      ? `https://api.pexels.com/v1/search?query=${encodeURIComponent(q)}&per_page=${perPage}&page=${page}`
+      : `https://api.pexels.com/v1/curated?per_page=${perPage}&page=${page}`;
+
+    const r = await fetch(url, { headers: { Authorization: apiKey } });
+    if (!r.ok) return res.status(r.status).json({ ok: false, error: `Pexels API ${r.status}` });
+
+    const data = await r.json();
+    const photos = (data.photos || []).map(p => ({
+      id:               p.id,
+      src_thumb:        p.src.small,
+      src_medium:       p.src.medium,
+      src_large:        p.src.large2x || p.src.large,
+      photographer:     p.photographer,
+      photographer_url: p.photographer_url,
+      alt:              p.alt || '',
+    }));
+
+    return res.json({ ok: true, photos, total_results: data.total_results || 0, page });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+router.post('/stock/photos/download', express.json(), async (req, res) => {
+  try {
+    const apiKey = await getPexelsKey();
+    if (!apiKey) return res.status(400).json({ ok: false, error: 'pexels_not_configured' });
+
+    const { src_url, photographer, photographer_url } = req.body;
+    if (!src_url) return res.status(400).json({ ok: false, error: 'src_url required' });
+
+    const userId   = req.headers['x-user-id']   || 'anon';
+    const tenantId = req.headers['x-tenant-id'] || null;
+
+    const imgRes = await fetch(src_url);
+    if (!imgRes.ok) return res.status(502).json({ ok: false, error: 'Failed to download image' });
+
+    const buffer   = Buffer.from(await imgRes.arrayBuffer());
+    const meta     = await sharp(buffer).metadata();
+    const mimeType = `image/${meta.format === 'jpg' ? 'jpeg' : meta.format || 'jpeg'}`;
+
+    const storedName = `${Date.now()}_${crypto.randomBytes(6).toString('hex')}_pexels.${meta.format || 'jpg'}`;
+    const url        = `/uploads/${storedName}`;
+
+    await storage.upload(buffer, {
+      tenantId, userId, type: 'uploads', filename: storedName, mimeType,
+    });
+
+    await db.prepare(`
+      INSERT INTO media_files
+        (user_id, tenant_id, filename, stored_name, mime_type, file_size, width, height, format_tag, url)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(userId, tenantId, storedName, storedName, mimeType,
+           buffer.length, meta.width || null, meta.height || null, 'stock', url);
+
+    const dataUrl = `data:${mimeType};base64,${buffer.toString('base64')}`;
+    return res.json({
+      ok: true,
+      file: { url, storageKey: storedName, dataUrl },
+      attribution: { photographer, photographer_url, source: 'pexels' },
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+router.get('/stock/icons', async (req, res) => {
+  try {
+    const q     = (req.query.q || '').trim();
+    if (!q) return res.json({ ok: true, icons: [] });
+
+    const limit = Math.min(64, Math.max(1, parseInt(req.query.limit) || 32));
+
+    const r = await fetch(`https://api.iconify.design/search?query=${encodeURIComponent(q)}&limit=${limit}`);
+    if (!r.ok) return res.status(r.status).json({ ok: false, error: `Iconify API ${r.status}` });
+
+    const data = await r.json();
+    const icons = (data.icons || []).map(name => {
+      const [prefix, ...rest] = name.split(':');
+      return { prefix, name: rest.join(':'), fullName: name };
+    });
+
+    return res.json({ ok: true, icons, total: data.total || icons.length });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+router.post('/stock/icons/download', express.json(), async (req, res) => {
+  try {
+    const { prefix, name } = req.body;
+    if (!prefix || !name) return res.status(400).json({ ok: false, error: 'prefix and name required' });
+
+    const userId   = req.headers['x-user-id']   || 'anon';
+    const tenantId = req.headers['x-tenant-id'] || null;
+
+    const svgRes = await fetch(`https://api.iconify.design/${prefix}/${name}.svg?width=512&height=512`);
+    if (!svgRes.ok) return res.status(502).json({ ok: false, error: 'Failed to fetch icon SVG' });
+
+    const svgText = await svgRes.text();
+    const pngBuffer = await sharp(Buffer.from(svgText))
+      .resize(512, 512, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+      .png()
+      .toBuffer();
+
+    const storedName = `${Date.now()}_${crypto.randomBytes(6).toString('hex')}_icon.png`;
+    const url        = `/uploads/${storedName}`;
+
+    await storage.upload(pngBuffer, {
+      tenantId, userId, type: 'uploads', filename: storedName, mimeType: 'image/png',
+    });
+
+    await db.prepare(`
+      INSERT INTO media_files
+        (user_id, tenant_id, filename, stored_name, mime_type, file_size, width, height, format_tag, url)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(userId, tenantId, storedName, storedName, 'image/png',
+           pngBuffer.length, 512, 512, 'icon', url);
+
+    const dataUrl = `data:image/png;base64,${pngBuffer.toString('base64')}`;
+    return res.json({ ok: true, file: { url, storageKey: storedName, dataUrl } });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 module.exports = router;

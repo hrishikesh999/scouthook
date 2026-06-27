@@ -7966,6 +7966,85 @@ html[data-nav-dir="back"] #main-content.spa-entering {
   animation: htpl-spin 0.7s linear infinite;
 }
 
+/* ── Media picker popover ── */
+.html-tpl-img-zone { position: relative; }
+.htpl-img-empty { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.htpl-img-empty-sub { font-size: 11px; color: var(--text-muted, #999); }
+
+.htpl-media-picker {
+  position: absolute; top: 100%; left: 0; right: 0; z-index: 60;
+  margin-top: 6px;
+  background: var(--surface-1, #fff); border: 1px solid var(--border);
+  border-radius: 10px; box-shadow: 0 8px 30px rgba(0,0,0,0.13);
+  overflow: hidden;
+}
+.htpl-mp-tabs {
+  display: flex; border-bottom: 1px solid var(--border);
+}
+.htpl-mp-tab {
+  flex: 1; text-align: center; font-size: 11.5px; padding: 9px 2px;
+  background: none; border: none; border-bottom: 2px solid transparent;
+  color: var(--text-muted, #888); cursor: pointer; transition: color 0.15s;
+  display: flex; align-items: center; justify-content: center; gap: 4px;
+}
+.htpl-mp-tab:hover { color: var(--text-primary, #111); }
+.htpl-mp-tab--active { color: var(--brand, #0f766e); border-bottom-color: var(--brand, #0f766e); font-weight: 600; }
+.htpl-mp-tab svg { width: 14px; height: 14px; flex-shrink: 0; }
+
+.htpl-mp-body { padding: 10px; }
+.htpl-mp-search-wrap { position: relative; margin-bottom: 10px; }
+.htpl-mp-search-icon {
+  position: absolute; left: 9px; top: 50%; transform: translateY(-50%);
+  width: 14px; height: 14px; color: var(--text-muted, #999); pointer-events: none;
+}
+.htpl-mp-search {
+  width: 100%; box-sizing: border-box; padding: 7px 10px 7px 30px;
+  border: 1px solid var(--border); border-radius: 6px; font-size: 12.5px;
+  background: var(--surface-2, #f9fafb); outline: none; color: var(--text-primary, #111);
+}
+.htpl-mp-search:focus { border-color: var(--brand, #0f766e); background: var(--surface-1, #fff); }
+
+.htpl-mp-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px;
+  max-height: 240px; overflow-y: auto; scrollbar-width: thin;
+}
+.htpl-mp-icon-grid { grid-template-columns: repeat(4, 1fr); }
+
+.htpl-mp-thumb {
+  aspect-ratio: 1; border-radius: 6px; overflow: hidden; cursor: pointer;
+  border: 2px solid transparent; transition: border-color 0.15s;
+  background: var(--surface-2, #f3f4f6); display: flex; align-items: center; justify-content: center;
+}
+.htpl-mp-thumb:hover { border-color: var(--brand, #0f766e); }
+.htpl-mp-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.htpl-mp-thumb svg { width: 60%; height: 60%; color: var(--text-primary, #333); }
+
+.htpl-mp-empty {
+  text-align: center; padding: 24px 8px; font-size: 12px; color: var(--text-muted, #999);
+}
+.htpl-mp-loading {
+  text-align: center; padding: 20px 8px; font-size: 12px; color: var(--text-muted, #999);
+}
+.htpl-mp-attribution {
+  font-size: 10.5px; color: var(--text-muted, #999); text-align: center; margin-top: 6px;
+}
+.htpl-mp-attribution a { color: var(--text-muted, #999); text-decoration: underline; }
+
+.htpl-mp-upload-area {
+  text-align: center; padding: 28px 12px; cursor: pointer;
+}
+.htpl-mp-upload-area:hover { background: var(--surface-2, #f9fafb); border-radius: 6px; }
+
+.htpl-mp-chips {
+  display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 10px;
+}
+.htpl-mp-chip {
+  font-size: 11px; padding: 4px 10px; border-radius: 12px;
+  background: var(--surface-2, #f3f4f6); border: 1px solid var(--border);
+  color: var(--text-secondary, #555); cursor: pointer; transition: background 0.15s;
+}
+.htpl-mp-chip:hover { background: var(--brand-light, #e0f2f1); border-color: var(--brand, #0f766e); color: var(--brand, #0f766e); }
+
 .htpl-wand-btn {
   background: none; border: 1px solid var(--border); border-radius: 4px;
   color: var(--brand, #0f766e); cursor: pointer; font-size: 13px;

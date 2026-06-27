@@ -78,6 +78,16 @@
           </div>
         </div>
 
+        <!-- Media section -->
+        <div class="card card--section">
+          <h3 class="section-heading">Media</h3>
+          <div class="field">
+            <label for="pexels_api_key">Pexels API key</label>
+            <input type="password" id="pexels_api_key" name="pexels_api_key" placeholder="From pexels.com/api" autocomplete="off" />
+            <div class="text-muted field-hint">Enables stock photo search in the design editor. Free at <a href="https://www.pexels.com/api/" target="_blank">pexels.com/api</a>.</div>
+          </div>
+        </div>
+
         <!-- Infrastructure section -->
         <div class="card card--section">
           <h3 class="section-heading">Infrastructure</h3>
@@ -95,7 +105,7 @@
   <script>
     const SETTING_KEYS = [
       'anthropic_api_key', 'linkedin_client_id', 'linkedin_client_secret',
-      'linkedin_redirect_uri', 'token_encryption_key', 'redis_url',
+      'linkedin_redirect_uri', 'token_encryption_key', 'redis_url', 'pexels_api_key',
     ];
     let adminPw = '';
 

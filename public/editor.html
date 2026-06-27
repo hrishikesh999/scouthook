@@ -1807,10 +1807,15 @@ function renderHtmlTemplateForm(slots) {
         <label class="field-label">${escHtml(label)}</label>
         <div class="html-tpl-img-zone">
           <div class="html-tpl-img-preview" data-slot="${escHtml(key)}" role="button" tabindex="0">
-            <span style="font-size:12px;color:var(--text-muted)">Click to upload</span>
+            <div class="htpl-img-empty">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--brand,#0f766e)"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+              <span style="font-size:12px;font-weight:500;color:var(--text-primary)">Click to add image</span>
+              <span class="htpl-img-empty-sub">Upload, stock photos, or icons</span>
+            </div>
           </div>
           <input type="file" accept="image/*" data-slot="${escHtml(key)}" hidden>
           <button type="button" class="htpl-remove-bg-btn" data-slot="${escHtml(key)}" hidden>✦ Remove background</button>
+          <div class="htpl-mp-attribution" data-slot="${escHtml(key)}" hidden></div>
         </div>
       </div>`;
       continue;
@@ -1824,10 +1829,15 @@ function renderHtmlTemplateForm(slots) {
         <label class="field-label">${escHtml(label)}</label>
         <div class="html-tpl-img-zone">
           <div class="html-tpl-img-preview" data-slot="${escHtml(effectiveKey)}" role="button" tabindex="0">
-            <span style="font-size:12px;color:var(--text-muted)">Click to upload</span>
+            <div class="htpl-img-empty">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--brand,#0f766e)"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+              <span style="font-size:12px;font-weight:500;color:var(--text-primary)">Click to add image</span>
+              <span class="htpl-img-empty-sub">Upload, stock photos, or icons</span>
+            </div>
           </div>
           <input type="file" accept="image/*" data-slot="${escHtml(effectiveKey)}" hidden>
           <button type="button" class="htpl-remove-bg-btn" data-slot="${escHtml(effectiveKey)}" hidden>✦ Remove background</button>
+          <div class="htpl-mp-attribution" data-slot="${escHtml(effectiveKey)}" hidden></div>
         </div>
       </div>`;
       continue;
@@ -1931,8 +1941,8 @@ function renderHtmlTemplateForm(slots) {
     const slot = zone.dataset.slot;
     const fileInput = formPane.querySelector(`input[type="file"][data-slot="${slot}"]`);
     const bgBtn = formPane.querySelector(`.htpl-remove-bg-btn[data-slot="${slot}"]`);
-    zone.addEventListener('click', () => fileInput?.click());
-    zone.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput?.click(); } });
+    zone.addEventListener('click', () => _openMediaPicker(zone, slot, fileInput, bgBtn));
+    zone.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); _openMediaPicker(zone, slot, fileInput, bgBtn); } });
 
     fileInput?.addEventListener('change', async () => {
       const file = fileInput.files[0];
@@ -2066,6 +2076,309 @@ function renderHtmlTemplateForm(slots) {
       _highlightSlotInIframe(card.dataset.slotKey);
     });
   });
+}
+
+// ─── Media picker popover ───────────────────────────────────────────
+let _activeMediaPicker = null;
+let _pexelsAvailable = null; // null = unchecked, true/false after first probe
+
+function _closeMediaPicker() {
+  if (_activeMediaPicker) {
+    _activeMediaPicker.remove();
+    _activeMediaPicker = null;
+  }
+  document.removeEventListener('keydown', _mediaPickerEscHandler);
+  document.removeEventListener('mousedown', _mediaPickerOutsideHandler);
+}
+
+function _mediaPickerEscHandler(e) { if (e.key === 'Escape') _closeMediaPicker(); }
+function _mediaPickerOutsideHandler(e) {
+  if (_activeMediaPicker && !_activeMediaPicker.contains(e.target) && !e.target.closest('.html-tpl-img-preview')) _closeMediaPicker();
+}
+
+function _mpHeaders() {
+  const h = {};
+  if (typeof getUserId === 'function') h['X-User-Id'] = getUserId();
+  if (typeof getTenantId === 'function') h['X-Tenant-Id'] = getTenantId();
+  return h;
+}
+
+const _MP_TAB_ICONS = {
+  upload: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>',
+  photos: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>',
+  icons: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>',
+  library: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>',
+};
+
+const _ICON_SUGGESTIONS = ['arrow', 'star', 'check', 'heart', 'user', 'chart', 'mail', 'phone', 'globe', 'trophy'];
+
+async function _openMediaPicker(zone, slot, fileInput, bgBtn) {
+  if (zone.querySelector('img')) {
+    fileInput?.click();
+    return;
+  }
+  if (_activeMediaPicker) _closeMediaPicker();
+
+  if (_pexelsAvailable === null) {
+    try {
+      const r = await fetch('/api/media/stock/photos?q=test&per_page=1', { credentials: 'include' });
+      const d = await r.json();
+      _pexelsAvailable = d.ok === true;
+    } catch { _pexelsAvailable = false; }
+  }
+
+  const picker = document.createElement('div');
+  picker.className = 'htpl-media-picker';
+  _activeMediaPicker = picker;
+
+  const tabs = [];
+  tabs.push({ id: 'upload', label: 'Upload', icon: _MP_TAB_ICONS.upload });
+  if (_pexelsAvailable) tabs.push({ id: 'photos', label: 'Photos', icon: _MP_TAB_ICONS.photos });
+  tabs.push({ id: 'icons', label: 'Icons', icon: _MP_TAB_ICONS.icons });
+  tabs.push({ id: 'library', label: 'Library', icon: _MP_TAB_ICONS.library });
+
+  picker.innerHTML = `
+    <div class="htpl-mp-tabs">
+      ${tabs.map((t, i) => `<button class="htpl-mp-tab${i === 0 ? ' htpl-mp-tab--active' : ''}" data-mp-tab="${t.id}">${t.icon} ${t.label}</button>`).join('')}
+    </div>
+    <div class="htpl-mp-body" id="mp-body"></div>
+  `;
+
+  zone.closest('.html-tpl-img-zone').appendChild(picker);
+
+  setTimeout(() => {
+    document.addEventListener('keydown', _mediaPickerEscHandler);
+    document.addEventListener('mousedown', _mediaPickerOutsideHandler);
+  }, 10);
+
+  const body = picker.querySelector('#mp-body');
+
+  function switchTab(tabId) {
+    picker.querySelectorAll('.htpl-mp-tab').forEach(t => t.classList.toggle('htpl-mp-tab--active', t.dataset.mpTab === tabId));
+    if (tabId === 'upload') _mpRenderUpload(body, fileInput);
+    else if (tabId === 'photos') _mpRenderPhotos(body, zone, slot, bgBtn);
+    else if (tabId === 'icons') _mpRenderIcons(body, zone, slot, bgBtn);
+    else if (tabId === 'library') _mpRenderLibrary(body, zone, slot, bgBtn);
+  }
+
+  picker.querySelectorAll('.htpl-mp-tab').forEach(tab => {
+    tab.addEventListener('click', () => switchTab(tab.dataset.mpTab));
+  });
+
+  switchTab('upload');
+}
+
+function _mpRenderUpload(body, fileInput) {
+  body.innerHTML = `<div class="htpl-mp-upload-area">
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--brand,#0f766e);margin-bottom:6px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+    <div style="font-size:13px;font-weight:500;color:var(--text-primary)">Choose a file</div>
+    <div style="font-size:11px;color:var(--text-muted);margin-top:2px">PNG, JPG, WebP, SVG, GIF</div>
+  </div>`;
+  body.querySelector('.htpl-mp-upload-area').addEventListener('click', () => {
+    _closeMediaPicker();
+    fileInput?.click();
+  });
+}
+
+let _mpPhotoDebounce = null;
+function _mpRenderPhotos(body, zone, slot, bgBtn) {
+  body.innerHTML = `
+    <div class="htpl-mp-search-wrap">
+      <svg class="htpl-mp-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      <input type="text" class="htpl-mp-search" placeholder="Search free photos…" autofocus>
+    </div>
+    <div class="htpl-mp-grid" id="mp-photo-grid">
+      <div class="htpl-mp-loading" style="grid-column:1/-1">Loading curated photos…</div>
+    </div>
+    <div class="htpl-mp-attribution" style="display:block">Photos by <a href="https://www.pexels.com" target="_blank" rel="noopener">Pexels</a></div>
+  `;
+
+  const grid = body.querySelector('#mp-photo-grid');
+  const search = body.querySelector('.htpl-mp-search');
+
+  _mpLoadPhotos(grid, '', zone, slot, bgBtn);
+
+  search.addEventListener('input', () => {
+    clearTimeout(_mpPhotoDebounce);
+    _mpPhotoDebounce = setTimeout(() => _mpLoadPhotos(grid, search.value.trim(), zone, slot, bgBtn), 300);
+  });
+}
+
+async function _mpLoadPhotos(grid, query, zone, slot, bgBtn) {
+  grid.innerHTML = '<div class="htpl-mp-loading" style="grid-column:1/-1">Searching…</div>';
+  try {
+    const url = `/api/media/stock/photos?q=${encodeURIComponent(query)}&per_page=15`;
+    const r = await fetch(url, { credentials: 'include' });
+    const data = await r.json();
+    if (!data.ok || !data.photos.length) {
+      grid.innerHTML = '<div class="htpl-mp-empty" style="grid-column:1/-1">No photos found</div>';
+      return;
+    }
+    grid.innerHTML = data.photos.map(p =>
+      `<div class="htpl-mp-thumb" data-photo='${JSON.stringify(p).replace(/'/g, '&#39;')}' title="${(p.alt || p.photographer || '').replace(/"/g, '&quot;')}">
+        <img src="${p.src_thumb}" alt="${(p.alt || '').replace(/"/g, '&quot;')}" loading="lazy">
+      </div>`
+    ).join('');
+
+    grid.querySelectorAll('.htpl-mp-thumb').forEach(thumb => {
+      thumb.addEventListener('click', () => {
+        const photo = JSON.parse(thumb.dataset.photo);
+        _mpSelectPhoto(photo, zone, slot, bgBtn);
+      });
+    });
+  } catch {
+    grid.innerHTML = '<div class="htpl-mp-empty" style="grid-column:1/-1">Failed to load photos</div>';
+  }
+}
+
+async function _mpSelectPhoto(photo, zone, slot, bgBtn) {
+  zone.innerHTML = `<img src="${photo.src_medium}" alt="" style="width:100%;height:100%;object-fit:cover">`;
+  _applySlotToIframe(slot, photo.src_medium, 'image');
+
+  const attrEl = zone.closest('.html-tpl-img-zone')?.querySelector('.htpl-mp-attribution');
+  if (attrEl) {
+    attrEl.innerHTML = `Photo by <a href="${photo.photographer_url}" target="_blank" rel="noopener">${photo.photographer}</a> on <a href="https://www.pexels.com" target="_blank" rel="noopener">Pexels</a>`;
+    attrEl.hidden = false;
+  }
+
+  _closeMediaPicker();
+
+  try {
+    const r = await fetch('/api/media/stock/photos/download', {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json', ..._mpHeaders() },
+      body: JSON.stringify({ src_url: photo.src_large, photographer: photo.photographer, photographer_url: photo.photographer_url }),
+    });
+    const data = await r.json();
+    if (data.ok && data.file) {
+      zone.dataset.storageKey = data.file.storageKey || data.file.url.replace(/^\/uploads\//, '');
+      zone.dataset.originalStorageKey = zone.dataset.storageKey;
+      zone.dataset.originalDataUrl = data.file.dataUrl || photo.src_large;
+      zone.dataset.noBgDataUrl = '';
+      zone.dataset.bgRemoved = '';
+      if (data.file.dataUrl) {
+        zone.innerHTML = `<img src="${data.file.dataUrl}" alt="" style="width:100%;height:100%;object-fit:cover">`;
+        _applySlotToIframe(slot, data.file.dataUrl, 'image');
+      }
+      if (bgBtn) { bgBtn.hidden = false; bgBtn.textContent = '✦ Remove background'; }
+    }
+  } catch { /* non-fatal — preview already shown */ }
+}
+
+let _mpIconDebounce = null;
+function _mpRenderIcons(body, zone, slot, bgBtn) {
+  body.innerHTML = `
+    <div class="htpl-mp-search-wrap">
+      <svg class="htpl-mp-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      <input type="text" class="htpl-mp-search" placeholder="Search 200,000+ icons…" autofocus>
+    </div>
+    <div class="htpl-mp-chips">${_ICON_SUGGESTIONS.map(s => `<button class="htpl-mp-chip">${s}</button>`).join('')}</div>
+    <div class="htpl-mp-grid htpl-mp-icon-grid" id="mp-icon-grid">
+      <div class="htpl-mp-empty" style="grid-column:1/-1">Type to search icons</div>
+    </div>
+    <div class="htpl-mp-attribution" style="display:block">Icons by <a href="https://iconify.design" target="_blank" rel="noopener">Iconify</a></div>
+  `;
+
+  const grid = body.querySelector('#mp-icon-grid');
+  const search = body.querySelector('.htpl-mp-search');
+
+  body.querySelectorAll('.htpl-mp-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      search.value = chip.textContent;
+      _mpLoadIcons(grid, chip.textContent, zone, slot, bgBtn);
+    });
+  });
+
+  search.addEventListener('input', () => {
+    clearTimeout(_mpIconDebounce);
+    _mpIconDebounce = setTimeout(() => {
+      const q = search.value.trim();
+      if (q) _mpLoadIcons(grid, q, zone, slot, bgBtn);
+      else grid.innerHTML = '<div class="htpl-mp-empty" style="grid-column:1/-1">Type to search icons</div>';
+    }, 300);
+  });
+}
+
+async function _mpLoadIcons(grid, query, zone, slot, bgBtn) {
+  grid.innerHTML = '<div class="htpl-mp-loading" style="grid-column:1/-1">Searching…</div>';
+  try {
+    const r = await fetch(`/api/media/stock/icons?q=${encodeURIComponent(query)}&limit=32`, { credentials: 'include' });
+    const data = await r.json();
+    if (!data.ok || !data.icons.length) {
+      grid.innerHTML = '<div class="htpl-mp-empty" style="grid-column:1/-1">No icons found</div>';
+      return;
+    }
+    grid.innerHTML = data.icons.map(ic =>
+      `<div class="htpl-mp-thumb" data-icon-prefix="${ic.prefix}" data-icon-name="${ic.name}" title="${ic.fullName}">
+        <img src="https://api.iconify.design/${ic.prefix}/${ic.name}.svg?width=48&height=48" alt="${ic.fullName}" loading="lazy" style="width:48px;height:48px;object-fit:contain">
+      </div>`
+    ).join('');
+
+    grid.querySelectorAll('.htpl-mp-thumb').forEach(thumb => {
+      thumb.addEventListener('click', () => _mpSelectIcon(thumb.dataset.iconPrefix, thumb.dataset.iconName, zone, slot, bgBtn));
+    });
+  } catch {
+    grid.innerHTML = '<div class="htpl-mp-empty" style="grid-column:1/-1">Failed to load icons</div>';
+  }
+}
+
+async function _mpSelectIcon(prefix, name, zone, slot, bgBtn) {
+  const previewUrl = `https://api.iconify.design/${prefix}/${name}.svg?width=128&height=128`;
+  zone.innerHTML = `<img src="${previewUrl}" alt="${prefix}:${name}" style="width:60%;height:60%;object-fit:contain">`;
+  _closeMediaPicker();
+
+  try {
+    const r = await fetch('/api/media/stock/icons/download', {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json', ..._mpHeaders() },
+      body: JSON.stringify({ prefix, name }),
+    });
+    const data = await r.json();
+    if (data.ok && data.file) {
+      const src = data.file.dataUrl || data.file.url;
+      zone.innerHTML = `<img src="${src}" alt="${prefix}:${name}" style="width:60%;height:60%;object-fit:contain">`;
+      zone.dataset.storageKey = data.file.storageKey || data.file.url.replace(/^\/uploads\//, '');
+      zone.dataset.originalStorageKey = zone.dataset.storageKey;
+      zone.dataset.originalDataUrl = src;
+      zone.dataset.noBgDataUrl = '';
+      zone.dataset.bgRemoved = '';
+      _applySlotToIframe(slot, src, 'image');
+      if (bgBtn) { bgBtn.hidden = false; bgBtn.textContent = '✦ Remove background'; }
+    }
+  } catch { /* preview already shown */ }
+}
+
+async function _mpRenderLibrary(body, zone, slot, bgBtn) {
+  body.innerHTML = '<div class="htpl-mp-loading">Loading your media…</div>';
+  try {
+    const r = await fetch('/api/media', { credentials: 'include' });
+    const data = await r.json();
+    const files = (data.files || []).filter(f => f.mime_type && f.mime_type.startsWith('image/'));
+    if (!files.length) {
+      body.innerHTML = '<div class="htpl-mp-empty">No images in your library yet</div>';
+      return;
+    }
+    body.innerHTML = `<div class="htpl-mp-grid" id="mp-lib-grid">
+      ${files.slice(0, 30).map(f => `<div class="htpl-mp-thumb" data-lib-url="${f.url}" data-lib-key="${f.stored_name || ''}" title="${f.filename || ''}">
+        <img src="${f.url}" alt="${f.filename || ''}" loading="lazy">
+      </div>`).join('')}
+    </div>`;
+
+    body.querySelectorAll('.htpl-mp-thumb').forEach(thumb => {
+      thumb.addEventListener('click', async () => {
+        const fileUrl = thumb.dataset.libUrl;
+        const key = thumb.dataset.libKey;
+        zone.innerHTML = `<img src="${fileUrl}" alt="" style="width:100%;height:100%;object-fit:cover">`;
+        zone.dataset.storageKey = key || fileUrl.replace(/^\/uploads\//, '');
+        zone.dataset.originalStorageKey = zone.dataset.storageKey;
+        _applySlotToIframe(slot, fileUrl, 'image');
+        if (bgBtn) { bgBtn.hidden = false; bgBtn.textContent = '✦ Remove background'; }
+        _closeMediaPicker();
+      });
+    });
+  } catch {
+    body.innerHTML = '<div class="htpl-mp-empty">Failed to load library</div>';
+  }
 }
 
 function _buildRepeatingCard(slotKey, fields, item, idx, canRemove) {

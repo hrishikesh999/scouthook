@@ -134,8 +134,14 @@ function fillTextSlot(html, key, value) {
 
 // ---------------------------------------------------------------------------
 // injectColorSlots
-// Prepends a <style>:root { ... }</style> block before </head>.
-// Keys are e.g. "color:accent" → CSS var "--accent".
+// Injects a <script> before </body> that applies color overrides via
+// element.style.setProperty() — the same DOM API the live preview uses.
+//
+// Why not a <style>:root{} block?  Templates define CSS variables as inline
+// styles on a container div (e.g. style="--accent:#e94560").  A :root{}
+// rule targets <html>, not that div, so the div's inline declaration wins
+// and children inherit the original colors.  setProperty() modifies the
+// inline style in-place, matching what the user saw in the editor preview.
 // ---------------------------------------------------------------------------
 
 function injectColorSlots(html, colorSlots) {
@@ -145,22 +151,29 @@ function injectColorSlots(html, colorSlots) {
   const valid = entries.filter(([, v]) => isValidColor(v));
   if (valid.length === 0) return html;
 
-  const vars = valid.map(([k, v]) => {
-    // "color:accent" → "--accent"
-    const varName = '--' + k.replace(/^color:/, '');
-    return `  ${varName}: ${v};`;
-  }).join('\n');
-  const styleBlock = `<style>:root {\n${vars}\n}</style>\n`;
+  const overrides = {};
+  for (const [k, v] of valid) {
+    overrides['--' + k.replace(/^color:/, '')] = v;
+  }
 
-  const headClose = html.indexOf('</head>');
-  if (headClose !== -1) {
-    return html.slice(0, headClose) + styleBlock + html.slice(headClose);
+  const script = `<script>(function(){`
+    + `var o=${JSON.stringify(overrides)};`
+    + `document.querySelectorAll("[style]").forEach(function(el){`
+    +   `for(var k in o){if(el.style.getPropertyValue(k))el.style.setProperty(k,o[k])}`
+    + `});`
+    + `var r=document.documentElement;`
+    + `for(var k in o){r.style.setProperty(k,o[k])}`
+    + `})()</script>\n`;
+
+  const bodyClose = html.indexOf('</body>');
+  if (bodyClose !== -1) {
+    return html.slice(0, bodyClose) + script + html.slice(bodyClose);
   }
-  const bodyOpen = html.indexOf('<body');
-  if (bodyOpen !== -1) {
-    return html.slice(0, bodyOpen) + styleBlock + html.slice(bodyOpen);
+  const htmlClose = html.indexOf('</html>');
+  if (htmlClose !== -1) {
+    return html.slice(0, htmlClose) + script + html.slice(htmlClose);
   }
-  return styleBlock + html;
+  return html + script;
 }
 
 // ---------------------------------------------------------------------------

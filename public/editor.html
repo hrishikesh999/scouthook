@@ -504,6 +504,18 @@ function escHtml(str) {
   return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+function _parseManifestFromHtml(html) {
+  const tag = '<script type="application/json" id="template-meta">';
+  const alt = "<script type='application/json' id='template-meta'>";
+  let start = html.indexOf(tag);
+  let tl = tag.length;
+  if (start === -1) { start = html.indexOf(alt); tl = alt.length; }
+  if (start === -1) return null;
+  const end = html.indexOf('</script>', start + tl);
+  if (end === -1) return null;
+  try { return JSON.parse(html.slice(start + tl, end).trim()); } catch { return null; }
+}
+
 function _tplThumbError(img, initials) {
   img.onerror = null;
   const div = document.createElement('div');
@@ -1464,6 +1476,13 @@ async function _selectHtmlTemplate(templateId) {
     if (!htmlRes.ok) throw new Error('Could not load template HTML');
     _htmlTplTemplateHtml = await htmlRes.text();
     _htmlTplExtractedSlots = {};
+
+    // Parse manifest from the HTML itself (source of truth) —
+    // the DB column may be stale or empty
+    const htmlManifest = _parseManifestFromHtml(_htmlTplTemplateHtml);
+    if (htmlManifest && Object.keys(htmlManifest.slots || {}).length > 0) {
+      _htmlTplSelectedMeta = { ..._htmlTplSelectedMeta, slot_manifest: htmlManifest };
+    }
 
     _renderTemplateIframe(_htmlTplTemplateHtml, null);
     renderHtmlTemplateForm(null);

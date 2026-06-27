@@ -596,16 +596,37 @@
       });
     });
 
-    // Slot delete
+    // Slot delete — removes data-slot from HTML + slot from state
     list.querySelectorAll('.slot-card__delete').forEach(btn => {
       btn.addEventListener('click', e => {
         e.stopPropagation();
         const i = parseInt(btn.dataset.i);
-        if (i >= 0 && i < _slotState.length) {
-          _slotState.splice(i, 1);
-          renderSlotCards();
-          renderPreview();
+        const s = _slotState[i];
+        if (!s) return;
+        if (!confirm(`Remove slot "${s.key}" from this template?`)) return;
+
+        // Remove data-slot attribute from the HTML
+        try {
+          const doc = new DOMParser().parseFromString(_templateHtml, 'text/html');
+          const el = doc.querySelector(`[data-slot="${s.key}"]`);
+          if (el) {
+            el.removeAttribute('data-slot');
+            el.removeAttribute('data-slot-container');
+            el.removeAttribute('data-slot-item');
+            _templateHtml = '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
+            document.getElementById('f-html').value = _templateHtml;
+            const rawHtml = document.getElementById('raw-html');
+            if (rawHtml) rawHtml.value = _templateHtml;
+          }
+        } catch (err) {
+          console.warn('[slot-delete] HTML update failed:', err.message);
         }
+
+        // Remove from state
+        _slotState.splice(i, 1);
+        renderSlotCards();
+        updateManifest();
+        renderPreview();
       });
     });
 
@@ -624,12 +645,29 @@
         const commit = () => {
           const newKey = input.value.trim();
           if (newKey && newKey !== s.key && !_slotState.some((x, j) => j !== i && x.key === newKey)) {
+            const oldKey = s.key;
+            // Update data-slot in the HTML
+            try {
+              const doc = new DOMParser().parseFromString(_templateHtml, 'text/html');
+              const el = doc.querySelector(`[data-slot="${oldKey}"]`);
+              if (el) {
+                el.setAttribute('data-slot', newKey);
+                _templateHtml = '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
+                document.getElementById('f-html').value = _templateHtml;
+                const rawHtml = document.getElementById('raw-html');
+                if (rawHtml) rawHtml.value = _templateHtml;
+              }
+            } catch (err) {
+              console.warn('[slot-rename] HTML update failed:', err.message);
+            }
             s.key = newKey;
             if (newKey.startsWith('color:')) s.type = 'color';
             else if (newKey.startsWith('image:')) s.type = 'image';
+            else if (!newKey.startsWith('color:') && !newKey.startsWith('image:')) s.type = 'text';
           }
           renderSlotCards();
           updateManifest();
+          renderPreview();
         };
         input.addEventListener('blur', commit);
         input.addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); commit(); } if (ev.key === 'Escape') { renderSlotCards(); } });

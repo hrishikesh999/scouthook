@@ -593,13 +593,16 @@
       card.addEventListener('click', () => {
         _activeSlotKey = card.dataset.slotKey;
         list.querySelectorAll('.slot-card').forEach(c => c.classList.toggle('slot-card--active', c === card));
+        _hideColorInspectBar();
         if (_activeSlotKey.startsWith('color:')) {
           const varName = _activeSlotKey.slice('color:'.length);
           const iframe = document.getElementById('admin-tpl-iframe');
           if (iframe?.contentWindow) {
-            iframe.contentWindow.postMessage({ type: 'admin-highlight-var', varName }, '*');
+            iframe.contentWindow.postMessage({ type: 'admin-color-inspect', varName }, '*');
           }
         } else {
+          const iframe = document.getElementById('admin-tpl-iframe');
+          if (iframe?.contentWindow) iframe.contentWindow.postMessage({ type: 'admin-color-inspect', varName: null }, '*');
           highlightSlotInPreview(_activeSlotKey);
         }
       });
@@ -781,6 +784,16 @@
           var el = e.target;
           while (el && el !== document.body && el.tagName === 'SPAN' && !el.getAttribute('data-slot')) el = el.parentElement;
           if (!el || el === document.body) return;
+          if (el.classList.contains('color-inspect-highlight')) {
+            window.parent.postMessage({
+              type: 'admin-color-element-click',
+              selector: buildSelector(el),
+              tag: el.tagName,
+              text: (el.textContent || '').trim().slice(0, 40),
+              style: el.getAttribute('style') || ''
+            }, '*');
+            return;
+          }
           document.querySelectorAll('.slot-active, .slot-highlight').forEach(function(x) { x.classList.remove('slot-active'); x.classList.remove('slot-highlight'); });
           el.classList.add('slot-active');
           var existing = el.getAttribute('data-slot');
@@ -812,6 +825,77 @@
             setTimeout(function() { root.style.setProperty('--' + d.varName, orig || ''); }, 600);
             setTimeout(function() { root.style.setProperty('--' + d.varName, '#FEF08A'); }, 900);
             setTimeout(function() { root.style.setProperty('--' + d.varName, orig || ''); }, 1200);
+          } else if (d.type === 'admin-color-inspect') {
+            document.querySelectorAll('.color-inspect-highlight').forEach(function(x) {
+              x.classList.remove('color-inspect-highlight');
+              x.style.outline = '';
+            });
+            if (!d.varName) return;
+            var needle = 'var(--' + d.varName + ')';
+            var allEls = document.body.querySelectorAll('*');
+            var found = [];
+            allEls.forEach(function(el) {
+              if (el.tagName === 'STYLE' || el.tagName === 'SCRIPT' || el.tagName === 'LINK') return;
+              var inlineStyle = el.getAttribute('style') || '';
+              if (inlineStyle.indexOf(needle) !== -1) { found.push(el); return; }
+              var cs = window.getComputedStyle(el);
+              var props = ['color','background-color','background','border-color','border','box-shadow','fill','stroke'];
+              for (var p = 0; p < props.length; p++) {
+                var raw = el.style.getPropertyValue(props[p]);
+                if (raw && raw.indexOf(needle) !== -1) { found.push(el); return; }
+              }
+            });
+            var styleTag = document.querySelector('style');
+            if (styleTag) {
+              var css = styleTag.textContent || '';
+              var re = new RegExp('[.#]?([\\w-]+)\\s*\\{[^}]*' + needle.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&') + '[^}]*\\}', 'g');
+              var m;
+              while ((m = re.exec(css)) !== null) {
+                var sel = m[0].match(/^([^{]+)/);
+                if (sel) try { document.querySelectorAll(sel[1].trim()).forEach(function(el) { if (found.indexOf(el) === -1) found.push(el); }); } catch(e) {}
+              }
+            }
+            found.forEach(function(el) {
+              el.classList.add('color-inspect-highlight');
+              el.style.outline = '3px solid #0f766e';
+              el.style.outlineOffset = '2px';
+            });
+            window.parent.postMessage({ type: 'admin-color-inspect-count', varName: d.varName, count: found.length }, '*');
+          } else if (d.type === 'admin-color-reassign') {
+            var needle = 'var(--' + d.fromVar + ')';
+            var replacement = 'var(--' + d.toVar + ')';
+            var sel = d.selector;
+            var el = null;
+            try { el = document.querySelector(sel); } catch(e) {}
+            if (!el) return;
+            var inl = el.getAttribute('style') || '';
+            if (inl.indexOf(needle) !== -1) {
+              el.setAttribute('style', inl.split(needle).join(replacement));
+            }
+            var styleTag = document.querySelector('style');
+            if (styleTag) {
+              styleTag.textContent = (styleTag.textContent || '').split(needle).join(replacement);
+            }
+            el.classList.remove('color-inspect-highlight');
+            el.style.outline = '';
+            el.style.outlineOffset = '';
+            var html = '<!DOCTYPE html>\\n' + document.documentElement.outerHTML;
+            window.parent.postMessage({ type: 'admin-color-reassign-done', html: html, selector: sel }, '*');
+          } else if (d.type === 'admin-color-remove-var') {
+            var needle = 'var(--' + d.varName + ')';
+            var sel = d.selector;
+            var el = null;
+            try { el = document.querySelector(sel); } catch(e) {}
+            if (!el) return;
+            var cs = window.getComputedStyle(el);
+            var inl = el.getAttribute('style') || '';
+            var parts = inl.split(';').filter(function(p) { return p.indexOf(needle) === -1; });
+            el.setAttribute('style', parts.join(';'));
+            el.classList.remove('color-inspect-highlight');
+            el.style.outline = '';
+            el.style.outlineOffset = '';
+            var html = '<!DOCTYPE html>\\n' + document.documentElement.outerHTML;
+            window.parent.postMessage({ type: 'admin-color-reassign-done', html: html, selector: sel }, '*');
           }
         });
       <\/script>`;
@@ -918,8 +1002,108 @@
       if (e.data.selector) _showExistingSlotPopover(e.data);
     } else if (e.data?.type === 'slot-add-request') {
       _showAddSlotPopover(e.data);
+    } else if (e.data?.type === 'admin-color-inspect-count') {
+      _showColorInspectBar(e.data.varName, e.data.count);
+    } else if (e.data?.type === 'admin-color-element-click') {
+      _showColorReassignPopover(e.data);
+    } else if (e.data?.type === 'admin-color-reassign-done') {
+      _templateHtml = e.data.html;
+      document.getElementById('f-html').value = _templateHtml;
+      const rawHtml = document.getElementById('raw-html');
+      if (rawHtml) rawHtml.value = _templateHtml;
+      updateManifest();
     }
   });
+
+  let _colorInspectVarName = null;
+
+  function _showColorInspectBar(varName, count) {
+    _colorInspectVarName = varName;
+    let bar = document.getElementById('color-inspect-bar');
+    if (!bar) {
+      bar = document.createElement('div');
+      bar.id = 'color-inspect-bar';
+      bar.style.cssText = 'background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:.78rem;color:#166534;display:flex;align-items:center;gap:8px;justify-content:space-between';
+      const slotsPanel = document.getElementById('config-slots');
+      slotsPanel.insertBefore(bar, slotsPanel.querySelector('.config-slots-title'));
+    }
+    const otherColors = _slotState.filter(s => s.key.startsWith('color:') && s.key !== 'color:' + varName).map(s => s.key.slice('color:'.length));
+    bar.innerHTML = `<div><strong>--${varName}</strong> used on <strong>${count}</strong> element${count !== 1 ? 's' : ''}. Click one in preview to reassign.</div>
+      <button type="button" onclick="this.closest('#color-inspect-bar').remove(); var f=document.getElementById('admin-tpl-iframe'); if(f?.contentWindow) f.contentWindow.postMessage({type:'admin-color-inspect',varName:null},'*')" style="background:none;border:none;cursor:pointer;font-size:16px;color:#166534;padding:0 4px">&times;</button>`;
+    bar.hidden = false;
+  }
+
+  function _hideColorInspectBar() {
+    const bar = document.getElementById('color-inspect-bar');
+    if (bar) bar.hidden = true;
+    _colorInspectVarName = null;
+  }
+
+  function _showColorReassignPopover(data) {
+    if (!_colorInspectVarName) return;
+    let popover = document.getElementById('color-reassign-popover');
+    if (popover) popover.remove();
+
+    const otherColors = _slotState
+      .filter(s => s.key.startsWith('color:') && s.key.slice('color:'.length) !== _colorInspectVarName)
+      .map(s => ({ varName: s.key.slice('color:'.length), color: s.config.default || '#cccccc' }));
+
+    popover = document.createElement('div');
+    popover.id = 'color-reassign-popover';
+    popover.style.cssText = 'background:var(--surface-1,#fff);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.15);padding:12px;margin-bottom:10px;position:relative';
+
+    const label = data.tag + (data.text ? ': "' + data.text.slice(0, 30) + '"' : '');
+    popover.innerHTML = `
+      <div style="font-size:.75rem;color:var(--text-muted);margin-bottom:4px">Element: <strong>${label}</strong></div>
+      <div style="font-size:.78rem;font-weight:600;margin-bottom:8px">Currently uses <code style="background:#f3f4f6;padding:2px 6px;border-radius:4px;font-size:.72rem">--${_colorInspectVarName}</code></div>
+      <div style="font-size:.72rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">Reassign to</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">
+        ${otherColors.map(c => `<button type="button" class="cr-option" data-var="${c.varName}" style="display:flex;align-items:center;gap:5px;padding:5px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface-2,#f9fafb);cursor:pointer;font-size:.75rem;transition:border-color .15s">
+          <span style="width:14px;height:14px;border-radius:3px;background:${c.color};border:1px solid rgba(0,0,0,0.1);flex-shrink:0"></span>
+          --${c.varName}
+        </button>`).join('')}
+      </div>
+      <div style="display:flex;gap:6px">
+        <button type="button" id="cr-remove" style="font-size:.72rem;padding:4px 10px;border:1px solid #fca5a5;border-radius:5px;background:#fef2f2;color:#991b1b;cursor:pointer">Remove variable</button>
+        <div style="flex:1"></div>
+        <button type="button" id="cr-cancel" style="font-size:.72rem;padding:4px 10px;border:1px solid var(--border);border-radius:5px;background:none;cursor:pointer;color:var(--text-muted)">Cancel</button>
+      </div>
+    `;
+
+    const slotsPanel = document.getElementById('config-slots');
+    const inspectBar = document.getElementById('color-inspect-bar');
+    slotsPanel.insertBefore(popover, inspectBar?.nextSibling || slotsPanel.querySelector('.config-slots-title'));
+
+    popover.querySelectorAll('.cr-option').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const toVar = btn.dataset.var;
+        const iframe = document.getElementById('admin-tpl-iframe');
+        if (iframe?.contentWindow) {
+          iframe.contentWindow.postMessage({ type: 'admin-color-reassign', fromVar: _colorInspectVarName, toVar, selector: data.selector }, '*');
+        }
+        popover.remove();
+        // Re-inspect to update count
+        setTimeout(() => {
+          const iframe = document.getElementById('admin-tpl-iframe');
+          if (iframe?.contentWindow) iframe.contentWindow.postMessage({ type: 'admin-color-inspect', varName: _colorInspectVarName }, '*');
+        }, 100);
+      });
+    });
+
+    popover.querySelector('#cr-remove').addEventListener('click', () => {
+      const iframe = document.getElementById('admin-tpl-iframe');
+      if (iframe?.contentWindow) {
+        iframe.contentWindow.postMessage({ type: 'admin-color-remove-var', varName: _colorInspectVarName, selector: data.selector }, '*');
+      }
+      popover.remove();
+      setTimeout(() => {
+        const iframe = document.getElementById('admin-tpl-iframe');
+        if (iframe?.contentWindow) iframe.contentWindow.postMessage({ type: 'admin-color-inspect', varName: _colorInspectVarName }, '*');
+      }, 100);
+    });
+
+    popover.querySelector('#cr-cancel').addEventListener('click', () => popover.remove());
+  }
 
   function _suggestSlotKey(tag, text) {
     const t = (text || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();

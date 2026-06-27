@@ -47,8 +47,8 @@ router.get('/:id/thumbnail', async (req, res) => {
     if (!row?.thumbnail_r2_key) return res.status(404).end();
     const buf = await storage.downloadAdmin(row.thumbnail_r2_key);
     res.set('Content-Type', 'image/png').set('Cache-Control', 'public, max-age=3600').send(buf);
-  } catch (err) {
-    res.status(500).json({ ok: false, error: err.message });
+  } catch {
+    res.status(404).end();
   }
 });
 

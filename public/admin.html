@@ -236,19 +236,19 @@
       const r = await fetch('/admin/diagnostics', { headers: { 'X-Admin-Password': adminPw } });
       const data = await r.json();
       if (!data.ok) return;
-      const counts = { pro: 0, trialing: 0, free: 0, canceled: 0 };
+      const counts = { pro: 0, trialing: 0, expired: 0, canceled: 0 };
       for (const u of data.users) {
-        const s = u.status || 'free';
-        const p = u.plan || 'free';
+        const s = u.status || 'expired';
+        const p = u.plan || 'expired';
         if (s === 'active' && p === 'pro') counts.pro++;
         else if (s === 'trialing') counts.trialing++;
         else if (s === 'canceled') counts.canceled++;
-        else counts.free++;
+        else counts.expired++;
       }
       renderDonut('chart-plans', [
         { label: 'Pro', value: counts.pro, color: COLORS.primary },
         { label: 'Trialing', value: counts.trialing, color: COLORS.amber },
-        { label: 'Free', value: counts.free, color: COLORS.muted },
+        { label: 'Expired', value: counts.expired, color: COLORS.muted },
         { label: 'Canceled', value: counts.canceled, color: COLORS.error },
       ]);
     }

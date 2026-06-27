@@ -92,8 +92,8 @@ router.post('/', requireAuth, async (req, res) => {
     const sub = await db.prepare(
       'SELECT plan, status, extra_workspaces FROM user_subscriptions WHERE user_id = ?'
     ).get(req.userId);
-    const plan = (sub?.status === 'active' || sub?.status === 'trialing') ? (sub.plan || 'free') : 'free';
-    const WORKSPACE_LIMITS = { free: 1, solo: 1, pro: 2 };
+    const plan = (sub?.status === 'active' || sub?.status === 'trialing') ? (sub.plan || 'expired') : 'expired';
+    const WORKSPACE_LIMITS = { expired: 0, solo: 1, pro: 2 };
     const baseLimit = WORKSPACE_LIMITS[plan] ?? 1;
     const limit = plan === 'pro' ? baseLimit + (sub?.extra_workspaces || 0) : baseLimit;
 

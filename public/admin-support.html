@@ -108,7 +108,7 @@
 
     function planBadge(plan, subStatus) {
       if (subStatus === 'active' && plan === 'pro') return `<span class="badge badge--pro">Pro</span>`;
-      return `<span class="badge badge--free">${esc(plan || 'Free')}</span>`;
+      return `<span class="badge badge--free">${esc(plan || 'Expired')}</span>`;
     }
 
     async function loadTickets(status) {

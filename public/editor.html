@@ -319,8 +319,8 @@
       </div>
     </div>
 
-    <!-- Upgrade note (free plan only) -->
-    <p class="free-upgrade-note">Scheduling requires a paid plan. <button type="button" onclick="window.PricingModal?.open({ feature: 'scheduling' })" class="free-upgrade-link">Upgrade →</button></p>
+    <!-- Upgrade note (non-Pro users) -->
+    <p class="free-upgrade-note">Scheduling requires a Pro plan. <button type="button" onclick="window.PricingModal?.open({ feature: 'scheduling' })" class="free-upgrade-link">Upgrade →</button></p>
 
     <!-- Publish now section -->
     <button id="publish-now-btn" class="btn-publish-now">
@@ -1160,12 +1160,12 @@ function populateModalAccount() {
   }
 }
 
-function openModal(freePlan = false) {
+function openModal(limitedPlan = false) {
   if (scheduleEditLocked) return;
   const modal = document.getElementById('schedule-modal');
   const ov    = document.getElementById('overlay');
-  if (freePlan) modal.classList.add('modal--publish-only');
-  else          modal.classList.remove('modal--publish-only');
+  if (limitedPlan) modal.classList.add('modal--publish-only');
+  else             modal.classList.remove('modal--publish-only');
   modal.classList.add('visible');
   modal.setAttribute('aria-hidden', 'false');
   ov.classList.add('visible');
@@ -2816,9 +2816,9 @@ function init() {
   }
 
   fetch('/api/billing/subscription', { credentials: 'include' })
-    .then(r => r.ok ? r.json() : { plan: 'free' })
-    .then(d => { userPlan = d.plan || 'free'; })
-    .catch(() => { userPlan = 'free'; });
+    .then(r => r.ok ? r.json() : { plan: 'expired' })
+    .then(d => { userPlan = d.plan || 'expired'; })
+    .catch(() => { userPlan = 'expired'; });
 
   checkLinkedInStatus();
   loadPost(postId);

@@ -59,7 +59,7 @@
       height: 3px;
       background: linear-gradient(90deg, #0D9488, #10B981);
     }
-    .plan-tier-bar.free { background: var(--border); }
+    .plan-tier-bar.expired { background: var(--border); }
 
     .plan-main-row {
       display: flex;
@@ -111,7 +111,7 @@
     .status-pill.trialing { background: rgba(13,148,136,0.10); color: var(--brand); }
     .status-pill.past_due { background: rgba(217,119,6,0.10);  color: #B45309; }
     .status-pill.canceled { background: rgba(220,38,38,0.08);  color: #DC2626; }
-    .status-pill.free     { background: var(--bg-pill);         color: var(--text-muted); }
+    .status-pill.expired  { background: var(--bg-pill);         color: var(--text-muted); }
 
     .plan-price-block { text-align: right; flex-shrink: 0; }
     .plan-price {

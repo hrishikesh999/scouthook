@@ -936,7 +936,7 @@ async function syncExpiredSubscriptions() {
           const sub = await db.prepare(
             'SELECT plan, extra_workspaces FROM user_subscriptions WHERE user_id = ?'
           ).get(row.user_id);
-          await enforceWorkspaceLimitGrace(row.user_id, sub?.plan ?? 'free', sub?.extra_workspaces ?? 0);
+          await enforceWorkspaceLimitGrace(row.user_id, sub?.plan ?? 'expired', sub?.extra_workspaces ?? 0);
         }
       } catch (err) {
         console.error('[billing-sync-cron] failed for', row.user_id, err.message);

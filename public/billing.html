@@ -86,11 +86,11 @@
 
           <!-- ── Card 1: Current Plan ───────────────────── -->
           <div class="billing-card" id="plan-card">
-            <div id="plan-tier-bar" class="plan-tier-bar free"></div>
+            <div id="plan-tier-bar" class="plan-tier-bar expired"></div>
 
             <div class="billing-card-header">
               <span class="billing-card-title">Current plan</span>
-              <span id="status-pill" class="status-pill free"><span class="status-dot"></span><span id="status-label">Free</span></span>
+              <span id="status-pill" class="status-pill expired"><span class="status-dot"></span><span id="status-label">Expired</span></span>
             </div>
 
             <div class="billing-card-body">
@@ -104,7 +104,7 @@
               <div class="plan-main-row">
                 <div class="plan-name-block">
                   <div class="plan-name">
-                    <span id="plan-name">Free</span>
+                    <span id="plan-name">No plan</span>
                     <span id="plan-tier-badge" class="plan-tier-badge" style="display:none"></span>
                   </div>
                   <span id="plan-sub" class="field-helper" style="margin-top:0"></span>
@@ -205,7 +205,7 @@
 
               <!-- Free nudge -->
               <div id="usage-upgrade-nudge" class="usage-nudge" style="display:none">
-                <span>Free plan — upgrade for unlimited generations, visuals, and more.</span>
+                <span>Subscribe to Pro for unlimited generations, visuals, and more.</span>
                 <button type="button" id="btn-upgrade-nudge">Upgrade to Pro</button>
               </div>
 
@@ -443,7 +443,7 @@
 
       // ── Tier bar color ─────────────────────────────────────
       const tierBar = document.getElementById('plan-tier-bar');
-      if (isPro) tierBar.classList.replace('free', 'pro') || tierBar.classList.remove('free');
+      if (isPro) tierBar.classList.replace('expired', 'pro') || tierBar.classList.remove('expired');
 
       // ── Status pill ────────────────────────────────────────
       const statusPill  = document.getElementById('status-pill');
@@ -508,11 +508,11 @@
         }
 
       } else {
-        // Free plan
-        statusPill.className = 'status-pill free';
-        statusLabel.textContent = 'Free plan';
-        document.getElementById('plan-name').textContent = 'Free';
-        document.getElementById('plan-sub').textContent = 'Limited features - upgrade to unlock everything.';
+        // Expired / no plan
+        statusPill.className = 'status-pill expired';
+        statusLabel.textContent = 'No active plan';
+        document.getElementById('plan-name').textContent = 'No plan';
+        document.getElementById('plan-sub').textContent = 'Subscribe to Pro to unlock all features.';
         document.getElementById('free-actions').style.display = '';
       }
 
@@ -542,7 +542,7 @@
         } else {
           const czText = document.getElementById('cancel-zone-text');
           czText.textContent = sub.current_period_end
-            ? `Your subscription renews automatically on ${fmt(sub.current_period_end)}. You can cancel anytime, and you'll keep Pro access until the end of your billing period, then move to the Free plan.`
+            ? `Your subscription renews automatically on ${fmt(sub.current_period_end)}. You can cancel anytime, and you'll keep Pro access until the end of your billing period.`
             : `You can cancel anytime, and you'll keep Pro access until the end of your billing period.`;
           document.getElementById('cancel-zone').style.display = '';
         }
@@ -550,7 +550,7 @@
         if (isCanceled && sub.current_period_end) {
           document.getElementById('expired-info').style.display = '';
           document.getElementById('expired-info-text').textContent =
-            `Your Pro subscription ended on ${fmt(sub.current_period_end)}. You are now on the Free plan.`;
+            `Your Pro subscription ended on ${fmt(sub.current_period_end)}. Subscribe again to restore access.`;
         }
         document.getElementById('upgrade-cta').style.display = '';
       }
@@ -599,8 +599,8 @@
       const body = document.getElementById('cancel-modal-body');
       const periodEnd = _subData?.current_period_end;
       body.textContent = periodEnd
-        ? `You'll keep Pro access until ${fmt(periodEnd)}. After that, your account switches to the Free plan. This cannot be undone within the billing period.`
-        : 'You\'ll keep Pro access until the end of this billing period, then switch to the Free plan.';
+        ? `You'll keep Pro access until ${fmt(periodEnd)}. After that, your account will be paused until you resubscribe.`
+        : 'You\'ll keep Pro access until the end of this billing period. After that, your account will be paused.';
       document.getElementById('cancel-error').style.display = 'none';
       document.getElementById('cancel-modal').classList.add('open');
     }
@@ -638,7 +638,7 @@
               const el = document.getElementById(id);
               if (el) el.style.display = 'none';
             });
-          document.getElementById('plan-tier-bar').className = 'plan-tier-bar free';
+          document.getElementById('plan-tier-bar').className = 'plan-tier-bar expired';
           await render(d2, _priceMap);
         } else {
           errEl.innerHTML = 'Could not cancel. Please try again or <a href="/help.html">get help</a>.';
@@ -778,7 +778,7 @@
           _subData = freshSub;
           // Reset toggleable elements before re-render. plan-tier-bar class is
           // intentionally NOT reset here — render() sets it based on the real plan,
-          // so pre-setting it to 'free' would cause a visible flash for Pro users.
+          // so pre-setting it to 'expired' would cause a visible flash for Pro users.
           ['canceled-banner','pro-actions','free-actions','plan-price-block','renewal-line',
            'plan-tier-badge','usage-upgrade-nudge','cancel-zone','canceled-info','expired-info','upgrade-cta',
            'trial-expired-banner','ws-grace-alert','ws-add-row','ws-upsell-note']
@@ -800,7 +800,7 @@
         // await /api/billing/sync *before* fetching subscription state.
         // Without this, the DB still shows Free (the keepalive sync from
         // pricing-modal.js can take up to ~7 s to poll Paddle) and the
-        // billing page would incorrectly render the Free plan.
+        // billing page would incorrectly render as expired.
         if (params.get('checkout') === 'success') {
           document.getElementById('success-banner').style.display = '';
           window.history.replaceState({}, '', '/billing.html');
@@ -831,7 +831,7 @@
         await render(d, _priceMap);
 
         // Auto-open checkout for returning users arriving via "Start with Pro" on signup page.
-        // Guard: only fires when on Free plan to prevent accidental double-upgrade.
+        // Guard: only fires when not on Pro to prevent accidental double-upgrade.
         const upgradeParams = new URLSearchParams(window.location.search);
         if (upgradeParams.get('upgrade') === '1' && d.plan !== 'pro') {
           window.history.replaceState({}, '', '/billing.html');

@@ -255,7 +255,7 @@ router.post('/sync-subscription', requireAdminPassword, (req, res) => {
     }
 
     const priceId = subscription.items?.[0]?.price?.id ?? null;
-    const plan    = !priceId ? 'pro' : (proPriceIds.includes(priceId) ? 'pro' : 'free');
+    const plan    = !priceId ? 'pro' : (proPriceIds.includes(priceId) ? 'pro' : 'expired');
 
     await upsertSubscription({
       userId,
@@ -287,7 +287,7 @@ router.post('/sync-subscription', requireAdminPassword, (req, res) => {
       if (['solo', 'pro'].includes(plan) && ['active', 'trialing'].includes(subscription.status)) {
         mailerlite.upgradeSubscriberToPaid(user.email, user.name).catch(() => {});
       } else if (['canceled', 'past_due', 'paused'].includes(subscription.status)) {
-        mailerlite.downgradeSubscriberToFree(user.email, user.name).catch(() => {});
+        mailerlite.downgradeSubscriber(user.email, user.name).catch(() => {});
       }
     }).catch(() => {});
 
@@ -333,7 +333,7 @@ router.post('/grant-lifetime', requireAdminPassword, (req, res) => {
 
 // ---------------------------------------------------------------------------
 // POST /admin/revoke-lifetime
-// Reverts a lifetime user back to the free plan.
+// Reverts a lifetime user back to expired (no active plan).
 // Body: { email }
 // ---------------------------------------------------------------------------
 router.post('/revoke-lifetime', requireAdminPassword, (req, res) => {
@@ -352,7 +352,7 @@ router.post('/revoke-lifetime', requireAdminPassword, (req, res) => {
 
     await db.prepare(`
       UPDATE user_subscriptions
-      SET plan = 'free', status = 'free', paddle_customer_id = NULL,
+      SET plan = 'expired', status = 'expired', paddle_customer_id = NULL,
           paddle_subscription_id = NULL, current_period_end = NULL,
           canceled_at = NULL, price_id = NULL, updated_at = now()
       WHERE user_id = ?

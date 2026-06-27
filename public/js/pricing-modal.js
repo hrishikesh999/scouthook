@@ -358,7 +358,7 @@
   // ── State ──────────────────────────────────────────────────────────────────
   let paddleConfig = null;
   let configLoaded = false;
-  let currentPlan  = 'free';  // set on open() after subscription fetch
+  let currentPlan  = 'expired';  // set on open() after subscription fetch
 
   // ── DOM refs ───────────────────────────────────────────────────────────────
   function $id(id) { return document.getElementById(id); }
@@ -586,7 +586,7 @@
     // even if they have a stale price_id from a prior cancelled subscription.
     // Exclude expired app-level trials so they're treated as Free, not active trial.
     const isAppTrial = sub.status === 'trialing' && !sub.trial_expired;
-    currentPlan = isAppTrial ? 'free' : (sub.plan || 'free');
+    currentPlan = isAppTrial ? 'expired' : (sub.plan || 'expired');
 
     // — Apply plan state to UI
     if (currentPlan === 'pro') {

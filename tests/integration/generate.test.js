@@ -34,7 +34,7 @@ describe('Generate — validation gates (no Anthropic call)', () => {
     expect(res.body.error).toBe('complete_profile_first');
   });
 
-  test('returns 403 feature_not_available for carousel on free plan', async () => {
+  test('returns 403 feature_not_available for carousel on expired plan', async () => {
     const user = await createUser();
     const ag   = await loginAs(user);
     const res  = await ag.post('/api/generate').send({ path: 'idea', asset_type: 'carousel', raw_idea: 'test' });

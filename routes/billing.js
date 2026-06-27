@@ -122,7 +122,7 @@ router.get('/subscription', requireAuth, async (req, res) => {
               ? (subscription.items?.find(i => i.price?.id !== addonPriceIdStale) ?? subscription.items?.[0])
               : subscription.items?.[0];
             const priceId = basePlanItemStale?.price?.id ?? null;
-            const plan    = !priceId ? 'pro' : (proPriceIds.includes(priceId) ? 'pro' : 'free');
+            const plan    = !priceId ? 'pro' : (proPriceIds.includes(priceId) ? 'pro' : 'expired');
             await upsertSubscription({
               userId,
               paddleCustomerId:     subscription.customerId,
@@ -155,7 +155,7 @@ router.get('/subscription', requireAuth, async (req, res) => {
               if (['solo', 'pro'].includes(plan) && ['active', 'trialing'].includes(subscription.status)) {
                 mailerlite.upgradeSubscriberToPaid(user.email, user.name).catch(() => {});
               } else if (['canceled', 'past_due', 'paused'].includes(subscription.status)) {
-                mailerlite.downgradeSubscriberToFree(user.email, user.name).catch(() => {});
+                mailerlite.downgradeSubscriber(user.email, user.name).catch(() => {});
               }
             }).catch(() => {});
 
@@ -198,7 +198,7 @@ router.get('/subscription', requireAuth, async (req, res) => {
 
           if (recovered) {
             const priceId = recovered.items?.[0]?.price?.id ?? null;
-            const plan    = !priceId ? 'pro' : (proPriceIds.includes(priceId) ? 'pro' : 'free');
+            const plan    = !priceId ? 'pro' : (proPriceIds.includes(priceId) ? 'pro' : 'expired');
             await upsertSubscription({
               userId,
               paddleCustomerId:     recovered.customerId,
@@ -215,7 +215,7 @@ router.get('/subscription', requireAuth, async (req, res) => {
           }
         } catch (recoverErr) {
           // Non-fatal — if Paddle lookup fails just return current (free) state
-          console.warn('[billing] subscription recovery from Paddle failed (non-fatal):', recoverErr.message);
+          console.warn('[billing] subscription recovery from Paddle failed (non-fatal, will show as expired):', recoverErr.message);
         }
       }
     }
@@ -252,7 +252,7 @@ router.get('/subscription', requireAuth, async (req, res) => {
 
   return res.json({
     ok: true,
-    plan: genCheck.plan,  // effective plan: 'free' once trial/grace period has expired
+    plan: genCheck.plan,  // effective plan: 'expired' once trial/grace period has expired
     status: effectiveStatus,
     price_id: sub.price_id ?? null,
     current_period_end: sub.current_period_end ?? null,
@@ -480,12 +480,12 @@ router.post('/sync', requireAuth, async (req, res) => {
   if (!priceId) {
     plan = 'pro'; // unknown price ID — assume pro, webhook will correct if wrong
   } else {
-    plan = proPriceIds.includes(priceId) ? 'pro' : 'free';
+    plan = proPriceIds.includes(priceId) ? 'pro' : 'expired';
   }
 
   // Capture existing plan before the upsert so we can detect plan changes.
   const prevSub = await getUserSubscription(userId).catch(() => null);
-  const prevPlan = prevSub?.plan ?? 'free';
+  const prevPlan = prevSub?.plan ?? 'expired';
 
   try {
     await upsertSubscription({
@@ -553,7 +553,7 @@ router.post('/sync', requireAuth, async (req, res) => {
     if (['solo', 'pro'].includes(plan) && ['active', 'trialing'].includes(subscription.status)) {
       mailerlite.upgradeSubscriberToPaid(user.email, user.name).catch(() => {});
     } else if (['canceled', 'past_due', 'paused'].includes(subscription.status)) {
-      mailerlite.downgradeSubscriberToFree(user.email, user.name).catch(() => {});
+      mailerlite.downgradeSubscriber(user.email, user.name).catch(() => {});
     }
   }).catch(() => {});
 

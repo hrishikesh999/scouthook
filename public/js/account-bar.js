@@ -302,7 +302,7 @@
     try {
       const d = await cachedFetch('/api/billing/subscription', { credentials: 'same-origin' });
       if (!d) return;
-      if (d.plan !== 'free') return;
+      if (d.plan === 'pro') return;
 
       const btn = document.createElement('button');
       btn.type = 'button';

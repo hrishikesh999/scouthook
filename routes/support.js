@@ -60,7 +60,7 @@ router.post('/', requireAuth, async (req, res) => {
       user_email: userInfo?.email || userId,
       topic,
       message:    message.trim(),
-      plan_badge: isPro ? '⭐ Pro' : 'Free',
+      plan_badge: isPro ? '⭐ Pro' : 'Trial/Expired',
       submitted_at: new Date().toUTCString(),
       app_url: appUrl,
     }).catch(() => {});

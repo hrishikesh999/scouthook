@@ -6,9 +6,9 @@ const { getMonthlyPostLimit } = require('../lib/planFeatures');
 
 // Internal hard caps — never shown to users; exist to prevent runaway abuse.
 // Env vars allow tuning without a deploy. Values are per user per calendar month.
-const INTERNAL_POST_CAP_FREE   = parseInt(process.env.INTERNAL_POST_CAP_FREE   || '25',  10);
+const INTERNAL_POST_CAP_EXPIRED = parseInt(process.env.INTERNAL_POST_CAP_EXPIRED || '0',   10);
 const INTERNAL_POST_CAP_PRO    = parseInt(process.env.INTERNAL_POST_CAP_PRO    || '500', 10);
-const INTERNAL_VISUAL_CAP_FREE = parseInt(process.env.INTERNAL_VISUAL_CAP_FREE || '25',  10);
+const INTERNAL_VISUAL_CAP_EXPIRED = parseInt(process.env.INTERNAL_VISUAL_CAP_EXPIRED || '0',   10);
 const INTERNAL_VISUAL_CAP_PRO  = parseInt(process.env.INTERNAL_VISUAL_CAP_PRO  || '800', 10);
 
 // ---------------------------------------------------------------------------
@@ -50,13 +50,13 @@ async function getUserSubscription(userId) {
   } catch (err) {
     console.error('[subscription] getUserSubscription error:', err.message);
   }
-  // Synthetic free row — user has never subscribed
+  // Synthetic expired row — user has never subscribed
   return {
     user_id: userId,
     paddle_customer_id: null,
     paddle_subscription_id: null,
-    plan: 'free',
-    status: 'free',
+    plan: 'expired',
+    status: 'expired',
     current_period_end: null,
     canceled_at: null,
   };
@@ -64,29 +64,30 @@ async function getUserSubscription(userId) {
 
 // ---------------------------------------------------------------------------
 // getUserPlan
-// Returns 'free' | 'solo' | 'pro'.
+// Returns 'expired' | 'solo' | 'pro'.
 // A canceled subscription retains access until current_period_end.
+// Users without a valid subscription get 'expired' — there is no free plan.
 // ---------------------------------------------------------------------------
 async function getUserPlan(userId) {
   const sub = await getUserSubscription(userId);
   // Lifetime plan: admin-granted, never expires, full Pro access.
   if (sub.status === 'lifetime') return 'pro';
-  // Normalise to the three known tiers; unknown values fall back to free.
-  const tier = ['free', 'solo', 'pro'].includes(sub.plan) ? sub.plan : 'free';
-  if (tier === 'free') return 'free';
-  if (!['active', 'trialing', 'canceled', 'past_due', 'paused'].includes(sub.status)) return 'free';
+  // Normalise to known tiers; unknown values fall back to expired.
+  const tier = ['solo', 'pro'].includes(sub.plan) ? sub.plan : 'expired';
+  if (tier === 'expired') return 'expired';
+  if (!['active', 'trialing', 'canceled', 'past_due', 'paused'].includes(sub.status)) return 'expired';
   if (sub.status === 'canceled') {
-    if (!sub.current_period_end) return 'free';
-    if (new Date(sub.current_period_end) <= new Date()) return 'free';
+    if (!sub.current_period_end) return 'expired';
+    if (new Date(sub.current_period_end) <= new Date()) return 'expired';
   }
   // past_due: allow access during Paddle's retry window (~7–10 days), then lapse.
   if (sub.status === 'past_due' && sub.current_period_end) {
     const GRACE_MS = 14 * 24 * 60 * 60 * 1000;
-    if (new Date(sub.current_period_end).getTime() + GRACE_MS < Date.now()) return 'free';
+    if (new Date(sub.current_period_end).getTime() + GRACE_MS < Date.now()) return 'expired';
   }
   // App-level trial: enforce expiry via trial_ends_at (no Paddle subscription involved).
   if (sub.status === 'trialing' && sub.trial_ends_at && new Date(sub.trial_ends_at) <= new Date()) {
-    return 'free';
+    return 'expired';
   }
 
 
@@ -147,7 +148,7 @@ async function canGeneratePost(userId) {
     return { allowed: true, current: 0, limit, plan, resets_at: end };
   }
 
-  const internalCap = plan === 'pro' ? INTERNAL_POST_CAP_PRO : INTERNAL_POST_CAP_FREE;
+  const internalCap = plan === 'pro' ? INTERNAL_POST_CAP_PRO : INTERNAL_POST_CAP_EXPIRED;
   const allowedByQuota = limit === null || current < limit;
   const allowedByCap   = current < internalCap;
   return { allowed: allowedByQuota && allowedByCap, current, limit, plan, resets_at: end };
@@ -180,7 +181,7 @@ async function canGenerateVisual(userId, tenantId = 'default') {
     console.error('[subscription] canGenerateVisual count error:', err.message);
     return { allowed: true, current: 0, limit, plan };
   }
-  const internalCap = plan === 'pro' ? INTERNAL_VISUAL_CAP_PRO : INTERNAL_VISUAL_CAP_FREE;
+  const internalCap = plan === 'pro' ? INTERNAL_VISUAL_CAP_PRO : INTERNAL_VISUAL_CAP_EXPIRED;
   const allowedByQuota = limit === null || current < limit;
   const allowedByCap   = current < internalCap;
   return { allowed: allowedByQuota && allowedByCap, current, limit, plan };
@@ -293,7 +294,7 @@ async function forceSyncSubscriptionForUser(userId) {
   // If price ID list is empty (env vars missing), default to 'pro' to avoid silently downgrading users.
   const plan    = (FORCE_SYNC_PRO_PRICE_IDS.length === 0 || !priceId || FORCE_SYNC_PRO_PRICE_IDS.includes(priceId))
     ? 'pro'
-    : 'free';
+    : 'expired';
 
   await upsertSubscription({
     userId,
@@ -343,8 +344,8 @@ module.exports = {
   getPaddleCustomerId,
   upsertSubscription,
   forceSyncSubscriptionForUser,
-  INTERNAL_POST_CAP_FREE,
+  INTERNAL_POST_CAP_EXPIRED,
   INTERNAL_POST_CAP_PRO,
-  INTERNAL_VISUAL_CAP_FREE,
+  INTERNAL_VISUAL_CAP_EXPIRED,
   INTERNAL_VISUAL_CAP_PRO,
 };

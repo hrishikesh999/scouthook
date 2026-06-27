@@ -40,13 +40,13 @@ async function removeFromGroup(subscriberId, groupId) {
   await apiRequest('DELETE', `/subscribers/${subscriberId}/groups/${groupId}`);
 }
 
-async function addFreeSubscriber(email, name) {
+async function addNewSubscriber(email, name) {
   const { apiKey, groupFree } = getConfig();
   if (!apiKey) return;
   try {
     await upsertSubscriber(email, name, groupFree || null);
   } catch (err) {
-    console.error('[mailerlite] addFreeSubscriber failed:', err.message);
+    console.error('[mailerlite] addNewSubscriber failed:', err.message);
   }
 }
 
@@ -68,7 +68,7 @@ async function upgradeSubscriberToPaid(email, name) {
 // Backward-compat alias — call sites that used upgradeSubscriberToPro still work.
 const upgradeSubscriberToPro = upgradeSubscriberToPaid;
 
-async function downgradeSubscriberToFree(email, name) {
+async function downgradeSubscriber(email, name) {
   const { apiKey, groupFree, groupPro } = getConfig();
   if (!apiKey) return;
   try {
@@ -77,8 +77,12 @@ async function downgradeSubscriberToFree(email, name) {
       await removeFromGroup(subscriberId, groupPro).catch(() => {});
     }
   } catch (err) {
-    console.error('[mailerlite] downgradeSubscriberToFree failed:', err.message);
+    console.error('[mailerlite] downgradeSubscriber failed:', err.message);
   }
 }
 
-module.exports = { addFreeSubscriber, upgradeSubscriberToPro, upgradeSubscriberToPaid, downgradeSubscriberToFree };
+// Backward-compat aliases
+const addFreeSubscriber = addNewSubscriber;
+const downgradeSubscriberToFree = downgradeSubscriber;
+
+module.exports = { addFreeSubscriber, addNewSubscriber, upgradeSubscriberToPro, upgradeSubscriberToPaid, downgradeSubscriberToFree, downgradeSubscriber };

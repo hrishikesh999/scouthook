@@ -22,7 +22,7 @@ describe('Visuals — POST /:postId', () => {
     const user = await createUser();
     const ag   = await loginAs(user);
     // visual_type is valid, post doesn't exist → 404 post_not_found
-    // (plan check may also gate this; on free plan with 0 visuals it should pass to post check)
+    // (plan check may also gate this; on expired plan with 0 visuals it should pass to post check)
     const res = await ag.post('/api/visuals/999999').send({ visual_type: 'quote_card', mode: 'extract' });
     // Could be 403 (plan) or 404 (not found) — either is acceptable; never 200
     expect([403, 404]).toContain(res.status);

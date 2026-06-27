@@ -415,6 +415,7 @@ function renderStepDots(current, total) {
 // Lead magnet chip
 // Get ideas chip
 document.getElementById('intent-ideas')?.addEventListener('click', () => {
+  if (document.getElementById('plan-gate-banner')) return;
   document.querySelectorAll('.intent-card[data-type]').forEach(p => p.classList.remove('active'));
   const _pq = document.getElementById('pill-question');
   if (_pq) { _pq.textContent = ''; _pq.classList.remove('visible'); }
@@ -436,6 +437,7 @@ document.getElementById('intent-ideas')?.addEventListener('click', () => {
 });
 
 function selectType(type) {
+  if (document.getElementById('plan-gate-banner')) return;
   selectedType        = type;
   chatStep            = 0;
   chatAnswers         = {};
@@ -2204,6 +2206,7 @@ document.getElementById('back-to-pills')?.addEventListener('click', () => {
 // Post-type intent cards — select type on click
 document.querySelectorAll('.intent-card[data-type]').forEach(pill => {
   pill.addEventListener('click', () => {
+    if (document.getElementById('plan-gate-banner')) return;
     document.querySelectorAll('.intent-card').forEach(p => p.classList.remove('active'));
     pill.classList.add('active');
     const pillQ = document.getElementById('pill-question');
@@ -2701,6 +2704,37 @@ function hideSubstanceWarning() {
   document.getElementById('chat-generate-anyway')?.remove();
 }
 
+/* ── Plan gate (blocks expired / non-Pro users at type selection) ── */
+async function checkPlanGate() {
+  try {
+    const sub = await cachedFetch('/api/billing/subscription', { credentials: 'same-origin' });
+    if (!sub || !sub.ok) return false;
+    if (sub.plan === 'pro') return false;
+
+    const pills = document.getElementById('starting-pills');
+    if (pills) pills.classList.add('plan-blocked');
+
+    const banner = document.createElement('div');
+    banner.id = 'plan-gate-banner';
+    banner.className = 'plan-gate-banner';
+    banner.innerHTML = `
+      <strong>Your trial has ended</strong>
+      <p>Upgrade to Pro to keep generating posts with ScoutHook.</p>
+      <button type="button" class="plan-gate-upgrade-btn">Upgrade to Pro &mdash; $29/mo &rarr;</button>
+    `;
+    if (pills) pills.insertAdjacentElement('beforebegin', banner);
+
+    banner.querySelector('.plan-gate-upgrade-btn').addEventListener('click', () => {
+      window.PricingModal ? window.PricingModal.open({ feature: 'generate' }) : (window.location.href = '/billing.html?upgrade=1');
+    });
+
+    const gc = document.getElementById('guided-chat');
+    if (gc) gc.style.display = 'none';
+
+    return true;
+  } catch { return false; }
+}
+
 /* ── Profile gate + niche placeholder ───────────────────────── */
 async function checkProfileGate() {
   try {
@@ -2847,6 +2881,9 @@ async function init() {
   await window.scouthookAuthReady;
 
   initGenVaultTypePicker();
+
+  const planBlocked = await checkPlanGate();
+  if (planBlocked) return;
 
   // Default to reach immediately; loadMixRecommendation may update this
   selectType('reach');

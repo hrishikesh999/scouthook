@@ -49,6 +49,55 @@
       gap: 10px;
       margin-bottom: 20px;
     }
+    /* ── Plan gate (expired trial / no subscription) ────────── */
+    #starting-pills.plan-blocked {
+      opacity: 0.4;
+      pointer-events: none;
+      user-select: none;
+      filter: grayscale(0.3);
+    }
+    .plan-gate-banner {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      padding: 24px 24px 20px;
+      margin-bottom: 16px;
+      border: 1.5px solid #d97706;
+      border-radius: 14px;
+      background: color-mix(in srgb, #d97706 6%, var(--bg-surface));
+      text-align: center;
+    }
+    .plan-gate-banner strong {
+      font-size: 1rem;
+      color: var(--text-heading, var(--text));
+    }
+    .plan-gate-banner p {
+      margin: 0;
+      font-size: 0.875rem;
+      color: var(--text);
+      line-height: 1.5;
+    }
+    .plan-gate-upgrade-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 4px;
+      padding: 10px 24px;
+      border: none;
+      border-radius: 10px;
+      background: var(--brand, #0D9488);
+      color: #fff;
+      font-size: 0.875rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
+    }
+    .plan-gate-upgrade-btn:hover {
+      filter: brightness(0.9);
+      transform: translateY(-1px);
+    }
+
     #pill-question {
       text-align: center;
       font-size: 0.9375rem;

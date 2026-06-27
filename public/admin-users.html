@@ -118,12 +118,12 @@
 
     function statusBadge(plan, status) {
       if (status === 'lifetime') return `<span class="badge badge--lifetime">Lifetime &#8734;</span>`;
-      if (!status || status === 'free' || (!plan && !status)) return `<span class="badge badge--free">Free</span>`;
+      if (!status || status === 'expired' || status === 'free' || (!plan && !status)) return `<span class="badge badge--free">Expired</span>`;
       if (status === 'active' && plan === 'pro') return `<span class="badge badge--pro">Pro</span>`;
       if (status === 'trialing') return `<span class="badge badge--trialing">Trialing</span>`;
       if (status === 'canceled') return `<span class="badge badge--canceled">Canceled</span>`;
       if (status === 'past_due') return `<span class="badge badge--pastdue">Past Due</span>`;
-      return `<span class="badge badge--free">${esc(status)}</span>`;
+      return `<span class="badge badge--free">${esc(status || 'Expired')}</span>`;
     }
 
     function sortedUsers() {
@@ -360,7 +360,7 @@
       });
 
       document.getElementById('revoke-lifetime-btn')?.addEventListener('click', async () => {
-        if (!confirm('Revoke lifetime plan? The user will revert to Free immediately.')) return;
+        if (!confirm('Revoke lifetime plan? The user will lose access immediately.')) return;
         const email = document.getElementById('revoke-lifetime-btn').dataset.email;
         const msg   = document.getElementById('lifetime-msg');
         msg.style.display = 'block';

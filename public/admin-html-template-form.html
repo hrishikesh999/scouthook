@@ -587,15 +587,20 @@
         updateManifest();
       });
       el.addEventListener('click', e => e.stopPropagation());
-      if (el.dataset.c === 'colorPicker') {
-        el.addEventListener('focus', () => {
-          const i = parseInt(el.dataset.i), s = _slotState[i];
-          if (!s || !s.key.startsWith('color:')) return;
-          const varName = s.key.slice('color:'.length);
-          const iframe = document.getElementById('admin-tpl-iframe');
-          iframe?.contentWindow?.postMessage({ type: 'admin-highlight-var', varName }, '*');
-        });
-      }
+    });
+
+    // Color swatch click → flash elements using that variable in the preview
+    list.querySelectorAll('input[data-c="colorPicker"]').forEach(picker => {
+      picker.addEventListener('click', () => {
+        const i = parseInt(picker.dataset.i), s = _slotState[i];
+        if (!s || !s.key.startsWith('color:')) return;
+        const varName = s.key.slice('color:'.length);
+        const iframe = document.getElementById('admin-tpl-iframe');
+        if (iframe?.contentWindow) {
+          console.log('[color-highlight] flashing --' + varName);
+          iframe.contentWindow.postMessage({ type: 'admin-highlight-var', varName: varName }, '*');
+        }
+      });
     });
     list.querySelectorAll('.slot-card').forEach(card => {
       card.addEventListener('click', () => {

@@ -463,6 +463,9 @@ router.get('/ideas', async (req, res) => {
     CASE funnel_type WHEN 'convert' THEN 0 WHEN 'trust' THEN 1 ELSE 2 END,
     created_at DESC`;
 
+  const limitVal = req.query.limit ? parseInt(req.query.limit, 10) : null;
+  if (limitVal && limitVal > 0) sql += ` LIMIT ${limitVal}`;
+
   const ideas = await db.prepare(sql).all(...args);
   return res.json({ ok: true, ideas });
 });
@@ -654,8 +657,56 @@ router.get('/generate-ideas', async (req, res) => {
       if (Array.isArray(a)) authStatements = a.filter(x => typeof x === 'string' && x.trim()).slice(0, 2);
     } catch { authStatements = []; }
 
+    // Parse brand personality traits
+    let personalityTraits = [];
+    try {
+      const t = JSON.parse(profile?.brand_personality_traits || '[]');
+      if (Array.isArray(t)) personalityTraits = t.filter(x => typeof x === 'string' && x.trim()).slice(0, 4);
+    } catch { personalityTraits = []; }
+
+    // Parse brand phrases to use
+    let phrases = [];
+    try {
+      const ph = JSON.parse(profile?.brand_phrases_to_use || '[]');
+      if (Array.isArray(ph)) phrases = ph.filter(x => typeof x === 'string' && x.trim()).slice(0, 5);
+    } catch { phrases = []; }
+
+    // Parse audience goals
+    let audienceGoals = [];
+    try {
+      const g = JSON.parse(profile?.audience_goals || '[]');
+      if (Array.isArray(g)) audienceGoals = g.filter(x => typeof x === 'string' && x.trim()).slice(0, 3);
+    } catch { audienceGoals = []; }
+
+    // Parse audience market beliefs (myths the audience holds — gold for trust posts)
+    let audienceBeliefs = [];
+    try {
+      const b = JSON.parse(profile?.audience_core_beliefs_market || '[]');
+      if (Array.isArray(b)) audienceBeliefs = b.filter(x => typeof x === 'string' && x.trim()).slice(0, 4);
+    } catch { audienceBeliefs = []; }
+
+    // Archetype → tension type preference map
+    const ARCHETYPE_TENSION = {
+      'Rebel':     'myth_bust, contrarian',
+      'Outlaw':    'myth_bust, contrarian',
+      'Sage':      'contrarian, prediction',
+      'Expert':    'contrarian, prediction',
+      'Mentor':    'lesson_learned, behind_scenes',
+      'Teacher':   'lesson_learned, behind_scenes',
+      'Hero':      'outcome_proof, lesson_learned',
+      'Leader':    'outcome_proof, contrarian',
+      'Explorer':  'prediction, behind_scenes',
+      'Innovator': 'prediction, contrarian',
+      'Creator':   'behind_scenes, lesson_learned',
+      'Builder':   'behind_scenes, lesson_learned',
+      'Caregiver': 'lesson_learned, behind_scenes',
+      'Everyman':  'lesson_learned, outcome_proof',
+    };
+    const archetype = profile?.brand_archetype || '';
+    const preferredTensionTypes = archetype ? (ARCHETYPE_TENSION[archetype] || null) : null;
+
     // Guard: require minimum viable ICP
-    if (!niche && !audience && !pos.stands_for) {
+    if (!niche && !audience && !pos.stands_for && !profile?.brand_description) {
       return res.json({ ok: true, ideas: [], icp_summary: '' });
     }
 
@@ -666,23 +717,38 @@ router.get('/generate-ideas', async (req, res) => {
 
     const client = new Anthropic({ apiKey });
 
-    // Build ICP block — pure voice DNA, no vault anchors
+    // WHO THEY ARE — brand_description as first anchor, clearest single-sentence identity
     const icpLines = [
-      niche                             && `Creator niche: ${niche}`,
-      audience                          && `Their audience: ${audience}`,
-      pain                              && `What keeps the audience up at night: ${pain}`,
-      profile?.elevator_main_result      && `Positioning: ${profile.elevator_main_result}`,
-      pos.stands_for                    && `What the creator stands for: ${pos.stands_for}`,
-      pos.pushes_back_against           && `What they push back against: ${pos.pushes_back_against}`,
-      pos.outcome                       && `Outcome they deliver: ${pos.outcome}`,
-      profile?.brand_core_beliefs       && `Their contrarian belief: ${profile.brand_core_beliefs}`,
-      pillars.length                    && `Strategic pillars: ${pillars.join(' | ')}`,
-      liRow?.display_name               && `LinkedIn: ${liRow.display_name}`,
+      profile?.brand_description    && `What they do: ${profile.brand_description}`,
+      niche                         && `Industry/niche: ${niche}`,
+      profile?.elevator_main_result && `Core outcome they deliver: ${profile.elevator_main_result}`,
+      pos.stands_for                && `What they stand for: ${pos.stands_for}`,
+      pos.pushes_back_against       && `What they push back against: ${pos.pushes_back_against}`,
+      pos.outcome                   && `Transformation they create: ${pos.outcome}`,
+      profile?.brand_core_beliefs   && `Their non-negotiable beliefs: ${profile.brand_core_beliefs}`,
+      pillars.length                && `Strategic pillars: ${pillars.join(' | ')}`,
+      liRow?.display_name           && `LinkedIn name: ${liRow.display_name}`,
     ].filter(Boolean).join('\n');
 
     const authBlock = authStatements.length
       ? `\nProof points:\n${authStatements.map(s => `- ${s}`).join('\n')}`
       : '';
+
+    // THEIR VOICE — archetype with hardcoded tension preferences + personality + owned vocabulary
+    const voiceBlock = [
+      archetype              && `Brand archetype: ${archetype}`,
+      preferredTensionTypes  && `Preferred tension types for this archetype: ${preferredTensionTypes}`,
+      personalityTraits.length && `Communication style: ${personalityTraits.join(', ')}`,
+      phrases.length         && `Owned vocabulary (use naturally in story_prompt): ${phrases.join(', ')}`,
+    ].filter(Boolean).join('\n');
+
+    // THEIR AUDIENCE — goals alongside obstacles + market beliefs (the myths they hold)
+    const audienceBlock = [
+      audience                 && `Who they are: ${audience}`,
+      audienceGoals.length     && `What they want to achieve:\n${audienceGoals.map(g => `- ${g}`).join('\n')}`,
+      pain                     && `What's blocking them: ${pain}`,
+      audienceBeliefs.length   && `What they currently believe (market assumptions):\n${audienceBeliefs.map(b => `- ${b}`).join('\n')}`,
+    ].filter(Boolean).join('\n');
 
     // Post type directive
     const TYPE_DIRECTIVE = {
@@ -697,27 +763,30 @@ router.get('/generate-ideas', async (req, res) => {
       ? `\nAVOID these angles (already shown):\n${excludedHooks.map(h => `- ${h}`).join('\n')}\n`
       : '';
 
-    const prompt = `You are a world-class LinkedIn content strategist. Your job is to generate 3 genuinely strong post ideas — not generic topics, but specific angles only THIS creator can own.
+    const prompt = `You are a world-class LinkedIn content strategist. Generate 3 genuinely strong post ideas — not generic topics, but specific angles only THIS creator can own.
 
 == WHO THEY ARE ==
 ${icpLines}${authBlock}
 
+== THEIR VOICE ==
+${voiceBlock || '(no voice data — use a confident, direct professional tone)'}
+
 == THEIR AUDIENCE ==
-These are ${audience || 'professionals'} who ${pain ? `struggle with: ${pain}` : 'want to grow'}.
+${audienceBlock || `Professionals who want to grow in the ${niche || 'their'} space.`}
 They follow this creator because ${pos.stands_for || 'they have a unique perspective'}.
 
 == YOUR TASK ==
-Step 1 — Think about the ${niche || 'professional'} space: what are the 3–4 most painful tensions, frustrating myths, or counterintuitive truths that ${audience || 'this audience'} encounters? These are the angles that get saved and shared.
+Step 1 — Find the tensions: What are the 3–4 most painful gaps between what this audience WANTS and what is currently STOPPING them in the ${niche || 'professional'} space? What counterintuitive truths would make them say "I've never heard it framed that way"?
 
-Step 2 — For each tension, ask: what is this specific creator's UNIQUE take on it, given their positioning and beliefs? Generic takes get ignored. Specific, opinionated takes get traction.
+Step 2 — Find the collisions: Look for places where the AUDIENCE'S market beliefs (listed above) clash with THIS CREATOR'S beliefs. Those collisions are precision TRUST post angles — don't invent myths, use the ones already listed. For each tension, ask: what is this specific creator's UNIQUE take, given their archetype and positioning? Generic observations get ignored.
 
-Step 3 — Generate exactly 3 ideas. ${postTypeDirective}
+Step 3 — Generate exactly 3 ideas. ${postTypeDirective}${preferredTensionTypes ? `\nThis creator's archetype is ${archetype} — lean toward tension types: ${preferredTensionTypes}.` : ''}
 
-For each idea, also write a "story_prompt" — this is NOT the post itself. It is a 4-5 sentence first-person raw brief the creator would type to brief a ghostwriter. It must:
+For each idea, write a "story_prompt" — NOT the post itself. A 4–5 sentence first-person brief the creator would hand to a ghostwriter. It must:
 - Open with a specific moment, situation, or realisation (not a generic statement)
 - Name a concrete tension the creator personally observed or experienced
-- Include a prompt for a specific detail: a number, timeframe, client result, or named example they should fill in
-- End with the insight or shift — what changed, what they now believe
+- Include a prompt for a specific detail: a number, timeframe, client result, or named example to fill in
+- End with the insight or shift — what changed, what they now believe${personalityTraits.length ? `\n- Sound like someone who is ${personalityTraits.join(', ')}` : ''}${phrases.length ? `\n- Use their owned vocabulary naturally where it fits: ${phrases.join(', ')}` : ''}
 
 The story_prompt is the fuel that makes the generated post specific and real. Make it rich.
 ${excludeBlock}
@@ -726,7 +795,7 @@ Return ONLY a JSON array of 3 objects, no other text:
   {
     "hook": "8-12 word arresting opening line — specific, opinionated, no filler, no 'I' as first word",
     "angle": "One crisp sentence: the exact tension or contrarian point",
-    "icp_resonance": "One sentence: the specific pain point of ${audience || 'their audience'} this addresses",
+    "icp_resonance": "One sentence: the specific pain point, goal gap, or belief clash this addresses",
     "post_type": "reach | trust | convert",
     "tension_type": "lesson_learned | contrarian | outcome_proof | myth_bust | behind_scenes | prediction",
     "story_prompt": "4-5 sentence first-person brief with a specific moment, named tension, detail prompt, and the insight"
@@ -735,7 +804,7 @@ Return ONLY a JSON array of 3 objects, no other text:
 
     const message = await client.messages.create({
       model:      SONNET_MODEL,
-      max_tokens: 1400,
+      max_tokens: 1600,
       messages: [{ role: 'user', content: prompt }],
     });
 

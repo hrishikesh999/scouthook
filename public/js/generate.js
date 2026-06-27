@@ -110,8 +110,11 @@ let _resultsMechanism        = '';
 let _resultsWhoFor           = '';
 let _resultsLengthPreference = 'Medium';
 let _prefetchedIdeas    = null;      // prefetched result from /api/vault/generate-ideas
+let _prefetchPromise    = null;      // in-flight prefetch promise (reused if user clicks early)
 let _allFreshIdeas      = [];        // all fetched fresh ideas — filters applied client-side
 let _lastIcpSummary     = '';        // icp_summary from last fetch
+let _ideaInteracted     = false;     // true once user clicks a card — prevents mid-interaction refresh
+let _vaultHasDocs       = true;      // false when workspace has no vault documents
 // ── Conversational coach state ────────────────────────────────
 let _coach = {
   active:         false,  // coach is running
@@ -514,7 +517,7 @@ function markRecommendedBtn() { /* no-op — lead magnet chip removed */ }
 let _ideaTab = 'fresh';
 
 async function loadVaultPanel(type, onItemSelected, { reset = false } = {}) {
-  if (reset) { _shownIdeaHooks = []; _currentPostTypeFilter = null; _ideaTab = 'fresh'; _allFreshIdeas = []; _lastIcpSummary = ''; }
+  if (reset) { _shownIdeaHooks = []; _currentPostTypeFilter = null; _ideaTab = 'fresh'; _allFreshIdeas = []; _lastIcpSummary = ''; _ideaInteracted = false; }
   const panel = document.getElementById('vault-panel');
   if (!panel) return;
   panel.style.display = '';
@@ -527,55 +530,108 @@ async function loadVaultPanel(type, onItemSelected, { reset = false } = {}) {
 }
 
 async function prefetchIdeas() {
-  try {
-    // Always fetch mixed (no post_type) so filters work client-side on a full set
-    const params = new URLSearchParams();
-    const res  = await fetch(`/api/vault/generate-ideas?${params}`, { headers: apiHeaders() });
-    const data = await res.json();
-    if (data.ideas?.length) _prefetchedIdeas = data;
-  } catch { /* non-fatal */ }
+  _prefetchPromise = (async () => {
+    try {
+      const res  = await fetch('/api/vault/generate-ideas', { headers: apiHeaders() });
+      const data = await res.json();
+      return data.ideas?.length ? data : null;
+    } catch { return null; }
+  })();
+  const data = await _prefetchPromise;
+  if (data) _prefetchedIdeas = data;
+}
+
+function _parseCachedIdeaRows(rows) {
+  return rows.map(row => {
+    let parsed = {};
+    try { parsed = JSON.parse(row.seed_text); } catch { parsed = {}; }
+    return {
+      id:            row.id,
+      hook:          row.hook_preview || parsed.hook || '',
+      angle:         parsed.angle     || '',
+      story_prompt:  parsed.story_prompt || '',
+      icp_resonance: row.source_ref   || '',
+      post_type:     row.funnel_type  || 'reach',
+      tension_type:  row.hook_archetype || null,
+      vault_anchor:  null,
+      saved:         false,
+    };
+  }).filter(i => i.hook);
 }
 
 async function loadFreshIdeas(panel, type, onItemSelected) {
-  renderIdeaLoadingState(panel, 'fresh', onItemSelected);
+  // Phase A — immediately render previously generated ideas from DB (fast SQL, no AI)
+  let phaseARendered = false;
+  try {
+    const cacheRes  = await fetch('/api/vault/ideas?source=idea_engine&status=fresh&limit=3', { headers: apiHeaders() });
+    const cacheData = await cacheRes.json();
+    const cachedIdeas = _parseCachedIdeaRows(cacheData.ideas || []);
+    if (cachedIdeas.length && !_allFreshIdeas.length) {
+      // Show stale ideas with a refreshing indicator — user gets instant content
+      renderIdeaEngineWithRefreshing(panel, cachedIdeas, _lastIcpSummary, onItemSelected);
+      phaseARendered = true;
+    }
+  } catch { /* non-fatal — fall through to spinner */ }
 
+  if (!phaseARendered) {
+    renderIdeaLoadingState(panel, 'fresh', onItemSelected);
+  }
+
+  // Phase B — fetch fresh AI-generated ideas (uses prefetch promise if available)
   try {
     let data;
     if (_prefetchedIdeas && !_shownIdeaHooks.length) {
       data = _prefetchedIdeas;
       _prefetchedIdeas = null;
+    } else if (_prefetchPromise && !_shownIdeaHooks.length) {
+      data = await _prefetchPromise;
+      _prefetchedIdeas = null;
     } else {
-      // Always fetch without post_type — filtering is done client-side
       const params = new URLSearchParams();
       if (_shownIdeaHooks.length) params.set('exclude_hooks', JSON.stringify(_shownIdeaHooks.slice(-12)));
       const res = await fetch(`/api/vault/generate-ideas?${params}`, { headers: apiHeaders() });
       data = await res.json();
     }
 
-    const ideas = data.ideas || [];
+    const ideas = data?.ideas || [];
     if (!ideas.length && !_allFreshIdeas.length) {
       panel.innerHTML = `
         ${renderIdeaTabBar('fresh')}
-        <p class="idea-empty-saved">No ideas yet — add documents or notes to your vault and ScoutHook will suggest post ideas from them.</p>`;
+        <p class="idea-empty-saved">Complete your <a href="/settings.html" style="color:var(--brand)">brand voice profile</a> to generate post ideas.</p>`;
       panel.querySelectorAll('.idea-tab').forEach(tab => {
         tab.addEventListener('click', () => { _ideaTab = tab.dataset.tab; loadVaultPanel(null, onItemSelected); });
       });
       return;
     }
 
-    _shownIdeaHooks.push(...ideas.map(i => i.hook));
-    _allFreshIdeas.push(...ideas);
-    _lastIcpSummary = data.icp_summary || _lastIcpSummary;
+    if (ideas.length) {
+      _shownIdeaHooks.push(...ideas.map(i => i.hook));
+      _allFreshIdeas.push(...ideas);
+      _lastIcpSummary = data.icp_summary || _lastIcpSummary;
+    }
 
-    renderFilteredIdeas(panel, onItemSelected);
+    // Only update the panel if the user hasn't interacted with a card yet
+    if (!_ideaInteracted) {
+      renderFilteredIdeas(panel, onItemSelected);
+    }
   } catch {
-    panel.innerHTML = `
-      ${renderIdeaTabBar('fresh')}
-      <p class="idea-empty-saved">Couldn't load ideas right now — try again in a moment.</p>`;
-    panel.querySelectorAll('.idea-tab').forEach(tab => {
-      tab.addEventListener('click', () => { _ideaTab = tab.dataset.tab; loadVaultPanel(null, onItemSelected); });
-    });
+    if (!phaseARendered) {
+      panel.innerHTML = `
+        ${renderIdeaTabBar('fresh')}
+        <p class="idea-empty-saved">Couldn't load ideas right now — try again in a moment.</p>`;
+      panel.querySelectorAll('.idea-tab').forEach(tab => {
+        tab.addEventListener('click', () => { _ideaTab = tab.dataset.tab; loadVaultPanel(null, onItemSelected); });
+      });
+    }
+    // If Phase A already rendered, silently swallow — user has stale ideas to read
   }
+}
+
+function renderIdeaEngineWithRefreshing(panel, ideas, icpSummary, onItemSelected) {
+  // Renders Phase A (stale) ideas with a subtle refreshing badge in the header.
+  // Phase B will call renderFilteredIdeas() to replace these once AI resolves.
+  _allFreshIdeas = ideas;
+  renderIdeaEngine(panel, ideas, icpSummary, 'fresh', onItemSelected, true);
 }
 
 function renderFilteredIdeas(panel, onItemSelected) {
@@ -650,7 +706,7 @@ function renderIdeaEmptySaved(panel, onItemSelected) {
   });
 }
 
-function renderIdeaEngine(panel, ideas, icpSummary, activeTab, onItemSelected) {
+function renderIdeaEngine(panel, ideas, icpSummary, activeTab, onItemSelected, isRefreshing = false) {
   const PILL = {
     reach:   { bg: '#eff6ff', color: '#1d4ed8', label: 'Reach' },
     trust:   { bg: '#f0fdf4', color: '#166534', label: 'Trust' },
@@ -679,24 +735,34 @@ function renderIdeaEngine(panel, ideas, icpSummary, activeTab, onItemSelected) {
           ${idea.vault_anchor ? '<span class="idea-vault-badge">From your vault</span>' : ''}
         </span>
       </button>
-      <button class="idea-bookmark${isSaved ? ' saved' : ''}" type="button" data-idx="${idx}" aria-label="${isSaved ? 'Unsave idea' : 'Save idea'}" title="${isSaved ? 'Remove from saved' : 'Save for later'}">
-        ${isSaved ? '★' : '☆'}
-      </button>
+      <div class="idea-card-actions">
+        <button class="idea-bookmark${isSaved ? ' saved' : ''}" type="button" data-idx="${idx}" aria-label="${isSaved ? 'Unsave idea' : 'Save idea'}" title="${isSaved ? 'Remove from saved' : 'Save for later'}">${isSaved ? '★' : '☆'}</button>
+        <button class="idea-discard" type="button" data-idx="${idx}" aria-label="Discard idea" title="Discard">×</button>
+      </div>
     </div>`;
   }).join('');
+
+  const vaultNudge = (isFreshTab && !_vaultHasDocs)
+    ? `<div class="idea-vault-nudge">Ideas from your brand voice &amp; audience · <a href="/vault.html">Add vault docs for richer, more specific ideas →</a></div>`
+    : '';
 
   panel.innerHTML = `
     ${renderIdeaTabBar(activeTab)}
     <div class="idea-engine-header">
-      ${icpSummary ? `<span class="idea-icp-summary">IDEAS FOR: ${escapeHtml(icpSummary)}</span>` : ''}
+      <div class="idea-engine-header-row">
+        ${icpSummary ? `<span class="idea-icp-summary">IDEAS FOR: ${escapeHtml(icpSummary)}</span>` : ''}
+        ${isFreshTab ? `<span class="idea-autosave-note">${isRefreshing ? '<span class="idea-refreshing-chip"><span class="idea-spinner-sm"></span> Refreshing…</span>' : 'Auto-saved · discard any you don\'t need'}</span>` : ''}
+      </div>
       ${filterRow}
     </div>
     <div class="idea-engine-grid">${cards}</div>
+    ${vaultNudge}
     ${isFreshTab ? `<button class="idea-load-more" type="button" id="idea-load-more-btn">Load more ideas →</button>` : ''}`;
 
   // Card click — fetch brief, store pending vault data, open type picker
   panel.querySelectorAll('.idea-engine-card').forEach((btn, i) => {
     btn.addEventListener('click', async () => {
+      _ideaInteracted = true;
       const idea     = ideas[i];
       const seedText = `${idea.hook}\n\n${idea.angle}`;
 
@@ -751,6 +817,30 @@ function renderIdeaEngine(panel, ideas, icpSummary, activeTab, onItemSelected) {
     });
   });
 
+  // Discard button — removes from UI immediately, patches DB async
+  panel.querySelectorAll('.idea-discard').forEach((btn, i) => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const idea = ideas[i];
+      const wrap = btn.closest('.idea-engine-card-wrap');
+      if (wrap) {
+        wrap.classList.add('idea-discard-out');
+        setTimeout(() => wrap.remove(), 200);
+      }
+      // Remove from in-memory list so it doesn't reappear on filter changes
+      _allFreshIdeas = _allFreshIdeas.filter(x => x.id !== idea.id);
+      ideas.splice(i, 1);
+      if (!idea.id) return;
+      try {
+        await fetch(`/api/vault/ideas/${idea.id}`, {
+          method: 'PATCH',
+          headers: { ...apiHeaders(), 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'discarded' }),
+        });
+      } catch { /* non-fatal */ }
+    });
+  });
+
   // Filter chips (fresh tab only) — client-side filter, no API call
   panel.querySelectorAll('.idea-filter-chip').forEach(chip => {
     chip.addEventListener('click', () => {
@@ -769,6 +859,7 @@ function renderIdeaEngine(panel, ideas, icpSummary, activeTab, onItemSelected) {
 
   // Load more (fresh tab only)
   panel.querySelector('#idea-load-more-btn')?.addEventListener('click', () => {
+    _ideaInteracted = false;
     loadFreshIdeas(panel, null, onItemSelected);
   });
 
@@ -2798,6 +2889,7 @@ async function checkVaultEmptyState() {
     const res  = await fetch('/api/vault/documents', { headers: apiHeaders() });
     const data = await res.json();
     if (!data.ok || (data.documents || []).length > 0) return;
+    _vaultHasDocs = false;
     const banner = document.getElementById('vault-quality-banner');
     if (banner) {
       banner.innerHTML =
@@ -2805,8 +2897,7 @@ async function checkVaultEmptyState() {
         '<a class="vqb-cta" href="/vault.html">Upload a case study →</a>';
       banner.style.display = '';
     }
-    const ideasBtn = document.getElementById('intent-ideas');
-    if (ideasBtn) ideasBtn.style.display = 'none';
+    // No longer hiding the ideas button — idea engine works on brand voice alone
   } catch { /* non-fatal */ }
 }
 

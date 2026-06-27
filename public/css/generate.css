@@ -294,22 +294,7 @@
     .idea-engine-card-wrap {
       position: relative;
     }
-    .idea-bookmark {
-      position: absolute;
-      top: 10px;
-      right: 10px;
-      background: none;
-      border: none;
-      font-size: 1rem;
-      cursor: pointer;
-      color: var(--text-muted);
-      padding: 2px 4px;
-      line-height: 1;
-      transition: color 0.14s, transform 0.1s;
-      z-index: 1;
-    }
-    .idea-bookmark:hover { color: var(--brand); transform: scale(1.15); }
-    .idea-bookmark.saved { color: var(--brand); }
+    /* .idea-bookmark styles moved to .idea-card-actions block below */
     .idea-engine-loading {
       display: flex;
       align-items: center;
@@ -377,8 +362,10 @@
       display: flex;
       flex-direction: column;
       gap: 7px;
-      padding: 14px 16px;
+      padding: 14px 52px 14px 16px; /* right padding makes room for bookmark + discard */
       text-align: left;
+      width: 100%;
+      box-sizing: border-box;
       background: var(--bg-surface);
       border: 1.5px solid var(--border);
       border-radius: 14px;
@@ -454,6 +441,94 @@
       transition: border-color 0.14s, color 0.14s;
     }
     .idea-load-more:hover { border-color: var(--brand); color: var(--brand); }
+
+    /* ── Idea card actions (bookmark + discard) ──────────────── */
+    .idea-card-actions {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      display: flex;
+      gap: 2px;
+      align-items: center;
+    }
+    .idea-bookmark {
+      background: none;
+      border: none;
+      font-size: 1rem;
+      cursor: pointer;
+      color: var(--text-muted);
+      padding: 2px 4px;
+      line-height: 1;
+      transition: color 0.14s, transform 0.1s;
+    }
+    .idea-bookmark:hover { color: var(--brand); transform: scale(1.15); }
+    .idea-bookmark.saved { color: var(--brand); }
+    .idea-discard {
+      background: none;
+      border: none;
+      font-size: 1.1rem;
+      line-height: 1;
+      cursor: pointer;
+      color: var(--text-muted);
+      padding: 2px 4px;
+      transition: color 0.14s, transform 0.1s;
+      opacity: 0;
+    }
+    .idea-engine-card-wrap:hover .idea-discard { opacity: 1; }
+    .idea-discard:hover { color: #dc2626; transform: scale(1.15); }
+    .idea-discard-out {
+      animation: ideaDiscardOut 0.2s ease forwards;
+    }
+    @keyframes ideaDiscardOut {
+      to { opacity: 0; transform: scale(0.92); }
+    }
+
+    /* ── Idea engine header row ──────────────────────────────── */
+    .idea-engine-header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      min-height: 18px;
+    }
+    .idea-autosave-note {
+      font-size: 0.6875rem;
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+    .idea-refreshing-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 0.6875rem;
+      color: var(--text-muted);
+    }
+    .idea-spinner-sm {
+      width: 10px; height: 10px;
+      border: 1.5px solid var(--border);
+      border-top-color: var(--brand);
+      border-radius: 50%;
+      animation: ideaSpin 0.7s linear infinite;
+      flex-shrink: 0;
+    }
+
+    /* ── No-vault-docs nudge strip ───────────────────────────── */
+    .idea-vault-nudge {
+      margin: 0 0 10px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      background: color-mix(in srgb, var(--brand) 5%, var(--bg-surface));
+      border: 1px solid color-mix(in srgb, var(--brand) 15%, transparent);
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+    .idea-vault-nudge a {
+      color: var(--brand);
+      text-decoration: none;
+      font-weight: 600;
+    }
+    .idea-vault-nudge a:hover { text-decoration: underline; }
 
     /* ── Vault quality-lift banner ───────────────────────────── */
     #vault-quality-banner {

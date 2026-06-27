@@ -366,21 +366,42 @@
         <span class="ai-image-modal-title">MEDIA LIBRARY</span>
         <button class="slide-over-close" id="media-modal-close" aria-label="Close">✕</button>
       </div>
+      <div class="media-modal-tabs" role="tablist">
+        <button class="media-modal-tab active" data-mm-tab="library" role="tab" aria-selected="true">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+          Library
+        </button>
+        <button class="media-modal-tab" data-mm-tab="photos" role="tab" aria-selected="false">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+          Stock Photos
+        </button>
+        <button class="media-modal-tab" data-mm-tab="icons" role="tab" aria-selected="false">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+          Icons
+        </button>
+      </div>
       <div class="ai-image-modal-body">
-        <div class="ai-image-preview-pane media-modal-upload-pane" id="media-modal-upload-pane">
-          <div id="media-modal-upload-zone" class="media-upload-zone" role="button" tabindex="0" aria-label="Upload — click or drop">
-            <div class="upload-zone-icon" aria-hidden="true">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <!-- Library tab (default) -->
+        <div id="media-modal-library-tab" class="media-modal-tab-pane">
+          <div class="ai-image-preview-pane media-modal-upload-pane" id="media-modal-upload-pane">
+            <div id="media-modal-upload-zone" class="media-upload-zone" role="button" tabindex="0" aria-label="Upload — click or drop">
+              <div class="upload-zone-icon" aria-hidden="true">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              </div>
+              <p class="upload-zone-text">Drop or <span class="upload-zone-link">click to upload</span></p>
+              <input type="file" id="media-modal-file-input" accept="image/jpeg,image/png,image/gif,image/webp,application/pdf" multiple aria-hidden="true" tabindex="-1">
             </div>
-            <p class="upload-zone-text">Drop or <span class="upload-zone-link">click to upload</span></p>
-            <input type="file" id="media-modal-file-input" accept="image/jpeg,image/png,image/gif,image/webp,application/pdf" multiple aria-hidden="true" tabindex="-1">
+          </div>
+          <div class="ai-image-form-pane media-modal-grid-pane" id="media-modal-grid-pane">
+            <div id="media-modal-grid" class="media-drawer-grid" aria-live="polite"></div>
+            <p id="media-modal-empty-msg" class="media-empty" style="display:none">No media yet — upload above.</p>
+            <p id="media-modal-error-msg" class="media-drawer-error" style="display:none"></p>
           </div>
         </div>
-        <div class="ai-image-form-pane media-modal-grid-pane" id="media-modal-grid-pane">
-          <div id="media-modal-grid" class="media-drawer-grid" aria-live="polite"></div>
-          <p id="media-modal-empty-msg" class="media-empty" style="display:none">No media yet — upload above.</p>
-          <p id="media-modal-error-msg" class="media-drawer-error" style="display:none"></p>
-        </div>
+        <!-- Stock Photos tab -->
+        <div id="media-modal-photos-tab" class="media-modal-tab-pane" hidden></div>
+        <!-- Icons tab -->
+        <div id="media-modal-icons-tab" class="media-modal-tab-pane" hidden></div>
       </div>
       <div class="ai-image-modal-footer">
         <div style="flex:1"></div>
@@ -1348,9 +1369,10 @@ function _renderHtmlTplPicker(templates) {
     const filtered = _htmlTplActiveCategory ? templates.filter(t => t.category === _htmlTplActiveCategory) : templates;
     gridHtml += filtered.map(t => {
       const initials = escHtml((t.name || '?').slice(0, 2).toUpperCase());
+      const thumbSrc = t.thumbnail_url || (t.thumbnail_r2_key ? `/api/html-templates/${t.id}/thumbnail` : null);
       return `<div class="ai-tpl-card" data-tpl-id="${t.id}" tabindex="0" role="button" aria-label="${escHtml(t.name)}">
-        ${t.thumbnail_r2_key
-          ? `<img src="/api/html-templates/${t.id}/thumbnail" alt="" loading="lazy" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px 8px 0 0;display:block">`
+        ${thumbSrc
+          ? `<img src="${escHtml(thumbSrc)}" alt="" loading="lazy" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px 8px 0 0;display:block">`
           : `<div style="width:100%;aspect-ratio:1;background:var(--surface-2);display:flex;align-items:center;justify-content:center;border-radius:8px 8px 0 0"><span style="font-size:24px;font-weight:700;color:var(--text-muted)">${initials}</span></div>`}
         <div style="padding:8px 12px 10px">
           <div style="font-weight:600;font-size:13px">${escHtml(t.name)}</div>
@@ -1366,7 +1388,8 @@ function _renderHtmlTplPicker(templates) {
     gridHtml += carousels.map(p => {
       const slideCount = (p.slides || []).length;
       const firstSlide = (p.slides || [])[0];
-      const thumbSrc = firstSlide ? `/api/html-templates/${firstSlide.template_id}/thumbnail` : '';
+      const firstTpl = firstSlide && (_htmlTplAllTemplates || []).find(t => t.id === firstSlide.template_id);
+      const thumbSrc = firstTpl?.thumbnail_url || (firstSlide ? `/api/html-templates/${firstSlide.template_id}/thumbnail` : '');
       const initials = escHtml((p.name || '?').slice(0, 2).toUpperCase());
       return `<div class="ai-tpl-card" data-carousel-id="${p.id}" tabindex="0" role="button" aria-label="${escHtml(p.name)}">
         ${thumbSrc
@@ -1417,6 +1440,7 @@ async function _selectHtmlTemplate(templateId) {
   _htmlTplSelectedMeta = tpl;
   _htmlTplActiveSlotKey = null;
   _htmlTplAiCache = null;
+  _pendingColorUpdates = {}; // fresh slate for each new template
   document.getElementById('html-tpl-modal-title').textContent = tpl.name.toUpperCase();
 
   _setHtmlTplModalState('editing');
@@ -1688,8 +1712,8 @@ function _renderTemplateIframe(html, slots) {
     `style="width:${width}px;height:${height}px;border:none;display:block;transform:scale(${scale});transform-origin:top left" ` +
     `title="Template preview"></iframe></div>`;
 
-  // Reset pending color updates for this new iframe
-  _pendingColorUpdates = {};
+  // _pendingColorUpdates is intentionally NOT cleared here — AI fill re-renders the iframe
+  // but must not lose color edits the user already made. It is cleared in _selectHtmlTemplate.
 
   // After iframe loads, inject AI-extracted content
   const iframe = document.getElementById('htpl-live-iframe');
@@ -1794,7 +1818,7 @@ function renderHtmlTemplateForm(slots) {
       const active = key === _htmlTplActiveSlotKey ? ' so-field-group--active' : '';
       const colorName = key.slice('color:'.length);
       const label = _friendlyColorLabel(colorName);
-      const val = (slots && slots[key]) || def.default || '#cccccc';
+      const val = _pendingColorUpdates[key] || (slots && slots[key]) || def.default || '#cccccc';
       const resolved = val === 'brand' ? _resolveBrandColor(key, def) : val;
       colorsHtml += `<div class="so-field-group${active}" data-slot-key="${escHtml(key)}" style="margin-bottom:10px">
         <label class="field-label">${escHtml(label)}</label>
@@ -2763,14 +2787,24 @@ function hideBoostOverlay() {
 /* ════════════════════════════════════════════════════════════════════════
    MEDIA MODAL
 ════════════════════════════════════════════════════════════════════════ */
-function openMediaDrawer() {
+async function openMediaDrawer() {
   if (scheduleEditLocked || !currentPostId) return;
   document.getElementById('media-modal-overlay').removeAttribute('aria-hidden');
-  loadDrawerMedia();
+  if (_pexelsAvailable === null) {
+    try {
+      const r = await fetch('/api/media/stock/photos?q=test&per_page=1', { credentials: 'include' });
+      const d = await r.json();
+      _pexelsAvailable = d.ok === true;
+    } catch { _pexelsAvailable = false; }
+  }
+  switchMediaModalTab(_mmActiveTab);
+  if (_mmActiveTab === 'library') loadDrawerMedia();
 }
 
 function closeMediaDrawer() {
   document.getElementById('media-modal-overlay').setAttribute('aria-hidden', 'true');
+  document.getElementById('media-modal-photos-tab').innerHTML = '';
+  document.getElementById('media-modal-icons-tab').innerHTML = '';
 }
 
 async function loadDrawerMedia() {
@@ -2883,6 +2917,208 @@ async function drawerUploadFile(file) {
   const emptyMsg = document.getElementById('media-modal-empty-msg');
   grid.prepend(buildDrawerCard(data.file));
   if (emptyMsg) emptyMsg.style.display = 'none';
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   MEDIA MODAL TABS (Library / Stock Photos / Icons)
+════════════════════════════════════════════════════════════════════════ */
+let _mmActiveTab = 'library';
+let _mmPhotoDebounce = null;
+let _mmIconDebounce = null;
+
+function switchMediaModalTab(tabId) {
+  _mmActiveTab = tabId;
+  document.querySelectorAll('.media-modal-tab').forEach(t => {
+    const isActive = t.dataset.mmTab === tabId;
+    t.classList.toggle('active', isActive);
+    t.setAttribute('aria-selected', isActive ? 'true' : 'false');
+  });
+  document.getElementById('media-modal-library-tab').hidden = tabId !== 'library';
+  document.getElementById('media-modal-photos-tab').hidden  = tabId !== 'photos';
+  document.getElementById('media-modal-icons-tab').hidden   = tabId !== 'icons';
+
+  if (tabId === 'photos') _mmRenderPhotosTab();
+  if (tabId === 'icons')  _mmRenderIconsTab();
+}
+
+function _mmAttachFile(file) {
+  const isPdf = file.mime_type === 'application/pdf';
+  attachedAssetUrl   = file.url;
+  attachedAssetType  = isPdf ? 'media_pdf' : 'media_image';
+  attachedPreviewUrl = isPdf ? null : file.url;
+  attachedSlideCount = 0;
+  const chipLabel = document.getElementById('asset-chip-label');
+  const chip      = document.getElementById('asset-chip');
+  if (chipLabel) chipLabel.textContent = isPdf ? 'PDF' : (file.format_tag || 'Image');
+  if (chip) chip.classList.remove('hidden');
+  renderPreviewAsset();
+  closeMediaDrawer();
+}
+
+function _mmRenderPhotosTab() {
+  const pane = document.getElementById('media-modal-photos-tab');
+  if (!_pexelsAvailable && _pexelsAvailable !== null) {
+    pane.innerHTML = `<div class="media-modal-stock-body">
+      <div class="htpl-mp-empty" style="padding:40px 20px;text-align:center">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-muted);margin-bottom:8px"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+        <div style="font-size:13px;font-weight:500;color:var(--text-primary);margin-bottom:4px">Stock photos not configured</div>
+        <div style="font-size:12px;color:var(--text-muted);line-height:1.5">Add a free Pexels API key in<br><a href="/admin-settings.html" target="_blank" style="color:var(--brand,#0f766e)">Admin → Settings → Media</a></div>
+      </div>
+    </div>`;
+    return;
+  }
+
+  if (pane.querySelector('.htpl-mp-search')) return;
+
+  pane.innerHTML = `<div class="media-modal-stock-body">
+    <div class="htpl-mp-search-wrap">
+      <svg class="htpl-mp-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      <input type="text" class="htpl-mp-search" placeholder="Search free photos…" autofocus>
+    </div>
+    <div class="media-modal-stock-grid" id="mm-photo-grid">
+      <div class="htpl-mp-loading" style="grid-column:1/-1">Loading curated photos…</div>
+    </div>
+    <div class="htpl-mp-attribution" style="display:block;margin-top:8px">Photos by <a href="https://www.pexels.com" target="_blank" rel="noopener">Pexels</a></div>
+  </div>`;
+
+  const grid = pane.querySelector('#mm-photo-grid');
+  const search = pane.querySelector('.htpl-mp-search');
+  _mmLoadPhotos(grid, '');
+
+  search.addEventListener('input', () => {
+    clearTimeout(_mmPhotoDebounce);
+    _mmPhotoDebounce = setTimeout(() => _mmLoadPhotos(grid, search.value.trim()), 300);
+  });
+}
+
+async function _mmLoadPhotos(grid, query) {
+  grid.innerHTML = '<div class="htpl-mp-loading" style="grid-column:1/-1">Searching…</div>';
+  try {
+    const url = `/api/media/stock/photos?q=${encodeURIComponent(query)}&per_page=20`;
+    const r = await fetch(url, { credentials: 'include' });
+    const data = await r.json();
+    if (!data.ok || !data.photos.length) {
+      grid.innerHTML = '<div class="htpl-mp-empty" style="grid-column:1/-1">No photos found</div>';
+      return;
+    }
+    grid.innerHTML = data.photos.map(p =>
+      `<div class="htpl-mp-thumb" data-photo='${JSON.stringify(p).replace(/'/g, '&#39;')}' title="${(p.alt || p.photographer || '').replace(/"/g, '&quot;')}">
+        <img src="${p.src_thumb}" alt="${(p.alt || '').replace(/"/g, '&quot;')}" loading="lazy">
+      </div>`
+    ).join('');
+
+    grid.querySelectorAll('.htpl-mp-thumb').forEach(thumb => {
+      thumb.addEventListener('click', () => {
+        const photo = JSON.parse(thumb.dataset.photo);
+        _mmSelectPhoto(photo, thumb);
+      });
+    });
+  } catch {
+    grid.innerHTML = '<div class="htpl-mp-empty" style="grid-column:1/-1">Failed to load photos</div>';
+  }
+}
+
+async function _mmSelectPhoto(photo, thumbEl) {
+  const origHtml = thumbEl.innerHTML;
+  thumbEl.innerHTML = '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--text-muted)">…</div>';
+  try {
+    const r = await fetch('/api/media/stock/photos/download', {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json', ..._mpHeaders() },
+      body: JSON.stringify({ src_url: photo.src_large, photographer: photo.photographer, photographer_url: photo.photographer_url }),
+    });
+    const data = await r.json();
+    if (data.ok && data.file) {
+      _mmAttachFile(data.file);
+    } else {
+      thumbEl.innerHTML = origHtml;
+      if (window.toast) window.toast.error('Download failed');
+    }
+  } catch {
+    thumbEl.innerHTML = origHtml;
+    if (window.toast) window.toast.error('Download failed');
+  }
+}
+
+function _mmRenderIconsTab() {
+  const pane = document.getElementById('media-modal-icons-tab');
+  if (pane.querySelector('.htpl-mp-search')) return;
+
+  pane.innerHTML = `<div class="media-modal-stock-body">
+    <div class="htpl-mp-search-wrap">
+      <svg class="htpl-mp-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      <input type="text" class="htpl-mp-search" placeholder="Search 200,000+ icons…" autofocus>
+    </div>
+    <div class="htpl-mp-chips">${_ICON_SUGGESTIONS.map(s => `<button class="htpl-mp-chip">${s}</button>`).join('')}</div>
+    <div class="media-modal-stock-grid htpl-mp-icon-grid" id="mm-icon-grid" style="grid-template-columns:repeat(6,1fr)">
+      <div class="htpl-mp-empty" style="grid-column:1/-1">Type to search icons</div>
+    </div>
+    <div class="htpl-mp-attribution" style="display:block;margin-top:8px">Icons by <a href="https://iconify.design" target="_blank" rel="noopener">Iconify</a></div>
+  </div>`;
+
+  const grid = pane.querySelector('#mm-icon-grid');
+  const search = pane.querySelector('.htpl-mp-search');
+
+  pane.querySelectorAll('.htpl-mp-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      search.value = chip.textContent;
+      _mmLoadIcons(grid, chip.textContent);
+    });
+  });
+
+  search.addEventListener('input', () => {
+    clearTimeout(_mmIconDebounce);
+    _mmIconDebounce = setTimeout(() => {
+      const q = search.value.trim();
+      if (q) _mmLoadIcons(grid, q);
+      else grid.innerHTML = '<div class="htpl-mp-empty" style="grid-column:1/-1">Type to search icons</div>';
+    }, 300);
+  });
+}
+
+async function _mmLoadIcons(grid, query) {
+  grid.innerHTML = '<div class="htpl-mp-loading" style="grid-column:1/-1">Searching…</div>';
+  try {
+    const r = await fetch(`/api/media/stock/icons?q=${encodeURIComponent(query)}&limit=36`, { credentials: 'include' });
+    const data = await r.json();
+    if (!data.ok || !data.icons.length) {
+      grid.innerHTML = '<div class="htpl-mp-empty" style="grid-column:1/-1">No icons found</div>';
+      return;
+    }
+    grid.innerHTML = data.icons.map(ic =>
+      `<div class="htpl-mp-thumb" data-icon-prefix="${ic.prefix}" data-icon-name="${ic.name}" title="${ic.fullName}" style="background:#f9fafb">
+        <img src="https://api.iconify.design/${ic.prefix}/${ic.name}.svg?width=48&height=48" alt="${ic.fullName}" loading="lazy" style="width:48px;height:48px;object-fit:contain">
+      </div>`
+    ).join('');
+
+    grid.querySelectorAll('.htpl-mp-thumb').forEach(thumb => {
+      thumb.addEventListener('click', () => _mmSelectIcon(thumb.dataset.iconPrefix, thumb.dataset.iconName, thumb));
+    });
+  } catch {
+    grid.innerHTML = '<div class="htpl-mp-empty" style="grid-column:1/-1">Failed to load icons</div>';
+  }
+}
+
+async function _mmSelectIcon(prefix, name, thumbEl) {
+  const origHtml = thumbEl.innerHTML;
+  thumbEl.innerHTML = '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--text-muted)">…</div>';
+  try {
+    const r = await fetch('/api/media/stock/icons/download', {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json', ..._mpHeaders() },
+      body: JSON.stringify({ prefix, name }),
+    });
+    const data = await r.json();
+    if (data.ok && data.file) {
+      _mmAttachFile(data.file);
+    } else {
+      thumbEl.innerHTML = origHtml;
+      if (window.toast) window.toast.error('Download failed');
+    }
+  } catch {
+    thumbEl.innerHTML = origHtml;
+    if (window.toast) window.toast.error('Download failed');
+  }
 }
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -3070,6 +3306,11 @@ function wireVisualButtons() {
   document.getElementById('media-library-btn').addEventListener('click', () => {
     if (scheduleEditLocked) return;
     openMediaDrawer();
+  });
+
+  // Media modal tabs
+  document.querySelectorAll('.media-modal-tab').forEach(tab => {
+    tab.addEventListener('click', () => switchMediaModalTab(tab.dataset.mmTab));
   });
 
   // Media modal buttons + upload zone

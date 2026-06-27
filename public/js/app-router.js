@@ -41,6 +41,9 @@
   // Track which page scripts have already been injected this session
   const _loadedScripts = new Set();
 
+  // Capture each page's __pageInit keyed by script src so re-visits call the right init
+  const _pageInitFns = new Map();
+
   // Monotonic nav index for direction detection
   let _navIndex = 0;
 
@@ -219,8 +222,11 @@
     const scriptSrc = PAGE_SCRIPTS[pathname];
     if (scriptSrc) {
       if (_loadedScripts.has(scriptSrc)) {
-        // Already loaded — call re-init hook
-        if (typeof window.__pageInit === 'function') {
+        // Already loaded — call the init captured for THIS script, not the global
+        const fn = _pageInitFns.get(scriptSrc);
+        if (typeof fn === 'function') {
+          fn();
+        } else if (typeof window.__pageInit === 'function') {
           window.__pageInit();
         }
       } else {
@@ -228,6 +234,11 @@
         _loadedScripts.add(scriptSrc);
         const s = document.createElement('script');
         s.src = scriptSrc;
+        s.addEventListener('load', () => {
+          if (typeof window.__pageInit === 'function') {
+            _pageInitFns.set(scriptSrc, window.__pageInit);
+          }
+        }, { once: true });
         document.body.appendChild(s);
       }
     }
@@ -262,10 +273,16 @@
   // Initialise history state for the current page so popstate has a url to work with
   history.replaceState({ url: location.href, idx: _navIndex }, '', location.href);
 
-  // Mark current page script as already loaded
+  // Mark current page script as already loaded and capture its init
   const currentScript = PAGE_SCRIPTS[location.pathname];
   if (currentScript) {
     _loadedScripts.add(currentScript);
+    // Capture __pageInit after the page script has executed (next microtask)
+    Promise.resolve().then(() => {
+      if (typeof window.__pageInit === 'function') {
+        _pageInitFns.set(currentScript, window.__pageInit);
+      }
+    });
   }
 
 })();

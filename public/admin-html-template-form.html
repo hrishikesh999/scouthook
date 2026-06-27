@@ -848,7 +848,7 @@
             var styleTag = document.querySelector('style');
             if (styleTag) {
               var css = styleTag.textContent || '';
-              var re = new RegExp('[.#]?([\\w-]+)\\s*\\{[^}]*' + needle.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&') + '[^}]*\\}', 'g');
+              var re = new RegExp('[.#]?([\\w-]+)\\s*\\{[^}]*' + needle.replace(/[.*+?^\${}()|[\\]\\\\]/g, '\\\\$&') + '[^}]*\\}', 'g');
               var m;
               while ((m = re.exec(css)) !== null) {
                 var sel = m[0].match(/^([^{]+)/);

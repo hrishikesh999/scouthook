@@ -1705,18 +1705,29 @@ function _renderTemplateIframe(html, slots) {
         }
       }
     }
-    // Apply only user-set color overrides — never override with manifest defaults,
-    // so the template's original CSS variables are preserved until the user changes them.
+    // Read actual color values from the template's own CSS variables,
+    // then sync the color picker inputs to match the real design.
     const colorRoot = doc.body.firstElementChild || doc.documentElement;
-    if (slots) {
-      for (const [key, val] of Object.entries(slots)) {
-        if (key.startsWith('color:') && val) {
-          colorRoot.style.setProperty('--' + key.slice('color:'.length), val);
+    const formPane = document.getElementById('html-tpl-form-pane');
+    for (const [key] of Object.entries(slotDefs)) {
+      if (!key.startsWith('color:')) continue;
+      const varName = key.slice('color:'.length);
+      // Check for user-set or pending overrides first
+      const userVal = (slots && slots[key]) || _pendingColorUpdates[key];
+      if (userVal) {
+        colorRoot.style.setProperty('--' + varName, userVal);
+      }
+      // Read the actual resolved value (from template inline style or user override)
+      const actual = colorRoot.style.getPropertyValue('--' + varName).trim();
+      if (actual && formPane) {
+        const picker = formPane.querySelector(`.html-tpl-color-swatch input[data-slot="${key}"]`);
+        const hex = formPane.querySelector(`.html-tpl-color-hex[data-slot="${key}"]`);
+        const normalized = _normalizeColor(actual);
+        if (normalized) {
+          if (picker) picker.value = normalized;
+          if (hex) hex.value = normalized;
         }
       }
-    }
-    for (const [key, val] of Object.entries(_pendingColorUpdates)) {
-      colorRoot.style.setProperty('--' + key.slice('color:'.length), val);
     }
   });
 }
@@ -2595,6 +2606,16 @@ const _COLOR_LABELS = {
 
 function _friendlyColorLabel(varName) {
   return _COLOR_LABELS[varName] || _slotLabel(varName);
+}
+
+function _normalizeColor(val) {
+  if (!val) return null;
+  val = val.trim();
+  if (/^#[0-9a-fA-F]{6}$/.test(val)) return val;
+  if (/^#[0-9a-fA-F]{3}$/.test(val)) return '#' + val[1]+val[1] + val[2]+val[2] + val[3]+val[3];
+  const m = val.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+  if (m) return '#' + [m[1],m[2],m[3]].map(n => parseInt(n).toString(16).padStart(2,'0')).join('');
+  return null;
 }
 
 // ── Instant DOM updates to the live iframe (no Puppeteer) ─────────────────

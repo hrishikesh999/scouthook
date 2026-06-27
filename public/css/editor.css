@@ -44,7 +44,7 @@
        Post card: max-width 720px, centered in #editor.  Improver: 322px from right.
        The bar sits halfway in the gap between them, using calc() on the right offset. */
     #visual-action-bar {
-      position: absolute; top: 50px; z-index: 10;
+      position: absolute; top: 65px; z-index: 10;
       right: calc(322px + (100% - 322px - 720px) / 2 - 32px);
       display: flex; flex-direction: column; align-items: center;
       gap: 10px;

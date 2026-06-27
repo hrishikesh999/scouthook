@@ -209,7 +209,7 @@
               <div class="config-slots" id="config-slots">
                 <!-- Click-to-add-slot popover -->
                 <div id="add-slot-popover" class="add-slot-popover" style="display:none">
-                  <div style="font-weight:600;font-size:.8rem;margin-bottom:6px">Add this element as a slot?</div>
+                  <div id="add-slot-popover-title" style="font-weight:600;font-size:.8rem;margin-bottom:6px">Add this element as a slot?</div>
                   <div style="font-size:.75rem;color:var(--text-muted);margin-bottom:8px"><strong id="add-slot-tag-label">H1</strong>: "<span id="add-slot-text-preview"></span>"</div>
                   <div style="display:flex;gap:6px;align-items:flex-end;margin-bottom:8px">
                     <div class="slot-card__field" style="flex:1"><label>Slot key</label><input type="text" id="add-slot-click-key" placeholder="headline" style="width:100%"></div>
@@ -776,7 +776,7 @@
           el.classList.add('slot-active');
           var existing = el.getAttribute('data-slot');
           if (existing) {
-            window.parent.postMessage({ type:'slot-click', key: existing }, '*');
+            window.parent.postMessage({ type:'slot-click', key: existing, tag: el.tagName, text: (el.textContent || '').trim().slice(0, 60), selector: buildSelector(el) }, '*');
           } else {
             window.parent.postMessage({
               type: 'slot-add-request',
@@ -899,7 +899,6 @@
 
   window.addEventListener('message', e => {
     if (e.data?.type === 'slot-click') {
-      _hideAddSlotPopover();
       _activeSlotKey = e.data.key;
       const card = document.querySelector(`.slot-card[data-slot-key="${e.data.key}"]`);
       if (card) {
@@ -907,6 +906,8 @@
         card.classList.add('slot-card--active');
         card.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
+      // Show popover for existing slot with "Delete element" option
+      if (e.data.selector) _showExistingSlotPopover(e.data);
     } else if (e.data?.type === 'slot-add-request') {
       _showAddSlotPopover(e.data);
     }
@@ -933,6 +934,16 @@
     return 'text';
   }
 
+  function _showExistingSlotPopover(data) {
+    _pendingSlotSelector = data.selector;
+    document.getElementById('add-slot-popover-title').textContent = `Slot: ${data.key}`;
+    document.getElementById('add-slot-tag-label').textContent = data.tag;
+    document.getElementById('add-slot-text-preview').textContent = data.text || '(empty)';
+    document.getElementById('add-slot-click-key').parentElement.parentElement.style.display = 'none';
+    document.getElementById('add-slot-click-confirm').style.display = 'none';
+    document.getElementById('add-slot-popover').style.display = '';
+  }
+
   function _showAddSlotPopover(data) {
     _pendingSlotSelector = data.selector;
     const popover = document.getElementById('add-slot-popover');
@@ -949,6 +960,9 @@
 
   function _hideAddSlotPopover() {
     document.getElementById('add-slot-popover').style.display = 'none';
+    document.getElementById('add-slot-click-key').parentElement.parentElement.style.display = '';
+    document.getElementById('add-slot-click-confirm').style.display = '';
+    document.getElementById('add-slot-popover-title').textContent = 'Add this element as a slot?';
     _pendingSlotSelector = null;
   }
 

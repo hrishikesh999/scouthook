@@ -392,21 +392,6 @@
     }
   }
 
-  // ── Color highlight (event delegation — runs once, survives re-renders) ──
-
-  document.getElementById('slot-list').addEventListener('mousedown', e => {
-    const picker = e.target.closest('input[type="color"]');
-    if (!picker) return;
-    const i = parseInt(picker.dataset.i);
-    const s = _slotState[i];
-    if (!s || !s.key.startsWith('color:')) return;
-    const varName = s.key.slice('color:'.length);
-    const iframe = document.getElementById('admin-tpl-iframe');
-    if (iframe?.contentWindow) {
-      iframe.contentWindow.postMessage({ type: 'admin-highlight-var', varName }, '*');
-    }
-  });
-
   // ── Step 2 initialization ────────────────────────────────────────────────
 
   function initStep2() {
@@ -608,7 +593,15 @@
       card.addEventListener('click', () => {
         _activeSlotKey = card.dataset.slotKey;
         list.querySelectorAll('.slot-card').forEach(c => c.classList.toggle('slot-card--active', c === card));
-        highlightSlotInPreview(_activeSlotKey);
+        if (_activeSlotKey.startsWith('color:')) {
+          const varName = _activeSlotKey.slice('color:'.length);
+          const iframe = document.getElementById('admin-tpl-iframe');
+          if (iframe?.contentWindow) {
+            iframe.contentWindow.postMessage({ type: 'admin-highlight-var', varName }, '*');
+          }
+        } else {
+          highlightSlotInPreview(_activeSlotKey);
+        }
       });
     });
 

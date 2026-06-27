@@ -1705,15 +1705,14 @@ function _renderTemplateIframe(html, slots) {
         }
       }
     }
-    // Apply color defaults from manifest first, then any user edits on top
-    // Target the root container div (where CSS vars are defined inline),
-    // not documentElement — inline style on the div has higher specificity.
+    // Apply only user-set color overrides — never override with manifest defaults,
+    // so the template's original CSS variables are preserved until the user changes them.
     const colorRoot = doc.body.firstElementChild || doc.documentElement;
-    for (const [key, def] of Object.entries(slotDefs)) {
-      if (key.startsWith('color:')) {
-        const varName = key.slice('color:'.length);
-        const val = _pendingColorUpdates[key] ?? _resolveBrandColor(key, def);
-        colorRoot.style.setProperty('--' + varName, val);
+    if (slots) {
+      for (const [key, val] of Object.entries(slots)) {
+        if (key.startsWith('color:') && val) {
+          colorRoot.style.setProperty('--' + key.slice('color:'.length), val);
+        }
       }
     }
     for (const [key, val] of Object.entries(_pendingColorUpdates)) {
@@ -2093,7 +2092,7 @@ function _closeMediaPicker() {
 
 function _mediaPickerEscHandler(e) { if (e.key === 'Escape') _closeMediaPicker(); }
 function _mediaPickerOutsideHandler(e) {
-  if (_activeMediaPicker && !_activeMediaPicker.contains(e.target) && !e.target.closest('.html-tpl-img-preview')) _closeMediaPicker();
+  if (_activeMediaPicker && !_activeMediaPicker.contains(e.target) && !e.target.closest('.html-tpl-img-zone')) _closeMediaPicker();
 }
 
 function _mpHeaders() {

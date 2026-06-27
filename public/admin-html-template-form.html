@@ -217,9 +217,11 @@
                       <select id="add-slot-click-type"><option value="text">Text</option><option value="color">Color</option><option value="image">Image</option></select>
                     </div>
                   </div>
-                  <div style="display:flex;gap:6px">
+                  <div style="display:flex;gap:6px;align-items:center">
                     <button class="btn btn--sm btn--primary" id="add-slot-click-confirm" type="button">Add slot</button>
                     <button class="btn btn--sm btn--secondary" id="add-slot-click-cancel" type="button">Cancel</button>
+                    <div style="flex:1"></div>
+                    <button class="btn btn--sm" id="add-slot-click-delete" type="button" style="background:none;border:none;color:#991b1b;font-size:.75rem;cursor:pointer;padding:2px 6px">Delete element</button>
                   </div>
                 </div>
 
@@ -939,6 +941,37 @@
 
     _hideAddSlotPopover();
     renderSlotCards();
+    renderPreview();
+  });
+
+  document.getElementById('add-slot-click-delete').addEventListener('click', () => {
+    if (!_pendingSlotSelector) return;
+    if (!confirm('Delete this element from the template?')) return;
+
+    try {
+      const doc = new DOMParser().parseFromString(_templateHtml, 'text/html');
+      const el = doc.querySelector(_pendingSlotSelector);
+      if (!el) { alert('Could not find the element.'); return; }
+
+      // If it had a slot, remove from _slotState too
+      const slotKey = el.getAttribute('data-slot');
+      if (slotKey) {
+        const idx = _slotState.findIndex(s => s.key === slotKey);
+        if (idx >= 0) _slotState.splice(idx, 1);
+      }
+
+      el.remove();
+      _templateHtml = '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
+      document.getElementById('f-html').value = _templateHtml;
+      if (document.getElementById('raw-html')) document.getElementById('raw-html').value = _templateHtml;
+    } catch (err) {
+      alert('Failed to delete: ' + err.message);
+      return;
+    }
+
+    _hideAddSlotPopover();
+    renderSlotCards();
+    updateManifest();
     renderPreview();
   });
 

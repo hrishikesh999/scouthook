@@ -743,8 +743,8 @@ function serveStoredFile(type) {
     let ownerId = req.userId;
     if (type === 'uploads') {
       const row = await db.prepare(
-        'SELECT user_id FROM media_files WHERE stored_name = ? AND tenant_id = ?'
-      ).get(filename, req.tenantId);
+        'SELECT user_id FROM media_files WHERE (stored_name = ? OR thumbnail_url = ?) AND tenant_id = ?'
+      ).get(filename, `/uploads/${filename}`, req.tenantId);
       if (!row) return res.status(404).end();
       ownerId = row.user_id;
     }

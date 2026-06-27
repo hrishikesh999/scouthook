@@ -54,7 +54,7 @@ async function init() {
 
   uploadZone.addEventListener('click', () => { if (!uploading) fileInput.click(); }, { signal });
   fileInput.addEventListener('change', () => {
-    if (fileInput.files.length) processFiles(fileInput, uploadZone, uploadProgress, mediaGrid, emptyMediaMsg);
+    if (fileInput.files.length) processFiles(Array.from(fileInput.files), uploadZone, uploadProgress, mediaGrid, emptyMediaMsg);
     fileInput.value = '';
   }, { signal });
   uploadZone.addEventListener('dragover', (e) => { e.preventDefault(); uploadZone.classList.add('dragover'); }, { signal });

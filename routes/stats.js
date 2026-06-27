@@ -548,7 +548,7 @@ router.get('/posts', async (req, res) => {
     let posts;
     if (status === 'published') {
       posts = await db.prepare(`
-        SELECT id, content, format_slug, published_at, linkedin_post_id,
+        SELECT id, LEFT(content, 200) AS content, format_slug, published_at, linkedin_post_id,
                asset_type, funnel_type, performance_tag, archetype_used
         FROM   generated_posts
         WHERE  tenant_id = ? AND status = 'published'
@@ -556,7 +556,7 @@ router.get('/posts', async (req, res) => {
       `).all(tenantId);
     } else {
       posts = await db.prepare(`
-        SELECT id, content, quality_score, passed_gate, format_slug, status, created_at, funnel_type, first_comment
+        SELECT id, LEFT(content, 200) AS content, quality_score, passed_gate, format_slug, status, created_at, funnel_type, first_comment
         FROM   generated_posts
         WHERE  tenant_id = ? AND status = 'draft'
         ORDER  BY created_at DESC

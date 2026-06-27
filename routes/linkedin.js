@@ -1006,7 +1006,7 @@ router.get('/scheduled', (req, res) => {
 
   (async () => {
     const posts = await db.prepare(`
-      SELECT sp.id, sp.content, sp.scheduled_for, sp.status,
+      SELECT sp.id, LEFT(sp.content, 300) AS content, sp.scheduled_for, sp.status,
              sp.linkedin_post_id, sp.error_message, sp.attempts, sp.created_at,
              sp.post_id, gp.format_slug, gp.funnel_type
       FROM   scheduled_posts sp

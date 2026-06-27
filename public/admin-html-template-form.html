@@ -808,9 +808,9 @@
           } else if (d.type === 'admin-highlight-var') {
             var root = document.body.firstElementChild || document.documentElement;
             var orig = root.style.getPropertyValue('--' + d.varName);
-            root.style.setProperty('--' + d.varName, '#ff00ff');
+            root.style.setProperty('--' + d.varName, '#FEF08A');
             setTimeout(function() { root.style.setProperty('--' + d.varName, orig || ''); }, 600);
-            setTimeout(function() { root.style.setProperty('--' + d.varName, '#ff00ff'); }, 900);
+            setTimeout(function() { root.style.setProperty('--' + d.varName, '#FEF08A'); }, 900);
             setTimeout(function() { root.style.setProperty('--' + d.varName, orig || ''); }, 1200);
           }
         });

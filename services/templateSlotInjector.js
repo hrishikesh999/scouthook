@@ -65,8 +65,12 @@ function readSlotManifest(html) {
 // ---------------------------------------------------------------------------
 
 function stripScriptTags(html) {
-  // Remove all <script ...>...</script> blocks (non-greedy, case-insensitive)
-  return html.replace(/<script[\s\S]*?<\/script>/gi, '');
+  // Remove executable <script> blocks but preserve <script type="application/json">
+  // (template-meta manifest is JSON, not executable — safe to keep)
+  return html.replace(/<script(?=[^>]*>)[\s\S]*?<\/script>/gi, match => {
+    if (/type\s*=\s*["']application\/json["']/i.test(match)) return match;
+    return '';
+  });
 }
 
 // ---------------------------------------------------------------------------

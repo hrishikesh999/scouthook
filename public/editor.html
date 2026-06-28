@@ -504,6 +504,51 @@ function escHtml(str) {
   return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+function _autoDetectSlots(html) {
+  const slots = {};
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+
+  // Detect text and image slots from data-slot attributes
+  doc.querySelectorAll('[data-slot]').forEach(el => {
+    const key = el.getAttribute('data-slot');
+    if (!key) return;
+    if (key.startsWith('image:')) {
+      slots[key] = {};
+    } else if (el.tagName === 'IMG') {
+      slots[key.startsWith('image:') ? key : 'image:' + key] = {};
+    } else {
+      const text = (el.textContent || '').trim();
+      slots[key] = text.length > 120 ? { maxLen: 0 } : { maxLen: text.length > 40 ? 200 : 100 };
+    }
+  });
+
+  // Detect color slots from CSS custom properties on the root container
+  const root = doc.body?.firstElementChild;
+  if (root) {
+    const style = root.getAttribute('style') || '';
+    const varPattern = /--([a-zA-Z0-9_-]+)\s*:\s*([^;]+)/g;
+    let m;
+    while ((m = varPattern.exec(style)) !== null) {
+      const varName = m[1];
+      const val = m[2].trim();
+      if (/^(#[0-9a-fA-F]{3,8}|rgba?\([^)]+\)|hsla?\([^)]+\))$/.test(val)) {
+        slots['color:' + varName] = { default: val };
+      }
+    }
+  }
+
+  // Detect dimensions from root container or meta viewport
+  let width = 1080, height = 1080;
+  if (root) {
+    const w = parseInt(root.style.width);
+    const h = parseInt(root.style.height);
+    if (w > 0) width = w;
+    if (h > 0) height = h;
+  }
+
+  return { slots, dimensions: { width, height } };
+}
+
 function _parseManifestFromHtml(html) {
   const tag = '<script type="application/json" id="template-meta">';
   const alt = "<script type='application/json' id='template-meta'>";
@@ -1477,11 +1522,20 @@ async function _selectHtmlTemplate(templateId) {
     _htmlTplTemplateHtml = await htmlRes.text();
     _htmlTplExtractedSlots = {};
 
-    // Parse manifest from the HTML itself (source of truth) —
+    // Parse manifest from the HTML itself if available —
     // the DB column may be stale or empty
     const htmlManifest = _parseManifestFromHtml(_htmlTplTemplateHtml);
     if (htmlManifest && Object.keys(htmlManifest.slots || {}).length > 0) {
       _htmlTplSelectedMeta = { ..._htmlTplSelectedMeta, slot_manifest: htmlManifest };
+    }
+
+    // If manifest is still empty, auto-detect slots from HTML DOM
+    const currentManifest = _htmlTplSelectedMeta?.slot_manifest || {};
+    if (!currentManifest.slots || Object.keys(currentManifest.slots).length === 0) {
+      const detected = _autoDetectSlots(_htmlTplTemplateHtml);
+      if (Object.keys(detected.slots).length > 0) {
+        _htmlTplSelectedMeta = { ..._htmlTplSelectedMeta, slot_manifest: detected };
+      }
     }
 
     _renderTemplateIframe(_htmlTplTemplateHtml, null);

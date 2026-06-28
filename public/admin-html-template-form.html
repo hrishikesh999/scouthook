@@ -239,7 +239,7 @@
                 </div>
 
                 <!-- Content Slots accordion -->
-                <div class="slots-accordion-header open" id="acc-content-header" onclick="toggleAccordion('content')">
+                <div class="slots-accordion-header open" id="acc-content-header">
                   <span class="slots-accordion-chevron">›</span>
                   <span class="slots-accordion-title">Content Slots</span>
                   <span class="slots-accordion-count">(<span id="slot-count">0</span>)</span>
@@ -256,7 +256,7 @@
                 </div>
 
                 <!-- Colors & Brand accordion -->
-                <div class="slots-accordion-header" id="acc-colors-header" onclick="toggleAccordion('colors')">
+                <div class="slots-accordion-header" id="acc-colors-header">
                   <span class="slots-accordion-chevron">›</span>
                   <span class="slots-accordion-title">Colors &amp; Brand</span>
                   <span class="slots-accordion-count">(<span id="color-slot-count">0</span>)</span>
@@ -712,9 +712,7 @@
             s.config.default = '#cccccc';
             delete s.config.brandRole;
           }
-          _renderColorSlotSection();
-          _wireColorSlotEvents();
-          _updateSimPanel();
+          renderSlotCards();
         }
         updateManifest();
       });
@@ -741,10 +739,7 @@
         const s = _slotState[i];
         if (!s || !confirm(`Remove slot "${s.key}"?`)) return;
         _slotState.splice(i, 1);
-        _renderColorSlotSection();
-        _wireColorSlotEvents();
-        updateManifest();
-        _updateSimPanel();
+        renderSlotCards();
       });
     });
 
@@ -1787,20 +1782,22 @@
 
   // ── Helpers ───────────────────────────────────────────────────────────────
 
-  window.toggleAccordion = function(section) {
+  function toggleAccordion(section) {
     const contentH = document.getElementById('acc-content-header');
     const colorsH = document.getElementById('acc-colors-header');
     if (section === 'content') {
       const wasOpen = contentH.classList.contains('open');
       contentH.classList.toggle('open', !wasOpen);
-      // Auto-collapse other if opening
       if (!wasOpen) colorsH.classList.remove('open');
     } else {
       const wasOpen = colorsH.classList.contains('open');
       colorsH.classList.toggle('open', !wasOpen);
       if (!wasOpen) contentH.classList.remove('open');
     }
-  };
+  }
+
+  document.getElementById('acc-content-header').addEventListener('click', () => toggleAccordion('content'));
+  document.getElementById('acc-colors-header').addEventListener('click', () => toggleAccordion('colors'));
 
   function _parseManifestFromHtml(html) {
     const tag = '<script type="application/json" id="template-meta">';

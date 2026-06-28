@@ -47,7 +47,7 @@
     .config-panels { display:flex; gap:0; min-height:500px; border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; }
     .config-preview { flex:1; background:#f3f4f6; display:flex; align-items:center; justify-content:center; overflow:hidden; position:relative; border-right:1px solid var(--border); }
     .config-preview iframe { border:none; display:block; transform-origin:top left; }
-    .config-slots { width:360px; flex-shrink:0; overflow-y:auto; padding:16px 20px; max-height:600px; }
+    .config-slots { width:480px; flex-shrink:0; overflow-y:auto; padding:16px 24px; max-height:600px; }
     .config-slots-title { font-size:.82rem; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:.04em; margin-bottom:12px; }
 
     /* Slot cards */
@@ -565,22 +565,28 @@
       const _autoRole = _autoDetectBrandRole(_varName);
       const _curRole = ib ? (s.config.brandRole || 'auto') : '';
       const _resolvedRole = _curRole === 'auto' ? _autoRole : _curRole;
-      body = `<div class="slot-card__field"><label>Color</label><div style="display:flex;gap:4px;align-items:center">
-        <input type="color" data-i="${i}" data-c="colorPicker" value="${esc(cv)}" ${ib?'disabled':''}>
-        <input type="text" class="hex-input" data-i="${i}" data-c="colorHex" value="${esc(ib?'brand':cv)}" maxlength="9" ${ib?'disabled':''}></div></div>
-        <div class="slot-card__field"><label>Brand</label>
-        <select data-i="${i}" data-c="brandRole" style="font-size:.72rem;padding:2px 4px;border:1px solid var(--border);border-radius:4px;min-width:90px;cursor:pointer">
-          <option value=""${!_curRole?' selected':''}>None</option>
-          <option value="auto"${_curRole==='auto'?' selected':''}>Auto → ${esc(_autoRole)}</option>
-          <option value="bg"${_curRole==='bg'?' selected':''}>Background</option>
-          <option value="accent"${_curRole==='accent'?' selected':''}>Accent</option>
-          <option value="text"${_curRole==='text'?' selected':''}>Text</option>
-          <option value="text_muted"${_curRole==='text_muted'?' selected':''}>Text Muted</option>
-          <option value="secondary_bg"${_curRole==='secondary_bg'?' selected':''}>Secondary BG</option>
-          <option value="secondary_text"${_curRole==='secondary_text'?' selected':''}>Secondary Text</option>
-          <option value="border"${_curRole==='border'?' selected':''}>Border</option>
-          <option value="overlay"${_curRole==='overlay'?' selected':''}>Overlay</option>
-        </select></div>${ib ? `<div style="align-self:center"><span style="font-size:.62rem;font-weight:600;color:#0f766e;background:#f0fdf4;padding:2px 6px;border-radius:3px;white-space:nowrap">→ ${esc(_brandRoleLabel(_resolvedRole))}</span></div>` : ''}`;
+      body = `<div style="display:grid;grid-template-columns:auto 1fr;gap:8px 12px;align-items:center;width:100%">
+        <label style="font-size:.7rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.03em">Color</label>
+        <div style="display:flex;gap:6px;align-items:center">
+          <input type="color" data-i="${i}" data-c="colorPicker" value="${esc(cv)}" style="width:36px;height:28px;border:1px solid var(--border);border-radius:4px;padding:1px;cursor:pointer" ${ib?'disabled':''}>
+          <input type="text" class="hex-input" data-i="${i}" data-c="colorHex" value="${esc(ib?'brand':cv)}" maxlength="9" style="width:90px;font-family:monospace;font-size:.78rem" ${ib?'disabled':''}>
+        </div>
+        <label style="font-size:.7rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.03em">Brand</label>
+        <div style="display:flex;gap:8px;align-items:center">
+          <select data-i="${i}" data-c="brandRole" style="font-size:.78rem;padding:4px 8px;border:1px solid var(--border);border-radius:5px;flex:1;cursor:pointer;background:#fff">
+            <option value=""${!_curRole?' selected':''}>None</option>
+            <option value="auto"${_curRole==='auto'?' selected':''}>Auto → ${esc(_autoRole)}</option>
+            <option value="bg"${_curRole==='bg'?' selected':''}>Background</option>
+            <option value="accent"${_curRole==='accent'?' selected':''}>Accent</option>
+            <option value="text"${_curRole==='text'?' selected':''}>Text</option>
+            <option value="text_muted"${_curRole==='text_muted'?' selected':''}>Text Muted</option>
+            <option value="secondary_bg"${_curRole==='secondary_bg'?' selected':''}>Secondary BG</option>
+            <option value="secondary_text"${_curRole==='secondary_text'?' selected':''}>Secondary Text</option>
+            <option value="border"${_curRole==='border'?' selected':''}>Border</option>
+            <option value="overlay"${_curRole==='overlay'?' selected':''}>Overlay</option>
+          </select>${ib ? `<span style="font-size:.68rem;font-weight:600;color:#0f766e;background:#f0fdf4;padding:3px 8px;border-radius:4px;white-space:nowrap">→ ${esc(_brandRoleLabel(_resolvedRole))}</span>` : ''}
+        </div>
+      </div>`;
     } else if (s.type === 'image') {
       const _ov = _imageOverrides[s.key];
       const _hasSrc = _ov !== undefined ? !!_ov : !!(s.config.src);

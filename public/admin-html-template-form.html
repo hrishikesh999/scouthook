@@ -401,13 +401,18 @@
       document.getElementById('f-category').value = t.category || '';
       document.getElementById('f-sort').value = t.sort_order ?? 0;
       _existingManifest = typeof t.slot_manifest === 'string' ? JSON.parse(t.slot_manifest) : (t.slot_manifest || {});
-      if (_existingManifest.dimensions) {
-        document.getElementById('f-dim-w').value = _existingManifest.dimensions.width || 1080;
-        document.getElementById('f-dim-h').value = _existingManifest.dimensions.height || 1080;
-      }
       if (htmlRes.ok) {
         _templateHtml = await htmlRes.text();
         document.getElementById('f-html').value = _templateHtml;
+        // Parse manifest from template HTML (source of truth) — DB column may be empty
+        const htmlManifest = _parseManifestFromHtml(_templateHtml);
+        if (htmlManifest && Object.keys(htmlManifest.slots || {}).length > 0) {
+          _existingManifest = htmlManifest;
+        }
+      }
+      if (_existingManifest.dimensions) {
+        document.getElementById('f-dim-w').value = _existingManifest.dimensions.width || 1080;
+        document.getElementById('f-dim-h').value = _existingManifest.dimensions.height || 1080;
       }
 
       // Load original image for comparison/refinement (non-blocking)
@@ -1552,6 +1557,17 @@
   });
 
   // ── Helpers ───────────────────────────────────────────────────────────────
+
+  function _parseManifestFromHtml(html) {
+    const tag = '<script type="application/json" id="template-meta">';
+    const alt = "<script type='application/json' id='template-meta'>";
+    let start = html.indexOf(tag), tl = tag.length;
+    if (start === -1) { start = html.indexOf(alt); tl = alt.length; }
+    if (start === -1) return null;
+    const end = html.indexOf('<\/' + 'script>', start + tl);
+    if (end === -1) return null;
+    try { return JSON.parse(html.slice(start + tl, end).trim()); } catch { return null; }
+  }
 
   function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   function showError(id, msg) { const el = document.getElementById(id); el.textContent = msg; el.classList.remove('hidden'); }

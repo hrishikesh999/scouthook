@@ -706,12 +706,6 @@ app.get([
   '/linkedin.html',
 ], requireLoginHtml);
 
-app.get('/Published.html', (req, res) => res.redirect(301, '/published.html'));
-app.get('/published.html', requireLoginHtml, (req, res) => {
-  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-  res.sendFile(path.join(__dirname, 'public', 'published.html'));
-});
-
 // Post editor — path-based routing so postId is in the URL, not a query param
 app.get('/editor/:postId', requireLoginHtml, (req, res) => {
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');

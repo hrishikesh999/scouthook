@@ -7,19 +7,25 @@ function toTitleCase(str) {
 }
 
 function hookLine(content) {
-  const line = (content || '').split('\n').find(l => l.trim().length > 0) || '';
-  return line.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  var line = (content || '').split('\n').find(function (l) { return l.trim().length > 0; }) || '';
+  return line.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function escAttr(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 /* ── Render ──────────────────────────────────────────────────── */
-async function parseJsonResponse(res) {
-  const text = await res.text();
-  if (!text) return {};
-  try { return JSON.parse(text); } catch { return {}; }
+function parseJsonResponse(res) {
+  return res.text().then(function (text) {
+    if (!text) return {};
+    try { return JSON.parse(text); } catch (e) { return {}; }
+  });
 }
 
 function deleteDraftErrorMessage(code) {
-  const map = {
+  var map = {
     post_not_found:              'This draft is no longer available.',
     only_drafts_deletable:       'Only drafts can be deleted.',
     cannot_delete_scheduled_post:'This post is scheduled — pause scheduling first.',
@@ -31,124 +37,127 @@ function deleteDraftErrorMessage(code) {
 }
 
 function renderList(posts) {
-  const container = document.getElementById('drafts-container');
+  var container = document.getElementById('drafts-container');
+  if (!container) return;
 
-  const rows = posts.map(post => {
-    const dateStr  = post.created_at
+  var rows = posts.map(function (post) {
+    var dateStr = post.created_at
       ? new Date(post.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
       : '';
-    const archetype = toTitleCase(post.format_slug);
-    const hook      = hookLine(post.content);
-    const url       = `/editor/${encodeURIComponent(post.id)}`;
-    const pid       = String(post.id);
+    var archetype = toTitleCase(post.format_slug);
+    var hook      = hookLine(post.content);
+    var url       = '/editor/' + encodeURIComponent(post.id);
+    var pid       = String(post.id);
 
-    const funnelBadge = post.funnel_type
-      ? `<span class="funnel-badge ${post.funnel_type}">${post.funnel_type}</span>` : '';
+    var funnelBadge = post.funnel_type
+      ? '<span class="funnel-badge ' + escAttr(post.funnel_type) + '">' + escAttr(post.funnel_type) + '</span>'
+      : '';
 
-    return `
-      <div class="draft-row" data-post-id="${pid}" data-url="${url}">
-        <div class="draft-row-meta">
-          <span class="draft-row-date">${dateStr}</span>
-          <span class="pub-archetype-badge">${archetype}</span>
-          ${funnelBadge}
-        </div>
-        <p class="draft-row-hook">${hook}</p>
-        <div class="draft-row-actions">
-          <button type="button" class="draft-row-delete" data-post-id="${pid}" aria-label="Delete draft">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
-          </button>
-        </div>
-      </div>`;
+    return '<div class="draft-row" data-post-id="' + escAttr(pid) + '" data-url="' + escAttr(url) + '">'
+      + '<div class="draft-row-meta">'
+      + '<span class="draft-row-date">' + escAttr(dateStr) + '</span>'
+      + '<span class="pub-archetype-badge">' + escAttr(archetype) + '</span>'
+      + funnelBadge
+      + '</div>'
+      + '<p class="draft-row-hook">' + hook + '</p>'
+      + '<div class="draft-row-actions">'
+      + '<button type="button" class="draft-row-delete" data-post-id="' + escAttr(pid) + '" aria-label="Delete draft">'
+      + '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>'
+      + '</button>'
+      + '</div>'
+      + '</div>';
   }).join('');
 
-  container.innerHTML = `<div id="drafts-list">${rows}</div>`;
+  container.innerHTML = '<div id="drafts-list">' + rows + '</div>';
   bindDeleteButtons(container);
   bindRowClicks(container);
 }
 
 function renderEmpty() {
-  const container = document.getElementById('drafts-container');
-  container.innerHTML = `
-    <div class="drafts-empty">
-      <a href="/generate.html?new=1" class="btn-teal-filled">Create Your First Post</a>
-      <p class="drafts-empty-sub">You are one click away from an authoritative post.</p>
-    </div>`;
+  var container = document.getElementById('drafts-container');
+  if (!container) return;
+  container.innerHTML = '<div class="drafts-empty">'
+    + '<a href="/generate.html?new=1" class="btn-teal-filled">Create Your First Post</a>'
+    + '<p class="drafts-empty-sub">You are one click away from an authoritative post.</p>'
+    + '</div>';
 }
 
 function bindDeleteButtons(container) {
-  container.querySelectorAll('.draft-row-delete').forEach(btn => {
-    btn.addEventListener('click', async e => {
+  container.querySelectorAll('.draft-row-delete').forEach(function (btn) {
+    btn.addEventListener('click', function (e) {
       e.preventDefault();
       e.stopPropagation();
-      const id = btn.getAttribute('data-post-id');
+      var id = btn.getAttribute('data-post-id');
       if (!id) return;
       if (!window.confirm('Delete this draft? This cannot be undone.')) return;
       if (btn.dataset.deleting === '1') return;
       btn.dataset.deleting = '1';
       btn.disabled = true;
-      try {
-        const res  = await fetch(`/api/posts/${encodeURIComponent(id)}/delete`, {
-          method: 'POST',
-          headers: apiHeaders(),
+
+      fetch('/api/posts/' + encodeURIComponent(id) + '/delete', {
+        method: 'POST',
+        headers: apiHeaders(),
+      })
+        .then(function (res) { return parseJsonResponse(res).then(function (data) { return { res: res, data: data }; }); })
+        .then(function (result) {
+          if (!result.res.ok || !result.data.ok) throw new Error(deleteDraftErrorMessage(result.data.error));
+
+          cachedFetch.bust('/api/posts');
+          var row = btn.closest('.draft-row');
+          if (row) row.remove();
+
+          var remaining = document.querySelectorAll('.draft-row').length;
+          var titleEl   = document.getElementById('drafts-title');
+          if (titleEl) titleEl.textContent = remaining > 0 ? 'Drafts (' + remaining + ')' : 'Drafts';
+          if (remaining === 0) renderEmpty();
+
+          if (window.toast && window.toast.success) window.toast.success('Draft deleted.');
+        })
+        .catch(function (err) {
+          if (window.toast && window.toast.error) window.toast.error(err.message || 'Could not delete draft. Please try again.');
+          else window.alert(err.message || 'Could not delete draft');
+          btn.disabled = false;
+          btn.dataset.deleting = '';
         });
-        const data = await parseJsonResponse(res);
-        if (!res.ok || !data.ok) throw new Error(deleteDraftErrorMessage(data.error));
-
-        cachedFetch.bust('/api/posts');
-        const row = btn.closest('.draft-row');
-        row?.remove();
-
-        const remaining = document.querySelectorAll('.draft-row').length;
-        const titleEl   = document.getElementById('drafts-title');
-        if (titleEl) titleEl.textContent = remaining > 0 ? `Drafts (${remaining})` : 'Drafts';
-        if (remaining === 0) renderEmpty();
-
-        if (window.toast?.success) window.toast.success('Draft deleted.');
-      } catch (err) {
-        if (window.toast?.error) window.toast.error(err.message || 'Could not delete draft. Please try again.');
-        else window.alert(err.message || 'Could not delete draft');
-        btn.disabled = false;
-        btn.dataset.deleting = '';
-      }
     });
   });
 }
 
 function bindRowClicks(container) {
-  container.querySelectorAll('.draft-row').forEach(row => {
-    row.addEventListener('click', () => {
-      const url = row.getAttribute('data-url');
+  container.querySelectorAll('.draft-row').forEach(function (row) {
+    row.addEventListener('click', function () {
+      var url = row.getAttribute('data-url');
       if (url) window.location.href = url;
     });
   });
 }
 
 /* ── Init ────────────────────────────────────────────────────── */
-async function init() {
+function init() {
   if (sessionStorage.getItem('sh_just_published') === '1') {
     sessionStorage.removeItem('sh_just_published');
     cachedFetch.bust('/api/posts');
     cachedFetch.bust('/api/posts?status=published');
-    if (window.toast?.success) window.toast.success('Post published successfully.');
+    if (window.toast && window.toast.success) window.toast.success('Post published successfully.');
     else {
-      const banner = document.getElementById('publish-banner');
-      if (banner) { banner.classList.remove('hidden'); setTimeout(() => banner.classList.add('hidden'), 5000); }
+      var banner = document.getElementById('publish-banner');
+      if (banner) { banner.classList.remove('hidden'); setTimeout(function () { banner.classList.add('hidden'); }, 5000); }
     }
   }
 
-  try {
-    const data = await cachedFetch('/api/posts', { headers: apiHeaders() }, 60_000);
-
-    if (!data.ok || !Array.isArray(data.posts) || data.posts.length === 0) {
+  cachedFetch('/api/posts', { headers: apiHeaders() }, 60000)
+    .then(function (data) {
+      if (!data.ok || !Array.isArray(data.posts) || data.posts.length === 0) {
+        renderEmpty();
+      } else {
+        var titleEl = document.getElementById('drafts-title');
+        if (titleEl) titleEl.textContent = 'Drafts (' + data.posts.length + ')';
+        renderList(data.posts);
+      }
+    })
+    .catch(function () {
       renderEmpty();
-    } else {
-      const titleEl = document.getElementById('drafts-title');
-      if (titleEl) titleEl.textContent = `Drafts (${data.posts.length})`;
-      renderList(data.posts);
-    }
-  } catch {
-    renderEmpty();
-  }
+    });
 }
 
 window.__pageInit = init;

@@ -640,8 +640,9 @@
         <div class="slot-card__field"><label>Max</label><input type="number" data-i="${i}" data-c="max" value="${s.config.max||10}" min="1" max="50"></div>`;
     }
 
+    const displayKey = s.key.replace(/^(color:|text:|image:)/, '');
     return `<div class="slot-card${active}" data-slot-key="${esc(s.key)}" data-i="${i}">
-      <div class="slot-card__header"><span class="slot-type ${tc}">${tl}</span><span class="slot-card__key" data-i="${i}" title="Double-click to rename">${esc(s.key)}</span>${s.orphaned?'<span style="color:#92400e;font-size:.7rem">⚠</span>':''}<button class="slot-card__delete" data-i="${i}" title="Delete slot">x</button></div>
+      <div class="slot-card__header"><span class="slot-type ${tc}">${tl}</span><span class="slot-card__key" data-i="${i}" title="Double-click to rename">${esc(displayKey)}</span>${s.orphaned?'<span style="color:#92400e;font-size:.7rem">⚠</span>':''}<button class="slot-card__delete" data-i="${i}" title="Delete slot">x</button></div>
       <div class="slot-card__body">${body}</div></div>`;
   }
 
@@ -750,16 +751,15 @@
         if (!s) return;
         const input = document.createElement('input');
         input.className = 'slot-card__key--editing';
-        input.value = s.key;
+        input.value = s.key.replace(/^color:/, '');
         span.replaceWith(input);
         input.focus(); input.select();
         const commit = () => {
-          const newKey = input.value.trim();
-          if (newKey && newKey !== s.key && !_slotState.some((x, j) => j !== i && x.key === newKey)) {
+          const raw = input.value.trim().replace(/^(color:|text:|image:)/, '');
+          const newKey = 'color:' + raw;
+          if (raw && newKey !== s.key && !_slotState.some((x, j) => j !== i && x.key === newKey)) {
             s.key = newKey;
-            if (newKey.startsWith('color:')) s.type = 'color';
-            else if (newKey.startsWith('image:')) s.type = 'image';
-            else s.type = 'text';
+            s.type = 'color';
           }
           renderSlotCards();
           renderPreview();
@@ -850,23 +850,24 @@
       });
     });
 
-    // Slot rename (double-click key label)
+    // Slot rename (double-click key label) — content slots only
     list.querySelectorAll('.slot-card__key').forEach(span => {
       span.addEventListener('dblclick', e => {
         e.stopPropagation();
         const i = parseInt(span.dataset.i), s = _slotState[i];
         if (!s) return;
+        const prefix = s.key.startsWith('image:') ? 'image:' : '';
         const input = document.createElement('input');
         input.className = 'slot-card__key--editing';
-        input.value = s.key;
+        input.value = s.key.replace(/^(text:|image:)/, '');
         span.replaceWith(input);
         input.focus();
         input.select();
         const commit = () => {
-          const newKey = input.value.trim();
-          if (newKey && newKey !== s.key && !_slotState.some((x, j) => j !== i && x.key === newKey)) {
+          const raw = input.value.trim().replace(/^(text:|image:|color:)/, '');
+          const newKey = prefix + raw;
+          if (raw && newKey !== s.key && !_slotState.some((x, j) => j !== i && x.key === newKey)) {
             const oldKey = s.key;
-            // Update data-slot in the HTML
             try {
               const doc = new DOMParser().parseFromString(_templateHtml, 'text/html');
               const el = doc.querySelector(`[data-slot="${oldKey}"]`);
@@ -881,9 +882,7 @@
               console.warn('[slot-rename] HTML update failed:', err.message);
             }
             s.key = newKey;
-            if (newKey.startsWith('color:')) s.type = 'color';
-            else if (newKey.startsWith('image:')) s.type = 'image';
-            else if (!newKey.startsWith('color:') && !newKey.startsWith('image:')) s.type = 'text';
+            s.type = prefix === 'image:' ? 'image' : 'text';
           }
           renderSlotCards();
           updateManifest();

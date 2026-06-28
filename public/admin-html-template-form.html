@@ -234,6 +234,38 @@
                   </div>
                   <button class="btn btn--sm btn--secondary" id="add-slot-btn" type="button">+</button>
                 </div>
+
+                <!-- Simulate Brand Colors panel -->
+                <div id="brand-sim-panel" style="display:none;margin-top:14px;padding:12px;background:rgba(15,118,110,0.03);border:1px solid rgba(15,118,110,0.12);border-radius:8px">
+                  <div style="font-size:.72rem;font-weight:700;color:var(--brand,#0f766e);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">Simulate Brand Colors</div>
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 12px">
+                    <div style="display:flex;align-items:center;gap:5px">
+                      <input type="color" id="sim-bg" value="#0F1A3C" style="width:24px;height:20px;border:1px solid var(--border);border-radius:3px;padding:0;cursor:pointer">
+                      <span style="font-size:.68rem;font-weight:600;color:var(--text-muted)">BG</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:5px">
+                      <input type="color" id="sim-accent" value="#0D7A5F" style="width:24px;height:20px;border:1px solid var(--border);border-radius:3px;padding:0;cursor:pointer">
+                      <span style="font-size:.68rem;font-weight:600;color:var(--text-muted)">Accent</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:5px">
+                      <input type="color" id="sim-text" value="#F0F4FF" style="width:24px;height:20px;border:1px solid var(--border);border-radius:3px;padding:0;cursor:pointer">
+                      <span style="font-size:.68rem;font-weight:600;color:var(--text-muted)">Text</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:5px">
+                      <input type="color" id="sim-secondary-bg" value="#1A2A4A" style="width:24px;height:20px;border:1px solid var(--border);border-radius:3px;padding:0;cursor:pointer">
+                      <span style="font-size:.68rem;font-weight:600;color:var(--text-muted)">2nd BG</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:5px;grid-column:span 2">
+                      <input type="color" id="sim-secondary-text" value="#AABBCC" style="width:24px;height:20px;border:1px solid var(--border);border-radius:3px;padding:0;cursor:pointer">
+                      <span style="font-size:.68rem;font-weight:600;color:var(--text-muted)">2nd Text</span>
+                    </div>
+                  </div>
+                  <div id="sim-mapping-table" style="margin-top:8px"></div>
+                  <div style="display:flex;gap:6px;margin-top:8px">
+                    <button type="button" id="sim-apply" class="btn btn--sm btn--primary" style="font-size:.72rem;padding:4px 12px">Apply to Preview</button>
+                    <button type="button" id="sim-reset" class="btn btn--sm btn--secondary" style="font-size:.72rem;padding:4px 12px">Reset</button>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -404,6 +436,7 @@
     document.getElementById('raw-html').value = _templateHtml;
     renderSlotCards();
     updateManifest();
+    _wireSimPanel();
     // Delay preview until browser has painted the panel (clientWidth needs layout)
     requestAnimationFrame(() => requestAnimationFrame(() => renderPreview()));
   }
@@ -411,6 +444,43 @@
   // ── Slot scanner ─────────────────────────────────────────────────────────
 
   const CSS_VAR_SKIP = new Set(['font-sans','font-mono','font-heading','font-body','space-xs','space-sm','space-md','space-lg','space-xl','radius','radius-sm','radius-md','radius-lg','border','surface','surface-2','bg-surface','bg-subtle','text-heading','text-secondary','text-muted','text-primary','brand','neutral-50','neutral-100','error','success','warning']);
+
+  // ── Brand role helpers (mirrors server-side resolveBrandRole) ──────────
+
+  function _blendHex(hexA, hexB, ratio) {
+    const parse = h => [parseInt(h.slice(1,3),16), parseInt(h.slice(3,5),16), parseInt(h.slice(5,7),16)];
+    const a = parse(hexA), b = parse(hexB);
+    return '#' + a.map((v, j) => Math.round(v * ratio + b[j] * (1 - ratio)).toString(16).padStart(2, '0')).join('');
+  }
+
+  function _autoDetectBrandRole(varName) {
+    const r = varName.toLowerCase();
+    if (/^(bg|background|card_bg|card-bg|surface|secondary_bg|secondary-bg)$/.test(r)) return 'bg';
+    if (/^(text|heading|heading_color|title|subtitle|body|label|caption)$/.test(r)) return 'text';
+    if (/^(text_muted|text-muted|muted|secondary_text|secondary-text)$/.test(r)) return 'text_muted';
+    if (/^(accent|brand|highlight|primary|cta|button|badge|tag|link)$/.test(r)) return 'accent';
+    if (/^(border|line|divider|separator|rule)$/.test(r)) return 'border';
+    if (/^(overlay)$/.test(r)) return 'overlay';
+    return 'accent';
+  }
+
+  const BRAND_ROLE_LABELS = { bg: 'brand.bg', accent: 'brand.accent', text: 'brand.text', text_muted: 'blend(text,bg)', secondary_bg: 'brand.2nd_bg', secondary_text: 'brand.2nd_text', border: 'blend(text,bg)', overlay: 'rgba overlay' };
+  function _brandRoleLabel(role) { return BRAND_ROLE_LABELS[role] || role; }
+
+  function _resolveSimBrandColor(role, brand) {
+    const r = role.toLowerCase();
+    if (brand[r]) return brand[r];
+    if (/^(bg|background|card_bg|card-bg|surface|secondary_bg|secondary-bg)$/.test(r)) return brand.bg;
+    if (/^(text|heading|heading_color|title|subtitle|body|label|caption)$/.test(r)) return brand.text;
+    if (/^(text_muted|text-muted|muted|secondary_text|secondary-text)$/.test(r)) return _blendHex(brand.text, brand.bg, 0.45);
+    if (/^(accent|brand|highlight|primary|cta|button|badge|tag|link)$/.test(r)) return brand.accent;
+    if (/^(border|line|divider|separator|rule)$/.test(r)) return _blendHex(brand.text, brand.bg, 0.2);
+    if (/^(overlay)$/.test(r)) return 'rgba(0,0,0,0.5)';
+    return brand.accent || '#0f766e';
+  }
+
+  let _simBrandColors = { bg: '#0F1A3C', accent: '#0D7A5F', text: '#F0F4FF', secondary_bg: '', secondary_text: '' };
+  let _simBrandActive = false;
 
   function scanSlotsFromHtml(html) {
     const slots = [], seen = new Set();
@@ -451,7 +521,7 @@
 
   function mergeExistingConfig(slots, manifest) {
     const es = (manifest && manifest.slots) || {};
-    for (const s of slots) { const e = es[s.key]; if (!e) continue; if (s.type === 'text') { s.config.maxLen = e.maxLen || 0; s.config.default = e.default || ''; } else if (s.type === 'color') { s.config.default = e.default || '#cccccc'; } else if (s.type === 'repeating') { s.config.min = e.min || 1; s.config.max = e.max || 10; if (e.fields?.length) s.config.fields = e.fields; } }
+    for (const s of slots) { const e = es[s.key]; if (!e) continue; if (s.type === 'text') { s.config.maxLen = e.maxLen || 0; s.config.default = e.default || ''; } else if (s.type === 'color') { s.config.default = e.default || '#cccccc'; if (e.brandRole) s.config.brandRole = e.brandRole; } else if (s.type === 'repeating') { s.config.min = e.min || 1; s.config.max = e.max || 10; if (e.fields?.length) s.config.fields = e.fields; } }
     for (const [k, d] of Object.entries(es)) { if (slots.find(s => s.key === k)) continue; let t = 'text'; if (k.startsWith('color:')) t = 'color'; else if (k.startsWith('image:')) t = 'image'; else if (d.type === 'repeating') t = 'repeating'; slots.push({ key: k, type: t, config: d, orphaned: true }); }
   }
 
@@ -486,10 +556,26 @@
               <div class="slot-card__field"><label>Default</label><input type="text" data-i="${i}" data-c="default" value="${esc(s.config.default || '')}"></div>`;
     } else if (s.type === 'color') {
       const ib = s.config.default === 'brand', cv = ib ? '#0f766e' : (s.config.default || '#cccccc');
+      const _varName = s.key.startsWith('color:') ? s.key.slice('color:'.length) : s.key;
+      const _autoRole = _autoDetectBrandRole(_varName);
+      const _curRole = ib ? (s.config.brandRole || 'auto') : '';
+      const _resolvedRole = _curRole === 'auto' ? _autoRole : _curRole;
       body = `<div class="slot-card__field"><label>Color</label><div style="display:flex;gap:4px;align-items:center">
         <input type="color" data-i="${i}" data-c="colorPicker" value="${esc(cv)}" ${ib?'disabled':''}>
         <input type="text" class="hex-input" data-i="${i}" data-c="colorHex" value="${esc(ib?'brand':cv)}" maxlength="9" ${ib?'disabled':''}></div></div>
-        <div class="slot-card__field" style="align-self:center"><label style="display:flex;gap:3px;align-items:center;cursor:pointer;white-space:nowrap"><input type="checkbox" data-i="${i}" data-c="brand" ${ib?'checked':''}> Brand</label></div>`;
+        <div class="slot-card__field"><label>Brand</label>
+        <select data-i="${i}" data-c="brandRole" style="font-size:.72rem;padding:2px 4px;border:1px solid var(--border);border-radius:4px;min-width:90px;cursor:pointer">
+          <option value=""${!_curRole?' selected':''}>None</option>
+          <option value="auto"${_curRole==='auto'?' selected':''}>Auto → ${esc(_autoRole)}</option>
+          <option value="bg"${_curRole==='bg'?' selected':''}>Background</option>
+          <option value="accent"${_curRole==='accent'?' selected':''}>Accent</option>
+          <option value="text"${_curRole==='text'?' selected':''}>Text</option>
+          <option value="text_muted"${_curRole==='text_muted'?' selected':''}>Text Muted</option>
+          <option value="secondary_bg"${_curRole==='secondary_bg'?' selected':''}>Secondary BG</option>
+          <option value="secondary_text"${_curRole==='secondary_text'?' selected':''}>Secondary Text</option>
+          <option value="border"${_curRole==='border'?' selected':''}>Border</option>
+          <option value="overlay"${_curRole==='overlay'?' selected':''}>Overlay</option>
+        </select></div>${ib ? `<div style="align-self:center"><span style="font-size:.62rem;font-weight:600;color:#0f766e;background:#f0fdf4;padding:2px 6px;border-radius:3px;white-space:nowrap">→ ${esc(_brandRoleLabel(_resolvedRole))}</span></div>` : ''}`;
     } else if (s.type === 'image') {
       const _ov = _imageOverrides[s.key];
       const _hasSrc = _ov !== undefined ? !!_ov : !!(s.config.src);
@@ -566,6 +652,7 @@
 
     wireSlotEvents();
     updateManifest();
+    _updateSimPanel();
   }
 
   function wireSlotEvents() {
@@ -579,10 +666,16 @@
         else if (c === 'max') s.config.max = parseInt(el.value) || 10;
         else if (c === 'colorPicker') { s.config.default = el.value; const h = list.querySelector(`[data-i="${i}"][data-c="colorHex"]`); if (h) h.value = el.value; }
         else if (c === 'colorHex') { if (/^#[0-9a-fA-F]{6}$/.test(el.value)) { s.config.default = el.value; const p = list.querySelector(`[data-i="${i}"][data-c="colorPicker"]`); if (p) p.value = el.value; } }
-        else if (c === 'brand') {
-          const p = list.querySelector(`[data-i="${i}"][data-c="colorPicker"]`), h = list.querySelector(`[data-i="${i}"][data-c="colorHex"]`);
-          if (el.checked) { s.config.default = 'brand'; if (p) { p.value = '#0f766e'; p.disabled = true; } if (h) { h.value = 'brand'; h.disabled = true; } }
-          else { s.config.default = p?.value || '#cccccc'; if (p) p.disabled = false; if (h) { h.value = p?.value || '#cccccc'; h.disabled = false; } }
+        else if (c === 'brandRole') {
+          const role = el.value;
+          if (role) {
+            s.config.default = 'brand';
+            if (role === 'auto') delete s.config.brandRole; else s.config.brandRole = role;
+          } else {
+            s.config.default = '#cccccc';
+            delete s.config.brandRole;
+          }
+          renderSlotCards();
         }
         updateManifest();
       });
@@ -718,6 +811,73 @@
         renderSlotCards();
         renderPreview();
       });
+    });
+  }
+
+  // ── Simulate Brand Panel ──────────────────────────────────────────────
+
+  function _readSimColors() {
+    _simBrandColors = {
+      bg: document.getElementById('sim-bg')?.value || '#0F1A3C',
+      accent: document.getElementById('sim-accent')?.value || '#0D7A5F',
+      text: document.getElementById('sim-text')?.value || '#F0F4FF',
+      secondary_bg: document.getElementById('sim-secondary-bg')?.value || '',
+      secondary_text: document.getElementById('sim-secondary-text')?.value || '',
+    };
+  }
+
+  function _updateSimPanel() {
+    const panel = document.getElementById('brand-sim-panel');
+    if (!panel) return;
+    const brandSlots = _slotState.filter(s => s.type === 'color' && s.config.default === 'brand');
+    if (!brandSlots.length) { panel.style.display = 'none'; return; }
+    panel.style.display = '';
+    _readSimColors();
+    const table = document.getElementById('sim-mapping-table');
+    if (!table) return;
+    let html = '<div style="font-size:.65rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">Mapping Preview</div>';
+    for (const s of brandSlots) {
+      const varName = s.key.slice('color:'.length);
+      const role = s.config.brandRole || _autoDetectBrandRole(varName);
+      const resolved = _resolveSimBrandColor(role, _simBrandColors);
+      const isHex = /^#[0-9a-fA-F]{6,8}$/.test(resolved);
+      html += `<div style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:.7rem">
+        <code style="font-size:.68rem;min-width:70px;color:var(--text-muted)">--${esc(varName)}</code>
+        <span style="color:var(--text-muted)">→</span>
+        <span style="font-weight:600;color:#0f766e;min-width:55px">${esc(_brandRoleLabel(role))}</span>
+        <span style="color:var(--text-muted)">→</span>
+        ${isHex ? `<span style="width:14px;height:14px;border-radius:3px;background:${resolved};border:1px solid rgba(0,0,0,0.1);flex-shrink:0"></span>` : ''}
+        <code style="font-size:.65rem;color:var(--text-muted)">${esc(resolved)}</code>
+      </div>`;
+    }
+    table.innerHTML = html;
+  }
+
+  function _wireSimPanel() {
+    ['sim-bg','sim-accent','sim-text','sim-secondary-bg','sim-secondary-text'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener('input', () => { _readSimColors(); _updateSimPanel(); });
+    });
+    document.getElementById('sim-apply')?.addEventListener('click', () => {
+      _readSimColors();
+      const iframe = document.getElementById('admin-tpl-iframe');
+      if (!iframe?.contentWindow) return;
+      const brandSlots = _slotState.filter(s => s.type === 'color' && s.config.default === 'brand');
+      for (const s of brandSlots) {
+        const varName = s.key.slice('color:'.length);
+        const role = s.config.brandRole || _autoDetectBrandRole(varName);
+        const resolved = _resolveSimBrandColor(role, _simBrandColors);
+        iframe.contentWindow.postMessage({ type: 'admin-set-var', name: '--' + varName, value: resolved }, '*');
+      }
+      _simBrandActive = true;
+      const btn = document.getElementById('sim-apply');
+      btn.textContent = 'Applied ✓';
+      btn.style.background = '#166534';
+      setTimeout(() => { btn.textContent = 'Apply to Preview'; btn.style.background = ''; }, 1500);
+    });
+    document.getElementById('sim-reset')?.addEventListener('click', () => {
+      _simBrandActive = false;
+      renderPreview();
     });
   }
 
@@ -1238,7 +1398,7 @@
     for (const s of _slotState) {
       const d = {};
       if (s.type === 'text') { if (s.config.maxLen > 0) d.maxLen = s.config.maxLen; if (s.config.default) d.default = s.config.default; }
-      else if (s.type === 'color') { d.default = s.config.default || '#cccccc'; }
+      else if (s.type === 'color') { d.default = s.config.default || '#cccccc'; if (s.config.brandRole) d.brandRole = s.config.brandRole; }
       else if (s.type === 'repeating') { d.type = 'repeating'; d.fields = s.config.fields || []; d.min = s.config.min || 1; d.max = s.config.max || 10; }
       slots[s.key] = d;
     }

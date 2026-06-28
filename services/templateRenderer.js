@@ -284,7 +284,8 @@ async function renderTemplate(post, templateId, userOverrides = {}, brand = {}, 
     if (overrideColors[key] && /^(#[0-9a-fA-F]{3,8}|rgba?\([^)]+\))$/.test(overrideColors[key])) {
       colorSlots[key] = overrideColors[key];
     } else if (def.default === 'brand') {
-      colorSlots[key] = resolveBrandRole(key.slice('color:'.length), brand);
+      const role = def.brandRole || key.slice('color:'.length);
+      colorSlots[key] = resolveBrandRole(role, brand);
     }
     // Skip generic defaults — the template HTML already has the real values
   }

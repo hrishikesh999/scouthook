@@ -8157,6 +8157,27 @@ html[data-nav-dir="back"] #main-content.spa-entering {
 }
 .htpl-mp-chip:hover { background: var(--brand-light, #e0f2f1); border-color: var(--brand, #0f766e); color: var(--brand, #0f766e); }
 
+.htpl-mp-actions {
+  display: flex; border-top: 1px solid var(--border); margin-top: 0;
+}
+.htpl-mp-action-btn {
+  flex: 1; display: flex; align-items: center; justify-content: center; gap: 4px;
+  padding: 7px 4px; font-size: 11.5px; font-weight: 500;
+  background: none; border: none; cursor: pointer;
+  color: var(--brand, #0f766e); transition: background 0.15s;
+}
+.htpl-mp-action-btn:hover { background: var(--surface-2, #f9fafb); }
+.htpl-mp-action-btn + .htpl-mp-action-btn { border-left: 1px solid var(--border); }
+.htpl-mp-cancel-bar {
+  border-top: 1px solid var(--border);
+}
+.htpl-mp-cancel-btn {
+  width: 100%; padding: 7px; font-size: 11.5px; font-weight: 500;
+  background: none; border: none; cursor: pointer;
+  color: var(--text-muted, #888); transition: background 0.15s;
+}
+.htpl-mp-cancel-btn:hover { background: var(--surface-2, #f9fafb); }
+
 .htpl-wand-btn {
   background: none; border: 1px solid var(--border); border-radius: 4px;
   color: var(--brand, #0f766e); cursor: pointer; font-size: 11px;

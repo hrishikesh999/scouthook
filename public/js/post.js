@@ -146,9 +146,10 @@ async function init() {
   }
 
   try {
-    // Use a prefetch started by the router (fired in parallel with the HTML fetch),
-    // falling back to a fresh request if navigated directly or prefetch isn't available.
-    const prefetchedPost = window.__routerConsumePrefetch?.(`/api/posts/${POST_ID}`);
+    // Consume any prefetch started by the router, then await it.
+    // If the prefetch resolved to null (error) or wasn't started, fall back to a fresh fetch.
+    const prefetchPromise = window.__routerConsumePrefetch?.(`/api/posts/${POST_ID}`);
+    const prefetchedPost = prefetchPromise ? await prefetchPromise : null;
 
     const [postResult, profileResult] = await Promise.allSettled([
       prefetchedPost || fetch(`/api/posts/${POST_ID}`, { headers: apiHeaders() }).then(r => r.json()),

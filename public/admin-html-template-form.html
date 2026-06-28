@@ -50,7 +50,13 @@
     .config-panels { display:flex; gap:0; min-height:500px; border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; }
     .config-preview { flex:1; min-width:0; background:#f3f4f6; display:flex; align-items:center; justify-content:center; overflow:hidden; position:relative; border-right:1px solid var(--border); }
     .config-preview iframe { border:none; display:block; transform-origin:top left; }
-    .config-slots { width:480px; flex-shrink:0; overflow-y:auto; padding:16px 24px; max-height:600px; }
+    .config-slots { width:380px; flex-shrink:0; overflow-y:auto; padding:16px 20px; max-height:600px; }
+
+    /* Color slots section — full width below preview */
+    .color-slots-section { border:1px solid var(--border); border-top:none; border-radius:0 0 var(--radius) var(--radius); padding:16px 20px; background:#fff; }
+    .color-slots-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(240px, 1fr)); gap:8px; }
+    .color-group-label { font-size:.68rem; font-weight:700; color:var(--brand,#0f766e); text-transform:uppercase; letter-spacing:.04em; grid-column:1 / -1; margin-top:6px; }
+    .color-group-label:first-child { margin-top:0; }
     .config-slots-title { font-size:.82rem; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:.04em; margin-bottom:12px; }
 
     /* Slot cards */
@@ -238,37 +244,48 @@
                   <button class="btn btn--sm btn--secondary" id="add-slot-btn" type="button">+</button>
                 </div>
 
-                <!-- Simulate Brand Colors panel -->
-                <div id="brand-sim-panel" style="display:none;margin-top:14px;padding:12px;background:rgba(15,118,110,0.03);border:1px solid rgba(15,118,110,0.12);border-radius:8px">
-                  <div style="font-size:.72rem;font-weight:700;color:var(--brand,#0f766e);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">Simulate Brand Colors</div>
-                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 12px">
-                    <div style="display:flex;align-items:center;gap:5px">
-                      <input type="color" id="sim-bg" value="#0F1A3C" style="width:24px;height:20px;border:1px solid var(--border);border-radius:3px;padding:0;cursor:pointer">
-                      <span style="font-size:.68rem;font-weight:600;color:var(--text-muted)">BG</span>
+              </div>
+            </div>
+
+            <!-- Color slots section — full width below preview -->
+            <div id="color-slots-section" class="color-slots-section" style="display:none">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+                <div style="font-size:.78rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em">Brand &amp; Color Slots (<span id="color-slot-count">0</span>)</div>
+              </div>
+              <div id="color-slot-list" class="color-slots-grid"></div>
+
+              <!-- Simulate Brand Colors panel -->
+              <div id="brand-sim-panel" style="display:none;margin-top:14px;padding:12px;background:rgba(15,118,110,0.03);border:1px solid rgba(15,118,110,0.12);border-radius:8px">
+                <div style="display:flex;align-items:center;flex-wrap:wrap;gap:12px 20px">
+                  <div style="font-size:.72rem;font-weight:700;color:var(--brand,#0f766e);text-transform:uppercase;letter-spacing:.04em">Simulate Brand</div>
+                  <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+                    <div style="display:flex;align-items:center;gap:4px">
+                      <input type="color" id="sim-bg" value="#0F1A3C" style="width:22px;height:18px;border:1px solid var(--border);border-radius:3px;padding:0;cursor:pointer">
+                      <span style="font-size:.66rem;font-weight:600;color:var(--text-muted)">BG</span>
                     </div>
-                    <div style="display:flex;align-items:center;gap:5px">
-                      <input type="color" id="sim-accent" value="#0D7A5F" style="width:24px;height:20px;border:1px solid var(--border);border-radius:3px;padding:0;cursor:pointer">
-                      <span style="font-size:.68rem;font-weight:600;color:var(--text-muted)">Accent</span>
+                    <div style="display:flex;align-items:center;gap:4px">
+                      <input type="color" id="sim-accent" value="#0D7A5F" style="width:22px;height:18px;border:1px solid var(--border);border-radius:3px;padding:0;cursor:pointer">
+                      <span style="font-size:.66rem;font-weight:600;color:var(--text-muted)">Accent</span>
                     </div>
-                    <div style="display:flex;align-items:center;gap:5px">
-                      <input type="color" id="sim-text" value="#F0F4FF" style="width:24px;height:20px;border:1px solid var(--border);border-radius:3px;padding:0;cursor:pointer">
-                      <span style="font-size:.68rem;font-weight:600;color:var(--text-muted)">Text</span>
+                    <div style="display:flex;align-items:center;gap:4px">
+                      <input type="color" id="sim-text" value="#F0F4FF" style="width:22px;height:18px;border:1px solid var(--border);border-radius:3px;padding:0;cursor:pointer">
+                      <span style="font-size:.66rem;font-weight:600;color:var(--text-muted)">Text</span>
                     </div>
-                    <div style="display:flex;align-items:center;gap:5px">
-                      <input type="color" id="sim-secondary-bg" value="#1A2A4A" style="width:24px;height:20px;border:1px solid var(--border);border-radius:3px;padding:0;cursor:pointer">
-                      <span style="font-size:.68rem;font-weight:600;color:var(--text-muted)">2nd BG</span>
+                    <div style="display:flex;align-items:center;gap:4px">
+                      <input type="color" id="sim-secondary-bg" value="#1A2A4A" style="width:22px;height:18px;border:1px solid var(--border);border-radius:3px;padding:0;cursor:pointer">
+                      <span style="font-size:.66rem;font-weight:600;color:var(--text-muted)">2nd BG</span>
                     </div>
-                    <div style="display:flex;align-items:center;gap:5px;grid-column:span 2">
-                      <input type="color" id="sim-secondary-text" value="#AABBCC" style="width:24px;height:20px;border:1px solid var(--border);border-radius:3px;padding:0;cursor:pointer">
-                      <span style="font-size:.68rem;font-weight:600;color:var(--text-muted)">2nd Text</span>
+                    <div style="display:flex;align-items:center;gap:4px">
+                      <input type="color" id="sim-secondary-text" value="#AABBCC" style="width:22px;height:18px;border:1px solid var(--border);border-radius:3px;padding:0;cursor:pointer">
+                      <span style="font-size:.66rem;font-weight:600;color:var(--text-muted)">2nd Text</span>
                     </div>
                   </div>
-                  <div id="sim-mapping-table" style="margin-top:8px"></div>
-                  <div style="display:flex;gap:6px;margin-top:8px">
+                  <div style="display:flex;gap:6px">
                     <button type="button" id="sim-apply" class="btn btn--sm btn--primary" style="font-size:.72rem;padding:4px 12px">Apply to Preview</button>
                     <button type="button" id="sim-reset" class="btn btn--sm btn--secondary" style="font-size:.72rem;padding:4px 12px">Reset</button>
                   </div>
                 </div>
+                <div id="sim-mapping-table" style="margin-top:8px"></div>
               </div>
             </div>
 
@@ -620,41 +637,23 @@
   function renderSlotCards() {
     const list = document.getElementById('slot-list');
     document.getElementById('slot-count').textContent = _slotState.length;
-    if (!_slotState.length) { list.innerHTML = '<p style="font-size:.85rem;color:var(--text-muted)">No slots detected. Click elements in the preview to add slots.</p>'; updateManifest(); return; }
+    if (!_slotState.length) { list.innerHTML = '<p style="font-size:.85rem;color:var(--text-muted)">No slots detected. Click elements in the preview to add slots.</p>'; updateManifest(); _renderColorSlotSection(); return; }
 
-    // Separate colors from other slots for grouped rendering
+    // Separate colors from other slots
     const nonColorSlots = _slotState.filter(s => s.type !== 'color');
-    const colorSlots = _slotState.filter(s => s.type === 'color');
 
-    // Group colors by role
-    const colorGroups = {};
-    for (const s of colorSlots) {
-      const varName = s.key.slice('color:'.length);
-      const group = _getColorGroup(varName);
-      if (!colorGroups[group]) colorGroups[group] = [];
-      colorGroups[group].push(s);
-    }
-
-    // Render non-color slots first
+    // Render text/image/repeating slots in right panel
     let html = nonColorSlots.map((s, idx) => {
       const i = _slotState.indexOf(s);
       return _renderSlotCard(s, i);
     }).join('');
 
-    // Render grouped color slots
-    if (colorSlots.length) {
-      html += '<div style="margin-top:14px;padding-top:10px;border-top:1px solid var(--border)"><div style="font-size:.75rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">Colors</div>';
-      for (const [group, slots] of Object.entries(colorGroups)) {
-        html += `<div style="font-size:.68rem;font-weight:600;color:var(--brand,#0f766e);text-transform:uppercase;letter-spacing:.03em;margin:8px 0 4px">${esc(group)}</div>`;
-        html += slots.map(s => {
-          const i = _slotState.indexOf(s);
-          return _renderSlotCard(s, i);
-        }).join('');
-      }
-      html += '</div>';
-    }
+    if (!nonColorSlots.length) html = '<p style="font-size:.85rem;color:var(--text-muted)">No text/image slots. Click elements in the preview to add.</p>';
 
     list.innerHTML = html;
+
+    // Render color slots in the full-width section below
+    _renderColorSlotSection();
 
     // Set img src via DOM (avoids embedding large base64 strings inside innerHTML)
     list.querySelectorAll('img[data-slot-thumb]').forEach(img => {
@@ -665,8 +664,119 @@
     });
 
     wireSlotEvents();
+    _wireColorSlotEvents();
     updateManifest();
     _updateSimPanel();
+  }
+
+  function _renderColorSlotSection() {
+    const section = document.getElementById('color-slots-section');
+    const colorList = document.getElementById('color-slot-list');
+    if (!section || !colorList) return;
+
+    const colorSlots = _slotState.filter(s => s.type === 'color');
+    if (!colorSlots.length) { section.style.display = 'none'; return; }
+    section.style.display = '';
+    document.getElementById('color-slot-count').textContent = colorSlots.length;
+
+    const colorGroups = {};
+    for (const s of colorSlots) {
+      const varName = s.key.slice('color:'.length);
+      const group = _getColorGroup(varName);
+      if (!colorGroups[group]) colorGroups[group] = [];
+      colorGroups[group].push(s);
+    }
+
+    let html = '';
+    for (const [group, slots] of Object.entries(colorGroups)) {
+      html += `<div class="color-group-label">${esc(group)}</div>`;
+      html += slots.map(s => {
+        const i = _slotState.indexOf(s);
+        return _renderSlotCard(s, i);
+      }).join('');
+    }
+    colorList.innerHTML = html;
+  }
+
+  function _wireColorSlotEvents() {
+    const colorList = document.getElementById('color-slot-list');
+    if (!colorList) return;
+
+    colorList.querySelectorAll('input[data-c], select[data-c]').forEach(el => {
+      el.addEventListener('input', () => {
+        const i = parseInt(el.dataset.i), c = el.dataset.c, s = _slotState[i]; if (!s) return;
+        if (c === 'colorPicker') { s.config.default = el.value; const h = colorList.querySelector(`[data-i="${i}"][data-c="colorHex"]`); if (h) h.value = el.value; }
+        else if (c === 'colorHex') { if (/^#[0-9a-fA-F]{6}$/.test(el.value)) { s.config.default = el.value; const p = colorList.querySelector(`[data-i="${i}"][data-c="colorPicker"]`); if (p) p.value = el.value; } }
+        else if (c === 'brandRole') {
+          const role = el.value;
+          if (role) {
+            s.config.default = 'brand';
+            if (role === 'auto') delete s.config.brandRole; else s.config.brandRole = role;
+          } else {
+            s.config.default = '#cccccc';
+            delete s.config.brandRole;
+          }
+          _renderColorSlotSection();
+          _wireColorSlotEvents();
+          _updateSimPanel();
+        }
+        updateManifest();
+      });
+      el.addEventListener('click', e => e.stopPropagation());
+    });
+
+    colorList.querySelectorAll('.slot-card').forEach(card => {
+      card.addEventListener('click', () => {
+        _activeSlotKey = card.dataset.slotKey;
+        document.querySelectorAll('.slot-card').forEach(c => c.classList.remove('slot-card--active'));
+        card.classList.add('slot-card--active');
+        if (_activeSlotKey.startsWith('color:')) {
+          const varName = _activeSlotKey.slice('color:'.length);
+          const iframe = document.getElementById('admin-tpl-iframe');
+          if (iframe?.contentWindow) iframe.contentWindow.postMessage({ type: 'admin-color-inspect', varName }, '*');
+        }
+      });
+    });
+
+    colorList.querySelectorAll('.slot-card__delete').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        const i = parseInt(btn.dataset.i);
+        const s = _slotState[i];
+        if (!s || !confirm(`Remove slot "${s.key}"?`)) return;
+        _slotState.splice(i, 1);
+        _renderColorSlotSection();
+        _wireColorSlotEvents();
+        updateManifest();
+        _updateSimPanel();
+      });
+    });
+
+    colorList.querySelectorAll('.slot-card__key').forEach(span => {
+      span.addEventListener('dblclick', e => {
+        e.stopPropagation();
+        const i = parseInt(span.dataset.i), s = _slotState[i];
+        if (!s) return;
+        const input = document.createElement('input');
+        input.className = 'slot-card__key--editing';
+        input.value = s.key;
+        span.replaceWith(input);
+        input.focus(); input.select();
+        const commit = () => {
+          const newKey = input.value.trim();
+          if (newKey && newKey !== s.key && !_slotState.some((x, j) => j !== i && x.key === newKey)) {
+            s.key = newKey;
+            if (newKey.startsWith('color:')) s.type = 'color';
+            else if (newKey.startsWith('image:')) s.type = 'image';
+            else s.type = 'text';
+          }
+          renderSlotCards();
+          renderPreview();
+        };
+        input.addEventListener('blur', commit);
+        input.addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); commit(); } if (ev.key === 'Escape') renderSlotCards(); });
+      });
+    });
   }
 
   function wireSlotEvents() {

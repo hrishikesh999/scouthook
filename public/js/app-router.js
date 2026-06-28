@@ -225,63 +225,63 @@
     // Update page title
     document.title = doc.title;
 
-    // Swap content with View Transitions or CSS class fallback
-    const swap = () => {
+    // Post-swap initialisation: run inline scripts, load page JS, update UI.
+    // Must run AFTER the new #main-content is in the live DOM so getElementById
+    // calls inside page scripts find the freshly-swapped elements.
+    const initPage = () => {
+      updateSidebarActiveLink(pathname);
+
+      if (typeof window._renderPageHeaderActions === 'function') {
+        window._renderPageHeaderActions();
+      }
+
+      executeInlineScripts(inlineScripts);
+
+      const scriptSrc = PAGE_SCRIPTS[pathname];
+      if (scriptSrc) {
+        if (_loadedScripts.has(scriptSrc)) {
+          const fn = _pageInitFns.get(scriptSrc);
+          if (typeof fn === 'function') {
+            fn();
+          } else if (typeof window.__pageInit === 'function') {
+            window.__pageInit();
+          }
+        } else {
+          _loadedScripts.add(scriptSrc);
+          const s = document.createElement('script');
+          s.src = scriptSrc;
+          s.addEventListener('load', () => {
+            if (typeof window.__pageInit === 'function') {
+              _pageInitFns.set(scriptSrc, window.__pageInit);
+            }
+          }, { once: true });
+          document.body.appendChild(s);
+        }
+      }
+
+      document.dispatchEvent(new CustomEvent('spa:navigated', { detail: { url, pathname } }));
+    };
+
+    // Swap content with View Transitions or CSS class fallback.
+    // startViewTransition calls the update callback asynchronously (microtask),
+    // so all DOM-dependent init must happen inside the callback, after the swap.
+    if (document.startViewTransition && !isReducedMotion()) {
+      document.startViewTransition(() => {
+        const current = document.getElementById('main-content');
+        if (current) current.replaceWith(newContent);
+        window.scrollTo(0, 0);
+        initPage();
+      });
+    } else {
+      newContent.classList.add('spa-entering');
       const current = document.getElementById('main-content');
       if (current) current.replaceWith(newContent);
       window.scrollTo(0, 0);
-    };
-
-    if (document.startViewTransition && !isReducedMotion()) {
-      // The swap callback runs synchronously — new DOM is in place immediately after this call.
-      // Don't await .finished; start page init in parallel with the visual animation.
-      document.startViewTransition(swap);
-    } else {
-      newContent.classList.add('spa-entering');
-      swap();
       newContent.addEventListener('animationend', () => {
         newContent.classList.remove('spa-entering');
       }, { once: true });
+      initPage();
     }
-
-    // Update sidebar active state
-    updateSidebarActiveLink(pathname);
-
-    // Re-run page header actions (help link) for the new page
-    if (typeof window._renderPageHeaderActions === 'function') {
-      window._renderPageHeaderActions();
-    }
-
-    // Execute page-specific inline scripts (vault.html, billing.html, account.html, etc.)
-    executeInlineScripts(inlineScripts);
-
-    // Load or re-init the page-specific script
-    const scriptSrc = PAGE_SCRIPTS[pathname];
-    if (scriptSrc) {
-      if (_loadedScripts.has(scriptSrc)) {
-        // Already loaded — call the init captured for THIS script, not the global
-        const fn = _pageInitFns.get(scriptSrc);
-        if (typeof fn === 'function') {
-          fn();
-        } else if (typeof window.__pageInit === 'function') {
-          window.__pageInit();
-        }
-      } else {
-        // First visit — inject the script (it will call init itself)
-        _loadedScripts.add(scriptSrc);
-        const s = document.createElement('script');
-        s.src = scriptSrc;
-        s.addEventListener('load', () => {
-          if (typeof window.__pageInit === 'function') {
-            _pageInitFns.set(scriptSrc, window.__pageInit);
-          }
-        }, { once: true });
-        document.body.appendChild(s);
-      }
-    }
-
-    // Notify analytics or other listeners
-    document.dispatchEvent(new CustomEvent('spa:navigated', { detail: { url, pathname } }));
   }
 
   // Intercept clicks on internal links

@@ -972,7 +972,7 @@
           el.classList.add('slot-active');
           var existing = el.getAttribute('data-slot');
           if (existing) {
-            window.parent.postMessage({ type:'slot-click', key: existing, tag: el.tagName, text: (el.textContent || '').trim().slice(0, 60), selector: buildSelector(el) }, '*');
+            window.parent.postMessage({ type:'slot-click', key: existing, tag: el.tagName, text: (el.textContent || '').trim().slice(0, 60), selector: buildSelector(el), elStyle: el.getAttribute('style') || '' }, '*');
           } else {
             window.parent.postMessage({
               type: 'slot-add-request',
@@ -1308,6 +1308,118 @@
     document.getElementById('add-slot-click-key').parentElement.parentElement.style.display = 'none';
     document.getElementById('add-slot-click-confirm').style.display = 'none';
     document.getElementById('add-slot-popover').style.display = '';
+
+    // Remove stale color options section
+    const old = document.getElementById('add-color-slot-section');
+    if (old) old.remove();
+
+    const style = data.elStyle || '';
+    if (!style) return;
+
+    // Detect CSS variables used in this element's inline style
+    const cssVars = [];
+    const varRe = /var\(--([a-zA-Z0-9_-]+)\)/g;
+    let vm;
+    while ((vm = varRe.exec(style)) !== null) {
+      if (!CSS_VAR_SKIP.has(vm[1])) cssVars.push(vm[1]);
+    }
+
+    // Detect hardcoded color values (color, background-color, background, border-color)
+    const hardcoded = [];
+    const colorRe = /(?:^|;)\s*(color|background(?:-color)?|border-color)\s*:\s*(#[0-9a-fA-F]{3,8}|rgba?\([^)]+\))/gi;
+    let cm;
+    while ((cm = colorRe.exec(style)) !== null) {
+      if (style.indexOf('var(') === -1 || style.indexOf('var(') > cm.index)
+        hardcoded.push({ prop: cm[1], value: cm[2] });
+    }
+
+    if (!cssVars.length && !hardcoded.length) return;
+
+    const section = document.createElement('div');
+    section.id = 'add-color-slot-section';
+    section.style.cssText = 'margin-top:10px;padding-top:10px;border-top:1px solid var(--border)';
+
+    let html = '<div style="font-size:.72rem;font-weight:700;color:var(--brand,#0f766e);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">Colors on this element</div>';
+
+    for (const varName of cssVars) {
+      const key = 'color:' + varName;
+      const exists = _slotState.find(s => s.key === key);
+      html += `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:.78rem">
+        <code style="font-size:.72rem;background:#f3f4f6;padding:2px 6px;border-radius:4px">--${esc(varName)}</code>
+        ${exists
+          ? `<span style="font-size:.68rem;color:#166534;font-weight:600;cursor:pointer" onclick="document.querySelector('.slot-card[data-slot-key=\\'${esc(key)}\\']')?.scrollIntoView({behavior:'smooth',block:'center'})">✓ Has slot — click to view</span>`
+          : `<button type="button" class="acb-var" data-var="${esc(varName)}" style="font-size:.72rem;padding:3px 10px;border:1px solid var(--brand,#0f766e);border-radius:5px;background:rgba(15,118,110,0.06);color:var(--brand,#0f766e);cursor:pointer;font-weight:600">+ Add color slot</button>`}
+      </div>`;
+    }
+
+    const baseName = data.key.replace(/^text:|^image:/,'');
+    for (const {prop, value} of hardcoded) {
+      const suffix = prop === 'color' ? 'color' : prop.includes('background') ? 'bg' : 'border';
+      const suggested = baseName + '_' + suffix;
+      const key = 'color:' + suggested;
+      const exists = _slotState.find(s => s.key === key);
+      const isHex = value.startsWith('#');
+      html += `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:.78rem">
+        ${isHex ? `<span style="width:16px;height:16px;border-radius:3px;background:${value};border:1px solid rgba(0,0,0,0.1);flex-shrink:0"></span>` : ''}
+        <span style="font-size:.72rem;color:var(--text-muted)">${esc(prop)}: ${esc(value)}</span>
+        ${exists
+          ? '<span style="font-size:.68rem;color:#166534;font-weight:600">✓ Has slot</span>'
+          : `<button type="button" class="acb-hc" data-prop="${esc(prop)}" data-value="${esc(value)}" data-suggested="${esc(suggested)}" style="font-size:.72rem;padding:3px 10px;border:1px solid var(--brand,#0f766e);border-radius:5px;background:rgba(15,118,110,0.06);color:var(--brand,#0f766e);cursor:pointer;font-weight:600">+ Add as --${esc(suggested)}</button>`}
+      </div>`;
+    }
+
+    section.innerHTML = html;
+
+    // Wire CSS variable "Add color slot" buttons
+    section.querySelectorAll('.acb-var').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        const key = 'color:' + btn.dataset.var;
+        if (_slotState.find(s => s.key === key)) return;
+        _slotState.push({ key, type: 'color', config: { default: '#cccccc' } });
+        _hideAddSlotPopover();
+        renderSlotCards();
+        renderPreview();
+      });
+    });
+
+    // Wire hardcoded color "Add" buttons — converts to CSS variable in HTML
+    section.querySelectorAll('.acb-hc').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        const varName = btn.dataset.suggested;
+        const value = btn.dataset.value;
+        const key = 'color:' + varName;
+        if (_slotState.find(s => s.key === key)) return;
+
+        // Convert hardcoded color → var(--name) in template HTML
+        if (_pendingSlotSelector) {
+          try {
+            const doc = new DOMParser().parseFromString(_templateHtml, 'text/html');
+            const el = doc.querySelector(_pendingSlotSelector);
+            if (el) {
+              const inl = el.getAttribute('style') || '';
+              const escaped = value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+              el.setAttribute('style', inl.replace(new RegExp(escaped, 'g'), 'var(--' + varName + ')'));
+              const root = doc.querySelector('body > div, body > section') || doc.body;
+              const rs = root.getAttribute('style') || '';
+              root.setAttribute('style', '--' + varName + ':' + value + ';' + rs);
+              _templateHtml = '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
+              document.getElementById('f-html').value = _templateHtml;
+              const rawHtml = document.getElementById('raw-html');
+              if (rawHtml) rawHtml.value = _templateHtml;
+            }
+          } catch (err) { console.warn('[add-color] HTML update failed:', err.message); }
+        }
+
+        _slotState.push({ key, type: 'color', config: { default: value } });
+        _hideAddSlotPopover();
+        renderSlotCards();
+        renderPreview();
+      });
+    });
+
+    document.getElementById('add-slot-popover').appendChild(section);
   }
 
   function _showAddSlotPopover(data) {
@@ -1329,6 +1441,8 @@
     document.getElementById('add-slot-click-key').parentElement.parentElement.style.display = '';
     document.getElementById('add-slot-click-confirm').style.display = '';
     document.getElementById('add-slot-popover-title').textContent = 'Add this element as a slot?';
+    const cs = document.getElementById('add-color-slot-section');
+    if (cs) cs.remove();
     _pendingSlotSelector = null;
   }
 

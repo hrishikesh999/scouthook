@@ -22,7 +22,6 @@
     '/workspace.html':  '/js/members.js',
     '/post.html':       '/js/post.js',
     '/help.html':       null,
-    '/voice-dna.html':  null,
   };
 
   // Scripts shared across all pages — never re-inject these
@@ -89,7 +88,6 @@
     '/media.html':     '/settings.html',
     '/Media.html':     '/settings.html',
     '/workspace.html': '/settings.html',
-    '/voice-dna.html': '/settings.html',
     '/account.html':   null,
     '/billing.html':   null,
     '/workspaces.html': null,

@@ -50,13 +50,17 @@
     .config-panels { display:flex; gap:0; min-height:500px; border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; }
     .config-preview { flex:1; min-width:0; background:#f3f4f6; display:flex; align-items:center; justify-content:center; overflow:hidden; position:relative; border-right:1px solid var(--border); }
     .config-preview iframe { border:none; display:block; transform-origin:top left; }
-    .config-slots { width:380px; flex-shrink:0; overflow-y:auto; padding:16px 20px; max-height:600px; }
+    .config-slots { width:480px; flex-shrink:0; overflow-y:auto; padding:16px 20px; max-height:700px; }
 
-    /* Color slots section — full width below preview */
-    .color-slots-section { border:1px solid var(--border); border-top:none; border-radius:0 0 var(--radius) var(--radius); padding:16px 20px; background:#fff; }
-    .color-slots-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(240px, 1fr)); gap:8px; }
-    .color-group-label { font-size:.68rem; font-weight:700; color:var(--brand,#0f766e); text-transform:uppercase; letter-spacing:.04em; grid-column:1 / -1; margin-top:6px; }
-    .color-group-label:first-child { margin-top:0; }
+    /* Accordion section headers */
+    .slots-accordion-header { display:flex; align-items:center; gap:8px; padding:8px 0; cursor:pointer; user-select:none; border-top:1px solid var(--border); margin-top:10px; }
+    .slots-accordion-header:first-child { border-top:none; margin-top:0; }
+    .slots-accordion-chevron { font-size:.7rem; color:var(--text-muted); transition:transform .15s; width:16px; text-align:center; }
+    .slots-accordion-header.open .slots-accordion-chevron { transform:rotate(90deg); }
+    .slots-accordion-title { font-size:.78rem; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:.04em; }
+    .slots-accordion-count { font-size:.68rem; color:var(--text-muted); }
+    .slots-accordion-body { display:none; padding-top:8px; }
+    .slots-accordion-header.open + .slots-accordion-body { display:block; }
     .config-slots-title { font-size:.82rem; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:.04em; margin-bottom:12px; }
 
     /* Slot cards */
@@ -214,7 +218,7 @@
               <div class="config-preview" id="config-preview">
                 <div style="color:var(--text-muted);font-size:.85rem">Loading preview…</div>
               </div>
-              <!-- Right: slot cards -->
+              <!-- Right: slot cards with accordion sections -->
               <div class="config-slots" id="config-slots">
                 <!-- Click-to-add-slot popover -->
                 <div id="add-slot-popover" class="add-slot-popover" style="display:none">
@@ -234,58 +238,65 @@
                   </div>
                 </div>
 
-                <div class="config-slots-title">Slots (<span id="slot-count">0</span>)</div>
-                <div id="slot-list"></div>
-                <div class="config-add-row">
-                  <div class="slot-card__field"><label>Key</label><input type="text" id="add-slot-key" placeholder="color:accent"></div>
-                  <div class="slot-card__field"><label>Type</label>
-                    <select id="add-slot-type"><option value="text">Text</option><option value="color">Color</option><option value="image">Image</option></select>
+                <!-- Content Slots accordion -->
+                <div class="slots-accordion-header open" id="acc-content-header" onclick="toggleAccordion('content')">
+                  <span class="slots-accordion-chevron">›</span>
+                  <span class="slots-accordion-title">Content Slots</span>
+                  <span class="slots-accordion-count">(<span id="slot-count">0</span>)</span>
+                </div>
+                <div class="slots-accordion-body" id="acc-content-body">
+                  <div id="slot-list"></div>
+                  <div class="config-add-row">
+                    <div class="slot-card__field"><label>Key</label><input type="text" id="add-slot-key" placeholder="color:accent"></div>
+                    <div class="slot-card__field"><label>Type</label>
+                      <select id="add-slot-type"><option value="text">Text</option><option value="color">Color</option><option value="image">Image</option></select>
+                    </div>
+                    <button class="btn btn--sm btn--secondary" id="add-slot-btn" type="button">+</button>
                   </div>
-                  <button class="btn btn--sm btn--secondary" id="add-slot-btn" type="button">+</button>
                 </div>
 
-              </div>
-            </div>
+                <!-- Colors & Brand accordion -->
+                <div class="slots-accordion-header" id="acc-colors-header" onclick="toggleAccordion('colors')">
+                  <span class="slots-accordion-chevron">›</span>
+                  <span class="slots-accordion-title">Colors &amp; Brand</span>
+                  <span class="slots-accordion-count">(<span id="color-slot-count">0</span>)</span>
+                </div>
+                <div class="slots-accordion-body" id="acc-colors-body">
+                  <div id="color-slot-list"></div>
 
-            <!-- Color slots section — full width below preview -->
-            <div id="color-slots-section" class="color-slots-section" style="display:none">
-              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-                <div style="font-size:.78rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em">Brand &amp; Color Slots (<span id="color-slot-count">0</span>)</div>
-              </div>
-              <div id="color-slot-list" class="color-slots-grid"></div>
-
-              <!-- Simulate Brand Colors panel -->
-              <div id="brand-sim-panel" style="display:none;margin-top:14px;padding:12px;background:rgba(15,118,110,0.03);border:1px solid rgba(15,118,110,0.12);border-radius:8px">
-                <div style="display:flex;align-items:center;flex-wrap:wrap;gap:12px 20px">
-                  <div style="font-size:.72rem;font-weight:700;color:var(--brand,#0f766e);text-transform:uppercase;letter-spacing:.04em">Simulate Brand</div>
-                  <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-                    <div style="display:flex;align-items:center;gap:4px">
-                      <input type="color" id="sim-bg" value="#0F1A3C" style="width:22px;height:18px;border:1px solid var(--border);border-radius:3px;padding:0;cursor:pointer">
-                      <span style="font-size:.66rem;font-weight:600;color:var(--text-muted)">BG</span>
+                  <!-- Simulate Brand Colors panel -->
+                  <div id="brand-sim-panel" style="display:none;margin-top:12px;padding:10px;background:rgba(15,118,110,0.03);border:1px solid rgba(15,118,110,0.12);border-radius:8px">
+                    <div style="font-size:.7rem;font-weight:700;color:var(--brand,#0f766e);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">Simulate Brand</div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px 10px">
+                      <div style="display:flex;align-items:center;gap:4px">
+                        <input type="color" id="sim-bg" value="#0F1A3C" style="width:22px;height:18px;border:1px solid var(--border);border-radius:3px;padding:0;cursor:pointer">
+                        <span style="font-size:.66rem;font-weight:600;color:var(--text-muted)">BG</span>
+                      </div>
+                      <div style="display:flex;align-items:center;gap:4px">
+                        <input type="color" id="sim-accent" value="#0D7A5F" style="width:22px;height:18px;border:1px solid var(--border);border-radius:3px;padding:0;cursor:pointer">
+                        <span style="font-size:.66rem;font-weight:600;color:var(--text-muted)">Accent</span>
+                      </div>
+                      <div style="display:flex;align-items:center;gap:4px">
+                        <input type="color" id="sim-text" value="#F0F4FF" style="width:22px;height:18px;border:1px solid var(--border);border-radius:3px;padding:0;cursor:pointer">
+                        <span style="font-size:.66rem;font-weight:600;color:var(--text-muted)">Text</span>
+                      </div>
+                      <div style="display:flex;align-items:center;gap:4px">
+                        <input type="color" id="sim-secondary-bg" value="#1A2A4A" style="width:22px;height:18px;border:1px solid var(--border);border-radius:3px;padding:0;cursor:pointer">
+                        <span style="font-size:.66rem;font-weight:600;color:var(--text-muted)">2nd BG</span>
+                      </div>
+                      <div style="display:flex;align-items:center;gap:4px;grid-column:span 2">
+                        <input type="color" id="sim-secondary-text" value="#AABBCC" style="width:22px;height:18px;border:1px solid var(--border);border-radius:3px;padding:0;cursor:pointer">
+                        <span style="font-size:.66rem;font-weight:600;color:var(--text-muted)">2nd Text</span>
+                      </div>
                     </div>
-                    <div style="display:flex;align-items:center;gap:4px">
-                      <input type="color" id="sim-accent" value="#0D7A5F" style="width:22px;height:18px;border:1px solid var(--border);border-radius:3px;padding:0;cursor:pointer">
-                      <span style="font-size:.66rem;font-weight:600;color:var(--text-muted)">Accent</span>
+                    <div id="sim-mapping-table" style="margin-top:6px"></div>
+                    <div style="display:flex;gap:6px;margin-top:8px">
+                      <button type="button" id="sim-apply" class="btn btn--sm btn--primary" style="font-size:.72rem;padding:4px 12px">Apply to Preview</button>
+                      <button type="button" id="sim-reset" class="btn btn--sm btn--secondary" style="font-size:.72rem;padding:4px 12px">Reset</button>
                     </div>
-                    <div style="display:flex;align-items:center;gap:4px">
-                      <input type="color" id="sim-text" value="#F0F4FF" style="width:22px;height:18px;border:1px solid var(--border);border-radius:3px;padding:0;cursor:pointer">
-                      <span style="font-size:.66rem;font-weight:600;color:var(--text-muted)">Text</span>
-                    </div>
-                    <div style="display:flex;align-items:center;gap:4px">
-                      <input type="color" id="sim-secondary-bg" value="#1A2A4A" style="width:22px;height:18px;border:1px solid var(--border);border-radius:3px;padding:0;cursor:pointer">
-                      <span style="font-size:.66rem;font-weight:600;color:var(--text-muted)">2nd BG</span>
-                    </div>
-                    <div style="display:flex;align-items:center;gap:4px">
-                      <input type="color" id="sim-secondary-text" value="#AABBCC" style="width:22px;height:18px;border:1px solid var(--border);border-radius:3px;padding:0;cursor:pointer">
-                      <span style="font-size:.66rem;font-weight:600;color:var(--text-muted)">2nd Text</span>
-                    </div>
-                  </div>
-                  <div style="display:flex;gap:6px">
-                    <button type="button" id="sim-apply" class="btn btn--sm btn--primary" style="font-size:.72rem;padding:4px 12px">Apply to Preview</button>
-                    <button type="button" id="sim-reset" class="btn btn--sm btn--secondary" style="font-size:.72rem;padding:4px 12px">Reset</button>
                   </div>
                 </div>
-                <div id="sim-mapping-table" style="margin-top:8px"></div>
+
               </div>
             </div>
 
@@ -636,24 +647,38 @@
 
   function renderSlotCards() {
     const list = document.getElementById('slot-list');
-    document.getElementById('slot-count').textContent = _slotState.length;
-    if (!_slotState.length) { list.innerHTML = '<p style="font-size:.85rem;color:var(--text-muted)">No slots detected. Click elements in the preview to add slots.</p>'; updateManifest(); _renderColorSlotSection(); return; }
+    const colorList = document.getElementById('color-slot-list');
 
-    // Separate colors from other slots
     const nonColorSlots = _slotState.filter(s => s.type !== 'color');
+    const colorSlots = _slotState.filter(s => s.type === 'color');
 
-    // Render text/image/repeating slots in right panel
-    let html = nonColorSlots.map((s, idx) => {
-      const i = _slotState.indexOf(s);
-      return _renderSlotCard(s, i);
-    }).join('');
+    document.getElementById('slot-count').textContent = nonColorSlots.length;
+    document.getElementById('color-slot-count').textContent = colorSlots.length;
 
-    if (!nonColorSlots.length) html = '<p style="font-size:.85rem;color:var(--text-muted)">No text/image slots. Click elements in the preview to add.</p>';
+    // Render content slots (text/image/repeating)
+    if (!nonColorSlots.length) {
+      list.innerHTML = '<p style="font-size:.85rem;color:var(--text-muted)">No text/image slots. Click elements in the preview to add.</p>';
+    } else {
+      list.innerHTML = nonColorSlots.map(s => _renderSlotCard(s, _slotState.indexOf(s))).join('');
+    }
 
-    list.innerHTML = html;
-
-    // Render color slots in the full-width section below
-    _renderColorSlotSection();
+    // Render color slots grouped by role
+    if (!colorSlots.length) {
+      colorList.innerHTML = '<p style="font-size:.85rem;color:var(--text-muted)">No color slots detected.</p>';
+    } else {
+      const colorGroups = {};
+      for (const s of colorSlots) {
+        const group = _getColorGroup(s.key.slice('color:'.length));
+        if (!colorGroups[group]) colorGroups[group] = [];
+        colorGroups[group].push(s);
+      }
+      let html = '';
+      for (const [group, slots] of Object.entries(colorGroups)) {
+        html += `<div style="font-size:.68rem;font-weight:600;color:var(--brand,#0f766e);text-transform:uppercase;letter-spacing:.03em;margin:8px 0 4px">${esc(group)}</div>`;
+        html += slots.map(s => _renderSlotCard(s, _slotState.indexOf(s))).join('');
+      }
+      colorList.innerHTML = html;
+    }
 
     // Set img src via DOM (avoids embedding large base64 strings inside innerHTML)
     list.querySelectorAll('img[data-slot-thumb]').forEach(img => {
@@ -667,35 +692,6 @@
     _wireColorSlotEvents();
     updateManifest();
     _updateSimPanel();
-  }
-
-  function _renderColorSlotSection() {
-    const section = document.getElementById('color-slots-section');
-    const colorList = document.getElementById('color-slot-list');
-    if (!section || !colorList) return;
-
-    const colorSlots = _slotState.filter(s => s.type === 'color');
-    if (!colorSlots.length) { section.style.display = 'none'; return; }
-    section.style.display = '';
-    document.getElementById('color-slot-count').textContent = colorSlots.length;
-
-    const colorGroups = {};
-    for (const s of colorSlots) {
-      const varName = s.key.slice('color:'.length);
-      const group = _getColorGroup(varName);
-      if (!colorGroups[group]) colorGroups[group] = [];
-      colorGroups[group].push(s);
-    }
-
-    let html = '';
-    for (const [group, slots] of Object.entries(colorGroups)) {
-      html += `<div class="color-group-label">${esc(group)}</div>`;
-      html += slots.map(s => {
-        const i = _slotState.indexOf(s);
-        return _renderSlotCard(s, i);
-      }).join('');
-    }
-    colorList.innerHTML = html;
   }
 
   function _wireColorSlotEvents() {
@@ -1790,6 +1786,21 @@
   });
 
   // ── Helpers ───────────────────────────────────────────────────────────────
+
+  window.toggleAccordion = function(section) {
+    const contentH = document.getElementById('acc-content-header');
+    const colorsH = document.getElementById('acc-colors-header');
+    if (section === 'content') {
+      const wasOpen = contentH.classList.contains('open');
+      contentH.classList.toggle('open', !wasOpen);
+      // Auto-collapse other if opening
+      if (!wasOpen) colorsH.classList.remove('open');
+    } else {
+      const wasOpen = colorsH.classList.contains('open');
+      colorsH.classList.toggle('open', !wasOpen);
+      if (!wasOpen) contentH.classList.remove('open');
+    }
+  };
 
   function _parseManifestFromHtml(html) {
     const tag = '<script type="application/json" id="template-meta">';

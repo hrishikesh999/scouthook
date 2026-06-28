@@ -14,7 +14,7 @@
     '/workspaces.html': null,
     '/editor.html':     '/drafts.html',
     '/schedule.html':   '/drafts.html',
-    '/Published.html':  '/drafts.html',
+    '/published.html':  '/drafts.html',
   };
 
   var pathname = window.location.pathname;

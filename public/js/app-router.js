@@ -11,7 +11,7 @@
     '/vault.html':      null,
     '/drafts.html':     '/js/drafts.js',
     '/schedule.html':   '/js/schedule.js',
-    '/Published.html':  '/js/published.js',
+    '/published.html':  '/js/published.js',
     '/settings.html':   '/js/settings.js',
     '/account.html':    null,
     '/billing.html':    null,
@@ -59,7 +59,7 @@
   // so init() finds the data ready or in-flight (cachedFetch deduplicates).
   const ROUTE_PREFETCHES = {
     '/drafts.html':    () => cachedFetch('/api/posts',                    { credentials: 'same-origin' }, 60_000),
-    '/Published.html': () => cachedFetch('/api/posts?status=published',   { credentials: 'same-origin' }, 60_000),
+    '/published.html': () => cachedFetch('/api/posts?status=published',   { credentials: 'same-origin' }, 60_000),
     '/schedule.html':  () => cachedFetch('/api/linkedin/scheduled',       { credentials: 'same-origin' }, 60_000),
   };
 
@@ -94,7 +94,7 @@
     '/billing.html':   null,
     '/workspaces.html': null,
     '/schedule.html':  '/drafts.html',
-    '/Published.html': '/drafts.html',
+    '/published.html': '/drafts.html',
     '/post.html':      '/drafts.html',
   };
 

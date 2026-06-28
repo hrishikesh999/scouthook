@@ -1,219 +1,205 @@
 /* schedule.js — Editorial Agenda for schedule.html */
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
+/* ── Helpers ────────────────────────────────────────────────── */
 
 function toTitleCase(str) {
   if (!str) return '';
-  return str.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  return str.replace(/-/g, ' ').replace(/\b\w/g, function (c) { return c.toUpperCase(); });
+}
+
+function escHtml(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 function localDateKey(isoString) {
-  // Returns "YYYY-MM-DD" in the user's local timezone
-  const d = new Date(isoString);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+  var d = new Date(isoString);
+  var y = d.getFullYear();
+  var m = String(d.getMonth() + 1).padStart(2, '0');
+  var day = String(d.getDate()).padStart(2, '0');
+  return y + '-' + m + '-' + day;
 }
 
-/** Calendar key for a local Date (do not use date.toISOString() — UTC shifts the day). */
 function localDateKeyFromDate(d) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+  var y = d.getFullYear();
+  var m = String(d.getMonth() + 1).padStart(2, '0');
+  var day = String(d.getDate()).padStart(2, '0');
+  return y + '-' + m + '-' + day;
 }
 
 function formatTime(isoString) {
-  const d = new Date(isoString);
+  var d = new Date(isoString);
   return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
 }
 
-function formatDayParts(date) {
-  const today    = todayMidnight();
-  const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
-  const isToday    = date.getTime() === today.getTime();
-  const isTomorrow = date.getTime() === tomorrow.getTime();
-
-  const weekday = date.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase();
-  const num     = date.getDate();
-  const month   = date.toLocaleDateString('en-US', { month: 'short' }).toUpperCase();
-  const label   = isToday ? 'TODAY' : isTomorrow ? 'TOMORROW' : null;
-
-  return { weekday, num, month, label };
-}
-
 function todayMidnight() {
-  const d = new Date();
+  var d = new Date();
   d.setHours(0, 0, 0, 0);
   return d;
 }
 
-// ---------------------------------------------------------------------------
-// Build a 7-day date range starting from today
-// ---------------------------------------------------------------------------
+function formatDayParts(date) {
+  var today    = todayMidnight();
+  var tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
+  var isToday    = date.getTime() === today.getTime();
+  var isTomorrow = date.getTime() === tomorrow.getTime();
+
+  var weekday = date.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase();
+  var num     = date.getDate();
+  var month   = date.toLocaleDateString('en-US', { month: 'short' }).toUpperCase();
+  var label   = isToday ? 'TODAY' : isTomorrow ? 'TOMORROW' : null;
+
+  return { weekday: weekday, num: num, month: month, label: label };
+}
+
+/* ── 7-day range ────────────────────────────────────────────── */
 
 function buildDayRange() {
-  const days = [];
-  const base = todayMidnight();
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(base);
+  var days = [];
+  var base = todayMidnight();
+  for (var i = 0; i < 7; i++) {
+    var d = new Date(base);
     d.setDate(base.getDate() + i);
     days.push(d);
   }
   return days;
 }
 
-// ---------------------------------------------------------------------------
-// Group posts by local date key, sorted by scheduled_for within each group
-// ---------------------------------------------------------------------------
+/* ── Group posts by date ────────────────────────────────────── */
 
 function groupByDate(posts) {
-  const map = new Map();
-  for (const post of posts) {
-    const key = localDateKey(post.scheduled_for);
+  var map = new Map();
+  for (var i = 0; i < posts.length; i++) {
+    var post = posts[i];
+    var key = localDateKey(post.scheduled_for);
     if (!map.has(key)) map.set(key, []);
     map.get(key).push(post);
   }
-  for (const [, dayPosts] of map) {
-    dayPosts.sort((a, b) => new Date(a.scheduled_for) - new Date(b.scheduled_for));
-  }
+  map.forEach(function (dayPosts) {
+    dayPosts.sort(function (a, b) { return new Date(a.scheduled_for) - new Date(b.scheduled_for); });
+  });
   return map;
 }
 
-// ---------------------------------------------------------------------------
-// Render
-// ---------------------------------------------------------------------------
+/* ── Render ──────────────────────────────────────────────────── */
 
-const MISSED_THRESHOLD_MS = 30 * 60 * 1000; // 30 minutes
+var MISSED_THRESHOLD_MS = 30 * 60 * 1000;
 
 function isMissedPost(post) {
-  if (!['pending', 'processing'].includes(post.status)) return false;
-  const t = new Date(post.scheduled_for).getTime();
+  if (post.status !== 'pending' && post.status !== 'processing') return false;
+  var t = new Date(post.scheduled_for).getTime();
   return Number.isFinite(t) && (Date.now() - t) > MISSED_THRESHOLD_MS;
 }
 
 function renderStream(posts) {
-  const stream = document.getElementById('schedule-stream');
+  var stream = document.getElementById('schedule-stream');
   if (!stream) return;
 
-  const list   = Array.isArray(posts) ? posts : [];
-  const failed = list.filter(p => p.status === 'not_sent' || isMissedPost(p));
-  const active = list.filter(p => p.status !== 'not_sent' && !isMissedPost(p));
+  var list   = Array.isArray(posts) ? posts : [];
+  var failed = list.filter(function (p) { return p.status === 'not_sent' || isMissedPost(p); });
+  var active = list.filter(function (p) { return p.status !== 'not_sent' && !isMissedPost(p); });
 
-  const days   = buildDayRange();
-  const byDate = groupByDate(active);
+  var days   = buildDayRange();
+  var byDate = groupByDate(active);
 
-  // Day keys covered by the 7-day window
-  const windowKeys = new Set(days.map(localDateKeyFromDate));
+  var windowKeys = new Set(days.map(localDateKeyFromDate));
 
-  // "Next 7 days" section — always show all 7 days
-  const weekHtml = days.map(date => {
-    const key = localDateKeyFromDate(date);
+  var weekHtml = days.map(function (date) {
+    var key = localDateKeyFromDate(date);
     return renderDayGroup(date, byDate.get(key) || []);
   }).join('');
 
-  // "Coming up" section — scheduled posts beyond the 7-day window
-  const laterEntries = [...byDate.entries()]
-    .filter(([key]) => !windowKeys.has(key))
-    .sort(([a], [b]) => a.localeCompare(b));
+  var laterEntries = [];
+  byDate.forEach(function (dayPosts, key) {
+    if (!windowKeys.has(key)) laterEntries.push([key, dayPosts]);
+  });
+  laterEntries.sort(function (a, b) { return a[0].localeCompare(b[0]); });
 
-  let laterHtml = '';
+  var laterHtml = '';
   if (laterEntries.length > 0) {
-    const groups = laterEntries.map(([key, dayPosts]) => {
-      const [y, m, d] = key.split('-').map(Number);
-      const date = new Date(y, m - 1, d);
-      return renderDayGroup(date, dayPosts);
+    var groups = laterEntries.map(function (entry) {
+      var parts = entry[0].split('-').map(Number);
+      var date = new Date(parts[0], parts[1] - 1, parts[2]);
+      return renderDayGroup(date, entry[1]);
     }).join('');
-    laterHtml = `
-      <div class="sched-section-divider">
-        <span class="sched-section-label">Coming up</span>
-      </div>
-      ${groups}`;
+    laterHtml = '<div class="sched-section-divider">'
+      + '<span class="sched-section-label">Coming up</span>'
+      + '</div>'
+      + groups;
   }
 
-  // "Failed to Publish" section
-  let failedHtml = '';
+  var failedHtml = '';
   if (failed.length > 0) {
-    const rows = failed.map(renderFailedRow).join('');
-    failedHtml = `
-      <div class="sched-section-divider sched-section-divider--failed">
-        <span class="sched-section-label sched-section-label--failed">Failed to Publish</span>
-      </div>
-      <div class="sched-failed-list">${rows}</div>`;
+    var rows = failed.map(renderFailedRow).join('');
+    failedHtml = '<div class="sched-section-divider sched-section-divider--failed">'
+      + '<span class="sched-section-label sched-section-label--failed">Failed to Publish</span>'
+      + '</div>'
+      + '<div class="sched-failed-list">' + rows + '</div>';
   }
 
   stream.innerHTML = weekHtml + laterHtml + failedHtml;
 }
 
 function renderDayGroup(date, posts) {
-  const { weekday, num, month, label } = formatDayParts(date);
-  const isToday    = label === 'TODAY';
-  const weekdayFull = date.toLocaleDateString('en-US', { weekday: 'long' });
-  const monthFull   = date.toLocaleDateString('en-US', { month: 'long' });
-  const countLabel  = posts.length === 1 ? '1 post' : posts.length > 1 ? `${posts.length} posts` : '';
+  var dp = formatDayParts(date);
+  var isToday = dp.label === 'TODAY';
 
-  const bodyHtml = posts.length > 0
-    ? `<div class="sched-events">${posts.map(renderEventRow).join('')}</div>`
-    : '';
+  var contentHtml = posts.length > 0
+    ? '<div class="sched-events">' + posts.map(renderEventRow).join('') + '</div>'
+    : '<p class="sched-empty-hint">No posts scheduled</p>';
 
-  const contentHtml = posts.length > 0
-    ? `<div class="sched-events">${posts.map(renderEventRow).join('')}</div>`
-    : `<p class="sched-empty-hint">No posts scheduled</p>`;
-
-  return `
-    <div class="sched-day-group${isToday ? ' sched-day-group--today' : ''}${posts.length === 0 ? ' sched-day-group--empty' : ''}">
-      <div class="sched-day-aside">
-        <span class="sched-dp-wday">${label || weekday}</span>
-        <span class="sched-dp-num">${num}</span>
-        <span class="sched-dp-month">${month}</span>
-      </div>
-      <div class="sched-day-content">
-        ${contentHtml}
-      </div>
-    </div>`;
+  return '<div class="sched-day-group'
+    + (isToday ? ' sched-day-group--today' : '')
+    + (posts.length === 0 ? ' sched-day-group--empty' : '')
+    + '">'
+    + '<div class="sched-day-aside">'
+    + '<span class="sched-dp-wday">' + (dp.label || dp.weekday) + '</span>'
+    + '<span class="sched-dp-num">' + dp.num + '</span>'
+    + '<span class="sched-dp-month">' + dp.month + '</span>'
+    + '</div>'
+    + '<div class="sched-day-content">'
+    + contentHtml
+    + '</div>'
+    + '</div>';
 }
 
 function renderEventRow(post) {
-  const time      = formatTime(post.scheduled_for);
-  const archetype = toTitleCase(post.format_slug);
-  const lines     = (post.content || '').trim().split('\n').map(l => l.trim()).filter(Boolean);
-  const hook      = lines[0] || '';
-  const second    = lines[1] || '';
+  var time      = formatTime(post.scheduled_for);
+  var archetype = toTitleCase(post.format_slug);
+  var lines     = (post.content || '').trim().split('\n').map(function (l) { return l.trim(); }).filter(Boolean);
+  var hook      = escHtml(lines[0] || '');
+  var second    = escHtml(lines[1] || '');
 
-  const editHref = post.post_id
-    ? `/editor/${encodeURIComponent(post.post_id)}`
+  var editHref = post.post_id
+    ? '/editor/' + encodeURIComponent(post.post_id)
     : null;
 
-  const tag    = editHref ? `a href="${editHref}"` : 'div';
-  const endTag = editHref ? 'a' : 'div';
+  var tag    = editHref ? 'a href="' + escHtml(editHref) + '"' : 'div';
+  var endTag = editHref ? 'a' : 'div';
 
-  return `
-    <${tag} class="sched-event" data-id="${post.id}">
-      <div class="sched-evt-time-badge">${time}</div>
-      <div class="sched-evt-body">
-        <div class="sched-evt-badges">
-          ${archetype ? `<span class="sched-archetype-badge">${archetype}</span>` : ''}
-          ${post.funnel_type ? `<span class="funnel-badge ${post.funnel_type}">${post.funnel_type}</span>` : ''}
-        </div>
-        <p class="sched-evt-hook">${hook}</p>
-        ${second ? `<p class="sched-evt-second">${second}</p>` : ''}
-        <span class="sched-action-edit">Edit →</span>
-      </div>
-    </${endTag}>`;
+  return '<' + tag + ' class="sched-event" data-id="' + post.id + '">'
+    + '<div class="sched-evt-time-badge">' + time + '</div>'
+    + '<div class="sched-evt-body">'
+    + '<div class="sched-evt-badges">'
+    + (archetype ? '<span class="sched-archetype-badge">' + escHtml(archetype) + '</span>' : '')
+    + (post.funnel_type ? '<span class="funnel-badge ' + escHtml(post.funnel_type) + '">' + escHtml(post.funnel_type) + '</span>' : '')
+    + '</div>'
+    + '<p class="sched-evt-hook">' + hook + '</p>'
+    + (second ? '<p class="sched-evt-second">' + second + '</p>' : '')
+    + '<span class="sched-action-edit">Edit &rarr;</span>'
+    + '</div>'
+    + '</' + endTag + '>';
 }
 
 function renderFailedRow(post) {
-  const lines   = (post.content || '').trim().split('\n').map(l => l.trim()).filter(Boolean);
-  const hook    = lines[0] || '';
-  const missed  = isMissedPost(post);
-  const when    = post.scheduled_for
+  var lines  = (post.content || '').trim().split('\n').map(function (l) { return l.trim(); }).filter(Boolean);
+  var hook   = escHtml(lines[0] || '');
+  var missed = isMissedPost(post);
+  var when   = post.scheduled_for
     ? new Date(post.scheduled_for).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })
     : '';
 
-  const errorMap = {
+  var errorMap = {
     reconnect_required: 'LinkedIn connection expired',
     not_connected: 'LinkedIn not connected',
     rate_limit_exceeded: 'Rate limit exceeded',
@@ -225,177 +211,178 @@ function renderFailedRow(post) {
     scheduled_payload_mismatch: 'Post content was modified after scheduling',
     linkedin_api_version_error: 'LinkedIn API version mismatch — contact support',
   };
-  const reason = missed
+  var reason = missed
     ? 'Missed scheduled time'
     : (errorMap[post.error_message] || post.error_message || 'Unknown error');
 
-  const editHref = post.post_id ? `/editor/${encodeURIComponent(post.post_id)}` : null;
+  var editHref = post.post_id ? '/editor/' + encodeURIComponent(post.post_id) : null;
 
-  // Missed posts (still pending/processing) show as read-only — server will recover them shortly.
-  // not_sent posts get full dismiss + reschedule actions.
-  const actionsHtml = post.status === 'not_sent' ? `
-    <div class="sched-failed-actions">
-      <button class="sched-btn sched-btn--reschedule-toggle" data-id="${post.id}">Reschedule</button>
-      <button class="sched-btn sched-btn--publish-now" data-id="${post.id}">Publish now</button>
-      ${editHref ? `<a href="${editHref}" class="sched-btn sched-btn--edit">Edit →</a>` : ''}
-      <button class="sched-btn sched-btn--dismiss" data-id="${post.id}">Dismiss</button>
-    </div>
-    <div class="sched-reschedule-panel" id="reschedule-panel-${post.id}" style="display:none">
-      <input type="datetime-local" class="sched-reschedule-input" id="reschedule-dt-${post.id}">
-      <button class="sched-btn sched-btn--confirm-reschedule" data-id="${post.id}">Confirm reschedule</button>
-    </div>` : `
-    <div class="sched-failed-actions">
-      ${editHref ? `<a href="${editHref}" class="sched-btn sched-btn--edit">Edit →</a>` : ''}
-      <span class="sched-failed-recovering">Recovering…</span>
-    </div>`;
+  var actionsHtml;
+  if (post.status === 'not_sent') {
+    actionsHtml = '<div class="sched-failed-actions">'
+      + '<button class="sched-btn sched-btn--reschedule-toggle" data-id="' + post.id + '">Reschedule</button>'
+      + '<button class="sched-btn sched-btn--publish-now" data-id="' + post.id + '">Publish now</button>'
+      + (editHref ? '<a href="' + escHtml(editHref) + '" class="sched-btn sched-btn--edit">Edit &rarr;</a>' : '')
+      + '<button class="sched-btn sched-btn--dismiss" data-id="' + post.id + '">Dismiss</button>'
+      + '</div>'
+      + '<div class="sched-reschedule-panel" id="reschedule-panel-' + post.id + '" style="display:none">'
+      + '<input type="datetime-local" class="sched-reschedule-input" id="reschedule-dt-' + post.id + '">'
+      + '<button class="sched-btn sched-btn--confirm-reschedule" data-id="' + post.id + '">Confirm reschedule</button>'
+      + '</div>';
+  } else {
+    actionsHtml = '<div class="sched-failed-actions">'
+      + (editHref ? '<a href="' + escHtml(editHref) + '" class="sched-btn sched-btn--edit">Edit &rarr;</a>' : '')
+      + '<span class="sched-failed-recovering">Recovering&hellip;</span>'
+      + '</div>';
+  }
 
-  return `
-    <div class="sched-failed-row" data-id="${post.id}">
-      <div class="sched-failed-meta">
-        <span class="sched-failed-badge">Failed to Publish</span>
-        ${when ? `<span class="sched-failed-when">Scheduled for ${when}</span>` : ''}
-      </div>
-      <p class="sched-failed-hook">${hook}</p>
-      <p class="sched-failed-reason">${reason}</p>
-      ${actionsHtml}
-    </div>`;
+  return '<div class="sched-failed-row" data-id="' + post.id + '">'
+    + '<div class="sched-failed-meta">'
+    + '<span class="sched-failed-badge">Failed to Publish</span>'
+    + (when ? '<span class="sched-failed-when">Scheduled for ' + escHtml(when) + '</span>' : '')
+    + '</div>'
+    + '<p class="sched-failed-hook">' + hook + '</p>'
+    + '<p class="sched-failed-reason">' + escHtml(reason) + '</p>'
+    + actionsHtml
+    + '</div>';
 }
 
-// ---------------------------------------------------------------------------
-// LinkedIn status (sidebar)
-// ---------------------------------------------------------------------------
+/* ── LinkedIn status ────────────────────────────────────────── */
 
 function buildLinkedInChip(name, photoUrl) {
-  const initials = name
-    ? name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
+  var initials = name
+    ? name.split(' ').map(function (w) { return w[0]; }).slice(0, 2).join('').toUpperCase()
     : '??';
-  const avatarHtml = photoUrl
-    ? `<img class="nav-linkedin-avatar" src="${photoUrl}" alt="${name || 'LinkedIn'}">`
-    : `<div class="nav-linkedin-initials">${initials}</div>`;
-  const nameHtml = name ? `<span class="nav-linkedin-name">${name}</span>` : '';
-  return `<div class="nav-linkedin-connected">${avatarHtml}${nameHtml}</div>`;
+  var avatarHtml = photoUrl
+    ? '<img class="nav-linkedin-avatar" src="' + escHtml(photoUrl) + '" alt="' + escHtml(name || 'LinkedIn') + '">'
+    : '<div class="nav-linkedin-initials">' + initials + '</div>';
+  var nameHtml = name ? '<span class="nav-linkedin-name">' + escHtml(name) + '</span>' : '';
+  return '<div class="nav-linkedin-connected">' + avatarHtml + nameHtml + '</div>';
 }
 
-async function checkLinkedInStatus() {
-  const connectBtn = document.getElementById('linkedin-connect-btn');
+function checkLinkedInStatus() {
+  var connectBtn = document.getElementById('linkedin-connect-btn');
   if (connectBtn) {
-    connectBtn.href = `/api/linkedin/connect?_uid=${encodeURIComponent(getUserId())}&_tid=${encodeURIComponent(getTenantId())}`;
+    connectBtn.href = '/api/linkedin/connect?_uid=' + encodeURIComponent(getUserId()) + '&_tid=' + encodeURIComponent(getTenantId());
   }
-  try {
-    const res  = await fetch('/api/linkedin/status', { headers: apiHeaders() });
-    const data = await res.json();
-    const area = document.getElementById('nav-linkedin-area');
-    if (!area) return;
-    if (data.connected) {
-      area.innerHTML = buildLinkedInChip(data.name, data.photo_url);
-    }
-  } catch { /* non-fatal */ }
+  fetch('/api/linkedin/status', { headers: apiHeaders() })
+    .then(function (res) { return res.json(); })
+    .then(function (data) {
+      var area = document.getElementById('nav-linkedin-area');
+      if (!area) return;
+      if (data.connected) {
+        area.innerHTML = buildLinkedInChip(data.name, data.photo_url);
+      }
+    })
+    .catch(function () { /* non-fatal */ });
 }
 
-// ---------------------------------------------------------------------------
-// Boot
-// ---------------------------------------------------------------------------
+/* ── Boot ────────────────────────────────────────────────────── */
 
-async function reloadStream() {
-  try {
-    const data = await cachedFetch('/api/linkedin/scheduled', { headers: apiHeaders() }, 60_000);
-    renderStream(data.ok && Array.isArray(data.posts) ? data.posts : []);
-  } catch {
-    renderStream([]);
-  }
+function reloadStream() {
+  return cachedFetch('/api/linkedin/scheduled', { headers: apiHeaders() }, 60000)
+    .then(function (data) {
+      renderStream(data.ok && Array.isArray(data.posts) ? data.posts : []);
+    })
+    .catch(function () {
+      renderStream([]);
+    });
 }
 
-async function init() {
+function init() {
   checkLinkedInStatus();
-  await reloadStream();
 
-  // Event delegation for dismiss / reschedule actions on failed-post cards.
-  const stream = document.getElementById('schedule-stream');
-  if (!stream) return;
+  reloadStream().then(function () {
+    var stream = document.getElementById('schedule-stream');
+    if (!stream) return;
 
-  stream.addEventListener('click', async e => {
-    const dismissBtn  = e.target.closest('.sched-btn--dismiss');
-    const toggleBtn   = e.target.closest('.sched-btn--reschedule-toggle');
-    const confirmBtn  = e.target.closest('.sched-btn--confirm-reschedule');
-    const nowBtn      = e.target.closest('.sched-btn--publish-now');
+    stream.addEventListener('click', function (e) {
+      var dismissBtn  = e.target.closest('.sched-btn--dismiss');
+      var toggleBtn   = e.target.closest('.sched-btn--reschedule-toggle');
+      var confirmBtn  = e.target.closest('.sched-btn--confirm-reschedule');
+      var nowBtn      = e.target.closest('.sched-btn--publish-now');
 
-    if (dismissBtn) {
-      const id = dismissBtn.dataset.id;
-      try {
-        const res = await fetch(`/api/linkedin/scheduled/${id}/dismiss`, {
+      if (dismissBtn) {
+        var id = dismissBtn.dataset.id;
+        fetch('/api/linkedin/scheduled/' + id + '/dismiss', {
           method: 'DELETE', headers: apiHeaders(),
-        });
-        const data = await res.json();
-        if (data.ok) {
-          cachedFetch.bust('/api/linkedin/scheduled');
-          stream.querySelector(`.sched-failed-row[data-id="${id}"]`)?.remove();
-        } else {
-          alert(`Could not dismiss: ${data.error}`);
-        }
-      } catch { alert('Dismiss failed — please try again.'); }
-    }
+        })
+          .then(function (res) { return res.json(); })
+          .then(function (data) {
+            if (data.ok) {
+              cachedFetch.bust('/api/linkedin/scheduled');
+              var row = stream.querySelector('.sched-failed-row[data-id="' + id + '"]');
+              if (row) row.remove();
+            } else {
+              alert('Could not dismiss: ' + data.error);
+            }
+          })
+          .catch(function () { alert('Dismiss failed — please try again.'); });
+      }
 
-    if (toggleBtn) {
-      const id    = toggleBtn.dataset.id;
-      const panel = document.getElementById(`reschedule-panel-${id}`);
-      if (panel) {
-        const opening = panel.style.display === 'none';
-        panel.style.display = opening ? '' : 'none';
-        if (opening) {
-          // Pre-fill with tomorrow at 9am as a sensible default
-          const dt = document.getElementById(`reschedule-dt-${id}`);
-          if (dt && !dt.value) {
-            const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0);
-            dt.value = d.toISOString().slice(0, 16);
+      if (toggleBtn) {
+        var tid    = toggleBtn.dataset.id;
+        var panel = document.getElementById('reschedule-panel-' + tid);
+        if (panel) {
+          var opening = panel.style.display === 'none';
+          panel.style.display = opening ? '' : 'none';
+          if (opening) {
+            var dt = document.getElementById('reschedule-dt-' + tid);
+            if (dt && !dt.value) {
+              var d = new Date(); d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0);
+              dt.value = d.toISOString().slice(0, 16);
+            }
           }
         }
       }
-    }
 
-    if (confirmBtn) {
-      const id  = confirmBtn.dataset.id;
-      const dt  = document.getElementById(`reschedule-dt-${id}`);
-      if (!dt?.value) { alert('Please pick a date and time.'); return; }
-      const scheduled_for = new Date(dt.value).toISOString();
-      try {
-        const res  = await fetch(`/api/linkedin/scheduled/${id}/reschedule`, {
+      if (confirmBtn) {
+        var cid = confirmBtn.dataset.id;
+        var dtEl = document.getElementById('reschedule-dt-' + cid);
+        if (!dtEl || !dtEl.value) { alert('Please pick a date and time.'); return; }
+        var scheduled_for = new Date(dtEl.value).toISOString();
+        fetch('/api/linkedin/scheduled/' + cid + '/reschedule', {
           method: 'POST',
-          headers: { ...apiHeaders(), 'Content-Type': 'application/json' },
-          body: JSON.stringify({ scheduled_for }),
-        });
-        const data = await res.json();
-        if (data.ok) {
-          cachedFetch.bust('/api/linkedin/scheduled');
-          await reloadStream();
-        } else {
-          const msgs = {
-            scheduled_for_too_soon: 'Please pick a time at least 5 minutes in the future.',
-            scheduled_for_too_far:  'Please pick a time within the next 30 days.',
-            scheduling_unavailable: 'Scheduler is unavailable — try again shortly.',
-          };
-          alert(msgs[data.error] || `Could not reschedule: ${data.error}`);
-        }
-      } catch { alert('Reschedule failed — please try again.'); }
-    }
+          headers: Object.assign({}, apiHeaders(), { 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ scheduled_for: scheduled_for }),
+        })
+          .then(function (res) { return res.json(); })
+          .then(function (data) {
+            if (data.ok) {
+              cachedFetch.bust('/api/linkedin/scheduled');
+              reloadStream();
+            } else {
+              var msgs = {
+                scheduled_for_too_soon: 'Please pick a time at least 5 minutes in the future.',
+                scheduled_for_too_far:  'Please pick a time within the next 30 days.',
+                scheduling_unavailable: 'Scheduler is unavailable — try again shortly.',
+              };
+              alert(msgs[data.error] || 'Could not reschedule: ' + data.error);
+            }
+          })
+          .catch(function () { alert('Reschedule failed — please try again.'); });
+      }
 
-    if (nowBtn) {
-      const id = nowBtn.dataset.id;
-      if (!confirm('Publish this post to LinkedIn right now?')) return;
-      try {
-        const res  = await fetch(`/api/linkedin/scheduled/${id}/reschedule`, {
+      if (nowBtn) {
+        var nid = nowBtn.dataset.id;
+        if (!confirm('Publish this post to LinkedIn right now?')) return;
+        fetch('/api/linkedin/scheduled/' + nid + '/reschedule', {
           method: 'POST',
-          headers: { ...apiHeaders(), 'Content-Type': 'application/json' },
+          headers: Object.assign({}, apiHeaders(), { 'Content-Type': 'application/json' }),
           body: JSON.stringify({ scheduled_for: null }),
-        });
-        const data = await res.json();
-        if (data.ok) {
-          cachedFetch.bust('/api/linkedin/scheduled');
-          await reloadStream();
-        } else {
-          alert(`Could not publish: ${data.error}`);
-        }
-      } catch { alert('Publish failed — please try again.'); }
-    }
+        })
+          .then(function (res) { return res.json(); })
+          .then(function (data) {
+            if (data.ok) {
+              cachedFetch.bust('/api/linkedin/scheduled');
+              reloadStream();
+            } else {
+              alert('Could not publish: ' + data.error);
+            }
+          })
+          .catch(function () { alert('Publish failed — please try again.'); });
+      }
+    });
   });
 }
 

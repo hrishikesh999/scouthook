@@ -133,7 +133,7 @@ function showPostError(msg) {
 
 async function init() {
   const POST_ID = new URLSearchParams(window.location.search).get('id');
-  if (!POST_ID) { window.location.replace('/Published.html'); return; }
+  if (!POST_ID) { window.location.replace('/published.html'); return; }
 
   const ratingBtns = document.getElementById('post-rating-btns');
   if (ratingBtns) {
@@ -157,7 +157,7 @@ async function init() {
 
     const postData = postResult.status === 'fulfilled' ? postResult.value : null;
     if (!postData?.ok || !postData.post) {
-      showPostError('Could not load this post. <a href="/Published.html" style="color:var(--teal)">Back to Published</a>');
+      showPostError('Could not load this post. <a href="/published.html" style="color:var(--teal)">Back to Published</a>');
       return;
     }
 
@@ -179,7 +179,7 @@ async function init() {
     populateLinkedInLink(post);
     renderRating(post.performance_tag || null);
   } catch {
-    showPostError('Something went wrong loading this post. <a href="/Published.html" style="color:var(--teal)">Back to Published</a>');
+    showPostError('Something went wrong loading this post. <a href="/published.html" style="color:var(--teal)">Back to Published</a>');
   }
 }
 

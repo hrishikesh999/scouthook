@@ -54,10 +54,17 @@ RULE 1: LAYOUT
 
 RULE 2: FONTS
    - Load via <link href="https://fonts.googleapis.com/css2?family=...&display=swap">.
-   - Pick the closest Google Font. Good options: Poppins, Inter, Montserrat, Playfair Display,
-     Raleway, Roboto Condensed, DM Sans, Space Grotesk, Bebas Neue, Oswald.
+   - Pick the closest Google Font by carefully observing character shapes:
+     • Geometric sans-serif (round O, even strokes): Poppins, Nunito Sans, Outfit, DM Sans, Plus Jakarta Sans
+     • Humanist sans-serif (slightly calligraphic, varied strokes): Inter, Work Sans, Source Sans Pro
+     • Condensed/narrow (tall and tight): Barlow Condensed, Roboto Condensed, Oswald, Bebas Neue (display only)
+     • Monospace-influenced / techy (equal-width feel): Space Grotesk, Space Mono, Inconsolata
+     • Bold display / impact: Exo 2, Rajdhani, Michroma, Black Ops One
+     • Serif / editorial: Playfair Display, Merriweather, Lora, DM Serif Display
+     • Script / handwritten: Pacifico, Dancing Script, Caveat
    - Always specify font-weight explicitly. Full range available: 100, 200, 300, 400, 500, 600, 700, 800, 900.
    - For ultra-thin designs use 100 or 200. For light designs use 300. Match what you see exactly.
+   - If headline text looks condensed and tall (narrow letters, large size), use a Condensed font family.
 
 RULE 3: COLORS — NON-NEGOTIABLE
    WRONG ✗ (hardcoded hex OR rgba in CSS rule):
@@ -263,7 +270,7 @@ INVIOLABLE RULES:
 const VISION_TIMEOUT_MS = 120_000;
 
 // Pass 2 quality thresholds
-const DIFF_SKIP_THRESHOLD = 88;   // skip AI refinement if already this good
+const DIFF_SKIP_THRESHOLD = 75;   // skip AI refinement if already this good
 const DIFF_STOP_THRESHOLD = 92;   // stop refinement loop once converged
 const MAX_REFINEMENT_PASSES = 2;  // max AI refinement attempts
 
@@ -336,12 +343,14 @@ async function extractDominantColors(buffer) {
 // ---------------------------------------------------------------------------
 
 /**
- * Scan the image row by row and identify major horizontal zones:
- * photo/illustration regions (high pixel variance) vs solid/gradient regions (low variance).
- * Returns an array of zone descriptors with fractional y-coordinates (0–1).
+ * Scan the image both row-by-row (horizontal zones) and column-by-column (vertical zones).
+ * High pixel variance = photo/illustration. Low variance = solid color or gradient.
+ * Returns { hZones, vZones } — each an array of zone descriptors with fractional coordinates (0–1).
  */
 async function analyzeImageLayout(buffer) {
   const W = 180, H = 180;
+  const PHOTO_V = 500;
+  const MIN_ZONE_FRAC = 0.06;
 
   const { data } = await sharp(buffer)
     .resize(W, H, { fit: 'fill' })
@@ -349,8 +358,14 @@ async function analyzeImageLayout(buffer) {
     .raw()
     .toBuffer({ resolveWithObject: true });
 
-  // Per-row: average color + variance across all pixels in that row
-  const rows = [];
+  function toHex(r, g, b) {
+    return '#' + [r, g, b]
+      .map(c => Math.max(0, Math.min(255, Math.round(c))).toString(16).padStart(2, '0'))
+      .join('');
+  }
+
+  // Build per-row stats
+  const rowStats = [];
   for (let y = 0; y < H; y++) {
     let sr = 0, sg = 0, sb = 0;
     for (let x = 0; x < W; x++) {
@@ -361,82 +376,122 @@ async function analyzeImageLayout(buffer) {
     let v = 0;
     for (let x = 0; x < W; x++) {
       const i = (y * W + x) * 3;
-      const dr = data[i] - ar, dg = data[i + 1] - ag, db = data[i + 2] - ab;
-      v += dr * dr + dg * dg + db * db;
+      v += (data[i]-ar)**2 + (data[i+1]-ag)**2 + (data[i+2]-ab)**2;
     }
-    rows.push({ r: ar, g: ag, b: ab, v: v / W });
+    rowStats.push({ r: ar, g: ag, b: ab, v: v / W });
   }
 
-  // Smooth variance with a 5-row window to reduce text/edge noise
-  const smoothV = rows.map((_, y) => {
-    let sum = 0, cnt = 0;
-    for (let dy = -2; dy <= 2; dy++) {
-      const ry = y + dy;
-      if (ry >= 0 && ry < H) { sum += rows[ry].v; cnt++; }
-    }
-    return sum / cnt;
-  });
-
-  // photo = high variance (faces, illustrations, textures)
-  // solid = low variance (flat panels, gradients, text areas)
-  const PHOTO_V = 500;
-  const types = smoothV.map(v => v > PHOTO_V ? 'photo' : 'solid');
-
-  // Group consecutive same-type rows; merge zones thinner than 6% of height
-  const MIN_ZONE = Math.ceil(H * 0.06);
-  const raw = [];
-  let zStart = 0;
-  for (let y = 1; y <= H; y++) {
-    if (y === H || types[y] !== types[y - 1]) {
-      raw.push({ start: zStart, end: y, type: types[y - 1] });
-      zStart = y;
-    }
-  }
-  // Merge thin zones into their predecessor
-  const merged = [];
-  for (const z of raw) {
-    if (z.end - z.start < MIN_ZONE && merged.length > 0) {
-      merged[merged.length - 1].end = z.end;
-    } else {
-      merged.push({ ...z });
-    }
-  }
-
-  // Compute dominant color for each zone
-  return merged.map(z => {
+  // Build per-column stats
+  const colStats = [];
+  for (let x = 0; x < W; x++) {
     let sr = 0, sg = 0, sb = 0;
-    for (let y = z.start; y < z.end; y++) {
-      sr += rows[y].r; sg += rows[y].g; sb += rows[y].b;
+    for (let y = 0; y < H; y++) {
+      const i = (y * W + x) * 3;
+      sr += data[i]; sg += data[i + 1]; sb += data[i + 2];
     }
-    const n = z.end - z.start;
-    const r = Math.round(sr / n), g = Math.round(sg / n), b = Math.round(sb / n);
-    const hex = '#' + [r, g, b]
-      .map(c => Math.max(0, Math.min(255, c)).toString(16).padStart(2, '0'))
-      .join('');
-    return { start: z.start / H, end: z.end / H, type: z.type, color: hex };
-  });
+    const ar = sr / H, ag = sg / H, ab = sb / H;
+    let v = 0;
+    for (let y = 0; y < H; y++) {
+      const i = (y * W + x) * 3;
+      v += (data[i]-ar)**2 + (data[i+1]-ag)**2 + (data[i+2]-ab)**2;
+    }
+    colStats.push({ r: ar, g: ag, b: ab, v: v / H });
+  }
+
+  // Generic zone detector: takes a stats array (rows or cols), returns zone descriptors
+  function detectZones(stats, dim) {
+    const MIN_ZONE = Math.ceil(dim * MIN_ZONE_FRAC);
+
+    // Smooth variance with 5-sample window
+    const smoothV = stats.map((_, i) => {
+      let sum = 0, cnt = 0;
+      for (let d = -2; d <= 2; d++) {
+        if (i + d >= 0 && i + d < dim) { sum += stats[i + d].v; cnt++; }
+      }
+      return sum / cnt;
+    });
+
+    const types = smoothV.map(v => v > PHOTO_V ? 'photo' : 'solid');
+
+    const raw = [];
+    let start = 0;
+    for (let i = 1; i <= dim; i++) {
+      if (i === dim || types[i] !== types[i - 1]) {
+        raw.push({ start, end: i, type: types[i - 1] });
+        start = i;
+      }
+    }
+
+    // Merge thin zones into predecessor
+    const merged = [];
+    for (const z of raw) {
+      if (z.end - z.start < MIN_ZONE && merged.length > 0) {
+        merged[merged.length - 1].end = z.end;
+      } else {
+        merged.push({ ...z });
+      }
+    }
+
+    return merged.map(z => {
+      let sr = 0, sg = 0, sb = 0;
+      for (let i = z.start; i < z.end; i++) {
+        sr += stats[i].r; sg += stats[i].g; sb += stats[i].b;
+      }
+      const n = z.end - z.start;
+      return {
+        start: z.start / dim,
+        end:   z.end   / dim,
+        type:  z.type,
+        color: toHex(sr / n, sg / n, sb / n),
+      };
+    });
+  }
+
+  return {
+    hZones: detectZones(rowStats, H), // top-to-bottom zones
+    vZones: detectZones(colStats, W), // left-to-right zones
+  };
 }
 
 /**
  * Format zone analysis into a prompt context string.
- * Only emitted when there are 2+ distinct zones (i.e. the layout has clear regions).
+ * Emits horizontal zones, vertical zones, or both if multiple distinct zones exist.
  */
-function buildLayoutContext(zones, tplW, tplH) {
-  if (!zones || zones.length < 2) return '';
+function buildLayoutContext({ hZones, vZones }, tplW, tplH) {
+  const hasH = hZones && hZones.length >= 2;
+  const hasV = vZones && vZones.length >= 2;
+  if (!hasH && !hasV) return '';
+
   const lines = ['\n\nLAYOUT ZONES (measured algorithmically — use these exact pixel values, do not re-estimate):'];
-  zones.forEach((z, i) => {
-    const y0 = Math.round(z.start * tplH);
-    const y1 = Math.round(z.end * tplH);
-    const pct = Math.round((z.end - z.start) * 100);
-    if (z.type === 'photo') {
-      lines.push(`  Zone ${i + 1}: y=${y0}–${y1}px (${pct}%) → PHOTO/ILLUSTRATION region`);
-      lines.push(`    Use: <img data-slot="image:photo" style="...height:${y1 - y0}px..."> — do NOT attempt SVG recreation`);
-      lines.push(`    Manifest: "image:photo": {"x":0,"y":${y0},"w":${tplW},"h":${y1 - y0}}`);
-    } else {
-      lines.push(`  Zone ${i + 1}: y=${y0}–${y1}px (${pct}%) → SOLID/GRADIENT panel, dominant color ${z.color}`);
-      lines.push(`    Use this color as --bg or --panel_bg CSS var`);
-    }
-  });
+
+  if (hasH) {
+    lines.push('  TOP-TO-BOTTOM split:');
+    hZones.forEach((z, i) => {
+      const y0 = Math.round(z.start * tplH), y1 = Math.round(z.end * tplH);
+      const pct = Math.round((z.end - z.start) * 100);
+      if (z.type === 'photo') {
+        lines.push(`    Zone ${i + 1}: y=${y0}–${y1}px (${pct}%) → PHOTO/ILLUSTRATION — use <img data-slot="image:photo" style="height:${y1-y0}px"> NOT SVG`);
+        lines.push(`      Manifest: "image:photo": {"x":0,"y":${y0},"w":${tplW},"h":${y1 - y0}}`);
+      } else {
+        lines.push(`    Zone ${i + 1}: y=${y0}–${y1}px (${pct}%) → SOLID/GRADIENT, dominant color ${z.color}`);
+      }
+    });
+  }
+
+  if (hasV) {
+    lines.push('  LEFT-TO-RIGHT split:');
+    vZones.forEach((z, i) => {
+      const x0 = Math.round(z.start * tplW), x1 = Math.round(z.end * tplW);
+      const pct = Math.round((z.end - z.start) * 100);
+      if (z.type === 'photo') {
+        lines.push(`    Zone ${i + 1}: x=${x0}–${x1}px (${pct}%) → PHOTO/ILLUSTRATION — use <img data-slot="image:photo" style="width:${x1-x0}px"> NOT SVG`);
+        lines.push(`      Manifest: "image:photo": {"x":${x0},"y":0,"w":${x1 - x0},"h":${tplH}}`);
+      } else {
+        lines.push(`    Zone ${i + 1}: x=${x0}–${x1}px (${pct}%) → SOLID/GRADIENT, dominant color ${z.color}`);
+      }
+    });
+  }
+
   return lines.join('\n');
 }
 
@@ -661,7 +716,7 @@ async function generateTemplateFromImage(imageBuffer, options = {}) {
   let layoutContext = '';
 
   if (!isSvg && cropBuffer) {
-    const [colors, zones] = await Promise.all([
+    const [colors, layout] = await Promise.all([
       extractDominantColors(imageBuffer),
       analyzeImageLayout(cropBuffer),
     ]);
@@ -671,12 +726,13 @@ async function generateTemplateFromImage(imageBuffer, options = {}) {
       console.log('[templateFromImage] extracted %d dominant colors: %s', colors.length, colors.join(', '));
     }
 
-    // Detect template dimensions from image metadata for zone scaling
     const tplW = originalMeta?.width || 1080;
     const tplH = originalMeta?.height || 1080;
-    layoutContext = buildLayoutContext(zones, tplW, tplH);
+    layoutContext = buildLayoutContext(layout, tplW, tplH);
     if (layoutContext) {
-      console.log('[templateFromImage] detected %d layout zones', zones.length);
+      const hCount = layout.hZones?.length || 0;
+      const vCount = layout.vZones?.length || 0;
+      console.log('[templateFromImage] detected zones: %d horizontal, %d vertical', hCount, vCount);
     }
   }
 

@@ -201,15 +201,13 @@
               </div>
             </div>
 
-            <!-- Preview mode toggle + refine -->
+            <!-- Preview mode toggle -->
             <div id="preview-toolbar" style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
               <div style="display:flex;gap:0;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden">
                 <button class="btn btn--sm preview-mode-btn active" data-mode="preview" type="button" style="border-radius:0;border:none">Preview</button>
                 <button class="btn btn--sm preview-mode-btn" data-mode="original" type="button" style="border-radius:0;border:none;border-left:1px solid var(--border)" id="btn-show-original">Original</button>
                 <button class="btn btn--sm preview-mode-btn" data-mode="sideBySide" type="button" style="border-radius:0;border:none;border-left:1px solid var(--border)" id="btn-show-sbs">Side by Side</button>
               </div>
-              <div style="flex:1"></div>
-              <button class="btn btn--sm btn--secondary" id="btn-refine" type="button">Refine template</button>
             </div>
 
             <!-- Two-panel editor -->
@@ -1228,38 +1226,6 @@
       renderPreview();
     }
   }
-
-  // ── Refine template (re-run Pass 2) ─────────────────────────────────────
-
-  document.getElementById('btn-refine').addEventListener('click', async () => {
-    if (!_originalImageFile || !_templateHtml) { alert('Upload a design first.'); return; }
-    const btn = document.getElementById('btn-refine');
-    btn.disabled = true; btn.textContent = 'Refining... (45-90s)';
-
-    try {
-      console.log('[refine] sending %s (%d bytes)', _originalImageFile.type, _originalImageFile.size);
-      const r = await fetch('/admin/html-templates/from-image', {
-        method: 'POST',
-        headers: { 'Content-Type': _originalImageFile.type, 'X-Admin-Password': adminPw, 'X-Instructions': 'Refine only - improve accuracy of the existing HTML' },
-        body: _originalImageFile,
-      });
-      console.log('[refine] response status:', r.status);
-      let data; try { data = await r.json(); } catch { throw new Error(`Server error (HTTP ${r.status})`); }
-      if (!data.ok) throw new Error(data.error || 'Refinement failed');
-
-      _templateHtml = data.html;
-      document.getElementById('f-html').value = data.html;
-      document.getElementById('raw-html').value = data.html;
-      _step2Initialized = false;
-      initStep2();
-
-      btn.textContent = 'Refined!';
-      setTimeout(() => { btn.textContent = 'Refine template'; btn.disabled = false; }, 2000);
-    } catch (err) {
-      alert('Refinement failed: ' + err.message);
-      btn.textContent = 'Refine template'; btn.disabled = false;
-    }
-  });
 
   let _pendingSlotSelector = null;
 

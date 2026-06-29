@@ -528,10 +528,95 @@ async function analyzeImageLayout(buffer) {
     }
   }
 
+  // ── Embedded solid panel detection ─────────────────────────────────────────
+  // Detect a flat-colour card/billboard/sign embedded inside a photo background
+  // (e.g. a white billboard in a street scene, a product mockup on a surface).
+  //
+  // Strategy:
+  //  1. Build a boolean solid-grid from the inverse of photoCells.
+  //  2. Dilate 2 rounds so that sparse text cells inside a white region get
+  //     absorbed (bold text on white = high variance, but it's inside the panel).
+  //  3. BFS flood-fill to find connected solid components.
+  //  4. A component qualifies as a "panel" if:
+  //       • It doesn't touch any canvas edge (it's floating inside the photo).
+  //       • Its area ≥ 10% of the grid (meaningful size, not noise).
+  //  5. Take the largest qualifying component as the panel bounding box.
+  let panelBox = null;
+
+  // Only worth running when the outer context looks like a photo background
+  // (photoBox is full-bleed, meaning photo cells dominate the canvas).
+  if (photoBox?.isFullBleed) {
+    const photoKey = new Set(photoCells.map(c => `${c.cy}:${c.cx}`));
+
+    // 2D solid grid
+    let solid = Array.from({ length: GRID }, (_, cy) =>
+      Array.from({ length: GRID }, (_, cx) => !photoKey.has(`${cy}:${cx}`))
+    );
+
+    // Dilate 2 rounds to fill text-cell gaps inside white panels
+    for (let round = 0; round < 2; round++) {
+      const next = solid.map(r => [...r]);
+      for (let cy = 0; cy < GRID; cy++) {
+        for (let cx = 0; cx < GRID; cx++) {
+          if (!solid[cy][cx]) {
+            if (
+              (cy > 0       && solid[cy - 1][cx]) ||
+              (cy < GRID-1  && solid[cy + 1][cx]) ||
+              (cx > 0       && solid[cy][cx - 1]) ||
+              (cx < GRID-1  && solid[cy][cx + 1])
+            ) next[cy][cx] = true;
+          }
+        }
+      }
+      solid = next;
+    }
+
+    // BFS flood-fill — find all connected solid components
+    const visited = Array.from({ length: GRID }, () => new Uint8Array(GRID));
+    const MIN_PANEL_CELLS = Math.ceil(GRID * GRID * 0.10); // ≥10% of grid
+
+    for (let sy = 0; sy < GRID; sy++) {
+      for (let sx = 0; sx < GRID; sx++) {
+        if (!solid[sy][sx] || visited[sy][sx]) continue;
+        const queue = [[sy, sx]];
+        visited[sy][sx] = 1;
+        const component = [];
+        let touchesEdge = false;
+        while (queue.length > 0) {
+          const [cy, cx] = queue.pop();
+          component.push({ cy, cx });
+          if (cy === 0 || cy === GRID - 1 || cx === 0 || cx === GRID - 1) touchesEdge = true;
+          for (const [ny, nx] of [[cy-1,cx],[cy+1,cx],[cy,cx-1],[cy,cx+1]]) {
+            if (ny >= 0 && ny < GRID && nx >= 0 && nx < GRID && solid[ny][nx] && !visited[ny][nx]) {
+              visited[ny][nx] = 1;
+              queue.push([ny, nx]);
+            }
+          }
+        }
+        if (!touchesEdge && component.length >= MIN_PANEL_CELLS) {
+          const minCX = Math.min(...component.map(c => c.cx));
+          const maxCX = Math.max(...component.map(c => c.cx));
+          const minCY = Math.min(...component.map(c => c.cy));
+          const maxCY = Math.max(...component.map(c => c.cy));
+          if (!panelBox || component.length > panelBox.area) {
+            panelBox = {
+              startX: minCX / GRID,
+              endX:   (maxCX + 1) / GRID,
+              startY: minCY / GRID,
+              endY:   (maxCY + 1) / GRID,
+              area:   component.length,
+            };
+          }
+        }
+      }
+    }
+  }
+
   return {
-    hZones: detectZones(rowStats, H), // top-to-bottom zones
-    vZones: detectZones(colStats, W), // left-to-right zones
-    photoBox,                          // null | { startX, endX, startY, endY, isFullBleed }
+    hZones:   detectZones(rowStats, H), // top-to-bottom zones
+    vZones:   detectZones(colStats, W), // left-to-right zones
+    photoBox,                            // null | { startX, endX, startY, endY, isFullBleed }
+    panelBox,                            // null | { startX, endX, startY, endY, area }
   };
 }
 
@@ -544,23 +629,43 @@ async function analyzeImageLayout(buffer) {
  *      + solid zone colors from zone analysis as supplemental info
  *   3. Zone splits only       → full horizontal/vertical split output (legacy path)
  */
-function buildLayoutContext({ hZones, vZones, photoBox }, tplW, tplH) {
+function buildLayoutContext({ hZones, vZones, photoBox, panelBox }, tplW, tplH) {
   const hasH = hZones && hZones.length >= 2;
   const hasV = vZones && vZones.length >= 2;
   const lines = [];
 
   // ── 1. Full-bleed background photo ────────────────────────────────────────
   if (photoBox?.isFullBleed) {
-    return [
-      '\n\nLAYOUT ANALYSIS: FULL-BLEED BACKGROUND — the entire canvas is a photo, texture, or',
-      '  illustration used as the background, with text/overlays layered on top.',
-      '  Use this pattern:',
-      `    <img data-slot="image:bg" src="" alt="Background"`,
-      `         style="position:absolute;top:0;left:0;width:${tplW}px;height:${tplH}px;object-fit:cover;z-index:0">`,
-      '    Add gradient/colour overlays at z-index:1, text content at z-index:2+.',
-      `    Manifest: "image:bg": {"x":0,"y":0,"w":${tplW},"h":${tplH}}`,
-      '  NOTE: if you can see this is actually a CSS gradient, use linear-gradient() instead.',
-    ].join('\n');
+    const bgLines = [
+      '\n\nLAYOUT ANALYSIS: FULL-BLEED BACKGROUND PHOTO.',
+      `  Background: <img data-slot="image:bg" src="" alt="Background"`,
+      `               style="position:absolute;top:0;left:0;width:${tplW}px;height:${tplH}px;object-fit:cover;z-index:0">`,
+      `  Manifest: "image:bg": {"x":0,"y":0,"w":${tplW},"h":${tplH}}`,
+    ];
+
+    // ── 1a. Embedded card/panel within the photo ───────────────────────────
+    // e.g. a billboard sign, product mockup, phone screen, card on a table.
+    if (panelBox) {
+      const px = Math.round(panelBox.startX * tplW);
+      const py = Math.round(panelBox.startY * tplH);
+      const pw = Math.round((panelBox.endX - panelBox.startX) * tplW);
+      const ph = Math.round((panelBox.endY - panelBox.startY) * tplH);
+      bgLines.push('');
+      bgLines.push('  EMBEDDED PANEL detected inside the photo background:');
+      bgLines.push(`  Position: x=${px}px, y=${py}px, width=${pw}px, height=${ph}px`);
+      bgLines.push('  This is a flat-colour card, billboard, sign, or screen floating within the photo.');
+      bgLines.push('  Use a <div> with position:absolute at exactly these measured pixel bounds:');
+      bgLines.push(`    <div style="position:absolute;left:${px}px;top:${py}px;width:${pw}px;height:${ph}px;`);
+      bgLines.push('          background:<panel-color>;z-index:1">');
+      bgLines.push('      <!-- all text, logo, and decorative content goes here -->');
+      bgLines.push('    </div>');
+      bgLines.push('  CRITICAL: Do NOT make the panel larger or smaller — use EXACTLY these pixel values.');
+    } else {
+      bgLines.push('  Add gradient/colour overlays at z-index:1, text content at z-index:2+.');
+      bgLines.push('  NOTE: if you can see this is actually a CSS gradient, use linear-gradient() instead.');
+    }
+
+    return bgLines.join('\n');
   }
 
   // ── 2. Contained photo: cell-analysis gives exact pixel bounds ─────────────

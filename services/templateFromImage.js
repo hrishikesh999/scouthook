@@ -345,12 +345,15 @@ async function extractDominantColors(buffer) {
 /**
  * Scan the image both row-by-row (horizontal zones) and column-by-column (vertical zones).
  * High pixel variance = photo/illustration. Low variance = solid color or gradient.
- * Returns { hZones, vZones } — each an array of zone descriptors with fractional coordinates (0–1).
+ * Also runs a 30×30 cell grid to find a contained photo bounding box (handles
+ * centred portrait photos where per-row scans are diluted by background pixels).
+ * Returns { hZones, vZones, photoBox } where photoBox is null or fractional coords (0–1).
  */
 async function analyzeImageLayout(buffer) {
   const W = 180, H = 180;
   const PHOTO_V = 500;
   const MIN_ZONE_FRAC = 0.06;
+  const GRID = 30; // 30×30 grid → each cell ≈ 36×36px at 1080×1080
 
   const { data } = await sharp(buffer)
     .resize(W, H, { fit: 'fill' })
@@ -447,27 +450,103 @@ async function analyzeImageLayout(buffer) {
     });
   }
 
+  // ── 2D cell grid: find the tallest contiguous photo-row block ──────────────
+  // Per-row scans are diluted when a centred photo is surrounded by background
+  // (e.g. a portrait card with cream borders). The cell grid measures variance
+  // in 30×30 local patches so background cells don't wash out photo cells.
+  // To avoid mistaking bold text for a photo we require ≥5 consecutive photo
+  // rows AND ≥5 photo columns — text is thin; real photos are chunky.
+  const cW = W / GRID, cH = H / GRID;
+  const photoCells = []; // { cx, cy }
+
+  for (let cy = 0; cy < GRID; cy++) {
+    for (let cx = 0; cx < GRID; cx++) {
+      const x0 = Math.floor(cx * cW), x1 = Math.floor((cx + 1) * cW);
+      const y0 = Math.floor(cy * cH), y1 = Math.floor((cy + 1) * cH);
+      let sr = 0, sg = 0, sb = 0, cnt = 0;
+      for (let y = y0; y < y1; y++) {
+        for (let x = x0; x < x1; x++) {
+          const i = (y * W + x) * 3;
+          sr += data[i]; sg += data[i + 1]; sb += data[i + 2];
+          cnt++;
+        }
+      }
+      const ar = sr / cnt, ag = sg / cnt, ab = sb / cnt;
+      let v = 0;
+      for (let y = y0; y < y1; y++) {
+        for (let x = x0; x < x1; x++) {
+          const i = (y * W + x) * 3;
+          v += (data[i]-ar)**2 + (data[i+1]-ag)**2 + (data[i+2]-ab)**2;
+        }
+      }
+      if (v / cnt > PHOTO_V) photoCells.push({ cx, cy });
+    }
+  }
+
+  let photoBox = null;
+  if (photoCells.length > 0) {
+    // Build a set of rows that have ≥5 photo columns in them
+    const rowPhotoColCount = Array.from({ length: GRID }, (_, cy) =>
+      photoCells.filter(c => c.cy === cy).length
+    );
+    const rowIsPhoto = rowPhotoColCount.map(count => count >= 5);
+
+    // Find the tallest contiguous run of photo rows (≥5 rows required)
+    let best = null, rStart = -1, rLen = 0;
+    for (let cy = 0; cy <= GRID; cy++) {
+      if (cy < GRID && rowIsPhoto[cy]) {
+        if (rStart < 0) rStart = cy;
+        rLen++;
+      } else {
+        if (rLen >= 5) {
+          const blockCells = photoCells.filter(c => c.cy >= rStart && c.cy < rStart + rLen);
+          const minCX = Math.min(...blockCells.map(c => c.cx));
+          const maxCX = Math.max(...blockCells.map(c => c.cx));
+          const spanX = maxCX - minCX + 1;
+          if (spanX >= 5 && (!best || rLen * spanX > best.score)) {
+            best = { rStart, rLen, minCX, maxCX, score: rLen * spanX };
+          }
+        }
+        rStart = -1; rLen = 0;
+      }
+    }
+
+    if (best) {
+      const coverX = (best.maxCX - best.minCX + 1) / GRID;
+      const coverY = best.rLen / GRID;
+      photoBox = {
+        startX: best.minCX / GRID,
+        endX:   (best.maxCX + 1) / GRID,
+        startY: best.rStart / GRID,
+        endY:   (best.rStart + best.rLen) / GRID,
+        isFullBleed: coverX >= 0.80 && coverY >= 0.80,
+      };
+    }
+  }
+
   return {
     hZones: detectZones(rowStats, H), // top-to-bottom zones
     vZones: detectZones(colStats, W), // left-to-right zones
+    photoBox,                          // null | { startX, endX, startY, endY, isFullBleed }
   };
 }
 
 /**
  * Format zone analysis into a prompt context string.
- * Emits horizontal zones, vertical zones, or both if multiple distinct zones exist.
+ *
+ * Priority:
+ *   1. photoBox.isFullBleed  → full-bleed background hint
+ *   2. photoBox (contained)  → exact pixel bounds for the photo element
+ *      + solid zone colors from zone analysis as supplemental info
+ *   3. Zone splits only       → full horizontal/vertical split output (legacy path)
  */
-function buildLayoutContext({ hZones, vZones }, tplW, tplH) {
+function buildLayoutContext({ hZones, vZones, photoBox }, tplW, tplH) {
   const hasH = hZones && hZones.length >= 2;
   const hasV = vZones && vZones.length >= 2;
+  const lines = [];
 
-  // Full-bleed background photo: no splits detected in either direction and
-  // the single zone is high-variance (photo/texture/illustration) across the
-  // entire canvas. This is the "photo with text overlay" pattern.
-  if (!hasH && !hasV) {
-    const isFullBleed = hZones?.length === 1 && hZones[0].type === 'photo'
-                     && vZones?.length === 1 && vZones[0].type === 'photo';
-    if (!isFullBleed) return '';
+  // ── 1. Full-bleed background photo ────────────────────────────────────────
+  if (photoBox?.isFullBleed) {
     return [
       '\n\nLAYOUT ANALYSIS: FULL-BLEED BACKGROUND — the entire canvas is a photo, texture, or',
       '  illustration used as the background, with text/overlays layered on top.',
@@ -476,12 +555,45 @@ function buildLayoutContext({ hZones, vZones }, tplW, tplH) {
       `         style="position:absolute;top:0;left:0;width:${tplW}px;height:${tplH}px;object-fit:cover;z-index:0">`,
       '    Add gradient/colour overlays at z-index:1, text content at z-index:2+.',
       `    Manifest: "image:bg": {"x":0,"y":0,"w":${tplW},"h":${tplH}}`,
-      '  NOTE: if you can see this is actually a CSS gradient (not a photo), use linear-gradient()',
-      '  instead of an image slot — the AI visual check takes precedence over this hint.',
+      '  NOTE: if you can see this is actually a CSS gradient, use linear-gradient() instead.',
     ].join('\n');
   }
 
-  const lines = ['\n\nLAYOUT ZONES (measured algorithmically — use these exact pixel values, do not re-estimate):'];
+  // ── 2. Contained photo: cell-analysis gives exact pixel bounds ─────────────
+  // This beats the zone-analysis approach because per-row scans are diluted by
+  // background pixels when a portrait/image is surrounded by solid colour.
+  if (photoBox) {
+    const x = Math.round(photoBox.startX * tplW);
+    const y = Math.round(photoBox.startY * tplH);
+    const w = Math.round((photoBox.endX - photoBox.startX) * tplW);
+    const h = Math.round((photoBox.endY - photoBox.startY) * tplH);
+    lines.push('\n\nLAYOUT ANALYSIS (measured algorithmically — use these exact pixel values, do NOT re-estimate):');
+    lines.push(`  PHOTO/PORTRAIT/ILLUSTRATION region: x=${x}px, y=${y}px, width=${w}px, height=${h}px`);
+    lines.push(`  → <img data-slot="image:photo"`);
+    lines.push(`         style="position:absolute;left:${x}px;top:${y}px;width:${w}px;height:${h}px;object-fit:cover">`);
+    lines.push(`  → Manifest slot: "image:photo": {"x":${x},"y":${y},"w":${w},"h":${h}}`);
+
+    // Supplement with solid-zone background colors (zone analysis still useful for colors)
+    const solidH = hasH ? hZones.filter(z => z.type === 'solid') : [];
+    const solidV = hasV ? vZones.filter(z => z.type === 'solid') : [];
+    if (solidH.length || solidV.length) {
+      lines.push('  Background zone colors:');
+      solidH.forEach(z => {
+        const y0 = Math.round(z.start * tplH), y1 = Math.round(z.end * tplH);
+        lines.push(`    y=${y0}–${y1}px → ${z.color}`);
+      });
+      solidV.forEach(z => {
+        const x0 = Math.round(z.start * tplW), x1 = Math.round(z.end * tplW);
+        lines.push(`    x=${x0}–${x1}px → ${z.color}`);
+      });
+    }
+    return lines.join('\n');
+  }
+
+  // ── 3. No photoBox: fall back to full zone-split output ───────────────────
+  if (!hasH && !hasV) return '';
+
+  lines.push('\n\nLAYOUT ZONES (measured algorithmically — use these exact pixel values, do not re-estimate):');
 
   if (hasH) {
     lines.push('  TOP-TO-BOTTOM split:');

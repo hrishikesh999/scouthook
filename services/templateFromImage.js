@@ -209,30 +209,34 @@ CRITICAL: Return ONLY the raw JSON. No markdown fences, no explanation.`;
 
 const REFINE_PROMPT = `You are refining an HTML template to match a design image more precisely.
 
-Image 1 is the ORIGINAL DESIGN (the target to match).
-Image 2 is the CURRENT HTML RENDERING (what the code produces now).
-The current HTML source code is provided after the images.
+The image you receive shows a SIDE-BY-SIDE COMPARISON:
+  LEFT HALF  = the ORIGINAL DESIGN (the target to match)
+  RIGHT HALF = your CURRENT HTML RENDERING (what the code produces now)
+
+Differences that need fixing will be visible as mismatches between left and right.
+The current HTML source code is provided below the comparison image.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 STEP 1 — SYSTEMATIC DIFF (check EVERY category below)
 
-Go through this checklist and note EVERY difference between Image 1 and Image 2:
+Go through this checklist and note EVERY difference between LEFT and RIGHT:
 
 A) BACKGROUND: Solid color? Gradient (direction, stops, opacity)? Pattern? Multiple layers?
-   - Gradients are commonly missed — check if Image 1 has a gradient that Image 2 renders as flat.
+   - Gradients are commonly missed — check if the LEFT has a gradient the RIGHT renders as flat.
 B) TYPOGRAPHY: Font family match? Size? Weight (100/200/300/400/500/600/700/800/900)? Letter-spacing? Line-height? Text-transform (uppercase)?
    - Check EACH text element separately — headings, subheadings, body, labels, captions.
    - Ultra-thin text (weight 100-200) and ultra-bold (900) are commonly missed.
-C) COLORS: Compare every text color, background, accent, border, shadow color.
+C) COLORS: Compare every text color, background, accent, border, shadow color between LEFT and RIGHT.
 D) LAYOUT & SPACING: Padding, margins, gaps between elements. Element alignment (left/center/right). Vertical positioning.
+   - Compare element positions at the same location in LEFT vs RIGHT — if an element appears lower/smaller/larger on one side, fix it.
 E) DECORATIVE ELEMENTS: Lines, dividers, shapes, badges, icons, dots, circles, underlines, borders.
-   - These are the MOST commonly missed elements. Check every edge, corner, and divider in Image 1.
+   - These are the MOST commonly missed elements. Check every edge, corner, and divider in the LEFT.
    - Reproduce as inline SVG with position:absolute if needed.
    - ARROWS and directional icons: match exact direction — do not mirror or flip.
 F) BORDERS & SHADOWS: Border-radius values, border widths/colors, box-shadows, text-shadows.
-G) IMAGE AREAS: Correct size, position, border-radius, and aspect ratio of photo regions.
-H) LAYERING: Overlays, semi-transparent layers, z-index stacking. Does Image 1 have a dark/light overlay over a photo?
-I) ILLUSTRATION REGIONS: If Image 2 shows a broken/incorrect SVG illustration where Image 1 shows
+G) IMAGE AREAS: Compare photo size, position, border-radius, and aspect ratio — LEFT vs RIGHT.
+H) LAYERING: Overlays, semi-transparent layers, z-index stacking. Does the LEFT have a dark/light overlay over a photo?
+I) ILLUSTRATION REGIONS: If the RIGHT shows a broken/incorrect SVG where the LEFT shows
    detailed artwork or characters, REPLACE the SVG entirely with:
    <img data-slot="image:illustration" src="" alt="Illustration" style="position:absolute; ...correct bounds...">
    Do not try to fix SVG path coordinates — replace the entire SVG with an image slot.
@@ -762,6 +766,36 @@ async function computePixelDiff(origBuf, rendBuf, manifest) {
 }
 
 // ---------------------------------------------------------------------------
+// Build side-by-side comparison image for Pass 2 visual diff
+// ---------------------------------------------------------------------------
+
+/**
+ * Stitch the original design and the current render into a single PNG where
+ * the original occupies the LEFT half and the render occupies the RIGHT half.
+ * This gives the refine model a spatially-aligned comparison rather than two
+ * separate images — differences at the same position in both halves are
+ * immediately visible without mental context-switching between image blocks.
+ */
+async function buildCompositeDiff(origBuf, rendBuf, tplW, tplH) {
+  const halfW = Math.floor(tplW / 2);
+  const [leftBuf, rightBuf] = await Promise.all([
+    sharp(origBuf).resize(halfW, tplH, { fit: 'fill' }).png().toBuffer(),
+    sharp(rendBuf).resize(halfW, tplH, { fit: 'fill' }).png().toBuffer(),
+  ]);
+  // 4px dark divider between halves via a slightly wider canvas background
+  const totalW = halfW * 2 + 4;
+  return sharp({
+    create: { width: totalW, height: tplH, channels: 3, background: { r: 40, g: 40, b: 40 } },
+  })
+    .composite([
+      { input: leftBuf,  top: 0, left: 0 },
+      { input: rightBuf, top: 0, left: halfW + 4 },
+    ])
+    .png()
+    .toBuffer();
+}
+
+// ---------------------------------------------------------------------------
 // Main entry point
 // ---------------------------------------------------------------------------
 
@@ -1003,26 +1037,44 @@ async function generateTemplateFromImage(imageBuffer, options = {}) {
         break;
       }
 
-      // Build targeted refinement context from diff analysis
+      // Build side-by-side visual comparison (original LEFT, render RIGHT)
+      let compositeBlock;
+      try {
+        const compositePng = await buildCompositeDiff(cropBuffer, renderedPng, width, height);
+        compositeBlock = {
+          type: 'image',
+          source: { type: 'base64', media_type: 'image/png', data: compositePng.toString('base64') },
+          cache_control: { type: 'ephemeral' },
+        };
+      } catch (err) {
+        console.warn('[templateFromImage] pass 2.%d: composite build failed (%s), falling back to separate images', pass + 1, err.message);
+      }
+
       let diffContext = '';
       if (diffResult && diffResult.badRegions.length > 0) {
-        diffContext = `\n\nPIXEL DIFF ANALYSIS — highest mismatch regions (focus fixes here): ${diffResult.badRegions.join(', ')}. Overall match score: ${diffResult.score.toFixed(0)}/100.`;
+        diffContext = ` Pay close attention to the ${diffResult.badRegions.join(', ')} region(s) — pixel diff shows the largest mismatch there. Overall match score: ${diffResult.score.toFixed(0)}/100.`;
       }
+
+      // If composite build succeeded, send one spatially-aligned image.
+      // Fall back to two separate images if Sharp composite failed.
+      const refineContent = compositeBlock
+        ? [
+            compositeBlock,
+            { type: 'text', text: `The image above is a SIDE-BY-SIDE COMPARISON:\n  • LEFT HALF = original design (the target)\n  • RIGHT HALF = your current render\n\nLook at corresponding positions in left vs right to spot every difference.\n\nCurrent HTML:\n\`\`\`html\n${html}\n\`\`\`\n\nFix every visible difference.${diffContext} Return the complete corrected HTML document.` },
+          ]
+        : [
+            { type: 'text', text: 'Image 1 — Original design:' },
+            imageBlock,
+            { type: 'text', text: 'Image 2 — Current HTML rendering:' },
+            { type: 'image', source: { type: 'base64', media_type: 'image/png', data: renderedPng.toString('base64') } },
+            { type: 'text', text: `Current HTML:\n\`\`\`html\n${html}\n\`\`\`\n\nFix every difference between Image 1 and Image 2.${diffContext} Return the complete corrected HTML document.` },
+          ];
 
       const refineMsg = await callWithTimeout({
         model: 'claude-sonnet-4-6',
         max_tokens: 16000,
         system: REFINE_PROMPT,
-        messages: [{
-          role: 'user',
-          content: [
-            { type: 'text', text: 'Image 1 — Original design:' },
-            imageBlock,
-            { type: 'text', text: 'Image 2 — Current HTML rendering:' },
-            { type: 'image', source: { type: 'base64', media_type: 'image/png', data: renderedPng.toString('base64') } },
-            { type: 'text', text: `Current HTML source code:\n\`\`\`html\n${html}\n\`\`\`\n\nFix every difference between Image 1 and Image 2.${diffContext}\n\nKeep all data-slot attributes and the template-meta script block intact. Return the complete corrected HTML document.` },
-          ],
-        }],
+        messages: [{ role: 'user', content: refineContent }],
       });
 
       const refinedHtml = extractHtmlFromResponse(getAnthropicMessageText(refineMsg));

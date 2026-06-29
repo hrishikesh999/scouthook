@@ -460,7 +460,26 @@ async function analyzeImageLayout(buffer) {
 function buildLayoutContext({ hZones, vZones }, tplW, tplH) {
   const hasH = hZones && hZones.length >= 2;
   const hasV = vZones && vZones.length >= 2;
-  if (!hasH && !hasV) return '';
+
+  // Full-bleed background photo: no splits detected in either direction and
+  // the single zone is high-variance (photo/texture/illustration) across the
+  // entire canvas. This is the "photo with text overlay" pattern.
+  if (!hasH && !hasV) {
+    const isFullBleed = hZones?.length === 1 && hZones[0].type === 'photo'
+                     && vZones?.length === 1 && vZones[0].type === 'photo';
+    if (!isFullBleed) return '';
+    return [
+      '\n\nLAYOUT ANALYSIS: FULL-BLEED BACKGROUND — the entire canvas is a photo, texture, or',
+      '  illustration used as the background, with text/overlays layered on top.',
+      '  Use this pattern:',
+      `    <img data-slot="image:bg" src="" alt="Background"`,
+      `         style="position:absolute;top:0;left:0;width:${tplW}px;height:${tplH}px;object-fit:cover;z-index:0">`,
+      '    Add gradient/colour overlays at z-index:1, text content at z-index:2+.',
+      `    Manifest: "image:bg": {"x":0,"y":0,"w":${tplW},"h":${tplH}}`,
+      '  NOTE: if you can see this is actually a CSS gradient (not a photo), use linear-gradient()',
+      '  instead of an image slot — the AI visual check takes precedence over this hint.',
+    ].join('\n');
+  }
 
   const lines = ['\n\nLAYOUT ZONES (measured algorithmically — use these exact pixel values, do not re-estimate):'];
 

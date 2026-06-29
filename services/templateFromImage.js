@@ -454,7 +454,7 @@ async function analyzeImageLayout(buffer) {
     });
   }
 
-  // ── 2D cell grid: find the tallest contiguous photo-row block ──────────────
+  // ── 2D cell grid: find photo bounding boxes ────────────────────────────────
   // Per-row scans are diluted when a centred photo is surrounded by background
   // (e.g. a portrait card with cream borders). The cell grid measures variance
   // in 30×30 local patches so background cells don't wash out photo cells.
@@ -462,6 +462,7 @@ async function analyzeImageLayout(buffer) {
   // rows AND ≥5 photo columns — text is thin; real photos are chunky.
   const cW = W / GRID, cH = H / GRID;
   const photoCells = []; // { cx, cy }
+  const cellVarianceMap = new Map(); // "cy:cx" → per-pixel variance (for gradient detection)
 
   for (let cy = 0; cy < GRID; cy++) {
     for (let cx = 0; cx < GRID; cx++) {
@@ -483,48 +484,89 @@ async function analyzeImageLayout(buffer) {
           v += (data[i]-ar)**2 + (data[i+1]-ag)**2 + (data[i+2]-ab)**2;
         }
       }
-      if (v / cnt > PHOTO_V) photoCells.push({ cx, cy });
+      const cellV = v / cnt;
+      cellVarianceMap.set(`${cy}:${cx}`, cellV);
+      if (cellV > PHOTO_V) photoCells.push({ cx, cy });
     }
   }
 
-  let photoBox = null;
-  if (photoCells.length > 0) {
-    // Build a set of rows that have ≥5 photo columns in them
-    const rowPhotoColCount = Array.from({ length: GRID }, (_, cy) =>
-      photoCells.filter(c => c.cy === cy).length
-    );
-    const rowIsPhoto = rowPhotoColCount.map(count => count >= 5);
+  // Build a set of rows that have ≥5 photo columns in them
+  const rowPhotoColCount = Array.from({ length: GRID }, (_, cy) =>
+    photoCells.filter(c => c.cy === cy).length
+  );
+  const rowIsPhoto = rowPhotoColCount.map(count => count >= 5);
 
-    // Find the tallest contiguous run of photo rows (≥5 rows required)
-    let best = null, rStart = -1, rLen = 0;
+  // Find all distinct photo blocks (up to 4) using iterative best-block search.
+  // After finding the primary block, its rows are excluded so a second scan can
+  // locate non-overlapping secondary photo regions (e.g. two portrait photos).
+  const photoBlocks = [];
+  const usedRows = new Set();
+
+  for (let attempt = 0; attempt < 4; attempt++) {
+    let bestBlock = null, rStart = -1, rLen = 0;
+
     for (let cy = 0; cy <= GRID; cy++) {
-      if (cy < GRID && rowIsPhoto[cy]) {
+      const rowAvailable = cy < GRID && rowIsPhoto[cy] && !usedRows.has(cy);
+      if (rowAvailable) {
         if (rStart < 0) rStart = cy;
         rLen++;
       } else {
         if (rLen >= 5) {
-          const blockCells = photoCells.filter(c => c.cy >= rStart && c.cy < rStart + rLen);
-          const minCX = Math.min(...blockCells.map(c => c.cx));
-          const maxCX = Math.max(...blockCells.map(c => c.cx));
-          const spanX = maxCX - minCX + 1;
-          if (spanX >= 5 && (!best || rLen * spanX > best.score)) {
-            best = { rStart, rLen, minCX, maxCX, score: rLen * spanX };
+          const blockCells = photoCells.filter(c => c.cy >= rStart && c.cy < rStart + rLen && !usedRows.has(c.cy));
+          if (blockCells.length > 0) {
+            const minCX = Math.min(...blockCells.map(c => c.cx));
+            const maxCX = Math.max(...blockCells.map(c => c.cx));
+            const spanX = maxCX - minCX + 1;
+            if (spanX >= 5 && (!bestBlock || rLen * spanX > bestBlock.score)) {
+              bestBlock = { rStart, rLen, minCX, maxCX, score: rLen * spanX };
+            }
           }
         }
         rStart = -1; rLen = 0;
       }
     }
 
-    if (best) {
-      const coverX = (best.maxCX - best.minCX + 1) / GRID;
-      const coverY = best.rLen / GRID;
-      photoBox = {
-        startX: best.minCX / GRID,
-        endX:   (best.maxCX + 1) / GRID,
-        startY: best.rStart / GRID,
-        endY:   (best.rStart + best.rLen) / GRID,
-        isFullBleed: coverX >= 0.80 && coverY >= 0.80,
-      };
+    if (!bestBlock) break;
+    photoBlocks.push(bestBlock);
+    // Exclude this block's rows (plus a 2-row gap) from subsequent searches
+    for (let r = Math.max(0, bestBlock.rStart - 2); r < Math.min(GRID, bestBlock.rStart + bestBlock.rLen + 2); r++) {
+      usedRows.add(r);
+    }
+  }
+
+  // Convert blocks to fractional bounding boxes
+  const photoBoxes = photoBlocks.map(best => {
+    const coverX = (best.maxCX - best.minCX + 1) / GRID;
+    const coverY = best.rLen / GRID;
+    return {
+      startX: best.minCX / GRID,
+      endX:   (best.maxCX + 1) / GRID,
+      startY: best.rStart / GRID,
+      endY:   (best.rStart + best.rLen) / GRID,
+      isFullBleed: coverX >= 0.80 && coverY >= 0.80,
+    };
+  });
+
+  let photoBox = photoBoxes[0] || null;
+
+  // Gradient detection: a CSS gradient has spatially uniform cell-level variance
+  // (each local patch changes gradually). A real photo has wildly varying per-cell
+  // variance — some areas are textured, some smooth. The coefficient of variation
+  // (std/mean) of photo-cell variances distinguishes them:
+  //   low CV  → uniform moderate variance → likely a CSS gradient
+  //   high CV → chaotic variance pattern  → likely a real photo
+  let isGradient = false;
+  if (photoBox?.isFullBleed) {
+    const photoVarValues = photoCells.map(c => cellVarianceMap.get(`${c.cy}:${c.cx}`) || 0);
+    if (photoVarValues.length >= 10) {
+      const meanV = photoVarValues.reduce((s, v) => s + v, 0) / photoVarValues.length;
+      const stdV = Math.sqrt(photoVarValues.reduce((s, v) => s + (v - meanV) ** 2, 0) / photoVarValues.length);
+      const cv = meanV > 0 ? stdV / meanV : 0;
+      if (cv < 0.30) {
+        console.log('[templateFromImage] gradient detected (cv=%.2f) — suppressing full-bleed photo hint', cv);
+        isGradient = true;
+        photoBox = null;
+      }
     }
   }
 
@@ -615,10 +657,12 @@ async function analyzeImageLayout(buffer) {
   } }
 
   return {
-    hZones:   detectZones(rowStats, H), // top-to-bottom zones
-    vZones:   detectZones(colStats, W), // left-to-right zones
-    photoBox,                            // null | { startX, endX, startY, endY, isFullBleed }
-    panelBox,                            // null | { startX, endX, startY, endY, area }
+    hZones:    detectZones(rowStats, H),
+    vZones:    detectZones(colStats, W),
+    photoBox,
+    photoBoxes,
+    panelBox,
+    isGradient,
   };
 }
 
@@ -631,10 +675,15 @@ async function analyzeImageLayout(buffer) {
  *      + solid zone colors from zone analysis as supplemental info
  *   3. Zone splits only       → full horizontal/vertical split output (legacy path)
  */
-function buildLayoutContext({ hZones, vZones, photoBox, panelBox }, tplW, tplH) {
+function buildLayoutContext({ hZones, vZones, photoBox, photoBoxes, panelBox, isGradient }, tplW, tplH) {
   const hasH = hZones && hZones.length >= 2;
   const hasV = vZones && vZones.length >= 2;
   const lines = [];
+
+  // ── 0. Gradient background ────────────────────────────────────────────────
+  if (isGradient) {
+    return '\n\nLAYOUT ANALYSIS: The background appears to be a CSS gradient (not a photo). Use background: linear-gradient() or radial-gradient() with the exact color stops and direction you observe in the image. Do NOT use an <img> slot for the background.';
+  }
 
   // ── 1. Full-bleed background photo ────────────────────────────────────────
   if (photoBox?.isFullBleed) {
@@ -670,7 +719,37 @@ function buildLayoutContext({ hZones, vZones, photoBox, panelBox }, tplW, tplH) 
     return bgLines.join('\n');
   }
 
-  // ── 2. Contained photo: cell-analysis gives exact pixel bounds ─────────────
+  // ── 2. Multiple contained photos ──────────────────────────────────────────
+  if (photoBoxes && photoBoxes.length >= 2) {
+    lines.push('\n\nLAYOUT ANALYSIS (multiple photo regions detected algorithmically — use these exact pixel values, do NOT re-estimate):');
+    photoBoxes.forEach((box, idx) => {
+      const slotKey = idx === 0 ? 'image:photo' : `image:photo${idx + 1}`;
+      const x = Math.round(box.startX * tplW);
+      const y = Math.round(box.startY * tplH);
+      const w = Math.round((box.endX - box.startX) * tplW);
+      const h = Math.round((box.endY - box.startY) * tplH);
+      lines.push(`  PHOTO/PORTRAIT REGION ${idx + 1}: x=${x}px, y=${y}px, width=${w}px, height=${h}px`);
+      lines.push(`  → <img data-slot="${slotKey}"`);
+      lines.push(`         style="position:absolute;left:${x}px;top:${y}px;width:${w}px;height:${h}px;object-fit:cover">`);
+      lines.push(`  → Manifest: "${slotKey}": {"x":${x},"y":${y},"w":${w},"h":${h}}`);
+    });
+    const solidH = hasH ? hZones.filter(z => z.type === 'solid') : [];
+    const solidV = hasV ? vZones.filter(z => z.type === 'solid') : [];
+    if (solidH.length || solidV.length) {
+      lines.push('  Background zone colors:');
+      solidH.forEach(z => {
+        const y0 = Math.round(z.start * tplH), y1 = Math.round(z.end * tplH);
+        lines.push(`    y=${y0}–${y1}px → ${z.color}`);
+      });
+      solidV.forEach(z => {
+        const x0 = Math.round(z.start * tplW), x1 = Math.round(z.end * tplW);
+        lines.push(`    x=${x0}–${x1}px → ${z.color}`);
+      });
+    }
+    return lines.join('\n');
+  }
+
+  // ── 3. Contained photo: cell-analysis gives exact pixel bounds ─────────────
   // This beats the zone-analysis approach because per-row scans are diluted by
   // background pixels when a portrait/image is surrounded by solid colour.
   if (photoBox) {
@@ -786,6 +865,17 @@ function syncManifestColors(html, manifest) {
     }
   }
 
+  // Auto-add color:* slots for CSS vars present in the HTML but missing from the
+  // manifest — catches new vars introduced by Pass 2 that weren't added to JSON.
+  const isColorValue = v => /^#[0-9a-fA-F]{3,8}$/.test(v) || /^rgba?\(/.test(v) || /^hsla?\(/.test(v);
+  for (const [varName, value] of Object.entries(cssVars)) {
+    const key = `color:${varName}`;
+    if (!manifest.slots[key] && isColorValue(value)) {
+      manifest.slots[key] = { default: value };
+      changed = true;
+    }
+  }
+
   if (changed) {
     const newJson = JSON.stringify({ slots: manifest.slots, dimensions: manifest.dimensions });
     html = html.replace(
@@ -829,7 +919,7 @@ async function computePixelDiff(origBuf, rendBuf, manifest) {
     sharp(rendBuf).resize(W, H, { fit: 'fill' }).removeAlpha().raw().toBuffer(),
   ]);
 
-  const GRID = 4;
+  const GRID = 8;  // 8×8 = 64 regions at ~135px granularity (was 4×4 at 270px)
   const cellDiff = new Float32Array(GRID * GRID);
   const cellCount = new Int32Array(GRID * GRID);
 
@@ -852,18 +942,17 @@ async function computePixelDiff(origBuf, rendBuf, manifest) {
   const totalPx = cellCount.reduce((s, c) => s + c, 0);
   const avgDiff = totalPx > 0 ? totalDiff / totalPx : 255;
 
-  const QUADRANT_NAMES = [
-    'top-left', 'top-center-left', 'top-center-right', 'top-right',
-    'upper-mid-left', 'upper-mid-center-left', 'upper-mid-center-right', 'upper-mid-right',
-    'lower-mid-left', 'lower-mid-center-left', 'lower-mid-center-right', 'lower-mid-right',
-    'bottom-left', 'bottom-center-left', 'bottom-center-right', 'bottom-right',
-  ];
+  const ROW_LABELS = ['top', 'upper-A', 'upper-B', 'mid-upper', 'mid-lower', 'lower-A', 'lower-B', 'bottom'];
+  const COL_LABELS = ['far-left', 'left-A', 'left-B', 'center-left', 'center-right', 'right-A', 'right-B', 'far-right'];
 
   const badRegions = Array.from(cellDiff)
-    .map((d, i) => ({ avg: cellCount[i] > 0 ? d / cellCount[i] : 0, name: QUADRANT_NAMES[i] }))
+    .map((d, i) => ({
+      avg: cellCount[i] > 0 ? d / cellCount[i] : 0,
+      name: `${ROW_LABELS[Math.floor(i / GRID)]}-${COL_LABELS[i % GRID]}`,
+    }))
     .filter(r => r.avg > 30)
     .sort((a, b) => b.avg - a.avg)
-    .slice(0, 4)
+    .slice(0, 6)
     .map(r => r.name);
 
   // score: 100 = perfect, 0 = completely wrong

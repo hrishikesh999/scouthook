@@ -756,6 +756,20 @@
           const raw = input.value.trim().replace(/^(color:|text:|image:)/, '');
           const newKey = 'color:' + raw;
           if (raw && newKey !== s.key && !_slotState.some((x, j) => j !== i && x.key === newKey)) {
+            const oldVar = s.key.slice('color:'.length);
+            const newVar = raw;
+            if (oldVar !== newVar) {
+              try {
+                const reEsc = v => v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                // Rename CSS var usage: var(--old) → var(--new)
+                _templateHtml = _templateHtml.replace(new RegExp(`var\\(--${reEsc(oldVar)}\\)`, 'g'), `var(--${newVar})`);
+                // Rename CSS var definition: --old: value → --new: value
+                _templateHtml = _templateHtml.replace(new RegExp(`--${reEsc(oldVar)}\\s*:`, 'g'), `--${newVar}:`);
+                document.getElementById('raw-html').value = _templateHtml;
+              } catch (err) {
+                console.warn('[color-rename] HTML update failed:', err.message);
+              }
+            }
             s.key = newKey;
             s.type = 'color';
           }

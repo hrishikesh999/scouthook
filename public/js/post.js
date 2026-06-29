@@ -146,39 +146,47 @@ async function init() {
   }
 
   try {
-    // Consume any prefetch started by the router, then await it.
-    // If the prefetch resolved to null (error) or wasn't started, fall back to a fresh fetch.
+    // Start both fetches in parallel immediately.
     const prefetchPromise = window.__routerConsumePrefetch?.(`/api/posts/${POST_ID}`);
-    const prefetchedPost = prefetchPromise ? await prefetchPromise : null;
+    const postPromise     = prefetchPromise
+      || fetch(`/api/posts/${POST_ID}`, { credentials: 'same-origin' }).then(r => r.json());
+    // Cache linkedin/status — only name/avatar needed, no need to refetch for 2 min.
+    const profilePromise  = cachedFetch('/api/linkedin/status', { credentials: 'same-origin' }, 120_000);
 
-    const [postResult, profileResult] = await Promise.allSettled([
-      prefetchedPost || fetch(`/api/posts/${POST_ID}`, { headers: apiHeaders() }).then(r => r.json()),
-      fetch('/api/linkedin/status', { headers: apiHeaders() }).then(r => r.json()),
-    ]);
-
-    const postData = postResult.status === 'fulfilled' ? postResult.value : null;
+    // Render post body as soon as post data arrives — don't block on LinkedIn status.
+    const postData = await postPromise;
     if (!postData?.ok || !postData.post) {
       showPostError('Could not load this post. <a href="/published.html" style="color:var(--teal)">Back to Published</a>');
       return;
     }
 
     const post = postData.post;
-
-    let profile = null;
-    if (profileResult.status === 'fulfilled' && profileResult.value?.connected) {
-      const p = profileResult.value;
-      profile = {
-        name:     p.name     || '',
-        headline: p.headline || '',
-        photoUrl: p.photo_url || null,
-        initials: p.name ? p.name.charAt(0).toUpperCase() : '',
-      };
-    }
-
     populateMeta(post);
-    populateLiCard(post, profile);
+    populateLiCard(post, null);
     populateLinkedInLink(post);
     renderRating(post.performance_tag || null);
+
+    // Patch in LinkedIn profile (name / avatar / headline) when it arrives.
+    profilePromise.then(p => {
+      if (!p?.connected) return;
+      const nameEl   = document.getElementById('post-li-name');
+      const metaEl   = document.getElementById('post-li-meta');
+      const avatarEl = document.getElementById('post-li-avatar');
+      if (nameEl)   nameEl.textContent = p.name || '';
+      if (metaEl)   metaEl.textContent = p.headline || '';
+      if (avatarEl) {
+        if (p.photo_url) {
+          const img = document.createElement('img');
+          img.src           = p.photo_url.trim();
+          img.alt           = p.name || '';
+          img.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:50%';
+          avatarEl.innerHTML = '';
+          avatarEl.appendChild(img);
+        } else if (p.name) {
+          avatarEl.textContent = p.name.charAt(0).toUpperCase();
+        }
+      }
+    }).catch(() => {});
   } catch {
     showPostError('Something went wrong loading this post. <a href="/published.html" style="color:var(--teal)">Back to Published</a>');
   }

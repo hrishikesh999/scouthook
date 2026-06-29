@@ -34,24 +34,30 @@ C) BACKGROUND TYPE: Solid color | CSS gradient | Image/pattern?
 D) LAYOUT: Flexbox column | Flexbox row | CSS Grid | Layered (position:absolute)?
 E) ASPECT RATIO: Square (1080×1080) | Portrait (1080×1350) | Landscape (1200×628)?
 F) EDITABLE REGIONS: Which text blocks should be slots? Which images?
-G) DECORATIVE ELEMENTS: Lines, shapes, icons, badges — reproduce as inline SVG.
+G) DECORATIVE ELEMENTS: Lines, shapes, simple geometric icons — reproduce as inline SVG.
+   ILLUSTRATION RULE: Complex artwork, illustrated characters, detailed graphics, or images with
+   many colors and organic shapes CANNOT be recreated as SVG — treat them as image slots instead.
+   The original artwork will be cropped and embedded automatically. A safe test: if drawing it in
+   SVG would require more than 5-6 paths, use an image slot.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 STEP 2 — GENERATE THE HTML TEMPLATE
 
 RULE 1: LAYOUT
-   - Root container: <div style="position:relative; width:Wpx; height:Hpx; overflow:hidden">.
+   - Root container: <div class="root" style="position:relative; width:Wpx; height:Hpx; overflow:hidden">.
    - Use Flexbox or CSS Grid as primary layout.
    - For LAYERED designs (photo background + text overlay, two panels, etc.) use position:absolute with z-index:
        z-index:0 → background image layer
        z-index:1 → overlay / gradient layer
        z-index:2 → text / content layer
-   - Use inline SVG for shapes, icons, dividers, and decorative elements — reproduce them faithfully.
+   - Use inline SVG for simple shapes, icons, dividers, and geometric decorative elements.
 
 RULE 2: FONTS
    - Load via <link href="https://fonts.googleapis.com/css2?family=...&display=swap">.
-   - Pick the closest Google Font. Good options: Poppins, Inter, Montserrat, Playfair Display, Raleway, Roboto Condensed, DM Sans, Space Grotesk.
-   - Always specify font-weight explicitly (400, 500, 600, 700, 800).
+   - Pick the closest Google Font. Good options: Poppins, Inter, Montserrat, Playfair Display,
+     Raleway, Roboto Condensed, DM Sans, Space Grotesk, Bebas Neue, Oswald.
+   - Always specify font-weight explicitly. Full range available: 100, 200, 300, 400, 500, 600, 700, 800, 900.
+   - For ultra-thin designs use 100 or 200. For light designs use 300. Match what you see exactly.
 
 RULE 3: COLORS — NON-NEGOTIABLE
    WRONG ✗ (hardcoded hex OR rgba in CSS rule):
@@ -60,7 +66,7 @@ RULE 3: COLORS — NON-NEGOTIABLE
      .overlay { background: rgba(0,0,0,0.5); }
 
    RIGHT ✓ (CSS custom property on root, var() everywhere else):
-     <div style="--bg:#1a1a2e; --accent:#e94560; --text:#ffffff; --text-muted:rgba(255,255,255,0.7); --overlay:rgba(0,0,0,0.5)">
+     <div class="root" style="--bg:#1a1a2e; --accent:#e94560; --text:#ffffff; --overlay:rgba(0,0,0,0.5)">
      .headline { color: var(--text); }
      .badge { background: var(--accent); }
      .overlay { background: var(--overlay); }
@@ -84,11 +90,17 @@ RULE 5: IMAGE SLOTS — ALWAYS use <img> elements, NEVER CSS background-image
           style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;z-index:0">
      Then place overlay/text divs with position:absolute and z-index:1+.
 
+   ILLUSTRATION SLOTS: When a region contains complex artwork, illustrated characters, or detailed
+   graphics that cannot be cleanly reproduced as SVG, use:
+     <img data-slot="image:illustration" src="" alt="Illustration"
+          style="position:absolute; top:Ypx; left:Xpx; width:Wpx; height:Hpx; object-fit:contain">
+   The original illustration will be cropped from the design and embedded automatically.
+
    NEVER do this:
      <div style="background-image:url('photo.jpg')">   ← WRONG, slot injection won't work
      background-image: url(...)                         ← WRONG even in CSS rules
 
-   ALWAYS use <img data-slot="image:key"> and style with object-fit:cover.
+   ALWAYS use <img data-slot="image:key"> and style with object-fit:cover or object-fit:contain.
    src MUST be empty string "" — the original photo will be cropped and injected automatically.
    Do NOT put data-slot-container on image parent elements — that is ONLY for repeating slots.
 
@@ -111,21 +123,32 @@ RULE 6: REPEATING SLOTS — ONLY for lists, steps, or grids of similar items:
 
 RULE 7: MANIFEST — Embed inside <head>:
    <script type="application/json" id="template-meta">
-   {"slots":{"headline":{"maxLen":80},"subtext":{"maxLen":200},"color:bg":{"default":"#1a1a2e"},"color:accent":{"default":"#e94560"},"color:text":{"default":"#ffffff"},"color:text_muted":{"default":"rgba(255,255,255,0.7)"},"image:photo":{"x":60,"y":120,"w":400,"h":500},"items":{"type":"repeating","fields":["title","body"],"min":2,"max":6}},"dimensions":{"width":1080,"height":1080}}
+   {"slots":{"headline":{"maxLen":80},"subtext":{"maxLen":200},"color:bg":{"default":"#1a1a2e"},"color:accent":{"default":"#e94560"},"color:text":{"default":"#ffffff"},"image:photo":{"x":0,"y":0,"w":1080,"h":1080}},"dimensions":{"width":1080,"height":1080}}
    </script>
+
+   MANIFEST COLOR DEFAULTS — CRITICAL RULE:
+   Every "color:varname" default value MUST be the EXACT hex you assigned to --varname on the root element.
+   Example: if you wrote style="--bg:#3a3c1a; --accent:#e94560" on the root, the manifest MUST have:
+     "color:bg": {"default": "#3a3c1a"},
+     "color:accent": {"default": "#e94560"}
+   NEVER use "#cccccc" as a default. Copy the exact hex from your CSS var definition.
+
    - Include ALL color:* slots — one per CSS custom property defined
    - Include ALL image:* slots with bounding box { "x":..., "y":..., "w":..., "h":... }
    - Include ALL text slots with appropriate maxLen
 
 RULE 8: VISUAL FIDELITY
    - Match the image's padding, margins, and spacing precisely.
-   - Reproduce font sizes: large headings 36-64px, subheadings 20-28px, body 14-18px.
+   - Reproduce font sizes: large headings 36-80px, subheadings 20-28px, body 14-18px.
    - Line-height: 1.1-1.2 for headings, 1.4-1.6 for body.
-   - Letter-spacing: tight (-1px to -2.5px) for large headings if the design uses it.
+   - Letter-spacing: tight (-1px to -3px) for large headings if the design uses it; wide (2-8px) for
+     uppercase labels if the design uses it.
    - Reproduce rounded corners, shadows, and decorative elements precisely.
-   - For gradient backgrounds: use CSS linear-gradient() or radial-gradient() — match direction and all color stops exactly. Store each gradient stop color as a separate CSS var.
+   - For gradient backgrounds: use CSS linear-gradient() or radial-gradient() — match direction and all
+     color stops exactly. Store each gradient stop color as a separate CSS var.
    - For pattern/texture backgrounds: approximate with CSS gradients or SVG patterns.
-   - Reproduce decorative lines, shapes, and icons as inline SVG.
+   - Reproduce decorative lines, shapes, and simple icons as inline SVG.
+   - ARROWS and directional elements: match direction exactly (↗ ↘ ← → ↑ ↓). Do not mirror or flip.
 
 RULE 9: DIMENSIONS — Match the image aspect ratio:
    Square: 1080×1080 | Portrait: 1080×1350 | Landscape: 1200×628
@@ -134,12 +157,14 @@ RULE 9: DIMENSIONS — Match the image aspect ratio:
 STEP 3 — SELF-CHECK BEFORE OUTPUTTING
 
 Before returning, verify:
+□ Root container has class="root" and ALL CSS vars in its style="" attribute
 □ Every hex color in the template appears ONLY in the root container's style=""
 □ Every CSS rule uses var(--name), never a literal hex value
 □ Every image element has data-slot="image:key" (with "image:" prefix) and src=""
 □ Every image:* slot in the manifest has x, y, w, h bounding box coordinates
-□ The manifest lists color:* for every CSS var defined
+□ Every color:* slot in the manifest has default = the EXACT hex from the root style="" (NOT #cccccc)
 □ No data-slot-container on non-repeating elements
+□ Complex illustrations use <img data-slot="image:..."> NOT inline SVG paths
 
 CRITICAL: Return ONLY the raw JSON. No markdown fences, no explanation.`;
 
@@ -155,7 +180,7 @@ You are given the SVG source code of a design. Extract EXACT values from the SVG
 OUTPUT: Return a JSON object: { "html": "<!DOCTYPE html>...", "manifest": { "slots": {...}, "dimensions": {...} } }
 
 RULES:
-1. Root <div> with explicit width/height and overflow:hidden
+1. Root <div class="root"> with explicit width/height and overflow:hidden
 2. ALL colors as CSS custom properties on root: style="--bg:#hex; --accent:#hex; --text:#hex"
 3. Text slots: data-slot="key_name" with snake_case keys
 4. Image slots: data-slot="image:key" — if the SVG contains a <image> element with href="data:image/..." (base64 embedded image), PRESERVE that data URI as the src value:
@@ -165,7 +190,7 @@ RULES:
    Only use src="" if there is no image data to preserve.
 5. Repeating slots: data-slot-container + data-slot-item + data-slot-field
 6. Embed manifest as <script type="application/json" id="template-meta"> in <head>
-7. Include color:* slots in manifest for each CSS variable
+7. Include color:* slots in manifest for each CSS variable — defaults MUST match the exact hex values used
 
 ADVANTAGE: You have the exact SVG source — use the EXACT font-family, EXACT hex colors, EXACT dimensions, and PRESERVE embedded images. Do not approximate anything.
 
@@ -188,16 +213,22 @@ Go through this checklist and note EVERY difference between Image 1 and Image 2:
 
 A) BACKGROUND: Solid color? Gradient (direction, stops, opacity)? Pattern? Multiple layers?
    - Gradients are commonly missed — check if Image 1 has a gradient that Image 2 renders as flat.
-B) TYPOGRAPHY: Font family match? Size? Weight (400/500/600/700/800/900)? Letter-spacing? Line-height? Text-transform (uppercase)?
+B) TYPOGRAPHY: Font family match? Size? Weight (100/200/300/400/500/600/700/800/900)? Letter-spacing? Line-height? Text-transform (uppercase)?
    - Check EACH text element separately — headings, subheadings, body, labels, captions.
+   - Ultra-thin text (weight 100-200) and ultra-bold (900) are commonly missed.
 C) COLORS: Compare every text color, background, accent, border, shadow color.
 D) LAYOUT & SPACING: Padding, margins, gaps between elements. Element alignment (left/center/right). Vertical positioning.
 E) DECORATIVE ELEMENTS: Lines, dividers, shapes, badges, icons, dots, circles, underlines, borders.
    - These are the MOST commonly missed elements. Check every edge, corner, and divider in Image 1.
    - Reproduce as inline SVG with position:absolute if needed.
+   - ARROWS and directional icons: match exact direction — do not mirror or flip.
 F) BORDERS & SHADOWS: Border-radius values, border widths/colors, box-shadows, text-shadows.
 G) IMAGE AREAS: Correct size, position, border-radius, and aspect ratio of photo regions.
 H) LAYERING: Overlays, semi-transparent layers, z-index stacking. Does Image 1 have a dark/light overlay over a photo?
+I) ILLUSTRATION REGIONS: If Image 2 shows a broken/incorrect SVG illustration where Image 1 shows
+   detailed artwork or characters, REPLACE the SVG entirely with:
+   <img data-slot="image:illustration" src="" alt="Illustration" style="position:absolute; ...correct bounds...">
+   Do not try to fix SVG path coordinates — replace the entire SVG with an image slot.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 STEP 2 — FIX EVERY DIFFERENCE
@@ -211,6 +242,7 @@ Apply ALL fixes to the HTML. Common fixes:
 - Wrong spacing → adjust padding/margin values in px
 - Missing borders → add border with correct width, style, color
 - Missing shadows → add box-shadow or text-shadow
+- Broken SVG illustration → replace with <img data-slot="image:illustration" src="">
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 STEP 3 — COLOR AUDIT (MANDATORY)
@@ -218,30 +250,30 @@ STEP 3 — COLOR AUDIT (MANDATORY)
 Scan every CSS rule and inline style in the HTML. If you find ANY hardcoded hex value (#rrggbb) or rgba() color outside of the root container's style="" attribute:
 1. Add it as a CSS custom property on the root container (--new_var:#hex)
 2. Replace the hardcoded value with var(--new_var)
-3. Add "color:new_var" to the manifest slots with its default hex value
+3. Add "color:new_var" to the manifest slots with its EXACT hex value as the default (NOT #cccccc)
 
 INVIOLABLE RULES:
-- Keep ALL data-slot, data-slot-container, data-slot-item, data-slot-field attributes exactly as they are — do NOT modify slot keys or remove slot attributes
-- Keep src="" unchanged on ALL <img data-slot="image:*"> elements — src values are populated by a separate pipeline step after refinement; do NOT add placeholder URLs or remove the attribute
-- Keep the <script type="application/json" id="template-meta"> block — you may ADD new color:* entries but do NOT remove existing slots or change their keys
+- Keep ALL data-slot, data-slot-container, data-slot-item, data-slot-field attributes exactly as they are
+- Keep src="" unchanged on ALL <img data-slot="image:*"> elements
+- Keep the <script type="application/json" id="template-meta"> block — you may ADD new entries but do NOT remove existing slots
 - Keep all Google Font <link> tags in <head>
 - Return the COMPLETE corrected HTML document (not a JSON wrapper — just raw HTML starting with <!DOCTYPE html>)
 - No markdown fences, no explanation — only the HTML`;
 
 const VISION_TIMEOUT_MS = 120_000;
 
+// Pass 2 quality thresholds
+const DIFF_SKIP_THRESHOLD = 88;   // skip AI refinement if already this good
+const DIFF_STOP_THRESHOLD = 92;   // stop refinement loop once converged
+const MAX_REFINEMENT_PASSES = 2;  // max AI refinement attempts
+
 /**
  * Strip AI commentary from a response that should be raw HTML.
- * Handles: markdown fences, explanatory text before/after the HTML document.
- * Returns null if no valid HTML document found.
  */
 function extractHtmlFromResponse(text) {
   let s = String(text || '').trim();
-
-  // Strip markdown code fences wrapping the entire response
   s = s.replace(/^```(?:html)?\s*/m, '').replace(/\s*```\s*$/m, '').trim();
 
-  // Find where the actual HTML document begins
   const doctypeIdx = s.indexOf('<!DOCTYPE');
   const htmlIdx = s.indexOf('<html');
   let startIdx = -1;
@@ -250,11 +282,8 @@ function extractHtmlFromResponse(text) {
   else if (htmlIdx >= 0) startIdx = htmlIdx;
 
   if (startIdx < 0) return null;
-
-  // Truncate everything before the HTML document
   s = s.slice(startIdx);
 
-  // Strip any trailing commentary after </html>
   const closeIdx = s.lastIndexOf('</html>');
   if (closeIdx >= 0) s = s.slice(0, closeIdx + '</html>'.length);
 
@@ -302,6 +331,254 @@ async function extractDominantColors(buffer) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Zone analysis — detect major layout regions algorithmically
+// ---------------------------------------------------------------------------
+
+/**
+ * Scan the image row by row and identify major horizontal zones:
+ * photo/illustration regions (high pixel variance) vs solid/gradient regions (low variance).
+ * Returns an array of zone descriptors with fractional y-coordinates (0–1).
+ */
+async function analyzeImageLayout(buffer) {
+  const W = 180, H = 180;
+
+  const { data } = await sharp(buffer)
+    .resize(W, H, { fit: 'fill' })
+    .removeAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+
+  // Per-row: average color + variance across all pixels in that row
+  const rows = [];
+  for (let y = 0; y < H; y++) {
+    let sr = 0, sg = 0, sb = 0;
+    for (let x = 0; x < W; x++) {
+      const i = (y * W + x) * 3;
+      sr += data[i]; sg += data[i + 1]; sb += data[i + 2];
+    }
+    const ar = sr / W, ag = sg / W, ab = sb / W;
+    let v = 0;
+    for (let x = 0; x < W; x++) {
+      const i = (y * W + x) * 3;
+      const dr = data[i] - ar, dg = data[i + 1] - ag, db = data[i + 2] - ab;
+      v += dr * dr + dg * dg + db * db;
+    }
+    rows.push({ r: ar, g: ag, b: ab, v: v / W });
+  }
+
+  // Smooth variance with a 5-row window to reduce text/edge noise
+  const smoothV = rows.map((_, y) => {
+    let sum = 0, cnt = 0;
+    for (let dy = -2; dy <= 2; dy++) {
+      const ry = y + dy;
+      if (ry >= 0 && ry < H) { sum += rows[ry].v; cnt++; }
+    }
+    return sum / cnt;
+  });
+
+  // photo = high variance (faces, illustrations, textures)
+  // solid = low variance (flat panels, gradients, text areas)
+  const PHOTO_V = 500;
+  const types = smoothV.map(v => v > PHOTO_V ? 'photo' : 'solid');
+
+  // Group consecutive same-type rows; merge zones thinner than 6% of height
+  const MIN_ZONE = Math.ceil(H * 0.06);
+  const raw = [];
+  let zStart = 0;
+  for (let y = 1; y <= H; y++) {
+    if (y === H || types[y] !== types[y - 1]) {
+      raw.push({ start: zStart, end: y, type: types[y - 1] });
+      zStart = y;
+    }
+  }
+  // Merge thin zones into their predecessor
+  const merged = [];
+  for (const z of raw) {
+    if (z.end - z.start < MIN_ZONE && merged.length > 0) {
+      merged[merged.length - 1].end = z.end;
+    } else {
+      merged.push({ ...z });
+    }
+  }
+
+  // Compute dominant color for each zone
+  return merged.map(z => {
+    let sr = 0, sg = 0, sb = 0;
+    for (let y = z.start; y < z.end; y++) {
+      sr += rows[y].r; sg += rows[y].g; sb += rows[y].b;
+    }
+    const n = z.end - z.start;
+    const r = Math.round(sr / n), g = Math.round(sg / n), b = Math.round(sb / n);
+    const hex = '#' + [r, g, b]
+      .map(c => Math.max(0, Math.min(255, c)).toString(16).padStart(2, '0'))
+      .join('');
+    return { start: z.start / H, end: z.end / H, type: z.type, color: hex };
+  });
+}
+
+/**
+ * Format zone analysis into a prompt context string.
+ * Only emitted when there are 2+ distinct zones (i.e. the layout has clear regions).
+ */
+function buildLayoutContext(zones, tplW, tplH) {
+  if (!zones || zones.length < 2) return '';
+  const lines = ['\n\nLAYOUT ZONES (measured algorithmically — use these exact pixel values, do not re-estimate):'];
+  zones.forEach((z, i) => {
+    const y0 = Math.round(z.start * tplH);
+    const y1 = Math.round(z.end * tplH);
+    const pct = Math.round((z.end - z.start) * 100);
+    if (z.type === 'photo') {
+      lines.push(`  Zone ${i + 1}: y=${y0}–${y1}px (${pct}%) → PHOTO/ILLUSTRATION region`);
+      lines.push(`    Use: <img data-slot="image:photo" style="...height:${y1 - y0}px..."> — do NOT attempt SVG recreation`);
+      lines.push(`    Manifest: "image:photo": {"x":0,"y":${y0},"w":${tplW},"h":${y1 - y0}}`);
+    } else {
+      lines.push(`  Zone ${i + 1}: y=${y0}–${y1}px (${pct}%) → SOLID/GRADIENT panel, dominant color ${z.color}`);
+      lines.push(`    Use this color as --bg or --panel_bg CSS var`);
+    }
+  });
+  return lines.join('\n');
+}
+
+// ---------------------------------------------------------------------------
+// Post-processing: sync manifest color defaults from actual CSS var values
+// ---------------------------------------------------------------------------
+
+/**
+ * Read all CSS custom property definitions from the generated HTML (both inline
+ * style="" on root and <style> block .root rules), then update every color:* entry
+ * in the manifest so its default matches the actual hex value used.
+ * Also re-embeds the updated manifest JSON into the HTML script tag.
+ */
+function syncManifestColors(html, manifest) {
+  const cssVars = {};
+
+  // 1. Extract from <style> block .root { --var: value; }
+  const styleBlock = html.match(/<style[^>]*>([\s\S]*?)<\/style>/i);
+  if (styleBlock) {
+    const rootRule = styleBlock[1].match(/(?:\.root|:root)\s*\{([^}]+)\}/);
+    if (rootRule) {
+      for (const m of rootRule[1].matchAll(/--([a-zA-Z0-9_-]+)\s*:\s*([^;}\n]+)/g)) {
+        cssVars[m[1].trim()] = m[2].trim();
+      }
+    }
+  }
+
+  // 2. Extract from inline style="" on root element (handles either attribute order)
+  for (const m of html.matchAll(/<div\b[^>]*\bclass="root"[^>]*>/gi)) {
+    const styleAttr = m[0].match(/\bstyle="([^"]*)"/);
+    if (styleAttr) {
+      for (const v of styleAttr[1].matchAll(/--([a-zA-Z0-9_-]+)\s*:\s*([^;}"]+)/g)) {
+        cssVars[v[1].trim()] = v[2].trim();
+      }
+    }
+  }
+
+  if (Object.keys(cssVars).length === 0) return html;
+
+  let changed = false;
+  for (const [key, slot] of Object.entries(manifest.slots)) {
+    if (!key.startsWith('color:')) continue;
+    const varName = key.slice(6); // 'color:bg' → 'bg'
+    if (!cssVars[varName]) continue;
+    const newDefault = cssVars[varName];
+    if (typeof slot === 'object' && slot !== null) {
+      if (slot.default !== newDefault) { slot.default = newDefault; changed = true; }
+    } else {
+      manifest.slots[key] = { default: newDefault }; changed = true;
+    }
+  }
+
+  if (changed) {
+    const newJson = JSON.stringify({ slots: manifest.slots, dimensions: manifest.dimensions });
+    html = html.replace(
+      /(<script[^>]*type="application\/json"[^>]*id="template-meta"[^>]*>)([\s\S]*?)(<\/script>)/i,
+      `$1${newJson}$3`
+    );
+    console.log('[templateFromImage] synced manifest colors: %s',
+      Object.entries(cssVars).map(([k, v]) => `--${k}:${v}`).join(', '));
+  }
+
+  return html;
+}
+
+// ---------------------------------------------------------------------------
+// Pass 2 quality check: pixel-level diff between original and rendered HTML
+// ---------------------------------------------------------------------------
+
+/**
+ * Compare two image buffers (original design vs Puppeteer screenshot) by computing
+ * average pixel-level RGB distance across a 4×4 grid, excluding known image-slot
+ * regions (which are intentionally empty until Pass 3).
+ *
+ * Returns { score (0–100, higher = better match), avgDiff (0–255), badRegions (string[]) }
+ */
+async function computePixelDiff(origBuf, rendBuf, manifest) {
+  const W = 200, H = 200;
+  const { width: tplW = 1080, height: tplH = 1080 } = (manifest && manifest.dimensions) || {};
+
+  // Regions to exclude from diff (image slots have src="" so they'll always differ)
+  const excludes = Object.entries((manifest && manifest.slots) || {})
+    .filter(([k, v]) => k.startsWith('image:') && v && v.x != null)
+    .map(([, v]) => ({
+      x1: Math.floor(v.x * W / tplW),
+      y1: Math.floor(v.y * H / tplH),
+      x2: Math.ceil((v.x + v.w) * W / tplW),
+      y2: Math.ceil((v.y + v.h) * H / tplH),
+    }));
+
+  const [origData, rendData] = await Promise.all([
+    sharp(origBuf).resize(W, H, { fit: 'fill' }).removeAlpha().raw().toBuffer(),
+    sharp(rendBuf).resize(W, H, { fit: 'fill' }).removeAlpha().raw().toBuffer(),
+  ]);
+
+  const GRID = 4;
+  const cellDiff = new Float32Array(GRID * GRID);
+  const cellCount = new Int32Array(GRID * GRID);
+
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      if (excludes.some(e => x >= e.x1 && x < e.x2 && y >= e.y1 && y < e.y2)) continue;
+      const i = (y * W + x) * 3;
+      const dr = origData[i] - rendData[i];
+      const dg = origData[i + 1] - rendData[i + 1];
+      const db = origData[i + 2] - rendData[i + 2];
+      const diff = Math.sqrt(dr * dr + dg * dg + db * db);
+      const ci = Math.min(Math.floor(y / H * GRID), GRID - 1) * GRID +
+                 Math.min(Math.floor(x / W * GRID), GRID - 1);
+      cellDiff[ci] += diff;
+      cellCount[ci]++;
+    }
+  }
+
+  const totalDiff = cellDiff.reduce((s, d) => s + d, 0);
+  const totalPx = cellCount.reduce((s, c) => s + c, 0);
+  const avgDiff = totalPx > 0 ? totalDiff / totalPx : 255;
+
+  const QUADRANT_NAMES = [
+    'top-left', 'top-center-left', 'top-center-right', 'top-right',
+    'upper-mid-left', 'upper-mid-center-left', 'upper-mid-center-right', 'upper-mid-right',
+    'lower-mid-left', 'lower-mid-center-left', 'lower-mid-center-right', 'lower-mid-right',
+    'bottom-left', 'bottom-center-left', 'bottom-center-right', 'bottom-right',
+  ];
+
+  const badRegions = Array.from(cellDiff)
+    .map((d, i) => ({ avg: cellCount[i] > 0 ? d / cellCount[i] : 0, name: QUADRANT_NAMES[i] }))
+    .filter(r => r.avg > 30)
+    .sort((a, b) => b.avg - a.avg)
+    .slice(0, 4)
+    .map(r => r.name);
+
+  // score: 100 = perfect, 0 = completely wrong
+  const score = Math.max(0, Math.min(100, 100 - avgDiff / 1.5));
+
+  return { score, avgDiff, badRegions };
+}
+
+// ---------------------------------------------------------------------------
+// Main entry point
+// ---------------------------------------------------------------------------
+
 async function generateTemplateFromImage(imageBuffer, options = {}) {
   const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
   if (!apiKey) throw new Error('anthropic_api_key not configured');
@@ -310,25 +587,19 @@ async function generateTemplateFromImage(imageBuffer, options = {}) {
   const bufStr = imageBuffer.toString('utf8', 0, Math.min(200, imageBuffer.length));
   const isSvg = options.contentType === 'image/svg+xml' || bufStr.trimStart().startsWith('<svg') || bufStr.trimStart().startsWith('<?xml');
 
-  // cropBuffer = what we crop photo regions from (original resolution, raster format)
-  // originalMeta = pixel dimensions of cropBuffer (for coordinate scaling)
   let imageBlock, mimeType, originalMeta, cropBuffer;
 
-  const SVG_TEXT_MAX_BYTES = 80_000; // ~20K tokens — safe for text pipeline
+  const SVG_TEXT_MAX_BYTES = 80_000;
 
   if (isSvg && imageBuffer.length <= SVG_TEXT_MAX_BYTES) {
-    // Small SVG: use text-based pipeline (exact fonts/colors from markup)
     console.log('[templateFromImage] SVG text pipeline (%d bytes)', imageBuffer.length);
     mimeType = 'image/svg+xml';
     imageBlock = null;
-    // cropBuffer stays null — SVG text pipeline embeds images directly from markup
   } else if (isSvg) {
-    // Large SVG (Canva exports with embedded images): render to PNG, use Vision
     console.log('[templateFromImage] SVG too large for text (%d bytes), converting to PNG', imageBuffer.length);
     try {
       const pngBuf = await sharp(imageBuffer).png().toBuffer();
       const meta = await sharp(pngBuf).metadata();
-      // Keep the full-res PNG as cropBuffer so we can crop photo regions from it
       cropBuffer = pngBuf;
       originalMeta = meta;
       let resizedBuf = pngBuf;
@@ -341,7 +612,6 @@ async function generateTemplateFromImage(imageBuffer, options = {}) {
         cache_control: { type: 'ephemeral' },
       };
       mimeType = 'image/png';
-      console.log('[templateFromImage] SVG→PNG: %d bytes (crop source: %dx%d)', resizedBuf.length, meta.width, meta.height);
     } catch (err) {
       throw new Error('Could not render SVG — the file may be too complex or corrupted');
     }
@@ -357,7 +627,6 @@ async function generateTemplateFromImage(imageBuffer, options = {}) {
       throw new Error(`Unsupported image format: ${meta.format || 'unknown'}`);
     }
 
-    // Capture full-res source before any resize — used for photo cropping
     originalMeta = meta;
     cropBuffer = imageBuffer;
 
@@ -369,38 +638,49 @@ async function generateTemplateFromImage(imageBuffer, options = {}) {
     if (meta.width > 2048 || meta.height > 2048) {
       resizedBuf = await sharp(imageBuffer).resize(2048, 2048, { fit: 'inside' }).toBuffer();
     }
-    const base64 = resizedBuf.toString('base64');
 
     imageBlock = {
       type: 'image',
-      source: { type: 'base64', media_type: mimeType, data: base64 },
+      source: { type: 'base64', media_type: mimeType, data: resizedBuf.toString('base64') },
       cache_control: { type: 'ephemeral' },
     };
   }
 
   const client = new Anthropic({ apiKey });
 
-  const callWithTimeout = (params) => {
-    return Promise.race([
-      client.messages.create(params),
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('AI conversion timed out after 120 seconds')), VISION_TIMEOUT_MS)
-      ),
-    ]);
-  };
+  const callWithTimeout = (params) => Promise.race([
+    client.messages.create(params),
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('AI conversion timed out after 120 seconds')), VISION_TIMEOUT_MS)
+    ),
+  ]);
 
-  // ── Extract dominant colors from the image ────────────────────────────────
+  // ── Pre-analysis: extract colors + layout zones (raster images only) ────────
 
   let colorHint = '';
-  if (!isSvg) {
-    const colors = await extractDominantColors(imageBuffer);
+  let layoutContext = '';
+
+  if (!isSvg && cropBuffer) {
+    const [colors, zones] = await Promise.all([
+      extractDominantColors(imageBuffer),
+      analyzeImageLayout(cropBuffer),
+    ]);
+
     if (colors.length) {
       colorHint = `\n\nEXACT COLORS extracted from this design (use these precise hex values as CSS custom properties — do NOT approximate): ${colors.join(', ')}`;
       console.log('[templateFromImage] extracted %d dominant colors: %s', colors.length, colors.join(', '));
     }
+
+    // Detect template dimensions from image metadata for zone scaling
+    const tplW = originalMeta?.width || 1080;
+    const tplH = originalMeta?.height || 1080;
+    layoutContext = buildLayoutContext(zones, tplW, tplH);
+    if (layoutContext) {
+      console.log('[templateFromImage] detected %d layout zones', zones.length);
+    }
   }
 
-  // ── Pass 1: Design → HTML ────────────────────────────────────────────────
+  // ── Pass 1: Design → HTML ──────────────────────────────────────────────────
 
   const pass1Start = Date.now();
   let pass1Messages, pass1System;
@@ -420,7 +700,7 @@ async function generateTemplateFromImage(imageBuffer, options = {}) {
     const basePrompt = options.instructions
       ? `Convert this design image into an HTML template. Additional instructions: ${options.instructions}`
       : 'Convert this design image into an HTML template. Reproduce the layout, typography, colors, and structure as closely as possible.';
-    const userPrompt = basePrompt + colorHint;
+    const userPrompt = basePrompt + colorHint + layoutContext;
     pass1System = SYSTEM_PROMPT;
     pass1Messages = [{ role: 'user', content: [imageBlock, { type: 'text', text: userPrompt }] }];
   }
@@ -462,27 +742,25 @@ async function generateTemplateFromImage(imageBuffer, options = {}) {
 
   let html = result.html;
 
-  // Post-processing applied twice: once after Pass 1, once after Pass 2.
-  // Extracted as a function so both passes produce clean, consistent HTML.
+  // Post-processing: fix slot prefixes and sync manifest keys to HTML
   function applyPostProcessing(h) {
-    // Fix <img> tags with data-slot missing "image:" prefix (multi-line safe via /s flag)
+    // Fix <img> tags missing "image:" prefix in data-slot
     h = h.replace(/<img\b([^>]*?)data-slot="(?!image:)([\w]+)"([^>]*?)>/gs, (match, before, key, after) => {
       console.log('[templateFromImage] fixing image slot prefix: %s → image:%s', key, key);
       manifest.slots[`image:${key}`] = manifest.slots[key] || {};
       delete manifest.slots[key];
       let fixed = `<img${before}data-slot="image:${key}"${after}>`;
-      // Clear non-data-URI filenames in src (both quote styles)
       fixed = fixed.replace(/src=["'](?!data:)[^"']*["']/g, 'src=""');
       return fixed;
     });
 
-    // Fix remaining image slots with a non-empty non-data-URI src (both quote styles)
+    // Clear non-empty non-data-URI src on image slots
     h = h.replace(/(<img\b[^>]*data-slot="image:[^"]*"[^>]*?)src=["'](?!data:)[^"']*["']/gs, '$1src=""');
 
-    // Remove bogus data-slot-container="value" → data-slot-container (boolean attr)
+    // Normalize data-slot-container (remove value if present)
     h = h.replace(/data-slot-container="[^"]*"/g, 'data-slot-container');
 
-    // Sync manifest: ensure every data-slot key in HTML exists in manifest
+    // Ensure every data-slot in HTML has a manifest entry
     for (const m of h.matchAll(/data-slot="([^"]+)"/g)) {
       const key = m[1];
       if (key === 'data-slot-container' || key === 'data-slot-item') continue;
@@ -494,28 +772,55 @@ async function generateTemplateFromImage(imageBuffer, options = {}) {
   }
 
   html = applyPostProcessing(html);
+  // Deterministic manifest color sync: CSS var values → manifest defaults
+  html = syncManifestColors(html, manifest);
 
   console.log('[templateFromImage] pass 1 done in %dms (%d bytes, %d slots)',
     Date.now() - pass1Start, html.length, Object.keys(manifest.slots).length);
 
-  // ── Pass 2: Render → Compare → Refine ──────────────────────────────────
-  // Only runs when we have an image to compare against (not SVG text pipeline).
+  // ── Pass 2: Quantitative diff → iterative AI refinement ───────────────────
 
   const shouldRefine = options.refine !== false;
 
-  if (shouldRefine && imageBlock) {
-    try {
-      const callRenderService = getRenderService();
-      const { width = 1080, height = 1080 } = manifest.dimensions;
+  if (shouldRefine && imageBlock && cropBuffer && originalMeta) {
+    const callRenderService = getRenderService();
+    const { width = 1080, height = 1080 } = manifest.dimensions;
+    const pass2Start = Date.now();
 
-      console.log('[templateFromImage] pass 2: rendering HTML for comparison (%dx%d)', width, height);
-      const pass2Start = Date.now();
+    for (let pass = 0; pass < MAX_REFINEMENT_PASSES; pass++) {
+      let renderedPng;
+      try {
+        renderedPng = await callRenderService(html, width, height);
+      } catch (err) {
+        console.warn('[templateFromImage] pass 2.%d: render failed (%s), aborting refinement', pass + 1, err.message);
+        break;
+      }
 
-      const renderedPng = await callRenderService(html, width, height);
-      const renderedBase64 = renderedPng.toString('base64');
+      // Quantitative diff check — skip or stop if already good enough
+      let diffResult = null;
+      try {
+        diffResult = await computePixelDiff(cropBuffer, renderedPng, manifest);
+        console.log('[templateFromImage] pass 2.%d: diff score=%.1f avgDiff=%.1f bad=%s',
+          pass + 1, diffResult.score, diffResult.avgDiff, diffResult.badRegions.join(',') || 'none');
+      } catch (err) {
+        console.warn('[templateFromImage] pass 2.%d: diff failed (%s), proceeding with refinement', pass + 1, err.message);
+      }
 
-      console.log('[templateFromImage] pass 2: rendered in %dms (%d bytes PNG), sending for refinement',
-        Date.now() - pass2Start, renderedPng.length);
+      if (diffResult && pass === 0 && diffResult.score >= DIFF_SKIP_THRESHOLD) {
+        console.log('[templateFromImage] pass 2: skipping refinement (already good — score %.1f)', diffResult.score);
+        break;
+      }
+
+      if (diffResult && pass > 0 && diffResult.score >= DIFF_STOP_THRESHOLD) {
+        console.log('[templateFromImage] pass 2: converged (score %.1f after %d passes)', diffResult.score, pass);
+        break;
+      }
+
+      // Build targeted refinement context from diff analysis
+      let diffContext = '';
+      if (diffResult && diffResult.badRegions.length > 0) {
+        diffContext = `\n\nPIXEL DIFF ANALYSIS — highest mismatch regions (focus fixes here): ${diffResult.badRegions.join(', ')}. Overall match score: ${diffResult.score.toFixed(0)}/100.`;
+      }
 
       const refineMsg = await callWithTimeout({
         model: 'claude-sonnet-4-6',
@@ -527,32 +832,27 @@ async function generateTemplateFromImage(imageBuffer, options = {}) {
             { type: 'text', text: 'Image 1 — Original design:' },
             imageBlock,
             { type: 'text', text: 'Image 2 — Current HTML rendering:' },
-            { type: 'image', source: { type: 'base64', media_type: 'image/png', data: renderedBase64 } },
-            { type: 'text', text: `Current HTML source code:\n\`\`\`html\n${html}\n\`\`\`\n\nFix every difference between Image 1 and Image 2. Return the complete corrected HTML document. Keep all data-slot attributes and the template-meta script block intact.` },
+            { type: 'image', source: { type: 'base64', media_type: 'image/png', data: renderedPng.toString('base64') } },
+            { type: 'text', text: `Current HTML source code:\n\`\`\`html\n${html}\n\`\`\`\n\nFix every difference between Image 1 and Image 2.${diffContext}\n\nKeep all data-slot attributes and the template-meta script block intact. Return the complete corrected HTML document.` },
           ],
         }],
       });
 
-      const refinedText = getAnthropicMessageText(refineMsg);
-
-      const refinedHtml = extractHtmlFromResponse(refinedText);
-
+      const refinedHtml = extractHtmlFromResponse(getAnthropicMessageText(refineMsg));
       if (refinedHtml) {
-        // Apply same post-processing to Pass 2 output — it can re-introduce mistakes
         html = applyPostProcessing(refinedHtml);
-        console.log('[templateFromImage] pass 2 refinement applied (%d bytes, total %dms)',
-          html.length, Date.now() - pass2Start);
+        html = syncManifestColors(html, manifest);
+        console.log('[templateFromImage] pass 2.%d refinement applied (%d bytes, %dms elapsed)',
+          pass + 1, html.length, Date.now() - pass2Start);
       } else {
-        console.warn('[templateFromImage] pass 2 refinement skipped — response did not contain valid HTML');
+        console.warn('[templateFromImage] pass 2.%d: refinement returned no valid HTML', pass + 1);
+        break;
       }
-    } catch (err) {
-      console.warn('[templateFromImage] pass 2 refinement failed (using pass 1 result):', err.message);
     }
   }
 
-  // ── Pass 3: Crop original photos and embed as default images ─────────────
-  // Runs for Vision path (PNG/JPG input) and large-SVG-rasterized-to-PNG path.
-  // SVG text pipeline already preserves embedded images from the markup itself.
+  // ── Pass 3: Crop original photos and embed as default images ──────────────
+
   if (!useSvgTextPipeline && cropBuffer && originalMeta) {
     try {
       html = await injectCroppedImages(html, manifest, cropBuffer, originalMeta);
@@ -566,8 +866,6 @@ async function generateTemplateFromImage(imageBuffer, options = {}) {
 
 // ---------------------------------------------------------------------------
 // Crop image regions from the original design and inject as default src values.
-// Claude provides bounding boxes (x,y,w,h) in template coordinates; we scale
-// them to the original image pixel space and crop with Sharp.
 // ---------------------------------------------------------------------------
 
 async function injectCroppedImages(html, manifest, cropBuffer, originalMeta) {
@@ -596,8 +894,6 @@ async function injectCroppedImages(html, manifest, cropBuffer, originalMeta) {
     }
 
     try {
-      // Max 600px keeps embedded images well under the 3MB HTML storage limit
-      // while remaining large enough for Puppeteer renders at template resolution.
       const cropped = await sharp(cropBuffer)
         .extract({ left, top, width, height })
         .resize({ width: Math.min(Math.round(cfg.w), 600), height: Math.min(Math.round(cfg.h), 600), fit: 'inside' })
@@ -608,20 +904,16 @@ async function injectCroppedImages(html, manifest, cropBuffer, originalMeta) {
       const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const prevLen = html.length;
 
-      // Matches src="" or src='' (Claude uses both quote styles)
       const srcEmpty = `src=(?:""|'')`;
 
-      // Case 1: data-slot comes before src
       html = html.replace(
         new RegExp(`(<img\\b[^>]*?data-slot="${escapedKey}"[^>]*?)${srcEmpty}`, 'gs'),
         `$1src="${dataUri}"`
       );
-      // Case 2: src comes before data-slot
       html = html.replace(
         new RegExp(`(<img\\b[^>]*?)${srcEmpty}([^>]*?data-slot="${escapedKey}"[^>]*?>)`, 'gs'),
         `$1src="${dataUri}"$2`
       );
-      // Case 3: no src attribute at all — inject before the closing > of the img tag
       if (html.length === prevLen) {
         html = html.replace(
           new RegExp(`(<img\\b[^>]*?data-slot="${escapedKey}"[^>]*?)(\\s*/?>)`, 'gs'),
@@ -633,7 +925,7 @@ async function injectCroppedImages(html, manifest, cropBuffer, originalMeta) {
         console.log('[templateFromImage] injected default image for %s (%dx%d, %d bytes JPEG)',
           key, width, height, cropped.length);
       } else {
-        console.warn('[templateFromImage] could not inject src for img[data-slot="%s"] — element not found in HTML', key);
+        console.warn('[templateFromImage] could not inject src for img[data-slot="%s"] — element not found', key);
       }
     } catch (err) {
       console.warn('[templateFromImage] crop failed for %s:', key, err.message);

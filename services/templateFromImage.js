@@ -271,12 +271,12 @@ INVIOLABLE RULES:
 - Return the COMPLETE corrected HTML document (not a JSON wrapper — just raw HTML starting with <!DOCTYPE html>)
 - No markdown fences, no explanation — only the HTML`;
 
-const VISION_TIMEOUT_MS = 120_000;
+const VISION_TIMEOUT_MS = 55_000;  // per-AI-call cap; calls rarely exceed 40s
 
 // Pass 2 quality thresholds
 const DIFF_SKIP_THRESHOLD = 75;   // skip AI refinement if already this good
 const DIFF_STOP_THRESHOLD = 92;   // stop refinement loop once converged
-const MAX_REFINEMENT_PASSES = 2;  // max AI refinement attempts
+const MAX_REFINEMENT_PASSES = 1;  // 1 pass keeps total pipeline under ~85s
 
 /**
  * Strip AI commentary from a response that should be raw HTML.
@@ -545,7 +545,7 @@ async function analyzeImageLayout(buffer) {
 
   // Only worth running when the outer context looks like a photo background
   // (photoBox is full-bleed, meaning photo cells dominate the canvas).
-  if (photoBox?.isFullBleed) {
+  if (photoBox?.isFullBleed) { try {
     const photoKey = new Set(photoCells.map(c => `${c.cy}:${c.cx}`));
 
     // 2D solid grid
@@ -610,7 +610,9 @@ async function analyzeImageLayout(buffer) {
         }
       }
     }
-  }
+  } catch (err) {
+    console.warn('[templateFromImage] panelBox detection failed (non-fatal): %s', err.message);
+  } }
 
   return {
     hZones:   detectZones(rowStats, H), // top-to-bottom zones

@@ -385,8 +385,19 @@ router.post('/from-image', express.raw({ type: ['image/png', 'image/jpeg', 'imag
     console.log('[adminHtmlTemplates] from-image: %d bytes, instructions=%s',
       buffer.length, instructions ? 'yes' : 'none');
 
+    // Hard deadline: respond before the platform proxy (Cloudflare / Render) kills
+    // the connection. 90s covers Pass 1 + one refinement pass at typical AI speeds.
+    const PIPELINE_DEADLINE_MS = 90_000;
     const start = Date.now();
-    const { html, manifest } = await generateTemplateFromImage(buffer, { instructions, contentType });
+    const { html, manifest } = await Promise.race([
+      generateTemplateFromImage(buffer, { instructions, contentType }),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(Object.assign(
+          new Error('Generation timed out (90s). The design may be complex — please try again.'),
+          { status: 504 }
+        )), PIPELINE_DEADLINE_MS)
+      ),
+    ]);
     console.log('[adminHtmlTemplates] from-image: generated in %dms (%d bytes HTML, %d slots)',
       Date.now() - start, html.length, Object.keys(manifest.slots || {}).length);
 
@@ -399,8 +410,9 @@ router.post('/from-image', express.raw({ type: ['image/png', 'image/jpeg', 'imag
 
     res.json({ ok: true, html, manifest, original_image_id: origId });
   } catch (err) {
-    console.error('[adminHtmlTemplates] from-image error:', err.message);
-    res.status(500).json({ ok: false, error: err.message });
+    const status = err.status || 500;
+    console.error('[adminHtmlTemplates] from-image error (%d): %s', status, err.message);
+    res.status(status).json({ ok: false, error: err.message });
   }
 });
 

@@ -254,7 +254,7 @@
                 </div>
 
                 <!-- Colors & Brand accordion -->
-                <div class="slots-accordion-header" id="acc-colors-header">
+                <div class="slots-accordion-header open" id="acc-colors-header">
                   <span class="slots-accordion-chevron">›</span>
                   <span class="slots-accordion-title">Colors &amp; Brand</span>
                   <span class="slots-accordion-count">(<span id="color-slot-count">0</span>)</span>
@@ -941,12 +941,17 @@
   function _updateSimPanel() {
     const panel = document.getElementById('brand-sim-panel');
     if (!panel) return;
-    const brandSlots = _slotState.filter(s => s.type === 'color' && s.config.default === 'brand');
-    if (!brandSlots.length) { panel.style.display = 'none'; return; }
+    const colorSlots = _slotState.filter(s => s.type === 'color');
+    if (!colorSlots.length) { panel.style.display = 'none'; return; }
     panel.style.display = '';
     _readSimColors();
+    const brandSlots = colorSlots.filter(s => s.config.default === 'brand');
     const table = document.getElementById('sim-mapping-table');
     if (!table) return;
+    if (!brandSlots.length) {
+      table.innerHTML = '<div style="font-size:.68rem;color:var(--text-muted);padding:4px 0;font-style:italic">Set a Brand role on any color slot above to map it here.</div>';
+      return;
+    }
     let html = '<div style="font-size:.65rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">Mapping Preview</div>';
     for (const s of brandSlots) {
       const varName = s.key.slice('color:'.length);

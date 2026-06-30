@@ -1866,8 +1866,17 @@ function _renderTemplateIframe(html, slots) {
     for (const [key] of Object.entries(slotDefs)) {
       if (!key.startsWith('color:')) continue;
       const varName = key.slice('color:'.length);
-      // Capture the template's original color before any overrides
-      const origVal = colorRoot.style.getPropertyValue('--' + varName).trim();
+      // Capture the template's original color before any overrides.
+      // CSS vars may be defined on a nested element's inline style rather than
+      // on body.firstElementChild, so fall back to a DOM search if needed.
+      let origVal = colorRoot.style.getPropertyValue('--' + varName).trim();
+      if (!origVal) {
+        for (const el of doc.querySelectorAll('[style]')) {
+          if (el === colorRoot) continue;
+          const v = el.style.getPropertyValue('--' + varName).trim();
+          if (v) { origVal = v; break; }
+        }
+      }
       const origNorm = _normalizeColor(origVal);
       if (origNorm && !_htmlTplOriginalColors[key]) {
         _htmlTplOriginalColors[key] = origNorm;
@@ -2819,14 +2828,14 @@ function _highlightSlotInIframe(key) {
 
 function _resetColorsToOriginal() {
   const formPane = document.getElementById('html-tpl-form-pane');
+  _pendingColorUpdates = {}; // clear overrides first so _applySlotToIframe re-seeds correctly
   for (const [key, original] of Object.entries(_htmlTplOriginalColors)) {
     const picker = formPane.querySelector(`.html-tpl-color-swatch input[data-slot="${key}"]`);
     const hex = formPane.querySelector(`.html-tpl-color-hex[data-slot="${key}"]`);
     if (picker) picker.value = original;
     if (hex) hex.value = original;
-    _applySlotToIframe(key, original, 'color');
+    _applySlotToIframe(key, original, 'color'); // also seeds _pendingColorUpdates[key]
   }
-  _pendingColorUpdates = {};
 }
 
 function _applyBrandColors() {

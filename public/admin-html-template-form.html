@@ -451,6 +451,8 @@
         const blob = await r.blob();
         _originalImageFile = new File([blob], 'original.png', { type: blob.type });
         _originalImageDataUrl = URL.createObjectURL(blob);
+        // Re-render if user already switched to a tab that depends on the original
+        if (_previewMode === 'original' || _previewMode === 'sideBySide') applyPreviewMode();
       }).catch(() => {});
     } catch (err) {
       console.error('[loadTemplate]', err);

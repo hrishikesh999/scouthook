@@ -132,10 +132,10 @@ await test('unauthenticated request → 401, no DB access', async () => {
 await test('user A cannot read user B\'s profile via URL param — session identity wins', async () => {
   // user_b's profile
   const userBProfile = {
-    audience_role: 'B\'s audience', audience_pain: null, content_niche: 'B\'s niche',
-    contrarian_view: null, voice_fingerprint: null, writing_samples: null,
+    brand_description: 'B\'s niche', audience_description: 'B\'s audience',
+    voice_fingerprint: null, writing_samples: null,
     brand_bg: null, brand_accent: null, brand_text: null, brand_name: null, brand_logo: null,
-    user_role: null, onboarding_complete: 0, business_positioning: null, website_url: null,
+    user_role: null, onboarding_complete: 0, website_url: null,
   };
   const mock = makeMockDb(userBProfile);
   inject('./db', mock);
@@ -169,10 +169,10 @@ await test('user A cannot read user B\'s profile via URL param — session ident
 
 await test('authenticated user reads their own profile — correct user_id used', async () => {
   const ownProfile = {
-    audience_role: 'Founders', audience_pain: 'No time', content_niche: 'SaaS growth',
-    contrarian_view: 'Cold email is dead', voice_fingerprint: '{"fp":true}', writing_samples: 'Sample text',
+    brand_description: 'I help SaaS founders scale to $10M', audience_description: 'Founders',
+    brand_core_beliefs: '["Cold email is dead"]', voice_fingerprint: '{"fp":true}', writing_samples: 'Sample text',
     brand_bg: '#fff', brand_accent: '#000', brand_text: '#333', brand_name: 'Acme', brand_logo: null,
-    user_role: 'founder', onboarding_complete: 1, business_positioning: 'We help SaaS founders', website_url: 'https://example.com',
+    user_role: 'founder', onboarding_complete: 1, website_url: 'https://example.com',
   };
   const mock = makeMockDb(ownProfile);
   inject('./db', mock);

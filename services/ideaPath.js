@@ -21,6 +21,15 @@ function firstObstacle(profile) {
   }
 }
 
+function firstBelief(profile) {
+  try {
+    const arr = JSON.parse(profile?.brand_core_beliefs || '[]');
+    return Array.isArray(arr) ? (arr[0] || '') : String(profile?.brand_core_beliefs || '');
+  } catch {
+    return String(profile?.brand_core_beliefs || '');
+  }
+}
+
 const ARCHETYPE_POST_TYPE_PREFERENCES = {
   reach:   ['BEFORE_AFTER', 'CONFESSION', 'CURIOSITY_GAP'],
   trust:   ['INSIGHT', 'MYTH_BUST', 'DIRECT_ADDRESS'],
@@ -363,7 +372,7 @@ async function buildStructureBlueprint(rawIdea, postType, client, userProfile = 
     ? `\nAUTHOR CONTEXT (use to pick an archetype that fits this author's style and niche):\n` +
       (userProfile.brand_description    ? `Niche: ${userProfile.brand_description}\n` : '') +
       (firstObstacle(userProfile)    ? `Audience challenge: ${firstObstacle(userProfile)}\n` : '') +
-      (userProfile.contrarian_view  ? `Author's POV: ${userProfile.contrarian_view}\n` : '') +
+      (firstBelief(userProfile)     ? `Author's POV: ${firstBelief(userProfile)}\n` : '') +
       (topArchetypes.length         ? `Signature archetypes (favour these when the input fits): ${topArchetypes.join(', ')}\n` : '') +
       (samplePhrase                 ? `Voice sample (match this register): "${samplePhrase}"\n` : '')
     : '';
@@ -443,9 +452,9 @@ CONTENT NICHE: ${userProfile.brand_description || 'not specified'}
 AUDIENCE:
 - Who they are: ${userProfile.audience_description || 'professionals in the author\'s field'}
 - What keeps them up at night: ${firstObstacle(userProfile) || 'professional challenges in their field'}
-${userProfile.contrarian_view ? `
+${firstBelief(userProfile) ? `
 EDITORIAL CONTEXT (the author's established worldview — let this colour the angle and framing):
-${userProfile.contrarian_view}
+${firstBelief(userProfile)}
 ` : ''}
 LINKEDIN FORMATTING (non-negotiable):
 - One sentence per line. Never write paragraph blocks. Every sentence gets its own line.

@@ -56,7 +56,7 @@ let _pendingVaultIdeaSeed = '';  // brief/seed text for pending vault idea
 let _tensionResult      = null; // { tension, missing } from silent extraction
 let _tensionDebounce    = null; // debounce timer for extraction on input
 let _nichePlaceholders  = [];   // niche-specific placeholder examples loaded from profile
-let _nicheProfile       = null; // cached profile for niche-aware nudge (content_niche)
+let _nicheProfile       = null; // cached profile for niche-aware nudge (brand_description)
 let _shownVaultIds      = new Set(); // vault idea IDs shown this session — rotates on each click
 let _shownAITopics      = [];        // AI topic titles shown this session — passed as exclusion list
 let _shownIdeaHooks     = [];        // idea engine hook lines shown — passed as exclude_hooks
@@ -2692,7 +2692,7 @@ function checkSpecificityNudge(val) {
   if (!val || !selectedType) { hideSpecificityNudge(); return; }
   if (val.length < 40) { hideSpecificityNudge(); return; }
 
-  const niche = _nicheProfile?.content_niche || '';
+  const niche = _nicheProfile?.brand_description || '';
 
   if (isLikelyVague(val)) {
     const nicheLabel = niche ? `in ${niche}` : 'in your work';
@@ -2835,9 +2835,7 @@ async function checkProfileGate() {
     const profile = data.profile || {};
     _nicheProfile = profile;
 
-    // Accept either the old content_niche field or the new brand_description
-    // set by the v2 onboarding wizard.
-    const hasNiche = !!profile.content_niche?.trim() || !!profile.brand_description?.trim();
+    const hasNiche = !!profile.brand_description?.trim();
     const hasVoice = !!profile.voice_fingerprint || !!profile.onboarding_q2?.trim()
                      || !!profile.brand_voice_profile_json?.trim();
 

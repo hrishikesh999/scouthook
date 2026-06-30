@@ -700,7 +700,7 @@ router.post('/connections/:id/set-default', async (req, res) => {
 router.post('/publish', async (req, res) => {
   const userId   = req.userId;
   const tenantId = req.tenantId;
-  const { content, image_url, carousel_pdf_url, postId, connectionId } = req.body;
+  const { content, image_url, carousel_pdf_url, asset_type: clientAssetType, postId, connectionId } = req.body;
 
   if (!userId)  return res.status(400).json({ ok: false, error: 'missing_user_id' });
   if (!content?.trim()) return res.status(400).json({ ok: false, error: 'missing_content' });
@@ -736,7 +736,7 @@ router.post('/publish', async (req, res) => {
     const result = await publishNow(userId, tenantId, content.trim(), publishOpts);
 
     if (postId) {
-      const assetType = carousel_pdf_url ? 'carousel' : image_url ? 'image' : null;
+      const assetType = carousel_pdf_url ? 'carousel' : (clientAssetType || (image_url ? 'image' : null));
       await db.prepare(`
         UPDATE generated_posts
         SET status = 'published', published_at = CURRENT_TIMESTAMP, asset_type = ?
@@ -783,7 +783,7 @@ router.post('/publish', async (req, res) => {
 router.post('/schedule', async (req, res) => {
   const userId   = req.userId;
   const tenantId = req.tenantId;
-  const { content, scheduled_for, post_id, image_url, carousel_pdf_url, first_comment, asset_preview_url, asset_slide_count, connectionId } = req.body;
+  const { content, scheduled_for, post_id, image_url, carousel_pdf_url, first_comment, asset_preview_url, asset_slide_count, asset_type: clientAssetType, connectionId } = req.body;
 
   if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
 
@@ -900,9 +900,10 @@ router.post('/schedule', async (req, res) => {
   }
 
   try {
+    const resolvedAssetType = carousel_pdf_url ? 'carousel' : (clientAssetType || (image_url ? 'image' : null));
     const payloadHash = sha256Hex(JSON.stringify({
       content: content.trim(),
-      asset_type: carousel_pdf_url ? 'carousel' : image_url ? 'image' : null,
+      asset_type: resolvedAssetType,
       asset_url: (carousel_pdf_url || image_url)?.trim() || null,
       scheduled_for: scheduledDate.toISOString(),
       first_comment: trimmedFirstComment,
@@ -920,7 +921,7 @@ router.post('/schedule', async (req, res) => {
         post_id || null,
         content.trim(),
         scheduledDate.toISOString(),
-        carousel_pdf_url ? 'carousel' : image_url ? 'image' : null,
+        resolvedAssetType,
         (carousel_pdf_url || image_url)?.trim() || null,
         payloadHash,
         trimmedFirstComment,
@@ -930,7 +931,7 @@ router.post('/schedule', async (req, res) => {
       scheduledPostId = Number(result.lastInsertRowid);
 
       if (post_id) {
-        const assetType = carousel_pdf_url ? 'carousel' : image_url ? 'image' : null;
+        const assetType = resolvedAssetType;
         const assetUrl  = (carousel_pdf_url || image_url)?.trim() || null;
         await tx.prepare(`
           UPDATE generated_posts

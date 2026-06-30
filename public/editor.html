@@ -284,7 +284,10 @@
   <div id="html-tpl-overlay" class="ai-image-overlay" role="dialog" aria-modal="true" aria-label="Design Templates" aria-hidden="true">
     <div class="ai-image-modal">
       <div class="ai-image-modal-header">
-        <span class="ai-image-modal-title" id="html-tpl-modal-title">DESIGN TEMPLATES</span>
+        <div class="htpl-title-group">
+          <span class="htpl-modal-eyebrow">Design Template</span>
+          <span class="ai-image-modal-title" id="html-tpl-modal-title">DESIGN TEMPLATES</span>
+        </div>
         <button class="slide-over-close" id="html-tpl-modal-close" aria-label="Close">&#10005;</button>
       </div>
       <div class="ai-image-modal-body" id="html-tpl-modal-body">
@@ -1331,6 +1334,8 @@ function _setHtmlTplModalState(state) {
   const genBtn  = document.getElementById('html-tpl-generate-btn');
 
   body.classList.toggle('is-picker', state === 'picker');
+  const _htplModalEl = document.getElementById('html-tpl-overlay')?.querySelector('.ai-image-modal');
+  if (_htplModalEl) _htplModalEl.dataset.htplState = state;
   form.hidden = state === 'picker';
   back.hidden = state === 'picker';
   genBtn.hidden = state === 'picker';
@@ -1353,12 +1358,18 @@ function openHtmlTemplateModal() {
 
   const cached = visualCache.get(`${currentPostId}:html_template`);
   if (cached?.assetUrl) {
-    _htmlTplSelectedId   = cached.templateId;
-    _htmlTplSelectedMeta = cached.templateMeta;
+    _htmlTplSelectedId     = cached.templateId;
+    _htmlTplSelectedMeta   = cached.templateMeta;
     _htmlTplExtractedSlots = cached.extractedContent;
-    currentAssetUrl  = cached.assetUrl;
+    _htmlTplTemplateHtml   = cached.templateHtml || _htmlTplTemplateHtml;
+    _pendingColorUpdates   = { ...(cached.colorOverrides || {}) };
+    currentAssetUrl   = cached.assetUrl;
     currentPreviewUrl = cached.previewUrl;
-    _renderHtmlTplPreviewImage(cached.previewUrl || cached.assetUrl);
+    if (_htmlTplTemplateHtml) {
+      _renderTemplateIframe(_htmlTplTemplateHtml, _htmlTplExtractedSlots);
+    } else {
+      _renderHtmlTplPreviewImage(cached.previewUrl || cached.assetUrl);
+    }
     renderHtmlTemplateForm(_htmlTplExtractedSlots);
     _setHtmlTplModalState('editing');
     _showInsertBtn();
@@ -1712,6 +1723,8 @@ async function _selectCarouselPack(packId) {
 let _htmlTplBrandColors = null;
 let _htmlTplOriginalColors = {};
 let _pendingColorUpdates = {}; // color:key → value, flushed into iframe on load
+let _htplPendingUploads = 0;  // in-progress image uploads in the template form
+let _htmlTplLastColors   = {}; // color overrides from last readHtmlTemplateFormContent()
 
 async function _loadBrandColors() {
   if (_htmlTplBrandColors) return _htmlTplBrandColors;
@@ -1731,7 +1744,7 @@ async function _loadBrandColors() {
 }
 
 function _resolveBrandColor(key, def) {
-  if (def.default !== 'brand' || !_htmlTplBrandColors) return def.default || '#cccccc';
+  if (def.default !== 'brand' || !_htmlTplBrandColors) return /^#[0-9a-fA-F]{3,8}$/.test(def.default) ? def.default : '#cccccc';
   const role = key.slice('color:'.length).toLowerCase();
   if (_htmlTplBrandColors[role]) return _htmlTplBrandColors[role];
   if (/^(bg|background|card_bg|card-bg|surface|secondary_bg|secondary-bg)$/.test(role)) return _htmlTplBrandColors.bg;
@@ -2077,6 +2090,9 @@ function renderHtmlTemplateForm(slots) {
       const reader = new FileReader();
       reader.onload = async () => {
         _mpOnImageSelected(zone, slot, reader.result, null, fileInput);
+        _htplPendingUploads++;
+        const genBtn = document.getElementById('html-tpl-generate-btn');
+        if (genBtn && !genBtn.hidden) { genBtn.disabled = true; genBtn.title = 'Waiting for image upload…'; }
         try {
           const headers = { 'Content-Type': file.type, 'X-Filename': encodeURIComponent(file.name) };
           if (typeof getUserId === 'function') headers['X-User-Id'] = getUserId();
@@ -2089,6 +2105,12 @@ function renderHtmlTemplateForm(slots) {
             zone.dataset.originalStorageKey = key;
           }
         } catch { /* non-fatal */ }
+        finally {
+          _htplPendingUploads = Math.max(0, _htplPendingUploads - 1);
+          if (_htplPendingUploads === 0 && genBtn && !genBtn.hidden) {
+            genBtn.disabled = false; genBtn.title = '';
+          }
+        }
       };
       reader.readAsDataURL(file);
     });
@@ -2813,6 +2835,7 @@ function readHtmlTemplateFormContent() {
 
 async function generateHtmlTplInModal() {
   const content = readHtmlTemplateFormContent();
+  _htmlTplLastColors = content.colors || {};
   _setHtmlTplModalState('generating');
   const pane = document.getElementById('html-tpl-preview-pane');
   pane.insertAdjacentHTML('beforeend', '<div class="html-tpl-progress" style="position:absolute;bottom:12px;left:12px;right:12px;z-index:10"><div class="html-tpl-progress-spinner"></div>Rendering final image…</div>');
@@ -2848,7 +2871,7 @@ function _startHtmlTplJobPoll(jobId) {
         _htmlTplExtractedSlots = data.content || _htmlTplExtractedSlots;
         document.getElementById('html-tpl-preview-pane').querySelector('.html-tpl-progress')?.remove();
         _setHtmlTplModalState('editing'); _showInsertBtn();
-        visualCache.set(`${currentPostId}:html_template`, { extractedContent: _htmlTplExtractedSlots, assetUrl: data.png_url, previewUrl: data.png_url, templateId: _htmlTplSelectedId, templateMeta: _htmlTplSelectedMeta });
+        visualCache.set(`${currentPostId}:html_template`, { extractedContent: _htmlTplExtractedSlots, assetUrl: data.png_url, previewUrl: data.png_url, templateId: _htmlTplSelectedId, templateMeta: _htmlTplSelectedMeta, templateHtml: _htmlTplTemplateHtml, colorOverrides: _htmlTplLastColors });
       } else if (data.status === 'failed') {
         clearInterval(_htmlTplPollTimer); _setHtmlTplModalState('editing');
         document.getElementById('html-tpl-preview-pane').querySelector('.html-tpl-progress')?.remove();
@@ -2866,6 +2889,22 @@ function _doSaveHtmlTemplate() {
   if (chipLabel) chipLabel.textContent = 'Design Template';
   if (chip) chip.classList.remove('hidden');
   renderPreviewAsset(); closeHtmlTemplateModal();
+  // Persist to DB immediately so auto-save and page reloads don't silently drop the asset
+  if (currentPostId) {
+    fetch(`/api/posts/${encodeURIComponent(String(currentPostId))}`, {
+      method: 'PATCH', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        content: getPostContent(),
+        asset_url: currentAssetUrl,
+        asset_preview_url: currentPreviewUrl,
+        asset_type: 'html_template',
+        asset_slide_count: 0,
+      }),
+    }).then(r => r.json()).then(d => {
+      if (d.ok) { _lastAutoSavedContent = getPostContent(); updateAutosaveIndicator(); }
+    }).catch(() => {});
+  }
 }
 
 
@@ -3322,7 +3361,8 @@ function wireSchedule() {
           payload.asset_preview_url   = attachedPreviewUrl || null;
           payload.asset_slide_count   = attachedSlideCount || 0;
         } else {
-          payload.image_url = attachedAssetUrl;
+          payload.image_url  = attachedAssetUrl;
+          payload.asset_type = attachedAssetType;
         }
       }
       const res  = await fetch('/api/linkedin/schedule', {
@@ -3375,7 +3415,7 @@ function wireSchedule() {
       if (selectedConnectionId) payload.connectionId = selectedConnectionId;
       if (attachedAssetUrl) {
         if (attachedAssetType === 'carousel' || attachedAssetType === 'media_pdf') payload.carousel_pdf_url = attachedAssetUrl;
-        else payload.image_url = attachedAssetUrl;
+        else { payload.image_url = attachedAssetUrl; payload.asset_type = attachedAssetType; }
       }
       const res  = await fetch('/api/linkedin/publish', {
         method: 'POST', credentials: 'include',

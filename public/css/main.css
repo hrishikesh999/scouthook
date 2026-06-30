@@ -8404,3 +8404,134 @@ html[data-nav-dir="back"] #main-content.spa-entering {
 .htpl-panel .field-textarea { font-size: 13px; line-height: 1.5; }
 .htpl-panel .field-input { height: 36px; }
 .htpl-panel .field-textarea { min-height: 80px; }
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   Design Template Modal — Premium UX Polish
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+/* ── Modal shell ─────────────────────────────────────────────── */
+#html-tpl-overlay .ai-image-modal {
+  box-shadow: 0 24px 80px rgba(0,0,0,0.28), 0 8px 32px rgba(0,0,0,0.10);
+}
+
+/* ── Header ──────────────────────────────────────────────────── */
+.htpl-title-group {
+  display: flex; flex-direction: column; gap: 1px;
+}
+.htpl-modal-eyebrow {
+  display: none; font-size: 10px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.10em;
+  color: var(--brand);
+}
+.ai-image-modal[data-htpl-state="editing"] .htpl-modal-eyebrow,
+.ai-image-modal[data-htpl-state="generating"] .htpl-modal-eyebrow {
+  display: block;
+}
+/* Close button — circular */
+#html-tpl-modal-close {
+  width: 28px; height: 28px; border-radius: 50%; padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; color: var(--text-muted);
+  border: 1px solid transparent;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+#html-tpl-modal-close:hover {
+  background: var(--bg-pill); border-color: var(--border);
+  color: var(--text-heading);
+}
+
+/* ── Preview canvas — Figma-style dot grid ───────────────────── */
+#html-tpl-preview-pane {
+  background-color: #E5E7EB;
+  background-image: radial-gradient(circle, rgba(0,0,0,0.18) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+#html-tpl-preview-pane > iframe,
+#html-tpl-preview-pane > img {
+  box-shadow: 0 8px 40px rgba(0,0,0,0.20), 0 2px 8px rgba(0,0,0,0.08);
+  border-radius: 2px;
+}
+
+/* ── Form pane — breathing room ──────────────────────────────── */
+#html-tpl-form-pane.ai-image-form-pane {
+  width: 360px;
+}
+
+/* ── Tabs — active weight + teal badge ───────────────────────── */
+.htpl-tab--active {
+  font-weight: 600;
+}
+.htpl-tab--active .htpl-tab-badge {
+  background: rgba(15,118,110,0.12);
+  color: var(--brand);
+}
+
+/* ── Fill all with AI — full-height gradient button ──────────── */
+#htpl-fill-all {
+  height: 36px; gap: 6px; border-radius: 8px;
+  background: linear-gradient(180deg, #0D9488 0%, #0F766E 100%);
+  border: 1px solid #115E59;
+  box-shadow: inset 0 1px 0 rgba(94,234,212,0.30), 0 2px 8px rgba(20,184,166,0.15);
+  letter-spacing: 0.01em;
+}
+#htpl-fill-all:not(:disabled):hover {
+  opacity: 0.91;
+  box-shadow: inset 0 1px 0 rgba(94,234,212,0.30), 0 4px 14px rgba(20,184,166,0.28);
+}
+
+/* ── Wand buttons — teal pill ────────────────────────────────── */
+.htpl-wand-btn {
+  border-radius: 99px;
+  padding: 2px 8px;
+  font-size: 10.5px;
+  letter-spacing: 0.01em;
+  background: rgba(15,118,110,0.06);
+  border-color: rgba(15,118,110,0.22);
+  color: var(--brand);
+}
+.htpl-wand-btn:hover { background: rgba(15,118,110,0.12); border-color: rgba(15,118,110,0.45); }
+
+/* ── Color action buttons ────────────────────────────────────── */
+#htpl-apply-brand {
+  border-color: rgba(15,118,110,0.35) !important;
+  color: var(--brand) !important;
+  background: rgba(15,118,110,0.05) !important;
+}
+#htpl-apply-brand:hover:not(:disabled) {
+  background: rgba(15,118,110,0.10) !important;
+  border-color: var(--brand) !important;
+}
+
+/* ── Color swatches — larger, rounder ───────────────────────── */
+.html-tpl-color-swatch {
+  width: 36px; height: 36px; border-radius: 8px;
+}
+.html-tpl-color-swatch input[type="color"] {
+  width: 52px; height: 52px; top: -8px; left: -8px;
+}
+
+/* ── Progress card — glassmorphism ──────────────────────────── */
+.html-tpl-progress {
+  background: rgba(255,255,255,0.88);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255,255,255,0.6);
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.10);
+  font-weight: 500;
+}
+
+/* ── Footer — inset shadow + refined back button ─────────────── */
+#html-tpl-overlay .ai-image-modal-footer {
+  box-shadow: 0 -4px 12px rgba(0,0,0,0.04);
+}
+#html-tpl-back-btn {
+  border: 1px solid var(--border); border-radius: 8px;
+  padding: 0 var(--space-3); height: 36px;
+  display: inline-flex; align-items: center; gap: 6px;
+  color: var(--text-secondary); background: transparent;
+  font-size: 13px; font-weight: 500;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+#html-tpl-back-btn:not([hidden]):hover {
+  background: var(--bg-pill); border-color: #A1A1AA; color: var(--text-heading);
+}

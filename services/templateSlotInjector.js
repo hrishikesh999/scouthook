@@ -160,13 +160,16 @@ function injectColorSlots(html, colorSlots) {
     overrides['--' + k.replace(/^color:/, '')] = v;
   }
 
+  // Apply on body.firstElementChild unconditionally (matches live-preview postMessage strategy),
+  // then also update any other [style] elements that already define the same var inline.
   const script = `<script>(function(){`
     + `var o=${JSON.stringify(overrides)};`
+    + `var root=document.body&&document.body.firstElementChild||document.documentElement;`
+    + `for(var k in o){root.style.setProperty(k,o[k])}`
     + `document.querySelectorAll("[style]").forEach(function(el){`
+    +   `if(el===root)return;`
     +   `for(var k in o){if(el.style.getPropertyValue(k))el.style.setProperty(k,o[k])}`
     + `});`
-    + `var r=document.documentElement;`
-    + `for(var k in o){r.style.setProperty(k,o[k])}`
     + `})()</script>\n`;
 
   const bodyClose = html.indexOf('</body>');

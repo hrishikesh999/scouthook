@@ -731,6 +731,9 @@ async function publishScheduledPost(scheduledPostId, { attemptsMade = 0, maxAtte
         WHERE id = ? AND user_id = ? AND tenant_id = ?
       `).run(linkedin_post_id, row.post_id, row.user_id, row.tenant_id);
 
+      // Trial email — evaluate immediately after first publish (no settle needed)
+      require('./trialEmails').evaluateAndSend(row.user_id, row.tenant_id).catch(() => {});
+
       // Track archetype preference for hook bias (fire-and-forget)
       try {
         const postRow = await db.prepare('SELECT archetype_used, profile_id FROM generated_posts WHERE id = ?')

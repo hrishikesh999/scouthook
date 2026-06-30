@@ -9,6 +9,40 @@
   <link rel="stylesheet" href="/css/main.css" />
   <link rel="stylesheet" href="/css/admin.css" />
   <script src="/js/admin-nav.js"></script>
+  <style>
+    .activity-log { display: flex; flex-direction: column; gap: 0; }
+    .activity-log__row {
+      display: grid;
+      grid-template-columns: 20px 1fr auto;
+      gap: 8px;
+      align-items: baseline;
+      padding: 6px 0;
+      border-bottom: 1px solid #f3f4f6;
+      font-size: 13px;
+      color: #374151;
+    }
+    .activity-log__row:last-child { border-bottom: none; }
+    .activity-log__row--upgrade  { background: #f0fdf4; border-radius: 4px; padding: 6px 6px; margin: 2px -6px; }
+    .activity-log__row--publish  { background: #eff6ff; border-radius: 4px; padding: 6px 6px; margin: 2px -6px; }
+    .activity-log__row--email    { color: #6b7280; }
+    .activity-log__icon { font-size: 12px; color: #9ca3af; text-align: center; }
+    .activity-log__row--upgrade  .activity-log__icon { color: #16a34a; }
+    .activity-log__row--publish  .activity-log__icon { color: #2563eb; }
+    .activity-log__label { font-size: 13px; }
+    .activity-log__meta {
+      display: inline-block;
+      margin-left: 6px;
+      font-size: 11px;
+      color: #9ca3af;
+      font-style: italic;
+      max-width: 160px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      vertical-align: middle;
+    }
+    .activity-log__time { font-size: 11px; color: #9ca3af; white-space: nowrap; }
+  </style>
 </head>
 <body>
 
@@ -193,9 +227,13 @@
       document.getElementById('overlay').classList.add('overlay--visible');
       document.getElementById('so-body').innerHTML = '<div class="loading-text">Loading…</div>';
 
-      const r = await fetch(`/admin/users/${encodeURIComponent(userId)}`, { headers: { 'X-Admin-Password': adminPw } });
+      const [r, rActivity] = await Promise.all([
+        fetch(`/admin/users/${encodeURIComponent(userId)}`, { headers: { 'X-Admin-Password': adminPw } }),
+        fetch(`/admin/users/${encodeURIComponent(userId)}/activity`, { headers: { 'X-Admin-Password': adminPw } }),
+      ]);
       const data = await r.json();
       if (!data.ok) { document.getElementById('so-body').innerHTML = `<p class="save-error-msg">Failed to load.</p>`; return; }
+      const activityData = rActivity.ok ? await rActivity.json() : { activity: [] };
 
       const { profile, subscription, workspaces, connections, profiles, recent_posts, usage } = data;
 
@@ -317,6 +355,58 @@
               </div>
               <div class="mini-post__content">${esc((p.content || '').slice(0, 100))}${(p.content || '').length > 100 ? '…' : ''}</div>
             </div>`).join('') : '<p class="empty-section-text">No posts yet.</p>'}
+        </div>
+
+        <!-- Activity Log -->
+        <div class="slide-over__section">
+          <div class="slide-over__section-title">Activity Log</div>
+          ${(() => {
+            const events = activityData.activity || [];
+            if (!events.length) return '<p class="empty-section-text">No activity recorded yet.</p>';
+
+            const iconMap = {
+              login:              '→',
+              onboarding_complete:'✓',
+              linkedin_connect:   '⊙',
+              linkedin_disconnect:'⊗',
+              post_created:       '✎',
+              post_published:     '↑',
+              email_sent:         '✉',
+              email_opened:       '◉',
+              email_clicked:      '◈',
+              upgrade:            '★',
+            };
+            const labelMap = {
+              login:              'Signed in',
+              onboarding_complete:'Onboarding completed',
+              linkedin_connect:   'LinkedIn connected',
+              linkedin_disconnect:'LinkedIn disconnected',
+              post_created:       'Post created',
+              post_published:     'Post published',
+              email_sent:         'Email sent',
+              email_opened:       'Email opened',
+              email_clicked:      'Email link clicked',
+              upgrade:            'Upgraded to Pro',
+            };
+
+            return `<div class="activity-log">${events.map(e => {
+              const icon  = iconMap[e.event]  || '·';
+              const label = labelMap[e.event] || e.event;
+              const ts    = e.created_at ? new Date(e.created_at) : null;
+              const dateStr = ts ? ts.toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' }) : '—';
+              const timeStr = ts ? ts.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' }) : '';
+              const meta  = e.meta ? `<span class="activity-log__meta">${esc(e.meta)}</span>` : '';
+              const isUpgrade  = e.event === 'upgrade';
+              const isEmail    = e.event === 'email_sent' || e.event === 'email_opened' || e.event === 'email_clicked';
+              const isPublish  = e.event === 'post_published';
+              const rowClass   = isUpgrade ? 'activity-log__row--upgrade' : isPublish ? 'activity-log__row--publish' : isEmail ? 'activity-log__row--email' : '';
+              return `<div class="activity-log__row ${rowClass}">
+                <span class="activity-log__icon">${icon}</span>
+                <span class="activity-log__label">${label}${meta}</span>
+                <span class="activity-log__time">${dateStr} ${timeStr}</span>
+              </div>`;
+            }).join('')}</div>`;
+          })()}
         </div>
       `;
 

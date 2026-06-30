@@ -503,6 +503,7 @@ router.get('/callback', async (req, res) => {
         accessTokenEnc, refreshTokenEnc, expiresAt
       );
       console.log(`[linkedin/callback] Connected user=${userId} as ${linkedin_name} (${linkedin_member_id})`);
+      require('../services/trialEmails').scheduleTrialEvaluation(userId, tenantId);
     }
 
     // Fire-and-forget: discover org pages the user administers

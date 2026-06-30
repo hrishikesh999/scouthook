@@ -532,6 +532,9 @@ router.post('/sync', requireAuth, async (req, res) => {
       // Upgrade — clear any grace periods
       clearWorkspaceGracePeriods(userId)
         .catch(err => console.error('[billing] clearWorkspaceGracePeriods error:', err.message));
+      // Log upgrade event for the activity log
+      billingDb.prepare("INSERT INTO platform_events (event_type, user_id) VALUES ('upgrade', ?)")
+        .run(userId).catch(() => {});
     }
   }
 

@@ -679,6 +679,84 @@ router.get('/users/:userId', requireAdminPassword, (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// GET /admin/users/:userId/activity
+// Returns a unified, time-sorted activity log for a single user, drawn from:
+//   platform_events  — login, linkedin_disconnect, email_opened, email_clicked, upgrade
+//   linkedin_connections — linkedin_connect (derived; authorized_by = userId)
+//   user_profiles    — onboarding_complete (derived)
+//   generated_posts  — post_created, post_published (derived)
+//   email_log        — email_sent (derived)
+// ---------------------------------------------------------------------------
+router.get('/users/:userId/activity', requireAdminPassword, (req, res) => {
+  (async () => {
+    const { userId } = req.params;
+
+    const rows = await pool.query(`
+      SELECT created_at, event_type AS event, meta FROM (
+
+        -- Logins
+        SELECT created_at, 'login' AS event_type, NULL AS meta
+        FROM platform_events WHERE user_id = $1 AND event_type = 'login'
+
+        UNION ALL
+
+        -- LinkedIn connected (derived — authorized_by is the user who clicked Connect)
+        SELECT created_at, 'linkedin_connect', display_name
+        FROM linkedin_connections WHERE authorized_by = $1
+
+        UNION ALL
+
+        -- LinkedIn disconnected
+        SELECT created_at, 'linkedin_disconnect', NULL
+        FROM platform_events WHERE user_id = $1 AND event_type = 'linkedin_disconnect'
+
+        UNION ALL
+
+        -- Onboarding completed
+        SELECT onboarding_completed_at, 'onboarding_complete', NULL
+        FROM user_profiles WHERE user_id = $1 AND onboarding_completed_at IS NOT NULL
+
+        UNION ALL
+
+        -- Posts created
+        SELECT created_at, 'post_created', LEFT(content, 80)
+        FROM generated_posts WHERE user_id = $1
+
+        UNION ALL
+
+        -- Posts published
+        SELECT published_at, 'post_published', LEFT(content, 80)
+        FROM generated_posts WHERE user_id = $1 AND status = 'published' AND published_at IS NOT NULL
+
+        UNION ALL
+
+        -- Emails sent
+        SELECT sent_at, 'email_sent', template
+        FROM email_log WHERE user_id = $1
+
+        UNION ALL
+
+        -- Email opened / clicked (Resend webhook)
+        SELECT created_at, event_type, metadata->>'template'
+        FROM platform_events WHERE user_id = $1 AND event_type IN ('email_opened', 'email_clicked')
+
+        UNION ALL
+
+        -- Upgrade
+        SELECT created_at, 'upgrade', NULL
+        FROM platform_events WHERE user_id = $1 AND event_type = 'upgrade'
+
+      ) sub
+      WHERE created_at IS NOT NULL
+      ORDER BY created_at DESC
+      LIMIT 200
+    `, [userId]);
+
+    return res.json({ ok: true, activity: rows.rows });
+  })().catch(err => res.status(500).json({ ok: false, error: err.message }));
+});
+
+// ---------------------------------------------------------------------------
 // POST /admin/users/:userId/extend-trial
 // Body: { days: 7 }
 // ---------------------------------------------------------------------------

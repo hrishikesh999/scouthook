@@ -56,6 +56,55 @@ if (allowedOrigin) {
 // /api/billing/subscription (stale-refresh on every subscription GET).
 
 // ---------------------------------------------------------------------------
+// Resend webhook — email.opened / email.clicked (must be before express.json)
+// Enable open + click tracking in the Resend dashboard, then point the webhook
+// at POST /webhooks/resend. Set RESEND_WEBHOOK_SECRET from the Resend dashboard.
+// ---------------------------------------------------------------------------
+app.post('/webhooks/resend', express.raw({ type: 'application/json' }), async (req, res) => {
+  const secret = process.env.RESEND_WEBHOOK_SECRET;
+  if (secret) {
+    const crypto = require('crypto');
+    const msgId        = req.headers['svix-id']        || '';
+    const msgTimestamp = req.headers['svix-timestamp'] || '';
+    const msgSig       = req.headers['svix-signature'] || '';
+    const ts = parseInt(msgTimestamp, 10);
+    if (!msgId || !msgTimestamp || !msgSig || Math.abs(Date.now() / 1000 - ts) > 300) {
+      return res.status(401).json({ ok: false, error: 'invalid_timestamp' });
+    }
+    const toSign   = `${msgId}.${msgTimestamp}.${req.body}`;
+    const expected = crypto.createHmac('sha256', Buffer.from(secret.replace(/^whsec_/, ''), 'base64'))
+      .update(toSign).digest('base64');
+    const valid = msgSig.split(' ').some(part => {
+      const [, sig] = part.split(',');
+      try { return sig && crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(sig)); } catch { return false; }
+    });
+    if (!valid) return res.status(401).json({ ok: false, error: 'invalid_signature' });
+  }
+
+  try {
+    const payload  = JSON.parse(req.body);
+    const type     = payload?.type; // 'email.opened' | 'email.clicked'
+    const emailId  = payload?.data?.email_id;
+    const template = payload?.data?.tags?.template || null;
+    const to       = payload?.data?.to?.[0] || null;
+
+    if ((type === 'email.opened' || type === 'email.clicked') && to) {
+      const eventType = type === 'email.opened' ? 'email_opened' : 'email_clicked';
+      const userRow = await db.prepare('SELECT user_id FROM user_profiles WHERE email = ? LIMIT 1').get(to);
+      if (userRow?.user_id) {
+        await db.prepare(
+          "INSERT INTO platform_events (event_type, user_id, metadata) VALUES (?, ?, ?)"
+        ).run(eventType, userRow.user_id, JSON.stringify({ email_id: emailId, template }));
+      }
+    }
+  } catch (err) {
+    console.warn('[resend-webhook] parse/insert error (non-fatal):', err.message);
+  }
+
+  res.json({ ok: true });
+});
+
+// ---------------------------------------------------------------------------
 // Middleware
 // ---------------------------------------------------------------------------
 
@@ -968,6 +1017,7 @@ async function sendTrialExpiryEmails() {
       FROM user_subscriptions us
       JOIN user_profiles up ON up.user_id = us.user_id
       WHERE us.status = 'trialing'
+        AND us.paddle_subscription_id IS NULL
         AND us.trial_ends_at BETWEEN now() + INTERVAL '2 days' AND now() + INTERVAL '3 days'
     `).all();
     for (const u of users) {
@@ -989,6 +1039,19 @@ if (process.env.NODE_ENV !== 'test') {
     sendTrialExpiryEmails();
     setInterval(sendTrialExpiryEmails, 24 * 60 * 60 * 1000);
   }, 20 * 60 * 1000);
+}
+
+// ---------------------------------------------------------------------------
+// Email: trial engagement nudges — hourly cron.
+// Evaluates every app-level trialing user and sends the next contextual email
+// if their state warrants one and the 12 h inter-email cooldown has passed.
+// ---------------------------------------------------------------------------
+if (process.env.NODE_ENV !== 'test') {
+  const { runTrialEmailCron } = require('./services/trialEmails');
+  setTimeout(() => {
+    runTrialEmailCron();
+    setInterval(runTrialEmailCron, 60 * 60 * 1000);
+  }, 30 * 60 * 1000);
 }
 
 // ---------------------------------------------------------------------------

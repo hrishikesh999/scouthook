@@ -328,6 +328,9 @@ router.post('/', async (req, res) => {
 
       const sseWrite = (event, data) => {
         res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+        if (event === 'done') {
+          require('../services/trialEmails').scheduleTrialEvaluation(userId, tenantId);
+        }
       };
 
       try {
@@ -1238,6 +1241,8 @@ router.post('/', async (req, res) => {
       }
 
       const primaryQuality = buildQualityPayload(primaryGate, 1, true);
+
+      require('../services/trialEmails').scheduleTrialEvaluation(userId, tenantId);
 
       return res.json({
         ok: true,

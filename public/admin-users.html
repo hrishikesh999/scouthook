@@ -51,6 +51,14 @@
       color: #111827;
       line-height: 1.4;
     }
+    .activity-log__tz {
+      font-size: 9px;
+      font-weight: 600;
+      color: #9ca3af;
+      letter-spacing: 0.06em;
+      vertical-align: middle;
+      margin-left: 2px;
+    }
     .activity-log__meta {
       font-size: 11px;
       color: #9ca3af;
@@ -378,7 +386,7 @@
 
         <!-- Activity Log -->
         <div class="slide-over__section">
-          <div class="slide-over__section-title">Activity Log</div>
+          <div class="slide-over__section-title">Activity Log${profile.country ? ` <span style="font-weight:400;color:#6b7280;font-size:12px;">· ${profile.country}</span>` : ''}</div>
           ${(() => {
             const events = activityData.activity || [];
             if (!events.length) return '<p class="empty-section-text">No activity recorded yet.</p>';
@@ -414,12 +422,12 @@
               const label   = labelMap[e.event] || e.event;
               const color   = dotColor[e.event] || '#d1d5db';
               const ts      = e.created_at ? new Date(e.created_at) : null;
-              const dateStr = ts ? ts.toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' }) : '—';
-              const timeStr = ts ? ts.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' }) : '';
+              const dateStr = ts ? ts.toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric', timeZone:'UTC' }) : '—';
+              const timeStr = ts ? ts.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit', timeZone:'UTC' }) : '';
               const meta    = e.meta ? `<div class="activity-log__meta">${esc(e.meta)}</div>` : '';
               return `<div class="activity-log__row">
                 <span class="activity-log__dot" style="background:${color}"></span>
-                <div class="activity-log__time">${dateStr} · ${timeStr}</div>
+                <div class="activity-log__time">${dateStr} · ${timeStr} <span class="activity-log__tz">UTC</span></div>
                 <div class="activity-log__label" style="color:${e.event === 'upgrade' ? '#15803d' : ''}">${label}</div>
                 ${meta}
               </div>`;

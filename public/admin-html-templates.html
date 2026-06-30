@@ -42,13 +42,8 @@
             <h1>Templates</h1>
             <p class="text-muted admin-page-subtitle">Design templates. Users select, AI fills text slots, they adjust colors and images.</p>
           </div>
-          <div style="display:flex;gap:8px">
-            <button id="regen-all-btn" class="btn btn--secondary">⟳ Regen All Thumbnails</button>
-            <button id="add-btn" class="btn btn--primary">+ Add template</button>
-          </div>
+          <button id="add-btn" class="btn btn--primary">+ Add template</button>
         </div>
-
-        <div id="regen-all-progress" class="hidden" style="padding:12px 16px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;margin-bottom:16px;font-size:.85rem;color:#065f46"></div>
 
         <div class="card card--section" id="template-list">
           <div class="loading-text--padded">Loading…</div>
@@ -100,34 +95,6 @@
   document.getElementById('add-btn').addEventListener('click', () => {
     location.href = '/admin-html-template-form.html';
   });
-
-  document.getElementById('regen-all-btn').addEventListener('click', regenAllThumbs);
-
-  async function regenAllThumbs() {
-    const btn = document.getElementById('regen-all-btn');
-    const progress = document.getElementById('regen-all-progress');
-    const r = await adminFetch('/admin/html-templates');
-    const { templates: all } = await r.json();
-    const ids = (all || []).filter(t => !t.is_carousel_slide).map(t => t.id);
-    if (!ids.length) return;
-
-    btn.disabled = true;
-    progress.classList.remove('hidden');
-    let done = 0, failed = 0;
-
-    for (const id of ids) {
-      progress.textContent = `Regenerating thumbnails… ${done + failed}/${ids.length} done${failed ? ` (${failed} failed)` : ''}`;
-      try {
-        const res = await adminFetch(`/admin/html-templates/${id}/regenerate-thumbnail`, { method: 'POST' });
-        const data = await res.json();
-        if (data.ok) { done++; } else { failed++; }
-      } catch { failed++; }
-    }
-
-    progress.textContent = `Done — ${done} thumbnails regenerated${failed ? `, ${failed} failed` : ''}. Reloading…`;
-    btn.disabled = false;
-    setTimeout(() => { progress.classList.add('hidden'); loadTemplates(); }, 1500);
-  }
 
   // ── Load templates ────────────────────────────────────────────────────────
 

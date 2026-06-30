@@ -14,7 +14,7 @@ const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const { db } = require('./db');
 const { pool: dbPool } = require('./db/pg');
-const { sendEmail } = require('./emails');
+const { sendEmail, sendEmailToUser } = require('./emails');
 const { seedTrialSubscription } = require('./services/subscription');
 const affiliatesService = require('./services/affiliates');
 const { scheduleReconciler } = require('./services/affiliateReconciler');
@@ -262,7 +262,7 @@ if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
             // Welcome email only on brand-new signup (new workspace = new user)
             if (email) {
               const appUrl = process.env.APP_URL || '';
-              sendEmail('welcome', email, { name: displayName.split(' ')[0] || displayName, app_url: appUrl });
+              sendEmailToUser(userId, 'welcome', { app_url: appUrl }, { dedupKey: `welcome:${userId}`, withinHours: 365 * 24 });
               require('./services/mailerlite').addFreeSubscriber(email, displayName).catch(() => {});
               require('./emails').notifyAdminsNewSignup(email, displayName, 'google').catch(() => {});
             }

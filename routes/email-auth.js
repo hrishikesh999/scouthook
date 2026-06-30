@@ -6,7 +6,7 @@ const bcrypt     = require('bcryptjs');
 const { rateLimit, ipKeyGenerator } = require('express-rate-limit');
 const router     = express.Router();
 const { db }     = require('../db');
-const { sendEmail } = require('../emails');
+const { sendEmail, sendEmailToUser } = require('../emails');
 const { seedTrialSubscription } = require('../services/subscription');
 
 const APP_URL = process.env.APP_URL || '';
@@ -203,10 +203,8 @@ router.post('/verify-email', async (req, res) => {
     } else {
       workspaceId = await createPersonalWorkspaceForUser(row.user_id, row.display_name);
       seedTrialSubscription(row.user_id).catch(() => {});
-      sendEmail('welcome', row.email, {
-        name:    row.display_name.split(' ')[0] || row.display_name,
-        app_url: APP_URL,
-      }).catch(() => {});
+      sendEmailToUser(row.user_id, 'welcome', { app_url: APP_URL },
+        { dedupKey: `welcome:${row.user_id}`, withinHours: 365 * 24 }).catch(() => {});
       require('../services/mailerlite').addFreeSubscriber(row.email, row.display_name).catch(() => {});
       require('../emails').notifyAdminsNewSignup(row.email, row.display_name, 'email').catch(() => {});
     }

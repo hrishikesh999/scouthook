@@ -2795,12 +2795,21 @@ function _friendlyColorLabel(varName) {
 }
 
 function _normalizeColor(val) {
-  if (!val) return null;
+  if (!val || typeof val !== 'string') return null;
   val = val.trim();
   if (/^#[0-9a-fA-F]{6}$/.test(val)) return val;
+  // Expand 3-char hex
   if (/^#[0-9a-fA-F]{3}$/.test(val)) return '#' + val[1]+val[1] + val[2]+val[2] + val[3]+val[3];
+  // Strip 8-char hex alpha (color picker needs 6-char)
+  if (/^#[0-9a-fA-F]{8}$/.test(val)) return val.slice(0, 7);
+  // rgb() / rgba() — clamp channels to 0–255 to avoid overlong hex strings
   const m = val.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
-  if (m) return '#' + [m[1],m[2],m[3]].map(n => parseInt(n).toString(16).padStart(2,'0')).join('');
+  if (m) {
+    const clamp = n => Math.min(255, Math.max(0, parseInt(n, 10)));
+    return '#' + [m[1], m[2], m[3]].map(n => clamp(n).toString(16).padStart(2, '0')).join('');
+  }
+  // hsl() / hsla() — return as-is; browser handles it and color picker accepts CSS colors
+  if (/^hsla?\(/.test(val)) return val;
   return null;
 }
 
@@ -2828,8 +2837,17 @@ function _highlightSlotInIframe(key) {
 
 function _resetColorsToOriginal() {
   const formPane = document.getElementById('html-tpl-form-pane');
+  const manifest = _htmlTplSelectedMeta?.slot_manifest || {};
+  const slotDefs = manifest.slots || {};
   _pendingColorUpdates = {}; // clear overrides first so _applySlotToIframe re-seeds correctly
-  for (const [key, original] of Object.entries(_htmlTplOriginalColors)) {
+
+  // Prefer captured originals (from live iframe); fall back to manifest defaults
+  // if the iframe hasn't loaded yet (user resets very quickly after template select).
+  const colorKeys = Object.keys(slotDefs).filter(k => k.startsWith('color:'));
+  for (const key of colorKeys) {
+    const original = _htmlTplOriginalColors[key]
+      || _normalizeColor(slotDefs[key]?.default)
+      || '#cccccc';
     const picker = formPane.querySelector(`.html-tpl-color-swatch input[data-slot="${key}"]`);
     const hex = formPane.querySelector(`.html-tpl-color-hex[data-slot="${key}"]`);
     if (picker) picker.value = original;

@@ -10,38 +10,57 @@
   <link rel="stylesheet" href="/css/admin.css" />
   <script src="/js/admin-nav.js"></script>
   <style>
-    .activity-log { display: flex; flex-direction: column; gap: 0; }
-    .activity-log__row {
-      display: grid;
-      grid-template-columns: auto 20px 1fr;
-      gap: 8px;
-      align-items: baseline;
-      padding: 6px 0;
-      border-bottom: 1px solid #f3f4f6;
-      font-size: 13px;
-      color: #374151;
+    .activity-log { position: relative; padding-left: 28px; }
+    .activity-log::before {
+      content: '';
+      position: absolute;
+      left: 5px;
+      top: 6px;
+      bottom: 6px;
+      width: 2px;
+      background: linear-gradient(to bottom, #e5e7eb 80%, transparent);
     }
-    .activity-log__row:last-child { border-bottom: none; }
-    .activity-log__row--upgrade  { background: #f0fdf4; border-radius: 4px; padding: 6px 6px; margin: 2px -6px; }
-    .activity-log__row--publish  { background: #eff6ff; border-radius: 4px; padding: 6px 6px; margin: 2px -6px; }
-    .activity-log__row--email    { color: #6b7280; }
-    .activity-log__icon { font-size: 12px; color: #9ca3af; text-align: center; }
-    .activity-log__row--upgrade  .activity-log__icon { color: #16a34a; }
-    .activity-log__row--publish  .activity-log__icon { color: #2563eb; }
-    .activity-log__label { font-size: 13px; }
+    .activity-log__row {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      padding-bottom: 16px;
+    }
+    .activity-log__row:last-child { padding-bottom: 0; }
+    .activity-log__dot {
+      position: absolute;
+      left: -23px;
+      top: 4px;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      border: 2px solid #fff;
+      box-shadow: 0 0 0 1px #e5e7eb;
+      flex-shrink: 0;
+    }
+    .activity-log__time {
+      font-size: 11px;
+      font-weight: 600;
+      color: #4b5563;
+      letter-spacing: 0.01em;
+      margin-bottom: 2px;
+    }
+    .activity-log__label {
+      font-size: 13px;
+      font-weight: 500;
+      color: #111827;
+      line-height: 1.4;
+    }
     .activity-log__meta {
-      display: inline-block;
-      margin-left: 6px;
       font-size: 11px;
       color: #9ca3af;
+      margin-top: 2px;
       font-style: italic;
-      max-width: 160px;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-      vertical-align: middle;
+      max-width: 240px;
     }
-    .activity-log__time { font-size: 11px; color: #9ca3af; white-space: nowrap; }
   </style>
 </head>
 <body>
@@ -364,18 +383,6 @@
             const events = activityData.activity || [];
             if (!events.length) return '<p class="empty-section-text">No activity recorded yet.</p>';
 
-            const iconMap = {
-              login:              '→',
-              onboarding_complete:'✓',
-              linkedin_connect:   '⊙',
-              linkedin_disconnect:'⊗',
-              post_created:       '✎',
-              post_published:     '↑',
-              email_sent:         '✉',
-              email_opened:       '◉',
-              email_clicked:      '◈',
-              upgrade:            '★',
-            };
             const labelMap = {
               login:              'Signed in',
               onboarding_complete:'Onboarding completed',
@@ -386,24 +393,33 @@
               email_sent:         'Email sent',
               email_opened:       'Email opened',
               email_clicked:      'Email link clicked',
-              upgrade:            'Upgraded to Pro',
+              upgrade:            'Upgraded to Pro ★',
+            };
+            const dotColor = {
+              login:               '#9ca3af',
+              onboarding_complete: '#0F766E',
+              linkedin_connect:    '#0077b5',
+              linkedin_disconnect: '#ef4444',
+              post_created:        '#7c3aed',
+              post_published:      '#2563eb',
+              email_sent:          '#d1d5db',
+              email_opened:        '#f59e0b',
+              email_clicked:       '#f97316',
+              upgrade:             '#16a34a',
             };
 
             return `<div class="activity-log">${events.map(e => {
-              const icon  = iconMap[e.event]  || '·';
-              const label = labelMap[e.event] || e.event;
-              const ts    = e.created_at ? new Date(e.created_at) : null;
+              const label   = labelMap[e.event] || e.event;
+              const color   = dotColor[e.event] || '#d1d5db';
+              const ts      = e.created_at ? new Date(e.created_at) : null;
               const dateStr = ts ? ts.toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' }) : '—';
               const timeStr = ts ? ts.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' }) : '';
-              const meta  = e.meta ? `<span class="activity-log__meta">${esc(e.meta)}</span>` : '';
-              const isUpgrade  = e.event === 'upgrade';
-              const isEmail    = e.event === 'email_sent' || e.event === 'email_opened' || e.event === 'email_clicked';
-              const isPublish  = e.event === 'post_published';
-              const rowClass   = isUpgrade ? 'activity-log__row--upgrade' : isPublish ? 'activity-log__row--publish' : isEmail ? 'activity-log__row--email' : '';
-              return `<div class="activity-log__row ${rowClass}">
-                <span class="activity-log__time">${dateStr} ${timeStr}</span>
-                <span class="activity-log__icon">${icon}</span>
-                <span class="activity-log__label">${label}${meta}</span>
+              const meta    = e.meta ? `<div class="activity-log__meta">${esc(e.meta)}</div>` : '';
+              return `<div class="activity-log__row">
+                <span class="activity-log__dot" style="background:${color}"></span>
+                <div class="activity-log__time">${dateStr} · ${timeStr}</div>
+                <div class="activity-log__label" style="color:${e.event === 'upgrade' ? '#15803d' : ''}">${label}</div>
+                ${meta}
               </div>`;
             }).join('')}</div>`;
           })()}

@@ -1363,6 +1363,7 @@ function openHtmlTemplateModal() {
     _htmlTplExtractedSlots = cached.extractedContent;
     _htmlTplTemplateHtml   = cached.templateHtml || _htmlTplTemplateHtml;
     _pendingColorUpdates   = { ...(cached.colorOverrides || {}) };
+    _htmlTplOriginalColors = { ...(cached.originalColors || {}) };
     currentAssetUrl   = cached.assetUrl;
     currentPreviewUrl = cached.previewUrl;
     if (_htmlTplTemplateHtml) {
@@ -2923,7 +2924,7 @@ function _startHtmlTplJobPoll(jobId) {
         _htmlTplExtractedSlots = data.content || _htmlTplExtractedSlots;
         _renderHtmlTplPreviewImage(data.png_url); // replaces iframe + progress with final PNG
         _setHtmlTplModalState('editing'); _showInsertBtn();
-        visualCache.set(`${currentPostId}:html_template`, { extractedContent: _htmlTplExtractedSlots, assetUrl: data.png_url, previewUrl: data.png_url, templateId: _htmlTplSelectedId, templateMeta: _htmlTplSelectedMeta, templateHtml: _htmlTplTemplateHtml, colorOverrides: _htmlTplLastColors });
+        visualCache.set(`${currentPostId}:html_template`, { extractedContent: _htmlTplExtractedSlots, assetUrl: data.png_url, previewUrl: data.png_url, templateId: _htmlTplSelectedId, templateMeta: _htmlTplSelectedMeta, templateHtml: _htmlTplTemplateHtml, colorOverrides: _htmlTplLastColors, originalColors: { ..._htmlTplOriginalColors } });
       } else if (data.status === 'failed') {
         clearInterval(_htmlTplPollTimer); _setHtmlTplModalState('editing');
         document.getElementById('html-tpl-preview-pane').querySelector('.html-tpl-progress')?.remove();

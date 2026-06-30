@@ -161,7 +161,15 @@ async function extractSlotContent(post, manifest) {
         `- "${key}": array of ${def.min || 2}–${def.max || 6} objects each with { ${fields} }`
       );
     } else {
-      const maxNote = def.maxLen ? ` (max ${def.maxLen} chars)` : '';
+      let lengthHint = '';
+      if (def.maxLen) {
+        const approxWords = Math.max(2, Math.round(def.maxLen / 5));
+        if (def.maxLen <= 40)       lengthHint = ` — ${approxWords}-${approxWords + 1} words max, ultra-short`;
+        else if (def.maxLen <= 80)  lengthHint = ` — ${approxWords}-${approxWords + 2} words max, short phrase`;
+        else if (def.maxLen <= 160) lengthHint = ` — ${approxWords}-${approxWords + 4} words max, one sentence`;
+        else                        lengthHint = ` — ${approxWords}+ words, 1-2 sentences`;
+      }
+      const maxNote = def.maxLen ? ` (max ${def.maxLen} chars${lengthHint})` : '';
       const reqNote = def.required ? ' [REQUIRED]' : '';
       slotDescriptions.push(`- "${key}": string${maxNote}${reqNote}`);
     }
@@ -169,13 +177,18 @@ async function extractSlotContent(post, manifest) {
 
   if (slotDescriptions.length === 0) return {};
 
-  const prompt = `Analyze this LinkedIn post and extract content for a visual template. Return ONLY valid JSON with these exact keys:
+  const prompt = `You are filling text fields for a visual LinkedIn card — NOT writing a blog post. Each field is a standalone text block displayed on a designed image. Extract content from the post below and generate values for each field.
+
+Return ONLY valid JSON with these exact keys:
 
 ${slotDescriptions.join('\n')}
 
 Rules:
-- Be concise — this is a visual, not an article
-- Preserve the author's voice and key stats
+- CRITICAL: Generate text that fits comfortably UNDER each field's character limit — never at or over.
+- Small maxLen (≤40 chars) = a short title or label (3-6 words). Do NOT write a full sentence.
+- Medium maxLen (41-160 chars) = a single punchy sentence.
+- Large maxLen (>160 chars) = 1-2 sentences max.
+- Adapt directly from the post — preserve the author's voice, key stats, and main message.
 - Do NOT wrap in markdown code fences. Return raw JSON only.
 
 POST:

@@ -2837,17 +2837,8 @@ function _highlightSlotInIframe(key) {
 
 function _resetColorsToOriginal() {
   const formPane = document.getElementById('html-tpl-form-pane');
-  const manifest = _htmlTplSelectedMeta?.slot_manifest || {};
-  const slotDefs = manifest.slots || {};
   _pendingColorUpdates = {}; // clear overrides first so _applySlotToIframe re-seeds correctly
-
-  // Prefer captured originals (from live iframe); fall back to manifest defaults
-  // if the iframe hasn't loaded yet (user resets very quickly after template select).
-  const colorKeys = Object.keys(slotDefs).filter(k => k.startsWith('color:'));
-  for (const key of colorKeys) {
-    const original = _htmlTplOriginalColors[key]
-      || _normalizeColor(slotDefs[key]?.default)
-      || '#cccccc';
+  for (const [key, original] of Object.entries(_htmlTplOriginalColors)) {
     const picker = formPane.querySelector(`.html-tpl-color-swatch input[data-slot="${key}"]`);
     const hex = formPane.querySelector(`.html-tpl-color-hex[data-slot="${key}"]`);
     if (picker) picker.value = original;

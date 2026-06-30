@@ -51,8 +51,11 @@ async function getUserTrialState(userId) {
 
   const [profile, linkedin, postRow, publishedRow] = await Promise.all([
     db.prepare(`
-      SELECT brand_industry, content_themes, elevator_main_result
-      FROM profiles WHERE workspace_id = ? AND is_default = true
+      SELECT p.content_themes,
+             bvp.brand_industry, bvp.elevator_main_result
+      FROM   profiles p
+      LEFT JOIN brand_voice_profiles bvp ON bvp.profile_id = p.id
+      WHERE  p.workspace_id = ? AND p.is_default = true
     `).get(workspaceId),
     db.prepare(`
       SELECT id FROM linkedin_connections

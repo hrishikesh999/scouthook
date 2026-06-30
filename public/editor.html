@@ -1765,6 +1765,19 @@ function _blendColor(hexA, hexB, ratio) {
   } catch { return hexA; }
 }
 
+// ── Static PNG preview (after render, or cache-restore without templateHtml) ──
+
+function _renderHtmlTplPreviewImage(url) {
+  const pane = document.getElementById('html-tpl-preview-pane');
+  pane.innerHTML = `<img src="${escHtml(url)}" style="max-width:100%;max-height:100%;object-fit:contain;border-radius:2px" alt="Generated template preview">
+    <button type="button" onclick="_renderTemplateIframe(_htmlTplTemplateHtml,_htmlTplExtractedSlots)"
+      style="position:absolute;bottom:10px;left:10px;font-size:11px;font-family:inherit;
+             background:rgba(255,255,255,0.92);border:1px solid var(--border);
+             border-radius:6px;padding:4px 10px;cursor:pointer;backdrop-filter:blur(4px)">
+      ← Back to live edit
+    </button>`;
+}
+
 // ── Live iframe preview with instant DOM updates ───────────────────────
 
 function _renderTemplateIframe(html, slots) {
@@ -1799,6 +1812,12 @@ function _renderTemplateIframe(html, slots) {
         if (d.type === 'htpl-set-var') {
           var root = document.body.firstElementChild || document.documentElement;
           root.style.setProperty(d.name, d.value);
+          // Also update any nested element that defines this same var inline,
+          // so a child's own inline style doesn't override the inherited value.
+          document.querySelectorAll('[style]').forEach(function(el) {
+            if (el === root) return;
+            if (el.style.getPropertyValue(d.name)) el.style.setProperty(d.name, d.value);
+          });
         } else if (d.type === 'htpl-set-text') {
           const el = document.querySelector('[data-slot="' + d.key + '"]');
           if (el) el.textContent = d.value;
@@ -1853,10 +1872,15 @@ function _renderTemplateIframe(html, slots) {
       if (origNorm && !_htmlTplOriginalColors[key]) {
         _htmlTplOriginalColors[key] = origNorm;
       }
-      // Apply user-set or pending overrides
+      // Apply user-set or pending overrides (from brand colors or user edits)
       const userVal = (slots && slots[key]) || _pendingColorUpdates[key];
       if (userVal) {
         colorRoot.style.setProperty('--' + varName, userVal);
+        // Also cascade into nested elements that define this var inline
+        doc.querySelectorAll('[style]').forEach(function(el) {
+          if (el === colorRoot) return;
+          if (el.style.getPropertyValue('--' + varName)) el.style.setProperty('--' + varName, userVal);
+        });
       }
       // Read the final resolved value
       const actual = userVal || origVal;
@@ -1942,6 +1966,9 @@ function renderHtmlTemplateForm(slots) {
       const label = _friendlyColorLabel(colorName);
       const val = _pendingColorUpdates[key] || (slots && slots[key]) || def.default || '#cccccc';
       const resolved = val === 'brand' ? _resolveBrandColor(key, def) : val;
+      // Seed _pendingColorUpdates so the iframe load-flush picks up the right color even
+      // if _applySlotToIframe is called before the iframe is in the DOM.
+      if (!_pendingColorUpdates[key]) _applySlotToIframe(key, resolved, 'color');
       colorsHtml += `<div class="so-field-group${active}" data-slot-key="${escHtml(key)}" style="margin-bottom:10px">
         <label class="field-label">${escHtml(label)}</label>
         <div class="html-tpl-color-row">
@@ -2771,10 +2798,12 @@ function _normalizeColor(val) {
 // ── Instant DOM updates to the live iframe (no Puppeteer) ─────────────────
 
 function _applySlotToIframe(key, value, type) {
+  // Always persist color updates so the iframe load-flush can replay them
+  // even when this is called before the iframe is in the DOM.
+  if (type === 'color') _pendingColorUpdates[key] = value;
   const iframe = document.getElementById('htpl-live-iframe');
   if (!iframe?.contentWindow) return;
   if (type === 'color') {
-    _pendingColorUpdates[key] = value; // persist so load-flush can replay it
     iframe.contentWindow.postMessage({ type: 'htpl-set-var', name: '--' + key.slice('color:'.length), value }, '*');
   } else if (type === 'text') {
     iframe.contentWindow.postMessage({ type: 'htpl-set-text', key, value }, '*');
@@ -2869,7 +2898,7 @@ function _startHtmlTplJobPoll(jobId) {
         clearInterval(_htmlTplPollTimer);
         currentAssetUrl = data.png_url; currentPreviewUrl = data.png_url;
         _htmlTplExtractedSlots = data.content || _htmlTplExtractedSlots;
-        document.getElementById('html-tpl-preview-pane').querySelector('.html-tpl-progress')?.remove();
+        _renderHtmlTplPreviewImage(data.png_url); // replaces iframe + progress with final PNG
         _setHtmlTplModalState('editing'); _showInsertBtn();
         visualCache.set(`${currentPostId}:html_template`, { extractedContent: _htmlTplExtractedSlots, assetUrl: data.png_url, previewUrl: data.png_url, templateId: _htmlTplSelectedId, templateMeta: _htmlTplSelectedMeta, templateHtml: _htmlTplTemplateHtml, colorOverrides: _htmlTplLastColors });
       } else if (data.status === 'failed') {

@@ -2,12 +2,21 @@
 
 const crypto  = require('crypto');
 const express = require('express');
+const sharp   = require('sharp');
 const router  = express.Router();
 const { db }  = require('../db');
 const storage = require('../services/storage');
 const { readSlotManifest, stripScriptTags } = require('../services/templateSlotInjector');
 const { generateTemplateThumbnail } = require('../services/templateRenderer');
 const { generateTemplateFromImage } = require('../services/templateFromImage');
+
+// Resize any image buffer to a 540px-wide PNG thumbnail.
+async function makeThumbnailFromOriginal(origBuffer) {
+  return sharp(origBuffer)
+    .resize(540, 540, { fit: 'inside', withoutEnlargement: true })
+    .png({ compressionLevel: 9 })
+    .toBuffer();
+}
 
 // ---------------------------------------------------------------------------
 // Auth
@@ -70,7 +79,7 @@ router.get('/:id', async (req, res) => {
 
 router.post('/', async (req, res) => {
   try {
-    const { name, description, category, html, sort_order = 0 } = req.body || {};
+    const { name, description, category, html, sort_order = 0, original_image_id } = req.body || {};
 
     if (!name || !html) {
       return res.status(400).json({ ok: false, error: 'name and html are required' });
@@ -96,18 +105,32 @@ router.post('/', async (req, res) => {
     // Upload HTML to R2
     await storage.uploadAdmin(Buffer.from(cleanHtml, 'utf8'), htmlKey, 'text/html');
 
-    // Generate thumbnail synchronously (admin waits ~3–5s)
+    // Generate thumbnail — prefer original design image over Puppeteer render
     let thumbnailKey = null;
     let thumbnailWarning = null;
     const thumbStart = Date.now();
     try {
-      console.log('[adminHtmlTemplates] generating thumbnail for %s (html=%d bytes, slots=%d)',
-        id, Buffer.byteLength(cleanHtml, 'utf8'), Object.keys(manifest.slots || {}).length);
-      const thumbBuf = await generateTemplateThumbnail(cleanHtml, manifest);
+      let thumbBuf;
+      if (original_image_id) {
+        try {
+          const origBuf = await storage.downloadAdmin(storage.buildOriginalImageKey(original_image_id));
+          thumbBuf = await makeThumbnailFromOriginal(origBuf);
+          console.log('[adminHtmlTemplates] thumbnail from original image for %s in %dms (%d bytes)',
+            id, Date.now() - thumbStart, thumbBuf.length);
+        } catch (origErr) {
+          console.warn('[adminHtmlTemplates] original image not found for %s (%s) — falling back to Puppeteer',
+            id, origErr.message);
+          thumbBuf = await generateTemplateThumbnail(cleanHtml, manifest);
+          console.log('[adminHtmlTemplates] thumbnail via Puppeteer for %s in %dms (%d bytes)',
+            id, Date.now() - thumbStart, thumbBuf.length);
+        }
+      } else {
+        thumbBuf = await generateTemplateThumbnail(cleanHtml, manifest);
+        console.log('[adminHtmlTemplates] thumbnail via Puppeteer for %s in %dms (%d bytes)',
+          id, Date.now() - thumbStart, thumbBuf.length);
+      }
       thumbnailKey = storage.buildThumbnailKey(id);
       await storage.uploadAdmin(thumbBuf, thumbnailKey, 'image/png');
-      console.log('[adminHtmlTemplates] thumbnail generated for %s in %dms (%d bytes)',
-        id, Date.now() - thumbStart, thumbBuf.length);
     } catch (thumbErr) {
       console.warn('[adminHtmlTemplates] thumbnail failed for %s after %dms: %s',
         id, Date.now() - thumbStart, thumbErr.message);
@@ -145,7 +168,7 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, description, category, html, sort_order, active } = req.body || {};
+    const { name, description, category, html, sort_order, active, original_image_id } = req.body || {};
 
     const existing = await db.prepare('SELECT * FROM html_templates WHERE id = ?').get(id);
     if (!existing) return res.status(404).json({ ok: false, error: 'not_found' });
@@ -170,16 +193,24 @@ router.put('/:id', async (req, res) => {
       // Overwrite the same R2 key
       await storage.uploadAdmin(Buffer.from(cleanHtml, 'utf8'), htmlKey, 'text/html');
 
-      // Regenerate thumbnail
+      // Regenerate thumbnail — prefer original design image
       const thumbStart = Date.now();
       try {
-        console.log('[adminHtmlTemplates] regenerating thumbnail for %s (html=%d bytes, slots=%d)',
-          id, Buffer.byteLength(cleanHtml, 'utf8'), Object.keys(manifest.slots || {}).length);
-        const thumbBuf = await generateTemplateThumbnail(cleanHtml, manifest);
+        let thumbBuf;
+        const origLookupId = original_image_id || id;
+        try {
+          const origBuf = await storage.downloadAdmin(storage.buildOriginalImageKey(origLookupId));
+          thumbBuf = await makeThumbnailFromOriginal(origBuf);
+          console.log('[adminHtmlTemplates] thumbnail from original image for %s in %dms (%d bytes)',
+            id, Date.now() - thumbStart, thumbBuf.length);
+        } catch {
+          console.log('[adminHtmlTemplates] no original image for %s — falling back to Puppeteer', id);
+          thumbBuf = await generateTemplateThumbnail(cleanHtml, manifest);
+          console.log('[adminHtmlTemplates] thumbnail via Puppeteer for %s in %dms (%d bytes)',
+            id, Date.now() - thumbStart, thumbBuf.length);
+        }
         thumbnailKey = storage.buildThumbnailKey(id);
         await storage.uploadAdmin(thumbBuf, thumbnailKey, 'image/png');
-        console.log('[adminHtmlTemplates] thumbnail regenerated for %s in %dms (%d bytes)',
-          id, Date.now() - thumbStart, thumbBuf.length);
       } catch (thumbErr) {
         console.warn('[adminHtmlTemplates] thumbnail regen failed for %s after %dms: %s',
           id, Date.now() - thumbStart, thumbErr.message);
@@ -308,19 +339,31 @@ router.post('/:id/regenerate-thumbnail', async (req, res) => {
     const row = await db.prepare('SELECT * FROM html_templates WHERE id = ?').get(id);
     if (!row) return res.status(404).json({ ok: false, error: 'not_found' });
 
-    const htmlBuf = await storage.downloadAdmin(row.html_r2_key);
-    const html = htmlBuf.toString('utf8');
-    const manifest = row.slot_manifest; // pre-parsed JSONB
-
     const thumbStart = Date.now();
-    console.log('[adminHtmlTemplates] regenerate-thumbnail for %s (html=%d bytes, slots=%d)',
-      id, htmlBuf.length, Object.keys((manifest && manifest.slots) || {}).length);
-    const thumbBuf = await generateTemplateThumbnail(html, manifest);
+    let thumbBuf;
+    let source;
+
+    // Prefer original design image — no render service needed
+    try {
+      const origBuf = await storage.downloadAdmin(storage.buildOriginalImageKey(id));
+      thumbBuf = await makeThumbnailFromOriginal(origBuf);
+      source = 'original';
+    } catch {
+      // Fall back to Puppeteer render
+      const htmlBuf = await storage.downloadAdmin(row.html_r2_key);
+      const html = htmlBuf.toString('utf8');
+      const manifest = row.slot_manifest;
+      console.log('[adminHtmlTemplates] regenerate-thumbnail (Puppeteer) for %s (html=%d bytes)',
+        id, htmlBuf.length);
+      thumbBuf = await generateTemplateThumbnail(html, manifest);
+      source = 'puppeteer';
+    }
+
     const thumbnailKey = storage.buildThumbnailKey(id);
     await storage.uploadAdmin(thumbBuf, thumbnailKey, 'image/png');
     await db.prepare('UPDATE html_templates SET thumbnail_r2_key = ? WHERE id = ?').run(thumbnailKey, id);
-    console.log('[adminHtmlTemplates] regenerate-thumbnail done for %s in %dms (%d bytes)',
-      id, Date.now() - thumbStart, thumbBuf.length);
+    console.log('[adminHtmlTemplates] regenerate-thumbnail done for %s via %s in %dms (%d bytes)',
+      id, source, Date.now() - thumbStart, thumbBuf.length);
 
     res.json({ ok: true, thumbnail_r2_key: thumbnailKey });
   } catch (err) {

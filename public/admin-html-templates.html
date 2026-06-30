@@ -40,7 +40,7 @@
         <div class="admin-page-header">
           <div>
             <h1>Templates</h1>
-            <p class="text-muted admin-page-subtitle">Design templates rendered via Puppeteer. Users select, AI fills text slots, they adjust colors and images.</p>
+            <p class="text-muted admin-page-subtitle">Design templates. Users select, AI fills text slots, they adjust colors and images.</p>
           </div>
           <button id="add-btn" class="btn btn--primary">+ Add template</button>
         </div>
@@ -113,11 +113,12 @@
       const hasThumb = !!t.thumbnail_r2_key;
       const slots = t.slot_manifest?.slots ? Object.keys(t.slot_manifest.slots) : [];
       const escapedName = esc(t.name);
+      const initials = esc((t.name || '?').slice(0, 2).toUpperCase());
       return `
       <div class="template-row ht-row" data-id="${t.id}" data-name="${escapedName}" data-active="${t.active}">
         ${hasThumb
           ? `<img class="template-row__thumb" data-thumb-url="/admin/html-templates/${t.id}/thumbnail" alt="${escapedName}">`
-          : `<div class="template-row__placeholder">${esc((t.name || '?').slice(0, 2).toUpperCase())}</div>`}
+          : `<div class="template-row__placeholder" title="No thumbnail — click ⟳ Thumbnail to generate">${initials}</div>`}
         <div class="template-row__info">
           <div class="template-row__name">${escapedName}</div>
           <div class="template-row__meta" style="margin-top:4px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
@@ -130,7 +131,7 @@
         <div class="template-row__actions">
           <button class="btn btn--secondary btn--sm js-edit">Edit</button>
           <button class="btn btn--secondary btn--sm js-toggle">${t.active ? 'Deactivate' : 'Activate'}</button>
-          ${!t.thumbnail_r2_key ? `<button class="btn btn--secondary btn--sm js-regen">⟳ Thumbnail</button>` : ''}
+          <button class="btn btn--secondary btn--sm js-regen">⟳ Thumbnail</button>
           <button class="btn btn--secondary btn--sm btn--danger js-delete">Delete</button>
         </div>
       </div>`;

@@ -1,4 +1,4 @@
-CREATE TABLE html_templates (
+CREATE TABLE IF NOT EXISTS html_templates (
   id               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
   name             TEXT        NOT NULL,
   description      TEXT,
@@ -11,4 +11,4 @@ CREATE TABLE html_templates (
   created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX html_templates_active_order ON html_templates (active, sort_order);
+CREATE INDEX IF NOT EXISTS html_templates_active_order ON html_templates (active, sort_order);

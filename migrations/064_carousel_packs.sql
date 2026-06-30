@@ -1,7 +1,7 @@
 -- Carousel packs: groups of HTML templates (title + content + closing) that
 -- render multi-slide carousels via Puppeteer.
 
-CREATE TABLE carousel_packs (
+CREATE TABLE IF NOT EXISTS carousel_packs (
   id                 UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
   name               TEXT        NOT NULL,
   description        TEXT,
@@ -15,7 +15,7 @@ CREATE TABLE carousel_packs (
   created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE carousel_pack_slides (
+CREATE TABLE IF NOT EXISTS carousel_pack_slides (
   id            UUID    PRIMARY KEY DEFAULT gen_random_uuid(),
   pack_id       UUID    NOT NULL REFERENCES carousel_packs(id) ON DELETE CASCADE,
   template_id   UUID    NOT NULL REFERENCES html_templates(id) ON DELETE RESTRICT,
@@ -24,5 +24,5 @@ CREATE TABLE carousel_pack_slides (
   UNIQUE (pack_id, role, slide_order)
 );
 
-CREATE INDEX carousel_packs_active_order ON carousel_packs (active, sort_order);
-CREATE INDEX carousel_pack_slides_pack   ON carousel_pack_slides (pack_id, slide_order);
+CREATE INDEX IF NOT EXISTS carousel_packs_active_order ON carousel_packs (active, sort_order);
+CREATE INDEX IF NOT EXISTS carousel_pack_slides_pack   ON carousel_pack_slides (pack_id, slide_order);

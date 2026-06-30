@@ -694,6 +694,12 @@ router.get('/users/:userId/activity', requireAdminPassword, (req, res) => {
     const rows = await pool.query(`
       SELECT created_at, event_type AS event, meta FROM (
 
+        -- Signup (account creation timestamp)
+        SELECT created_at, 'signup' AS event_type, NULL AS meta
+        FROM user_profiles WHERE user_id = $1
+
+        UNION ALL
+
         -- Logins
         SELECT created_at, 'login' AS event_type, NULL AS meta
         FROM platform_events WHERE user_id = $1 AND event_type = 'login'

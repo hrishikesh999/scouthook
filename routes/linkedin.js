@@ -281,9 +281,12 @@ router.post('/extract-profile', async (req, res) => {
 
     const result = await extractVoiceDNAFromLinkedIn(targetProfile.id);
     const profile = await db.prepare(
-      `SELECT content_niche, audience_role, business_positioning, content_pillars,
-              voice_profile_completion_pct
-       FROM profiles WHERE id = ?`
+      `SELECT p.content_pillars, p.voice_profile_completion_pct,
+              bvp.brand_description, audp.audience_description
+       FROM   profiles p
+       LEFT JOIN brand_voice_profiles bvp  ON bvp.profile_id = p.id
+       LEFT JOIN audience_profiles    audp ON audp.profile_id = p.id
+       WHERE  p.id = ?`
     ).get(targetProfile.id);
     return res.json({ ok: true, updated: result.updated || [], profile: profile || {} });
   } catch (err) {

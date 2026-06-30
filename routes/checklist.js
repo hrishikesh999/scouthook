@@ -23,10 +23,13 @@ router.get('/', async (req, res) => {
     `).get(uid);
 
     const profile = await db.prepare(`
-      SELECT writing_samples, content_niche, avatar_url,
-             audience_role, audience_pain, business_positioning
-      FROM   profiles
-      WHERE  workspace_id = ? AND is_default = true
+      SELECT p.avatar_url, p.writing_samples,
+             bvp.brand_description,
+             audp.audience_description
+      FROM   profiles p
+      LEFT JOIN brand_voice_profiles bvp  ON bvp.profile_id = p.id
+      LEFT JOIN audience_profiles    audp ON audp.profile_id = p.id
+      WHERE  p.workspace_id = ? AND p.is_default = true
     `).get(tid);
 
     const publishedRow = await db.prepare(`
@@ -45,13 +48,13 @@ router.get('/', async (req, res) => {
       {
         id:    'voice_profile',
         label: 'Complete your voice profile',
-        done:  !!(profile?.content_niche && profile?.audience_role && profile?.audience_pain && profile?.writing_samples && profile?.business_positioning),
+        done:  !!(profile?.brand_description && profile?.audience_description && profile?.writing_samples),
         href:  '/profile.html',
       },
       {
         id:    'brand_settings',
         label: 'Update your brand settings',
-        done:  !!(profile?.avatar_url && profile?.business_positioning),
+        done:  !!profile?.avatar_url,
         href:  '/brand.html',
       },
       {

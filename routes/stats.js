@@ -330,7 +330,7 @@ router.patch('/posts/:id', async (req, res) => {
     let qualityPayload = null;
     try {
       const profileRow  = await db.prepare(
-        `SELECT voice_fingerprint, content_niche FROM profiles WHERE workspace_id = ? AND is_default = true`
+        `SELECT voice_fingerprint FROM profiles WHERE workspace_id = ? AND is_default = true`
       ).get(tenantId);
       const voiceProfile = profileRow || {};
       let lmKeyword = null;

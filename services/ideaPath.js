@@ -12,6 +12,15 @@ const { LINKEDIN_RULES } = require('../modules/formatIntelligence/rules');
 
 const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
 
+function firstObstacle(profile) {
+  try {
+    const arr = JSON.parse(profile?.audience_obstacles || '[]');
+    return Array.isArray(arr) ? (arr[0] || '') : String(profile?.audience_obstacles || '');
+  } catch {
+    return String(profile?.audience_obstacles || '');
+  }
+}
+
 const ARCHETYPE_POST_TYPE_PREFERENCES = {
   reach:   ['BEFORE_AFTER', 'CONFESSION', 'CURIOSITY_GAP'],
   trust:   ['INSIGHT', 'MYTH_BUST', 'DIRECT_ADDRESS'],
@@ -352,8 +361,8 @@ async function buildStructureBlueprint(rawIdea, postType, client, userProfile = 
 
   const voiceContextBlock = userProfile
     ? `\nAUTHOR CONTEXT (use to pick an archetype that fits this author's style and niche):\n` +
-      (userProfile.content_niche    ? `Niche: ${userProfile.content_niche}\n` : '') +
-      (userProfile.audience_pain    ? `Audience challenge: ${userProfile.audience_pain}\n` : '') +
+      (userProfile.brand_description    ? `Niche: ${userProfile.brand_description}\n` : '') +
+      (firstObstacle(userProfile)    ? `Audience challenge: ${firstObstacle(userProfile)}\n` : '') +
       (userProfile.contrarian_view  ? `Author's POV: ${userProfile.contrarian_view}\n` : '') +
       (topArchetypes.length         ? `Signature archetypes (favour these when the input fits): ${topArchetypes.join(', ')}\n` : '') +
       (samplePhrase                 ? `Voice sample (match this register): "${samplePhrase}"\n` : '')
@@ -429,11 +438,11 @@ ${blueprintBlock}
 ${bodyStructureBlock}
 ${hookInjectionBlock}
 
-CONTENT NICHE: ${userProfile.content_niche || 'not specified'}
+CONTENT NICHE: ${userProfile.brand_description || 'not specified'}
 
 AUDIENCE:
-- Who they are: ${userProfile.audience_role || 'professionals in the author\'s field'}
-- What keeps them up at night: ${userProfile.audience_pain || 'professional challenges in their field'}
+- Who they are: ${userProfile.audience_description || 'professionals in the author\'s field'}
+- What keeps them up at night: ${firstObstacle(userProfile) || 'professional challenges in their field'}
 ${userProfile.contrarian_view ? `
 EDITORIAL CONTEXT (the author's established worldview — let this colour the angle and framing):
 ${userProfile.contrarian_view}
@@ -861,9 +870,9 @@ ${ctaRule}
 6. FORMAT: One sentence per line. Blank line between every 2–3 lines. No bullet lists. No headers. No paragraph blocks.
 
 AUTHOR CONTEXT:
-- Niche: ${userProfile.content_niche || 'not specified'}
-- Audience: ${userProfile.audience_role || 'professionals in the author\'s field'}
-- Audience pain: ${userProfile.audience_pain || 'professional challenges in their field'}
+- Niche: ${userProfile.brand_description || 'not specified'}
+- Audience: ${userProfile.audience_description || 'professionals in the author\'s field'}
+- Audience pain: ${firstObstacle(userProfile) || 'professional challenges in their field'}
 
 POINT OF VIEW (non-negotiable):
 Take the strongest defensible position the raw idea supports — not the safest one.
@@ -931,8 +940,8 @@ No markdown fences. No explanation. Only the JSON object.`;
 }
 
 async function assessInputQuality(text, client, userProfile = {}) {
-  const niche    = userProfile.content_niche || '';
-  const audience = userProfile.audience_role || '';
+  const niche    = userProfile.brand_description || '';
+  const audience = userProfile.audience_description || '';
   try {
     const response = await client.messages.create({
       model:       HAIKU_MODEL,
@@ -1009,7 +1018,7 @@ function buildSubstancePrompt(quality, userProfile = {}) {
 
   if (passCount >= 3) return null; // 3+ dimensions pass — generate immediately
 
-  const niche = userProfile.content_niche || '';
+  const niche = userProfile.brand_description || '';
 
   if (passCount === 2) {
     return { tier: 'warn', message: buildSubstanceWarnMessage(quality, niche) };
@@ -1020,7 +1029,7 @@ function buildSubstancePrompt(quality, userProfile = {}) {
 
 function buildSubstancePromptForPostType(quality, userProfile, postType) {
   const { hasSpecific, hasTension, hasNovelty } = quality;
-  const niche = userProfile.content_niche || '';
+  const niche = userProfile.brand_description || '';
 
   if (postType === 'reach') {
     // Quotes, observations, contrarian opinions are all valid reach seeds.
@@ -1088,9 +1097,9 @@ WHAT YOU MUST NEVER DO UNLESS EXPLICITLY ASKED:
 - Do not add new facts, examples, or claims not already in the post
 
 AUTHOR CONTEXT (for tone reference — do not restructure to match):
-- Niche: ${userProfile.content_niche || 'not specified'}
-- Audience: ${userProfile.audience_role || 'professionals'}
-- Audience pain: ${userProfile.audience_pain || 'professional challenges'}
+- Niche: ${userProfile.brand_description || 'not specified'}
+- Audience: ${userProfile.audience_description || 'professionals'}
+- Audience pain: ${firstObstacle(userProfile) || 'professional challenges'}
 ${phraseLibraryBlock}
 SPECIFICS ARE SACRED:
 Any number, percentage, named company, role, timeframe, or measurable outcome stays verbatim — never approximate, round, or paraphrase.

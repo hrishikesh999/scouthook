@@ -12,17 +12,21 @@ function assertProfileId(profileId, fnName) {
 async function generateInputExamples(profileId) {
   assertProfileId(profileId, 'generateInputExamples');
   const profile = await db
-    .prepare('SELECT content_niche, audience_role FROM profiles WHERE id = ?')
+    .prepare(`SELECT bvp.brand_description, audp.audience_description
+              FROM profiles p
+              LEFT JOIN brand_voice_profiles bvp  ON bvp.profile_id = p.id
+              LEFT JOIN audience_profiles    audp ON audp.profile_id = p.id
+              WHERE p.id = ?`)
     .get(profileId);
 
-  if (!profile?.content_niche) return;
+  if (!profile?.brand_description) return;
 
   const Anthropic = require('@anthropic-ai/sdk');
   const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
   if (!apiKey) return;
 
-  const niche    = profile.content_niche;
-  const audience = profile.audience_role || 'professionals';
+  const niche    = profile.brand_description;
+  const audience = profile.audience_description || 'professionals';
 
   const client = new Anthropic({ apiKey });
   const message = await client.messages.create({
@@ -70,20 +74,24 @@ Example format: ["example 1", "example 2", "example 3", "example 4"]`,
 async function generateContentPillars(profileId) {
   assertProfileId(profileId, 'generateContentPillars');
   const profile = await db
-    .prepare('SELECT content_niche, audience_role, onboarding_q1, onboarding_q2 FROM profiles WHERE id = ?')
+    .prepare(`SELECT p.onboarding_q2,
+                     bvp.brand_description, audp.audience_description
+              FROM profiles p
+              LEFT JOIN brand_voice_profiles bvp  ON bvp.profile_id = p.id
+              LEFT JOIN audience_profiles    audp ON audp.profile_id = p.id
+              WHERE p.id = ?`)
     .get(profileId);
 
-  if (!profile?.content_niche) return;
+  if (!profile?.brand_description) return;
 
   const Anthropic = require('@anthropic-ai/sdk');
   const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
   if (!apiKey) return;
 
   const context = [
-    `Niche: ${profile.content_niche}`,
-    profile.audience_role  && `Audience: ${profile.audience_role}`,
-    profile.onboarding_q1  && `Their POV / strong opinion: ${profile.onboarding_q1}`,
-    profile.onboarding_q2  && `How they describe their work: ${profile.onboarding_q2}`,
+    `Niche: ${profile.brand_description}`,
+    profile.audience_description && `Audience: ${profile.audience_description}`,
+    profile.onboarding_q2        && `How they describe their work: ${profile.onboarding_q2}`,
   ].filter(Boolean).join('\n');
 
   const client = new Anthropic({ apiKey });

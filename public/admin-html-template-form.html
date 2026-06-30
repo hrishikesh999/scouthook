@@ -183,6 +183,7 @@
             <div class="form-actions">
               <button id="btn-next" class="btn btn--primary" type="button">Next →</button>
               <button id="btn-save-details" class="btn btn--primary" type="button" style="display:none">Save template</button>
+              <button id="btn-reset-s1" class="btn btn--secondary" type="button" style="display:none">↩ Reset to saved</button>
               <a href="/admin-html-templates.html" class="btn btn--secondary">Cancel</a>
             </div>
           </div>
@@ -308,6 +309,7 @@
             <div class="form-actions" style="margin-top:var(--space-md)">
               <button id="btn-back" class="btn btn--secondary" type="button">← Back</button>
               <button id="btn-save" class="btn btn--primary" type="button">Save template</button>
+              <button id="btn-reset-s2" class="btn btn--secondary" type="button" style="display:none">↩ Reset to saved</button>
               <a href="/admin-html-templates.html" class="btn btn--secondary">Cancel</a>
             </div>
           </div>
@@ -383,7 +385,31 @@
     document.getElementById('btn-next').style.display = 'none';
     document.getElementById('btn-save-details').style.display = '';
     document.getElementById('btn-back').style.display = 'none';
+    document.getElementById('btn-reset-s1').style.display = '';
+    document.getElementById('btn-reset-s2').style.display = '';
   }
+
+  async function resetHtmlToSaved() {
+    if (!templateId) return;
+    if (!confirm('Reset HTML to the last saved version? Any unsaved edits will be lost.')) return;
+    const btns = [document.getElementById('btn-reset-s1'), document.getElementById('btn-reset-s2')];
+    btns.forEach(b => { if (b) { b.textContent = '↩ Resetting…'; b.disabled = true; } });
+    try {
+      const r = await adminFetch(`/admin/html-templates/${templateId}/html`);
+      if (!r.ok) throw new Error(`Server returned ${r.status}`);
+      const html = await r.text();
+      _templateHtml = html;
+      document.getElementById('f-html').value = html;
+      renderPreview();
+    } catch (err) {
+      alert('Reset failed: ' + err.message);
+    } finally {
+      btns.forEach(b => { if (b) { b.textContent = '↩ Reset to saved'; b.disabled = false; } });
+    }
+  }
+
+  document.getElementById('btn-reset-s1').addEventListener('click', resetHtmlToSaved);
+  document.getElementById('btn-reset-s2').addEventListener('click', resetHtmlToSaved);
 
   document.getElementById('edit-tabs').addEventListener('click', e => {
     const tab = e.target.closest('.edit-tab');

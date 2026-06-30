@@ -51,11 +51,8 @@ async function getUserTrialState(userId) {
 
   const [profile, linkedin, postRow, publishedRow] = await Promise.all([
     db.prepare(`
-      SELECT p.content_themes,
-             bvp.brand_industry, bvp.elevator_main_result
-      FROM   profiles p
-      LEFT JOIN brand_voice_profiles bvp ON bvp.profile_id = p.id
-      WHERE  p.workspace_id = ? AND p.is_default = true
+      SELECT content_themes FROM profiles
+      WHERE  workspace_id = ? AND is_default = true
     `).get(workspaceId),
     db.prepare(`
       SELECT id FROM linkedin_connections
@@ -88,7 +85,6 @@ async function getUserTrialState(userId) {
     linkedin:     !!linkedin,
     postsCount:   Number(postRow?.cnt ?? 0),
     published:    Number(publishedRow?.cnt ?? 0) > 0,
-    industry:     profile?.brand_industry || null,
     contentTheme: contentThemes[0] || null,
   };
 }
@@ -183,7 +179,7 @@ function buildVars(state, name) {
     days_left:         String(state.daysLeft ?? ''),
     posts_count:       String(state.postsCount),
     posts_count_label: state.postsCount === 1 ? '1 post' : `${state.postsCount} posts`,
-    industry:          state.industry    || 'your industry',
+    industry:          'your industry',
     content_theme:     state.contentTheme || 'your niche',
   };
 }

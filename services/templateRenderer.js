@@ -177,18 +177,19 @@ async function extractSlotContent(post, manifest) {
 
   if (slotDescriptions.length === 0) return {};
 
-  const prompt = `You are filling text fields for a visual LinkedIn card — NOT writing a blog post. Each field is a standalone text block displayed on a designed image. Extract content from the post below and generate values for each field.
+  const prompt = `You are filling text fields for a visual LinkedIn card. Each field is a standalone text block shown on a designed image. Your job is to EXTRACT and CONDENSE content directly from the post — do NOT invent, embellish, or add anything not present in the post.
 
 Return ONLY valid JSON with these exact keys:
 
 ${slotDescriptions.join('\n')}
 
 Rules:
+- ONLY use information explicitly stated in the post. If a field's content cannot be found in the post, use an empty string "" — never guess or fabricate.
 - CRITICAL: Generate text that fits comfortably UNDER each field's character limit — never at or over.
 - Small maxLen (≤40 chars) = a short title or label (3-6 words). Do NOT write a full sentence.
 - Medium maxLen (41-160 chars) = a single punchy sentence.
 - Large maxLen (>160 chars) = 1-2 sentences max.
-- Adapt directly from the post — preserve the author's voice, key stats, and main message.
+- Preserve the author's exact words, numbers, and stats — do not paraphrase statistics.
 - Do NOT wrap in markdown code fences. Return raw JSON only.
 
 POST:
@@ -218,11 +219,16 @@ ${post.content}`;
     extracted = extractJsonFromResponse(getAnthropicMessageText(retry));
   }
 
-  // Enforce maxLen constraints on text slots
+  // Enforce maxLen and strip empty sentinel values (AI returns "" when content not found in post)
   for (const [key, def] of Object.entries(slots)) {
-    if (!def.maxLen || key.startsWith('color:') || key.startsWith('image:')) continue;
+    if (key.startsWith('color:') || key.startsWith('image:')) continue;
     if (typeof extracted[key] === 'string') {
-      extracted[key] = extracted[key].slice(0, def.maxLen);
+      extracted[key] = extracted[key].trim();
+      if (extracted[key] === '') {
+        delete extracted[key]; // leave field at its default rather than blanking it
+      } else if (def.maxLen) {
+        extracted[key] = extracted[key].slice(0, def.maxLen);
+      }
     }
   }
 

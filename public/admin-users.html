@@ -13,7 +13,7 @@
     .activity-log { display: flex; flex-direction: column; gap: 0; }
     .activity-log__row {
       display: grid;
-      grid-template-columns: 20px 1fr auto;
+      grid-template-columns: auto 20px 1fr;
       gap: 8px;
       align-items: baseline;
       padding: 6px 0;
@@ -401,9 +401,9 @@
               const isPublish  = e.event === 'post_published';
               const rowClass   = isUpgrade ? 'activity-log__row--upgrade' : isPublish ? 'activity-log__row--publish' : isEmail ? 'activity-log__row--email' : '';
               return `<div class="activity-log__row ${rowClass}">
+                <span class="activity-log__time">${dateStr} ${timeStr}</span>
                 <span class="activity-log__icon">${icon}</span>
                 <span class="activity-log__label">${label}${meta}</span>
-                <span class="activity-log__time">${dateStr} ${timeStr}</span>
               </div>`;
             }).join('')}</div>`;
           })()}

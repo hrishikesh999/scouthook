@@ -2845,6 +2845,11 @@ function _resetColorsToOriginal() {
     if (hex) hex.value = original;
     _applySlotToIframe(key, original, 'color'); // also seeds _pendingColorUpdates[key]
   }
+  // If the preview is showing a generated PNG (no live iframe), switch back to live edit
+  // so the user can see the reset colors immediately rather than staring at a stale image.
+  if (!document.getElementById('htpl-live-iframe') && _htmlTplTemplateHtml) {
+    _renderTemplateIframe(_htmlTplTemplateHtml, _htmlTplExtractedSlots);
+  }
 }
 
 function _applyBrandColors() {

@@ -1746,7 +1746,11 @@ async function _loadBrandColors() {
 
 function _resolveBrandColor(key, def) {
   if (def.default !== 'brand' || !_htmlTplBrandColors) return /^#[0-9a-fA-F]{3,8}$/.test(def.default) ? def.default : '#cccccc';
-  const role = key.slice('color:'.length).toLowerCase();
+  // Prefer the admin's explicit brandRole pick over guessing from the var
+  // name — must match services/templateRenderer.js:306's server-side
+  // resolveBrandRole() priority exactly, or the live preview here can show
+  // a different color than what the published post actually renders.
+  const role = (def.brandRole || key.slice('color:'.length)).toLowerCase();
   if (_htmlTplBrandColors[role]) return _htmlTplBrandColors[role];
   if (/^(bg|background|card_bg|card-bg|surface|secondary_bg|secondary-bg)$/.test(role)) return _htmlTplBrandColors.bg;
   if (/^(text|heading|heading_color|title|subtitle|body|label|caption)$/.test(role)) return _htmlTplBrandColors.text;
@@ -2883,9 +2887,11 @@ function _applyBrandColors() {
   if (!_htmlTplBrandColors) return;
   const manifest = _htmlTplSelectedMeta?.slot_manifest || {};
   const formPane = document.getElementById('html-tpl-form-pane');
-  for (const [key] of Object.entries(manifest.slots || {})) {
+  for (const [key, def] of Object.entries(manifest.slots || {})) {
     if (!key.startsWith('color:')) continue;
-    const resolved = _resolveBrandColor(key, { default: 'brand' });
+    // Pass the real manifest entry (not a synthetic {default:'brand'}) so an
+    // explicit brandRole pick on this slot is honored instead of discarded.
+    const resolved = _resolveBrandColor(key, { ...def, default: 'brand' });
     const picker = formPane.querySelector(`.html-tpl-color-swatch input[data-slot="${key}"]`);
     const hex = formPane.querySelector(`.html-tpl-color-hex[data-slot="${key}"]`);
     if (picker) picker.value = resolved;

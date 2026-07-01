@@ -172,6 +172,13 @@
               <input type="file" id="img-upload-input" accept="image/png,image/jpeg,image/webp,image/svg+xml" hidden>
             </div>
 
+            <!-- Match score + refine — shown whenever an original design image is available
+                 to compare against, whether from a fresh conversion or an existing template
+                 being edited (loadTemplate() reveals this once it confirms the original exists). -->
+            <div class="field" id="original-compare-field" style="display:none">
+              <div style="padding:12px 16px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:var(--radius);font-size:.85rem;color:#166534;display:flex;align-items:center;gap:8px" id="match-score-row"></div>
+            </div>
+
             <div class="or-divider">or paste HTML manually</div>
 
             <div class="field">
@@ -524,13 +531,17 @@
       // Load original image for comparison/refinement (non-blocking)
       _originalImageId = templateId;
       adminFetch(`/admin/html-templates/${templateId}/original`).then(async r => {
-        if (!r.ok) return;
+        if (!r.ok) { _originalImageId = null; return; }
         const blob = await r.blob();
         _originalImageFile = new File([blob], 'original.png', { type: blob.type });
         _originalImageDataUrl = URL.createObjectURL(blob);
+        // Original confirmed to exist — reveal the refine section (edit mode
+        // has no match score yet since nothing has rendered/compared until
+        // the admin clicks Refine).
+        showMatchScoreSection(null);
         // Re-render if user already switched to a tab that depends on the original
         if (_previewMode === 'original' || _previewMode === 'sideBySide') applyPreviewMode();
-      }).catch(() => {});
+      }).catch(() => { _originalImageId = null; });
     } catch (err) {
       console.error('[loadTemplate]', err);
       showError('form-error', 'Failed to load: ' + err.message);
@@ -1744,11 +1755,23 @@
   imgInput.addEventListener('change', () => { if (imgInput.files[0]) processUpload(imgInput.files[0]); imgInput.value = ''; });
 
   // ── Match score + on-demand refine (Pass 2) ─────────────────────────────
+  // Persistent section (#original-compare-field / #match-score-row) shared by
+  // both flows: right after a fresh conversion, and while editing an existing
+  // template that has an original design image on file.
 
   function renderMatchScoreRow(score) {
-    const label = score == null ? 'Match score unavailable' : `Match score: ${Math.round(score)}/100`;
+    const label = score == null ? 'Compare the current HTML against the original design' : `Match score: ${Math.round(score)}/100`;
     return `<span style="font-size:.78rem;color:#166534">${label}</span>
       <button class="btn btn--sm btn--secondary" id="btn-refine" type="button" style="margin-left:auto">↻ Refine to match original</button>`;
+  }
+
+  function showMatchScoreSection(score) {
+    const field = document.getElementById('original-compare-field');
+    const row = document.getElementById('match-score-row');
+    if (!field || !row) return;
+    field.style.display = '';
+    row.innerHTML = renderMatchScoreRow(score);
+    document.getElementById('btn-refine')?.addEventListener('click', refineTemplate);
   }
 
   async function refineTemplate() {
@@ -1757,9 +1780,14 @@
     if (!_originalImageId) { alert('No original design image available to refine against.'); return; }
     btn.textContent = 'Refining…'; btn.disabled = true;
     try {
+      // Derive the manifest fresh from the current HTML rather than trusting a
+      // separately-tracked variable — any slot edit, raw-HTML apply, or reset
+      // done between converting and clicking refine already updated
+      // _templateHtml, and a stale manifest object would silently drift from it.
+      const manifest = _parseManifestFromHtml(_templateHtml) || _convertedManifest || { slots: {}, dimensions: { width: 1080, height: 1080 } };
       const r = await adminFetch('/admin/html-templates/from-image/refine', {
         method: 'POST',
-        body: JSON.stringify({ html: _templateHtml, manifest: _convertedManifest, original_image_id: _originalImageId }),
+        body: JSON.stringify({ html: _templateHtml, manifest, original_image_id: _originalImageId }),
       });
       const data = await r.json();
       if (!data.ok) throw new Error(data.error || 'Refinement failed');
@@ -1767,10 +1795,24 @@
       _templateHtml = data.html;
       _convertedManifest = data.manifest;
       document.getElementById('f-html').value = data.html;
+      const rawHtml = document.getElementById('raw-html');
+      if (rawHtml) rawHtml.value = data.html;
 
-      const row = document.getElementById('match-score-row');
-      if (row) row.innerHTML = renderMatchScoreRow(data.matchScore);
-      document.getElementById('btn-refine')?.addEventListener('click', refineTemplate);
+      // Refine can add new CSS vars (its color audit step) even though it
+      // preserves existing data-slot attributes — re-sync slot state the same
+      // way applyRawHtml()/resetHtmlToSaved() do, so a newly-audited color
+      // shows up as a slot card instead of only existing in the raw HTML.
+      const priorManifest = { slots: Object.fromEntries(_slotState.map(s => [s.key, s.config])) };
+      const slots = scanSlotsFromHtml(data.html);
+      mergeExistingConfig(slots, priorManifest);
+      _slotState = slots;
+      if (_step2Initialized) {
+        renderSlotCards();
+        updateManifest();
+      }
+      renderPreview();
+
+      showMatchScoreSection(data.matchScore);
     } catch (err) {
       alert('Refine failed: ' + err.message);
       btn.textContent = '↻ Refine to match original'; btn.disabled = false;
@@ -1821,13 +1863,11 @@
       if (data.manifest?.dimensions) { document.getElementById('f-dim-w').value = data.manifest.dimensions.width || 1080; document.getElementById('f-dim-h').value = data.manifest.dimensions.height || 1080; }
 
       uf.innerHTML = `<label>Upload a design</label>
-        <div style="padding:12px 16px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:var(--radius);font-size:.85rem;color:#166534;display:flex;flex-direction:column;gap:8px">
-        <div style="display:flex;align-items:center;gap:8px">
+        <div style="padding:12px 16px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:var(--radius);font-size:.85rem;color:#166534;display:flex;align-items:center;gap:8px">
         <span style="font-size:18px">✓</span><div><div style="font-weight:600">Template generated</div>
         <div style="font-size:.78rem;color:#15803d;margin-top:1px">${Object.keys(data.manifest?.slots||{}).length} slots · ${data.html.length.toLocaleString()} bytes</div></div>
-        <button class="btn btn--sm btn--secondary" style="margin-left:auto" onclick="resetUploadZone()">Change</button></div>
-        <div id="match-score-row" style="display:flex;align-items:center;gap:8px;padding-top:8px;border-top:1px solid #bbf7d0">${renderMatchScoreRow(data.matchScore)}</div></div>`;
-      document.getElementById('btn-refine')?.addEventListener('click', refineTemplate);
+        <button class="btn btn--sm btn--secondary" style="margin-left:auto" onclick="resetUploadZone()">Change</button></div>`;
+      showMatchScoreSection(data.matchScore);
     } catch (err) {
       if (err.name === 'AbortError') { _uploadInProgress = false; return; }
       uf.innerHTML = `<label>Upload a design</label><div class="img-upload-error">${esc(err.message)} <button class="btn btn--sm btn--secondary" style="margin-left:auto" onclick="resetUploadZone()">Retry</button></div>`;

@@ -2,7 +2,8 @@
 
 const Anthropic = require('@anthropic-ai/sdk');
 const { getSetting } = require('../db');
-const { extractJsonFromResponse, getAnthropicMessageText } = require('./voiceFingerprint');
+const { getAnthropicMessageText } = require('./voiceFingerprint');
+const { readSlotManifest } = require('./templateSlotInjector');
 const sharp = require('sharp');
 
 let _callRenderService = null;
@@ -19,8 +20,9 @@ function getRenderService() {
 
 const SYSTEM_PROMPT = `You are an expert HTML/CSS developer converting design images into Puppeteer-compatible HTML templates.
 
-OUTPUT: Return a JSON object with exactly two keys:
-{ "html": "<!DOCTYPE html>...", "manifest": { "slots": {...}, "dimensions": {...} } }
+OUTPUT: Return the raw HTML document only, starting with <!DOCTYPE html>. Embed the slot
+manifest inside <head> via <script type="application/json" id="template-meta"> as described
+in Rule 7 below — do NOT wrap the HTML in a JSON object.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 STEP 1 — ANALYZE THE IMAGE FIRST (before generating any code)
@@ -173,7 +175,8 @@ Before returning, verify:
 □ No data-slot-container on non-repeating elements
 □ Complex illustrations use <img data-slot="image:..."> NOT inline SVG paths
 
-CRITICAL: Return ONLY the raw JSON. No markdown fences, no explanation.`;
+CRITICAL: Return ONLY the raw HTML document, starting with <!DOCTYPE html> and ending with
+</html>. No JSON wrapper, no markdown fences, no explanation.`;
 
 const SVG_SYSTEM_PROMPT = `You are an expert HTML/CSS developer converting an SVG design into a Puppeteer-compatible HTML template.
 
@@ -184,7 +187,9 @@ You are given the SVG source code of a design. Extract EXACT values from the SVG
 - text elements → make editable with data-slot attributes
 - <image> elements with embedded base64 data → PRESERVE as image slots with the original data
 
-OUTPUT: Return a JSON object: { "html": "<!DOCTYPE html>...", "manifest": { "slots": {...}, "dimensions": {...} } }
+OUTPUT: Return the raw HTML document only, starting with <!DOCTYPE html>. Embed the slot
+manifest inside <head> via <script type="application/json" id="template-meta"> as described
+in Rule 6 below — do NOT wrap the HTML in a JSON object.
 
 RULES:
 1. Root <div class="root"> with explicit width/height and overflow:hidden
@@ -201,7 +206,8 @@ RULES:
 
 ADVANTAGE: You have the exact SVG source — use the EXACT font-family, EXACT hex colors, EXACT dimensions, and PRESERVE embedded images. Do not approximate anything.
 
-CRITICAL: Return ONLY the raw JSON. No markdown fences, no explanation.`;
+CRITICAL: Return ONLY the raw HTML document, starting with <!DOCTYPE html> and ending with
+</html>. No JSON wrapper, no markdown fences, no explanation.`;
 
 // ---------------------------------------------------------------------------
 // Pass 2 prompt — refine HTML by comparing original vs rendered
@@ -273,10 +279,20 @@ INVIOLABLE RULES:
 
 const VISION_TIMEOUT_MS = 55_000;  // per-AI-call cap; calls rarely exceed 40s
 
-// Pass 2 quality thresholds
-const DIFF_SKIP_THRESHOLD = 75;   // skip AI refinement if already this good
-const DIFF_STOP_THRESHOLD = 92;   // stop refinement loop once converged
-const MAX_REFINEMENT_PASSES = 1;  // 1 pass keeps total pipeline under ~85s
+async function getApiKey() {
+  const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
+  if (!apiKey) throw new Error('anthropic_api_key not configured');
+  return apiKey;
+}
+
+function makeCallWithTimeout(client) {
+  return (params) => Promise.race([
+    client.messages.create(params),
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('AI conversion timed out after 120 seconds')), VISION_TIMEOUT_MS)
+    ),
+  ]);
+}
 
 /**
  * Strip AI commentary from a response that should be raw HTML.
@@ -992,12 +1008,237 @@ async function buildCompositeDiff(origBuf, rendBuf, tplW, tplH) {
 }
 
 // ---------------------------------------------------------------------------
+// Rule 3 enforcement: auto-promote hardcoded colors left outside the root
+// style="" attribute. The prompt calls this "NON-NEGOTIABLE" but nothing
+// previously verified compliance — this is the deterministic backstop.
+// ---------------------------------------------------------------------------
+
+const COLOR_VALUE_RE = /#[0-9a-fA-F]{3,8}\b|\brgba?\([^)]*\)|\bhsla?\([^)]*\)/g;
+
+// Extract color literals that appear as a CSS declaration VALUE (after a
+// colon, before the next `;`/`}`/end). Scoping to the value half means a
+// hex-word-like id selector such as `#face { ... }` is never mistaken for a
+// color — selectors sit before `{`, which this pattern can't cross.
+function _colorLiteralsInDeclarationValues(cssText) {
+  const out = [];
+  for (const decl of cssText.matchAll(/:\s*([^;{}]+?)\s*(?=;|\}|$)/g)) {
+    for (const m of decl[1].matchAll(COLOR_VALUE_RE)) out.push(m[0]);
+  }
+  return out;
+}
+
+function enforceColorVars(html, manifest) {
+  const rootMatch = html.match(/<div\b[^>]*\bclass="root"[^>]*>/i);
+  if (!rootMatch) return html; // no recognizable root — nothing safe to rewrite
+
+  const rootTag = rootMatch[0];
+  const rootStart = rootMatch.index;
+  const rootEnd = rootStart + rootTag.length;
+  const before = html.slice(0, rootStart);
+  const after = html.slice(rootEnd);
+
+  const styleAttrMatch = rootTag.match(/\bstyle="([^"]*)"/);
+  const existingVarNames = new Set();
+  if (styleAttrMatch) {
+    for (const m of styleAttrMatch[1].matchAll(/--([a-zA-Z0-9_-]+)\s*:/g)) existingVarNames.add(m[1]);
+  }
+
+  // Gather literals from <style> blocks and inline style="" attributes
+  // anywhere except the root tag's own style="" (which is the compliant spot).
+  const literals = [];
+  for (const seg of [before, after]) {
+    for (const styleBlock of seg.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gi)) {
+      literals.push(..._colorLiteralsInDeclarationValues(styleBlock[1]));
+    }
+    for (const styleAttr of seg.matchAll(/\bstyle="([^"]*)"/g)) {
+      literals.push(..._colorLiteralsInDeclarationValues(styleAttr[1]));
+    }
+  }
+
+  const uniqueLiterals = [...new Set(literals)];
+  if (uniqueLiterals.length === 0) return html;
+
+  const nameFor = new Map();
+  let n = 1;
+  for (const val of uniqueLiterals) {
+    let name = `auto${n}`;
+    while (existingVarNames.has(name)) { n++; name = `auto${n}`; }
+    existingVarNames.add(name);
+    nameFor.set(val, name);
+    n++;
+  }
+
+  console.log('[templateFromImage] Rule 3 enforcement: promoting %d hardcoded color(s) found outside root style: %s',
+    nameFor.size, [...nameFor.keys()].join(', '));
+
+  // Replace literals with var(--name) everywhere outside the root tag.
+  // Longest value first so e.g. #ffffff is fully consumed before #fff runs
+  // (otherwise #fff would match the first 4 chars of #ffffff too).
+  const orderedEntries = [...nameFor.entries()].sort((a, b) => b[0].length - a[0].length);
+  const replaceLiterals = (segment) => {
+    for (const [val, name] of orderedEntries) {
+      const escaped = val.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      segment = segment.replace(new RegExp(escaped, 'g'), `var(--${name})`);
+    }
+    return segment;
+  };
+
+  const newBefore = replaceLiterals(before);
+  const newAfter = replaceLiterals(after);
+
+  // Append the newly-minted custom properties to the root's own style="".
+  const newVarsCss = orderedEntries.map(([val, name]) => `--${name}:${val}`).join('; ');
+  let newRootTag;
+  if (styleAttrMatch) {
+    const trimmed = styleAttrMatch[1].trim().replace(/;\s*$/, '');
+    const newStyle = (trimmed ? trimmed + '; ' : '') + newVarsCss;
+    newRootTag = rootTag.slice(0, styleAttrMatch.index) + `style="${newStyle}"` +
+      rootTag.slice(styleAttrMatch.index + styleAttrMatch[0].length);
+  } else {
+    newRootTag = rootTag.replace(/>$/, ` style="${newVarsCss}">`);
+  }
+
+  html = newBefore + newRootTag + newAfter;
+
+  for (const [val, name] of nameFor) {
+    manifest.slots[`color:${name}`] = { default: val };
+  }
+
+  return html;
+}
+
+// ---------------------------------------------------------------------------
+// Post-processing: fix slot prefixes and sync manifest keys to HTML
+// ---------------------------------------------------------------------------
+
+function applyPostProcessing(h, manifest) {
+  // Fix <img> tags missing "image:" prefix in data-slot
+  h = h.replace(/<img\b([^>]*?)data-slot="(?!image:)([\w]+)"([^>]*?)>/gs, (match, before, key, after) => {
+    console.log('[templateFromImage] fixing image slot prefix: %s → image:%s', key, key);
+    manifest.slots[`image:${key}`] = manifest.slots[key] || {};
+    delete manifest.slots[key];
+    let fixed = `<img${before}data-slot="image:${key}"${after}>`;
+    fixed = fixed.replace(/src=["'](?!data:)[^"']*["']/g, 'src=""');
+    return fixed;
+  });
+
+  // Clear non-empty non-data-URI src on image slots
+  h = h.replace(/(<img\b[^>]*data-slot="image:[^"]*"[^>]*?)src=["'](?!data:)[^"']*["']/gs, '$1src=""');
+
+  // Normalize data-slot-container (remove value if present)
+  h = h.replace(/data-slot-container="[^"]*"/g, 'data-slot-container');
+
+  // Ensure every data-slot in HTML has a manifest entry
+  for (const m of h.matchAll(/data-slot="([^"]+)"/g)) {
+    const key = m[1];
+    if (key === 'data-slot-container' || key === 'data-slot-item') continue;
+    if (!manifest.slots[key]) {
+      manifest.slots[key] = key.startsWith('image:') ? {} : { maxLen: 200 };
+    }
+  }
+
+  // Rule 3 (NON-NEGOTIABLE): promote any hardcoded color left outside the
+  // root style="" into a CSS var + manifest slot.
+  h = enforceColorVars(h, manifest);
+
+  return h;
+}
+
+// ---------------------------------------------------------------------------
+// Match score: render current HTML and diff against the original design image
+// ---------------------------------------------------------------------------
+
+async function computeMatchScore(html, manifest, originalImageBuffer) {
+  try {
+    const callRenderService = getRenderService();
+    const { width = 1080, height = 1080 } = manifest.dimensions || {};
+    const renderedPng = await callRenderService(html, width, height);
+    const diffResult = await computePixelDiff(originalImageBuffer, renderedPng, manifest);
+    return diffResult.score;
+  } catch (err) {
+    console.warn('[templateFromImage] match score computation failed: %s', err.message);
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Pass 2 (on-demand): refine HTML to match the original design image more
+// closely. Independent of Pass 1's time budget — callers invoke this
+// explicitly, as many times as they like, each call its own request/timeout.
+// ---------------------------------------------------------------------------
+
+async function refineTemplateHtml(html, manifest, originalImageBuffer) {
+  const apiKey = await getApiKey();
+  const client = new Anthropic({ apiKey });
+  const callWithTimeout = makeCallWithTimeout(client);
+  const callRenderService = getRenderService();
+  const { width = 1080, height = 1080 } = manifest.dimensions || {};
+
+  const renderedPng = await callRenderService(html, width, height);
+
+  const diffResult = await computePixelDiff(originalImageBuffer, renderedPng, manifest);
+  console.log('[templateFromImage] refine: current score=%.1f avgDiff=%.1f bad=%s',
+    diffResult.score, diffResult.avgDiff, diffResult.badRegions.join(',') || 'none');
+
+  let compositeBlock;
+  try {
+    const compositePng = await buildCompositeDiff(originalImageBuffer, renderedPng, width, height);
+    compositeBlock = {
+      type: 'image',
+      source: { type: 'base64', media_type: 'image/png', data: compositePng.toString('base64') },
+      cache_control: { type: 'ephemeral' },
+    };
+  } catch (err) {
+    console.warn('[templateFromImage] refine: composite build failed (%s), falling back to separate images', err.message);
+  }
+
+  const diffContext = diffResult.badRegions.length > 0
+    ? ` Pay close attention to the ${diffResult.badRegions.join(', ')} region(s) — pixel diff shows the largest mismatch there. Overall match score: ${diffResult.score.toFixed(0)}/100.`
+    : '';
+
+  let refineContent;
+  if (compositeBlock) {
+    refineContent = [
+      compositeBlock,
+      { type: 'text', text: `The image above is a SIDE-BY-SIDE COMPARISON:\n  • LEFT HALF = original design (the target)\n  • RIGHT HALF = your current render\n\nLook at corresponding positions in left vs right to spot every difference.\n\nCurrent HTML:\n\`\`\`html\n${html}\n\`\`\`\n\nFix every visible difference.${diffContext} Return the complete corrected HTML document.` },
+    ];
+  } else {
+    const origPng = await sharp(originalImageBuffer).png().toBuffer();
+    refineContent = [
+      { type: 'text', text: 'Image 1 — Original design:' },
+      { type: 'image', source: { type: 'base64', media_type: 'image/png', data: origPng.toString('base64') } },
+      { type: 'text', text: 'Image 2 — Current HTML rendering:' },
+      { type: 'image', source: { type: 'base64', media_type: 'image/png', data: renderedPng.toString('base64') } },
+      { type: 'text', text: `Current HTML:\n\`\`\`html\n${html}\n\`\`\`\n\nFix every difference between Image 1 and Image 2.${diffContext} Return the complete corrected HTML document.` },
+    ];
+  }
+
+  const refineMsg = await callWithTimeout({
+    model: 'claude-sonnet-4-6',
+    max_tokens: 16000,
+    system: REFINE_PROMPT,
+    messages: [{ role: 'user', content: refineContent }],
+  });
+
+  const refinedHtml = extractHtmlFromResponse(getAnthropicMessageText(refineMsg));
+  if (!refinedHtml) {
+    throw new Error('AI refinement did not return valid HTML — please try again');
+  }
+
+  html = applyPostProcessing(refinedHtml, manifest);
+  html = syncManifestColors(html, manifest);
+
+  const matchScore = await computeMatchScore(html, manifest, originalImageBuffer);
+
+  return { html, manifest, matchScore, previousScore: diffResult.score };
+}
+
+// ---------------------------------------------------------------------------
 // Main entry point
 // ---------------------------------------------------------------------------
 
 async function generateTemplateFromImage(imageBuffer, options = {}) {
-  const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
-  if (!apiKey) throw new Error('anthropic_api_key not configured');
+  const apiKey = await getApiKey();
 
   // Detect SVG input
   const bufStr = imageBuffer.toString('utf8', 0, Math.min(200, imageBuffer.length));
@@ -1063,13 +1304,7 @@ async function generateTemplateFromImage(imageBuffer, options = {}) {
   }
 
   const client = new Anthropic({ apiKey });
-
-  const callWithTimeout = (params) => Promise.race([
-    client.messages.create(params),
-    new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('AI conversion timed out after 120 seconds')), VISION_TIMEOUT_MS)
-    ),
-  ]);
+  const callWithTimeout = makeCallWithTimeout(client);
 
   // ── Pre-analysis: extract colors + layout zones (raster images only) ────────
 
@@ -1131,14 +1366,12 @@ async function generateTemplateFromImage(imageBuffer, options = {}) {
 
   const rawText = getAnthropicMessageText(msg);
 
-  let result;
-  try {
-    result = extractJsonFromResponse(rawText);
-  } catch (e) {
+  let html = extractHtmlFromResponse(rawText);
+  if (!html) {
     const retryMessages = [
       ...pass1Messages,
       { role: 'assistant', content: msg.content },
-      { role: 'user', content: 'Return only the JSON object with "html" and "manifest" keys. No markdown, no code fences.' },
+      { role: 'user', content: 'Return ONLY the raw HTML document, starting with <!DOCTYPE html> and ending with </html>. No JSON wrapper, no markdown code fences, no explanation.' },
     ];
     const retry = await callWithTimeout({
       model: 'claude-sonnet-4-6',
@@ -1146,145 +1379,29 @@ async function generateTemplateFromImage(imageBuffer, options = {}) {
       system: pass1System,
       messages: retryMessages,
     });
-    result = extractJsonFromResponse(getAnthropicMessageText(retry));
+    html = extractHtmlFromResponse(getAnthropicMessageText(retry));
   }
 
-  if (!result.html || typeof result.html !== 'string') {
+  if (!html) {
     throw new Error('AI did not return valid HTML — please try again');
   }
 
-  const manifest = result.manifest || { slots: {}, dimensions: { width: 1080, height: 1080 } };
+  let manifest;
+  try {
+    manifest = readSlotManifest(html);
+  } catch (err) {
+    console.warn('[templateFromImage] pass 1: manifest parse failed (%s) — using defaults, will backfill from data-slot attrs', err.message);
+    manifest = { slots: {}, dimensions: { width: 1080, height: 1080 } };
+  }
   if (!manifest.slots) manifest.slots = {};
   if (!manifest.dimensions) manifest.dimensions = { width: 1080, height: 1080 };
 
-  let html = result.html;
-
-  // Post-processing: fix slot prefixes and sync manifest keys to HTML
-  function applyPostProcessing(h) {
-    // Fix <img> tags missing "image:" prefix in data-slot
-    h = h.replace(/<img\b([^>]*?)data-slot="(?!image:)([\w]+)"([^>]*?)>/gs, (match, before, key, after) => {
-      console.log('[templateFromImage] fixing image slot prefix: %s → image:%s', key, key);
-      manifest.slots[`image:${key}`] = manifest.slots[key] || {};
-      delete manifest.slots[key];
-      let fixed = `<img${before}data-slot="image:${key}"${after}>`;
-      fixed = fixed.replace(/src=["'](?!data:)[^"']*["']/g, 'src=""');
-      return fixed;
-    });
-
-    // Clear non-empty non-data-URI src on image slots
-    h = h.replace(/(<img\b[^>]*data-slot="image:[^"]*"[^>]*?)src=["'](?!data:)[^"']*["']/gs, '$1src=""');
-
-    // Normalize data-slot-container (remove value if present)
-    h = h.replace(/data-slot-container="[^"]*"/g, 'data-slot-container');
-
-    // Ensure every data-slot in HTML has a manifest entry
-    for (const m of h.matchAll(/data-slot="([^"]+)"/g)) {
-      const key = m[1];
-      if (key === 'data-slot-container' || key === 'data-slot-item') continue;
-      if (!manifest.slots[key]) {
-        manifest.slots[key] = key.startsWith('image:') ? {} : { maxLen: 200 };
-      }
-    }
-    return h;
-  }
-
-  html = applyPostProcessing(html);
+  html = applyPostProcessing(html, manifest);
   // Deterministic manifest color sync: CSS var values → manifest defaults
   html = syncManifestColors(html, manifest);
 
   console.log('[templateFromImage] pass 1 done in %dms (%d bytes, %d slots)',
     Date.now() - pass1Start, html.length, Object.keys(manifest.slots).length);
-
-  // ── Pass 2: Quantitative diff → iterative AI refinement ───────────────────
-
-  const shouldRefine = options.refine !== false;
-
-  if (shouldRefine && imageBlock && cropBuffer && originalMeta) {
-    const callRenderService = getRenderService();
-    const { width = 1080, height = 1080 } = manifest.dimensions;
-    const pass2Start = Date.now();
-
-    for (let pass = 0; pass < MAX_REFINEMENT_PASSES; pass++) {
-      let renderedPng;
-      try {
-        renderedPng = await callRenderService(html, width, height);
-      } catch (err) {
-        console.warn('[templateFromImage] pass 2.%d: render failed (%s), aborting refinement', pass + 1, err.message);
-        break;
-      }
-
-      // Quantitative diff check — skip or stop if already good enough
-      let diffResult = null;
-      try {
-        diffResult = await computePixelDiff(cropBuffer, renderedPng, manifest);
-        console.log('[templateFromImage] pass 2.%d: diff score=%.1f avgDiff=%.1f bad=%s',
-          pass + 1, diffResult.score, diffResult.avgDiff, diffResult.badRegions.join(',') || 'none');
-      } catch (err) {
-        console.warn('[templateFromImage] pass 2.%d: diff failed (%s), proceeding with refinement', pass + 1, err.message);
-      }
-
-      if (diffResult && pass === 0 && diffResult.score >= DIFF_SKIP_THRESHOLD) {
-        console.log('[templateFromImage] pass 2: skipping refinement (already good — score %.1f)', diffResult.score);
-        break;
-      }
-
-      if (diffResult && pass > 0 && diffResult.score >= DIFF_STOP_THRESHOLD) {
-        console.log('[templateFromImage] pass 2: converged (score %.1f after %d passes)', diffResult.score, pass);
-        break;
-      }
-
-      // Build side-by-side visual comparison (original LEFT, render RIGHT)
-      let compositeBlock;
-      try {
-        const compositePng = await buildCompositeDiff(cropBuffer, renderedPng, width, height);
-        compositeBlock = {
-          type: 'image',
-          source: { type: 'base64', media_type: 'image/png', data: compositePng.toString('base64') },
-          cache_control: { type: 'ephemeral' },
-        };
-      } catch (err) {
-        console.warn('[templateFromImage] pass 2.%d: composite build failed (%s), falling back to separate images', pass + 1, err.message);
-      }
-
-      let diffContext = '';
-      if (diffResult && diffResult.badRegions.length > 0) {
-        diffContext = ` Pay close attention to the ${diffResult.badRegions.join(', ')} region(s) — pixel diff shows the largest mismatch there. Overall match score: ${diffResult.score.toFixed(0)}/100.`;
-      }
-
-      // If composite build succeeded, send one spatially-aligned image.
-      // Fall back to two separate images if Sharp composite failed.
-      const refineContent = compositeBlock
-        ? [
-            compositeBlock,
-            { type: 'text', text: `The image above is a SIDE-BY-SIDE COMPARISON:\n  • LEFT HALF = original design (the target)\n  • RIGHT HALF = your current render\n\nLook at corresponding positions in left vs right to spot every difference.\n\nCurrent HTML:\n\`\`\`html\n${html}\n\`\`\`\n\nFix every visible difference.${diffContext} Return the complete corrected HTML document.` },
-          ]
-        : [
-            { type: 'text', text: 'Image 1 — Original design:' },
-            imageBlock,
-            { type: 'text', text: 'Image 2 — Current HTML rendering:' },
-            { type: 'image', source: { type: 'base64', media_type: 'image/png', data: renderedPng.toString('base64') } },
-            { type: 'text', text: `Current HTML:\n\`\`\`html\n${html}\n\`\`\`\n\nFix every difference between Image 1 and Image 2.${diffContext} Return the complete corrected HTML document.` },
-          ];
-
-      const refineMsg = await callWithTimeout({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 16000,
-        system: REFINE_PROMPT,
-        messages: [{ role: 'user', content: refineContent }],
-      });
-
-      const refinedHtml = extractHtmlFromResponse(getAnthropicMessageText(refineMsg));
-      if (refinedHtml) {
-        html = applyPostProcessing(refinedHtml);
-        html = syncManifestColors(html, manifest);
-        console.log('[templateFromImage] pass 2.%d refinement applied (%d bytes, %dms elapsed)',
-          pass + 1, html.length, Date.now() - pass2Start);
-      } else {
-        console.warn('[templateFromImage] pass 2.%d: refinement returned no valid HTML', pass + 1);
-        break;
-      }
-    }
-  }
 
   // ── Pass 3: Crop original photos and embed as default images ──────────────
 
@@ -1296,7 +1413,14 @@ async function generateTemplateFromImage(imageBuffer, options = {}) {
     }
   }
 
-  return { html, manifest };
+  // ── Match score: cheap, deterministic — compute for display even though ──
+  // ── refinement (Pass 2) is now a separate, on-demand action. ─────────────
+  let matchScore = null;
+  if (imageBlock && cropBuffer && originalMeta) {
+    matchScore = await computeMatchScore(html, manifest, cropBuffer);
+  }
+
+  return { html, manifest, matchScore };
 }
 
 // ---------------------------------------------------------------------------
@@ -1370,4 +1494,4 @@ async function injectCroppedImages(html, manifest, cropBuffer, originalMeta) {
   return html;
 }
 
-module.exports = { generateTemplateFromImage };
+module.exports = { generateTemplateFromImage, refineTemplateHtml };

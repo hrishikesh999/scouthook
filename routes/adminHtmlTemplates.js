@@ -8,7 +8,7 @@ const { db }  = require('../db');
 const storage = require('../services/storage');
 const { readSlotManifest, stripScriptTags } = require('../services/templateSlotInjector');
 const { generateTemplateThumbnail } = require('../services/templateRenderer');
-const { generateTemplateFromImage } = require('../services/templateFromImage');
+const { generateTemplateFromImage, refineTemplateHtml } = require('../services/templateFromImage');
 
 // Resize any image buffer to a 540px-wide PNG thumbnail.
 async function makeThumbnailFromOriginal(origBuffer) {
@@ -77,9 +77,11 @@ router.get('/:id', async (req, res) => {
 // POST / — create template (synchronous including thumbnail)
 // ---------------------------------------------------------------------------
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 router.post('/', async (req, res) => {
   try {
-    const { name, description, category, html, sort_order = 0, original_image_id } = req.body || {};
+    const { name, description, category, html, sort_order = 0, original_image_id, id: clientId } = req.body || {};
 
     if (!name || !html) {
       return res.status(400).json({ ok: false, error: 'name and html are required' });
@@ -99,7 +101,11 @@ router.post('/', async (req, res) => {
     // Strip all <script> blocks before storing (after manifest is read)
     const cleanHtml = stripScriptTags(html);
 
-    const id = crypto.randomUUID();
+    // Prefer the id minted client-side before /from-image (so the original
+    // design image — already uploaded under that id — lines up with the
+    // saved template without a separate copy step). Fall back to a fresh id
+    // for the paste-HTML-manually flow, which never mints one.
+    const id = (typeof clientId === 'string' && UUID_RE.test(clientId)) ? clientId : crypto.randomUUID();
     const htmlKey = storage.buildTemplateKey(id);
 
     // Upload HTML to R2
@@ -429,10 +435,12 @@ router.post('/from-image', express.raw({ type: ['image/png', 'image/jpeg', 'imag
       buffer.length, instructions ? 'yes' : 'none');
 
     // Hard deadline: respond before the platform proxy (Cloudflare / Render) kills
-    // the connection. 90s covers Pass 1 + one refinement pass at typical AI speeds.
+    // the connection. Pass 2 (refinement) no longer runs in this request — it's a
+    // separate, on-demand /from-image/refine call — so this only needs to cover
+    // Pass 1 + Pass 3 + the match-score render.
     const PIPELINE_DEADLINE_MS = 90_000;
     const start = Date.now();
-    const { html, manifest } = await Promise.race([
+    const { html, manifest, matchScore } = await Promise.race([
       generateTemplateFromImage(buffer, { instructions, contentType }),
       new Promise((_, reject) =>
         setTimeout(() => reject(Object.assign(
@@ -441,20 +449,80 @@ router.post('/from-image', express.raw({ type: ['image/png', 'image/jpeg', 'imag
         )), PIPELINE_DEADLINE_MS)
       ),
     ]);
-    console.log('[adminHtmlTemplates] from-image: generated in %dms (%d bytes HTML, %d slots)',
-      Date.now() - start, html.length, Object.keys(manifest.slots || {}).length);
+    console.log('[adminHtmlTemplates] from-image: generated in %dms (%d bytes HTML, %d slots, score=%s)',
+      Date.now() - start, html.length, Object.keys(manifest.slots || {}).length, matchScore?.toFixed(1) ?? 'n/a');
 
-    // Store original image so it's available for refinement later
+    // Store original image so it's available for on-demand refinement later.
+    // Awaited (not fire-and-forget) — the refine endpoint depends on this being
+    // in place before the admin can click "Refine to match original".
     const origId = req.headers['x-template-id'] || require('crypto').randomUUID();
     const origKey = storage.buildOriginalImageKey(origId);
-    const mimeToExt = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/svg+xml': 'svg' };
-    storage.uploadAdmin(buffer, origKey, contentType).catch(e =>
-      console.warn('[adminHtmlTemplates] original image upload failed:', e.message));
+    try {
+      await storage.uploadAdmin(buffer, origKey, contentType);
+    } catch (e) {
+      console.warn('[adminHtmlTemplates] original image upload failed:', e.message);
+    }
 
-    res.json({ ok: true, html, manifest, original_image_id: origId });
+    res.json({ ok: true, html, manifest, matchScore, original_image_id: origId });
   } catch (err) {
     const status = err.status || 500;
     console.error('[adminHtmlTemplates] from-image error (%d): %s', status, err.message);
+    res.status(status).json({ ok: false, error: err.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /from-image/refine — on-demand Pass 2: refine current HTML to match the
+// original design image more closely. Decoupled from Pass 1's time budget —
+// its own request, own timeout. Callers may call this repeatedly.
+// ---------------------------------------------------------------------------
+
+router.post('/from-image/refine', async (req, res) => {
+  try {
+    const { html, manifest, original_image_id } = req.body || {};
+    if (!html || typeof html !== 'string') {
+      return res.status(400).json({ ok: false, error: 'html is required' });
+    }
+    if (!manifest || typeof manifest !== 'object') {
+      return res.status(400).json({ ok: false, error: 'manifest is required' });
+    }
+    if (!original_image_id) {
+      return res.status(400).json({ ok: false, error: 'original_image_id is required' });
+    }
+
+    let originalImageBuffer;
+    try {
+      originalImageBuffer = await storage.downloadAdmin(storage.buildOriginalImageKey(original_image_id));
+    } catch {
+      return res.status(404).json({ ok: false, error: 'Original design image not found — cannot refine without it.' });
+    }
+
+    // Own deadline, independent of Pass 1's — a single AI call (≤55s) plus
+    // render/diff overhead comfortably fits under the platform proxy timeout.
+    const REFINE_DEADLINE_MS = 75_000;
+    const start = Date.now();
+    const result = await Promise.race([
+      refineTemplateHtml(html, manifest, originalImageBuffer),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(Object.assign(
+          new Error('Refinement timed out (75s) — please try again.'),
+          { status: 504 }
+        )), REFINE_DEADLINE_MS)
+      ),
+    ]);
+    console.log('[adminHtmlTemplates] from-image/refine: done in %dms (score %s → %s)',
+      Date.now() - start, result.previousScore?.toFixed(1) ?? 'n/a', result.matchScore?.toFixed(1) ?? 'n/a');
+
+    res.json({
+      ok: true,
+      html: result.html,
+      manifest: result.manifest,
+      matchScore: result.matchScore,
+      previousScore: result.previousScore,
+    });
+  } catch (err) {
+    const status = err.status || 500;
+    console.error('[adminHtmlTemplates] from-image/refine error (%d): %s', status, err.message);
     res.status(status).json({ ok: false, error: err.message });
   }
 });

@@ -1796,6 +1796,14 @@ function _renderTemplateIframe(html, slots) {
       [data-slot] { cursor:pointer; transition:outline .12s; }
       [data-slot]:hover { outline:2px dashed rgba(15,118,110,0.5); outline-offset:2px; }
       [data-slot].htpl-active { outline:3px solid #0f766e; outline-offset:2px; }
+      /* Scoped to the initial brand-color personalization only (added/removed
+         around that one swap) — so it reads as personalizing rather than the
+         original design instantly vanishing, without making live color-picker
+         dragging feel laggy the rest of the time. */
+      .htpl-personalizing, .htpl-personalizing * {
+        transition: background-color .35s ease, color .35s ease, border-color .35s ease,
+          fill .35s ease, stroke .35s ease, box-shadow .35s ease;
+      }
     </style>
     <script>
       document.querySelectorAll('[data-slot]').forEach(el => {
@@ -1864,6 +1872,12 @@ function _renderTemplateIframe(html, slots) {
     // then sync the color picker inputs to match the real design.
     const colorRoot = doc.body.firstElementChild || doc.documentElement;
     const formPane = document.getElementById('html-tpl-form-pane');
+    const overridesToApply = [];
+
+    // Pass 1 (synchronous): read the template's own neutral colors and let
+    // the browser paint them as-is — this is what makes the design visible
+    // in its original state for at least one frame. Personalized overrides
+    // are collected here but not applied yet (see Pass 2 below).
     for (const [key] of Object.entries(slotDefs)) {
       if (!key.startsWith('color:')) continue;
       const varName = key.slice('color:'.length);
@@ -1882,16 +1896,10 @@ function _renderTemplateIframe(html, slots) {
       if (origNorm && !_htmlTplOriginalColors[key]) {
         _htmlTplOriginalColors[key] = origNorm;
       }
-      // Apply user-set or pending overrides (from brand colors or user edits)
+
       const userVal = (slots && slots[key]) || _pendingColorUpdates[key];
-      if (userVal) {
-        colorRoot.style.setProperty('--' + varName, userVal);
-        // Also cascade into nested elements that define this var inline
-        doc.querySelectorAll('[style]').forEach(function(el) {
-          if (el === colorRoot) return;
-          if (el.style.getPropertyValue('--' + varName)) el.style.setProperty('--' + varName, userVal);
-        });
-      }
+      if (userVal) overridesToApply.push({ varName, userVal });
+
       // Read the final resolved value
       const actual = userVal || origVal;
       if (actual && formPane) {
@@ -1903,6 +1911,24 @@ function _renderTemplateIframe(html, slots) {
           if (hex) hex.value = normalized;
         }
       }
+    }
+
+    // Pass 2 (one frame later): apply personalized overrides after the
+    // browser has committed a paint of the neutral design, so the transition
+    // on .htpl-personalizing actually has an original frame to animate from.
+    if (overridesToApply.length) {
+      requestAnimationFrame(() => {
+        doc.documentElement.classList.add('htpl-personalizing');
+        for (const { varName, userVal } of overridesToApply) {
+          colorRoot.style.setProperty('--' + varName, userVal);
+          // Also cascade into nested elements that define this var inline
+          doc.querySelectorAll('[style]').forEach(function(el) {
+            if (el === colorRoot) return;
+            if (el.style.getPropertyValue('--' + varName)) el.style.setProperty('--' + varName, userVal);
+          });
+        }
+        setTimeout(() => doc.documentElement.classList.remove('htpl-personalizing'), 450);
+      });
     }
   });
 }

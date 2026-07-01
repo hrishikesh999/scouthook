@@ -301,7 +301,12 @@
 
             <!-- Collapsible raw views -->
             <div style="margin-top:var(--space-md)">
-              <details><summary>Raw HTML</summary><textarea id="raw-html" class="html-textarea" style="margin-top:8px;min-height:120px"></textarea></details>
+              <details><summary>Raw HTML</summary><textarea id="raw-html" class="html-textarea" style="margin-top:8px;min-height:120px"></textarea>
+                <div style="display:flex;align-items:center;gap:8px;margin-top:6px">
+                  <button type="button" id="btn-apply-raw-html" class="btn btn--sm btn--secondary">Apply raw HTML</button>
+                  <span style="font-size:.72rem;color:var(--text-muted)">Re-syncs slots, colors, and the preview from the text above. Edits here aren't picked up automatically.</span>
+                </div>
+              </details>
               <details style="margin-top:8px"><summary>Raw manifest JSON</summary><pre id="manifest-preview" class="manifest-json" style="margin-top:8px">{}</pre></details>
             </div>
 
@@ -328,6 +333,8 @@
   let _originalImageDataUrl = null;
   let _originalImageFile = null;
   let _originalImageId = null;
+  let _newTemplateId = null; // minted client-side on first image upload (new-template flow only)
+  let _convertedManifest = null; // manifest returned by /from-image or /from-image/refine
   let _previewMode = 'preview'; // 'preview' | 'original' | 'sideBySide'
   let _uploadInProgress = false;
   let _uploadAbort = null;
@@ -400,6 +407,22 @@
       const html = await r.text();
       _templateHtml = html;
       document.getElementById('f-html').value = html;
+
+      // Re-derive slot state from the reverted HTML — swapping _templateHtml
+      // alone left _slotState/manifest pointing at whatever was configured
+      // before the reset, which drifts from the HTML the moment any slot was
+      // added/removed/edited since the last save.
+      const manifest = _parseManifestFromHtml(html) || {};
+      const slots = scanSlotsFromHtml(html);
+      mergeExistingConfig(slots, manifest);
+      _slotState = slots;
+      const rawHtml = document.getElementById('raw-html');
+      if (rawHtml) rawHtml.value = html;
+
+      if (_step2Initialized) {
+        renderSlotCards();
+        updateManifest();
+      }
       renderPreview();
     } catch (err) {
       alert('Reset failed: ' + err.message);
@@ -410,6 +433,34 @@
 
   document.getElementById('btn-reset-s1').addEventListener('click', resetHtmlToSaved);
   document.getElementById('btn-reset-s2').addEventListener('click', resetHtmlToSaved);
+
+  // The Raw HTML textarea is a one-way mirror everywhere else in this file —
+  // many actions (slot-add, color reassign, reset) WRITE _templateHtml into
+  // it, but nothing reads a manual edit back out. Without this, hand-fixing
+  // an element then clicking any other slot action silently discards the fix.
+  function applyRawHtml() {
+    const html = document.getElementById('raw-html').value.trim();
+    if (!html) { alert('Raw HTML is empty.'); return; }
+
+    _templateHtml = html;
+    document.getElementById('f-html').value = html;
+
+    // Preserve currently-configured slot settings (maxLen, color defaults,
+    // brand roles) for slots that still exist; pick up new/removed data-slot
+    // attributes from the edited HTML.
+    const priorManifest = { slots: Object.fromEntries(_slotState.map(s => [s.key, s.config])) };
+    const slots = scanSlotsFromHtml(html);
+    mergeExistingConfig(slots, priorManifest);
+    _slotState = slots;
+
+    if (_step2Initialized) {
+      renderSlotCards();
+      updateManifest();
+    }
+    renderPreview();
+  }
+
+  document.getElementById('btn-apply-raw-html').addEventListener('click', applyRawHtml);
 
   document.getElementById('edit-tabs').addEventListener('click', e => {
     const tab = e.target.closest('.edit-tab');
@@ -1692,6 +1743,40 @@
   imgZone.addEventListener('drop', e => { e.preventDefault(); imgZone.classList.remove('dragover'); const f = e.dataTransfer.files[0]; if (f) processUpload(f); });
   imgInput.addEventListener('change', () => { if (imgInput.files[0]) processUpload(imgInput.files[0]); imgInput.value = ''; });
 
+  // ── Match score + on-demand refine (Pass 2) ─────────────────────────────
+
+  function renderMatchScoreRow(score) {
+    const label = score == null ? 'Match score unavailable' : `Match score: ${Math.round(score)}/100`;
+    return `<span style="font-size:.78rem;color:#166534">${label}</span>
+      <button class="btn btn--sm btn--secondary" id="btn-refine" type="button" style="margin-left:auto">↻ Refine to match original</button>`;
+  }
+
+  async function refineTemplate() {
+    const btn = document.getElementById('btn-refine');
+    if (!btn || btn.disabled) return;
+    if (!_originalImageId) { alert('No original design image available to refine against.'); return; }
+    btn.textContent = 'Refining…'; btn.disabled = true;
+    try {
+      const r = await adminFetch('/admin/html-templates/from-image/refine', {
+        method: 'POST',
+        body: JSON.stringify({ html: _templateHtml, manifest: _convertedManifest, original_image_id: _originalImageId }),
+      });
+      const data = await r.json();
+      if (!data.ok) throw new Error(data.error || 'Refinement failed');
+
+      _templateHtml = data.html;
+      _convertedManifest = data.manifest;
+      document.getElementById('f-html').value = data.html;
+
+      const row = document.getElementById('match-score-row');
+      if (row) row.innerHTML = renderMatchScoreRow(data.matchScore);
+      document.getElementById('btn-refine')?.addEventListener('click', refineTemplate);
+    } catch (err) {
+      alert('Refine failed: ' + err.message);
+      btn.textContent = '↻ Refine to match original'; btn.disabled = false;
+    }
+  }
+
   async function processUpload(file) {
     if (_uploadInProgress) return;
     if (file.size > 10 * 1024 * 1024) { alert('Max 10 MB.'); return; }
@@ -1710,27 +1795,39 @@
     uf.innerHTML = `<label>Upload a design</label>
       <div class="img-upload-progress"><div class="img-upload-spinner"></div>
       <div style="flex:1"><div style="font-weight:600;font-size:.85rem">Converting design to template…</div>
-      <div style="font-size:.78rem;color:var(--text-muted);margin-top:2px">AI is analyzing, generating HTML, then refining. 45–90 seconds.</div></div>
+      <div style="font-size:.78rem;color:var(--text-muted);margin-top:2px">AI is analyzing the design and generating HTML. Usually 20–40 seconds.</div></div>
       <button class="btn btn--sm btn--secondary" id="upload-cancel" type="button">Cancel</button></div>`;
     document.getElementById('upload-cancel')?.addEventListener('click', () => { _uploadAbort?.abort(); _uploadInProgress = false; resetUploadZone(); });
 
+    // Mint (or reuse) the id the original design image will be uploaded under.
+    // Editing an existing template → use its real id directly (no copy needed).
+    // Creating a new one → mint a UUID now and send it back as the row's id at
+    // save time, so the already-uploaded original lines up without a race.
+    const uploadTemplateId = templateId || (_newTemplateId ||= crypto.randomUUID());
+
     try {
       const r = await fetch('/admin/html-templates/from-image', {
-        method: 'POST', headers: { 'Content-Type': file.type, 'X-Admin-Password': adminPw }, body: file, signal: _uploadAbort.signal,
+        method: 'POST',
+        headers: { 'Content-Type': file.type, 'X-Admin-Password': adminPw, 'X-Template-Id': uploadTemplateId },
+        body: file, signal: _uploadAbort.signal,
       });
       let data; try { data = await r.json(); } catch { throw new Error(`Server error (HTTP ${r.status})`); }
       if (!data.ok) throw new Error(data.error || 'Conversion failed');
 
       _templateHtml = data.html;
+      _convertedManifest = data.manifest;
       if (data.original_image_id) _originalImageId = data.original_image_id;
       document.getElementById('f-html').value = data.html;
       if (data.manifest?.dimensions) { document.getElementById('f-dim-w').value = data.manifest.dimensions.width || 1080; document.getElementById('f-dim-h').value = data.manifest.dimensions.height || 1080; }
 
       uf.innerHTML = `<label>Upload a design</label>
-        <div style="padding:12px 16px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:var(--radius);font-size:.85rem;color:#166534;display:flex;align-items:center;gap:8px">
+        <div style="padding:12px 16px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:var(--radius);font-size:.85rem;color:#166534;display:flex;flex-direction:column;gap:8px">
+        <div style="display:flex;align-items:center;gap:8px">
         <span style="font-size:18px">✓</span><div><div style="font-weight:600">Template generated</div>
         <div style="font-size:.78rem;color:#15803d;margin-top:1px">${Object.keys(data.manifest?.slots||{}).length} slots · ${data.html.length.toLocaleString()} bytes</div></div>
-        <button class="btn btn--sm btn--secondary" style="margin-left:auto" onclick="resetUploadZone()">Change</button></div>`;
+        <button class="btn btn--sm btn--secondary" style="margin-left:auto" onclick="resetUploadZone()">Change</button></div>
+        <div id="match-score-row" style="display:flex;align-items:center;gap:8px;padding-top:8px;border-top:1px solid #bbf7d0">${renderMatchScoreRow(data.matchScore)}</div></div>`;
+      document.getElementById('btn-refine')?.addEventListener('click', refineTemplate);
     } catch (err) {
       if (err.name === 'AbortError') { _uploadInProgress = false; return; }
       uf.innerHTML = `<label>Upload a design</label><div class="img-upload-error">${esc(err.message)} <button class="btn btn--sm btn--secondary" style="margin-left:auto" onclick="resetUploadZone()">Retry</button></div>`;
@@ -1781,19 +1878,16 @@
     if (html) body.html = html;
 
     if (_originalImageId) body.original_image_id = _originalImageId;
+    // New template + an image was converted through this form → the original
+    // design already lives in R2 under _newTemplateId (see processUpload).
+    // Tell the server to use that same id for the row so they line up.
+    if (!id && _newTemplateId) body.id = _newTemplateId;
 
     try {
       const r = await adminFetch(id ? `/admin/html-templates/${id}` : '/admin/html-templates', { method: id ? 'PUT' : 'POST', body: JSON.stringify(body) });
       const data = await r.json();
       btn.textContent = 'Save template'; btn.disabled = false;
       if (!data.ok) { showError('form-error-2', data.error || 'Save failed.'); return; }
-
-      // Copy original image to the template's actual ID (for new templates)
-      if (!id && data.template?.id && _originalImageFile) {
-        adminFetch(`/admin/html-templates/upload-original/${data.template.id}`, {
-          method: 'POST', headers: { 'Content-Type': _originalImageFile.type }, body: _originalImageFile,
-        }).catch(() => {});
-      }
 
       if (data.thumbnail_warning) { showWarnBanner(`Saved, but thumbnail failed: ${data.thumbnail_warning}`); }
       else location.href = '/admin-html-templates.html';

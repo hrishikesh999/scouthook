@@ -163,6 +163,45 @@ RULE 9: DIMENSIONS — Match the image aspect ratio:
    Square: 1080×1080 | Portrait: 1080×1350 | Landscape: 1200×628
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+WORKED EXAMPLE
+
+Design: a square quote card. Solid dark-navy background. A large italic serif quote
+centered in white text. Below it, a thin gold horizontal divider line, then the
+author's name in smaller muted-gold uppercase letters with wide letter-spacing.
+
+Correct output for this design:
+
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@1,500&family=Inter:wght@600&display=swap" rel="stylesheet">
+<script type="application/json" id="template-meta">
+{"slots":{"quote":{"maxLen":180,"default":"The best way to predict the future is to create it."},"author":{"maxLen":40,"default":"PETER DRUCKER"},"color:bg":{"default":"#0b1120"},"color:text":{"default":"#ffffff"},"color:accent":{"default":"#d4af37"}},"dimensions":{"width":1080,"height":1080}}
+</script>
+<style>
+  .root { display:flex; flex-direction:column; align-items:center; justify-content:center; font-family:'Inter',sans-serif; }
+  .quote { font-family:'Playfair Display',serif; font-style:italic; font-weight:500; font-size:52px; line-height:1.35; color:var(--text); text-align:center; max-width:820px; }
+  .divider { margin:36px 0; }
+  .author { font-size:18px; font-weight:600; letter-spacing:4px; text-transform:uppercase; color:var(--accent); }
+</style>
+</head>
+<body>
+  <div class="root" style="position:relative; width:1080px; height:1080px; overflow:hidden; --bg:#0b1120; --text:#ffffff; --accent:#d4af37; background:var(--bg)">
+    <p class="quote" data-slot="quote">"The best way to predict the future is to create it."</p>
+    <svg class="divider" width="80" height="2"><rect width="80" height="2" fill="var(--accent)"/></svg>
+    <p class="author" data-slot="author">PETER DRUCKER</p>
+  </div>
+</body>
+</html>
+
+Notice: every color (#0b1120, #ffffff, #d4af37) is defined ONCE on the root as a CSS var and
+referenced everywhere else via var(--name) — including the SVG's fill attribute — never
+repeated as a literal. The manifest's color:* defaults match those root values exactly. Text
+slots use snake_case keys with realistic placeholder content matching the design. The divider
+is a simple inline SVG, not an image slot, because it's a single geometric shape.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 STEP 3 — SELF-CHECK BEFORE OUTPUTTING
 
 Before returning, verify:
@@ -550,6 +589,74 @@ async function analyzeImageLayout(buffer) {
     }
   }
 
+  // ── Text region detection ──────────────────────────────────────────────────
+  // Text has elevated local contrast (glyph edges against background) — but
+  // magnitude alone doesn't distinguish it from a photo: bold, high-contrast
+  // text can easily have HIGHER per-cell variance than a soft-focus photo.
+  // The real distinguishing signal is the one the photo detector above
+  // already uses ("text is thin; real photos are chunky" — it requires ≥5
+  // consecutive photo rows AND columns to register a block). So: reuse the
+  // same cellVarianceMap, and treat any elevated-variance cell that ISN'T
+  // part of a confirmed photo block as a text candidate, regardless of how
+  // high its variance is. Text lines are thin horizontal bands, so group by
+  // row first (like a line of text), then take each band's horizontal extent.
+  const TEXT_V_MIN = 35; // above flat-color/compression noise floor, no upper bound
+  const MIN_TEXT_COLS = 2; // at least a couple of glyphs' worth of contrast in the row
+
+  const textCells = [];
+  for (let cy = 0; cy < GRID; cy++) {
+    for (let cx = 0; cx < GRID; cx++) {
+      const v = cellVarianceMap.get(`${cy}:${cx}`) || 0;
+      if (v < TEXT_V_MIN) continue;
+      // Skip cells already claimed by a confirmed photo block (+2-row buffer,
+      // matching the gap convention the photo-block search itself uses).
+      const inPhotoBlock = photoBlocks.some(pb =>
+        cy >= pb.rStart - 2 && cy < pb.rStart + pb.rLen + 2 && cx >= pb.minCX && cx <= pb.maxCX);
+      if (inPhotoBlock) continue;
+      textCells.push({ cx, cy });
+    }
+  }
+
+  const rowTextColCount = Array.from({ length: GRID }, (_, cy) =>
+    textCells.filter(c => c.cy === cy).length
+  );
+  const rowHasText = rowTextColCount.map(count => count >= MIN_TEXT_COLS);
+
+  const textBands = [];
+  let tStart = -1;
+  for (let cy = 0; cy <= GRID; cy++) {
+    const has = cy < GRID && rowHasText[cy];
+    if (has) {
+      if (tStart < 0) tStart = cy;
+    } else if (tStart >= 0) {
+      textBands.push({ start: tStart, end: cy });
+      tStart = -1;
+    }
+  }
+
+  const textRegions = textBands
+    .map(band => {
+      const cells = textCells.filter(c => c.cy >= band.start && c.cy < band.end);
+      if (!cells.length) return null;
+      const minCX = Math.min(...cells.map(c => c.cx));
+      const maxCX = Math.max(...cells.map(c => c.cx));
+      return {
+        startX: minCX / GRID,
+        endX:   (maxCX + 1) / GRID,
+        startY: band.start / GRID,
+        endY:   band.end / GRID,
+      };
+    })
+    .filter(Boolean)
+    // A band overlapping a detected photo block is variance from the photo,
+    // not text sitting on top of it — this technique can't cleanly separate
+    // overlaid text from a busy photo background, so don't hint it as text.
+    .filter(box => !photoBlocks.some(pb => {
+      const pbStartY = pb.rStart / GRID, pbEndY = (pb.rStart + pb.rLen) / GRID;
+      return box.startY < pbEndY && box.endY > pbStartY;
+    }))
+    .slice(0, 8); // cap — a handful of hints is plenty, avoid overwhelming the prompt
+
   // Convert blocks to fractional bounding boxes
   const photoBoxes = photoBlocks.map(best => {
     const coverX = (best.maxCX - best.minCX + 1) / GRID;
@@ -679,19 +786,49 @@ async function analyzeImageLayout(buffer) {
     photoBoxes,
     panelBox,
     isGradient,
+    textRegions,
   };
 }
 
 /**
- * Format zone analysis into a prompt context string.
- *
+ * Format zone analysis into a prompt context string. Wraps the existing
+ * photo/gradient/zone branching (_buildPrimaryLayoutContext, unchanged) and
+ * appends text-region hints, which are relevant regardless of which branch
+ * fired above.
+ */
+function buildLayoutContext(analysis, tplW, tplH) {
+  return _buildPrimaryLayoutContext(analysis, tplW, tplH) +
+    _buildTextRegionContext(analysis.textRegions, tplW, tplH);
+}
+
+/**
+ * Format text-region hints (measured algorithmically) into a prompt context
+ * string. Supplemental to whichever primary layout branch fired — a template
+ * can have both a background photo AND text blocks worth hinting.
+ */
+function _buildTextRegionContext(textRegions, tplW, tplH) {
+  if (!textRegions || textRegions.length === 0) return '';
+  const lines = ['\n\nTEXT REGIONS (measured algorithmically — approximate position/size of ' +
+    'text-like content detected in the image; use as a starting hint for where editable text ' +
+    'blocks belong, refine based on what you actually see):'];
+  textRegions.forEach((box, i) => {
+    const x = Math.round(box.startX * tplW);
+    const y = Math.round(box.startY * tplH);
+    const w = Math.round((box.endX - box.startX) * tplW);
+    const h = Math.round((box.endY - box.startY) * tplH);
+    lines.push(`  Text block ${i + 1}: x=${x}px, y=${y}px, width=${w}px, height=${h}px`);
+  });
+  return lines.join('\n');
+}
+
+/**
  * Priority:
  *   1. photoBox.isFullBleed  → full-bleed background hint
  *   2. photoBox (contained)  → exact pixel bounds for the photo element
  *      + solid zone colors from zone analysis as supplemental info
  *   3. Zone splits only       → full horizontal/vertical split output (legacy path)
  */
-function buildLayoutContext({ hZones, vZones, photoBox, photoBoxes, panelBox, isGradient }, tplW, tplH) {
+function _buildPrimaryLayoutContext({ hZones, vZones, photoBox, photoBoxes, panelBox, isGradient }, tplW, tplH) {
   const hasH = hZones && hZones.length >= 2;
   const hasV = vZones && vZones.length >= 2;
   const lines = [];

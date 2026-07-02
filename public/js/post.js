@@ -146,15 +146,24 @@ async function init() {
   }
 
   try {
-    // Start both fetches in parallel immediately.
+    const directFetch = () =>
+      fetch(`/api/posts/${POST_ID}`, { credentials: 'same-origin' }).then(r => r.json());
+
+    // Use the router prefetch if available. If it resolved to null (any fetch error —
+    // e.g. Neon cold-start, network blip) fall back to a direct fetch immediately.
+    // Without this fallback a null-resolving Promise is still truthy, so the || branch
+    // never runs and the page is permanently stuck on the skeleton / error state.
     const prefetchPromise = window.__routerConsumePrefetch?.(`/api/posts/${POST_ID}`);
-    const postPromise     = prefetchPromise
-      || fetch(`/api/posts/${POST_ID}`, { credentials: 'same-origin' }).then(r => r.json());
+    let postData;
+    if (prefetchPromise) {
+      postData = await prefetchPromise;
+      if (!postData) postData = await directFetch();
+    } else {
+      postData = await directFetch();
+    }
+
     // Cache linkedin/status — only name/avatar needed, no need to refetch for 2 min.
     const profilePromise  = cachedFetch('/api/linkedin/status', { credentials: 'same-origin' }, 120_000);
-
-    // Render post body as soon as post data arrives — don't block on LinkedIn status.
-    const postData = await postPromise;
     if (!postData?.ok || !postData.post) {
       showPostError('Could not load this post. <a href="/published.html" style="color:var(--teal)">Back to Published</a>');
       return;

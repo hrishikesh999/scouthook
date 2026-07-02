@@ -164,6 +164,13 @@
     // Set direction for CSS animation
     document.documentElement.dataset.navDir = isPopState ? 'back' : 'forward';
 
+    // Show thin progress bar while the HTML fetch is in-flight so the user
+    // knows something is happening (especially important for post.html where
+    // requireLoginHtml adds DB round-trips before the static file is served).
+    const docEl = document.documentElement;
+    docEl.classList.remove('spa-nav-done');
+    docEl.classList.add('spa-navigating');
+
     // Fire data prefetches immediately — parallel with the HTML fetch below.
     // List pages use cachedFetch (deduplicates in-flight requests automatically).
     // Post detail uses _prefetches map, consumed once by post.js init().
@@ -193,6 +200,7 @@
       html = await res.text();
     } catch {
       // Hard navigate on network error
+      docEl.classList.remove('spa-navigating');
       window.location.href = url;
       return;
     }
@@ -211,6 +219,7 @@
     // Extract new main content
     const newContent = doc.getElementById('main-content');
     if (!newContent) {
+      docEl.classList.remove('spa-navigating');
       window.location.href = url;
       return;
     }
@@ -261,6 +270,11 @@
 
       document.dispatchEvent(new CustomEvent('spa:navigated', { detail: { url, pathname } }));
     };
+
+    // Dismiss progress bar — fetch complete, about to swap.
+    docEl.classList.remove('spa-navigating');
+    docEl.classList.add('spa-nav-done');
+    setTimeout(() => docEl.classList.remove('spa-nav-done'), 350);
 
     // Swap content with View Transitions or CSS class fallback.
     // startViewTransition calls the update callback asynchronously (microtask),

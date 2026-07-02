@@ -7802,6 +7802,32 @@ a.pub-card {
 
 /* Sidebar stays completely static — exclude from view transitions */
 #sidebar { view-transition-name: none; }
+/* ── SPA navigation progress bar ──────────────────────────────────── */
+/* Thin bar at the top that appears while the HTML fetch is in-flight. */
+html::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 2px;
+  width: 0%;
+  background: var(--teal);
+  z-index: 9999;
+  opacity: 0;
+  transition: opacity 80ms, width 0ms;
+  pointer-events: none;
+}
+html.spa-navigating::before {
+  opacity: 1;
+  width: 70%;
+  transition: opacity 80ms, width 600ms cubic-bezier(0.1, 0.6, 0.4, 1);
+}
+html.spa-nav-done::before {
+  opacity: 0;
+  width: 100%;
+  transition: opacity 200ms 80ms, width 100ms;
+}
+
 #main-content { view-transition-name: main-content; }
 
 /* Forward navigation: new content slides in from the right */

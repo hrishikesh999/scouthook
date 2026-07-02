@@ -48,7 +48,7 @@
     '  <nav class="sidebar-nav">',
     '    ' + link('/dashboard.html', svgDashboard, 'Dashboard'),
     '    ' + link('/drafts.html',    svgDrafts,    'Posts'),
-    '    ' + link('/vault.html',     svgVault,     'Knowledge Vault'),
+    '    ' + link('/vault.html',     svgVault,     'Vault'),
     '    ' + link('/settings.html',  svgSettings,  'Settings'),
     '  </nav>',
     '  <div class="sidebar-bottom">',

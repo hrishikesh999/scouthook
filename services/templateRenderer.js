@@ -98,6 +98,10 @@ function placeholderForKey(key) {
   return `${key} text here`;
 }
 
+// Neutral palette for thumbnail renders — brand-mapped color slots resolve
+// against this per role, so backgrounds/text/accents stay distinguishable.
+const THUMBNAIL_PREVIEW_BRAND = { bg: '#ffffff', text: '#111827', accent: '#0f766e' };
+
 // ---------------------------------------------------------------------------
 // generateTemplateThumbnail
 // No post, no AI, no brand context — deterministic placeholder content.
@@ -112,7 +116,13 @@ async function generateTemplateThumbnail(html, manifest) {
 
   for (const [key, def] of Object.entries(slots)) {
     if (key.startsWith('color:')) {
-      const val = def.default === 'brand' ? '#0f766e' : (def.default || '#cccccc');
+      // Brand-mapped slots ({default:'brand', brandRole:'bg'|'text'|...}) must
+      // resolve per role — a flat teal for every role renders bg and text the
+      // same color, producing a solid teal card with invisible text.
+      let val;
+      if (def.brandRole) val = resolveBrandRole(def.brandRole, THUMBNAIL_PREVIEW_BRAND);
+      else if (def.default === 'brand') val = THUMBNAIL_PREVIEW_BRAND.accent;
+      else val = def.default || '#cccccc';
       placeholderSlots[key] = val;
       continue;
     }

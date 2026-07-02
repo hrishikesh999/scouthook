@@ -440,7 +440,7 @@ router.post('/from-image', express.raw({ type: ['image/png', 'image/jpeg', 'imag
     // Pass 1 + Pass 3 + the match-score render.
     const PIPELINE_DEADLINE_MS = 90_000;
     const start = Date.now();
-    const { html, manifest, matchScore } = await Promise.race([
+    const { html, manifest, matchScore, colorWarning } = await Promise.race([
       generateTemplateFromImage(buffer, { instructions, contentType }),
       new Promise((_, reject) =>
         setTimeout(() => reject(Object.assign(
@@ -463,7 +463,7 @@ router.post('/from-image', express.raw({ type: ['image/png', 'image/jpeg', 'imag
       console.warn('[adminHtmlTemplates] original image upload failed:', e.message);
     }
 
-    res.json({ ok: true, html, manifest, matchScore, original_image_id: origId });
+    res.json({ ok: true, html, manifest, matchScore, colorWarning: colorWarning || null, original_image_id: origId });
   } catch (err) {
     const status = err.status || 500;
     console.error('[adminHtmlTemplates] from-image error (%d): %s', status, err.message);
@@ -519,6 +519,7 @@ router.post('/from-image/refine', async (req, res) => {
       manifest: result.manifest,
       matchScore: result.matchScore,
       previousScore: result.previousScore,
+      colorWarning: result.colorWarning || null,
     });
   } catch (err) {
     const status = err.status || 500;

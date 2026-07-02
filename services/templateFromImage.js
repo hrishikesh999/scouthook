@@ -141,6 +141,8 @@ RULE 7: MANIFEST — Embed inside <head>:
      "color:bg": {"default": "#3a3c1a"},
      "color:accent": {"default": "#e94560"}
    NEVER use "#cccccc" as a default. Copy the exact hex from your CSS var definition.
+   NEVER assign the same hex value to multiple different CSS vars — if --bg and --text and --accent are all
+   the same color, that is wrong. Real designs have contrast: a light background has dark text, or vice versa.
 
    - Include ALL color:* slots — one per CSS custom property defined
    - Include ALL image:* slots with bounding box { "x":..., "y":..., "w":..., "h":... }
@@ -1405,9 +1407,26 @@ async function refineTemplateHtml(html, manifest, originalImageBuffer) {
   html = applyPostProcessing(refinedHtml, manifest);
   html = syncManifestColors(html, manifest);
 
+  const colorDefaultsRefine = Object.entries(manifest.slots)
+    .filter(([k]) => k.startsWith('color:'))
+    .map(([, v]) => (typeof v === 'object' && v?.default ? String(v.default).trim().toLowerCase() : null))
+    .filter(Boolean);
+  let colorWarningRefine = null;
+  if (colorDefaultsRefine.length >= 2) {
+    const uniq = new Set(colorDefaultsRefine);
+    if (uniq.size === 1) {
+      const uniformColor = [...uniq][0];
+      console.warn(
+        '[templateFromImage] ⚠️  Pass 2: ALL %d color slot(s) still resolve to (%s) after refinement.',
+        colorDefaultsRefine.length, uniformColor,
+      );
+      colorWarningRefine = `All ${colorDefaultsRefine.length} color slots still resolved to the same value (${uniformColor}) after refinement.`;
+    }
+  }
+
   const matchScore = await computeMatchScore(html, manifest, originalImageBuffer);
 
-  return { html, manifest, matchScore, previousScore: diffResult.score };
+  return { html, manifest, matchScore, previousScore: diffResult.score, colorWarning: colorWarningRefine };
 }
 
 // ---------------------------------------------------------------------------
@@ -1577,6 +1596,26 @@ async function generateTemplateFromImage(imageBuffer, options = {}) {
   // Deterministic manifest color sync: CSS var values → manifest defaults
   html = syncManifestColors(html, manifest);
 
+  // Detect AI compliance failure: all color slots resolved to the same value
+  // (especially #cccccc — the old editor fallback). A real design never has
+  // every distinct color identical. Log a prominent warning so it's easy to
+  // spot in build logs and the admin knows to refine.
+  const colorDefaults = Object.entries(manifest.slots)
+    .filter(([k]) => k.startsWith('color:'))
+    .map(([, v]) => (typeof v === 'object' && v?.default ? String(v.default).trim().toLowerCase() : null))
+    .filter(Boolean);
+  if (colorDefaults.length >= 2) {
+    const uniqueDefaults = new Set(colorDefaults);
+    if (uniqueDefaults.size === 1) {
+      const uniformColor = [...uniqueDefaults][0];
+      console.warn(
+        '[templateFromImage] ⚠️  ALL %d color slot(s) resolved to the same value (%s) — ' +
+        'AI likely ignored color rules. Use "Refine to match original" to fix.',
+        colorDefaults.length, uniformColor,
+      );
+    }
+  }
+
   console.log('[templateFromImage] pass 1 done in %dms (%d bytes, %d slots)',
     Date.now() - pass1Start, html.length, Object.keys(manifest.slots).length);
 
@@ -1597,7 +1636,11 @@ async function generateTemplateFromImage(imageBuffer, options = {}) {
     matchScore = await computeMatchScore(html, manifest, cropBuffer);
   }
 
-  return { html, manifest, matchScore };
+  const colorUniform = colorDefaults.length >= 2 && new Set(colorDefaults).size === 1
+    ? [...new Set(colorDefaults)][0]
+    : null;
+
+  return { html, manifest, matchScore, colorWarning: colorUniform ? `All ${colorDefaults.length} color slots resolved to the same value (${colorUniform}) — use "Refine to match original" to fix the colors.` : null };
 }
 
 // ---------------------------------------------------------------------------

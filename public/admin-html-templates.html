@@ -114,6 +114,11 @@
       const slots = t.slot_manifest?.slots ? Object.keys(t.slot_manifest.slots) : [];
       const escapedName = esc(t.name);
       const initials = esc((t.name || '?').slice(0, 2).toUpperCase());
+      const colorDefaults = Object.entries(t.slot_manifest?.slots || {})
+        .filter(([k]) => k.startsWith('color:'))
+        .map(([, v]) => (typeof v === 'object' && v?.default && !v.brandRole ? String(v.default).trim().toLowerCase() : null))
+        .filter(Boolean);
+      const hasColorIssue = colorDefaults.length >= 2 && new Set(colorDefaults).size === 1;
       return `
       <div class="template-row ht-row" data-id="${t.id}" data-name="${escapedName}" data-active="${t.active}">
         ${hasThumb
@@ -125,6 +130,7 @@
             <span class="ht-badge ${t.active ? 'ht-badge--active' : 'ht-badge--inactive'}">${t.active ? 'Active' : 'Inactive'}</span>
             ${t.category ? `<span class="ht-badge ht-badge--cat">${esc(t.category)}</span>` : ''}
             <span>${slots.length} slot${slots.length !== 1 ? 's' : ''}</span>
+            ${hasColorIssue ? `<span style="color:#b45309;font-size:.78rem" title="All color slots have the same default (${colorDefaults[0]}) — edit and refine to fix">⚠ Color issue</span>` : ''}
           </div>
           ${t.description ? `<div class="template-row__meta" style="margin-top:2px">${esc(t.description)}</div>` : ''}
         </div>

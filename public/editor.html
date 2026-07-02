@@ -288,7 +288,7 @@
           <span class="htpl-modal-eyebrow">Design Template</span>
           <span class="ai-image-modal-title" id="html-tpl-modal-title">DESIGN TEMPLATES</span>
         </div>
-        <button class="slide-over-close" id="html-tpl-modal-close" aria-label="Close">&#10005;</button>
+        <button class="htpl-close-btn" id="html-tpl-modal-close" aria-label="Close editor">&#10005;&nbsp; Close</button>
       </div>
       <div class="ai-image-modal-body" id="html-tpl-modal-body">
         <div class="ai-image-preview-pane" id="html-tpl-preview-pane"></div>
@@ -1325,6 +1325,7 @@ let _htmlTplRenderJobId    = null;
 let _htmlTplPollTimer      = null;
 let _htmlTplTemplateHtml   = null;
 let _htmlTplActiveSlotKey  = null;
+let _htmlTplDirty          = false; // unsaved edits since open/last render
 
 function _setHtmlTplModalState(state) {
   _htmlTplModalState = state;
@@ -1349,38 +1350,104 @@ function _setHtmlTplModalState(state) {
   }
 }
 
-function openHtmlTemplateModal() {
+async function openHtmlTemplateModal() {
   if (scheduleEditLocked || !currentPostId) return;
   currentAssetType = 'html_template';
+  _htmlTplDirty = false;
   const insertBtn = document.getElementById('html-tpl-insert-btn');
   if (insertBtn) { insertBtn.hidden = true; insertBtn.disabled = true; }
   document.getElementById('html-tpl-overlay').setAttribute('aria-hidden', 'false');
 
+  // Restore a rendered result OR an in-progress draft (snapshotted on close) —
+  // previously only completed renders (assetUrl) were restored, so closing
+  // before "Save & Preview" lost every edit.
   const cached = visualCache.get(`${currentPostId}:html_template`);
-  if (cached?.assetUrl) {
+  if (cached?.templateId && (cached.templateHtml || cached.assetUrl)) {
     _htmlTplSelectedId     = cached.templateId;
     _htmlTplSelectedMeta   = cached.templateMeta;
     _htmlTplExtractedSlots = cached.extractedContent;
     _htmlTplTemplateHtml   = cached.templateHtml || _htmlTplTemplateHtml;
     _pendingColorUpdates   = { ...(cached.colorOverrides || {}) };
     _htmlTplOriginalColors = { ...(cached.originalColors || {}) };
-    currentAssetUrl   = cached.assetUrl;
-    currentPreviewUrl = cached.previewUrl;
+    currentAssetUrl   = cached.assetUrl || null;
+    currentPreviewUrl = cached.previewUrl || null;
+    if (cached.templateMeta?.name) {
+      document.getElementById('html-tpl-modal-title').textContent = cached.templateMeta.name.toUpperCase();
+    }
+    // Brand palette must be loaded before the form render resolves brand-mapped slots
+    await _loadBrandColors();
+    if (!Object.keys(_htmlTplOriginalColors).length && _htmlTplTemplateHtml) {
+      _captureOriginalColors(_htmlTplTemplateHtml, _htmlTplSelectedMeta?.slot_manifest?.slots || {});
+    }
     if (_htmlTplTemplateHtml) {
       _renderTemplateIframe(_htmlTplTemplateHtml, _htmlTplExtractedSlots);
     } else {
       _renderHtmlTplPreviewImage(cached.previewUrl || cached.assetUrl);
     }
     renderHtmlTemplateForm(_htmlTplExtractedSlots);
+    _restoreDraftImages(cached.imageSlots);
     _setHtmlTplModalState('editing');
-    _showInsertBtn();
+    if (cached.assetUrl) _showInsertBtn();
     return;
   }
   _setHtmlTplModalState('picker');
   loadHtmlTemplatePicker();
 }
 
+// Snapshot the current editing state into visualCache so closing the modal —
+// deliberately or not — never loses work. Restored by openHtmlTemplateModal.
+function _snapshotHtmlTplDraft() {
+  if (!currentPostId || !_htmlTplSelectedId || _htmlTplModalState === 'picker') return;
+  const formPane = document.getElementById('html-tpl-form-pane');
+  if (!formPane || formPane.hidden || !formPane.querySelector('[data-slot]')) return;
+  _syncExtractedFromForm();
+  const imageSlots = {};
+  formPane.querySelectorAll('.html-tpl-img-zone[data-slot]').forEach(zone => {
+    const img = zone.querySelector('.html-tpl-img-preview img');
+    if (img?.getAttribute('src')) {
+      imageSlots[zone.dataset.slot] = { src: img.getAttribute('src'), key: zone.dataset.storageKey || null };
+    }
+  });
+  const prev = visualCache.get(`${currentPostId}:html_template`) || {};
+  const sameTemplate = prev.templateId === _htmlTplSelectedId;
+  visualCache.set(`${currentPostId}:html_template`, {
+    ...prev,
+    templateId:       _htmlTplSelectedId,
+    templateMeta:     _htmlTplSelectedMeta,
+    templateHtml:     _htmlTplTemplateHtml,
+    extractedContent: { ...(_htmlTplExtractedSlots || {}) },
+    colorOverrides:   { ..._pendingColorUpdates },
+    originalColors:   { ..._htmlTplOriginalColors },
+    imageSlots,
+    assetUrl:   sameTemplate ? prev.assetUrl   || null : null,
+    previewUrl: sameTemplate ? prev.previewUrl || null : null,
+  });
+}
+
+function _restoreDraftImages(imageSlots) {
+  if (!imageSlots) return;
+  const formPane = document.getElementById('html-tpl-form-pane');
+  for (const [slot, info] of Object.entries(imageSlots)) {
+    if (!info?.src) continue;
+    const zone = formPane.querySelector(`.html-tpl-img-zone[data-slot="${slot}"]`);
+    if (!zone) continue;
+    const fileInput = zone.querySelector(`input[type="file"][data-slot="${slot}"]`);
+    if (info.key) { zone.dataset.storageKey = info.key; zone.dataset.originalStorageKey = info.key; }
+    _mpOnImageSelected(zone, slot, info.src, info.key || null, fileInput);
+  }
+  _htmlTplDirty = false; // restoring a draft is not a new edit
+}
+
+function attemptCloseHtmlTemplateModal() {
+  if (_htmlTplDirty && _htmlTplModalState !== 'picker') {
+    if (!confirm('Close the design editor? Your edits will be kept and restored when you reopen it.')) return;
+  }
+  closeHtmlTemplateModal();
+}
+
 function closeHtmlTemplateModal() {
+  _snapshotHtmlTplDraft();
+  _htmlTplDirty = false;
   document.getElementById('html-tpl-overlay').setAttribute('aria-hidden', 'true');
   clearInterval(_htmlTplPollTimer);
   clearInterval(_htmlTplSilentPollTimer);
@@ -1518,6 +1585,7 @@ async function _selectHtmlTemplate(templateId) {
   _htmlTplAiCache = null;
   _pendingColorUpdates = {};
   _htmlTplOriginalColors = {};
+  _htmlTplDirty = false;
   document.getElementById('html-tpl-modal-title').textContent = tpl.name.toUpperCase();
 
   _setHtmlTplModalState('editing');
@@ -1534,21 +1602,30 @@ async function _selectHtmlTemplate(templateId) {
     _htmlTplTemplateHtml = await htmlRes.text();
     _htmlTplExtractedSlots = {};
 
-    // Parse manifest from the HTML itself if available —
-    // the DB column may be stale or empty
-    const htmlManifest = _parseManifestFromHtml(_htmlTplTemplateHtml);
-    if (htmlManifest && Object.keys(htmlManifest.slots || {}).length > 0) {
-      _htmlTplSelectedMeta = { ..._htmlTplSelectedMeta, slot_manifest: htmlManifest };
-    }
-
-    // If manifest is still empty, auto-detect slots from HTML DOM
-    const currentManifest = _htmlTplSelectedMeta?.slot_manifest || {};
-    if (!currentManifest.slots || Object.keys(currentManifest.slots).length === 0) {
-      const detected = _autoDetectSlots(_htmlTplTemplateHtml);
-      if (Object.keys(detected.slots).length > 0) {
-        _htmlTplSelectedMeta = { ..._htmlTplSelectedMeta, slot_manifest: detected };
+    // Manifest priority: the DB column is authoritative — it's what the admin
+    // edits and what the server render uses (templateRenderer.js reads
+    // template.slot_manifest). Only fall back to the HTML-embedded manifest,
+    // then auto-detection, when the DB column is empty. Preferring the HTML
+    // manifest here silently dropped admin brandRole picks whenever the two
+    // drifted, so the modal preview disagreed with the final render.
+    const dbManifest = _htmlTplSelectedMeta?.slot_manifest;
+    if (!dbManifest?.slots || Object.keys(dbManifest.slots).length === 0) {
+      const htmlManifest = _parseManifestFromHtml(_htmlTplTemplateHtml);
+      if (htmlManifest && Object.keys(htmlManifest.slots || {}).length > 0) {
+        _htmlTplSelectedMeta = { ..._htmlTplSelectedMeta, slot_manifest: htmlManifest };
+      } else {
+        const detected = _autoDetectSlots(_htmlTplTemplateHtml);
+        if (Object.keys(detected.slots).length > 0) {
+          _htmlTplSelectedMeta = { ..._htmlTplSelectedMeta, slot_manifest: detected };
+        }
       }
     }
+
+    // Capture the template's original colors from the raw HTML string once,
+    // up front — covers vars defined in <style> blocks as well as inline
+    // styles, which the iframe-load capture (inline-only) missed. This is
+    // what makes "Reset to Original" deterministic.
+    _captureOriginalColors(_htmlTplTemplateHtml, _htmlTplSelectedMeta?.slot_manifest?.slots || {});
 
     _renderTemplateIframe(_htmlTplTemplateHtml, null);
     renderHtmlTemplateForm(null);
@@ -1582,6 +1659,7 @@ async function _aiFillAllFields() {
   try {
     const extracted = await _aiExtractAll();
     _htmlTplExtractedSlots = extracted;
+    _htmlTplDirty = true;
     _renderTemplateIframe(_htmlTplTemplateHtml, _htmlTplExtractedSlots);
     renderHtmlTemplateForm(_htmlTplExtractedSlots);
   } catch (err) {
@@ -1738,6 +1816,8 @@ async function _loadBrandColors() {
         bg:     data.profile.brand_bg     || '#0F1A3C',
         text:   data.profile.brand_text   || '#F0F4FF',
       };
+      if (data.profile.brand_secondary_bg)   _htmlTplBrandColors.secondary_bg   = data.profile.brand_secondary_bg;
+      if (data.profile.brand_secondary_text) _htmlTplBrandColors.secondary_text = data.profile.brand_secondary_text;
     }
   } catch { /* fallback */ }
   if (!_htmlTplBrandColors) _htmlTplBrandColors = { accent: '#0D7A5F', bg: '#0F1A3C', text: '#F0F4FF' };
@@ -1745,11 +1825,11 @@ async function _loadBrandColors() {
 }
 
 function _resolveBrandColor(key, def) {
-  if (def.default !== 'brand' || !_htmlTplBrandColors) return /^#[0-9a-fA-F]{3,8}$/.test(def.default) ? def.default : '#cccccc';
+  if (def.default !== 'brand' || !_htmlTplBrandColors) return /^#[0-9a-fA-F]{3,8}$/.test(def.default) ? def.default : null;
   // Prefer the admin's explicit brandRole pick over guessing from the var
-  // name — must match services/templateRenderer.js:306's server-side
-  // resolveBrandRole() priority exactly, or the live preview here can show
-  // a different color than what the published post actually renders.
+  // name — must match services/templateRenderer.js resolveBrandRole()
+  // priority exactly, or the live preview here can show a different color
+  // than what the published post actually renders.
   const role = (def.brandRole || key.slice('color:'.length)).toLowerCase();
   if (_htmlTplBrandColors[role]) return _htmlTplBrandColors[role];
   if (/^(bg|background|card_bg|card-bg|surface|secondary_bg|secondary-bg)$/.test(role)) return _htmlTplBrandColors.bg;
@@ -1758,7 +1838,9 @@ function _resolveBrandColor(key, def) {
   if (/^(accent|brand|highlight|primary|cta|button|badge|tag|link)$/.test(role)) return _htmlTplBrandColors.accent;
   if (/^(border|line|divider|separator|rule)$/.test(role)) return _blendColor(_htmlTplBrandColors.text, _htmlTplBrandColors.bg, 0.2);
   if (/^(overlay)$/.test(role)) return 'rgba(0,0,0,0.5)';
-  return _htmlTplBrandColors.accent;
+  // Unrecognized role — keep the template's original color rather than
+  // repainting the design with the accent (null = "don't override").
+  return null;
 }
 
 function _blendColor(hexA, hexB, ratio) {
@@ -1768,6 +1850,35 @@ function _blendColor(hexA, hexB, ratio) {
     const mix = a.map((v, i) => Math.round(v * ratio + b[i] * (1 - ratio)));
     return '#' + mix.map(v => v.toString(16).padStart(2, '0')).join('');
   } catch { return hexA; }
+}
+
+// Capture the template's own value for every color slot from the raw HTML —
+// both inline style attributes and <style> blocks. Stores the raw CSS value
+// (not normalized) so "Reset to Original" can restore gradients/named colors
+// the color-picker inputs can't represent.
+function _captureOriginalColors(html, slotDefs) {
+  _htmlTplOriginalColors = {};
+  const defs = {};
+  try {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const varPattern = /--([a-zA-Z0-9_-]+)\s*:\s*([^;}]+)/g;
+    const collect = (css) => {
+      let m;
+      while ((m = varPattern.exec(css)) !== null) {
+        if (!(m[1] in defs)) defs[m[1]] = m[2].trim(); // first definition wins per priority tier
+      }
+    };
+    // Priority: root element inline style → other inline styles → <style> blocks
+    const root = doc.body?.firstElementChild;
+    if (root?.getAttribute('style')) collect(root.getAttribute('style'));
+    doc.querySelectorAll('[style]').forEach(el => { if (el !== root) collect(el.getAttribute('style')); });
+    doc.querySelectorAll('style').forEach(s => collect(s.textContent));
+  } catch { /* leave empty — iframe-load capture still runs as a fallback */ }
+  for (const key of Object.keys(slotDefs)) {
+    if (!key.startsWith('color:')) continue;
+    const raw = defs[key.slice('color:'.length)];
+    if (raw) _htmlTplOriginalColors[key] = raw;
+  }
 }
 
 // ── Static PNG preview (after render, or cache-restore without templateHtml) ──
@@ -1877,6 +1988,14 @@ function _renderTemplateIframe(html, slots) {
         }
       }
     }
+    // Replay image selections from the form zones — they live only there, so
+    // any iframe re-render (reset, AI fill) would otherwise drop them.
+    document.querySelectorAll('#html-tpl-form-pane .html-tpl-img-zone[data-slot]').forEach(zone => {
+      const img = zone.querySelector('.html-tpl-img-preview img');
+      if (img?.getAttribute('src')) {
+        iframe.contentWindow.postMessage({ type: 'htpl-set-bg', key: zone.dataset.slot, value: img.getAttribute('src') }, '*');
+      }
+    });
     // Read actual color values from the template's own CSS variables,
     // then sync the color picker inputs to match the real design.
     const colorRoot = doc.body.firstElementChild || doc.documentElement;
@@ -1988,9 +2107,7 @@ function renderHtmlTemplateForm(slots) {
 
   if (hasColorSlots) {
     colorsHtml += '<div style="display:flex;gap:8px;margin-bottom:14px">';
-    if (_htmlTplBrandColors) {
-      colorsHtml += '<button type="button" id="htpl-apply-brand" class="btn btn--sm btn--secondary" style="flex:1">Apply Brand Colors</button>';
-    }
+    colorsHtml += '<button type="button" id="htpl-apply-brand" class="btn btn--sm btn--secondary" style="flex:1">Apply Brand Colors</button>';
     colorsHtml += '<button type="button" id="htpl-reset-colors" class="btn btn--sm btn--secondary" style="flex:1">Reset to Original</button>';
     colorsHtml += '</div>';
   }
@@ -2009,11 +2126,21 @@ function renderHtmlTemplateForm(slots) {
       const active = key === _htmlTplActiveSlotKey ? ' so-field-group--active' : '';
       const colorName = key.slice('color:'.length);
       const label = _friendlyColorLabel(colorName);
-      const val = _pendingColorUpdates[key] || (slots && slots[key]) || def.default || '#cccccc';
-      const resolved = val === 'brand' ? _resolveBrandColor(key, def) : val;
-      // Seed _pendingColorUpdates so the iframe load-flush picks up the right color even
-      // if _applySlotToIframe is called before the iframe is in the DOM.
-      if (!_pendingColorUpdates[key]) _applySlotToIframe(key, resolved, 'color');
+      // Only user edits and admin brand-mapped slots become overrides. Generic
+      // manifest defaults (#cccccc etc.) are never injected into the preview —
+      // the server render skips them too (templateRenderer.js) and lets the
+      // template's own CSS provide the original design colors.
+      let display = _pendingColorUpdates[key]
+        || (slots && typeof slots[key] === 'string' ? slots[key] : null);
+      if (!display && def.default === 'brand') {
+        const brandVal = _resolveBrandColor(key, def);
+        if (brandVal) { display = brandVal; _applySlotToIframe(key, brandVal, 'color'); }
+      }
+      if (!display) {
+        display = _htmlTplOriginalColors[key]
+          || (/^#[0-9a-fA-F]{3,8}$/.test(def.default || '') ? def.default : '#cccccc');
+      }
+      const resolved = _normalizeColor(display) || '#cccccc';
       colorsHtml += `<div class="so-field-group${active}" data-slot-key="${escHtml(key)}" style="margin-bottom:10px">
         <label class="field-label">${escHtml(label)}</label>
         <div class="html-tpl-color-row">
@@ -2129,6 +2256,9 @@ function renderHtmlTemplateForm(slots) {
     el.addEventListener('input', () => {
       const counter = el.closest('.so-field-group')?.querySelector('.htpl-char-cur');
       if (counter) counter.textContent = el.value.length;
+      _htmlTplExtractedSlots = _htmlTplExtractedSlots || {};
+      _htmlTplExtractedSlots[slot] = el.value;
+      _htmlTplDirty = true;
       _applySlotToIframe(slot, el.value, 'text');
     });
   });
@@ -2139,11 +2269,12 @@ function renderHtmlTemplateForm(slots) {
     const hexInput = formPane.querySelector(`.html-tpl-color-hex[data-slot="${slot}"]`);
     picker.addEventListener('input', () => {
       if (hexInput) hexInput.value = picker.value;
+      _htmlTplDirty = true;
       _applySlotToIframe(slot, picker.value, 'color');
     });
     if (hexInput) {
       hexInput.addEventListener('input', () => {
-        if (/^#[0-9a-fA-F]{6}$/.test(hexInput.value)) { picker.value = hexInput.value; _applySlotToIframe(slot, hexInput.value, 'color'); }
+        if (/^#[0-9a-fA-F]{6}$/.test(hexInput.value)) { picker.value = hexInput.value; _htmlTplDirty = true; _applySlotToIframe(slot, hexInput.value, 'color'); }
       });
     }
   });
@@ -2417,6 +2548,7 @@ function _mpShowFilled(zone, slot, fileInput) {
     delete zone.dataset.originalDataUrl;
     delete zone.dataset.noBgDataUrl;
     delete zone.dataset.bgRemoved;
+    _htmlTplDirty = true;
     _applySlotToIframe(slot, '', 'image');
 
     const attrEl = zone.querySelector('.htpl-mp-attribution');
@@ -2445,6 +2577,7 @@ function _mpOnImageSelected(zone, slot, src, storageKey, fileInput) {
   zone.dataset.originalDataUrl = src;
   zone.dataset.noBgDataUrl = '';
   zone.dataset.bgRemoved = '';
+  _htmlTplDirty = true;
   _applySlotToIframe(slot, src, 'image');
 
   _mpShowFilled(zone, slot, fileInput);
@@ -2740,7 +2873,10 @@ function _wireRepeatingSlots(formPane) {
       _wireRepeatingCardEvents(list);
     });
   });
-  formPane.querySelectorAll('.html-tpl-repeating-list').forEach(list => _wireRepeatingCardEvents(list));
+  formPane.querySelectorAll('.html-tpl-repeating-list').forEach(list => {
+    _wireRepeatingCardEvents(list);
+    list.addEventListener('input', () => { _htmlTplDirty = true; });
+  });
 }
 
 function _wireRepeatingCardEvents(list) {
@@ -2873,36 +3009,73 @@ function _highlightSlotInIframe(key) {
 
 function _resetColorsToOriginal() {
   const formPane = document.getElementById('html-tpl-form-pane');
-  _pendingColorUpdates = {}; // clear overrides first so _applySlotToIframe re-seeds correctly
-  for (const [key, original] of Object.entries(_htmlTplOriginalColors)) {
-    const picker = formPane.querySelector(`.html-tpl-color-swatch input[data-slot="${key}"]`);
-    const hex = formPane.querySelector(`.html-tpl-color-hex[data-slot="${key}"]`);
-    if (picker) picker.value = original;
-    if (hex) hex.value = original;
-    _applySlotToIframe(key, original, 'color'); // also seeds _pendingColorUpdates[key]
+  _pendingColorUpdates = {}; // drop every override — template CSS is the source of truth again
+  const slotDefs = (_htmlTplSelectedMeta?.slot_manifest || {}).slots || {};
+  for (const [key, def] of Object.entries(slotDefs)) {
+    if (!key.startsWith('color:')) continue;
+    const original = _htmlTplOriginalColors[key];
+    // Brand-mapped slots must pin the original as an explicit override,
+    // otherwise the next form render (e.g. AI fill) re-applies brand colors.
+    if (original && def.default === 'brand') _pendingColorUpdates[key] = original;
+    const norm = original ? _normalizeColor(original) : null;
+    if (norm) {
+      const picker = formPane.querySelector(`.html-tpl-color-swatch input[data-slot="${key}"]`);
+      const hex = formPane.querySelector(`.html-tpl-color-hex[data-slot="${key}"]`);
+      if (picker && norm.startsWith('#')) picker.value = norm;
+      if (hex) hex.value = norm;
+    }
   }
-  // If the preview is showing a generated PNG (no live iframe), switch back to live edit
-  // so the user can see the reset colors immediately rather than staring at a stale image.
-  if (!document.getElementById('htpl-live-iframe') && _htmlTplTemplateHtml) {
+  _htmlTplDirty = true;
+  // Re-render the live preview from the pristine template HTML. This restores
+  // values postMessage resets can't reach — vars defined in <style> blocks,
+  // gradients, named colors — and replaces a stale rendered PNG if one is showing.
+  if (_htmlTplTemplateHtml) {
+    _syncExtractedFromForm();
     _renderTemplateIframe(_htmlTplTemplateHtml, _htmlTplExtractedSlots);
   }
 }
 
-function _applyBrandColors() {
-  if (!_htmlTplBrandColors) return;
+async function _applyBrandColors() {
+  await _loadBrandColors();
   const manifest = _htmlTplSelectedMeta?.slot_manifest || {};
   const formPane = document.getElementById('html-tpl-form-pane');
+  let applied = 0;
   for (const [key, def] of Object.entries(manifest.slots || {})) {
     if (!key.startsWith('color:')) continue;
-    // Pass the real manifest entry (not a synthetic {default:'brand'}) so an
-    // explicit brandRole pick on this slot is honored instead of discarded.
+    // Only slots the admin mapped to a brand role — unmapped slots keep the
+    // template's original design colors, mirroring the server render.
+    if (def.default !== 'brand' && !def.brandRole) continue;
     const resolved = _resolveBrandColor(key, { ...def, default: 'brand' });
+    if (!resolved) continue;
+    const norm = _normalizeColor(resolved) || resolved;
     const picker = formPane.querySelector(`.html-tpl-color-swatch input[data-slot="${key}"]`);
     const hex = formPane.querySelector(`.html-tpl-color-hex[data-slot="${key}"]`);
-    if (picker) picker.value = resolved;
-    if (hex) hex.value = resolved;
+    if (picker && norm.startsWith('#')) picker.value = norm;
+    if (hex) hex.value = norm;
     _applySlotToIframe(key, resolved, 'color');
+    applied++;
   }
+  if (!applied) {
+    alert('This template has no colors mapped to brand roles yet — map color slots to brand roles in the admin template editor first.');
+    return;
+  }
+  _htmlTplDirty = true;
+  // If the preview is showing the rendered PNG, jump back to live edit so the
+  // click has a visible effect (Reset already did this; Apply previously didn't).
+  if (!document.getElementById('htpl-live-iframe') && _htmlTplTemplateHtml) {
+    _syncExtractedFromForm();
+    _renderTemplateIframe(_htmlTplTemplateHtml, _htmlTplExtractedSlots);
+  }
+}
+
+// Fold the form's current text/repeating values into _htmlTplExtractedSlots so
+// iframe re-renders never lose what the user typed (form edits previously
+// lived only in the input DOM + live iframe).
+function _syncExtractedFromForm() {
+  const formPane = document.getElementById('html-tpl-form-pane');
+  if (!formPane || formPane.hidden || !formPane.querySelector('[data-slot]')) return;
+  const { colors, images, ...textSlots } = readHtmlTemplateFormContent();
+  _htmlTplExtractedSlots = { ...(_htmlTplExtractedSlots || {}), ...textSlots };
 }
 
 function readHtmlTemplateFormContent() {
@@ -2911,7 +3084,11 @@ function readHtmlTemplateFormContent() {
   formPane.querySelectorAll('.field-input[data-slot], .field-textarea[data-slot]').forEach(el => {
     const s = el.dataset.slot; if (!s.startsWith('color:') && !s.startsWith('image:')) content[s] = el.value;
   });
-  formPane.querySelectorAll('.html-tpl-color-swatch input[type="color"]').forEach(el => { colors[el.dataset.slot] = el.value; });
+  // Only colors that were actually overridden (user edits, brand seeds, reset
+  // pins) — NOT every picker's displayed value. Sending all pickers shipped
+  // placeholder values (#cccccc for slots whose original couldn't be read) to
+  // the server as explicit overrides, graying out the final render.
+  for (const [k, v] of Object.entries(_pendingColorUpdates)) colors[k] = v;
   formPane.querySelectorAll('.html-tpl-img-zone[data-slot]').forEach(el => { if (el.dataset.storageKey) images[el.dataset.slot] = el.dataset.storageKey; });
   formPane.querySelectorAll('[data-repeating]').forEach(group => {
     const items = []; group.querySelectorAll('.html-tpl-repeating-card').forEach(card => {
@@ -2961,6 +3138,7 @@ function _startHtmlTplJobPoll(jobId) {
         _htmlTplExtractedSlots = data.content || _htmlTplExtractedSlots;
         _renderHtmlTplPreviewImage(data.png_url); // replaces iframe + progress with final PNG
         _setHtmlTplModalState('editing'); _showInsertBtn();
+        _htmlTplDirty = false; // everything up to this render is now persisted in the cache
         visualCache.set(`${currentPostId}:html_template`, { extractedContent: _htmlTplExtractedSlots, assetUrl: data.png_url, previewUrl: data.png_url, templateId: _htmlTplSelectedId, templateMeta: _htmlTplSelectedMeta, templateHtml: _htmlTplTemplateHtml, colorOverrides: _htmlTplLastColors, originalColors: { ..._htmlTplOriginalColors } });
       } else if (data.status === 'failed') {
         clearInterval(_htmlTplPollTimer); _setHtmlTplModalState('editing');
@@ -3409,7 +3587,7 @@ function bindEvents() {
     if (document.getElementById('visual-boost-overlay').classList.contains('visible')) hideBoostOverlay();
     else if (document.getElementById('success-sheet').classList.contains('visible'))   closeSuccessSheet();
     else if (document.getElementById('schedule-modal').classList.contains('visible'))  closeModal();
-    else if (document.getElementById('html-tpl-overlay')?.getAttribute('aria-hidden') !== 'true')     closeHtmlTemplateModal();
+    else if (document.getElementById('html-tpl-overlay')?.getAttribute('aria-hidden') !== 'true')     attemptCloseHtmlTemplateModal();
     else if (document.getElementById('media-modal-overlay')?.getAttribute('aria-hidden') !== 'true')  closeMediaDrawer();
   });
 
@@ -3588,11 +3766,14 @@ function wireVisualButtons() {
 
   // Design Templates Modal buttons (toolbar icon kept for backwards compat)
   document.getElementById('html-tpl-btn').addEventListener('click', () => openHtmlTemplateModal());
-  document.getElementById('html-tpl-modal-close').addEventListener('click', closeHtmlTemplateModal);
-  document.getElementById('html-tpl-cancel-btn').addEventListener('click', closeHtmlTemplateModal);
+  document.getElementById('html-tpl-modal-close').addEventListener('click', attemptCloseHtmlTemplateModal);
+  document.getElementById('html-tpl-cancel-btn').addEventListener('click', attemptCloseHtmlTemplateModal);
   document.getElementById('html-tpl-generate-btn').addEventListener('click', generateHtmlTplInModal);
   document.getElementById('html-tpl-insert-btn').addEventListener('click', _doSaveHtmlTemplate);
   document.getElementById('html-tpl-back-btn').addEventListener('click', () => {
+    if (_htmlTplDirty && !confirm('Change template? Your edits will be kept and restored if you come back to this template.')) return;
+    _snapshotHtmlTplDraft();
+    _htmlTplDirty = false;
     _htmlTplSelectedId = null;
     _htmlTplSelectedMeta = null;
     _htmlTplExtractedSlots = null;
@@ -3605,9 +3786,9 @@ function wireVisualButtons() {
     _setHtmlTplModalState('picker');
     loadHtmlTemplatePicker();
   });
-  document.getElementById('html-tpl-overlay').addEventListener('click', e => {
-    if (e.target === e.currentTarget) closeHtmlTemplateModal();
-  });
+  // Backdrop clicks intentionally do NOT close the design editor — accidental
+  // outside clicks were silently discarding all slot edits. Closing happens
+  // only via the Close button, Cancel, or Escape (guarded when dirty).
 
   // Visual Boost Overlay tiles + backdrop click
   document.getElementById('visual-boost-overlay')?.addEventListener('click', e => {

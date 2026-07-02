@@ -2660,6 +2660,29 @@ body.has-trial-banner #main-content {
   padding: var(--space-1);
 }
 
+/* Prominent close button for the Design Template editor — the only way to
+   dismiss the modal (backdrop clicks are intentionally inert there). */
+.htpl-close-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  color: var(--text-primary);
+  background: var(--surface-2, #f4f4f5);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 14px;
+  cursor: pointer;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.htpl-close-btn:hover {
+  background: var(--neutral-100, #e4e4e7);
+  border-color: var(--text-muted, #71717a);
+}
+
 .slide-over-content {
   flex: 1;
   overflow-y: auto;

@@ -71,7 +71,10 @@ function resolveBrandRole(role, brand) {
   if (/^(accent|brand|highlight|primary|cta|button|badge|tag|link)$/.test(r)) return brand.accent;
   if (/^(border|line|divider|separator|rule)$/.test(r)) return blendHex(brand.text, brand.bg, 0.2);
   if (/^(overlay)$/.test(r)) return 'rgba(0,0,0,0.5)';
-  return brand.accent || '#0f766e';
+  // Unrecognized role: return null so callers keep the template's original
+  // color instead of repainting the design with the accent. Must stay in
+  // lockstep with _resolveBrandColor in public/editor.html.
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -123,7 +126,7 @@ async function generateTemplateThumbnail(html, manifest) {
       if (def.brandRole) val = resolveBrandRole(def.brandRole, THUMBNAIL_PREVIEW_BRAND);
       else if (def.default === 'brand') val = THUMBNAIL_PREVIEW_BRAND.accent;
       else val = def.default || '#cccccc';
-      placeholderSlots[key] = val;
+      if (val) placeholderSlots[key] = val; // null = unrecognized role — keep the template's own color
       continue;
     }
     if (key.startsWith('image:')) {
@@ -314,7 +317,8 @@ async function renderTemplate(post, templateId, userOverrides = {}, brand = {}, 
       colorSlots[key] = overrideColors[key];
     } else if (def.default === 'brand') {
       const role = def.brandRole || key.slice('color:'.length);
-      colorSlots[key] = resolveBrandRole(role, brand);
+      const resolved = resolveBrandRole(role, brand);
+      if (resolved) colorSlots[key] = resolved;
     }
     // Skip generic defaults — the template HTML already has the real values
   }

@@ -1800,6 +1800,11 @@ function _renderTemplateIframe(html, slots) {
       [data-slot] { cursor:pointer; transition:outline .12s; }
       [data-slot]:hover { outline:2px dashed rgba(15,118,110,0.5); outline-offset:2px; }
       [data-slot].htpl-active { outline:3px solid #0f766e; outline-offset:2px; }
+      /* Safety net so typing longer text than the original placeholder wraps
+         instead of bleeding past its container — applies live regardless of
+         whether the template's own stored HTML has this rule baked in yet
+         (older templates predate it; this covers them immediately). */
+      [data-slot], [data-slot-field] { overflow-wrap: break-word; word-break: break-word; }
       /* Scoped to the initial brand-color personalization only (added/removed
          around that one swap) — so it reads as personalizing rather than the
          original design instantly vanishing, without making live color-picker

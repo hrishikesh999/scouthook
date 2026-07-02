@@ -353,9 +353,37 @@ function expandRepeatingSlot(html, key, items) {
 //   repeating slots: { items: [{ title, body }, ...] }
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Overflow safety net
+// ---------------------------------------------------------------------------
+
+const OVERFLOW_SAFETY_RULE = '[data-slot],[data-slot-field]{overflow-wrap:break-word;word-break:break-word;}';
+
+/**
+ * Ensure every text slot wraps instead of bleeding past its container when
+ * filled with content longer than the template's original placeholder.
+ * Runs on every render regardless of when the template was authored — this
+ * is the single choke point both real-post rendering (renderTemplate) and
+ * thumbnail generation (generateTemplateThumbnail) pass through, so it
+ * protects templates created before this rule existed too, without needing
+ * to regenerate them.
+ */
+function injectOverflowSafety(html) {
+  if (html.includes(OVERFLOW_SAFETY_RULE)) return html; // already present (e.g. baked in at generation time)
+  const styleMatch = html.match(/<style[^>]*>/i);
+  if (styleMatch) {
+    const idx = styleMatch.index + styleMatch[0].length;
+    return html.slice(0, idx) + OVERFLOW_SAFETY_RULE + html.slice(idx);
+  }
+  const styleBlock = `<style>${OVERFLOW_SAFETY_RULE}</style>`;
+  const headClose = html.indexOf('</head>');
+  if (headClose !== -1) return html.slice(0, headClose) + styleBlock + html.slice(headClose);
+  return html + styleBlock;
+}
+
 function injectSlots(html, slots) {
   const colorSlots = {};
-  let result = html;
+  let result = injectOverflowSafety(html);
 
   for (const [key, value] of Object.entries(slots)) {
     if (key.startsWith('color:')) {

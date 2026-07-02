@@ -1248,6 +1248,26 @@ function enforceColorVars(html, manifest) {
 // Post-processing: fix slot prefixes and sync manifest keys to HTML
 // ---------------------------------------------------------------------------
 
+// Text bleeds past its container when a user types content longer than the
+// AI's sample placeholder — Rule 7 asks the AI for a per-slot maxLen but it's
+// routinely left as an empty {} (observed in practice), so nothing bounds
+// input length. Backfill a length appropriate to what the slot looks like
+// it's for, same key-name-heuristic technique as templateRenderer.js's
+// placeholderForKey().
+function _defaultMaxLenForKey(key) {
+  // Match whole snake_case segments, not loose substrings — "subheadline"
+  // contains "headline" and "tagline" contains "tag", so naive substring
+  // regex silently misclassifies them under the wrong (tighter) bucket.
+  const segments = key.toLowerCase().split(/[_-]/);
+  const has = word => segments.includes(word);
+  if (has('headline') || has('title') || has('heading')) return 60;
+  if (has('subheadline') || has('subtitle') || has('tagline')) return 100;
+  if (has('label') || has('tag') || has('badge') || has('category') || has('cta') || has('button')) return 30;
+  if (has('email')) return 60;
+  if (has('name')) return 50;
+  return 200; // body/description/default
+}
+
 function applyPostProcessing(h, manifest) {
   // Fix <img> tags missing "image:" prefix in data-slot
   h = h.replace(/<img\b([^>]*?)data-slot="(?!image:)([\w]+)"([^>]*?)>/gs, (match, before, key, after) => {
@@ -1265,18 +1285,38 @@ function applyPostProcessing(h, manifest) {
   // Normalize data-slot-container (remove value if present)
   h = h.replace(/data-slot-container="[^"]*"/g, 'data-slot-container');
 
-  // Ensure every data-slot in HTML has a manifest entry
+  // Ensure every data-slot in HTML has a manifest entry with a real maxLen —
+  // the AI frequently emits the slot key with an empty {} config, which the
+  // old "!manifest.slots[key]" check let straight through unbounded.
   for (const m of h.matchAll(/data-slot="([^"]+)"/g)) {
     const key = m[1];
     if (key === 'data-slot-container' || key === 'data-slot-item') continue;
     if (!manifest.slots[key]) {
-      manifest.slots[key] = key.startsWith('image:') ? {} : { maxLen: 200 };
+      manifest.slots[key] = key.startsWith('image:') ? {} : { maxLen: _defaultMaxLenForKey(key) };
+    } else if (!key.startsWith('image:') && manifest.slots[key].type !== 'repeating' && !manifest.slots[key].maxLen) {
+      manifest.slots[key].maxLen = _defaultMaxLenForKey(key);
     }
   }
 
   // Rule 3 (NON-NEGOTIABLE): promote any hardcoded color left outside the
   // root style="" into a CSS var + manifest slot.
   h = enforceColorVars(h, manifest);
+
+  // Bake the same overflow-wrap safety net that templateSlotInjector.js's
+  // injectSlots() applies at render time — belt-and-suspenders so the stored
+  // HTML is correct on its own even outside this app's render pipeline.
+  const OVERFLOW_SAFETY_RULE = '[data-slot],[data-slot-field]{overflow-wrap:break-word;word-break:break-word;}';
+  if (!h.includes(OVERFLOW_SAFETY_RULE)) {
+    const styleMatch = h.match(/<style[^>]*>/i);
+    if (styleMatch) {
+      const idx = styleMatch.index + styleMatch[0].length;
+      h = h.slice(0, idx) + OVERFLOW_SAFETY_RULE + h.slice(idx);
+    } else {
+      const styleBlock = `<style>${OVERFLOW_SAFETY_RULE}</style>`;
+      const headClose = h.indexOf('</head>');
+      h = headClose !== -1 ? h.slice(0, headClose) + styleBlock + h.slice(headClose) : h + styleBlock;
+    }
+  }
 
   return h;
 }

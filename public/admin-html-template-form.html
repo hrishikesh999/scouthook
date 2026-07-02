@@ -1151,6 +1151,7 @@
         body *:not([data-slot]):not(style):not(script):not(link) { cursor:pointer; }
         body *:not([data-slot]):not(style):not(script):not(link):hover { outline:1px dashed rgba(15,118,110,0.25); outline-offset:1px; }
         .slot-highlight { outline:3px solid #0f766e !important; outline-offset:2px; }
+        [data-slot], [data-slot-field] { overflow-wrap: break-word; word-break: break-word; }
       </style>
       <script>
         function buildSelector(el) {

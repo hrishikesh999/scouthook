@@ -179,6 +179,16 @@
               <textarea id="f-html" class="html-textarea" placeholder='<!DOCTYPE html>&#10;<html>&#10;...&#10;</html>'></textarea>
             </div>
 
+            <!-- Version history (edit mode; shown once versions exist) -->
+            <div class="field" id="version-history-field" style="display:none">
+              <label>Version history</label>
+              <div style="display:flex;gap:8px;align-items:center">
+                <select id="version-select" style="flex:1;padding:6px 8px;border:1px solid var(--border);border-radius:var(--radius);font-size:.82rem;background:#fff"></select>
+                <button class="btn btn--sm btn--secondary" id="btn-restore-version" type="button">↩ Restore</button>
+              </div>
+              <div class="text-muted" style="font-size:.75rem;margin-top:4px">Every save is snapshotted. Restoring reverts HTML and slots — the current state is snapshotted first, so a restore can itself be undone.</div>
+            </div>
+
             <div id="form-error" class="form-error hidden"></div>
             <div class="form-actions">
               <button id="btn-next" class="btn btn--primary" type="button">Next →</button>
@@ -352,6 +362,7 @@
   let _imageOverrides = {}; // key → data URI ('data:...') or '' (cleared)
   let _editMode = false;
   let _step2Initialized = false;
+  let _refineUndoSnapshot = null; // { html, slots, overrides } captured before the last applied refine
 
   // ── Auth ──────────────────────────────────────────────────────────────────
 
@@ -541,6 +552,8 @@
         showColorWarning(`All ${existingColorDefaults.length} color slots have the same default (${c}). This template will appear as a solid color to users. Use "Refine to match original" to fix the colors.`);
       }
 
+      loadVersionHistory(); // non-blocking
+
       // Load original image for comparison/refinement (non-blocking)
       _originalImageId = templateId;
       adminFetch(`/admin/html-templates/${templateId}/original`).then(async r => {
@@ -560,6 +573,42 @@
       showError('form-error', 'Failed to load: ' + err.message);
     }
   }
+
+  // ── Version history ──────────────────────────────────────────────────────
+
+  async function loadVersionHistory() {
+    try {
+      const r = await adminFetch(`/admin/html-templates/${templateId}/versions`);
+      const data = await r.json();
+      if (!data.ok || !data.versions?.length) return;
+      const sel = document.getElementById('version-select');
+      sel.innerHTML = data.versions.map(v => {
+        const when = new Date(v.created_at).toLocaleString();
+        const kb = (v.size_bytes / 1024).toFixed(1);
+        return `<option value="${esc(v.id)}">${when} — ${esc(v.label)} (${kb} KB)</option>`;
+      }).join('');
+      document.getElementById('version-history-field').style.display = '';
+    } catch { /* non-fatal — history simply stays hidden */ }
+  }
+
+  document.getElementById('btn-restore-version').addEventListener('click', async () => {
+    const sel = document.getElementById('version-select');
+    const versionId = sel.value;
+    if (!versionId) return;
+    const optLabel = sel.options[sel.selectedIndex]?.textContent || versionId;
+    if (!confirm(`Restore this version?\n\n${optLabel}\n\nThe current state will be snapshotted first.`)) return;
+    const btn = document.getElementById('btn-restore-version');
+    btn.textContent = 'Restoring…'; btn.disabled = true;
+    try {
+      const r = await adminFetch(`/admin/html-templates/${templateId}/versions/${versionId}/revert`, { method: 'POST' });
+      const data = await r.json();
+      if (!data.ok) throw new Error(data.error || 'Restore failed');
+      location.reload();
+    } catch (err) {
+      alert('Restore failed: ' + err.message);
+      btn.textContent = '↩ Restore'; btn.disabled = false;
+    }
+  });
 
   // ── Step 2 initialization ────────────────────────────────────────────────
 
@@ -1776,7 +1825,8 @@
   function renderMatchScoreRow(score) {
     const label = score == null ? 'Compare the current HTML against the original design' : `Match score: ${Math.round(score)}/100`;
     return `<span style="font-size:.78rem;color:#166534">${label}</span>
-      <button class="btn btn--sm btn--secondary" id="btn-refine" type="button" style="margin-left:auto">↻ Refine to match original</button>`;
+      ${_refineUndoSnapshot ? '<button class="btn btn--sm btn--secondary" id="btn-undo-refine" type="button" style="margin-left:auto">↩ Undo refine</button>' : ''}
+      <button class="btn btn--sm btn--secondary" id="btn-refine" type="button" style="${_refineUndoSnapshot ? '' : 'margin-left:auto'}">↻ Refine to match original</button>`;
   }
 
   function showColorWarning(msg) {
@@ -1799,6 +1849,22 @@
     field.style.display = '';
     row.innerHTML = renderMatchScoreRow(score);
     document.getElementById('btn-refine')?.addEventListener('click', refineTemplate);
+    document.getElementById('btn-undo-refine')?.addEventListener('click', undoRefine);
+  }
+
+  function undoRefine() {
+    if (!_refineUndoSnapshot) return;
+    _templateHtml = _refineUndoSnapshot.html;
+    _slotState = _refineUndoSnapshot.slots;
+    _imageOverrides = _refineUndoSnapshot.overrides;
+    _refineUndoSnapshot = null;
+    document.getElementById('f-html').value = _templateHtml;
+    const rawHtml = document.getElementById('raw-html');
+    if (rawHtml) rawHtml.value = _templateHtml;
+    if (_step2Initialized) { renderSlotCards(); updateManifest(); }
+    renderPreview();
+    hideColorWarning();
+    showMatchScoreSection(null);
   }
 
   async function refineTemplate() {
@@ -1806,6 +1872,13 @@
     if (!btn || btn.disabled) return;
     if (!_originalImageId) { alert('No original design image available to refine against.'); return; }
     btn.textContent = 'Refining…'; btn.disabled = true;
+    // Snapshot the pre-refine state so a bad (but contract-passing) refine is
+    // one click away from being undone without a page reload or server revert.
+    const undoSnapshot = {
+      html: _templateHtml,
+      slots: structuredClone(_slotState),
+      overrides: { ..._imageOverrides },
+    };
     try {
       // Derive the manifest fresh from the current HTML rather than trusting a
       // separately-tracked variable — any slot edit, raw-HTML apply, or reset
@@ -1839,6 +1912,7 @@
       }
       renderPreview();
 
+      _refineUndoSnapshot = undoSnapshot;
       showMatchScoreSection(data.matchScore);
       if (data.colorWarning) showColorWarning(data.colorWarning); else hideColorWarning();
     } catch (err) {
@@ -1958,7 +2032,10 @@
       btn.textContent = 'Save template'; btn.disabled = false;
       if (!data.ok) { showError('form-error-2', data.error || 'Save failed.'); return; }
 
-      if (data.thumbnail_warning) { showWarnBanner(`Saved, but thumbnail failed: ${data.thumbnail_warning}`); }
+      const warns = [];
+      if (data.thumbnail_warning) warns.push(`thumbnail failed: ${data.thumbnail_warning}`);
+      if (data.contract_warnings?.length) warns.push(...data.contract_warnings);
+      if (warns.length) { showWarnBanner(`Saved, but: ${warns.join(' • ')}`); }
       else location.href = '/admin-html-templates.html';
     } catch (err) { btn.textContent = 'Save template'; btn.disabled = false; showError('form-error-2', err.message); }
   });

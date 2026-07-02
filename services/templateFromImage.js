@@ -4,6 +4,7 @@ const Anthropic = require('@anthropic-ai/sdk');
 const { getSetting } = require('../db');
 const { getAnthropicMessageText } = require('./voiceFingerprint');
 const { readSlotManifest } = require('./templateSlotInjector');
+const { diffSlots } = require('./templateContract');
 const sharp = require('sharp');
 
 let _callRenderService = null;
@@ -1014,6 +1015,10 @@ function syncManifestColors(html, manifest) {
     if (!cssVars[varName]) continue;
     const newDefault = cssVars[varName];
     if (typeof slot === 'object' && slot !== null) {
+      // 'brand' is a mapping ("resolve from workspace brand at render time"),
+      // not a stale literal — overwriting it with the hex found in the HTML
+      // would silently un-map every brand color on each refine.
+      if (slot.default === 'brand') continue;
       if (slot.default !== newDefault) { slot.default = newDefault; changed = true; }
     } else {
       manifest.slots[key] = { default: newDefault }; changed = true;
@@ -1399,13 +1404,36 @@ async function refineTemplateHtml(html, manifest, originalImageBuffer) {
     messages: [{ role: 'user', content: refineContent }],
   });
 
+  if (refineMsg.stop_reason === 'max_tokens') {
+    throw Object.assign(
+      new Error('Refinement output was truncated (template too large for one rewrite) — the result would be corrupt, so it was rejected.'),
+      { status: 422 }
+    );
+  }
+
   const refinedHtml = extractHtmlFromResponse(getAnthropicMessageText(refineMsg));
   if (!refinedHtml) {
     throw new Error('AI refinement did not return valid HTML — please try again');
   }
 
+  const inputHtml = html;
   html = applyPostProcessing(refinedHtml, manifest);
   html = syncManifestColors(html, manifest);
+
+  // Contract check: refine promises to preserve every slot. Expected slots are
+  // derived from the INPUT HTML itself — the client-supplied manifest can be
+  // empty (templates without a template-meta block) and must not be trusted
+  // as the baseline. Reject on any loss; a failed refine is recoverable, a
+  // silently de-slotted template is not.
+  const slotDiff = diffSlots(inputHtml, html);
+  if (slotDiff.lostContent.length > 0 || slotDiff.lostColors.length > 0) {
+    const lost = [...slotDiff.lostContent, ...slotDiff.lostColors.map(v => `color:${v}`)];
+    console.warn('[templateFromImage] refine REJECTED — dropped slot(s): %s', lost.join(', '));
+    throw Object.assign(
+      new Error(`Refinement dropped slot(s) [${lost.join(', ')}] and was rejected to protect the template. No changes were applied — try refining again.`),
+      { status: 422 }
+    );
+  }
 
   const colorDefaultsRefine = Object.entries(manifest.slots)
     .filter(([k]) => k.startsWith('color:'))
@@ -1714,4 +1742,4 @@ async function injectCroppedImages(html, manifest, cropBuffer, originalMeta) {
   return html;
 }
 
-module.exports = { generateTemplateFromImage, refineTemplateHtml };
+module.exports = { generateTemplateFromImage, refineTemplateHtml, syncManifestColors };

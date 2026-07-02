@@ -7,8 +7,36 @@ const router  = express.Router();
 const { db }  = require('../db');
 const storage = require('../services/storage');
 const { readSlotManifest, stripScriptTags } = require('../services/templateSlotInjector');
+const { validate: validateTemplateContract } = require('../services/templateContract');
 const { generateTemplateThumbnail } = require('../services/templateRenderer');
 const { generateTemplateFromImage, refineTemplateHtml } = require('../services/templateFromImage');
+
+// Keep the last N snapshots per template.
+const MAX_VERSIONS_PER_TEMPLATE = 20;
+
+// Snapshot a template state into the version history. Non-fatal by design:
+// versioning must never block a save (e.g. migration 070 not yet applied).
+async function saveVersion(templateId, label, html, manifest) {
+  try {
+    await db.prepare(
+      `INSERT INTO html_template_versions (template_id, label, html, slot_manifest)
+       VALUES (?, ?, ?, ?)`
+    ).run(templateId, label, html, JSON.stringify(manifest || null));
+    await db.prepare(
+      `DELETE FROM html_template_versions
+        WHERE template_id = ?
+          AND id NOT IN (
+            SELECT id FROM html_template_versions
+             WHERE template_id = ?
+             ORDER BY created_at DESC
+             LIMIT ${MAX_VERSIONS_PER_TEMPLATE}
+          )`
+    ).run(templateId, templateId);
+  } catch (err) {
+    console.warn('[adminHtmlTemplates] version snapshot failed for %s (%s): %s',
+      templateId, label, err.message);
+  }
+}
 
 // Resize any image buffer to a 540px-wide PNG thumbnail.
 async function makeThumbnailFromOriginal(origBuffer) {
@@ -160,7 +188,13 @@ router.post('/', async (req, res) => {
       Number(sort_order),
     );
 
-    res.status(201).json({ ok: true, template: row, thumbnail_warning: thumbnailWarning });
+    await saveVersion(id, 'create', cleanHtml, manifest);
+
+    const contract = validateTemplateContract(cleanHtml);
+    res.status(201).json({
+      ok: true, template: row, thumbnail_warning: thumbnailWarning,
+      contract_warnings: contract.warnings,
+    });
   } catch (err) {
     console.error('[adminHtmlTemplates] POST error:', err);
     res.status(500).json({ ok: false, error: err.message });
@@ -195,6 +229,23 @@ router.put('/:id', async (req, res) => {
       }
 
       const cleanHtml = stripScriptTags(html);
+
+      // First post-versioning save of a pre-existing template: snapshot the
+      // currently stored state before overwriting it, so there is always a
+      // baseline to revert to.
+      try {
+        const existingVersions = await db.prepare(
+          'SELECT count(*)::int AS n FROM html_template_versions WHERE template_id = ?'
+        ).get(id);
+        if (existingVersions && existingVersions.n === 0) {
+          const priorBuf = await storage.downloadAdmin(htmlKey).catch(() => null);
+          if (priorBuf) {
+            await saveVersion(id, 'pre-versioning baseline', priorBuf.toString('utf8'), existing.slot_manifest);
+          }
+        }
+      } catch (verErr) {
+        console.warn('[adminHtmlTemplates] baseline snapshot check failed for %s: %s', id, verErr.message);
+      }
 
       // Overwrite the same R2 key
       await storage.uploadAdmin(Buffer.from(cleanHtml, 'utf8'), htmlKey, 'text/html');
@@ -246,9 +297,75 @@ router.put('/:id', async (req, res) => {
       updates.slot_manifest, updates.thumbnail_r2_key, id,
     );
 
-    res.json({ ok: true, template: row, thumbnail_warning: thumbnailWarning });
+    let contractWarnings = [];
+    if (html) {
+      const cleanHtml = stripScriptTags(html);
+      await saveVersion(id, 'save', cleanHtml, manifest);
+      contractWarnings = validateTemplateContract(cleanHtml).warnings;
+    }
+
+    res.json({ ok: true, template: row, thumbnail_warning: thumbnailWarning, contract_warnings: contractWarnings });
   } catch (err) {
     console.error('[adminHtmlTemplates] PUT error:', err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /:id/versions — version history (newest first)
+// ---------------------------------------------------------------------------
+
+router.get('/:id/versions', async (req, res) => {
+  try {
+    const rows = await db.prepare(
+      `SELECT id, label, created_at, octet_length(html) AS size_bytes
+         FROM html_template_versions
+        WHERE template_id = ?
+        ORDER BY created_at DESC`
+    ).all(req.params.id);
+    res.json({ ok: true, versions: rows });
+  } catch (err) {
+    console.error('[adminHtmlTemplates] versions list error:', err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /:id/versions/:versionId/revert — restore a snapshot as the current
+// state. The pre-revert state is snapshotted first, so revert is undoable.
+// ---------------------------------------------------------------------------
+
+router.post('/:id/versions/:versionId/revert', async (req, res) => {
+  try {
+    const { id, versionId } = req.params;
+    const existing = await db.prepare('SELECT * FROM html_templates WHERE id = ?').get(id);
+    if (!existing) return res.status(404).json({ ok: false, error: 'not_found' });
+
+    const version = await db.prepare(
+      'SELECT * FROM html_template_versions WHERE id = ? AND template_id = ?'
+    ).get(versionId, id);
+    if (!version) return res.status(404).json({ ok: false, error: 'version_not_found' });
+
+    // Snapshot the current state before overwriting it
+    const currentBuf = await storage.downloadAdmin(existing.html_r2_key).catch(() => null);
+    if (currentBuf) {
+      await saveVersion(id, 'pre-revert', currentBuf.toString('utf8'), existing.slot_manifest);
+    }
+
+    const manifest = typeof version.slot_manifest === 'string'
+      ? JSON.parse(version.slot_manifest)
+      : version.slot_manifest;
+
+    await storage.uploadAdmin(Buffer.from(version.html, 'utf8'), existing.html_r2_key, 'text/html');
+    const row = await db.prepare(
+      'UPDATE html_templates SET slot_manifest = ? WHERE id = ? RETURNING *'
+    ).get(JSON.stringify(manifest), id);
+
+    console.log('[adminHtmlTemplates] reverted %s to version %s (%s, %s)',
+      id, versionId, version.label, version.created_at);
+    res.json({ ok: true, template: row });
+  } catch (err) {
+    console.error('[adminHtmlTemplates] revert error:', err);
     res.status(500).json({ ok: false, error: err.message });
   }
 });

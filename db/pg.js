@@ -23,6 +23,15 @@ function createPool() {
 
 const pool = createPool();
 
+// Apply a per-connection statement timeout so that queries never hang
+// indefinitely when Neon's serverless compute is resuming from sleep.
+// connectionTimeoutMillis only guards pool-slot acquisition; without this
+// an in-flight query during a cold Neon start waits forever.
+const STATEMENT_TIMEOUT_MS = Number(process.env.PG_STATEMENT_TIMEOUT_MS || 15_000);
+pool.on('connect', client => {
+  client.query(`SET statement_timeout = ${STATEMENT_TIMEOUT_MS}`).catch(() => {});
+});
+
 async function query(text, params) {
   return pool.query(text, params);
 }

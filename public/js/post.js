@@ -165,9 +165,22 @@ async function init() {
     // Cache linkedin/status — only name/avatar needed, no need to refetch for 2 min.
     const profilePromise  = cachedFetch('/api/linkedin/status', { credentials: 'same-origin' }, 120_000);
     if (!postData?.ok || !postData.post) {
+      // Auto-recover: the most common cause is a Neon cold-start stalling the
+      // prefetch. A hard navigation retries with a fresh connection (and Neon
+      // is warmer from the previous attempt). Use sessionStorage to avoid a loop.
+      const retryKey = `pst_retry:${POST_ID}`;
+      try {
+        if (!sessionStorage.getItem(retryKey)) {
+          sessionStorage.setItem(retryKey, '1');
+          window.location.replace(window.location.href);
+          return;
+        }
+        sessionStorage.removeItem(retryKey);
+      } catch { /* sessionStorage unavailable */ }
       showPostError('Could not load this post. <a href="/published.html" style="color:var(--teal)">Back to Published</a>');
       return;
     }
+    try { sessionStorage.removeItem(`pst_retry:${POST_ID}`); } catch {}
 
     const post = postData.post;
     populateMeta(post);

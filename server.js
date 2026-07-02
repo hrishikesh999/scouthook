@@ -634,6 +634,12 @@ async function requireLoginHtml(req, res, next) {
     return res.redirect(`/login.html?returnTo=${returnTo}`);
   }
 
+  // SPA navigations (app-router sends X-SPA-Request: 1) are already running
+  // inside an authenticated session — skip the onboarding DB check so we
+  // don't add 2 extra Neon round-trips to every client-side page transition.
+  // The HTML is just a static skeleton; all data is gated by API-level auth.
+  if (req.headers['x-spa-request'] === '1') return next();
+
   // Onboarding page itself is always reachable for authenticated users.
   // Workspace-setup is also exempt (it's its own flow).
   const exemptPaths = new Set(['/onboarding.html', '/workspace-setup.html']);

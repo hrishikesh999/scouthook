@@ -23,7 +23,7 @@ function buildVaultContextBlock(ragContext) {
     return `[${label}]\n${String(c.content).slice(0, 400).trim()}`;
   }).join('\n\n');
 
-  return `CONTEXT FROM THE AUTHOR'S OWN DOCUMENTS:\nUse these as supporting evidence, specific examples, or proof points where they genuinely strengthen the post. Do not force them in if they don't fit the angle.\n\n${passages}`;
+  return `CONTEXT FROM THE AUTHOR'S OWN DOCUMENTS:\nVERBATIM EXTRACTION: If a passage below contains the author's exact phrasing, a specific outcome, a named framework, or a precise statistic — quote it verbatim in the post. Do not paraphrase. Do not summarise. Use the author's exact wording where directly relevant. Only include a passage if it genuinely fits the angle; if uncertain, omit it entirely — a forced quote is worse than no quote.\n\n${passages}`;
 }
 
 module.exports = { buildVaultContextBlock };

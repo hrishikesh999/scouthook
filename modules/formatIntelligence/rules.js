@@ -47,6 +47,7 @@ const LINKEDIN_RULES = {
     reach:   { min: 200, max: 500, guidance: 'Develop the narrative fully — 200 to 500 words depending on the archetype. Story archetypes (BEFORE_AFTER, CONFESSION) need 400+ words; insight or pattern-interrupt hooks can be 200–350. Do not truncate before the arc is complete.' },
     trust:   { min: 350, max: 600, guidance: 'Develop the idea fully — 350 to 600 words. Trust posts earn authority by showing the reasoning, not just stating the conclusion. Every structural move — setup, evidence, implication — must be complete. Do not wrap up before the argument lands.' },
     convert: { min: 200, max: 380, guidance: 'Be specific enough to paint the transformation clearly — 200 to 380 words. Long enough to be credible, tight enough to stay focused on the single ask.' },
+    save:    { min: 250, max: 400, guidance: 'Keep it tight and dense — 250 to 400 words. Every line must be a standalone value unit: a stat, a step, a principle, or a framework item. Save posts are reference material — written to be bookmarked, not read and forgotten.' },
     default: { min: 200, max: 500, guidance: 'Develop the idea fully — 200 to 500 words. Develop each structural move until the arc is complete. Do not truncate.' },
   },
 };

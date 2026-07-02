@@ -39,6 +39,13 @@ FORBIDDEN STRUCTURES — these reveal AI authorship through pattern, not vocabul
 - Never present both sides without choosing one. A post with no verdict has no reason to exist.
 - Never write "What do you think? Let me know in the comments."
   or "Curious to hear your thoughts." These signal nothing was at stake.
+
+2026 VIRAL TEMPLATE SUPPRESSION — these structures are now saturated copywriting patterns
+that LinkedIn's composite AI-probability classifier flags as templated output:
+- Never use the "Stop [X], start [Y]" construction. It reads as a copywriting template, not a real observation.
+- Never open with "Here's what nobody tells you about [topic]" — it signals the writer ran out of ideas.
+- Never use "The result?" as a standalone line. It is the single most-detected AI copywriting tell in 2026.
+- Never use "It's not [X], it's [Y]" inversion. The structure is overused to the point of invisibility.
 `;
 
 /**

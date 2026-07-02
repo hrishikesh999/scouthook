@@ -4,8 +4,8 @@
  * funnelClassifier.js — Classify content as reach / trust / convert
  * and identify the most suitable hook archetype.
  *
- * Uses Claude Haiku (fast, cheap) — same pattern as hookSelector.js.
- * A single call returns both classifications to avoid two round trips.
+ * Uses Claude Haiku (fast, cheap). A single call returns both classifications
+ * to avoid two round trips.
  *
  * Funnel types:
  *   reach   — broad stories, observations, hot takes → maximize impressions
@@ -16,11 +16,10 @@
 const Anthropic  = require('@anthropic-ai/sdk');
 const { getSetting } = require('../db');
 const { extractJsonFromResponse } = require('./voiceFingerprint');
-const { ARCHETYPE_KEYS } = require('./hookArchetypes');
-
 const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
 
-const FUNNEL_TYPES  = ['reach', 'trust', 'convert'];
+const FUNNEL_TYPES    = ['reach', 'trust', 'convert'];
+const ARCHETYPE_KEYS  = ['CONFESSION', 'BEFORE_AFTER', 'INSIGHT', 'DIRECT_ADDRESS', 'NUMBER', 'MYTH_BUST', 'CURIOSITY_GAP', 'REFRAME'];
 
 const SYSTEM_PROMPT = `You are a LinkedIn content strategist. Classify the given text and return ONLY a valid JSON object with exactly two keys:
 

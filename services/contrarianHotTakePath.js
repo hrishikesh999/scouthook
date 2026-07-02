@@ -33,7 +33,7 @@ Follow this structure in every post:
 3. Your POV (Counter-belief) - State your contrarian stance clearly and confidently.
 4. Supporting Reason / Insight - Provide logic, observation, experience, or analysis that proves your point. Keep it simple, bold, and grounded.
 5. Implication - What this means for the reader. Reframe how they should think or act going forward.
-6. Closing Question - End with one powerful, specific, open-ended question that invites the reader to engage. The question must be directly tied to the contrarian belief and feel genuinely curious — not rhetorical. Make it specific enough that readers feel compelled to share their own experience or view. Never use "What do you think?" or any generic variation. One question only.
+6. Closing Question - End with one question that forces readers to take a side. Not a gentle invitation — a direct challenge to their belief, phrased as "Hot take: [contrarian position from the post]. Where am I wrong?" or "Most people think [X]. I think [Y]. Who's right?" The question must have a real answer that people will publicly argue over. Seven people arguing in the replies beats seventy people nodding. Never use "What do you think?" or "What's been your experience?" or any generic variation. One question only.
 
 LINK HANDLING
 - Do not include any links unless explicitly provided in the input.

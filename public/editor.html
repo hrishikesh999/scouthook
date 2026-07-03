@@ -1350,9 +1350,30 @@ function _setHtmlTplModalState(state) {
   if (state === 'generating') {
     genBtn.disabled = true;
     genBtn.textContent = 'Rendering final image…';
+    // Puppeteer renders take several seconds and the live iframe stays on
+    // screen the whole time (generateHtmlTplInModal only appends a progress
+    // overlay, it doesn't remove it) — so edits made mid-render looked like
+    // they worked, then got silently discarded the moment the job finished
+    // and swapped in a static PNG rendered from the OLDER, pre-edit content
+    // snapshot. Lock the form so there's nothing left to silently lose.
+    _setHtmlTplFormLocked(true);
   } else if (state === 'editing') {
     genBtn.disabled = false;
+    _setHtmlTplFormLocked(false);
     genBtn.innerHTML = 'Save &amp; Preview';
+  }
+}
+
+// Disables every input/textarea/button/select in the form pane (and blurs
+// focus off any of them) so a render in progress can't have its content
+// snapshot silently invalidated by edits made while it's running.
+function _setHtmlTplFormLocked(locked) {
+  const form = document.getElementById('html-tpl-form-pane');
+  if (!form) return;
+  form.querySelectorAll('input, textarea, button, select').forEach(el => { el.disabled = locked; });
+  form.classList.toggle('htpl-form-locked', locked);
+  if (locked && document.activeElement && form.contains(document.activeElement)) {
+    document.activeElement.blur();
   }
 }
 

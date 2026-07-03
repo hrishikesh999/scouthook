@@ -8459,6 +8459,15 @@ html[data-nav-dir="back"] #main-content.spa-entering {
   transition: height 0.1s ease;
 }
 
+/* Form pane while a Save & Preview render is in progress — see
+   _setHtmlTplFormLocked(). Disabled inputs already block interaction; this
+   is purely the "please wait" visual cue. */
+#html-tpl-form-pane.htpl-form-locked {
+  opacity: 0.55;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    Design Template Modal — Premium UX Polish
    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */

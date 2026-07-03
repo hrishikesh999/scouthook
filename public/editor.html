@@ -3091,7 +3091,20 @@ function _applySlotToIframe(key, value, type) {
   // even when this is called before the iframe is in the DOM.
   if (type === 'color') _pendingColorUpdates[key] = value;
   const iframe = document.getElementById('htpl-live-iframe');
-  if (!iframe?.contentWindow) return;
+  if (!iframe?.contentWindow) {
+    // Preview pane is showing the static rendered PNG (after "Save & Preview")
+    // instead of the live iframe — every further edit was silently no-op-ing
+    // here. Switch back to live edit so the change is visible again; the
+    // caller has already updated whichever state this edit belongs to
+    // (_htmlTplExtractedSlots for text, _pendingColorUpdates above for
+    // color, the form's own image preview <img> for images), so the fresh
+    // iframe's load handler picks the new value up automatically.
+    if (_htmlTplTemplateHtml) {
+      _syncExtractedFromForm();
+      _renderTemplateIframe(_htmlTplTemplateHtml, _htmlTplExtractedSlots);
+    }
+    return;
+  }
   if (type === 'color') {
     iframe.contentWindow.postMessage({ type: 'htpl-set-var', name: '--' + key.slice('color:'.length), value }, '*');
   } else if (type === 'text') {

@@ -1477,10 +1477,8 @@ function closeHtmlTemplateModal() {
   _htmlTplDirty = false;
   document.getElementById('html-tpl-overlay').setAttribute('aria-hidden', 'true');
   clearInterval(_htmlTplPollTimer);
-  clearInterval(_htmlTplSilentPollTimer);
   clearTimeout(_htmlTplPreviewTimer);
   _htmlTplPollTimer = null;
-  _htmlTplSilentPollTimer = null;
   _htmlTplPreviewTimer = null;
   _htmlTplRenderJobId = null;
   _htmlTplAutoPreviewRunning = false;

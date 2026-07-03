@@ -2850,7 +2850,7 @@ async function _mpRenderLibrary(body, zone, slot, fileInput) {
     }
     body.innerHTML = `<div class="htpl-mp-grid" id="mp-lib-grid">
       ${files.slice(0, 30).map(f => `<div class="htpl-mp-thumb" data-lib-url="${f.url}" data-lib-key="${f.stored_name || ''}" title="${f.filename || ''}">
-        <img src="${f.url}" alt="${f.filename || ''}" loading="lazy">
+        <img src="${f.thumbnail_url || f.url}" alt="${f.filename || ''}" loading="lazy">
       </div>`).join('')}
     </div>`;
 

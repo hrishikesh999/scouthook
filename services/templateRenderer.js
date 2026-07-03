@@ -292,15 +292,16 @@ async function renderTemplate(post, templateId, userOverrides = {}, brand = {}, 
   const slots = manifest.slots || {};
   const { width = 1080, height = 1080 } = manifest.dimensions || {};
 
-  // 4. Extract text + repeating slots via Claude Haiku
-  const textSlots = await extractSlotContent(post, manifest);
-
-  // 4b. Apply user text/repeating overrides (form edits take priority over AI)
+  // 4. Text + repeating slots come straight from the form — it is the single
+  //    source of truth at render time. AI extraction runs ONLY via the explicit
+  //    "Fill with AI" buttons (mode:'extract'), never silently here, so a field
+  //    the user cleared renders empty instead of being refilled from the post.
+  const textSlots = {};
   for (const [key, val] of Object.entries(userOverrides)) {
     if (key === 'colors' || key === 'images') continue;
     if (key.startsWith('color:') || key.startsWith('image:')) continue;
-    if (typeof val === 'string' && val.trim()) {
-      textSlots[key] = val;
+    if (typeof val === 'string') {
+      textSlots[key] = val; // honor explicit value including '' (user cleared)
     } else if (Array.isArray(val) && slots[key]?.type === 'repeating') {
       textSlots[key] = val;
     }

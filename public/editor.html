@@ -2025,7 +2025,7 @@ function _renderTemplateIframe(html, slots) {
         _htmlTplOriginalColors[key] = origNorm;
       }
 
-      const userVal = (slots && slots[key]) || _pendingColorUpdates[key];
+      const userVal = _pendingColorUpdates[key] || (slots && slots[key]);
       if (userVal) overridesToApply.push({ varName, userVal });
 
       // Read the final resolved value

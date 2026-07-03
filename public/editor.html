@@ -3306,6 +3306,19 @@ function _doSaveHtmlTemplate() {
       if (d.ok) { _lastAutoSavedContent = getPostContent(); updateAutosaveIndicator(); }
     }).catch(() => {});
   }
+  // Also copy the rendered design into the permanent Media Library
+  if (currentAssetUrl) {
+    const tplName = (_htmlTplSelectedMeta && _htmlTplSelectedMeta.name) || 'design-template';
+    fetch('/api/media/save-generated', {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fileUrl: currentAssetUrl,
+        filename: `${tplName}.png`,
+        mimeType: 'image/png',
+      }),
+    }).catch(() => {});
+  }
 }
 
 

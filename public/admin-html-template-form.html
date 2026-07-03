@@ -858,7 +858,11 @@
           const role = el.value;
           if (role) {
             s.config.default = 'brand';
-            if (role === 'auto') delete s.config.brandRole; else s.config.brandRole = role;
+            if (role === 'auto') {
+              s.config.brandRole = _autoDetectBrandRole(s.key.slice('color:'.length));
+            } else {
+              s.config.brandRole = role;
+            }
           } else {
             s.config.default = '#cccccc';
             delete s.config.brandRole;
@@ -949,7 +953,11 @@
           const role = el.value;
           if (role) {
             s.config.default = 'brand';
-            if (role === 'auto') delete s.config.brandRole; else s.config.brandRole = role;
+            if (role === 'auto') {
+              s.config.brandRole = _autoDetectBrandRole(s.key.slice('color:'.length));
+            } else {
+              s.config.brandRole = role;
+            }
           } else {
             s.config.default = '#cccccc';
             delete s.config.brandRole;

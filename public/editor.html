@@ -1327,6 +1327,12 @@ let _htmlTplTemplateHtml   = null;
 let _htmlTplActiveSlotKey  = null;
 let _htmlTplDirty          = false; // unsaved edits since open/last render
 
+function _markDirty() {
+  _htmlTplDirty = true;
+  const btn = document.getElementById('html-tpl-insert-btn');
+  if (btn) { btn.hidden = true; btn.disabled = true; }
+}
+
 function _setHtmlTplModalState(state) {
   _htmlTplModalState = state;
   const body    = document.getElementById('html-tpl-modal-body');
@@ -1659,7 +1665,7 @@ async function _aiFillAllFields() {
   try {
     const extracted = await _aiExtractAll();
     _htmlTplExtractedSlots = extracted;
-    _htmlTplDirty = true;
+    _markDirty();
     _renderTemplateIframe(_htmlTplTemplateHtml, _htmlTplExtractedSlots);
     renderHtmlTemplateForm(_htmlTplExtractedSlots);
   } catch (err) {
@@ -1838,8 +1844,10 @@ function _resolveBrandColor(key, def) {
   if (/^(accent|brand|highlight|primary|cta|button|badge|tag|link)$/.test(role)) return _htmlTplBrandColors.accent;
   if (/^(border|line|divider|separator|rule)$/.test(role)) return _blendColor(_htmlTplBrandColors.text, _htmlTplBrandColors.bg, 0.2);
   if (/^(overlay)$/.test(role)) return 'rgba(0,0,0,0.5)';
-  // Unrecognized role — keep the template's original color rather than
-  // repainting the design with the accent (null = "don't override").
+  // Unrecognized CSS var name on a brand-mapped slot (default === 'brand' but no
+  // explicit brandRole stored — legacy 'auto' slots). Fall back to accent, matching
+  // _autoDetectBrandRole's own default in admin-html-template-form.html.
+  if (!def.brandRole) return _htmlTplBrandColors.accent;
   return null;
 }
 
@@ -2258,7 +2266,7 @@ function renderHtmlTemplateForm(slots) {
       if (counter) counter.textContent = el.value.length;
       _htmlTplExtractedSlots = _htmlTplExtractedSlots || {};
       _htmlTplExtractedSlots[slot] = el.value;
-      _htmlTplDirty = true;
+      _markDirty();
       _applySlotToIframe(slot, el.value, 'text');
     });
   });
@@ -2269,12 +2277,12 @@ function renderHtmlTemplateForm(slots) {
     const hexInput = formPane.querySelector(`.html-tpl-color-hex[data-slot="${slot}"]`);
     picker.addEventListener('input', () => {
       if (hexInput) hexInput.value = picker.value;
-      _htmlTplDirty = true;
+      _markDirty();
       _applySlotToIframe(slot, picker.value, 'color');
     });
     if (hexInput) {
       hexInput.addEventListener('input', () => {
-        if (/^#[0-9a-fA-F]{6}$/.test(hexInput.value)) { picker.value = hexInput.value; _htmlTplDirty = true; _applySlotToIframe(slot, hexInput.value, 'color'); }
+        if (/^#[0-9a-fA-F]{6}$/.test(hexInput.value)) { picker.value = hexInput.value; _markDirty(); _applySlotToIframe(slot, hexInput.value, 'color'); }
       });
     }
   });
@@ -2548,7 +2556,7 @@ function _mpShowFilled(zone, slot, fileInput) {
     delete zone.dataset.originalDataUrl;
     delete zone.dataset.noBgDataUrl;
     delete zone.dataset.bgRemoved;
-    _htmlTplDirty = true;
+    _markDirty();
     _applySlotToIframe(slot, '', 'image');
 
     const attrEl = zone.querySelector('.htpl-mp-attribution');
@@ -2577,7 +2585,7 @@ function _mpOnImageSelected(zone, slot, src, storageKey, fileInput) {
   zone.dataset.originalDataUrl = src;
   zone.dataset.noBgDataUrl = '';
   zone.dataset.bgRemoved = '';
-  _htmlTplDirty = true;
+  _markDirty();
   _applySlotToIframe(slot, src, 'image');
 
   _mpShowFilled(zone, slot, fileInput);
@@ -2875,7 +2883,7 @@ function _wireRepeatingSlots(formPane) {
   });
   formPane.querySelectorAll('.html-tpl-repeating-list').forEach(list => {
     _wireRepeatingCardEvents(list);
-    list.addEventListener('input', () => { _htmlTplDirty = true; });
+    list.addEventListener('input', () => { _markDirty(); });
   });
 }
 
@@ -3025,7 +3033,7 @@ function _resetColorsToOriginal() {
       if (hex) hex.value = norm;
     }
   }
-  _htmlTplDirty = true;
+  _markDirty();
   // Re-render the live preview from the pristine template HTML. This restores
   // values postMessage resets can't reach — vars defined in <style> blocks,
   // gradients, named colors — and replaces a stale rendered PNG if one is showing.
@@ -3059,7 +3067,7 @@ async function _applyBrandColors() {
     alert('This template has no colors mapped to brand roles yet — map color slots to brand roles in the admin template editor first.');
     return;
   }
-  _htmlTplDirty = true;
+  _markDirty();
   // If the preview is showing the rendered PNG, jump back to live edit so the
   // click has a visible effect (Reset already did this; Apply previously didn't).
   if (!document.getElementById('htpl-live-iframe') && _htmlTplTemplateHtml) {

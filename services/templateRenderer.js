@@ -317,7 +317,10 @@ async function renderTemplate(post, templateId, userOverrides = {}, brand = {}, 
       colorSlots[key] = overrideColors[key];
     } else if (def.default === 'brand') {
       const role = def.brandRole || key.slice('color:'.length);
-      const resolved = resolveBrandRole(role, brand);
+      // Fall back to accent for unrecognized CSS var names on brand-mapped slots
+      // (legacy 'auto' slots stored before brandRole was persisted). Must match
+      // _resolveBrandColor's fallback in public/editor.html.
+      const resolved = resolveBrandRole(role, brand) || (!def.brandRole ? brand.accent : null);
       if (resolved) colorSlots[key] = resolved;
     }
     // Skip generic defaults — the template HTML already has the real values

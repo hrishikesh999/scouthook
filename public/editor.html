@@ -3774,7 +3774,6 @@ function wireSchedule() {
           payload.asset_slide_count   = attachedSlideCount || 0;
         } else {
           payload.image_url  = attachedAssetUrl;
-          payload.asset_type = attachedAssetType;
         }
       }
       const res  = await fetch('/api/linkedin/schedule', {
@@ -3826,8 +3825,13 @@ function wireSchedule() {
       const payload = { content, postId: currentPostId };
       if (selectedConnectionId) payload.connectionId = selectedConnectionId;
       if (attachedAssetUrl) {
-        if (attachedAssetType === 'carousel' || attachedAssetType === 'media_pdf') payload.carousel_pdf_url = attachedAssetUrl;
-        else { payload.image_url = attachedAssetUrl; payload.asset_type = attachedAssetType; }
+        if (attachedAssetType === 'carousel' || attachedAssetType === 'media_pdf') {
+          payload.carousel_pdf_url  = attachedAssetUrl;
+          payload.asset_preview_url = attachedPreviewUrl || null;
+          payload.asset_slide_count = attachedSlideCount || 0;
+        } else {
+          payload.image_url = attachedAssetUrl;
+        }
       }
       const res  = await fetch('/api/linkedin/publish', {
         method: 'POST', credentials: 'include',

@@ -3840,7 +3840,9 @@ function wireVisualButtons() {
   document.getElementById('html-tpl-generate-btn').addEventListener('click', generateHtmlTplInModal);
   document.getElementById('html-tpl-insert-btn').addEventListener('click', _doSaveHtmlTemplate);
   document.getElementById('html-tpl-back-btn').addEventListener('click', () => {
-    if (_htmlTplDirty && !confirm('Change template? Your edits will be kept and restored if you come back to this template.')) return;
+    // No confirm() here — "Change template" is a deliberate click (unlike an
+    // accidental backdrop click), and the current draft is always snapshotted
+    // below before switching away, so nothing is actually at risk of loss.
     _snapshotHtmlTplDraft();
     _htmlTplDirty = false;
     _htmlTplSelectedId = null;

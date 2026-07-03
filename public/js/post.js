@@ -81,6 +81,41 @@ function populateLiCard(post, profile) {
   bodyEl.innerHTML = bodyToHtml((post.content || '').trim());
 }
 
+function populateAsset(post) {
+  const el = document.getElementById('post-li-asset');
+  if (!el) return;
+
+  if (post.asset_type === 'image' && post.asset_url) {
+    el.innerHTML = `<img src="${escHtml(post.asset_url)}" alt="Attached image" style="width:calc(100% + 32px);margin:8px -16px;display:block;max-height:560px;object-fit:cover">`;
+    el.hidden = false;
+    return;
+  }
+
+  if (post.asset_type === 'carousel') {
+    const slideLabel = post.asset_slide_count > 1 ? `${post.asset_slide_count} slides` : 'Document';
+    if (post.asset_preview_url) {
+      el.innerHTML = `
+        <a href="${escHtml(post.asset_url || post.asset_preview_url)}" target="_blank" rel="noopener noreferrer" style="display:block;margin:8px -16px;position:relative">
+          <img src="${escHtml(post.asset_preview_url)}" alt="Carousel preview" style="width:100%;display:block;max-height:560px;object-fit:cover">
+          <span style="position:absolute;bottom:8px;left:8px;background:rgba(0,0,0,0.65);color:#fff;font-size:11px;font-weight:600;padding:3px 8px;border-radius:4px">${escHtml(slideLabel)}</span>
+        </a>`;
+      el.hidden = false;
+    } else if (post.asset_url) {
+      el.innerHTML = `
+        <a href="${escHtml(post.asset_url)}" target="_blank" rel="noopener noreferrer" style="display:flex;align-items:center;gap:8px;margin:8px 0;padding:10px 12px;border:1px solid #e0e0e0;border-radius:8px;text-decoration:none;color:#0a66c2;font-size:13px;font-weight:600">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          View document (${escHtml(slideLabel)})
+        </a>`;
+      el.hidden = false;
+    } else {
+      el.hidden = true;
+    }
+    return;
+  }
+
+  el.hidden = true;
+}
+
 function populateLinkedInLink(post) {
   if (!post.linkedin_post_id) return;
   const link = document.getElementById('post-li-link');
@@ -187,6 +222,7 @@ async function init() {
     const post = postData.post;
     populateMeta(post);
     populateLiCard(post, null);
+    populateAsset(post);
     populateLinkedInLink(post);
     renderRating(post.performance_tag || null);
 

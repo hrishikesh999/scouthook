@@ -1342,7 +1342,7 @@ function applyPostProcessing(h, manifest) {
   // Bake the same overflow-wrap safety net that templateSlotInjector.js's
   // injectSlots() applies at render time — belt-and-suspenders so the stored
   // HTML is correct on its own even outside this app's render pipeline.
-  const OVERFLOW_SAFETY_RULE = '[data-slot],[data-slot-field]{overflow-wrap:break-word;word-break:break-word;}';
+  const OVERFLOW_SAFETY_RULE = '[data-slot],[data-slot-field]{overflow-wrap:break-word;word-break:break-word;white-space:pre-wrap!important;}';
   if (!h.includes(OVERFLOW_SAFETY_RULE)) {
     const styleMatch = h.match(/<style[^>]*>/i);
     if (styleMatch) {

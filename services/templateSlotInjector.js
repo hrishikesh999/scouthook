@@ -364,7 +364,11 @@ function expandRepeatingSlot(html, key, items) {
 // Overflow safety net
 // ---------------------------------------------------------------------------
 
-const OVERFLOW_SAFETY_RULE = '[data-slot],[data-slot-field]{overflow-wrap:break-word;word-break:break-word;}';
+// white-space:pre-wrap (not the default `normal`) preserves manual line
+// breaks the user typed into a slot — without it, a literal \n in the
+// injected text collapses to a space when the browser lays it out, silently
+// dropping the break even though the character survived the round trip.
+const OVERFLOW_SAFETY_RULE = '[data-slot],[data-slot-field]{overflow-wrap:break-word;word-break:break-word;white-space:pre-wrap!important;}';
 
 /**
  * Ensure every text slot wraps instead of bleeding past its container when

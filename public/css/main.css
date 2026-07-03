@@ -8448,6 +8448,16 @@ html[data-nav-dir="back"] #main-content.spa-entering {
 .htpl-panel .field-textarea { font-size: 13px; line-height: 1.5; }
 .htpl-panel .field-input { height: 36px; }
 .htpl-panel .field-textarea { min-height: 80px; }
+/* Short text slots render as a textarea (not <input>) so Enter can insert a
+   manual line break — this keeps it looking like the old single-line input
+   until content actually needs more room; _autoGrowTextarea() expands it. */
+.htpl-panel .field-textarea--auto {
+  min-height: 36px;
+  height: 36px;
+  resize: none;
+  overflow: hidden;
+  transition: height 0.1s ease;
+}
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    Design Template Modal — Premium UX Polish

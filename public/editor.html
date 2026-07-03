@@ -1911,6 +1911,19 @@ function _captureOriginalColors(html, slotDefs) {
 // HTML, mirroring _captureOriginalColors. This is what "the template's
 // default content" means — the copy the admin/AI-generator authored into
 // data-slot elements — as opposed to content extracted from the user's post.
+// el.textContent silently drops <br> elements entirely (they're not text
+// nodes) — a template authored with a deliberate two-line default headline
+// (<span>Line one<br>Line two</span>) would otherwise come back as one
+// run-on line. Convert <br> to \n on a clone before reading textContent so
+// the template's own manual line breaks survive the round trip, matching
+// how the live iframe/final render now display a \n (white-space:pre-wrap).
+function _textWithBreaks(el) {
+  if (!el) return '';
+  const clone = el.cloneNode(true);
+  clone.querySelectorAll('br').forEach(br => br.replaceWith('\n'));
+  return (clone.textContent || '').trim();
+}
+
 function _captureOriginalContent(html, slotDefs) {
   const content = {};
   try {
@@ -1925,14 +1938,14 @@ function _captureOriginalContent(html, slotDefs) {
           const item = {};
           itemEl.querySelectorAll('[data-slot-field]').forEach(f => {
             const field = f.getAttribute('data-slot-field');
-            if (field) item[field] = (f.textContent || '').trim();
+            if (field) item[field] = _textWithBreaks(f);
           });
           if (Object.keys(item).length) items.push(item);
         });
         if (items.length) content[key] = items;
       } else {
         const el = doc.querySelector(`[data-slot="${key}"]`);
-        const text = (el?.textContent || '').trim();
+        const text = _textWithBreaks(el);
         if (text) content[key] = text;
         else if (typeof def.default === 'string' && def.default) content[key] = def.default;
       }
@@ -1974,8 +1987,12 @@ function _renderTemplateIframe(html, slots) {
       /* Safety net so typing longer text than the original placeholder wraps
          instead of bleeding past its container — applies live regardless of
          whether the template's own stored HTML has this rule baked in yet
-         (older templates predate it; this covers them immediately). */
-      [data-slot], [data-slot-field] { overflow-wrap: break-word; word-break: break-word; }
+         (older templates predate it; this covers them immediately). Also
+         mirrors services/templateSlotInjector.js's OVERFLOW_SAFETY_RULE —
+         must stay in sync, including white-space:pre-wrap so a manual line
+         break the user typed shows up live exactly as the final render will
+         produce it. */
+      [data-slot], [data-slot-field] { overflow-wrap: break-word; word-break: break-word; white-space: pre-wrap !important; }
       /* Scoped to the initial brand-color personalization only (added/removed
          around that one swap) — so it reads as personalizing rather than the
          original design instantly vanishing, without making live color-picker
@@ -2144,6 +2161,13 @@ window.addEventListener('message', e => {
 const IMAGE_LIKE_KEYS = new Set(['image','photo','portrait','background','bg',
   'thumbnail','cover','hero','picture','avatar','headshot','banner']);
 
+// Grows a "--auto" textarea to fit its content (reset to 'auto' first so it
+// can shrink back down too, e.g. after the user deletes a line break).
+function _autoGrowTextarea(el) {
+  el.style.height = 'auto';
+  el.style.height = el.scrollHeight + 'px';
+}
+
 function renderHtmlTemplateForm(slots) {
   const manifest = _htmlTplSelectedMeta?.slot_manifest || {};
   const slotDefs = manifest.slots || {};
@@ -2263,16 +2287,18 @@ function renderHtmlTemplateForm(slots) {
       continue;
     }
 
-    // Text slot
+    // Text slot — always a <textarea>, never a plain <input>, so the user can
+    // press Enter for a manual line break (a native <input> blocks Enter
+    // entirely). Short fields get rows="1" + the "--auto" class, which keeps
+    // them visually identical to the old single-line input until content
+    // actually needs more room, then the auto-grow listener below expands it.
     const label = _friendlyLabel(key);
     const val = (slots && slots[key]) || '';
     const maxLen = def.maxLen || 0;
-    const useTextarea = maxLen > 120 || (!maxLen && val.length > 80);
+    const isLong = maxLen > 120 || (!maxLen && val.length > 80);
     contentHtml += `<div class="so-field-group${active}" data-slot-key="${escHtml(key)}" style="margin-bottom:14px">
       <div style="display:flex;align-items:center;gap:4px"><label class="field-label" style="flex:1">${escHtml(label)}</label><button type="button" class="htpl-wand-btn" data-slot="${escHtml(key)}" title="Fill with AI" aria-label="Fill with AI">✦</button></div>${hintHtml}
-      ${useTextarea
-        ? `<textarea class="field-textarea" data-slot="${escHtml(key)}" ${maxLen ? `maxlength="${maxLen}"` : ''} rows="4">${escHtml(val)}</textarea>`
-        : `<input type="text" class="field-input" data-slot="${escHtml(key)}" value="${escHtml(val)}" ${maxLen ? `maxlength="${maxLen}"` : ''}>`}
+      <textarea class="field-textarea${isLong ? '' : ' field-textarea--auto'}" data-slot="${escHtml(key)}" ${maxLen ? `maxlength="${maxLen}"` : ''} rows="${isLong ? 4 : 1}">${escHtml(val)}</textarea>
       ${maxLen ? `<div class="so-char-counter"><span class="htpl-char-cur">${val.length}</span> / ${maxLen}</div>` : ''}
     </div>`;
   }
@@ -2320,9 +2346,13 @@ function renderHtmlTemplateForm(slots) {
   formPane.querySelectorAll('.field-input[data-slot], .field-textarea[data-slot]').forEach(el => {
     const slot = el.dataset.slot;
     if (slot.startsWith('color:') || slot.startsWith('image:')) return;
+    if (el.classList.contains('field-textarea--auto')) {
+      _autoGrowTextarea(el); // seed height for pre-filled multi-line content
+    }
     el.addEventListener('input', () => {
       const counter = el.closest('.so-field-group')?.querySelector('.htpl-char-cur');
       if (counter) counter.textContent = el.value.length;
+      if (el.classList.contains('field-textarea--auto')) _autoGrowTextarea(el);
       _htmlTplExtractedSlots = _htmlTplExtractedSlots || {};
       _htmlTplExtractedSlots[slot] = el.value;
       _markDirty();

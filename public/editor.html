@@ -1606,7 +1606,6 @@ async function _selectHtmlTemplate(templateId) {
 
     if (!htmlRes.ok) throw new Error('Could not load template HTML');
     _htmlTplTemplateHtml = await htmlRes.text();
-    _htmlTplExtractedSlots = {};
 
     // Manifest priority: the DB column is authoritative — it's what the admin
     // edits and what the server render uses (templateRenderer.js reads
@@ -1631,10 +1630,19 @@ async function _selectHtmlTemplate(templateId) {
     // up front — covers vars defined in <style> blocks as well as inline
     // styles, which the iframe-load capture (inline-only) missed. This is
     // what makes "Reset to Original" deterministic.
-    _captureOriginalColors(_htmlTplTemplateHtml, _htmlTplSelectedMeta?.slot_manifest?.slots || {});
+    const slotDefs = _htmlTplSelectedMeta?.slot_manifest?.slots || {};
+    _captureOriginalColors(_htmlTplTemplateHtml, slotDefs);
 
-    _renderTemplateIframe(_htmlTplTemplateHtml, null);
-    renderHtmlTemplateForm(null);
+    // Selecting a template should show ITS OWN default content and design —
+    // not an auto-personalized/auto-branded version. Prefill the form (and
+    // the extracted-slots state that Save & Preview sends to the server)
+    // with the template's baked-in copy, so what's shown live is exactly
+    // what renders unless the user explicitly edits, AI-fills, or applies
+    // brand colors.
+    _htmlTplExtractedSlots = _captureOriginalContent(_htmlTplTemplateHtml, slotDefs);
+
+    _renderTemplateIframe(_htmlTplTemplateHtml, _htmlTplExtractedSlots);
+    renderHtmlTemplateForm(_htmlTplExtractedSlots);
   } catch (err) {
     document.getElementById('html-tpl-form-pane').innerHTML = `<div class="so-editor-form"><p class="so-extract-error">${escHtml(err.message || 'Could not load template.')}</p></div>`;
   }
@@ -1671,7 +1679,10 @@ async function _aiFillAllFields() {
         extracted[key] = extracted[key].slice(0, def.maxLen);
       }
     }
-    _htmlTplExtractedSlots = extracted;
+    // Merge onto the existing state rather than replacing it — a slot the AI
+    // couldn't find content for (extractSlotContent omits it) should keep
+    // showing the template's own default text, not go blank.
+    _htmlTplExtractedSlots = { ...(_htmlTplExtractedSlots || {}), ...extracted };
     _markDirty();
     _renderTemplateIframe(_htmlTplTemplateHtml, _htmlTplExtractedSlots);
     renderHtmlTemplateForm(_htmlTplExtractedSlots);
@@ -1894,6 +1905,40 @@ function _captureOriginalColors(html, slotDefs) {
     const raw = defs[key.slice('color:'.length)];
     if (raw) _htmlTplOriginalColors[key] = raw;
   }
+}
+
+// Capture the template's own baked-in text/repeating content from the raw
+// HTML, mirroring _captureOriginalColors. This is what "the template's
+// default content" means — the copy the admin/AI-generator authored into
+// data-slot elements — as opposed to content extracted from the user's post.
+function _captureOriginalContent(html, slotDefs) {
+  const content = {};
+  try {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    for (const [key, def] of Object.entries(slotDefs)) {
+      if (key.startsWith('color:') || key.startsWith('image:')) continue;
+      if (def.type === 'repeating') {
+        const container = doc.querySelector(`[data-slot="${key}"][data-slot-container]`) || doc.querySelector(`[data-slot="${key}"]`);
+        if (!container) continue;
+        const items = [];
+        container.querySelectorAll('[data-slot-item]').forEach(itemEl => {
+          const item = {};
+          itemEl.querySelectorAll('[data-slot-field]').forEach(f => {
+            const field = f.getAttribute('data-slot-field');
+            if (field) item[field] = (f.textContent || '').trim();
+          });
+          if (Object.keys(item).length) items.push(item);
+        });
+        if (items.length) content[key] = items;
+      } else {
+        const el = doc.querySelector(`[data-slot="${key}"]`);
+        const text = (el?.textContent || '').trim();
+        if (text) content[key] = text;
+        else if (typeof def.default === 'string' && def.default) content[key] = def.default;
+      }
+    }
+  } catch { /* leave empty — form falls back to blank fields */ }
+  return content;
 }
 
 // ── Static PNG preview (after render, or cache-restore without templateHtml) ──
@@ -2141,20 +2186,17 @@ function renderHtmlTemplateForm(slots) {
       const active = key === _htmlTplActiveSlotKey ? ' so-field-group--active' : '';
       const colorName = key.slice('color:'.length);
       const label = _friendlyColorLabel(colorName);
-      // Only user edits and admin brand-mapped slots become overrides. Generic
-      // manifest defaults (#cccccc etc.) are never injected into the preview —
-      // the server render skips them too (templateRenderer.js) and lets the
-      // template's own CSS provide the original design colors.
-      let display = _pendingColorUpdates[key]
-        || (slots && typeof slots[key] === 'string' ? slots[key] : null);
-      if (!display && def.default === 'brand') {
-        const brandVal = _resolveBrandColor(key, def);
-        if (brandVal) { display = brandVal; _applySlotToIframe(key, brandVal, 'color'); }
-      }
-      if (!display) {
-        display = _htmlTplOriginalColors[key]
-          || (/^#[0-9a-fA-F]{3,8}$/.test(def.default || '') ? def.default : '#cccccc');
-      }
+      // Selecting a template shows ITS OWN design first — brand-mapped slots
+      // (def.default === 'brand') are NOT auto-resolved here. Only explicit
+      // user edits or a click on "Apply Brand Colors" (_applyBrandColors,
+      // which pins the result into _pendingColorUpdates) turn a slot brand.
+      // Generic manifest defaults (#cccccc etc.) are never injected into the
+      // preview either — the server render skips them too (templateRenderer.js)
+      // and lets the template's own CSS provide the original design colors.
+      const display = _pendingColorUpdates[key]
+        || (slots && typeof slots[key] === 'string' ? slots[key] : null)
+        || _htmlTplOriginalColors[key]
+        || (/^#[0-9a-fA-F]{3,8}$/.test(def.default || '') ? def.default : '#cccccc');
       const resolved = _normalizeColor(display) || '#cccccc';
       colorsHtml += `<div class="so-field-group${active}" data-slot-key="${escHtml(key)}" style="margin-bottom:10px">
         <label class="field-label">${escHtml(label)}</label>

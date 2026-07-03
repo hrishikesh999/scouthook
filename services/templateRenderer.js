@@ -307,24 +307,21 @@ async function renderTemplate(post, templateId, userOverrides = {}, brand = {}, 
     }
   }
 
-  // 5. Resolve color slots — only inject user overrides and brand mappings.
-  //    Never inject generic manifest defaults (#cccccc) — let the template's
-  //    own inline CSS variables provide the original design colors.
+  // 5. Resolve color slots — only inject explicit user overrides. Selecting a
+  //    template must render ITS OWN design, including for brand-mapped slots
+  //    (def.default === 'brand') — brand colors are applied only when the user
+  //    explicitly clicked "Apply Brand Colors" in the editor, which resolves
+  //    the hex client-side (_resolveBrandColor) and sends it here as a normal
+  //    override. No silent server-side brand fallback, mirroring step 4's text
+  //    handling — the form is the single source of truth at render time.
   const colorSlots = {};
   const overrideColors = (userOverrides && userOverrides.colors) || {};
-  for (const [key, def] of Object.entries(slots)) {
+  for (const key of Object.keys(slots)) {
     if (!key.startsWith('color:')) continue;
     if (overrideColors[key] && /^(#[0-9a-fA-F]{3,8}|rgba?\([^)]+\))$/.test(overrideColors[key])) {
       colorSlots[key] = overrideColors[key];
-    } else if (def.default === 'brand') {
-      const role = def.brandRole || key.slice('color:'.length);
-      // Fall back to accent for unrecognized CSS var names on brand-mapped slots
-      // (legacy 'auto' slots stored before brandRole was persisted). Must match
-      // _resolveBrandColor's fallback in public/editor.html.
-      const resolved = resolveBrandRole(role, brand) || (!def.brandRole ? brand.accent : null);
-      if (resolved) colorSlots[key] = resolved;
     }
-    // Skip generic defaults — the template HTML already has the real values
+    // Skip everything else — the template HTML already has the real values
   }
 
   // 6. Resolve image slots

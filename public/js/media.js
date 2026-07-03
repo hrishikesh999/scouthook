@@ -1,5 +1,6 @@
 /* media.js — Media Library page logic (SPA-safe: all DOM refs resolved in init) */
 
+(function () {
 'use strict';
 
 /* ── Module-level state only (no DOM refs) ─────────────────────── */
@@ -274,3 +275,5 @@ function escHtml(str) {
   if (!str) return '';
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
+
+})();

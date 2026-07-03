@@ -264,6 +264,13 @@
               _pageInitFns.set(scriptSrc, window.__pageInit);
             }
           }, { once: true });
+          // Safety net: if the script fails to fetch (network error, 404, blocked
+          // by an extension) the page would otherwise be stuck half-initialised.
+          // Hard-navigate instead — a fresh page load isn't subject to the SPA's
+          // shared-document script state.
+          s.addEventListener('error', () => {
+            window.location.href = url;
+          }, { once: true });
           document.body.appendChild(s);
         }
       }

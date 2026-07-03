@@ -1,5 +1,7 @@
 /* schedule.js — Editorial Agenda for schedule.html */
 
+(function () {
+
 /* ── Helpers ────────────────────────────────────────────────── */
 
 function toTitleCase(str) {
@@ -394,3 +396,5 @@ if (document.readyState === 'loading') {
 } else {
   init();
 }
+
+})();

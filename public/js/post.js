@@ -1,5 +1,7 @@
 /* post.js — Published post detail page */
 
+(function () {
+
 // POST_ID is resolved lazily in init() so SPA back-navigation picks up the current URL
 
 const RATING_META = {
@@ -222,3 +224,5 @@ if (document.readyState === 'loading') {
 } else {
   init();
 }
+
+})();

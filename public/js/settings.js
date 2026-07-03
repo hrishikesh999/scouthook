@@ -1,9 +1,10 @@
-'use strict';
-
 /* ============================================================
    settings.js — Voice Profile Wizard
    7 stages: Basics · Content Pillars · Credibility · CTAs · Rules · LinkedIn · Samples
    ============================================================ */
+
+(function () {
+'use strict';
 
 async function init() {
 
@@ -994,3 +995,5 @@ async function init() {
 window.__pageInit = init;
 window.__pageCleanup = null;
 init();
+
+})();

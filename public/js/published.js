@@ -1,5 +1,7 @@
 /* published.js — Published page for Scouthook */
 
+(function () {
+
 function toTitleCase(str) {
   if (!str) return '';
   return str.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
@@ -91,3 +93,5 @@ if (document.readyState === 'loading') {
 } else {
   init();
 }
+
+})();

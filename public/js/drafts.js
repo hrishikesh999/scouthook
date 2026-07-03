@@ -1,5 +1,7 @@
 /* drafts.js — Drafts management page */
 
+(function () {
+
 /* ── Helpers ─────────────────────────────────────────────────── */
 function toTitleCase(str) {
   if (!str) return 'Post';
@@ -168,3 +170,5 @@ if (document.readyState === 'loading') {
 } else {
   init();
 }
+
+})();

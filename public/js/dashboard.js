@@ -1,5 +1,7 @@
 /* dashboard.js — home page data fetching and rendering */
 
+(function () {
+
 /* ── Init ────────────────────────────────────────────────────── */
 let _perfTimer1 = null, _perfTimer2 = null;
 
@@ -540,4 +542,4 @@ function _perfModalShellHTML() {
       </div>`;
 }
 
-
+})();

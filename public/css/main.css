@@ -8235,13 +8235,8 @@ html[data-nav-dir="back"] #main-content.spa-entering {
 }
 .htpl-mp-cancel-btn:hover { background: var(--surface-2, #f9fafb); }
 
-.htpl-wand-btn {
-  background: none; border: 1px solid var(--border); border-radius: 4px;
-  color: var(--brand, #0f766e); cursor: pointer; font-size: 11px;
-  padding: 3px 8px; transition: background 0.15s, border-color 0.15s;
-  line-height: 1; font-family: inherit; font-weight: 500; white-space: nowrap;
-}
-.htpl-wand-btn:hover { background: rgba(15,118,110,0.08); border-color: var(--brand, #0f766e); }
+/* .htpl-wand-btn — defined later in the premium overrides section */
+.htpl-wand-btn { cursor: pointer; font-family: inherit; }
 .htpl-wand-btn:disabled { opacity: 0.5; cursor: default; }
 
 .html-tpl-progress {
@@ -8528,27 +8523,49 @@ html[data-nav-dir="back"] #main-content.spa-entering {
   box-shadow: inset 0 1px 0 rgba(94,234,212,0.30), 0 4px 14px rgba(20,184,166,0.28);
 }
 
-/* ── Wand buttons — teal pill ────────────────────────────────── */
+/* ── Wand buttons — compact icon-only sparkle ────────────────── */
 .htpl-wand-btn {
-  border-radius: 99px;
-  padding: 2px 8px;
-  font-size: 10.5px;
-  letter-spacing: 0.01em;
-  background: rgba(15,118,110,0.06);
-  border-color: rgba(15,118,110,0.22);
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; border-radius: 6px; padding: 0;
+  font-size: 12px; line-height: 1;
+  background: rgba(15,118,110,0.07);
+  border-color: rgba(15,118,110,0.20);
   color: var(--brand);
+  flex-shrink: 0;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
 }
-.htpl-wand-btn:hover { background: rgba(15,118,110,0.12); border-color: rgba(15,118,110,0.45); }
+.htpl-wand-btn:hover:not(:disabled) {
+  background: rgba(15,118,110,0.14);
+  border-color: rgba(15,118,110,0.50);
+  transform: scale(1.08);
+}
+.htpl-wand-spin { display: inline-block; font-style: normal; opacity: 0.6; }
 
 /* ── Color action buttons ────────────────────────────────────── */
-#htpl-apply-brand {
-  border-color: rgba(15,118,110,0.35) !important;
-  color: var(--brand) !important;
-  background: rgba(15,118,110,0.05) !important;
+.htpl-color-action-btn {
+  height: 32px; border-radius: 8px; font-size: 12px; font-weight: 500;
+  display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+  transition: background 0.15s, box-shadow 0.15s, border-color 0.15s;
 }
-#htpl-apply-brand:hover:not(:disabled) {
-  background: rgba(15,118,110,0.10) !important;
-  border-color: var(--brand) !important;
+.htpl-color-action-btn--brand {
+  background: linear-gradient(180deg, #0D9488 0%, #0F766E 100%) !important;
+  border: 1px solid #115E59 !important;
+  color: #fff !important;
+  box-shadow: inset 0 1px 0 rgba(94,234,212,0.20), 0 1px 4px rgba(20,184,166,0.18) !important;
+}
+.htpl-color-action-btn--brand:hover:not(:disabled) {
+  opacity: 0.90 !important;
+  box-shadow: inset 0 1px 0 rgba(94,234,212,0.25), 0 2px 10px rgba(20,184,166,0.28) !important;
+}
+.htpl-color-action-btn--reset {
+  background: transparent !important;
+  border: 1px solid var(--border) !important;
+  color: var(--text-secondary) !important;
+}
+.htpl-color-action-btn--reset:hover:not(:disabled) {
+  border-color: #A1A1AA !important;
+  background: var(--bg-pill, rgba(0,0,0,0.03)) !important;
+  color: var(--text-primary) !important;
 }
 
 /* ── Color swatches — larger, rounder ───────────────────────── */

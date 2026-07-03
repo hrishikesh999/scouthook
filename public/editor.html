@@ -1664,6 +1664,13 @@ async function _aiFillField(slotKey) {
 async function _aiFillAllFields() {
   try {
     const extracted = await _aiExtractAll();
+    // Client-side maxLen guard — server already clamps but this covers any edge cases
+    const slotDefs = _htmlTplSelectedMeta?.slot_manifest?.slots || {};
+    for (const [key, def] of Object.entries(slotDefs)) {
+      if (def.maxLen && typeof extracted[key] === 'string' && extracted[key].length > def.maxLen) {
+        extracted[key] = extracted[key].slice(0, def.maxLen);
+      }
+    }
     _htmlTplExtractedSlots = extracted;
     _markDirty();
     _renderTemplateIframe(_htmlTplTemplateHtml, _htmlTplExtractedSlots);
@@ -2115,8 +2122,8 @@ function renderHtmlTemplateForm(slots) {
 
   if (hasColorSlots) {
     colorsHtml += '<div style="display:flex;gap:8px;margin-bottom:14px">';
-    colorsHtml += '<button type="button" id="htpl-apply-brand" class="btn btn--sm btn--secondary" style="flex:1">Apply Brand Colors</button>';
-    colorsHtml += '<button type="button" id="htpl-reset-colors" class="btn btn--sm btn--secondary" style="flex:1">Reset to Original</button>';
+    colorsHtml += '<button type="button" id="htpl-apply-brand" class="btn btn--sm htpl-color-action-btn htpl-color-action-btn--brand" style="flex:1">✦ Apply Brand</button>';
+    colorsHtml += '<button type="button" id="htpl-reset-colors" class="btn btn--sm htpl-color-action-btn htpl-color-action-btn--reset" style="flex:1">↺ Reset</button>';
     colorsHtml += '</div>';
   }
 
@@ -2210,7 +2217,7 @@ function renderHtmlTemplateForm(slots) {
     const maxLen = def.maxLen || 0;
     const useTextarea = maxLen > 120 || (!maxLen && val.length > 80);
     contentHtml += `<div class="so-field-group${active}" data-slot-key="${escHtml(key)}" style="margin-bottom:14px">
-      <div style="display:flex;align-items:center;gap:4px"><label class="field-label" style="flex:1">${escHtml(label)}</label><button type="button" class="htpl-wand-btn" data-slot="${escHtml(key)}" title="AI fill from post">✦ Insert with AI</button></div>${hintHtml}
+      <div style="display:flex;align-items:center;gap:4px"><label class="field-label" style="flex:1">${escHtml(label)}</label><button type="button" class="htpl-wand-btn" data-slot="${escHtml(key)}" title="Fill with AI" aria-label="Fill with AI">✦</button></div>${hintHtml}
       ${useTextarea
         ? `<textarea class="field-textarea" data-slot="${escHtml(key)}" ${maxLen ? `maxlength="${maxLen}"` : ''} rows="4">${escHtml(val)}</textarea>`
         : `<input type="text" class="field-input" data-slot="${escHtml(key)}" value="${escHtml(val)}" ${maxLen ? `maxlength="${maxLen}"` : ''}>`}
@@ -2336,13 +2343,15 @@ function renderHtmlTemplateForm(slots) {
   formPane.querySelectorAll('.htpl-wand-btn').forEach(btn => {
     btn.addEventListener('click', async () => {
       const slot = btn.dataset.slot;
-      btn.disabled = true; btn.textContent = '...';
+      btn.disabled = true; btn.innerHTML = '<span class="htpl-wand-spin">…</span>';
       try {
-        const val = await _aiFillField(slot);
+        let val = await _aiFillField(slot);
         if (val) {
+          const maxLen = _htmlTplSelectedMeta?.slot_manifest?.slots?.[slot]?.maxLen;
+          if (maxLen && val.length > maxLen) val = val.slice(0, maxLen);
           const input = formPane.querySelector(`.field-input[data-slot="${slot}"], .field-textarea[data-slot="${slot}"]`);
           if (input) {
-            input.tagName === 'TEXTAREA' ? (input.value = val) : (input.value = val);
+            input.value = val;
             input.dispatchEvent(new Event('input'));
           }
         }
@@ -3794,9 +3803,10 @@ function wireVisualButtons() {
     _setHtmlTplModalState('picker');
     loadHtmlTemplatePicker();
   });
-  // Backdrop clicks intentionally do NOT close the design editor — accidental
-  // outside clicks were silently discarding all slot edits. Closing happens
-  // only via the Close button, Cancel, or Escape (guarded when dirty).
+  // Backdrop click routes through the same dirty-guard as Escape / Cancel.
+  document.getElementById('html-tpl-overlay').addEventListener('click', e => {
+    if (e.target === e.currentTarget) attemptCloseHtmlTemplateModal();
+  });
 
   // Visual Boost Overlay tiles + backdrop click
   document.getElementById('visual-boost-overlay')?.addEventListener('click', e => {

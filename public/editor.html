@@ -3845,10 +3845,9 @@ function wireVisualButtons() {
     _setHtmlTplModalState('picker');
     loadHtmlTemplatePicker();
   });
-  // Backdrop click routes through the same dirty-guard as Escape / Cancel.
-  document.getElementById('html-tpl-overlay').addEventListener('click', e => {
-    if (e.target === e.currentTarget) attemptCloseHtmlTemplateModal();
-  });
+  // Backdrop clicks intentionally do nothing — an accidental click outside
+  // the modal must never prompt or close it. The only ways out are the
+  // Close button, Cancel, or Escape (all guarded by the dirty-check above).
 
   // Visual Boost Overlay tiles + backdrop click
   document.getElementById('visual-boost-overlay')?.addEventListener('click', e => {

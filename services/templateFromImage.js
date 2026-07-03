@@ -311,9 +311,19 @@ Scan every CSS rule and inline style in the HTML. If you find ANY hardcoded hex 
 2. Replace the hardcoded value with var(--new_var)
 3. Add "color:new_var" to the manifest slots with its EXACT hex value as the default (NOT #cccccc)
 
+MASKED REGIONS:
+Solid magenta (#FF00FF) rectangles in the comparison image are MASKED image-slot
+regions (photos load at render time). They are painted identically on both halves,
+so they are never a difference. Ignore them completely — keep each
+<img data-slot="image:*"> element and its position/size styles exactly as they are.
+
 INVIOLABLE RULES:
 - Keep ALL data-slot, data-slot-container, data-slot-item, data-slot-field attributes exactly as they are
 - Keep src="" unchanged on ALL <img data-slot="image:*"> elements
+- Keep EVERY existing var(--name) reference exactly as-is. NEVER replace var(--name)
+  with a hardcoded color. To change what a variable's color looks like, change the
+  variable's VALUE where it is defined on the root container — not the reference.
+  Introduce NEW variables only for colors that were previously hardcoded.
 - Keep the <script type="application/json" id="template-meta"> block — you may ADD new entries but do NOT remove existing slots
 - Keep all Google Font <link> tags in <head>
 - Return the COMPLETE corrected HTML document (not a JSON wrapper — just raw HTML starting with <!DOCTYPE html>)
@@ -331,7 +341,7 @@ function makeCallWithTimeout(client) {
   return (params) => Promise.race([
     client.messages.create(params),
     new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('AI conversion timed out after 120 seconds')), VISION_TIMEOUT_MS)
+      setTimeout(() => reject(new Error(`AI call timed out after ${Math.round(VISION_TIMEOUT_MS / 1000)} seconds`)), VISION_TIMEOUT_MS)
     ),
   ]);
 }
@@ -1132,12 +1142,32 @@ async function computePixelDiff(origBuf, rendBuf, manifest) {
  * separate images — differences at the same position in both halves are
  * immediately visible without mental context-switching between image blocks.
  */
-async function buildCompositeDiff(origBuf, rendBuf, tplW, tplH) {
+async function buildCompositeDiff(origBuf, rendBuf, tplW, tplH, maskRects = []) {
   const halfW = Math.floor(tplW / 2);
-  const [leftBuf, rightBuf] = await Promise.all([
-    sharp(origBuf).resize(halfW, tplH, { fit: 'fill' }).png().toBuffer(),
-    sharp(rendBuf).resize(halfW, tplH, { fit: 'fill' }).png().toBuffer(),
-  ]);
+
+  // Image slots render with src="" — a blank region on the render side that
+  // the original shows as a photo. Left unmasked, that is the biggest visible
+  // "difference" in the composite and the refine model rewrites the whole
+  // region to fix it (dropping the <img data-slot> in the process). Painting
+  // the region magenta on BOTH halves makes it identical by construction, so
+  // there is nothing there to fix.
+  let maskOverlay = null;
+  if (maskRects.length > 0) {
+    const sx = halfW / tplW;
+    const rects = maskRects.map(r =>
+      `<rect x="${Math.round(r.x * sx)}" y="${Math.round(r.y)}" width="${Math.max(1, Math.round(r.w * sx))}" height="${Math.max(1, Math.round(r.h))}" fill="#FF00FF"/>`
+    ).join('');
+    maskOverlay = {
+      input: Buffer.from(`<svg width="${halfW}" height="${tplH}" xmlns="http://www.w3.org/2000/svg">${rects}</svg>`),
+      top: 0, left: 0,
+    };
+  }
+
+  const maskedHalf = buf => {
+    const p = sharp(buf).resize(halfW, tplH, { fit: 'fill' });
+    return (maskOverlay ? p.composite([maskOverlay]) : p).png().toBuffer();
+  };
+  const [leftBuf, rightBuf] = await Promise.all([maskedHalf(origBuf), maskedHalf(rendBuf)]);
   // 4px dark divider between halves via a slightly wider canvas background
   const totalW = halfW * 2 + 4;
   return sharp({
@@ -1366,7 +1396,10 @@ async function refineTemplateHtml(html, manifest, originalImageBuffer) {
 
   let compositeBlock;
   try {
-    const compositePng = await buildCompositeDiff(originalImageBuffer, renderedPng, width, height);
+    const imageMaskRects = Object.entries(manifest.slots || {})
+      .filter(([k, v]) => k.startsWith('image:') && v && v.x != null)
+      .map(([, v]) => ({ x: v.x, y: v.y, w: v.w, h: v.h }));
+    const compositePng = await buildCompositeDiff(originalImageBuffer, renderedPng, width, height, imageMaskRects);
     compositeBlock = {
       type: 'image',
       source: { type: 'base64', media_type: 'image/png', data: compositePng.toString('base64') },
@@ -1423,16 +1456,28 @@ async function refineTemplateHtml(html, manifest, originalImageBuffer) {
   // Contract check: refine promises to preserve every slot. Expected slots are
   // derived from the INPUT HTML itself — the client-supplied manifest can be
   // empty (templates without a template-meta block) and must not be trusted
-  // as the baseline. Reject on any loss; a failed refine is recoverable, a
-  // silently de-slotted template is not.
+  // as the baseline.
+  //
+  // Graduated policy: losing a CONTENT slot (text/image/repeating binding) is
+  // unrecoverable damage → reject. Losing a COLOR var usually means the model
+  // hardcoded a color mid-rewrite and enforceColorVars re-promoted it under a
+  // new name — the template still renders; the old slot goes orphaned. That is
+  // worth a warning (the admin has one-click Undo), not a hard failure that
+  // makes refine unusable.
   const slotDiff = diffSlots(inputHtml, html);
-  if (slotDiff.lostContent.length > 0 || slotDiff.lostColors.length > 0) {
-    const lost = [...slotDiff.lostContent, ...slotDiff.lostColors.map(v => `color:${v}`)];
-    console.warn('[templateFromImage] refine REJECTED — dropped slot(s): %s', lost.join(', '));
+  if (slotDiff.lostContent.length > 0) {
+    console.warn('[templateFromImage] refine REJECTED — dropped content slot(s): %s',
+      slotDiff.lostContent.join(', '));
     throw Object.assign(
-      new Error(`Refinement dropped slot(s) [${lost.join(', ')}] and was rejected to protect the template. No changes were applied — try refining again.`),
+      new Error(`Refinement dropped content slot(s) [${slotDiff.lostContent.join(', ')}] and was rejected to protect the template. No changes were applied — try refining again.`),
       { status: 422 }
     );
+  }
+  let slotWarning = null;
+  if (slotDiff.lostColors.length > 0) {
+    console.warn('[templateFromImage] refine: color var(s) replaced during rewrite: %s',
+      slotDiff.lostColors.join(', '));
+    slotWarning = `Refine replaced color variable(s) ${slotDiff.lostColors.map(v => `--${v}`).join(', ')} — re-check brand mappings in the Colors & Brand panel (or Undo).`;
   }
 
   const colorDefaultsRefine = Object.entries(manifest.slots)
@@ -1454,7 +1499,8 @@ async function refineTemplateHtml(html, manifest, originalImageBuffer) {
 
   const matchScore = await computeMatchScore(html, manifest, originalImageBuffer);
 
-  return { html, manifest, matchScore, previousScore: diffResult.score, colorWarning: colorWarningRefine };
+  const combinedWarning = [colorWarningRefine, slotWarning].filter(Boolean).join(' ') || null;
+  return { html, manifest, matchScore, previousScore: diffResult.score, colorWarning: combinedWarning };
 }
 
 // ---------------------------------------------------------------------------
@@ -1742,4 +1788,4 @@ async function injectCroppedImages(html, manifest, cropBuffer, originalMeta) {
   return html;
 }
 
-module.exports = { generateTemplateFromImage, refineTemplateHtml, syncManifestColors };
+module.exports = { generateTemplateFromImage, refineTemplateHtml, syncManifestColors, buildCompositeDiff };

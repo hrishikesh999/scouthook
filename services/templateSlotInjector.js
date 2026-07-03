@@ -193,9 +193,16 @@ function injectImageSlot(html, key, dataUri) {
 
   const attr = `data-slot="image:${key}"`;
   const altAttr = `data-slot='image:${key}'`;
+  // Fallback for templates whose <img> element was authored without the
+  // "image:" convention (data-slot="photo" instead of "image:photo") — the
+  // manifest key can drift from the raw HTML attribute in that case.
+  const bareAttr = `data-slot="${key}"`;
+  const bareAltAttr = `data-slot='${key}'`;
 
   let pos = html.indexOf(attr);
   if (pos === -1) pos = html.indexOf(altAttr);
+  if (pos === -1) pos = html.indexOf(bareAttr);
+  if (pos === -1) pos = html.indexOf(bareAltAttr);
   if (pos === -1) return html;
 
   // Find the start of this <img ...> tag
@@ -393,6 +400,15 @@ function injectSlots(html, slots) {
     if (key.startsWith('image:')) {
       const imageKey = key.slice('image:'.length);
       result = injectImageSlot(result, imageKey, value);
+      continue;
+    }
+    if (typeof value === 'string' && value.startsWith('data:image/')) {
+      // Manifest key lacks the "image:" prefix (e.g. an admin-added slot that
+      // wasn't authored with the convention) but the value is unmistakably an
+      // image — route it to injectImageSlot instead of dumping the base64
+      // data URI as text content. injectImageSlot's own bare-key fallback
+      // handles matching the raw HTML's data-slot attribute.
+      result = injectImageSlot(result, key, value);
       continue;
     }
     if (Array.isArray(value)) {

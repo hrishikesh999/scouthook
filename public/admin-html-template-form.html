@@ -1806,10 +1806,15 @@
   // ── Add slot manually ────────────────────────────────────────────────────
 
   document.getElementById('add-slot-btn').addEventListener('click', () => {
-    const key = document.getElementById('add-slot-key').value.trim();
+    let key = document.getElementById('add-slot-key').value.trim();
     if (!key) return;
-    if (_slotState.find(s => s.key === key)) { alert('Slot "' + key + '" exists.'); return; }
     const type = document.getElementById('add-slot-type').value;
+    // Image slots MUST carry the "image:" prefix — it's how the renderer and
+    // the live preview find the matching <img data-slot="image:key"> element.
+    // A bare key here (e.g. "photo") silently breaks both, since nothing in
+    // the raw HTML or the render pipeline recognizes it as an image slot.
+    if (type === 'image' && !key.startsWith('image:')) key = 'image:' + key;
+    if (_slotState.find(s => s.key === key)) { alert('Slot "' + key + '" exists.'); return; }
     _slotState.push({ key, type, config: type === 'text' ? { maxLen: 0, default: '' } : type === 'color' ? { default: '#cccccc' } : {} });
     renderSlotCards(); document.getElementById('add-slot-key').value = '';
   });

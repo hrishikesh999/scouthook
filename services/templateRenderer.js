@@ -324,14 +324,16 @@ async function renderTemplate(post, templateId, userOverrides = {}, brand = {}, 
     // Skip everything else — the template HTML already has the real values
   }
 
-  // 6. Resolve image slots
+  // 6. Resolve image slots — driven by what the user actually uploaded
+  //    (overrideImages), matched against declared manifest keys. Not gated on
+  //    key.startsWith('image:'): a slot manually added in the admin without
+  //    following the "image:" prefix convention (bare key, e.g. "photo")
+  //    still needs its upload applied — injectSlots/injectImageSlot route it
+  //    correctly by value shape and fall back to a bare data-slot lookup.
   const imageSlots = {};
   const overrideImages = (userOverrides && userOverrides.images) || {};
-  for (const [key, def] of Object.entries(slots)) {
-    if (!key.startsWith('image:')) continue;
-    const imageKey = key.slice('image:'.length);
-    const rawImageKey = overrideImages[key] || overrideImages[imageKey];
-    if (!rawImageKey) continue;
+  for (const [key, rawImageKey] of Object.entries(overrideImages)) {
+    if (!rawImageKey || !(key in slots)) continue;
     const storageKey = rawImageKey.includes('/') ? rawImageKey : storage.buildMemberKey(tenantId, userId, 'uploads', rawImageKey);
     try {
       const buf = await storage.download(storageKey);

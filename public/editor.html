@@ -2011,9 +2011,13 @@ function _renderTemplateIframe(html, slots) {
           const el = document.querySelector('[data-slot="' + d.key + '"]');
           if (el) el.textContent = d.value;
         } else if (d.type === 'htpl-set-bg') {
-          const el = document.querySelector('[data-slot="' + d.key + '"]');
+          // Fallback to the bare key (strip "image:") for templates whose
+          // <img>/div was authored without the prefix convention, so a
+          // manifest/HTML drift doesn't leave the live preview stuck.
+          var bareKey = d.key.indexOf('image:') === 0 ? d.key.slice(6) : d.key;
+          var el = document.querySelector('[data-slot="' + d.key + '"]') || document.querySelector('[data-slot="' + bareKey + '"]');
           if (el) el.style.backgroundImage = "url('" + d.value + "')";
-          const img = document.querySelector('img[data-slot="' + d.key + '"]');
+          var img = document.querySelector('img[data-slot="' + d.key + '"]') || document.querySelector('img[data-slot="' + bareKey + '"]');
           if (img) img.src = d.value;
         } else if (d.type === 'htpl-highlight') {
           document.querySelectorAll('.htpl-active').forEach(x => x.classList.remove('htpl-active'));
@@ -2227,13 +2231,19 @@ function renderHtmlTemplateForm(slots) {
 
     const isPromotedImage = IMAGE_LIKE_KEYS.has(key) && !def.maxLen && !def.default && def.type !== 'repeating';
     if (isPromotedImage) {
-      const effectiveKey = `image:${key}`;
+      // Use the manifest key AS-IS (no invented "image:" prefix) — this slot
+      // was authored without the "image:" convention (e.g. an admin-added
+      // slot named bare "photo"), so its raw HTML data-slot attribute is
+      // bare too. Inventing a prefixed key here made the live-preview
+      // postMessage lookup, the click-to-highlight round trip, and the
+      // server override all target a key nothing in the DOM/manifest
+      // actually has — the upload silently went nowhere.
       const label = _friendlyLabel(key);
-      contentHtml += `<div class="so-field-group${active}" data-slot-key="${escHtml(effectiveKey)}" style="margin-bottom:14px">
+      contentHtml += `<div class="so-field-group${active}" data-slot-key="${escHtml(key)}" style="margin-bottom:14px">
         <label class="field-label">${escHtml(label)}</label>
-        <div class="html-tpl-img-zone" data-slot="${escHtml(effectiveKey)}">
-          <input type="file" accept="image/*" data-slot="${escHtml(effectiveKey)}" hidden>
-          <div class="htpl-mp-attribution" data-slot="${escHtml(effectiveKey)}" hidden></div>
+        <div class="html-tpl-img-zone" data-slot="${escHtml(key)}">
+          <input type="file" accept="image/*" data-slot="${escHtml(key)}" hidden>
+          <div class="htpl-mp-attribution" data-slot="${escHtml(key)}" hidden></div>
         </div>
       </div>`;
       continue;

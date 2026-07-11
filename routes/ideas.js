@@ -1,18 +1,28 @@
 'use strict';
 
 /**
- * routes/ideas.js — "Today's 3" idea cards API (Idea Engine Phase 1)
+ * routes/ideas.js — "Today's 3" idea cards API (Idea Engine Phase 1 + 2)
  *
  * GET  /api/ideas/today        Serve (or generate + cache) today's 3 cards
  * POST /api/ideas/:id/clicked  Funnel event — user tapped "Write this →"
  * POST /api/ideas/:id/save     Save card to the queue
  * POST /api/ideas/:id/dismiss  Dismiss card ("Not for me") — never re-served
+ * POST /api/ideas/:id/answer   Answer a daily question card
+ *
+ * Phase 2 (retention layer — sprint-idea-engine-phase2.md):
+ * GET  /api/ideas/queue        Saved cards (oldest first) + answered questions
+ * GET  /api/ideas/queue-count  Badge count for the sidebar Ideas entry
+ * POST /api/ideas/:id/archive  Remove a saved card from the queue (soft-delete)
+ * POST /api/ideas/question     Mint a fresh question card on demand
+ * GET  /api/ideas/streak       Consistency counter for the dashboard
  */
 
 const express = require('express');
 const router = express.Router();
 const { db, getSetting } = require('../db');
 const { getDailyCards, updateCardStatus, logCardEvent } = require('../services/ideaEngine');
+const { recordStreakAction, getStreak } = require('../services/streak');
+const { pickDailyQuestion, fillTemplate } = require('../services/evergreenIdeas');
 
 const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
 

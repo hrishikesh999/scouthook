@@ -375,6 +375,39 @@ async function getDailyCards(userId, tenantId) {
 }
 
 // ---------------------------------------------------------------------------
+// mintQuestionCard — on-demand question card ("New question" on the Ideas tab,
+// Phase 2). Same dedup + interpolation as the daily-question slot, but not
+// bound to the Today's 3 set — it's an extra row for today.
+// ---------------------------------------------------------------------------
+async function mintQuestionCard(userId, tenantId) {
+  const [profile, recommendedType, history] = await Promise.all([
+    fetchIdeaProfile(tenantId),
+    getRecommendedType(tenantId),
+    fetchServedHistory(tenantId),
+  ]);
+  const pillars = parsePillars(profile);
+  const q = pickDailyQuestion({ postType: recommendedType, excludeSlugs: [...history.usedQuestionSlugs] });
+
+  const result = await db.prepare(`
+    INSERT INTO idea_cards
+      (user_id, tenant_id, hook, title, textarea_input, post_type, tier,
+       provenance_ref, provenance_label, is_question)
+    VALUES (?, ?, ?, ?, '', ?, 0, ?, ?, true)
+    RETURNING id, hook, title, post_type, tier, provenance_label, is_question, status
+  `).get(
+    userId, tenantId,
+    fillTemplate(q.question, evergreenVals(profile, pillars)),
+    'On-demand question',
+    q.post_type,
+    `question:${q.slug}`,
+    'Answer it — ScoutHook remembers and drafts'
+  );
+
+  logCardEvent('idea_question_minted', userId, tenantId, { idea_card_id: Number(result.id) });
+  return result;
+}
+
+// ---------------------------------------------------------------------------
 // updateCardStatus — save / dismiss from the dashboard
 // ---------------------------------------------------------------------------
 async function updateCardStatus(cardId, tenantId, status) {
@@ -417,4 +450,4 @@ function logCardEvent(eventType, userId, tenantId, metadata) {
   ).catch(err => console.error('[ideaEngine] logCardEvent failed (non-fatal):', err.message));
 }
 
-module.exports = { getDailyCards, updateCardStatus, stampIdeaCard, logCardEvent };
+module.exports = { getDailyCards, updateCardStatus, stampIdeaCard, logCardEvent, mintQuestionCard };

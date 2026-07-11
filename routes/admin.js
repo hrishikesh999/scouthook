@@ -158,7 +158,7 @@ router.get('/workspaces/:workspaceId', requireAdminPassword, (req, res) => {
         FROM profiles WHERE workspace_id = ?
       `).all(workspaceId),
       db.prepare(`
-        SELECT id, account_type, display_name, expires_at, is_default
+        SELECT id, account_type, display_name, expires_at, is_default, linkedin_member_id
         FROM linkedin_connections WHERE workspace_id = ?
       `).all(workspaceId),
       db.prepare(
@@ -1000,6 +1000,59 @@ router.post('/feedback/:id/reply', requireAdminPassword, (req, res) => {
     }, { replyTo: fromEmail || undefined });
 
     return res.json({ ok: true });
+  })().catch(err => res.status(500).json({ ok: false, error: err.message }));
+});
+
+// ---------------------------------------------------------------------------
+// GET /admin/idea-engine-report
+// North-star metric for the Idea Engine (idea-engine-spec-2026.md):
+// % of generated posts that started from a served idea card, plus the
+// per-tier card funnel and raw event counts. Window: last 30 days.
+// ---------------------------------------------------------------------------
+router.get('/idea-engine-report', requireAdminPassword, (req, res) => {
+  (async () => {
+    const northStar = await db.prepare(`
+      SELECT COUNT(*) FILTER (WHERE idea_card_id IS NOT NULL) AS from_served_idea,
+             COUNT(*)                                         AS total_posts
+      FROM   generated_posts
+      WHERE  created_at > NOW() - INTERVAL '30 days'
+    `).get();
+
+    const tierFunnel = await db.prepare(`
+      SELECT tier,
+             COUNT(*)                                    AS served,
+             COUNT(*) FILTER (WHERE status = 'saved')     AS saved,
+             COUNT(*) FILTER (WHERE status = 'dismissed') AS dismissed,
+             COUNT(*) FILTER (WHERE status = 'generated') AS generated
+      FROM   idea_cards
+      WHERE  served_on > CURRENT_DATE - INTERVAL '30 days'
+      GROUP  BY tier
+      ORDER  BY tier DESC
+    `).all();
+
+    const events = await db.prepare(`
+      SELECT event_type, COUNT(*) AS n
+      FROM   platform_events
+      WHERE  event_type LIKE 'idea_card%'
+        AND  created_at > NOW() - INTERVAL '30 days'
+      GROUP  BY event_type
+      ORDER  BY event_type
+    `).all();
+
+    const total = Number(northStar?.total_posts || 0);
+    const fromIdea = Number(northStar?.from_served_idea || 0);
+
+    return res.json({
+      ok: true,
+      window_days: 30,
+      north_star: {
+        posts_from_served_idea: fromIdea,
+        total_posts: total,
+        served_idea_share: total ? Math.round((fromIdea / total) * 1000) / 10 : 0, // percent, 1dp
+      },
+      tier_funnel: tierFunnel,
+      events,
+    });
   })().catch(err => res.status(500).json({ ok: false, error: err.message }));
 });
 

@@ -337,12 +337,19 @@ async function renderTemplate(post, templateId, userOverrides = {}, brand = {}, 
     const storageKey = rawImageKey.includes('/') ? rawImageKey : storage.buildMemberKey(tenantId, userId, 'uploads', rawImageKey);
     try {
       const buf = await storage.download(storageKey);
-      // Detect MIME from buffer magic bytes
-      let mime = 'image/jpeg';
-      if (buf[0] === 0x89 && buf[1] === 0x50) mime = 'image/png';
-      else if (buf[0] === 0x47 && buf[1] === 0x49) mime = 'image/gif';
-      else if (buf[0] === 0x52 && buf[1] === 0x49) mime = 'image/webp';
-      imageSlots[key] = `data:${mime};base64,${buf.toString('base64')}`;
+      // Re-encode to bound payload size — raw uploads (e.g. phone photos) can be
+      // several MB each, and N of them inlined as base64 into one HTML payload
+      // can exceed the render service's request body limit (FST_ERR_CTP_BODY_TOO_LARGE).
+      // Slots like image:logo can be transparent PNGs (e.g. a logo over a colored
+      // banner) — flattening those to JPEG would bake in a white background, so
+      // only JPEG-compress when the source has no alpha channel to preserve.
+      const pipeline = sharp(buf).resize(1600, 1600, { fit: 'inside', withoutEnlargement: true });
+      const { hasAlpha } = await pipeline.metadata();
+      const mime = hasAlpha ? 'image/png' : 'image/jpeg';
+      const resized = hasAlpha
+        ? await pipeline.png({ compressionLevel: 9 }).toBuffer()
+        : await pipeline.jpeg({ quality: 80 }).toBuffer();
+      imageSlots[key] = `data:${mime};base64,${resized.toString('base64')}`;
     } catch (err) {
       console.warn(`[templateRenderer] could not load image slot ${key}:`, err.message);
     }

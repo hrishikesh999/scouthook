@@ -295,6 +295,8 @@ ScoutHook turns documented expertise into LinkedIn posts that generate leads. Th
 
 Priority order. Items marked ✅ are shipped; 🔲 are queued; 🚫 are blocked by external constraint.
 
+> **Note (2026-07-11):** Items #6 (weekly content plan), #8 (generate from About), #9 (streak tracker), and #11 (URL capture) are now consolidated under the **Idea Engine** initiative — see `idea-engine-spec-2026.md` for the full spec, phasing, and decision log.
+
 | # | Feature | Status | Notes |
 |---|---|---|---|
 | 1 | **Apply migration 036 to prod** | 🔲 Next | Workspace/profiles/multi-LinkedIn schema. Maintenance window required. |

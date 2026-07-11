@@ -51,6 +51,7 @@ let chatStep            = 0;
 let chatAnswers         = {};
 let mixRecommended      = null;
 let selectedVaultIdeaId  = null; // set when user picks a vault idea
+let selectedIdeaCardId   = null; // set when arriving from a dashboard "Today's 3" card
 let _pendingVaultIdeaId  = null; // vault idea awaiting type selection in picker
 let _pendingVaultIdeaSeed = '';  // brief/seed text for pending vault idea
 let _tensionResult      = null; // { tension, missing } from silent extraction
@@ -2390,6 +2391,7 @@ async function triggerGenerate(opts = {}) {
     if (_selectedProfileId)                             body.profileId            = _selectedProfileId;
     if (tensionStmt)                                    body.tension_statement    = tensionStmt;
     if (selectedVaultIdeaId)                            body.vault_idea_id        = selectedVaultIdeaId;
+    if (selectedIdeaCardId)                             body.idea_card_id         = selectedIdeaCardId;
     if (opts.enrichedIdea || opts.skipSubstanceCheck)   body.skip_substance_check = true;
     if (shouldStream)                                   body.streaming            = true;
     // Authority/Expertise-specific params
@@ -2987,11 +2989,13 @@ async function init() {
   const urlType        = urlParams.get('type');
   const urlIdea        = urlParams.get('idea');
   const urlVaultIdeaId = urlParams.get('vault_idea_id');
+  const urlIdeaCardId  = urlParams.get('idea_card');
 
   if (urlType && CHAT_CONFIGS[urlType]) {
     selectType(urlType);
     // Restore vault idea id AFTER selectType (selectType clears it)
     if (urlVaultIdeaId) selectedVaultIdeaId = parseInt(urlVaultIdeaId, 10) || null;
+    if (urlIdeaCardId)  selectedIdeaCardId  = parseInt(urlIdeaCardId, 10) || null;
     if (urlIdea) {
       chatInput.value        = urlIdea;
       chatInput.style.height = 'auto';

@@ -1,6 +1,6 @@
 'use strict';
 
-const fastify = require('fastify')({ logger: true, bodyLimit: 5 * 1024 * 1024 });
+const fastify = require('fastify')({ logger: true, bodyLimit: 10 * 1024 * 1024 });
 const puppeteer = require('puppeteer-core');
 
 const CHROME_PATH = process.env.CHROME_PATH || '/usr/bin/chromium';
@@ -120,7 +120,7 @@ async function renderHtml(html, width, height) {
 
 // ── Routes ──────────────────────────────────────────────────────────────────
 
-fastify.addContentTypeParser('application/json', { parseAs: 'string', bodyLimit: 5 * 1024 * 1024 }, (req, body, done) => {
+fastify.addContentTypeParser('application/json', { parseAs: 'string', bodyLimit: 10 * 1024 * 1024 }, (req, body, done) => {
   try { done(null, JSON.parse(body)); } catch (e) { done(e); }
 });
 

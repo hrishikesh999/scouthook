@@ -708,6 +708,7 @@ app.use('/api/events',        requireWorkspaceMember, require('./routes/events')
 app.use('/api/media',         requireWorkspaceMember, require('./routes/media'));
 app.use('/api/notifications', requireWorkspaceMember, require('./routes/notifications'));
 app.use('/api/vault',         requireWorkspaceMember, requireWorkspaceActive, requireVaultFeatureForWrites, require('./routes/vault'));
+app.use('/api/ideas',         requireWorkspaceMember, requireWorkspaceActive, require('./routes/ideas'));
 app.use('/api/funnel',        requireWorkspaceMember, require('./routes/funnel'));
 app.use('/api/checklist',     requireWorkspaceMember, require('./routes/checklist'));
 app.use('/api/posts',         requireWorkspaceMember, require('./routes/performance'));

@@ -356,7 +356,7 @@
           ${connections.length ? connections.map(c => `
             <div class="detail-row">
               <span>${esc(c.display_name || 'Unknown')}</span>
-              <span class="text-xs-muted">${esc(c.account_type)} · expires ${c.expires_at ? new Date(c.expires_at).toLocaleDateString() : 'unknown'}</span>
+              <span class="text-xs-muted">${esc(c.account_type)} · expires ${c.expires_at ? new Date(c.expires_at).toLocaleDateString() : 'unknown'}${c.linkedin_member_id ? ` · member ID ${esc(c.linkedin_member_id)}` : ''}</span>
             </div>`).join('') : '<p class="empty-section-text">No connections.</p>'}
         </div>
 

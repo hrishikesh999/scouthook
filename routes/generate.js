@@ -165,6 +165,20 @@ router.post('/', async (req, res) => {
           tension_statement, length_preference, cta_intent } = req.body;
   let { raw_idea } = req.body;
 
+  // Idea Engine: generations that started from a dashboard "Today's 3" card carry
+  // idea_card_id. Every generation branch below responds via res.json with the new
+  // post's `id`, so one interception here stamps the origin onto the post row
+  // (the north-star metric) without touching all 11 insert sites.
+  const ideaCardId = parseInt(req.body.idea_card_id, 10) || null;
+  if (ideaCardId) {
+    const { stampIdeaCard } = require('../services/ideaEngine');
+    const origJson = res.json.bind(res);
+    res.json = (payload) => {
+      if (payload && payload.ok && payload.id) stampIdeaCard(ideaCardId, payload.id, userId, tenantId);
+      return origJson(payload);
+    };
+  }
+
   // Interview path: format Q&A answers into a structured raw_idea string.
   // Flag is passed to Stage 1 so Haiku knows to synthesise across answers,
   // not treat the first question line as a hook seed.
@@ -175,6 +189,29 @@ router.post('/', async (req, res) => {
       .map(a => `${a.question}\n${a.answer.trim()}`)
       .join('\n\n');
     isInterviewPath = true;
+  }
+
+  // Idea Engine auto-memories: mine the user's typed input for reusable facts
+  // (fire-and-forget, never blocks). Captured here — after interview answers
+  // are folded in, but before RAG enrichment mutates raw_idea — so extraction
+  // only ever sees what the user actually wrote or spoke.
+  // Vault-path input is skipped (that text came out of the vault already).
+  const userTypedInput = (raw_idea || '').trim();
+  if (userTypedInput.length >= 80 && !vault_idea_id) {
+    const { extractFactsFromInput } = require('../services/factExtraction');
+    if (ideaCardId) {
+      // Card-originated input starts life AI-drafted — only mine it if the
+      // user actually edited it, or we'd "remember" facts the AI invented.
+      Promise.resolve(
+        db.prepare('SELECT textarea_input FROM idea_cards WHERE id = ? AND tenant_id = ?').get(ideaCardId, tenantId)
+      ).then(card => {
+        if (!card || (card.textarea_input || '').trim() !== userTypedInput) {
+          extractFactsFromInput(userId, tenantId, userTypedInput);
+        }
+      }).catch(() => {});
+    } else {
+      extractFactsFromInput(userId, tenantId, userTypedInput);
+    }
   }
 
   if (!genPath) return res.status(400).json({ ok: false, error: 'missing_path' });
@@ -330,6 +367,10 @@ router.post('/', async (req, res) => {
         res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
         if (event === 'done') {
           require('../services/trialEmails').scheduleTrialEvaluation(userId, tenantId);
+          // Idea Engine origin stamp — streaming path never reaches res.json
+          if (ideaCardId && data.post_id) {
+            require('../services/ideaEngine').stampIdeaCard(ideaCardId, data.post_id, userId, tenantId);
+          }
         }
       };
 

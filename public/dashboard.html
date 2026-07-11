@@ -18,8 +18,20 @@
   <!-- ── Dashboard ─────────────────────────────────────────── -->
   <div class="dashboard-page">
 
-    <!-- Zone 1: Hero banner -->
-    <div class="hero-banner" role="banner">
+    <!-- Zone 1: Today's Ideas (Idea Engine — see idea-engine-spec-2026.md R1) -->
+    <div id="todays-ideas" class="todays-ideas" hidden role="region" aria-label="Today's post ideas">
+      <div class="ti-header">
+        <div class="ti-header-left">
+          <h1 class="ti-heading">Today's ideas</h1>
+          <p class="ti-subheading">Three ways you could show up on LinkedIn today — pick one.</p>
+        </div>
+        <a href="/generate.html?new=1" class="ti-own-idea">I have my own idea →</a>
+      </div>
+      <div id="ti-cards" class="ti-cards" aria-live="polite"></div>
+    </div>
+
+    <!-- Zone 1 fallback: hero banner — shown only if idea cards fail to load -->
+    <div class="hero-banner" role="banner" id="hero-fallback" hidden>
       <div class="hero-left">
         <h1 class="hero-heading">What's on your mind today?</h1>
         <p class="hero-subheading">A thought from your week could be your best post this month.</p>
@@ -169,6 +181,7 @@
   <script src="/js/ui-toast.js"></script>
   <script src="/js/account-bar.js"></script>
   <script src="/js/app-router.js"></script>
+  <script src="/js/voice-input.js"></script>
   <script src="/js/dashboard.js"></script>
 </body>
 </html>

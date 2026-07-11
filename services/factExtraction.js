@@ -18,8 +18,8 @@
 const { db, getSetting } = require('../db');
 
 const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
-const MIN_INPUT_CHARS = 80;
-const MAX_FACTS_PER_SESSION = 3;
+const MIN_INPUT_CHARS = 200;
+const MAX_FACTS_PER_SESSION = 1;
 
 async function getClient() {
   const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
@@ -60,7 +60,7 @@ async function runExtraction(userId, tenantId, input) {
 
 """${input.slice(0, 2000)}"""
 
-Extract up to ${MAX_FACTS_PER_SESSION} CONCRETE, reusable facts about THEIR work worth remembering for future posts. A fact qualifies only if it contains at least one of: a specific number/result, a named or clearly described client situation, a specific method they use, or a hard-won opinion tied to real experience. General topics, vague claims, and restatements of the post idea itself do NOT qualify.
+Extract UP TO 1 CONCRETE, reusable fact about THEIR work worth remembering for future posts — and ONLY if it's genuinely specific and novel. A fact qualifies only if: (1) it contains a specific number, result, or timescale tied to a real client/project, (2) it reveals a non-obvious insight from their consulting practice, (3) it could become a standalone LinkedIn hook that would stop someone scrolling. Generic advice, process-description, and restatements of the draft idea itself do NOT qualify. When in doubt, return an empty array.
 ${recentSeeds.length ? `\nAlready remembered (do NOT re-extract anything covering the same ground):\n${recentSeeds.map(s => `- ${String(s).slice(0, 120)}`).join('\n')}\n` : ''}
 For each fact also write:
 - "hook": a possible LinkedIn post first line built on the fact (≤ 12 words)
@@ -80,7 +80,7 @@ Return ONLY a JSON array (empty array if nothing qualifies — that is a good an
   } catch { facts = []; }
 
   facts = facts
-    .filter(f => f && typeof f.fact === 'string' && f.fact.trim().length > 20)
+    .filter(f => f && typeof f.fact === 'string' && f.fact.trim().length > 30)
     .slice(0, MAX_FACTS_PER_SESSION);
   if (!facts.length) return;
 

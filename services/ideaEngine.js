@@ -129,10 +129,31 @@ async function pickVaultCards(tenantId, recommendedType, usedVaultIdeaIds) {
     LIMIT  20
   `).all(tenantId, recommendedType);
 
+  // Quality gate: hook must be substantive (7+ words) and not a placeholder.
+  const qualityCheck = (hook) => {
+    const words = String(hook || '').trim().split(/\s+/).length;
+    const isPlaceholder = String(hook || '').match(/\{\{|placeholder|TODO|FILL|INSERT/i);
+    return words >= 7 && !isPlaceholder;
+  };
+
+  // Semantic dedup: if two hooks start with the same 5+ words, skip the second.
+  const seen = new Set();
+  const semanticDedup = (hook) => {
+    const prefix = String(hook || '')
+      .trim()
+      .split(/\s+/)
+      .slice(0, 5)
+      .join(' ')
+      .toLowerCase();
+    if (seen.has(prefix)) return false;
+    seen.add(prefix);
+    return true;
+  };
+
   // Label: document-mined ideas cite the file; idea-engine rows (no document)
   // get a generic vault label — their source_ref holds a rationale, not a name.
   return rows
-    .filter(r => !usedVaultIdeaIds.has(Number(r.id)))
+    .filter(r => !usedVaultIdeaIds.has(Number(r.id)) && qualityCheck(r.hook_preview) && semanticDedup(r.hook_preview))
     .slice(0, T3_DAILY_CAP)
     .map(r => ({
       tier: 3,
@@ -190,16 +211,22 @@ async function generateLlmCards({ profile, pillars, recommendedType, sequelSeed,
     max_tokens: 1000,
     messages: [{
       role: 'user',
-      content: `Generate ${count} LinkedIn post idea cards for this professional.
+      content: `Generate ${count} LinkedIn post idea cards for this consultant.
 
 ${context}
 ${sequelBlock}
-${recentTitles.length ? `Do NOT repeat any of these recently suggested angles:\n${recentTitles.slice(-30).map(t => `- ${t}`).join('\n')}\n` : ''}Rules for every card:
-- "hook" is the actual FIRST LINE of the post, written out (≤ 2 sentences) — punchy, specific, no hashtags, no "I'm excited"
-- "textarea_input" is 2–3 first-person sentences the author would type as raw material — like briefing a ghostwriter, with at least one concrete detail
-- "title" is a 3–7 word opinionated topic label
-- "post_type" is one of reach|trust|convert — at least one card must be "${recommendedType}"
-- Each idea must feel like something only this person could write — anchor in their positioning and pillars, never generic
+${recentTitles.length ? `Do NOT repeat any of these recently suggested angles:\n${recentTitles.slice(-30).map(t => `- ${t}`).join('\n')}\n` : ''}CRITICAL: Each card MUST reveal something about THEIR work or their audience's challenges — never generic "how to scale" advice. Use this template:
+
+REACH cards: A specific moment from your consulting work that shows how your audience is different, a client situation that surprised you, or a pattern you've seen repeatedly.
+TRUST cards: A non-obvious insight or contrarian belief from serving your audience, a mistake you see them make, or a misunderstanding about your field.
+CONVERT cards: A specific result you or a client achieved, a before/after that illustrates the impact of your work, or an unexpected obstacle you help people overcome.
+
+Rules for every card:
+- "hook" is the actual FIRST LINE of the post (≤ 2 sentences) — specific, grounded, no generic advice
+- "textarea_input" is 2–3 first-person sentences the author would type as raw material (e.g., "A client told me X" or "I realized Y when..."), with specific detail
+- "title" is a 3–7 word topic label
+- "post_type" is one of reach|trust|convert — at least one must be "${recommendedType}"
+- Each hook must pass this test: "Could I only write this based on my specific consulting experience?" If not, it's too generic.
 
 Return ONLY a JSON array of ${count} objects: [{"title": "...", "hook": "...", "textarea_input": "...", "post_type": "..."}]`,
     }],

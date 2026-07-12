@@ -1,6 +1,8 @@
 # Sprint — Idea Engine Phase 2: "The Retention Layer"
 
-*Planned: 2026-07-11 · Dates: TBD (post Phase 1 dogfood) · Spec: `idea-engine-spec-2026.md` (R6–R9)*
+*Planned: 2026-07-11 · Built: 2026-07-12 · Spec: `idea-engine-spec-2026.md` (R6–R9)*
+
+**Status: P0 + P1 (tasks 9–14) SHIPPED 2026-07-12.** Task 15 (weekly plan seed) deferred per cut order — it's Phase 3 prep and there is no weekly-plan surface to seed yet. Migration 072 applied.
 
 **Sprint Goal:** Convert the Daily 3 from a feature into a habit loop. Streak visibility + global Ideas pill + saved queue + nightly pre-compute establish a multi-touch funnel: daily idea → save or answer → streak increments → queue fills → weekly plan seeds.
 
@@ -54,12 +56,20 @@ P0 = 6d at ~75% of 8 working days. Cut order if slipping: P2 → P1 → skip 12 
 
 ## Definition of Done
 
-- [ ] Ideas tab: sidebar entry with badge (unseen count); /ideas route shows saved cards + recent questions; oldest-first sort; one-tap Write this → prefill chain works end-to-end
-- [ ] Streak: increments on save/answer/generate; resets daily; visible on dashboard (professional framing); event logging for north-star
-- [ ] Pill: ✨ button on every app page (dashboard, drafts, vault, generate, settings); slide-over drawer with Daily 3 + shuffle; fresh/stale state; close on navigate
-- [ ] Email: Resend integration; subject = card #1 hook; body = card preview + deep link; user cadence settings (daily/weekly/off); suppressed on action-days
-- [ ] Pre-compute (if not deferred): cron at 6am UTC; caches idea_cards for all active users; email uses cache, not sync-generated
-- [ ] Admin report extended: idea funnel now includes "saved → queue", "queue → write", "question → email"; cohort view by join date
+- [x] Ideas tab: sidebar entry with badge (queue count); /ideas route shows saved cards + recent questions; oldest-first sort; one-tap Write this → prefill chain works end-to-end. Bonus: "Ask me a question" mints an on-demand question card (`POST /api/ideas/question`).
+- [x] Streak: increments on save/answer/generate; lazy daily reset (midnight UTC, no cron); visible on dashboard as quiet "Consistency: N days" chip (hidden at 0 — no pressure); `streak_incremented` event logged once per user per day
+- [x] Pill: ✨ button on every app page (all sidebar pages; editor deliberately excluded); `<dialog>` slide-over with Daily 3 + shuffle (rotates same 3, no new fetch); 1h sessionStorage cache busted on card actions; closes on SPA navigate; fresh-count badge
+- [x] Email: Resend integration (`daily-ideas` template); subject = card #1 hook (90-char cap); body = card preview + prefilled write deep link; cadence daily/3x/weekly/off (NULL = weekly default); suppressed on action-days (idea event or generated post in last 24h); 7–10am local-time send window, email_log dedup per local date
+- [x] Pre-compute: in-process tick every 30 min, fires once per UTC day ≥ 6am UTC (platform_settings guard); warms idea_cards for users active in last 14 days; email cron falls back to sync getDailyCards() on cache miss
+- [x] Admin report extended: queue funnel (in_queue_now / archived / queue→write), daily-ideas email sends + recipients, active-streak stats, cohort view by join month; events breakdown now includes idea_email_sent / idea_question_minted / streak_incremented
+
+## As-built notes (deltas from plan)
+
+- Crons are **in-process** (`setInterval` in server.js, staggered offsets) matching every other ScoutHook cron — not an external Vercel/Railway cron as the implementation notes suggested.
+- Streak columns live on `user_profiles` (`streak_count`, `streak_last_date`); reset is **lazy on read** (streak reports 0 when last action < yesterday) so no daily reset cron exists.
+- Email prefs UI lives on **account.html#email-prefs** (user-scoped, like the rest of that page), not settings.html; API is `GET/PUT /api/email-preferences`.
+- Card rendering extracted to shared `public/js/idea-cards.js` (dashboard + pill + queue all use it); `/api/ideas/today` now flows through cachedFetch (1h TTL) shared by dashboard and pill, busted on any card action.
+- Queue removal uses a new `archived` card status (distinct from `dismissed`, which means "never re-serve").
 
 ## Implementation notes
 

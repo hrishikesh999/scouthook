@@ -4303,6 +4303,229 @@ body.has-trial-banner #main-content {
   .ti-header { flex-direction: column; align-items: flex-start; }
 }
 
+/* ── Idea Engine Phase 2: streak · sidebar badge · Ideas tab · pill ── */
+
+/* Consistency chip (dashboard ti-header) — deliberately quiet, no urgency */
+.ti-header-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+.ti-streak {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+}
+.ti-streak[hidden] { display: none; }
+.ti-streak-value {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--brand);
+  font-family: var(--font-sans);
+}
+.ti-streak-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+}
+
+/* Sidebar Ideas badge */
+.sidebar-badge {
+  margin-left: auto;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--brand);
+  color: var(--color-white);
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 999px;
+  line-height: 1;
+}
+.sidebar-badge[hidden] { display: none; }
+
+/* Ideas tab */
+.ideas-page { max-width: 1080px; }
+.ideas-header { margin-bottom: var(--space-5); display: flex; justify-content: space-between; align-items: flex-end; gap: var(--space-4); }
+.ideas-title {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  color: var(--text-heading);
+  font-family: var(--font-sans);
+}
+.ideas-sub { font-size: 14px; color: var(--text-muted); margin-top: var(--space-1); font-family: var(--font-sans); }
+.ideas-new-question-btn { flex-shrink: 0; }
+.ideas-question-slot { margin-bottom: var(--space-5); grid-template-columns: 1fr; }
+.ideas-question-slot[hidden] { display: none; }
+.ideas-queue { grid-template-columns: repeat(2, 1fr); margin-bottom: var(--space-7); }
+.ideas-empty { grid-column: 1 / -1; }
+
+.ideas-answered-header { margin-bottom: var(--space-3); }
+.ideas-answered-note { font-size: 12px; color: var(--text-muted); }
+.ideas-answered-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.ideas-answered-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-4);
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4) var(--space-5);
+}
+.ideas-answered-left { min-width: 0; }
+.ideas-answered-q {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-heading);
+  font-family: var(--font-sans);
+  margin-bottom: 2px;
+}
+.ideas-answered-a {
+  font-size: 13px;
+  color: var(--text-muted);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.ideas-answered-actions { flex-shrink: 0; }
+
+/* Global Ideas pill */
+.ideas-pill {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 46px;
+  height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--brand);
+  color: var(--color-white);
+  border: none;
+  border-radius: 999px;
+  box-shadow: var(--shadow-md);
+  cursor: pointer;
+  z-index: 890; /* under modals (900+), over page content */
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+.ideas-pill:hover { background: var(--brand-hover); transform: scale(1.06); }
+.ideas-pill-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #DC2626;
+  color: var(--color-white);
+  font-size: 10px;
+  font-weight: 700;
+  font-family: var(--font-sans);
+  border-radius: 999px;
+  border: 2px solid var(--bg-surface);
+  line-height: 1;
+}
+.ideas-pill-badge[hidden] { display: none; }
+
+/* Ideas drawer (slide-over dialog) */
+.ideas-drawer {
+  position: fixed;
+  inset: 0 0 0 auto;
+  width: min(440px, 92vw);
+  height: 100vh;
+  height: 100dvh;
+  max-height: none;
+  margin: 0;
+  padding: var(--space-5);
+  border: none;
+  border-left: 1px solid var(--border);
+  background: var(--bg-surface);
+  box-shadow: -12px 0 40px rgba(0, 0, 0, 0.12);
+  overflow-y: auto;
+  animation: ideas-drawer-in 0.22s ease;
+}
+.ideas-drawer::backdrop { background: rgba(9, 9, 11, 0.28); }
+@keyframes ideas-drawer-in {
+  from { transform: translateX(24px); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ideas-drawer { animation: none; }
+}
+
+.ideas-drawer-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+.ideas-drawer-title {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--text-heading);
+  font-family: var(--font-sans);
+}
+.ideas-drawer-sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+.ideas-drawer-header-actions { display: flex; align-items: center; gap: var(--space-1); flex-shrink: 0; }
+.ideas-drawer-close {
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: 20px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.ideas-drawer-close:hover { background: var(--bg-pill); color: var(--text-heading); }
+
+.ideas-drawer-cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.ideas-drawer-foot {
+  display: flex;
+  justify-content: space-between;
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border);
+}
+.ideas-drawer-foot a {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--brand);
+  text-decoration: none;
+}
+.ideas-drawer-foot a:hover { text-decoration: underline; }
+
+@media (max-width: 900px) {
+  .ideas-queue { grid-template-columns: 1fr; }
+  .ideas-header { flex-direction: column; align-items: flex-start; }
+  .ideas-pill { bottom: 18px; right: 18px; }
+}
+
 /* ── Onboarding Checklist ───────────────────────────────────── */
 .onboarding-checklist {
   background: var(--bg-surface);

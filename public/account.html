@@ -119,6 +119,35 @@
         </div>
       </div>
 
+      <!-- Email preferences card (Idea Engine Phase 2) -->
+      <div class="profile-card" id="email-prefs">
+        <div class="profile-field" style="margin-bottom:0">
+          <label class="field-label">Idea emails</label>
+          <p class="field-helper" style="margin:8px 0 16px">One ready-to-write post idea from your Daily 3, delivered at 7am your time. Skipped on days you've already worked on content.</p>
+
+          <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px">
+            <div style="flex:1;min-width:180px">
+              <label for="idea-email-cadence" style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:6px">How often</label>
+              <select id="idea-email-cadence" class="field-input" style="height:36px;font-size:13px;width:100%">
+                <option value="daily">Daily</option>
+                <option value="3x">3× a week (Mon · Wed · Fri)</option>
+                <option value="weekly">Weekly (Monday)</option>
+                <option value="off">Off</option>
+              </select>
+            </div>
+            <div style="flex:1;min-width:180px">
+              <label for="idea-email-timezone" style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:6px">Your timezone</label>
+              <select id="idea-email-timezone" class="field-input" style="height:36px;font-size:13px;width:100%"></select>
+            </div>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:10px">
+            <button id="idea-email-save" type="button" class="btn-outlined" style="font-size:12px;height:32px;padding:0 14px">Save preferences</button>
+            <span id="idea-email-feedback" style="display:none;font-size:12px;color:var(--text-muted)"></span>
+          </div>
+        </div>
+      </div>
+
       <!-- Danger Zone card -->
       <div class="profile-card profile-card--danger" id="danger-zone-card">
         <div class="profile-field" style="margin-bottom:0">
@@ -161,6 +190,8 @@
   <script src="/js/ui-toast.js"></script>
   <script src="/js/account-bar.js"></script>
   <script src="/js/app-router.js"></script>
+  <script src="/js/idea-cards.js"></script>
+  <script src="/js/ideas-pill.js"></script>
   <script src="/js/settings-nav.js"></script>
   <script>
     // Sign-in card (provider-aware)
@@ -369,6 +400,72 @@
           confirmBtn.disabled = false;
           confirmBtn.textContent = 'Delete everything';
           confirmBtn.style.opacity = '1';
+        }
+      });
+    })();
+  </script>
+
+  <!-- Email preferences (Idea Engine Phase 2) -->
+  <script>
+    (function () {
+      const cadenceEl  = document.getElementById('idea-email-cadence');
+      const tzEl       = document.getElementById('idea-email-timezone');
+      const saveBtn    = document.getElementById('idea-email-save');
+      const feedbackEl = document.getElementById('idea-email-feedback');
+      if (!cadenceEl || !tzEl || !saveBtn) return;
+
+      const detectedTz = (() => {
+        try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/New_York'; }
+        catch { return 'America/New_York'; }
+      })();
+
+      // Full IANA list when the browser exposes it, otherwise a sane shortlist.
+      let zones;
+      try { zones = Intl.supportedValuesOf('timeZone'); } catch { zones = null; }
+      if (!zones || !zones.length) {
+        zones = ['America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles',
+                 'Europe/London', 'Europe/Berlin', 'Asia/Dubai', 'Asia/Kolkata', 'Asia/Singapore',
+                 'Australia/Sydney'];
+      }
+      if (!zones.includes(detectedTz)) zones.unshift(detectedTz);
+      tzEl.innerHTML = zones.map(z =>
+        `<option value="${z}">${z.replace(/_/g, ' ')}</option>`
+      ).join('');
+      tzEl.value = detectedTz;
+
+      function flash(msg, isError) {
+        feedbackEl.textContent = msg;
+        feedbackEl.style.color = isError ? 'var(--score-fail, #dc2626)' : 'var(--brand, #0F766E)';
+        feedbackEl.style.display = 'inline';
+        setTimeout(() => { feedbackEl.style.display = 'none'; }, 3000);
+      }
+
+      // Load saved prefs (falls back to weekly + detected timezone)
+      fetch('/api/email-preferences', { credentials: 'same-origin' })
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+          if (!data || !data.ok) return;
+          cadenceEl.value = data.cadence || 'weekly';
+          if (data.timezone && zones.includes(data.timezone)) tzEl.value = data.timezone;
+        })
+        .catch(() => {});
+
+      saveBtn.addEventListener('click', async () => {
+        saveBtn.disabled = true;
+        try {
+          const r = await fetch('/api/email-preferences', {
+            method: 'PUT',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cadence: cadenceEl.value, timezone: tzEl.value }),
+          });
+          const data = await r.json();
+          if (!data.ok) throw new Error(data.error || 'save_failed');
+          flash('Saved ✓', false);
+        } catch {
+          flash('Could not save — try again.', true);
+        } finally {
+          saveBtn.disabled = false;
         }
       });
     })();

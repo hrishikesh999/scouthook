@@ -715,6 +715,7 @@ app.use('/api/posts',         requireWorkspaceMember, require('./routes/performa
 app.use('/api/workspaces',    require('./routes/workspaces'));
 app.use('/api/invites',       require('./routes/invites'));
 // User-scoped routes — require authenticated user, no workspace check
+app.use('/api/email-preferences', require('./routes/emailPreferences'));
 app.use('/api/billing',    require('./routes/billing'));
 app.use('/api/feedback',   require('./routes/feedback'));
 app.use('/api/support',    require('./routes/support'));
@@ -1061,6 +1062,26 @@ if (process.env.NODE_ENV !== 'test') {
     runTrialEmailCron();
     setInterval(runTrialEmailCron, 60 * 60 * 1000);
   }, 30 * 60 * 1000);
+}
+
+// ---------------------------------------------------------------------------
+// Idea Engine Phase 2: nightly pre-compute + daily ideas email.
+// Pre-compute tick fires every 30 min but runs at most once per UTC day
+// (>= 06:00 UTC, guarded via platform_settings) — warms idea_cards so the
+// email cron and first dashboard load hit cache. Email cron is hourly with a
+// 7–10am local-time send window (restart-safe: email_log dedup + wide window).
+// ---------------------------------------------------------------------------
+if (process.env.NODE_ENV !== 'test') {
+  const { ideaPrecomputeTick } = require('./services/ideaPrecompute');
+  const { runIdeaEmailCron }   = require('./services/ideaEmails');
+  setTimeout(() => {
+    ideaPrecomputeTick();
+    setInterval(ideaPrecomputeTick, 30 * 60 * 1000);
+  }, 10 * 60 * 1000);
+  setTimeout(() => {
+    runIdeaEmailCron();
+    setInterval(runIdeaEmailCron, 60 * 60 * 1000);
+  }, 35 * 60 * 1000); // staggered after the pre-compute tick and trial cron
 }
 
 // ---------------------------------------------------------------------------

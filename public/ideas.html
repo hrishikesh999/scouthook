@@ -3,10 +3,72 @@
 <head>
   <meta charset="UTF-8" />
   <link rel="icon" type="image/png" href="/favicon.png">
-  <meta http-equiv="refresh" content="0;url=/vault.html">
-  <title>Redirecting…</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ideas — Scouthook</title>
+  <link rel="stylesheet" href="/css/main.css">
 </head>
 <body>
-  <script>window.location.replace('/vault.html');</script>
+
+  <script src="/js/cached-fetch.js"></script>
+  <script src="/js/sidebar.js"></script>
+
+  <!-- ── Main content ──────────────────────────────────────── -->
+  <div id="main-content">
+
+    <div class="ideas-page">
+
+      <div class="page-header ideas-header">
+        <div>
+          <h1 class="ideas-title">Ideas</h1>
+          <p class="ideas-sub">Your saved ideas, oldest first — act on what you saved first.</p>
+        </div>
+        <button type="button" id="ideas-new-question" class="ti-write-btn ideas-new-question-btn">Ask me a question →</button>
+      </div>
+
+      <!-- On-demand question slot — filled when "Ask me a question" is tapped -->
+      <div id="ideas-question-slot" class="ti-cards ideas-question-slot" hidden aria-live="polite"></div>
+
+      <!-- Saved queue -->
+      <section role="region" aria-label="Saved ideas">
+        <div id="ideas-queue" class="ti-cards ideas-queue" aria-live="polite">
+          <div class="skeleton-pulse" aria-hidden="true" style="display:flex;flex-direction:column;gap:var(--space-3)">
+            <div class="skeleton-draft-row"></div>
+            <div class="skeleton-draft-row"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Answered questions history -->
+      <section id="ideas-answered-section" role="region" aria-label="Answered questions" hidden>
+        <div class="card-header ideas-answered-header">
+          <span class="card-title">Answered questions</span>
+          <span class="ideas-answered-note">Each answer is a vault memory — write from it any time.</span>
+        </div>
+        <div id="ideas-answered" class="ideas-answered-list"></div>
+      </section>
+
+    </div><!-- /ideas-page -->
+
+    <footer class="app-footer" role="contentinfo">
+      <div class="app-footer-inner">
+        <a href="https://www.scouthook.com/privacy" target="_blank" rel="noopener">Privacy Policy</a>
+        <span class="app-footer-sep">|</span>
+        <a href="https://www.scouthook.com/terms" target="_blank" rel="noopener">Terms of Service</a>
+        <span class="app-footer-sep">|</span>
+        <a href="/help.html">Help</a>
+        <p class="app-footer-legal">&copy; 2026 CopyPower Digital LLP. ScoutHook is an AI-powered authority engine.</p>
+      </div>
+    </footer>
+
+  </div><!-- /main-content -->
+
+  <script src="/js/session.js"></script>
+  <script src="/js/ui-toast.js"></script>
+  <script src="/js/account-bar.js"></script>
+  <script src="/js/app-router.js"></script>
+  <script src="/js/voice-input.js"></script>
+  <script src="/js/idea-cards.js"></script>
+  <script src="/js/ideas-pill.js"></script>
+  <script src="/js/ideas.js"></script>
 </body>
 </html>

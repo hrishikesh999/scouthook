@@ -10,6 +10,7 @@ async function init() {
   if (!recentList) return; // not on dashboard
   await window.scouthookAuthReady;
   loadTodaysIdeas();
+  loadStreak();
   loadDashboardStats();
   loadRecentPosts();
   loadRecentPublished();
@@ -28,24 +29,15 @@ window.__pageCleanup = function () {
 init();
 
 /* ── Today's Ideas (Idea Engine) ─────────────────────────────── */
-const TI_TYPE_META = {
-  reach:       { label: 'Reach',       cls: 'ti-type-reach' },
-  trust:       { label: 'Authority',   cls: 'ti-type-trust' },
-  convert:     { label: 'Convert',     cls: 'ti-type-convert' },
-  lead_magnet: { label: 'Lead magnet', cls: 'ti-type-lead' },
-};
-// generate.html CHAT_CONFIGS has no 'lead_magnet' key — its guided flow is 'lead_gen'
-const TI_URL_TYPE = { reach: 'reach', trust: 'trust', convert: 'convert', lead_magnet: 'lead_gen' };
-
 async function loadTodaysIdeas() {
   const zone = document.getElementById('todays-ideas');
   const fallback = document.getElementById('hero-fallback');
   if (!zone) return;
   try {
-    const res = await fetch('/api/ideas/today', { headers: apiHeaders() });
-    if (!res.ok) throw new Error('ideas_unavailable');
-    const data = await res.json();
-    if (!data.ok || !Array.isArray(data.cards) || !data.cards.length) throw new Error('no_cards');
+    // Shared with the Ideas pill (1h TTL, busted by card actions) — in-flight
+    // dedup also stops a same-page double generation on the first load of the day.
+    const data = await cachedFetch('/api/ideas/today', { credentials: 'same-origin' }, 60 * 60 * 1000);
+    if (!data || !data.ok || !Array.isArray(data.cards) || !data.cards.length) throw new Error('no_cards');
     renderIdeaCards(data.cards);
     zone.hidden = false;
   } catch {
@@ -55,161 +47,35 @@ async function loadTodaysIdeas() {
 
 function renderIdeaCards(cards) {
   const wrap = document.getElementById('ti-cards');
-  if (!wrap) return;
+  if (!wrap || !window.ScoutIdeaCards) return;
   wrap.innerHTML = '';
-  cards.forEach(card => {
-    if (card.is_question) {
-      wrap.appendChild(buildQuestionCard(card, wrap));
-      return;
+  const onRemoved = () => {
+    if (!wrap.querySelector('.ti-card')) {
+      wrap.innerHTML = `<div class="ti-empty">That's all for today — fresh ideas tomorrow. <a href="/generate.html?new=1">Or write your own →</a></div>`;
     }
-    const meta = TI_TYPE_META[card.post_type] || TI_TYPE_META.reach;
-    const el = document.createElement('div');
-    el.className = 'ti-card';
-    el.dataset.id = card.id;
-    el.innerHTML = `
-      <div class="ti-card-top">
-        <span class="ti-type-chip ${meta.cls}">${meta.label}</span>
-        <span class="ti-provenance">${escHtml(card.provenance_label || '')}</span>
-      </div>
-      <p class="ti-hook">${escHtml(card.hook)}</p>
-      <div class="ti-actions">
-        <button class="ti-write-btn" type="button">Write this →</button>
-        <button class="ti-ghost-btn ti-save-btn" type="button"${card.status === 'saved' ? ' disabled' : ''}>${card.status === 'saved' ? 'Saved ✓' : 'Save'}</button>
-        <button class="ti-ghost-btn ti-dismiss-btn" type="button" aria-label="Not for me">Not for me</button>
-      </div>`;
-
-    el.querySelector('.ti-write-btn').addEventListener('click', () => {
-      // Fire-and-forget funnel marker, then hand off to the generator with
-      // everything prefilled — the user should never see the intent grid.
-      fetch(`/api/ideas/${card.id}/clicked`, { method: 'POST', headers: apiHeaders() }).catch(() => {});
-      const params = new URLSearchParams({
-        type: TI_URL_TYPE[card.post_type] || 'reach',
-        idea: card.textarea_input || card.hook,
-        idea_card: String(card.id),
-      });
-      window.location.href = `/generate.html?${params.toString()}`;
-    });
-
-    el.querySelector('.ti-save-btn').addEventListener('click', async (e) => {
-      const btn = e.currentTarget;
-      btn.disabled = true;
-      try {
-        await fetch(`/api/ideas/${card.id}/save`, { method: 'POST', headers: apiHeaders() });
-        btn.textContent = 'Saved ✓';
-      } catch { btn.disabled = false; }
-    });
-
-    el.querySelector('.ti-dismiss-btn').addEventListener('click', async () => {
-      el.classList.add('ti-card--leaving');
-      fetch(`/api/ideas/${card.id}/dismiss`, { method: 'POST', headers: apiHeaders() }).catch(() => {});
-      setTimeout(() => {
-        el.remove();
-        if (!wrap.querySelector('.ti-card')) {
-          wrap.innerHTML = `<div class="ti-empty">That's all for today — fresh ideas tomorrow. <a href="/generate.html?new=1">Or write your own →</a></div>`;
-        }
-      }, 180);
-    });
-
-    wrap.appendChild(el);
+  };
+  cards.forEach(card => {
+    wrap.appendChild(window.ScoutIdeaCards.buildCard(card, { mode: 'today', onRemoved }));
   });
 }
 
-/* Question card — answering deposits a vault memory AND opens a prefilled draft */
-function buildQuestionCard(card, wrap) {
-  const el = document.createElement('div');
-  el.className = 'ti-card ti-card--question';
-  el.dataset.id = card.id;
-
-  if (card.status === 'answered') {
-    el.innerHTML = `
-      <div class="ti-card-top">
-        <span class="ti-type-chip ti-type-question">Today's question</span>
-      </div>
-      <p class="ti-hook">${escHtml(card.hook)}</p>
-      <div class="ti-actions"><span class="ti-answered-note">Answered ✓ — saved to your vault</span></div>`;
-    return el;
+/* ── Consistency streak (Idea Engine Phase 2) ────────────────── */
+async function loadStreak() {
+  const chip = document.getElementById('ti-streak');
+  if (!chip) return;
+  try {
+    const res = await fetch('/api/ideas/streak', { headers: apiHeaders() });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!data.ok || !data.streak_count) return; // 0 → stay quiet, no pressure
+    const days = data.streak_count === 1 ? '1 day' : `${data.streak_count} days`;
+    chip.innerHTML = `
+      <span class="ti-streak-value">Consistency: ${days}</span>
+      <span class="ti-streak-sub">${data.active_today ? '✓ counted today' : 'save, answer or write to keep it going'}</span>`;
+    chip.hidden = false;
+  } catch {
+    // Non-fatal — the chip is a progressive enhancement
   }
-
-  el.innerHTML = `
-    <div class="ti-card-top">
-      <span class="ti-type-chip ti-type-question">Today's question</span>
-      <span class="ti-provenance">${escHtml(card.provenance_label || '')}</span>
-    </div>
-    <p class="ti-hook">${escHtml(card.hook)}</p>
-    <div class="ti-actions ti-q-initial">
-      <button class="ti-write-btn ti-answer-toggle" type="button">Answer →</button>
-      <button class="ti-ghost-btn ti-dismiss-btn" type="button">Not today</button>
-    </div>
-    <div class="ti-answer-form" hidden>
-      <div class="ti-answer-input-wrap">
-        <textarea class="ti-answer-input" rows="3" placeholder="30 seconds, plain words — a specific moment, number, or opinion…" aria-label="Your answer"></textarea>
-        <button class="ti-mic-btn" type="button" aria-label="Record voice answer" style="display:none">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
-        </button>
-      </div>
-      <p class="ti-answer-error" role="alert" hidden>A little more detail — one specific moment or number is enough.</p>
-      <div class="ti-actions">
-        <button class="ti-write-btn ti-answer-submit" type="button">Save &amp; draft post →</button>
-        <button class="ti-ghost-btn ti-answer-cancel" type="button">Cancel</button>
-      </div>
-    </div>`;
-
-  const initialRow = el.querySelector('.ti-q-initial');
-  const form       = el.querySelector('.ti-answer-form');
-  const input      = el.querySelector('.ti-answer-input');
-  const errEl      = el.querySelector('.ti-answer-error');
-
-  el.querySelector('.ti-answer-toggle').addEventListener('click', () => {
-    initialRow.hidden = true;
-    form.hidden = false;
-    input.focus();
-    if (typeof initVoiceInput === 'function') {
-      initVoiceInput({ input, btn: el.querySelector('.ti-mic-btn') });
-    }
-  });
-
-  el.querySelector('.ti-answer-cancel').addEventListener('click', () => {
-    form.hidden = true;
-    initialRow.hidden = false;
-  });
-
-  el.querySelector('.ti-dismiss-btn').addEventListener('click', async () => {
-    el.classList.add('ti-card--leaving');
-    fetch(`/api/ideas/${card.id}/dismiss`, { method: 'POST', headers: apiHeaders() }).catch(() => {});
-    setTimeout(() => el.remove(), 180);
-  });
-
-  el.querySelector('.ti-answer-submit').addEventListener('click', async (e) => {
-    const answer = input.value.trim();
-    if (answer.length < 20) { errEl.hidden = false; return; }
-    errEl.hidden = true;
-    const btn = e.currentTarget;
-    btn.disabled = true;
-    btn.textContent = 'Saving…';
-    try {
-      const res = await fetch(`/api/ideas/${card.id}/answer`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...apiHeaders() },
-        body: JSON.stringify({ answer }),
-      });
-      const data = await res.json();
-      if (!data.ok) throw new Error(data.error || 'answer_failed');
-      // Q+A becomes the draft's raw input — same shape as the interview path
-      const params = new URLSearchParams({
-        type: TI_URL_TYPE[card.post_type] || 'reach',
-        idea: `${card.hook}\n${answer}`,
-        idea_card: String(card.id),
-      });
-      window.location.href = `/generate.html?${params.toString()}`;
-    } catch {
-      btn.disabled = false;
-      btn.textContent = 'Save & draft post →';
-      errEl.textContent = 'Could not save — try again.';
-      errEl.hidden = false;
-    }
-  });
-
-  return el;
 }
 
 /* ── Recent drafts ──────────────────────────────────────────── */

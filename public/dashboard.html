@@ -25,7 +25,10 @@
           <h1 class="ti-heading">Today's ideas</h1>
           <p class="ti-subheading">Three ways you could show up on LinkedIn today — pick one.</p>
         </div>
-        <a href="/generate.html?new=1" class="ti-own-idea">I have my own idea →</a>
+        <div class="ti-header-right">
+          <div id="ti-streak" class="ti-streak" hidden role="status" aria-label="Posting consistency"></div>
+          <a href="/generate.html?new=1" class="ti-own-idea">I have my own idea →</a>
+        </div>
       </div>
       <div id="ti-cards" class="ti-cards" aria-live="polite"></div>
     </div>
@@ -182,6 +185,8 @@
   <script src="/js/account-bar.js"></script>
   <script src="/js/app-router.js"></script>
   <script src="/js/voice-input.js"></script>
+  <script src="/js/idea-cards.js"></script>
+  <script src="/js/ideas-pill.js"></script>
   <script src="/js/dashboard.js"></script>
 </body>
 </html>

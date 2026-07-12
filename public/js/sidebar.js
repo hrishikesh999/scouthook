@@ -28,6 +28,7 @@
   }
 
   var svgDashboard = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>';
+  var svgIdeas     = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.4 1 2.3h6c0-.9.4-1.8 1-2.3A7 7 0 0 0 12 2z"/></svg>';
   var svgVault     = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>';
   var svgDrafts    = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>';
   var svgSchedule  = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
@@ -47,6 +48,7 @@
     '  </div>',
     '  <nav class="sidebar-nav">',
     '    ' + link('/dashboard.html', svgDashboard, 'Dashboard'),
+    '    ' + link('/ideas.html',     svgIdeas,     'Ideas<span id="sidebar-ideas-badge" class="sidebar-badge" hidden></span>'),
     '    ' + link('/drafts.html',    svgDrafts,    'Posts'),
     '    ' + link('/vault.html',     svgVault,     'Vault'),
     '    ' + link('/settings.html',  svgSettings,  'Settings'),
@@ -111,5 +113,22 @@
   aside.querySelectorAll('.sidebar-link').forEach(function (link) {
     link.addEventListener('click', closeMenu);
   });
+
+  // ── Ideas queue badge — saved ideas waiting on the Ideas tab ─
+  // Exposed globally so save/archive actions elsewhere can refresh it.
+  function refreshIdeasBadge() {
+    fetch('/api/ideas/queue-count', { credentials: 'same-origin' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (data) {
+        var badge = document.getElementById('sidebar-ideas-badge');
+        if (!badge || !data || !data.ok) return;
+        var n = Number(data.count) || 0;
+        badge.textContent = n > 9 ? '9+' : String(n);
+        badge.hidden = n === 0;
+      })
+      .catch(function () {});
+  }
+  window.__refreshIdeasBadge = refreshIdeasBadge;
+  refreshIdeasBadge();
 
 })();

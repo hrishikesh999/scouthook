@@ -170,11 +170,17 @@ router.post('/', async (req, res) => {
   // post's `id`, so one interception here stamps the origin onto the post row
   // (the north-star metric) without touching all 11 insert sites.
   const ideaCardId = parseInt(req.body.idea_card_id, 10) || null;
-  if (ideaCardId) {
-    const { stampIdeaCard } = require('../services/ideaEngine');
+  {
     const origJson = res.json.bind(res);
     res.json = (payload) => {
-      if (payload && payload.ok && payload.id) stampIdeaCard(ideaCardId, payload.id, userId, tenantId);
+      if (payload && payload.ok && payload.id) {
+        if (ideaCardId) {
+          require('../services/ideaEngine').stampIdeaCard(ideaCardId, payload.id, userId, tenantId);
+        }
+        // Consistency streak (Phase 2): any successful generation feeds the
+        // pipeline, card-originated or not. Fire-and-forget.
+        require('../services/streak').recordStreakAction(userId, tenantId, 'generate');
+      }
       return origJson(payload);
     };
   }
@@ -370,6 +376,9 @@ router.post('/', async (req, res) => {
           // Idea Engine origin stamp — streaming path never reaches res.json
           if (ideaCardId && data.post_id) {
             require('../services/ideaEngine').stampIdeaCard(ideaCardId, data.post_id, userId, tenantId);
+          }
+          if (data.post_id) {
+            require('../services/streak').recordStreakAction(userId, tenantId, 'generate');
           }
         }
       };

@@ -20,9 +20,8 @@
 const express = require('express');
 const router = express.Router();
 const { db, getSetting } = require('../db');
-const { getDailyCards, updateCardStatus, logCardEvent } = require('../services/ideaEngine');
+const { getDailyCards, updateCardStatus, logCardEvent, mintQuestionCard } = require('../services/ideaEngine');
 const { recordStreakAction, getStreak } = require('../services/streak');
-const { pickDailyQuestion, fillTemplate } = require('../services/evergreenIdeas');
 
 const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
 
@@ -65,6 +64,119 @@ router.get('/today', async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// GET /api/ideas/queue — the Ideas tab (Phase 2, spec R9)
+// Saved cards oldest-first (the queue is FIFO: act on what you saved first)
+// plus recently answered questions (each one is a vault memory the user can
+// still turn into a post).
+// ---------------------------------------------------------------------------
+router.get('/queue', async (req, res) => {
+  if (!requireUser(req, res)) return;
+  try {
+    const [saved, answered] = await Promise.all([
+      db.prepare(`
+        SELECT id, hook, title, textarea_input, post_type, tier,
+               provenance_label, is_question, served_on, updated_at
+        FROM   idea_cards
+        WHERE  tenant_id = ? AND status = 'saved'
+        ORDER  BY updated_at ASC
+        LIMIT  100
+      `).all(req.tenantId),
+      db.prepare(`
+        SELECT vi.id, vi.seed_text, vi.source_ref, vi.hook_preview,
+               vi.funnel_type, vi.created_at, vi.status
+        FROM   vault_ideas vi
+        WHERE  vi.tenant_id = ? AND vi.source = 'daily_question'
+        ORDER  BY vi.created_at DESC
+        LIMIT  15
+      `).all(req.tenantId),
+    ]);
+
+    return res.json({
+      ok: true,
+      saved: saved.map(c => ({
+        id: c.id,
+        hook: c.hook,
+        title: c.title,
+        post_type: c.post_type,
+        tier: c.tier,
+        provenance_label: c.provenance_label,
+        textarea_input: c.textarea_input,
+        is_question: !!c.is_question,
+        saved_on: c.updated_at,
+        served_on: c.served_on,
+      })),
+      answered: answered.map(a => ({
+        vault_idea_id: a.id,
+        question: (a.source_ref || '').replace(/^You answered: "|"$/g, ''),
+        answer: a.seed_text,
+        hook: a.hook_preview,
+        post_type: a.funnel_type,
+        answered_at: a.created_at,
+        used: a.status !== 'fresh',
+      })),
+    });
+  } catch (err) {
+    console.error('[ideas] GET /queue error:', err.message);
+    return res.status(500).json({ ok: false, error: 'queue_unavailable' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/ideas/queue-count — sidebar badge (cheap; called on every page load)
+// ---------------------------------------------------------------------------
+router.get('/queue-count', async (req, res) => {
+  if (!requireUser(req, res)) return;
+  try {
+    const row = await db.prepare(
+      "SELECT COUNT(*) AS n FROM idea_cards WHERE tenant_id = ? AND status = 'saved'"
+    ).get(req.tenantId);
+    return res.json({ ok: true, count: Number(row?.n || 0) });
+  } catch {
+    return res.json({ ok: true, count: 0 });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/ideas/streak — Consistency counter (Phase 2, spec R7)
+// ---------------------------------------------------------------------------
+router.get('/streak', async (req, res) => {
+  if (!requireUser(req, res)) return;
+  try {
+    return res.json({ ok: true, ...(await getStreak(req.userId)) });
+  } catch (err) {
+    console.error('[ideas] GET /streak error:', err.message);
+    return res.status(500).json({ ok: false, error: 'streak_unavailable' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/ideas/question — mint a fresh question card on demand
+// ("New question" button on the Ideas tab)
+// ---------------------------------------------------------------------------
+router.post('/question', async (req, res) => {
+  if (!requireUser(req, res)) return;
+  try {
+    const card = await mintQuestionCard(req.userId, req.tenantId);
+    return res.json({
+      ok: true,
+      card: {
+        id: card.id,
+        hook: card.hook,
+        title: card.title,
+        post_type: card.post_type,
+        tier: card.tier,
+        provenance_label: card.provenance_label,
+        is_question: true,
+        status: card.status,
+      },
+    });
+  } catch (err) {
+    console.error('[ideas] POST /question error:', err.message);
+    return res.status(500).json({ ok: false, error: 'question_unavailable' });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // POST /api/ideas/:id/clicked — fire-and-forget funnel marker
 // ---------------------------------------------------------------------------
 router.post('/:id/clicked', (req, res) => {
@@ -77,22 +189,31 @@ router.post('/:id/clicked', (req, res) => {
 // POST /api/ideas/:id/save · /:id/dismiss
 // ---------------------------------------------------------------------------
 async function setStatus(req, res, status, eventType) {
-  if (!requireUser(req, res)) return;
+  if (!requireUser(req, res)) return false;
   const cardId = Number(req.params.id);
-  if (!cardId) return res.status(400).json({ ok: false, error: 'invalid_card_id' });
+  if (!cardId) { res.status(400).json({ ok: false, error: 'invalid_card_id' }); return false; }
   try {
     const updated = await updateCardStatus(cardId, req.tenantId, status);
-    if (!updated) return res.status(404).json({ ok: false, error: 'card_not_found' });
+    if (!updated) { res.status(404).json({ ok: false, error: 'card_not_found' }); return false; }
     logCardEvent(eventType, req.userId, req.tenantId, { idea_card_id: cardId });
-    return res.json({ ok: true });
+    res.json({ ok: true });
+    return true;
   } catch (err) {
     console.error(`[ideas] POST /:id/${status} error:`, err.message);
-    return res.status(500).json({ ok: false, error: err.message });
+    res.status(500).json({ ok: false, error: err.message });
+    return false;
   }
 }
 
-router.post('/:id/save',    (req, res) => setStatus(req, res, 'saved',     'idea_card_saved'));
+router.post('/:id/save', async (req, res) => {
+  const ok = await setStatus(req, res, 'saved', 'idea_card_saved');
+  if (ok) recordStreakAction(req.userId, req.tenantId, 'save');
+});
 router.post('/:id/dismiss', (req, res) => setStatus(req, res, 'dismissed', 'idea_card_dismissed'));
+// Archive: soft-delete out of the Ideas-tab queue. Distinct from dismiss —
+// the user acted on it (or moved past it), we just stop showing it. Never
+// re-served either way (fetchServedHistory dedups on provenance, not status).
+router.post('/:id/archive', (req, res) => setStatus(req, res, 'archived', 'idea_card_archived'));
 
 // ---------------------------------------------------------------------------
 // POST /api/ideas/:id/answer — daily question card (spec R4)
@@ -130,6 +251,7 @@ router.post('/:id/answer', async (req, res) => {
 
     await updateCardStatus(cardId, req.tenantId, 'answered');
     logCardEvent('idea_question_answered', req.userId, req.tenantId, { idea_card_id: cardId, vault_idea_id: vaultIdeaId });
+    recordStreakAction(req.userId, req.tenantId, 'answer');
     generateHookPreview(vaultIdeaId, req.tenantId, card.hook, seedText); // fire-and-forget
 
     return res.json({ ok: true, vault_idea_id: vaultIdeaId });

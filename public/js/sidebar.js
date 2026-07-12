@@ -40,7 +40,7 @@
   var html = [
     '<aside id="sidebar" role="navigation" aria-label="Main navigation">',
     '  <a href="/dashboard.html" class="sidebar-logo">',
-    '    <img src="/images/scout-hook-logo.png" alt="ScoutHook" class="sidebar-logo-img">',
+    '    <img src="/images/sh-logo-dark.png" alt="ScoutHook" class="sidebar-logo-img">',
     '  </a>',
     '  <div id="workspace-switcher-slot"></div>',
     '  <div class="sidebar-cta">',
@@ -71,7 +71,7 @@
   topbarEl.id = 'mobile-topbar';
   topbarEl.innerHTML = [
     '<a href="/dashboard.html" class="mobile-logo-link">',
-    '  <img src="/images/scout-hook-logo.png" alt="ScoutHook" class="sidebar-logo-img">',
+    '  <img src="/images/sh-logo-dark.png" alt="ScoutHook" class="sidebar-logo-img">',
     '</a>',
     '<div class="mobile-topbar-right">',
     '  <a href="/generate.html?new=1" class="mobile-create-btn">' + svgPlus + ' Create Post</a>',

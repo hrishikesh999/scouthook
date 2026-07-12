@@ -33,50 +33,10 @@
       <div id="ti-cards" class="ti-cards" aria-live="polite"></div>
     </div>
 
-    <!-- Zone 1 fallback: hero banner — shown only if idea cards fail to load -->
-    <div class="hero-banner" role="banner" id="hero-fallback" hidden>
-      <div class="hero-left">
-        <h1 class="hero-heading">What's on your mind today?</h1>
-        <p class="hero-subheading">A thought from your week could be your best post this month.</p>
-      </div>
-      <div class="hero-right">
-        <a href="/generate.html?new=1" class="hero-btn">Generate a post →</a>
-      </div>
-    </div>
-
     <!-- LinkedIn reconnect nudge — shown when token expires within 7 days -->
     <div id="linkedin-expiry-banner" class="linkedin-expiry-banner" hidden role="alert"></div>
 
-    <!-- Zone 1.3: Stats strip -->
-    <div id="stats-strip" class="stats-strip" hidden>
-      <a href="/drafts.html?tab=published" class="stat-chip">
-        <span class="stat-chip__value" id="stat-ytd">—</span>
-        <span class="stat-chip__label">Posts YTD</span>
-      </a>
-      <a href="/drafts.html" class="stat-chip">
-        <span class="stat-chip__value" id="stat-drafts">—</span>
-        <span class="stat-chip__label">Drafts</span>
-      </a>
-      <a href="/drafts.html?tab=scheduled" class="stat-chip">
-        <span class="stat-chip__value" id="stat-scheduled">—</span>
-        <span class="stat-chip__label">Scheduled</span>
-      </a>
-      <div class="stat-chip">
-        <span class="stat-chip__value stat-chip__value--mix" id="stat-mix">—</span>
-        <span class="stat-chip__label">Post Mix</span>
-      </div>
-    </div>
-
-    <!-- Zone 1.4: Next Scheduled Post -->
-    <div id="next-up-card" class="posts-card next-up-card" hidden role="region" aria-label="Next scheduled post">
-      <div class="card-header">
-        <span class="card-title">Next Up</span>
-        <a href="/drafts.html?tab=scheduled" class="card-view-all">All scheduled →</a>
-      </div>
-      <div id="next-up-body"></div>
-    </div>
-
-    <!-- Zone 1.5a: Onboarding checklist — shown for new users, auto-hides when all done -->
+    <!-- Onboarding checklist — shown for new users, auto-hides when all done -->
     <div id="onboarding-checklist" class="onboarding-checklist" hidden role="region" aria-label="Getting started">
       <div class="checklist-header">
         <div class="checklist-header-left">
@@ -90,39 +50,28 @@
       <ul class="checklist-items" id="checklist-items" aria-live="polite"></ul>
     </div>
 
-    <!-- Zone 1.6: Content Intelligence — shown once ≥3 posts are tagged -->
-    <div id="content-intelligence" class="posts-card ci-card" hidden role="region" aria-label="Content Intelligence">
+    <!-- Zone 2: Content funnel — actual vs target mix, last 30 days -->
+    <div id="funnel-card" class="posts-card funnel-card" hidden role="region" aria-label="Content funnel">
       <div class="card-header">
-        <span class="card-title">Content Intelligence</span>
-        <span class="ci-tag-count" id="ci-tag-count"></span>
+        <span class="card-title">Content funnel <span class="funnel-window">· published, last 30 days</span></span>
+        <span class="funnel-legend"><span class="funnel-legend-tick" aria-hidden="true"></span> your target mix</span>
       </div>
-      <div id="ci-body" class="ci-body"></div>
+      <div id="funnel-bars" class="funnel-bars"></div>
+      <div id="funnel-insight" class="funnel-insight" hidden></div>
     </div>
 
-    <!-- Zone 2: Recent published -->
-    <div class="posts-card" role="region" aria-label="Recent published posts">
+    <!-- Zone 3: Pipeline — next scheduled + recent drafts, one card -->
+    <div id="pipeline-card" class="posts-card" role="region" aria-label="Pipeline">
       <div class="card-header">
-        <span class="card-title">Recent Published</span>
-        <a href="/drafts.html?tab=published" class="card-view-all">View all →</a>
-      </div>
-      <div id="recent-published-list" aria-live="polite">
-        <div class="card-empty-state">
-          No published posts yet — <a href="/generate.html?new=1">Generate your first post →</a>
-        </div>
-      </div>
-    </div>
-
-    <!-- Zone 2b: Recent drafts -->
-    <div class="posts-card" role="region" aria-label="Recent drafts">
-      <div class="card-header">
-        <span class="card-title">Recent Drafts</span>
+        <span class="card-title">Pipeline <span id="pipeline-counts" class="pipeline-counts"></span></span>
         <a href="/drafts.html" class="card-view-all">View all →</a>
       </div>
-      <div id="recent-posts-list" aria-live="polite">
+      <div id="pipeline-list" aria-live="polite">
         <div class="card-empty-state">
-          No posts yet — <a href="/generate.html?new=1">Generate your first post →</a>
+          Nothing in your pipeline yet — pick one of today's ideas above.
         </div>
       </div>
+      <div id="pipeline-insight" class="pipeline-insight" hidden></div>
     </div>
 
   </div><!-- /dashboard-page -->

@@ -214,15 +214,15 @@ router.get('/posts/mix-recommendation', async (req, res) => {
     `).all(tenantId);
 
     const total = rows.reduce((s, r) => s + Number(r.n), 0);
-
-    if (total < 4) {
-      return res.json({ ok: true, has_enough_data: false, recommended_type: null, nudge: null });
-    }
-
     const counts = { reach: 0, trust: 0, convert: 0 };
     for (const row of rows) counts[row.post_type] = Number(row.n);
-
     const targets = { reach: 0.50, trust: 0.30, convert: 0.20 };
+
+    if (total < 4) {
+      // counts/targets still returned so the dashboard funnel can decide
+      // (it hides itself below the data threshold)
+      return res.json({ ok: true, has_enough_data: false, recommended_type: null, nudge: null, counts, total, targets });
+    }
     let worstType = null;
     let worstDelta = -Infinity;
 
@@ -246,6 +246,9 @@ router.get('/posts/mix-recommendation', async (req, res) => {
       has_enough_data: true,
       recommended_type: worstType,
       nudge,
+      counts,
+      total,
+      targets,
     });
   } catch (err) {
     console.error('[stats] GET /api/posts/mix-recommendation error:', err);

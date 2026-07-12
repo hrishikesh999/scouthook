@@ -6,14 +6,13 @@
 let _perfTimer1 = null, _perfTimer2 = null;
 
 async function init() {
-  const recentList = document.getElementById('recent-posts-list');
-  if (!recentList) return; // not on dashboard
+  const pipelineCard = document.getElementById('pipeline-card');
+  if (!pipelineCard) return; // not on dashboard
   await window.scouthookAuthReady;
   loadTodaysIdeas();
   loadStreak();
-  loadDashboardStats();
-  loadRecentPosts();
-  loadRecentPublished();
+  loadFunnel();
+  loadPipeline();
   loadChecklist();
   loadPerformance();
   loadLinkedInExpiryBanner();
@@ -31,17 +30,19 @@ init();
 /* ── Today's Ideas (Idea Engine) ─────────────────────────────── */
 async function loadTodaysIdeas() {
   const zone = document.getElementById('todays-ideas');
-  const fallback = document.getElementById('hero-fallback');
   if (!zone) return;
+  zone.hidden = false;
   try {
     // Shared with the Ideas pill (1h TTL, busted by card actions) — in-flight
     // dedup also stops a same-page double generation on the first load of the day.
     const data = await cachedFetch('/api/ideas/today', { credentials: 'same-origin' }, 60 * 60 * 1000);
     if (!data || !data.ok || !Array.isArray(data.cards) || !data.cards.length) throw new Error('no_cards');
     renderIdeaCards(data.cards);
-    zone.hidden = false;
   } catch {
-    if (fallback) fallback.hidden = false;
+    // The supply ladder never runs dry, so this is a fetch/auth failure —
+    // a one-line inline state replaces the old hero-banner fallback block.
+    const wrap = document.getElementById('ti-cards');
+    if (wrap) wrap.innerHTML = `<div class="ti-empty">Couldn't load today's ideas — <a href="/generate.html?new=1">write your own →</a></div>`;
   }
 }
 
@@ -78,32 +79,63 @@ async function loadStreak() {
   }
 }
 
-/* ── Recent drafts ──────────────────────────────────────────── */
-async function loadRecentPosts() {
-  const recentList = document.getElementById('recent-posts-list');
-  try {
-    const res  = await fetch('/api/posts?status=draft', { headers: apiHeaders() });
-    if (!res.ok) throw new Error('Failed to load drafts');
-    const data = await res.json();
+/* ── Content funnel — actual vs target mix, last 30 days ─────── */
+const FUNNEL_META = {
+  reach:   { label: 'Reach',     color: '#047857' },
+  trust:   { label: 'Authority', color: '#1D4ED8' },
+  convert: { label: 'Convert',   color: '#B45309' },
+};
 
-    const posts = (data.posts || []).slice(0, 5);
-    if (posts.length === 0) {
-      showEmptyRecent();
-      return;
+async function loadFunnel() {
+  const card = document.getElementById('funnel-card');
+  const barsEl = document.getElementById('funnel-bars');
+  if (!card || !barsEl) return;
+  try {
+    const res = await fetch('/api/posts/mix-recommendation', { headers: apiHeaders() });
+    if (!res.ok) return;
+    const data = await res.json();
+    // Below the data threshold the card stays hidden — three empty bars
+    // would just tell a new user they're behind.
+    if (!data.ok || !data.has_enough_data || !data.counts || !data.total) return;
+
+    // One shared x-scale so bars and target ticks are comparable.
+    let xMax = 0;
+    for (const type of Object.keys(FUNNEL_META)) {
+      const share = (data.counts[type] || 0) / data.total;
+      xMax = Math.max(xMax, share, data.targets?.[type] || 0);
+    }
+    if (!xMax) return;
+
+    barsEl.innerHTML = '';
+    for (const [type, meta] of Object.entries(FUNNEL_META)) {
+      const count = data.counts[type] || 0;
+      const share = count / data.total;
+      const target = data.targets?.[type] || 0;
+      const row = document.createElement('div');
+      row.className = 'funnel-row';
+      row.innerHTML = `
+        <span class="funnel-label">${meta.label}</span>
+        <div class="funnel-track">
+          <div class="funnel-bar" style="width:${(share / xMax * 100).toFixed(1)}%;background:${meta.color}"></div>
+          <div class="funnel-tick" style="left:${(target / xMax * 100).toFixed(1)}%" title="Target ${Math.round(target * 100)}%"></div>
+        </div>
+        <span class="funnel-value">${count} <span class="funnel-share">· ${Math.round(share * 100)}%</span></span>`;
+      barsEl.appendChild(row);
     }
 
-    renderPostRows(recentList, posts, 'recent');
-  } catch {
-    showEmptyRecent();
-  }
-}
+    const insight = document.getElementById('funnel-insight');
+    if (insight && data.recommended_type && FUNNEL_META[data.recommended_type]) {
+      const label = FUNNEL_META[data.recommended_type].label;
+      // Daily 3 always serves at least one card of the recommended type,
+      // so the chart can point straight back at the ideas above it.
+      insight.textContent = `${label} is under target — today's ideas are weighted toward it.`;
+      insight.hidden = false;
+    }
 
-function showEmptyRecent() {
-  const recentList = document.getElementById('recent-posts-list');
-  if (recentList) recentList.innerHTML = `
-    <div class="card-empty-state">
-      No posts yet — <a href="/generate.html?new=1">Generate your first post →</a>
-    </div>`;
+    card.hidden = false;
+  } catch {
+    // Non-fatal — funnel is a progressive enhancement
+  }
 }
 
 /* ── Onboarding checklist ────────────────────────────────────── */
@@ -134,13 +166,11 @@ async function loadChecklist() {
       return;
     }
 
-    // Personalise the hero banner
+    // Personalise the ideas header for brand-new users (hero banner is gone)
     const firstName = (data.display_name || '').split(' ')[0];
     if (firstName) {
-      const heading    = document.querySelector('.hero-heading');
-      const subheading = document.querySelector('.hero-subheading');
-      if (heading)    heading.textContent    = `Welcome, ${firstName}. Your LinkedIn posting engine is ready.`;
-      if (subheading) subheading.textContent = 'Your voice profile is set up. Start by publishing your first post.';
+      const heading = document.querySelector('.ti-heading');
+      if (heading) heading.textContent = `Today's ideas, ${firstName}`;
     }
 
     // Progress bar and counter
@@ -213,119 +243,66 @@ async function loadLinkedInExpiryBanner() {
   }
 }
 
-/* ── Dashboard stats strip + next-up ────────────────────────── */
-async function loadDashboardStats() {
-  try {
-    const [statsRes, schedRes, mixRes] = await Promise.all([
-      fetch('/api/stats', { headers: apiHeaders() }),
-      fetch('/api/posts/scheduled', { headers: apiHeaders() }),
-      fetch('/api/posts/mix-recommendation', { headers: apiHeaders() }),
-    ]);
-
-    const stats = statsRes.ok ? await statsRes.json() : {};
-    const sched = schedRes.ok ? await schedRes.json() : {};
-    const mix   = mixRes.ok   ? await mixRes.json()   : {};
-
-    // Stats strip
-    const strip = document.getElementById('stats-strip');
-    if (strip) {
-      const ytdEl  = document.getElementById('stat-ytd');
-      const draftEl = document.getElementById('stat-drafts');
-      const schedEl = document.getElementById('stat-scheduled');
-      const mixEl   = document.getElementById('stat-mix');
-
-      if (ytdEl)   ytdEl.textContent   = Number(stats.posts_ytd || 0).toLocaleString();
-      if (draftEl) draftEl.textContent  = Number(stats.draft_count || 0).toLocaleString();
-      if (schedEl) schedEl.textContent  = Number(stats.scheduled_count || 0).toLocaleString();
-
-      if (mixEl && mix.ok && mix.has_enough_data) {
-        mixEl.textContent = mix.recommended_type
-          ? 'Try ' + mix.recommended_type
-          : 'Balanced';
-      } else if (mixEl) {
-        mixEl.textContent = '—';
-      }
-
-      strip.hidden = false;
-    }
-
-    // Next Up card
-    const nextCard = document.getElementById('next-up-card');
-    const nextBody = document.getElementById('next-up-body');
-    if (nextCard && nextBody) {
-      const posts = (sched.ok && Array.isArray(sched.posts)) ? sched.posts : [];
-      if (posts.length > 0) {
-        const p = posts[0];
-        const firstLine = (p.content || '').split('\n')[0] || 'Scheduled post';
-        const dateStr = p.scheduled_for ? formatDate(p.scheduled_for, true) : '';
-        nextBody.innerHTML = `
-          <div class="next-up-preview" title="${escHtml(firstLine)}">${escHtml(firstLine)}</div>
-          <div class="next-up-meta">${escHtml(dateStr)}</div>`;
-      } else {
-        nextBody.innerHTML = `
-          <div class="next-up-empty">
-            Nothing scheduled — <a href="/generate.html?new=1">create a post</a> and schedule it.
-          </div>`;
-      }
-      nextCard.hidden = false;
-    }
-  } catch {
-    // Non-fatal — stats strip is progressive enhancement
-  }
-}
-
-/* ── Recent published posts ─────────────────────────────────── */
-async function loadRecentPublished() {
-  const list = document.getElementById('recent-published-list');
+/* ── Pipeline — next scheduled + recent drafts, one card ─────── */
+async function loadPipeline() {
+  const list     = document.getElementById('pipeline-list');
+  const countsEl = document.getElementById('pipeline-counts');
   if (!list) return;
   try {
-    const res = await fetch('/api/posts?status=published', { headers: apiHeaders() });
-    if (!res.ok) return;
-    const data = await res.json();
-    const posts = (data.posts || []).slice(0, 3);
-    if (posts.length === 0) return;
-    renderPostRows(list, posts.map(p => ({
-      ...p,
-      status: 'published',
-    })), 'recent');
+    const [statsRes, schedRes, draftsRes] = await Promise.all([
+      fetch('/api/stats', { headers: apiHeaders() }),
+      fetch('/api/posts/scheduled', { headers: apiHeaders() }),
+      fetch('/api/posts?status=draft', { headers: apiHeaders() }),
+    ]);
+    const stats  = statsRes.ok  ? await statsRes.json()  : {};
+    const sched  = schedRes.ok  ? await schedRes.json()  : {};
+    const drafts = draftsRes.ok ? await draftsRes.json() : {};
+
+    const draftCount = Number(stats.draft_count || 0);
+    const schedCount = Number(stats.scheduled_count || 0);
+    if (countsEl) {
+      countsEl.textContent =
+        `· ${draftCount} draft${draftCount === 1 ? '' : 's'} · ${schedCount} scheduled`;
+    }
+
+    const rows = [];
+    const nextScheduled = (sched.ok && Array.isArray(sched.posts)) ? sched.posts[0] : null;
+    if (nextScheduled) {
+      rows.push(buildPipelineRow({
+        title: (nextScheduled.content || '').split('\n')[0] || 'Scheduled post',
+        meta: `Scheduled · ${formatDate(nextScheduled.scheduled_for, true)}`,
+        href: '/drafts.html?tab=scheduled',
+        scheduled: true,
+      }));
+    }
+    (drafts.posts || []).slice(0, 3).forEach(p => {
+      rows.push(buildPipelineRow({
+        title: (p.content || '').split('\n')[0] || 'Draft',
+        meta: `Draft · ${formatDate(p.created_at, false)}`,
+        href: `/editor/${encodeURIComponent(p.id)}`,
+      }));
+    });
+
+    if (rows.length) {
+      list.innerHTML = '';
+      rows.forEach(r => list.appendChild(r));
+    }
+    // else: keep the static empty state pointing at Today's Ideas
   } catch {
-    // Non-fatal
+    // Non-fatal — the static empty state stays
   }
 }
 
-/* ── Render rows ─────────────────────────────────────────────── */
-function renderPostRows(container, posts, type) {
-  container.innerHTML = '';
-  posts.forEach((post, index) => {
-    const row = document.createElement('div');
-    row.className = 'post-row';
-
-    // Determine content text
-    const text = post.content || post.post || '';
-    const firstLine = text.split('\n')[0] || text;
-
-    // Date string
-    let dateStr = '';
-    const dateField = type === 'scheduled' ? post.scheduled_for : (post.created_at || post.date);
-    if (dateField) {
-      dateStr = formatDate(dateField, type === 'scheduled');
-    }
-
-    // Status
-    const status     = post.status || (type === 'scheduled' ? 'scheduled' : 'draft');
-    const statusLabel = status.charAt(0).toUpperCase() + status.slice(1);
-
-    row.innerHTML = `
-      <div class="post-row-left">
-        <div class="post-row-title" title="${escHtml(firstLine)}">${escHtml(firstLine)}</div>
-        <div class="post-row-date">${escHtml(dateStr)}</div>
-      </div>
-      <div class="post-row-right">
-        <span class="status-pill ${status.toLowerCase()}">${escHtml(statusLabel)}</span>
-      </div>`;
-
-    container.appendChild(row);
-  });
+function buildPipelineRow({ title, meta, href, scheduled }) {
+  const row = document.createElement('a');
+  row.className = 'pipeline-row';
+  row.href = href;
+  if (href.startsWith('/editor/')) row.setAttribute('data-no-spa', '');
+  row.innerHTML = `
+    ${scheduled ? '<svg class="pipeline-row-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>' : ''}
+    <span class="pipeline-row-title" title="${escHtml(title)}">${escHtml(title)}</span>
+    <span class="pipeline-row-meta">${escHtml(meta)}</span>`;
+  return row;
 }
 
 /* ── Helpers ─────────────────────────────────────────────────── */
@@ -367,48 +344,27 @@ async function loadPerformance() {
   ]);
 }
 
+/* Content Intelligence — compressed to one line under the Pipeline card
+   (the old two-row card didn't earn its chrome) */
 async function loadContentIntelligence() {
+  const line = document.getElementById('pipeline-insight');
+  if (!line) return;
   try {
     const res = await fetch('/api/posts/performance-summary', { headers: apiHeaders() });
     if (!res.ok) return;
     const data = await res.json();
     if (!data.ok || !data.enough_data) return;
-    renderContentIntelligence(data);
+
+    const parts = [];
+    if (data.archetypes?.length > 0) parts.push(`${data.archetypes[0].archetype_used} hooks`);
+    if (data.best_day?.day_name) parts.push(`${data.best_day.day_name.trim()} posts`);
+    if (!parts.length) return;
+
+    line.textContent = `${parts.join(' and ')} perform best for you · based on ${data.total_tagged} rated post${data.total_tagged !== 1 ? 's' : ''}`;
+    line.hidden = false;
   } catch {
     // Non-fatal
   }
-}
-
-function renderContentIntelligence(data) {
-  const card    = document.getElementById('content-intelligence');
-  const body    = document.getElementById('ci-body');
-  const countEl = document.getElementById('ci-tag-count');
-  if (!card || !body) return;
-
-  countEl.textContent = `Based on ${data.total_tagged} rated post${data.total_tagged !== 1 ? 's' : ''}`;
-
-  const rows = [];
-
-  if (data.archetypes?.length > 0) {
-    const top  = data.archetypes[0];
-    const rate = top.total > 0 ? Math.round((top.strong_count / top.total) * 100) : 0;
-    rows.push(`<div class="ci-insight">
-      <span class="ci-label">Best hook type</span>
-      <span class="ci-value">${escHtml(top.archetype_used)} — ${rate}% strong posts</span>
-    </div>`);
-  }
-
-  if (data.best_day) {
-    const day = (data.best_day.day_name || '').trim();
-    rows.push(`<div class="ci-insight">
-      <span class="ci-label">Best day to post</span>
-      <span class="ci-value">${escHtml(day)} — highest strong rate</span>
-    </div>`);
-  }
-
-  if (rows.length === 0) return;
-  body.innerHTML = rows.join('');
-  card.hidden = false;
 }
 
 /* ── Performance rating modal ────────────────────────────────── */

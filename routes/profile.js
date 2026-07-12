@@ -64,6 +64,24 @@ async function upsertAudienceProfile(profileId, fields) {
 }
 
 // ---------------------------------------------------------------------------
+// GET /api/profile/completion — lightweight voice-profile % for the dashboard
+// (registered ahead of the /:user_id? wildcard below so it isn't swallowed by it)
+// ---------------------------------------------------------------------------
+router.get('/completion', async (req, res) => {
+  try {
+    const row = await db.prepare(`
+      SELECT voice_profile_completion_pct
+      FROM   profiles
+      WHERE  workspace_id = ? AND is_default = true
+    `).get(req.tenantId);
+    return res.json({ ok: true, pct: row?.voice_profile_completion_pct || 0 });
+  } catch (err) {
+    console.error('[profile] GET /completion error:', err.message);
+    return res.status(500).json({ ok: false, error: 'completion_unavailable' });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // GET /api/profile/:user_id?
 // Assembles profile from: user_profiles (identity), workspaces (brand settings),
 // profiles + brand_voice_profiles + audience_profiles (voice DNA). Returns the

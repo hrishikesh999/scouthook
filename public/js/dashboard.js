@@ -8,12 +8,14 @@ let _perfTimer1 = null, _perfTimer2 = null;
 async function init() {
   const pipelineCard = document.getElementById('pipeline-card');
   if (!pipelineCard) return; // not on dashboard
-  await window.scouthookAuthReady;
+  const authData = await window.scouthookAuthReady;
+  personalizeGreeting(authData);
   loadTodaysIdeas();
   loadStreak();
   loadFunnel();
   loadPipeline();
-  loadChecklist();
+  loadVoiceProfileBar();
+  loadVaultNudge();
   loadPerformance();
   loadLinkedInExpiryBanner();
 }
@@ -26,6 +28,13 @@ window.__pageCleanup = function () {
 };
 
 init();
+
+function personalizeGreeting(authData) {
+  const firstName = (authData?.user?.displayName || '').split(' ')[0];
+  if (!firstName) return;
+  const heading = document.querySelector('.ti-heading');
+  if (heading) heading.textContent = `Today's ideas, ${firstName}`;
+}
 
 /* ── Today's Ideas (Idea Engine) ─────────────────────────────── */
 async function loadTodaysIdeas() {
@@ -138,85 +147,46 @@ async function loadFunnel() {
   }
 }
 
-/* ── Onboarding checklist ────────────────────────────────────── */
-async function loadChecklist() {
-  // Scope the dismiss flag to the signed-in user — prevents a prior account's
-  // completed flag from hiding the checklist for a new account on the same browser.
-  const authData = await window.scouthookAuthReady;
-  const userId   = authData?.user?.user_id || 'anon';
-  const doneKey  = `sh_checklist_done_${userId}`;
-
-  if (localStorage.getItem(doneKey)) return;
-
-  const section  = document.getElementById('onboarding-checklist');
-  const barEl    = document.getElementById('checklist-bar');
-  const textEl   = document.getElementById('checklist-progress-text');
-  const itemsEl  = document.getElementById('checklist-items');
-  if (!section || !barEl || !textEl || !itemsEl) return;
-
+/* ── Voice profile completion ────────────────────────────────── */
+async function loadVoiceProfileBar() {
+  const section = document.getElementById('voice-profile-bar');
+  const fillEl  = document.getElementById('voice-profile-bar-fill');
+  const pctEl   = document.getElementById('voice-profile-pct-text');
+  const labelEl = document.getElementById('voice-profile-label');
+  if (!section || !fillEl || !pctEl || !labelEl) return;
   try {
-    const res  = await fetch('/api/checklist', { headers: apiHeaders() });
+    const res = await fetch('/api/profile/completion', { headers: apiHeaders() });
     if (!res.ok) return;
     const data = await res.json();
-    if (!data.ok) return;
-
-    // If all done on this load, collapse immediately and remember
-    if (data.all_done) {
-      collapseChecklist(section, doneKey);
-      return;
-    }
-
-    // Personalise the ideas header for brand-new users (hero banner is gone)
-    const firstName = (data.display_name || '').split(' ')[0];
-    if (firstName) {
-      const heading = document.querySelector('.ti-heading');
-      if (heading) heading.textContent = `Today's ideas, ${firstName}`;
-    }
-
-    // Progress bar and counter
-    const pct = Math.round((data.completed_count / data.total) * 100);
-    barEl.style.width  = pct + '%';
-    textEl.textContent = `${data.completed_count} of ${data.total} complete`;
-
-    // Render items
-    itemsEl.innerHTML = '';
-    data.steps.forEach(step => {
-      const li = document.createElement('li');
-      li.className = 'checklist-item' + (step.done ? ' done' : '');
-
-      if (step.done) {
-        const tickSvg = `<svg width="11" height="9" viewBox="0 0 11 9" fill="none" aria-hidden="true"><path d="M1 4.5L4 7.5L10 1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-        li.innerHTML = `
-          <span class="checklist-tick" aria-hidden="true">${tickSvg}</span>
-          <span class="checklist-label">${escHtml(step.label)}</span>
-        `;
-      } else {
-        li.innerHTML = `
-          <a class="checklist-row" href="${escHtml(step.href)}">
-            <span class="checklist-tick" aria-hidden="true"></span>
-            <span class="checklist-label">${escHtml(step.label)}</span>
-            <span class="checklist-arrow" aria-hidden="true">→</span>
-          </a>
-        `;
-      }
-      itemsEl.appendChild(li);
-    });
-
-    // Show the section
+    if (!data.ok || data.pct >= 100) return; // complete — stay quiet, no pressure
+    fillEl.style.width = data.pct + '%';
+    pctEl.textContent  = `${data.pct}%`;
+    // Same tiered copy as the voice wizard's completion bar (settings.js)
+    labelEl.textContent = data.pct >= 70
+      ? 'Almost there — a couple more stages will sharpen your posts significantly'
+      : data.pct >= 30
+        ? 'Good progress — keep going to unlock your full voice quality'
+        : 'Fill in more stages to improve post quality';
     section.hidden = false;
-
   } catch {
-    // Non-fatal — checklist is a progressive enhancement
+    // Non-fatal — progressive enhancement
   }
 }
 
-function collapseChecklist(section, doneKey) {
-  section.classList.add('collapsing');
-  section.addEventListener('transitionend', () => {
-    section.hidden = true;
-    section.classList.remove('collapsing');
-  }, { once: true });
-  localStorage.setItem(doneKey, '1');
+/* ── Vault nudge — no source material yet ────────────────────── */
+async function loadVaultNudge() {
+  const banner = document.getElementById('vault-nudge-banner');
+  if (!banner) return;
+  try {
+    const res = await fetch('/api/vault/documents/count', { headers: apiHeaders() });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!data.ok || data.count > 0) return; // already has material — stay quiet
+    banner.innerHTML = `Your posts get sharper with real material — <a href="/vault.html">upload a case study, doc, or transcript to your Vault →</a>`;
+    banner.hidden = false;
+  } catch {
+    // Non-fatal — progressive enhancement
+  }
 }
 
 /* ── LinkedIn token expiry banner ────────────────────────────── */

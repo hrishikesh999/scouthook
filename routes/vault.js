@@ -322,6 +322,17 @@ router.get('/documents', async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// GET /api/vault/documents/count — cheap check for the dashboard's Vault nudge
+// ---------------------------------------------------------------------------
+router.get('/documents/count', async (req, res) => {
+  if (!requireUser(req, res)) return;
+  const row = await db.prepare(
+    'SELECT COUNT(*) AS n FROM vault_documents WHERE tenant_id = ?'
+  ).get(req.tenantId);
+  return res.json({ ok: true, count: Number(row?.n || 0) });
+});
+
+// ---------------------------------------------------------------------------
 // DELETE /api/vault/documents/:id — delete document (cascades chunks + ideas)
 // ---------------------------------------------------------------------------
 router.delete('/documents/:id', async (req, res) => {

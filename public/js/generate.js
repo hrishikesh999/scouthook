@@ -1816,7 +1816,9 @@ const chat = (() => {
 
     const val = chatInput.value.trim();
     if (!val) { showChatInputError('Add something before generating.'); chatInput.focus(); return; }
-    if (val.length < 15) { showChatInputError('Add a bit more to work with.'); chatInput.focus(); return; }
+    // Idea-card answers are often short and specific ("doubled it", "$40k in Q3")
+    // — don't hold them to the 15-char brief minimum.
+    if (val.length < 15 && !_ideaCard.active) { showChatInputError('Add a bit more to work with.'); chatInput.focus(); return; }
 
     // Coach is active — user is answering a question
     if (_coach.active) {

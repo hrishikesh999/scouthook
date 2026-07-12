@@ -20,7 +20,16 @@
 const express = require('express');
 const router = express.Router();
 const { db, getSetting } = require('../db');
-const { getDailyCards, updateCardStatus, logCardEvent, mintQuestionCard } = require('../services/ideaEngine');
+const { getDailyCards, updateCardStatus, logCardEvent, mintQuestionCard, staticQuestions } = require('../services/ideaEngine');
+
+// Non-question cards should always carry two questions for the "Write this"
+// 2-question flow. Cards generated before migration 073 (or any edge case) have
+// none — synthesise the static per-type pair at read time so those cards get
+// the flow too, rather than falling back to pasting AI-drafted text into the box.
+function withQuestions(c) {
+  if (c.is_question) return null;
+  return c.questions || staticQuestions(c.post_type);
+}
 const { recordStreakAction, getStreak } = require('../services/streak');
 
 const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
@@ -54,7 +63,7 @@ router.get('/today', async (req, res) => {
           provenance_label: c.provenance_label,
           textarea_input: c.textarea_input,
           is_question: !!c.is_question,
-          questions: c.questions || null,
+          questions: withQuestions(c),
           status: c.status,
         })),
     });
@@ -103,7 +112,7 @@ router.get('/queue', async (req, res) => {
         provenance_label: c.provenance_label,
         textarea_input: c.textarea_input,
         is_question: !!c.is_question,
-        questions: c.questions || null,
+        questions: withQuestions(c),
         saved_on: c.updated_at,
         served_on: c.served_on,
       })),
@@ -207,7 +216,7 @@ router.get('/:id', async (req, res) => {
         provenance_label: c.provenance_label,
         textarea_input: c.textarea_input,
         is_question: !!c.is_question,
-        questions: c.questions || null,
+        questions: withQuestions(c),
         status: c.status,
       },
     });

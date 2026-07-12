@@ -678,4 +678,4 @@ function logCardEvent(eventType, userId, tenantId, metadata) {
   ).catch(err => console.error('[ideaEngine] logCardEvent failed (non-fatal):', err.message));
 }
 
-module.exports = { getDailyCards, updateCardStatus, stampIdeaCard, logCardEvent, mintQuestionCard };
+module.exports = { getDailyCards, updateCardStatus, stampIdeaCard, logCardEvent, mintQuestionCard, staticQuestions };

@@ -37,6 +37,58 @@
     return typeof apiHeaders === 'function' ? apiHeaders() : {};
   }
 
+  var ICON_SAVE   = '<svg class="ti-btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>';
+  var ICON_DISMISS = '<svg class="ti-btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+  var ICON_REMOVE = '<svg class="ti-btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
+  var ICON_PERSON = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
+
+  // The LinkedIn identity a card's "Write this" would publish under — fetched
+  // once per page load and shared across every card via cachedFetch's own cache.
+  var profilePromise = null;
+  function getProfile() {
+    if (!profilePromise) {
+      profilePromise = (window.cachedFetch
+        ? cachedFetch('/api/linkedin/status', { credentials: 'same-origin' }, 120_000)
+        : Promise.resolve(null)).catch(function () { return null; });
+    }
+    return profilePromise;
+  }
+
+  /* Card header: avatar + display name (patched in async) + a type/source tag */
+  function cardHeadHtml(tagHtml, provenanceText) {
+    return '<div class="ti-card-head">' +
+      '<div class="ti-card-avatar" data-role="avatar">' + ICON_PERSON + '</div>' +
+      '<div class="ti-card-head-text">' +
+        '<div class="ti-card-head-top">' +
+          '<span class="ti-card-name" data-role="name">You</span>' +
+          tagHtml +
+        '</div>' +
+        (provenanceText ? '<p class="ti-provenance">' + provenanceText + '</p>' : '') +
+      '</div>' +
+    '</div>';
+  }
+
+  function attachProfile(el) {
+    getProfile().then(function (p) {
+      if (!p || !p.connected) return;
+      var nameEl = el.querySelector('[data-role="name"]');
+      var avEl   = el.querySelector('[data-role="avatar"]');
+      if (nameEl && p.name) nameEl.textContent = p.name;
+      if (avEl) {
+        if (p.photo_url) {
+          var img = document.createElement('img');
+          img.src           = p.photo_url.trim();
+          img.alt           = p.name || '';
+          img.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:50%';
+          avEl.innerHTML = '';
+          avEl.appendChild(img);
+        } else if (p.name) {
+          avEl.textContent = p.name.charAt(0).toUpperCase();
+        }
+      }
+    });
+  }
+
   // Any card mutation invalidates the cached card sets + sidebar badge
   function queueChanged() {
     if (window.cachedFetch && cachedFetch.bust) {
@@ -80,21 +132,19 @@
     el.dataset.id = card.id;
 
     var secondary = mode === 'queue'
-      ? '<button class="ti-ghost-btn ti-remove-btn" type="button" aria-label="Remove from queue">Remove</button>'
-      : '<button class="ti-ghost-btn ti-save-btn" type="button"' + (card.status === 'saved' ? ' disabled' : '') + '>' + (card.status === 'saved' ? 'Saved ✓' : 'Save') + '</button>' +
-        '<button class="ti-ghost-btn ti-dismiss-btn" type="button" aria-label="Not for me">Not for me</button>';
+      ? '<button class="ti-ghost-btn ti-remove-btn" type="button" aria-label="Remove from queue">' + ICON_REMOVE + '<span>Remove</span></button>'
+      : '<button class="ti-ghost-btn ti-save-btn" type="button"' + (card.status === 'saved' ? ' disabled' : '') + '>' + ICON_SAVE + '<span>' + (card.status === 'saved' ? 'Saved ✓' : 'Save') + '</span></button>' +
+        '<button class="ti-ghost-btn ti-dismiss-btn" type="button" aria-label="Not for me">' + ICON_DISMISS + '<span>Not for me</span></button>';
 
     el.innerHTML =
-      '<div class="ti-card-top">' +
-        '<span class="ti-type-chip ' + meta.cls + '">' + meta.label + '</span>' +
-        '<span class="ti-provenance">' + esc(card.provenance_label || '') + '</span>' +
-      '</div>' +
+      cardHeadHtml('<span class="ti-type-chip ' + meta.cls + '">' + meta.label + '</span>', esc(card.provenance_label || '')) +
       '<p class="ti-hook">' + esc(card.hook) + '</p>' +
       '<div class="ti-actions">' +
         '<button class="ti-write-btn" type="button">Write this →</button>' +
         secondary +
       '</div>';
 
+    attachProfile(el);
     el.querySelector('.ti-write-btn').addEventListener('click', function () { goWrite(card); });
 
     var saveBtn = el.querySelector('.ti-save-btn');
@@ -105,8 +155,13 @@
         fetch('/api/ideas/' + card.id + '/save', { method: 'POST', headers: headers() })
           .then(function (r) {
             if (!r.ok) throw new Error('save_failed');
-            btn.textContent = 'Saved ✓';
             queueChanged();
+            // Saved → it now lives in the Ideas queue, so it leaves today's list
+            el.classList.add('ti-card--leaving');
+            setTimeout(function () {
+              el.remove();
+              if (typeof opts.onRemoved === 'function') opts.onRemoved(el);
+            }, 180);
           })
           .catch(function () { btn.disabled = false; });
       });
@@ -140,23 +195,19 @@
 
     if (card.status === 'answered') {
       el.innerHTML =
-        '<div class="ti-card-top">' +
-          '<span class="ti-type-chip ti-type-question">Today\'s question</span>' +
-        '</div>' +
+        cardHeadHtml('<span class="ti-type-chip ti-type-question">Today\'s question</span>', '') +
         '<p class="ti-hook">' + esc(card.hook) + '</p>' +
         '<div class="ti-actions"><span class="ti-answered-note">Answered ✓ — saved to your vault</span></div>';
+      attachProfile(el);
       return el;
     }
 
     el.innerHTML =
-      '<div class="ti-card-top">' +
-        '<span class="ti-type-chip ti-type-question">' + (mode === 'queue' ? 'Question' : 'Today\'s question') + '</span>' +
-        '<span class="ti-provenance">' + esc(card.provenance_label || '') + '</span>' +
-      '</div>' +
+      cardHeadHtml('<span class="ti-type-chip ti-type-question">' + (mode === 'queue' ? 'Question' : 'Today\'s question') + '</span>', esc(card.provenance_label || '')) +
       '<p class="ti-hook">' + esc(card.hook) + '</p>' +
       '<div class="ti-actions ti-q-initial">' +
         '<button class="ti-write-btn ti-answer-toggle" type="button">Answer →</button>' +
-        '<button class="ti-ghost-btn ti-dismiss-btn" type="button">' + (mode === 'queue' ? 'Remove' : 'Not today') + '</button>' +
+        '<button class="ti-ghost-btn ti-dismiss-btn" type="button">' + ICON_DISMISS + '<span>' + (mode === 'queue' ? 'Remove' : 'Not today') + '</span></button>' +
       '</div>' +
       '<div class="ti-answer-form" hidden>' +
         '<div class="ti-answer-input-wrap">' +
@@ -229,6 +280,7 @@
         });
     });
 
+    attachProfile(el);
     return el;
   }
 

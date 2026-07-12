@@ -54,6 +54,7 @@ router.get('/today', async (req, res) => {
           provenance_label: c.provenance_label,
           textarea_input: c.textarea_input,
           is_question: !!c.is_question,
+          questions: c.questions || null,
           status: c.status,
         })),
     });
@@ -75,7 +76,7 @@ router.get('/queue', async (req, res) => {
     const [saved, answered] = await Promise.all([
       db.prepare(`
         SELECT id, hook, title, textarea_input, post_type, tier,
-               provenance_label, is_question, served_on, updated_at
+               provenance_label, is_question, questions, served_on, updated_at
         FROM   idea_cards
         WHERE  tenant_id = ? AND status = 'saved'
         ORDER  BY updated_at ASC
@@ -102,6 +103,7 @@ router.get('/queue', async (req, res) => {
         provenance_label: c.provenance_label,
         textarea_input: c.textarea_input,
         is_question: !!c.is_question,
+        questions: c.questions || null,
         saved_on: c.updated_at,
         served_on: c.served_on,
       })),
@@ -173,6 +175,45 @@ router.post('/question', async (req, res) => {
   } catch (err) {
     console.error('[ideas] POST /question error:', err.message);
     return res.status(500).json({ ok: false, error: 'question_unavailable' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/ideas/:id — a single card incl. its pre-minted extraction questions.
+// generate.html fetches this on "Write this →" to drive the 2-question flow
+// (works identically for dashboard, pill drawer, Ideas tab, and email links).
+// Declared AFTER the static GETs above so it can't shadow /today, /queue, etc.
+// ---------------------------------------------------------------------------
+router.get('/:id', async (req, res) => {
+  if (!requireUser(req, res)) return;
+  const cardId = Number(req.params.id);
+  if (!cardId) return res.status(400).json({ ok: false, error: 'invalid_card_id' });
+  try {
+    const c = await db.prepare(`
+      SELECT id, hook, title, textarea_input, post_type, tier,
+             provenance_label, is_question, questions, status
+      FROM   idea_cards
+      WHERE  id = ? AND tenant_id = ?
+    `).get(cardId, req.tenantId);
+    if (!c) return res.status(404).json({ ok: false, error: 'card_not_found' });
+    return res.json({
+      ok: true,
+      card: {
+        id: c.id,
+        hook: c.hook,
+        title: c.title,
+        post_type: c.post_type,
+        tier: c.tier,
+        provenance_label: c.provenance_label,
+        textarea_input: c.textarea_input,
+        is_question: !!c.is_question,
+        questions: c.questions || null,
+        status: c.status,
+      },
+    });
+  } catch (err) {
+    console.error('[ideas] GET /:id error:', err.message);
+    return res.status(500).json({ ok: false, error: 'card_unavailable' });
   }
 });
 

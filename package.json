@@ -18,7 +18,7 @@
     "globalSetup": "./tests/integration/helpers/globalSetup.js"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.39.0",
+    "@anthropic-ai/sdk": "^0.111.0",
     "@aws-sdk/client-s3": "^3.1029.0",
     "@paddle/paddle-node-sdk": "^3.7.0",
     "@resvg/resvg-js": "^2.6.2",

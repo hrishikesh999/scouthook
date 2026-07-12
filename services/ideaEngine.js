@@ -23,9 +23,40 @@
 const { db, getSetting } = require('../db');
 const { interpolate, fillTemplate, pickEvergreen, pickDailyQuestion } = require('./evergreenIdeas');
 
-const SONNET_MODEL = 'claude-sonnet-4-6';
+const SONNET_MODEL = 'claude-sonnet-5';
 const T3_DAILY_CAP = 2;
 const CARDS_PER_DAY = 3;
+
+// ---------------------------------------------------------------------------
+// Static extraction questions — the floor for cards the LLM call didn't write
+// (evergreen T0, or any tier when the call is skipped/failed). Same shape the
+// LLM path produces, so the generate.html 2-question flow treats them alike.
+// Q1 (moment) pulls the real situation behind the idea; Q2 (proof) pulls a
+// number / outcome. See migrations/073.
+// ---------------------------------------------------------------------------
+const STATIC_QUESTION_ITEMS = {
+  reach: [
+    { key: 'moment', q: "What's the real moment behind this — a specific client, conversation, or day it happened?", help: 'One specific scene, in plain words.' },
+    { key: 'proof',  q: 'What detail makes it land — a number, a timeframe, or what changed afterward?', help: 'A concrete number or outcome makes it credible.' },
+  ],
+  trust: [
+    { key: 'moment', q: 'Where have you seen this play out in your own work — who was involved and what happened?', help: 'A real situation you can point to.' },
+    { key: 'proof',  q: "What's your evidence — a result, a pattern you keep seeing, or a before/after you observed?", help: 'Specifics beat generic claims.' },
+  ],
+  convert: [
+    { key: 'moment', q: 'Which client or project is this really about — what was going on before you stepped in?', help: 'The starting situation, concretely.' },
+    { key: 'proof',  q: "What was the measurable outcome — a number, %, timeframe, or the client's own words?", help: 'The harder the number, the better.' },
+  ],
+  lead_magnet: [
+    { key: 'moment', q: "Who is this for, and what specific problem were they stuck on when they came to you?", help: 'A real person or situation, not a persona.' },
+    { key: 'proof',  q: 'What changed once you helped — a result, timeframe, or exact words they used?', help: 'Concrete proof earns the click.' },
+  ],
+};
+
+function staticQuestions(postType) {
+  const items = STATIC_QUESTION_ITEMS[postType] || STATIC_QUESTION_ITEMS.reach;
+  return { v: 1, source: 'static', items: items.map(i => ({ ...i })) };
+}
 
 // ---------------------------------------------------------------------------
 // Profile context (same shape the vault mining/suggest-topics paths use)
@@ -33,6 +64,7 @@ const CARDS_PER_DAY = 3;
 async function fetchIdeaProfile(tenantId) {
   return db.prepare(`
     SELECT p.content_pillars, p.input_examples,
+           p.voice_fingerprint, p.authority_statements,
            bvp.brand_industry, bvp.elevator_main_result, bvp.brand_core_beliefs,
            ap.audience_description, ap.audience_obstacles
     FROM profiles p
@@ -40,6 +72,66 @@ async function fetchIdeaProfile(tenantId) {
     LEFT JOIN audience_profiles ap ON ap.profile_id = p.id
     WHERE p.workspace_id = ? AND p.is_default = true
   `).get(tenantId);
+}
+
+// Voice fingerprint positioning + authority proof points — the strongest signal
+// for grounding cards (and their questions) in what this consultant actually
+// stands for. Same JSON shapes routes/generate.js chat-intake parses.
+function parseVoiceContext(profile) {
+  let positioning = {};
+  try {
+    const fp = JSON.parse(profile?.voice_fingerprint || '{}');
+    positioning = (fp && typeof fp.positioning === 'object') ? fp.positioning : {};
+  } catch { positioning = {}; }
+  let authorityStatements = [];
+  try {
+    const arr = JSON.parse(profile?.authority_statements || '[]');
+    authorityStatements = Array.isArray(arr) ? arr.filter(s => typeof s === 'string' && s.trim()).slice(0, 2) : [];
+  } catch { authorityStatements = []; }
+  return {
+    standsFor: (positioning.stands_for || '').trim(),
+    outcome:   (positioning.outcome || '').trim(),
+    authorityStatements,
+  };
+}
+
+// Last few published posts (topic + performance) — lets the LLM extend what's
+// landed and steer clear of what hasn't.
+async function fetchRecentPublishedPosts(tenantId) {
+  try {
+    const rows = await db.prepare(`
+      SELECT content, post_type, performance_tag
+      FROM   generated_posts
+      WHERE  tenant_id = ? AND status = 'published' AND published_at IS NOT NULL
+      ORDER  BY published_at DESC
+      LIMIT  5
+    `).all(tenantId);
+    return rows.map(r => ({
+      topic: String(r.content || '').split('\n')[0].trim().slice(0, 120),
+      post_type: r.post_type || null,
+      performance: r.performance_tag || null,
+    })).filter(r => r.topic);
+  } catch { return []; }
+}
+
+// The consultant's own answers to daily questions — real first-person material,
+// the best raw signal for personalising extraction questions.
+async function fetchAnsweredQuestions(tenantId) {
+  try {
+    const rows = await db.prepare(`
+      SELECT seed_text, source_ref
+      FROM   vault_ideas
+      WHERE  tenant_id = ? AND source = 'daily_question'
+        AND  seed_text IS NOT NULL AND seed_text <> ''
+      ORDER  BY created_at DESC
+      LIMIT  5
+    `).all(tenantId);
+    return rows.map(r => ({
+      // source_ref is stored as: You answered: "<hook>"
+      prompt: String(r.source_ref || '').replace(/^You answered:\s*/i, '').replace(/^"|"$/g, '').slice(0, 160),
+      answer: String(r.seed_text || '').trim().slice(0, 300),
+    })).filter(r => r.answer);
+  } catch { return []; }
 }
 
 function parsePillars(profile) {
@@ -93,10 +185,11 @@ async function getRecommendedType(tenantId) {
 // ---------------------------------------------------------------------------
 async function fetchServedHistory(tenantId) {
   const rows = await db.prepare(`
-    SELECT title, provenance_ref, served_on, status
+    SELECT title, hook, provenance_ref, served_on, status
     FROM   idea_cards
     WHERE  tenant_id = ?
       AND  served_on > CURRENT_DATE - INTERVAL '60 days'
+    ORDER  BY served_on DESC
   `).all(tenantId);
 
   const usedVaultIdeaIds = new Set();
@@ -104,14 +197,20 @@ async function fetchServedHistory(tenantId) {
   const usedPostRefs = new Set();
   const usedQuestionSlugs = new Set();
   const recentTitles = [];
+  const savedHooks = [];     // acted on — positive taste signal
+  const dismissedHooks = []; // rejected — negative taste signal
   for (const r of rows) {
     if (r.provenance_ref?.startsWith('vault_idea:')) usedVaultIdeaIds.add(Number(r.provenance_ref.slice(11)));
     if (r.provenance_ref?.startsWith('evergreen:'))  usedEvergreenSlugs.add(r.provenance_ref.slice(10));
     if (r.provenance_ref?.startsWith('post:'))       usedPostRefs.add(r.provenance_ref);
     if (r.provenance_ref?.startsWith('question:'))   usedQuestionSlugs.add(r.provenance_ref.slice(9));
     if (r.title) recentTitles.push(r.title);
+    if (r.hook) {
+      if ((r.status === 'saved' || r.status === 'generated') && savedHooks.length < 5) savedHooks.push(r.hook);
+      else if (r.status === 'dismissed' && dismissedHooks.length < 5) dismissedHooks.push(r.hook);
+    }
   }
-  return { usedVaultIdeaIds, usedEvergreenSlugs, usedPostRefs, usedQuestionSlugs, recentTitles };
+  return { usedVaultIdeaIds, usedEvergreenSlugs, usedPostRefs, usedQuestionSlugs, recentTitles, savedHooks, dismissedHooks };
 }
 
 // ---------------------------------------------------------------------------
@@ -183,12 +282,75 @@ async function pickSequelSeed(tenantId, usedPostRefs) {
   return rows.find(r => !usedPostRefs.has(`post:${r.id}`)) || null;
 }
 
+// Structured-output schema for the daily card+questions call. Object-length
+// constraints aren't supported by json_schema, so counts are trimmed in code.
+const IDEA_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['cards', 'preset_questions'],
+  properties: {
+    cards: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['title', 'hook', 'textarea_input', 'post_type', 'q_moment', 'q_proof'],
+        properties: {
+          title:          { type: 'string' },
+          hook:           { type: 'string' },
+          textarea_input: { type: 'string' },
+          post_type:      { type: 'string', enum: ['reach', 'trust', 'convert'] },
+          q_moment:       { type: 'string' },
+          q_proof:        { type: 'string' },
+        },
+      },
+    },
+    preset_questions: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['ref', 'q_moment', 'q_proof'],
+        properties: {
+          ref:      { type: 'string' },
+          q_moment: { type: 'string' },
+          q_proof:  { type: 'string' },
+        },
+      },
+    },
+  },
+};
+
+// Build a card's `questions` jsonb from an LLM q_moment/q_proof pair, falling
+// back to the static per-type pair if either is missing.
+function llmQuestions(postType, qMoment, qProof) {
+  const m = typeof qMoment === 'string' ? qMoment.trim().slice(0, 200) : '';
+  const p = typeof qProof === 'string' ? qProof.trim().slice(0, 200) : '';
+  if (!m || !p) return staticQuestions(postType);
+  return {
+    v: 1,
+    source: 'llm',
+    items: [
+      { key: 'moment', q: m, help: 'One specific moment, in plain words.' },
+      { key: 'proof',  q: p, help: 'A concrete number or outcome makes it credible.' },
+    ],
+  };
+}
+
 // ---------------------------------------------------------------------------
-// T2+T1 — one Sonnet call writes all remaining cards
+// T2+T1 — one Sonnet call writes all remaining cards AND two extraction
+// questions for every non-question card (including preset T3 vault cards, which
+// it doesn't rewrite — it only writes their questions). Returns
+// { cards, presetQuestions } where presetQuestions is keyed by ref.
 // ---------------------------------------------------------------------------
-async function generateLlmCards({ profile, pillars, recommendedType, sequelSeed, recentTitles, count }) {
+async function generateLlmCardsAndQuestions({
+  profile, pillars, recommendedType, sequelSeed, recentTitles,
+  voice, answeredQuestions, recentPosts, savedHooks, dismissedHooks,
+  presetCards, count,
+}) {
+  const empty = { cards: [], presetQuestions: {} };
   const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
-  if (!apiKey) return [];
+  if (!apiKey) return empty;
 
   const Anthropic = require('@anthropic-ai/sdk');
   const client = new Anthropic({ apiKey });
@@ -202,20 +364,49 @@ async function generateLlmCards({ profile, pillars, recommendedType, sequelSeed,
     pillars.length                 && `Content pillars (stay within these): ${pillars.join(' · ')}`,
   ].filter(Boolean).join('\n');
 
+  const voiceBlock = (voice && (voice.standsFor || voice.outcome || voice.authorityStatements.length))
+    ? `\nVOICE & POSITIONING:\n${[
+        voice.standsFor && `They stand for: ${voice.standsFor}`,
+        voice.outcome   && `The outcome they deliver: ${voice.outcome}`,
+        voice.authorityStatements.length && `Proof points: ${voice.authorityStatements.join('; ')}`,
+      ].filter(Boolean).join('\n')}\n`
+    : '';
+
+  const answeredBlock = (answeredQuestions && answeredQuestions.length)
+    ? `\nTHINGS THEY'VE ACTUALLY SAID (their real words — the strongest signal for grounding cards and personalising the questions):\n${answeredQuestions.map(a => `- Prompt: ${a.prompt || 'a daily question'}\n  They said: "${a.answer}"`).join('\n')}\n`
+    : '';
+
+  const postsBlock = (recentPosts && recentPosts.length)
+    ? `\nRECENT PUBLISHED POSTS (topic — performance):\n${recentPosts.map(p => `- ${p.topic}${p.performance ? ` — ${p.performance}` : ''}`).join('\n')}\n`
+    : '';
+
+  const tasteBlock = ((savedHooks && savedHooks.length) || (dismissedHooks && dismissedHooks.length))
+    ? `\nTASTE:\n${[
+        savedHooks && savedHooks.length && `Hooks they saved or wrote from (lean into this style/angle):\n${savedHooks.map(h => `  + ${h}`).join('\n')}`,
+        dismissedHooks && dismissedHooks.length && `Hooks they dismissed (avoid this style/angle):\n${dismissedHooks.map(h => `  - ${h}`).join('\n')}`,
+      ].filter(Boolean).join('\n')}\n`
+    : '';
+
   const sequelBlock = sequelSeed
     ? `\nThe FIRST idea must be a follow-up ("sequel") to this post, which was one of their best performers recently — extend the topic with a new angle, deeper detail, or the next logical question. Do NOT rehash it:\n"""${String(sequelSeed.content || '').slice(0, 600)}"""\n`
     : '';
 
+  const presetBlock = (presetCards && presetCards.length)
+    ? `\nPRESET CARDS (these are already written — do NOT rewrite them; only write their two questions, returned in "preset_questions" keyed by "ref"):\n${presetCards.map(p => `- ref: ${p.ref} — hook: "${p.hook}" (${p.post_type})`).join('\n')}\n`
+    : '';
+
   const message = await client.messages.create({
     model: SONNET_MODEL,
-    max_tokens: 1000,
+    max_tokens: 8000, // adaptive thinking (on by default for Sonnet 5) shares this budget
+    output_config: { format: { type: 'json_schema', schema: IDEA_SCHEMA } },
     messages: [{
       role: 'user',
-      content: `Generate ${count} LinkedIn post idea cards for this consultant.
+      content: `Generate ${count} LinkedIn post idea cards for this consultant, and for EVERY card write exactly two short questions the consultant answers before drafting.
 
+CONSULTANT PROFILE:
 ${context}
-${sequelBlock}
-${recentTitles.length ? `Do NOT repeat any of these recently suggested angles:\n${recentTitles.slice(-30).map(t => `- ${t}`).join('\n')}\n` : ''}CRITICAL: Each card MUST reveal something about THEIR work or their audience's challenges — never generic "how to scale" advice. Use this template:
+${voiceBlock}${answeredBlock}${postsBlock}${tasteBlock}${sequelBlock}${presetBlock}${recentTitles.length ? `\nDo NOT repeat any of these recently suggested angles:\n${recentTitles.slice(-30).map(t => `- ${t}`).join('\n')}\n` : ''}
+CRITICAL: Each card MUST reveal something about THEIR work or their audience's challenges — never generic "how to scale" advice. Use this template:
 
 REACH cards: A specific moment from your consulting work that shows how your audience is different, a client situation that surprised you, or a pattern you've seen repeatedly.
 TRUST cards: A non-obvious insight or contrarian belief from serving your audience, a mistake you see them make, or a misunderstanding about your field.
@@ -228,34 +419,51 @@ Rules for every card:
 - "post_type" is one of reach|trust|convert — at least one must be "${recommendedType}"
 - Each hook must pass this test: "Could I only write this based on my specific consulting experience?" If not, it's too generic.
 
-Return ONLY a JSON array of ${count} objects: [{"title": "...", "hook": "...", "textarea_input": "...", "post_type": "..."}]`,
+QUESTION RULES (for every card, including the preset cards above):
+- "q_moment" asks the consultant for the REAL moment behind this specific idea — a client, a conversation, a decision, or a day. Reference the card's hook concretely, and their real words above where they fit.
+- "q_proof" asks for concrete proof — a number, a timeframe, a before/after, or the exact words someone used.
+- Each question ≤ 140 characters, answerable in 1–3 sentences, written in second person ("you"), never a yes/no question.
+
+Return a JSON object with "cards" (${count} objects: title, hook, textarea_input, post_type, q_moment, q_proof) and "preset_questions" (one object per preset ref: ref, q_moment, q_proof; empty array if no preset cards).`,
     }],
   });
 
-  const raw = message.content[0]?.text || '[]';
-  let ideas = [];
-  try {
-    const match = raw.match(/\[[\s\S]*\]/);
-    ideas = JSON.parse(match ? match[0] : raw);
-    if (!Array.isArray(ideas)) ideas = [];
-  } catch { ideas = []; }
+  if (message.stop_reason === 'refusal' || message.stop_reason === 'max_tokens') return empty;
 
-  return ideas
+  // Sonnet 5 responses may lead with thinking blocks — read the text block.
+  const text = (message.content.find(b => b.type === 'text') || {}).text || '{}';
+  let parsed = {};
+  try {
+    const match = text.match(/\{[\s\S]*\}/);
+    parsed = JSON.parse(match ? match[0] : text);
+  } catch { return empty; }
+
+  const rawCards = Array.isArray(parsed.cards) ? parsed.cards : [];
+  const cards = rawCards
     .filter(i => i && typeof i.hook === 'string' && i.hook.trim())
     .slice(0, count)
     .map((i, idx) => {
       const isSequel = !!sequelSeed && idx === 0;
+      const postType = ['reach', 'trust', 'convert', 'lead_magnet'].includes(i.post_type) ? i.post_type : recommendedType;
       return {
         tier: isSequel ? 2 : 1,
         title: typeof i.title === 'string' ? i.title.slice(0, 120) : null,
         hook: i.hook.trim(),
         textarea_input: typeof i.textarea_input === 'string' ? i.textarea_input : '',
-        post_type: ['reach', 'trust', 'convert', 'lead_magnet'].includes(i.post_type) ? i.post_type : recommendedType,
+        post_type: postType,
         provenance_ref: isSequel ? `post:${sequelSeed.id}` : 'profile',
         provenance_label: isSequel ? 'Sequel to your top post this month' : 'From your positioning',
         is_question: false,
+        questions: llmQuestions(postType, i.q_moment, i.q_proof),
       };
     });
+
+  const presetQuestions = {};
+  for (const pq of (Array.isArray(parsed.preset_questions) ? parsed.preset_questions : [])) {
+    if (pq && typeof pq.ref === 'string') presetQuestions[pq.ref] = { qMoment: pq.q_moment, qProof: pq.q_proof };
+  }
+
+  return { cards, presetQuestions };
 }
 
 // ---------------------------------------------------------------------------
@@ -275,6 +483,7 @@ function pickEvergreenCards({ count, recommendedType, usedEvergreenSlugs, profil
         provenance_ref: `evergreen:${idea.slug}`,
         provenance_label: 'A proven consultant angle',
         is_question: false,
+        questions: staticQuestions(idea.post_type),
       };
     });
 }
@@ -285,19 +494,22 @@ function pickEvergreenCards({ count, recommendedType, usedEvergreenSlugs, profil
 async function getDailyCards(userId, tenantId) {
   const existing = await db.prepare(`
     SELECT id, hook, title, textarea_input, post_type, tier,
-           provenance_ref, provenance_label, is_question, status, served_on
+           provenance_ref, provenance_label, is_question, questions, status, served_on
     FROM   idea_cards
     WHERE  tenant_id = ? AND served_on = CURRENT_DATE
     ORDER  BY id
   `).all(tenantId);
   if (existing.length) return { cards: existing, fresh: false };
 
-  const [profile, recommendedType, history] = await Promise.all([
+  const [profile, recommendedType, history, answeredQuestions, recentPosts] = await Promise.all([
     fetchIdeaProfile(tenantId),
     getRecommendedType(tenantId),
     fetchServedHistory(tenantId),
+    fetchAnsweredQuestions(tenantId),
+    fetchRecentPublishedPosts(tenantId),
   ]);
   const pillars = parsePillars(profile);
+  const voice = parseVoiceContext(profile);
 
   let cards = await pickVaultCards(tenantId, recommendedType, history.usedVaultIdeaIds);
 
@@ -308,23 +520,37 @@ async function getDailyCards(userId, tenantId) {
   const askQuestion = cards.length < 2;
   const fillTarget = askQuestion ? CARDS_PER_DAY - 1 : CARDS_PER_DAY;
 
+  // T3 vault cards are already written — the LLM call only writes their two
+  // questions, keyed by ref. (Fallback: static questions if the call is skipped.)
+  const presetCards = cards.map((c, idx) => ({ ref: `p${idx}`, hook: c.hook, post_type: c.post_type }));
+
   const remaining = fillTarget - cards.length;
-  if (remaining > 0) {
-    const sequelSeed = await pickSequelSeed(tenantId, history.usedPostRefs);
-    const hasProfileSubstance = !!(profile?.brand_industry || profile?.elevator_main_result || profile?.audience_description || pillars.length);
-    if (hasProfileSubstance || sequelSeed) {
-      try {
-        const llmCards = await generateLlmCards({
-          profile, pillars, recommendedType, sequelSeed,
-          recentTitles: history.recentTitles,
-          count: remaining,
-        });
-        cards = cards.concat(llmCards);
-      } catch (err) {
-        console.error('[ideaEngine] LLM card generation failed (falling back to evergreen):', err.message);
-      }
+  const sequelSeed = remaining > 0 ? await pickSequelSeed(tenantId, history.usedPostRefs) : null;
+  const hasProfileSubstance = !!(profile?.brand_industry || profile?.elevator_main_result || profile?.audience_description || pillars.length);
+  let presetQuestions = {};
+  if ((remaining > 0 || presetCards.length) && (hasProfileSubstance || sequelSeed)) {
+    try {
+      const result = await generateLlmCardsAndQuestions({
+        profile, pillars, recommendedType, sequelSeed,
+        recentTitles: history.recentTitles,
+        voice, answeredQuestions, recentPosts,
+        savedHooks: history.savedHooks, dismissedHooks: history.dismissedHooks,
+        presetCards, count: remaining,
+      });
+      if (remaining > 0) cards = cards.concat(result.cards);
+      presetQuestions = result.presetQuestions || {};
+    } catch (err) {
+      console.error('[ideaEngine] LLM card generation failed (falling back to evergreen):', err.message);
     }
   }
+
+  // Attach questions to the preset T3 cards (LLM-written where available, else static).
+  cards.forEach((c, idx) => {
+    if (c.tier === 3 && !c.questions) {
+      const pq = presetQuestions[`p${idx}`];
+      c.questions = pq ? llmQuestions(c.post_type, pq.qMoment, pq.qProof) : staticQuestions(c.post_type);
+    }
+  });
 
   if (cards.length < fillTarget) {
     cards = cards.concat(pickEvergreenCards({
@@ -347,6 +573,7 @@ async function getDailyCards(userId, tenantId) {
       provenance_ref: `question:${q.slug}`,
       provenance_label: 'Answer it — ScoutHook remembers and drafts',
       is_question: true,
+      questions: null, // question cards use the answer flow, not the 2-question flow
     });
   }
   cards = cards.slice(0, CARDS_PER_DAY);
@@ -356,14 +583,15 @@ async function getDailyCards(userId, tenantId) {
     const result = await db.prepare(`
       INSERT INTO idea_cards
         (user_id, tenant_id, hook, title, textarea_input, post_type, tier,
-         provenance_ref, provenance_label, is_question)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         provenance_ref, provenance_label, is_question, questions)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       RETURNING id
     `).run(
       userId, tenantId, c.hook, c.title, c.textarea_input, c.post_type, c.tier,
-      c.provenance_ref, c.provenance_label, c.is_question
+      c.provenance_ref, c.provenance_label, c.is_question,
+      c.questions ? JSON.stringify(c.questions) : null
     );
-    inserted.push({ id: result.lastInsertRowid, status: 'served', served_on: null, ...c });
+    inserted.push({ id: result.lastInsertRowid, status: 'served', served_on: null, ...c, questions: c.questions || null });
   }
 
   logCardEvent('idea_cards_served', userId, tenantId, {

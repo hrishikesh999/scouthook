@@ -52,6 +52,7 @@ let chatAnswers         = {};
 let mixRecommended      = null;
 let selectedVaultIdeaId  = null; // set when user picks a vault idea
 let selectedIdeaCardId   = null; // set when arriving from a dashboard "Today's 3" card
+let _ideaCard = { active: false, card: null, step: 0, answers: [] }; // idea-card 2-question flow
 let _pendingVaultIdeaId  = null; // vault idea awaiting type selection in picker
 let _pendingVaultIdeaSeed = '';  // brief/seed text for pending vault idea
 let _tensionResult      = null; // { tension, missing } from silent extraction
@@ -1699,6 +1700,9 @@ const chat = (() => {
     _type          = type;
     _tensionResult = null;
     selectedVaultIdeaId    = null;
+    // Switching post type exits idea-card mode (thread is cleared below anyway).
+    // selectedIdeaCardId is intentionally kept so funnel stamping still works.
+    _ideaCard = { active: false, card: null, step: 0, answers: [] };
     _authorityIdeaBrief    = '';
     _authorityMisconception = '';
     _authorityChatStep     = 0;
@@ -1822,6 +1826,28 @@ const chat = (() => {
       _coach.history.push({ role: 'user', content: val });
       _coach.exchangeCount++;
       runCoach();
+      return;
+    }
+
+    // Idea-card 2-question flow — user is answering Q1 or Q2. The two answers
+    // become the brief; the card's AI-drafted angle rides along as labeled
+    // context (composeIdeaBrief), never as the user's words.
+    if (_ideaCard.active) {
+      addUser(val);
+      chatInput.value       = '';
+      chatInput.style.height = '';
+      _ideaCard.answers.push(val);
+      const items = _ideaCard.card.questions.items;
+      if (_ideaCard.step === 0) {
+        _ideaCard.step = 1;
+        addQuestionBubble(items[1].q, items[1].help);
+        chatInput.placeholder = '1–3 sentences, plain words…';
+        renderStepDots(1, 2);
+        chatInput.focus();
+        return;
+      }
+      // Q2 answered — compose the brief and generate.
+      triggerGenerate({ enrichedIdea: composeIdeaBrief(), skipSubstanceCheck: true });
       return;
     }
 
@@ -2252,7 +2278,95 @@ const chat = (() => {
     }
   }
 
-  return { init, advance, fireTensionExtraction };
+  // Compose the generator brief from an idea card + the user's two answers.
+  // The card's AI-drafted angle is clearly labeled as context (NOT the author's
+  // words); the answers are marked as the real experience to build on. Mirrors
+  // the vault-enrichment labeling in routes/generate.js so the prompt keeps them
+  // distinct.
+  function composeIdeaBrief() {
+    const c = _ideaCard.card;
+    const items = c.questions.items;
+    const parts = [c.hook];
+    if (c.textarea_input) {
+      parts.push('[Idea context — AI-suggested angle, NOT the author\'s words:]\n' + c.textarea_input);
+    }
+    const qa = _ideaCard.answers
+      .map((a, i) => `Q: ${items[i] ? items[i].q : ''}\nA: ${a}`)
+      .join('\n');
+    parts.push('[The author\'s own answers — treat these as the real experience to build on:]\n' + qa);
+    return parts.join('\n\n');
+  }
+
+  // Entry point for the idea-card 2-question flow. Called by the page init when
+  // the URL carries idea_card=. Fetches the card (with its pre-minted questions)
+  // and either enters the 2-question flow or falls back to the legacy prefill.
+  async function startIdeaCardMode(cardId, fallbackIdea) {
+    const legacy = (card) => {
+      const text = fallbackIdea || (card && (card.textarea_input || card.hook)) || '';
+      if (text) {
+        chatInput.value        = text;
+        chatInput.style.height = 'auto';
+        chatInput.style.height = chatInput.scrollHeight + 'px';
+        chatInput.dispatchEvent(new Event('input'));
+      }
+    };
+
+    // Bail to legacy if the user already started typing/switched before the fetch.
+    if (chatInput.value.trim()) { return; }
+
+    let card = null;
+    try {
+      const res = await fetch('/api/ideas/' + cardId, { headers: apiHeaders() });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.ok) card = data.card;
+      }
+    } catch { /* network — fall through to legacy */ }
+
+    const items = card && card.questions && Array.isArray(card.questions.items) ? card.questions.items : null;
+    // Question cards, cards predating migration 073, or a failed fetch → legacy.
+    if (!card || card.is_question || !items || items.length !== 2) {
+      legacy(card);
+      return;
+    }
+
+    // Staleness guard: if the user typed/switched during the fetch, don't hijack.
+    if (chatInput.value.trim() || !_type) { legacy(card); return; }
+
+    _ideaCard = { active: true, card, step: 0, answers: [] };
+    chatThread.innerHTML = '';
+    chatThread.style.display = '';
+
+    // Pinned idea context: the hook as the headline, the AI-drafted angle shown
+    // muted and clearly labeled so the user knows their answers are what matters.
+    const ctx = document.createElement('div');
+    ctx.className = 'chat-bubble-bot idea-context-bubble';
+    const hookEl = document.createElement('div');
+    hookEl.className   = 'chat-bubble-main';
+    hookEl.textContent = card.hook;
+    ctx.appendChild(hookEl);
+    if (card.provenance_label) {
+      const prov = document.createElement('p');
+      prov.className   = 'chat-q-help';
+      prov.textContent = card.provenance_label;
+      ctx.appendChild(prov);
+    }
+    if (card.textarea_input) {
+      const angle = document.createElement('p');
+      angle.className   = 'chat-q-help idea-context-angle';
+      angle.style.opacity = '0.7';
+      angle.textContent = 'Suggested angle (AI-drafted — we\'ll use your words below): ' + card.textarea_input;
+      ctx.appendChild(angle);
+    }
+    chatThread.appendChild(ctx);
+
+    addQuestionBubble(items[0].q, items[0].help);
+    chatInput.placeholder = '1–3 sentences, plain words…';
+    renderStepDots(0, 2);
+    chatInput.focus();
+  }
+
+  return { init, advance, fireTensionExtraction, startIdeaCardMode };
 })();
 
 /* ── Post type intent cards ──────────────────────────────────── */
@@ -2392,6 +2506,9 @@ async function triggerGenerate(opts = {}) {
     if (tensionStmt)                                    body.tension_statement    = tensionStmt;
     if (selectedVaultIdeaId)                            body.vault_idea_id        = selectedVaultIdeaId;
     if (selectedIdeaCardId)                             body.idea_card_id         = selectedIdeaCardId;
+    // Idea-card flow: send just the user's two answers so the server mines those
+    // for vault facts (not the composed brief, which also holds the AI angle).
+    if (_ideaCard.active && _ideaCard.answers.length)   body.idea_answers         = _ideaCard.answers.join('\n');
     if (opts.enrichedIdea || opts.skipSubstanceCheck)   body.skip_substance_check = true;
     if (shouldStream)                                   body.streaming            = true;
     // Authority/Expertise-specific params
@@ -2996,7 +3113,11 @@ async function init() {
     // Restore vault idea id AFTER selectType (selectType clears it)
     if (urlVaultIdeaId) selectedVaultIdeaId = parseInt(urlVaultIdeaId, 10) || null;
     if (urlIdeaCardId)  selectedIdeaCardId  = parseInt(urlIdeaCardId, 10) || null;
-    if (urlIdea) {
+    // Idea card → 2-question flow (fetches questions by id; urlIdea is the
+    // legacy fallback). Do NOT prefill the chat box here — the flow owns it.
+    if (selectedIdeaCardId) {
+      chat.startIdeaCardMode(selectedIdeaCardId, urlIdea);
+    } else if (urlIdea) {
       chatInput.value        = urlIdea;
       chatInput.style.height = 'auto';
       chatInput.style.height = chatInput.scrollHeight + 'px';

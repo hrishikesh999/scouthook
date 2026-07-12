@@ -203,11 +203,18 @@ router.post('/', async (req, res) => {
   // only ever sees what the user actually wrote or spoke.
   // Vault-path input is skipped (that text came out of the vault already).
   const userTypedInput = (raw_idea || '').trim();
-  if (userTypedInput.length >= 80 && !vault_idea_id) {
+  // Idea-card 2-question flow sends the user's two answers separately — those
+  // are the real first-person material to mine (raw_idea is a composed brief
+  // that also contains the AI-drafted idea context, which we must NOT remember).
+  const ideaAnswers = typeof req.body.idea_answers === 'string' ? req.body.idea_answers.trim() : '';
+  if (ideaCardId && ideaAnswers.length >= 80 && !vault_idea_id) {
+    const { extractFactsFromInput } = require('../services/factExtraction');
+    extractFactsFromInput(userId, tenantId, ideaAnswers);
+  } else if (userTypedInput.length >= 80 && !vault_idea_id) {
     const { extractFactsFromInput } = require('../services/factExtraction');
     if (ideaCardId) {
-      // Card-originated input starts life AI-drafted — only mine it if the
-      // user actually edited it, or we'd "remember" facts the AI invented.
+      // Legacy card path (no 2-question answers): input starts AI-drafted — only
+      // mine it if the user actually edited it, or we'd "remember" AI-invented facts.
       Promise.resolve(
         db.prepare('SELECT textarea_input FROM idea_cards WHERE id = ? AND tenant_id = ?').get(ideaCardId, tenantId)
       ).then(card => {

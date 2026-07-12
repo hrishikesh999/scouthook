@@ -113,10 +113,10 @@
       }
     });
 
-    // Update sidebar account link active state
-    const accountLink = document.querySelector('.sidebar-account-foot-link-row');
-    if (accountLink) {
-      accountLink.classList.toggle('sidebar-account-foot--active', target === null);
+    // Update sidebar account trigger active state
+    const accountTrigger = document.querySelector('.sidebar-account-trigger');
+    if (accountTrigger) {
+      accountTrigger.classList.toggle('sidebar-account-foot--active', target === null);
     }
   }
 
@@ -243,10 +243,6 @@
     // calls inside page scripts find the freshly-swapped elements.
     const initPage = () => {
       updateSidebarActiveLink(pathname);
-
-      if (typeof window._renderPageHeaderActions === 'function') {
-        window._renderPageHeaderActions();
-      }
 
       executeInlineScripts(inlineScripts);
 

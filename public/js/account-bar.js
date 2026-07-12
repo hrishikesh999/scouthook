@@ -166,20 +166,29 @@
     if (!slot) return;
 
     const label = user.displayName || user.email || 'Google user';
-    const email = user.email && user.email !== label ? user.email : '';
     const photoUrl = safeImageUrl(user.photo);
     const isUserSettingsPage = ['/account.html', '/billing.html', '/workspaces.html'].includes(window.location.pathname);
-    const svgChevron = '<svg class="sidebar-account-foot-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>';
+    const svgChevron    = '<svg class="sidebar-account-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>';
+    const svgProfile    = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
+    const svgCard       = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>';
+    const svgBuilding   = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>';
+    const svgLogOut     = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>';
 
     slot.innerHTML = `
-      <div class="sidebar-account-foot-inner">
-        <a href="/account.html" class="sidebar-account-foot-link-row${isUserSettingsPage ? ' sidebar-account-foot--active' : ''}">
+      <div class="sidebar-account-menu" id="sidebar-account-menu">
+        <button type="button" class="sidebar-account-trigger${isUserSettingsPage ? ' sidebar-account-foot--active' : ''}"
+          id="sidebar-account-trigger" aria-haspopup="true" aria-expanded="false">
           <span class="sidebar-account-foot-avatar" aria-hidden="true"></span>
           <span class="sidebar-account-foot-name" title="${escapeAttr(user.email || '')}">${escapeHtml(label)}</span>
           ${svgChevron}
-        </a>
-        ${email ? `<span class="sidebar-account-foot-email" title="${escapeAttr(email)}">${escapeHtml(email)}</span>` : ''}
-        <button type="button" class="sidebar-account-foot-logout">Log out</button>
+        </button>
+        <div class="sidebar-account-flyout" id="sidebar-account-flyout" hidden role="menu" aria-label="Account menu">
+          <a href="/account.html" class="sidebar-account-flyout-item" role="menuitem">${svgProfile}Profile</a>
+          <a href="/billing.html" class="sidebar-account-flyout-item" role="menuitem">${svgCard}Subscription</a>
+          <a href="/workspaces.html" class="sidebar-account-flyout-item" role="menuitem">${svgBuilding}Workspaces</a>
+          <hr class="sidebar-account-flyout-divider">
+          <button type="button" class="sidebar-account-flyout-item sidebar-account-flyout-logout" role="menuitem">${svgLogOut}Log out</button>
+        </div>
       </div>
     `;
 
@@ -192,23 +201,31 @@
       }
     }
 
-    slot.querySelector('.sidebar-account-foot-logout').addEventListener('click', logOut);
-  }
+    const menu    = slot.querySelector('#sidebar-account-menu');
+    const trigger = slot.querySelector('#sidebar-account-trigger');
+    const flyout  = slot.querySelector('#sidebar-account-flyout');
 
-  // ── Page header actions (help + upgrade) ────────────────────
-  function renderPageHeaderActions() {
-    const header = document.querySelector('#main-content .page-header');
-    if (!header || header.querySelector('.page-header-actions')) return;
+    function closeMenu() {
+      flyout.hidden = true;
+      menu.classList.remove('sidebar-account-open');
+      trigger.setAttribute('aria-expanded', 'false');
+    }
 
-    const actions = document.createElement('div');
-    actions.className = 'page-header-actions';
-    actions.innerHTML = `
-      <a href="/help.html" class="page-header-help">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-        Help
-      </a>
-    `;
-    header.appendChild(actions);
+    trigger.addEventListener('click', e => {
+      e.stopPropagation();
+      const opening = flyout.hidden;
+      flyout.hidden = !opening;
+      menu.classList.toggle('sidebar-account-open', opening);
+      trigger.setAttribute('aria-expanded', String(opening));
+    });
+
+    if (!slot._closeMenuAttached) {
+      document.addEventListener('click', closeMenu);
+      document.addEventListener('keydown', e => { if (e.key === 'Escape') closeMenu(); });
+      slot._closeMenuAttached = true;
+    }
+
+    slot.querySelector('.sidebar-account-flyout-logout').addEventListener('click', logOut);
   }
 
   // ── Trial banner (site-wide) ─────────────────────────────────
@@ -314,6 +331,21 @@
       btn.addEventListener('click', () => window.PricingModal?.open());
       sidebarBottom.insertBefore(btn, sidebarBottom.firstChild);
     } catch { /* ignore */ }
+  }
+
+  // ── Help link ─────────────────────────────────────────────────
+  function renderSidebarHelp() {
+    const sidebarBottom = document.querySelector('#sidebar .sidebar-bottom');
+    if (!sidebarBottom || sidebarBottom.querySelector('.sidebar-help-btn')) return;
+
+    const link = document.createElement('a');
+    link.href = '/help.html';
+    link.className = 'sidebar-help-btn';
+    link.innerHTML = `
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      Help
+    `;
+    sidebarBottom.insertBefore(link, sidebarBottom.querySelector('#sidebar-account-slot'));
   }
 
   // ── Refer & Earn button ──────────────────────────────────────
@@ -578,17 +610,7 @@
     });
   }
 
-  // Expose for the SPA router to call after each page swap
-  window._renderPageHeaderActions = renderPageHeaderActions;
-
   // ── Boot ─────────────────────────────────────────────────────
-  // Render page header actions immediately (help link doesn't need auth)
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', renderPageHeaderActions);
-  } else {
-    renderPageHeaderActions();
-  }
-
   const auth = window.scouthookAuthReady;
   if (auth && typeof auth.then === 'function') {
     auth
@@ -598,6 +620,7 @@
         renderWorkspaceSwitcher(user.tenant_id);
         renderSidebarAccount(user);
         renderSidebarUpgrade();
+        renderSidebarHelp();
         renderSidebarRefer();
         initTrialBanner();
         initMiniOnboarding();

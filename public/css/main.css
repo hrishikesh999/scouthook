@@ -143,7 +143,8 @@ body {
 .media-title,
 .brand-heading,
 .profile-heading,
-.help-heading {
+.help-heading,
+.ideas-title {
   font-family: var(--font-sans);
   font-size: 28px;
   font-weight: 700;
@@ -3955,6 +3956,7 @@ body.has-trial-banner #main-content {
   .dashboard-page { padding: var(--space-5); }
   .drafts-page    { padding: var(--space-5); }
   .published-page { padding: var(--space-5); }
+  .ideas-page     { padding: var(--space-5); }
 
   /* Account settings tabs — horizontal scroll instead of multi-line wrap */
   .account-tabs {
@@ -4281,16 +4283,9 @@ body.has-trial-banner #main-content {
 .sidebar-badge[hidden] { display: none; }
 
 /* Ideas tab */
-.ideas-page { max-width: 1080px; }
-.ideas-header { margin-bottom: var(--space-5); display: flex; justify-content: space-between; align-items: flex-end; gap: var(--space-4); }
-.ideas-title {
-  font-size: 24px;
-  font-weight: 800;
-  letter-spacing: -0.04em;
-  color: var(--text-heading);
-  font-family: var(--font-sans);
-}
-.ideas-sub { font-size: 14px; color: var(--text-muted); margin-top: var(--space-1); font-family: var(--font-sans); }
+.ideas-page { max-width: 1080px; padding: var(--space-8); }
+.ideas-header { margin-bottom: var(--space-8); display: flex; justify-content: space-between; align-items: flex-end; gap: var(--space-4); }
+.ideas-sub { font-size: 14px; color: var(--text-tertiary); margin-top: var(--space-2); font-family: var(--font-sans); }
 .ideas-new-question-btn { flex-shrink: 0; }
 .ideas-question-slot { margin-bottom: var(--space-5); grid-template-columns: 1fr; }
 .ideas-question-slot[hidden] { display: none; }
@@ -6196,25 +6191,6 @@ body.has-trial-banner #main-content {
   padding-top: 4px;
 }
 
-.page-header-help {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-muted);
-  text-decoration: none;
-  padding: 6px 10px;
-  border-radius: var(--radius-md);
-  transition: color 0.15s, background 0.15s;
-  white-space: nowrap;
-}
-
-.page-header-help:hover {
-  color: var(--text-body);
-  background: var(--bg-subtle);
-}
-
 .page-header-upgrade {
   display: inline-flex;
   align-items: center;
@@ -6376,20 +6352,29 @@ body.has-trial-banner #main-content {
   color: #A1A1AA;
 }
 
-.sidebar-account-foot-link-row {
+.sidebar-account-menu {
+  position: relative;
+}
+
+.sidebar-account-trigger {
   display: flex;
   align-items: center;
   gap: 8px;
+  width: 100%;
   min-width: 0;
-  text-decoration: none;
   padding: 6px 8px;
   margin: -2px -8px;
+  border: none;
+  background: transparent;
   border-radius: 8px;
-  transition: background 0.15s ease;
   cursor: pointer;
+  font-family: var(--font-sans);
+  text-align: left;
+  transition: background 0.15s ease;
+  box-sizing: border-box;
 }
 
-.sidebar-account-foot-link-row:hover {
+.sidebar-account-trigger:hover {
   background: #F4F4F5;
 }
 
@@ -6397,14 +6382,15 @@ body.has-trial-banner #main-content {
   background: #F0FDFA;
 }
 
-.sidebar-account-foot-chevron {
+.sidebar-account-chevron {
   flex-shrink: 0;
   color: #A1A1AA;
   margin-left: auto;
   transition: color 0.15s ease;
 }
 
-.sidebar-account-foot-link-row:hover .sidebar-account-foot-chevron {
+.sidebar-account-trigger:hover .sidebar-account-chevron,
+.sidebar-account-menu.sidebar-account-open .sidebar-account-chevron {
   color: #52525B;
 }
 
@@ -6418,11 +6404,57 @@ body.has-trial-banner #main-content {
   text-overflow: ellipsis;
 }
 
-.sidebar-account-foot-row {
+/* ── Right-side flyout (Profile / Subscription / Workspaces / Log out) ── */
+.sidebar-account-flyout {
+  position: absolute;
+  left: calc(100% + 8px);
+  bottom: 0;
+  min-width: 190px;
+  background: #FFFFFF;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  padding: 4px;
+  z-index: 200;
+}
+
+.sidebar-account-flyout[hidden] { display: none; }
+
+.sidebar-account-flyout-item {
   display: flex;
   align-items: center;
   gap: 8px;
-  min-width: 0;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: var(--font-sans);
+  color: #52525B;
+  text-decoration: none;
+  cursor: pointer;
+  text-align: left;
+  box-sizing: border-box;
+  transition: background 0.1s, color 0.1s;
+}
+
+.sidebar-account-flyout-item svg { flex-shrink: 0; opacity: 0.6; }
+
+.sidebar-account-flyout-item:hover {
+  background: #F4F4F5;
+  color: #18181B;
+}
+
+.sidebar-account-flyout-divider {
+  margin: 4px 0;
+  border: none;
+  border-top: 1px solid var(--border);
+}
+
+.sidebar-account-flyout-logout:hover {
+  color: #DC2626;
 }
 
 .sidebar-account-foot-avatar {
@@ -6447,15 +6479,6 @@ body.has-trial-banner #main-content {
   display: block;
 }
 
-.sidebar-account-foot-email {
-  font-size: 11px;
-  font-weight: 500;
-  color: #71717A;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 .sidebar-account-foot-link {
   font-size: 12px;
   font-weight: 500;
@@ -6466,27 +6489,6 @@ body.has-trial-banner #main-content {
 
 .sidebar-account-foot-link:hover {
   color: #18181B;
-}
-
-.sidebar-account-foot-logout {
-  margin-top: 4px;
-  width: 100%;
-  padding: 8px 10px;
-  border-radius: 6px;
-  border: 1px solid var(--border);
-  background: transparent;
-  color: #71717A;
-  font-size: 12px;
-  font-weight: 600;
-  font-family: var(--font-sans);
-  cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
-}
-
-.sidebar-account-foot-logout:hover {
-  background: #F4F4F5;
-  color: #18181B;
-  border-color: #D4D4D8;
 }
 
 .sidebar-upgrade-btn {
@@ -6534,6 +6536,26 @@ body.has-trial-banner #main-content {
 .sidebar-refer-btn:hover {
   background: rgba(245, 158, 11, 0.14);
   border-color: rgba(245, 158, 11, 0.38);
+}
+.sidebar-help-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 10px;
+  margin-bottom: 6px;
+  color: var(--text-muted);
+  text-decoration: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: var(--font-sans);
+  transition: color 0.15s, background 0.15s;
+  box-sizing: border-box;
+}
+.sidebar-help-btn:hover {
+  color: var(--text-body);
+  background: var(--bg-subtle);
 }
 .sidebar-onboarding-btn {
   display: flex;

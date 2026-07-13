@@ -2290,7 +2290,11 @@ const chat = (() => {
     const items = c.questions.items;
     const parts = [c.hook];
     if (c.textarea_input) {
-      parts.push('[Idea context — AI-suggested angle, NOT the author\'s words:]\n' + c.textarea_input);
+      // Question cards: textarea_input is the author's own answer to the prompt
+      // (real words). Regular cards: an AI-suggested angle (context only).
+      parts.push(c.is_question
+        ? '[The author\'s answer to the prompt above — their real words:]\n' + c.textarea_input
+        : '[Idea context — AI-suggested angle, NOT the author\'s words:]\n' + c.textarea_input);
     }
     const qa = _ideaCard.answers
       .map((a, i) => `Q: ${items[i] ? items[i].q : ''}\nA: ${a}`)
@@ -2326,8 +2330,11 @@ const chat = (() => {
     } catch { /* network — fall through to legacy */ }
 
     const items = card && card.questions && Array.isArray(card.questions.items) ? card.questions.items : null;
-    // Question cards, cards predating migration 073, or a failed fetch → legacy.
-    if (!card || card.is_question || !items || items.length !== 2) {
+    // Cards predating migration 073, or a failed fetch → legacy. Question cards
+    // are allowed here once answered: POST /:id/answer mints their two follow-ups
+    // and stashes the answer in textarea_input, so they run the same 2-question
+    // flow grounded in the user's own answer.
+    if (!card || !items || items.length !== 2) {
       legacy(card);
       return;
     }
@@ -2357,7 +2364,11 @@ const chat = (() => {
       const angle = document.createElement('p');
       angle.className   = 'chat-q-help idea-context-angle';
       angle.style.opacity = '0.7';
-      angle.textContent = 'Suggested angle (AI-drafted — we\'ll use your words below): ' + card.textarea_input;
+      // Question cards store the user's own answer here (real words); regular
+      // cards store an AI-drafted angle. Label each honestly.
+      angle.textContent = card.is_question
+        ? 'Your answer: ' + card.textarea_input
+        : 'Suggested angle (AI-drafted — we\'ll use your words below): ' + card.textarea_input;
       ctx.appendChild(angle);
     }
     chatThread.appendChild(ctx);

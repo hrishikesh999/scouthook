@@ -22,12 +22,14 @@ const router = express.Router();
 const { db, getSetting } = require('../db');
 const { getDailyCards, updateCardStatus, logCardEvent, mintQuestionCard, staticQuestions } = require('../services/ideaEngine');
 
-// Non-question cards should always carry two questions for the "Write this"
-// 2-question flow. Cards generated before migration 073 (or any edge case) have
-// none — synthesise the static per-type pair at read time so those cards get
-// the flow too, rather than falling back to pasting AI-drafted text into the box.
+// Every card that drives the "Write this" 2-question flow must carry two
+// questions. Regular cards: pre-minted, or the static per-type pair as a
+// fallback for pre-migration rows. Question cards: null until answered, then
+// the deepening follow-ups minted at answer time (POST /:id/answer) — so an
+// answered question card flows through the same targeted flow, grounded in the
+// user's own answer, instead of the generic interview.
 function withQuestions(c) {
-  if (c.is_question) return null;
+  if (c.is_question) return c.questions || null;
   return c.questions || staticQuestions(c.post_type);
 }
 const { recordStreakAction, getStreak } = require('../services/streak');
@@ -268,8 +270,12 @@ router.post('/:id/archive', (req, res) => setStatus(req, res, 'archived', 'idea_
 // ---------------------------------------------------------------------------
 // POST /api/ideas/:id/answer — daily question card (spec R4)
 // The answer becomes a permanent vault memory (source='daily_question', feeds
-// tomorrow's T3 supply once its hook_preview lands) AND today's post seed —
-// the client redirects into the generator with the Q+A prefilled.
+// tomorrow's T3 supply once its hook_preview lands). It ALSO turns the question
+// card into a seed for today's post: we mint two deepening follow-up questions
+// grounded in the answer and store them (+ the answer) on the card, so the
+// client can hand off into the SAME targeted 2-question flow the idea cards use
+// — post type locked, no picker, two specific questions — rather than the
+// generic multi-question interview.
 // ---------------------------------------------------------------------------
 router.post('/:id/answer', async (req, res) => {
   if (!requireUser(req, res)) return;
@@ -299,45 +305,86 @@ router.post('/:id/answer', async (req, res) => {
     );
     const vaultIdeaId = insert.lastInsertRowid;
 
-    await updateCardStatus(cardId, req.tenantId, 'answered');
+    // Awaited: the card must carry two questions BEFORE the client navigates
+    // into the 2-question flow, or generate.html falls back to the generic path.
+    // One Haiku call yields both the follow-ups and the T3 hook preview.
+    const minted = await mintAnswerFollowups(card.hook, seedText, card.post_type);
+
+    await db.prepare(`
+      UPDATE idea_cards
+      SET    status = 'answered', textarea_input = ?, questions = ?, updated_at = NOW()
+      WHERE  id = ? AND tenant_id = ?
+    `).run(seedText, JSON.stringify(minted.questions), cardId, req.tenantId);
+
+    // hook preview → tomorrow's T3 supply (non-fatal if the model gave us none)
+    if (minted.hook) {
+      Promise.resolve(
+        db.prepare('UPDATE vault_ideas SET hook_preview = ? WHERE id = ? AND tenant_id = ?')
+          .run(minted.hook, vaultIdeaId, req.tenantId)
+      ).catch(() => {});
+    }
+
     logCardEvent('idea_question_answered', req.userId, req.tenantId, { idea_card_id: cardId, vault_idea_id: vaultIdeaId });
     recordStreakAction(req.userId, req.tenantId, 'answer');
-    generateHookPreview(vaultIdeaId, req.tenantId, card.hook, seedText); // fire-and-forget
 
-    return res.json({ ok: true, vault_idea_id: vaultIdeaId });
+    return res.json({ ok: true, vault_idea_id: vaultIdeaId, questions: minted.questions });
   } catch (err) {
     console.error('[ideas] POST /:id/answer error:', err.message);
     return res.status(500).json({ ok: false, error: err.message });
   }
 });
 
-// Fire-and-forget: write a ≤12-word hook onto the new memory so it qualifies
-// for the T3 tier of Today's 3 (pickVaultCards requires a hook_preview).
-function generateHookPreview(vaultIdeaId, tenantId, question, answer) {
-  (async () => {
+// Mint two DEEPENING follow-up questions (+ a T3 hook preview) grounded in a
+// question card's answer, in one Haiku call. Returns { hook, questions } in the
+// same shape as ideaEngine's llmQuestions; on any failure falls back to the
+// static per-type pair so the card always drives the 2-question flow.
+async function mintAnswerFollowups(question, answer, postType) {
+  const fallback = { hook: null, questions: staticQuestions(postType) };
+  try {
     const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
-    if (!apiKey) return;
+    if (!apiKey) return fallback;
     const Anthropic = require('@anthropic-ai/sdk');
     const client = new Anthropic({ apiKey });
     const message = await client.messages.create({
       model: HAIKU_MODEL,
-      max_tokens: 60,
+      max_tokens: 400,
       messages: [{
         role: 'user',
-        content: `A consultant answered a prompt about their work.
+        content: `A consultant answered a reflection prompt about their work. Deepen their answer into two follow-up questions that pull out the specifics a strong LinkedIn post needs.
 
 Prompt: ${String(question).slice(0, 200)}
 Their answer: ${String(answer).slice(0, 800)}
 
-Write ONE arresting LinkedIn post opening line (8-12 words) built on their answer — specific, opinionated, no filler, no hashtags. Return only the line.`,
+Return ONLY a JSON object with three fields:
+- "hook": one arresting LinkedIn opening line (8-12 words) built on their answer — specific, opinionated, no filler, no hashtags.
+- "q_moment": a question that pulls out the SPECIFIC moment behind their answer — the client, conversation, decision, or day it happened. Reference their answer concretely. Second person ("you"), <=140 chars, never yes/no.
+- "q_proof": a question that pulls out concrete proof — a number, timeframe, before/after, or the exact words someone used. Second person, <=140 chars, never yes/no.
+
+JSON only, no other text.`,
       }],
     });
-    const hook = (message.content?.[0]?.text || '').trim().replace(/^["']|["']$/g, '').slice(0, 200);
-    if (!hook) return;
-    await db.prepare(
-      'UPDATE vault_ideas SET hook_preview = ? WHERE id = ? AND tenant_id = ?'
-    ).run(hook, vaultIdeaId, tenantId);
-  })().catch(err => console.error('[ideas] hook preview failed (non-fatal):', err.message));
+    const text = message.content?.[0]?.text || '{}';
+    const parsed = JSON.parse(text.match(/\{[\s\S]*\}/)?.[0] || '{}');
+    const m = typeof parsed.q_moment === 'string' ? parsed.q_moment.trim().slice(0, 200) : '';
+    const p = typeof parsed.q_proof === 'string' ? parsed.q_proof.trim().slice(0, 200) : '';
+    const hook = typeof parsed.hook === 'string'
+      ? parsed.hook.trim().replace(/^["']|["']$/g, '').slice(0, 200) : null;
+    if (!m || !p) return { hook, questions: staticQuestions(postType) };
+    return {
+      hook,
+      questions: {
+        v: 1,
+        source: 'llm',
+        items: [
+          { key: 'moment', q: m, help: 'One specific moment, in plain words.' },
+          { key: 'proof',  q: p, help: 'A concrete number or outcome makes it credible.' },
+        ],
+      },
+    };
+  } catch (err) {
+    console.error('[ideas] mintAnswerFollowups failed (non-fatal):', err.message);
+    return fallback;
+  }
 }
 
 module.exports = router;

@@ -272,8 +272,14 @@
         .then(function (data) {
           if (!data.ok) throw new Error(data.error || 'answer_failed');
           queueChanged();
-          // Q+A becomes the draft's raw input — same shape as the interview path
-          window.location.href = writeUrl(card, card.hook + '\n' + answer);
+          // The answer endpoint minted this card's two follow-up questions and
+          // stashed the answer — hand off into the 2-question flow (type locked,
+          // no prefilled box, no picker). No idea= param: the flow owns context.
+          var params = new URLSearchParams({
+            type: URL_TYPE[card.post_type] || 'reach',
+            idea_card: String(card.id),
+          });
+          window.location.href = '/generate.html?' + params.toString();
         })
         .catch(function () {
           btn.disabled = false;

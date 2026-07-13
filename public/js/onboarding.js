@@ -452,13 +452,68 @@ async function saveAndFinish() {
 
   showScreen('s9');
   setTimeout(fireConfetti, 120);
+  // Warm the Daily 3 now — the profile just finished saving, so card
+  // generation sees the completed voice data, and the cards are usually
+  // ready before the user clicks through.
+  prefetchFirstCard();
 }
 
 // ── Celebration ───────────────────────────────────────────────────────────────
 
+// Day-0 activation: "Write your first post" drops the user into the guided
+// 2-question flow of their #1 idea card instead of a blank composer. The
+// Daily 3 are prefetched when the celebration screen mounts, so the (possibly
+// 2–3s) generation runs while the confetti flies. Any failure or slow path
+// falls back to the plain composer — the click never dead-ends.
+const FIRST_POST_TIMEOUT_MS = 10_000;
+// generate.html CHAT_CONFIGS has no 'lead_magnet' key — its guided flow is 'lead_gen'
+const CARD_URL_TYPE = { reach: 'reach', trust: 'trust', convert: 'convert', lead_magnet: 'lead_gen' };
+
+let firstCardPromise = null;
+
+function prefetchFirstCard() {
+  if (!firstCardPromise) {
+    firstCardPromise = fetch('/api/ideas/today', { credentials: 'same-origin' })
+      .then(r => (r.ok ? r.json() : null))
+      .then(data => {
+        const cards = (data && data.ok && Array.isArray(data.cards)) ? data.cards : [];
+        // First regular card — question cards have their own answer flow
+        return cards.find(c => c && c.id && !c.is_question) || null;
+      })
+      .catch(() => null);
+  }
+  return firstCardPromise;
+}
+
+function firstPostUrl(card) {
+  if (!card) return '/generate.html';
+  const params = new URLSearchParams({
+    type: CARD_URL_TYPE[card.post_type] || 'reach',
+    idea: card.textarea_input || card.hook || '',
+    idea_card: String(card.id),
+  });
+  return '/generate.html?' + params.toString();
+}
+
 function initS9() {
-  document.getElementById('ob-write-first-post').addEventListener('click', () => {
-    window.location.href = '/generate.html';
+  const btn = document.getElementById('ob-write-first-post');
+  btn.addEventListener('click', async () => {
+    if (btn.disabled) return;
+    setButtonLoading(btn, true);
+    const card = await Promise.race([
+      prefetchFirstCard(),
+      new Promise(resolve => setTimeout(() => resolve(null), FIRST_POST_TIMEOUT_MS)),
+    ]);
+    if (card) {
+      // Funnel marker, same as idea-cards.js goWrite (keepalive survives navigation)
+      fetch('/api/ideas/' + card.id + '/clicked', {
+        method: 'POST',
+        credentials: 'same-origin',
+        keepalive: true,
+        headers: { 'Content-Type': 'application/json' },
+      }).catch(() => {});
+    }
+    window.location.href = firstPostUrl(card);
   });
 }
 

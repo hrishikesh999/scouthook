@@ -11,9 +11,11 @@
  *
  * Cadence (user_profiles.idea_email_cadence):
  *   'daily'  → every day          '3x' → Mon/Wed/Fri
- *   'weekly' → Monday (also the NULL default — sprint decision: day-1 users
- *              get the lowest-volume cadence until they opt up)
- *   'off'    → never
+ *   'weekly' → Monday             'off' → never
+ *   NULL (user never chose) → 'daily' while trialing, 'weekly' after — the
+ *   trial IS the habit-formation window, and the 24h-activity suppression
+ *   below already keeps engaged users from being nagged. An explicit user
+ *   choice always wins (see effectiveCadence).
  *
  * Suppression: skip users who already fed their pipeline in the last 24h
  * (idea action or a generated post) — the email's job is to start the loop,
@@ -64,6 +66,16 @@ function cadenceAllowsToday(cadence, weekday) {
     case 'weekly': return weekday === 'Mon';
     default:       return false; // 'off' or unknown
   }
+}
+
+/**
+ * Resolve a stored cadence (possibly NULL = never chose) to what the user
+ * actually gets. Trial users default to 'daily'; everyone else 'weekly'.
+ * Shared with routes/emailPreferences.js so the settings page shows the
+ * same default the cron acts on.
+ */
+function effectiveCadence(storedCadence, isTrialing) {
+  return storedCadence || (isTrialing ? 'daily' : 'weekly');
 }
 
 async function actedInLast24h(userId) {
@@ -125,6 +137,7 @@ async function runIdeaEmailCron() {
   try {
     candidates = await db.prepare(`
       SELECT up.user_id, up.idea_email_cadence, up.idea_email_timezone,
+             us.status AS sub_status,
              COALESCE(
                up.last_active_workspace_id,
                (SELECT w.id
@@ -151,7 +164,10 @@ async function runIdeaEmailCron() {
 
       const clock = localClock(u.idea_email_timezone);
       if (!clock || clock.hour < SEND_FROM_HOUR || clock.hour >= SEND_TO_HOUR) continue;
-      if (!cadenceAllowsToday(u.idea_email_cadence, clock.weekday)) continue;
+      // sub_status 'trialing' here is always an unexpired trial — the
+      // candidate query already filters expired trials out entirely.
+      const cadence = effectiveCadence(u.idea_email_cadence, u.sub_status === 'trialing');
+      if (!cadenceAllowsToday(cadence, clock.weekday)) continue;
 
       // Explicit dedup up front (sendEmailToUser would catch it too, but this
       // skips the card work AND keeps the idea_email_sent event honest on the
@@ -176,12 +192,13 @@ async function runIdeaEmailCron() {
       await sendEmailToUser(
         u.user_id,
         'daily-ideas',
-        buildVars(card, cards.length, u.idea_email_cadence),
+        buildVars(card, cards.length, cadence),
         { dedupKey, withinHours: 24 }
       );
       logCardEvent('idea_email_sent', u.user_id, u.workspace_id, {
         idea_card_id: Number(card.id),
-        cadence: u.idea_email_cadence || 'weekly',
+        cadence,
+        cadence_is_default: !u.idea_email_cadence,
       });
     } catch (err) {
       console.warn(`[idea-emails] failed for userId=${u.user_id} (non-fatal):`, err.message);
@@ -189,4 +206,4 @@ async function runIdeaEmailCron() {
   }
 }
 
-module.exports = { runIdeaEmailCron };
+module.exports = { runIdeaEmailCron, effectiveCadence };

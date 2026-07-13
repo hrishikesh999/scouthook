@@ -8,7 +8,9 @@
  *   PUT /api/email-preferences  { cadence?, timezone? }
  *
  * cadence: 'daily' | '3x' | 'weekly' | 'off'. Stored NULL until the user
- * first saves — the email cron treats NULL as 'weekly' (day-1 default).
+ * first saves — the email cron resolves NULL via effectiveCadence(): 'daily'
+ * while trialing (habit-formation window), 'weekly' after. GET mirrors that
+ * resolution so the settings dropdown shows what the cron actually does.
  * timezone: IANA name, validated by probing Intl; invalid input is rejected
  * rather than silently stored (the cron would just fall back, but a saved-
  * then-ignored setting is worse than an error).
@@ -17,6 +19,7 @@
 const express = require('express');
 const router = express.Router();
 const { db } = require('../db');
+const { effectiveCadence } = require('../services/ideaEmails');
 
 const CADENCES = ['daily', '3x', 'weekly', 'off'];
 
@@ -41,12 +44,20 @@ function isValidTimezone(tz) {
 router.get('/', async (req, res) => {
   if (!requireUser(req, res)) return;
   try {
-    const row = await db.prepare(
-      'SELECT idea_email_cadence, idea_email_timezone FROM user_profiles WHERE user_id = ?'
-    ).get(req.userId);
+    const [row, sub] = await Promise.all([
+      db.prepare(
+        'SELECT idea_email_cadence, idea_email_timezone FROM user_profiles WHERE user_id = ?'
+      ).get(req.userId),
+      db.prepare(
+        'SELECT status, trial_ends_at FROM user_subscriptions WHERE user_id = ?'
+      ).get(req.userId),
+    ]);
+    // Same trial-validity rule as the cron's candidate query
+    const trialing = !!sub && sub.status === 'trialing' &&
+      (!sub.trial_ends_at || new Date(sub.trial_ends_at) > new Date());
     return res.json({
       ok: true,
-      cadence: row?.idea_email_cadence || 'weekly',
+      cadence: effectiveCadence(row?.idea_email_cadence, trialing),
       cadence_is_default: !row?.idea_email_cadence,
       timezone: row?.idea_email_timezone || null,
     });

@@ -630,9 +630,9 @@ function renderPreviewAsset() {
     el.innerHTML = '';
     const img = document.createElement('img');
     img.src = attachedPreviewUrl;
-    img.alt = attachedAssetType === 'carousel' ? 'Carousel preview' : 'Visual asset';
+    img.alt = (attachedAssetType === 'carousel' || attachedAssetType === 'carousel_pack') ? 'Carousel preview' : 'Visual asset';
     el.appendChild(img);
-    if (attachedAssetType === 'carousel' && attachedSlideCount > 1) {
+    if ((attachedAssetType === 'carousel' || attachedAssetType === 'carousel_pack') && attachedSlideCount > 1) {
       const badge = document.createElement('div');
       badge.className = 'preview-asset-badge';
       badge.textContent = `Document · ${attachedSlideCount} slides`;
@@ -1806,6 +1806,9 @@ async function _selectCarouselPack(packId) {
 
               // Show results
               const slides = job.slides || [];
+              const packPdfUrl     = job.pdf_url || null;
+              const packPreviewUrl = slides[0]?.png_url || null;
+              const packSlideCount = slides.length;
               let resultHtml = `<div style="padding:20px;width:100%;overflow-y:auto">
                 <div style="font-weight:600;font-size:14px;margin-bottom:12px">${slides.length} slides ready</div>
                 <div style="display:flex;gap:10px;flex-wrap:wrap">
@@ -1814,13 +1817,19 @@ async function _selectCarouselPack(packId) {
                     <div style="font-size:10px;text-align:center;margin-top:3px;text-transform:capitalize;color:var(--text-muted)">${escHtml(s.role)}</div>
                   </a>`).join('')}
                 </div>`;
-              if (job.pdf_url) {
-                resultHtml += `<a href="${job.pdf_url}" target="_blank" download class="btn-teal-filled" style="display:inline-flex;margin-top:16px;font-size:13px;padding:8px 16px;text-decoration:none">Download PDF</a>`;
+              if (packPdfUrl) {
+                resultHtml += `<div style="margin-top:16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+                  <button id="carousel-insert-btn" class="btn-secondary">Insert in Post</button>
+                  <a href="${packPdfUrl}" target="_blank" download class="btn-text" style="font-size:13px">Download PDF</a>
+                </div>`;
               }
               resultHtml += '</div>';
               previewPane.innerHTML = resultHtml;
               formPane.innerHTML = '';
               genBtn.hidden = true;
+              const _carInsBtn = document.getElementById('carousel-insert-btn');
+              if (_carInsBtn) _carInsBtn.addEventListener('click', () =>
+                _doSaveCarouselPack(packPdfUrl, packPreviewUrl, packSlideCount, _carInsBtn));
             } else if (job.status === 'failed') {
               clearInterval(pollTimer);
               if (statusEl) statusEl.textContent = `Failed: ${job.error}`;
@@ -3348,7 +3357,60 @@ async function _doSaveHtmlTemplate() {
   }).catch(() => {});
 }
 
+async function _doSaveCarouselPack(pdfUrl, previewUrl, slideCount, insertBtn) {
+  if (!pdfUrl) { alert('The carousel PDF isn’t ready yet. Please re-render and try again.'); return; }
+  const insertLabel = insertBtn ? insertBtn.textContent : 'Insert in Post';
 
+  // Persist the carousel to the draft FIRST and confirm it stuck — same guard as
+  // the design-template / media attach: never mark the post as having a graphic
+  // unless the server acknowledges the write, or scheduling could publish text-only.
+  if (currentPostId) {
+    if (insertBtn) { insertBtn.disabled = true; insertBtn.textContent = 'Saving…'; }
+    let ok = false, errCode = null;
+    try {
+      const res = await fetch(`/api/posts/${encodeURIComponent(String(currentPostId))}`, {
+        method: 'PATCH', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: getPostContent(),
+          asset_url: pdfUrl,
+          asset_preview_url: previewUrl,
+          asset_type: 'carousel_pack',
+          asset_slide_count: slideCount || 0,
+        }),
+      });
+      const d = await res.json().catch(() => ({}));
+      ok = res.ok && d.ok; errCode = d.error || null;
+    } catch { ok = false; }
+
+    if (!ok) {
+      if (insertBtn) { insertBtn.disabled = false; insertBtn.textContent = insertLabel; }
+      alert(errCode === 'post_not_editable'
+        ? 'This post can no longer be edited, so the carousel couldn’t be attached. Pause scheduling (or duplicate the post), then insert again.'
+        : 'Could not attach the carousel to your post — please try Insert again. (Nothing was saved.)');
+      return;
+    }
+    _lastAutoSavedContent = getPostContent();
+    updateAutosaveIndicator();
+    if (insertBtn) { insertBtn.textContent = insertLabel; }
+  }
+
+  // Server confirmed the write — reflect the attachment in editor state/UI.
+  attachedAssetUrl = pdfUrl; attachedAssetType = 'carousel_pack';
+  attachedPreviewUrl = previewUrl; attachedSlideCount = slideCount || 0;
+  const chipLabel = document.getElementById('asset-chip-label');
+  const chip = document.getElementById('asset-chip');
+  if (chipLabel) chipLabel.textContent = 'Carousel';
+  if (chip) chip.classList.remove('hidden');
+  renderPreviewAsset(); closeHtmlTemplateModal();
+
+  // Best-effort copy into the permanent Media Library.
+  fetch('/api/media/save-generated', {
+    method: 'POST', credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fileUrl: pdfUrl, filename: 'carousel.pdf', mimeType: 'application/pdf' }),
+  }).catch(() => {});
+}
 
 function _showInsertBtn() {
   const id = currentAssetType === 'html_template' ? 'html-tpl-insert-btn'

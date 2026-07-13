@@ -387,4 +387,54 @@ JSON only, no other text.`,
   }
 }
 
+// ---------------------------------------------------------------------------
+// POST /api/ideas/answered/:vaultIdeaId/write — prepare an already-answered
+// question (a daily_question vault_idea, shown on the Ideas tab) for the
+// 2-question flow. The answer lives on the vault_idea, so we mint two deepening
+// follow-ups from the stored Q+answer and return a dedicated idea_card the
+// client hands off via idea_card=. served_on is a sentinel past date so this
+// write-session card never enters the dashboard's Today's-3 set or the 60-day
+// dedup history. Re-uses an existing prepared card to avoid duplicates.
+// ---------------------------------------------------------------------------
+router.post('/answered/:vaultIdeaId/write', async (req, res) => {
+  if (!requireUser(req, res)) return;
+  const viId = Number(req.params.vaultIdeaId);
+  if (!viId) return res.status(400).json({ ok: false, error: 'invalid_id' });
+  try {
+    const vi = await db.prepare(`
+      SELECT id, seed_text, source_ref, funnel_type FROM vault_ideas
+      WHERE  id = ? AND tenant_id = ? AND source = 'daily_question'
+    `).get(viId, req.tenantId);
+    if (!vi) return res.status(404).json({ ok: false, error: 'answer_not_found' });
+
+    const question = (vi.source_ref || '').replace(/^You answered: "|"$/g, '').trim() || 'Your answer';
+    const answer   = (vi.seed_text || '').trim();
+    const postType = ['reach', 'trust', 'convert'].includes(vi.funnel_type) ? vi.funnel_type : 'reach';
+
+    // Reuse a prior prepared card for this answer (idempotent re-clicks).
+    const existing = await db.prepare(`
+      SELECT id, post_type FROM idea_cards
+      WHERE  tenant_id = ? AND provenance_ref = ? AND questions IS NOT NULL
+      LIMIT  1
+    `).get(req.tenantId, `answered:${viId}`);
+    if (existing) return res.json({ ok: true, card_id: existing.id, post_type: existing.post_type });
+
+    const minted = await mintAnswerFollowups(question, answer, postType);
+    const inserted = await db.prepare(`
+      INSERT INTO idea_cards
+        (user_id, tenant_id, hook, title, textarea_input, post_type, tier,
+         provenance_ref, provenance_label, is_question, questions, status, served_on)
+      VALUES (?, ?, ?, 'Your answer', ?, ?, 0, ?, 'From your answered question', true, ?, 'answered', DATE '2000-01-01')
+      RETURNING id
+    `).run(
+      req.userId, req.tenantId, question, answer, postType,
+      `answered:${viId}`, JSON.stringify(minted.questions)
+    );
+    return res.json({ ok: true, card_id: inserted.lastInsertRowid, post_type: postType });
+  } catch (err) {
+    console.error('[ideas] POST /answered/:id/write error:', err.message);
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 module.exports = router;

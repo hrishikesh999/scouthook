@@ -76,12 +76,30 @@ function buildAnsweredCard(item) {
     '</div>';
   const writeBtn = el.querySelector('.ideas-answered-write');
   if (writeBtn) {
-    writeBtn.addEventListener('click', () => {
-      const params = new URLSearchParams({
-        type: ['reach', 'trust', 'convert'].includes(item.post_type) ? item.post_type : 'reach',
-        idea: item.answer || item.hook || item.question,
-      });
-      window.location.href = `/generate.html?${params.toString()}`;
+    writeBtn.addEventListener('click', async () => {
+      writeBtn.disabled = true;
+      writeBtn.textContent = 'Preparing…';
+      try {
+        // Mint two follow-ups from the stored answer and hand off to the 2-question
+        // flow via idea_card (type auto-selected, no default step-1 screen).
+        const res = await fetch('/api/ideas/answered/' + item.vault_idea_id + '/write', {
+          method: 'POST', headers: apiHeaders(),
+        });
+        const data = await res.json();
+        if (!data.ok || !data.card_id) throw new Error('prepare_failed');
+        const params = new URLSearchParams({
+          type: data.post_type || item.post_type || 'reach',
+          idea_card: String(data.card_id),
+        });
+        window.location.href = `/generate.html?${params.toString()}`;
+      } catch {
+        // Fallback: prefill the generator so the user is never stuck.
+        const params = new URLSearchParams({
+          type: ['reach', 'trust', 'convert'].includes(item.post_type) ? item.post_type : 'reach',
+          idea: item.answer || item.hook || item.question,
+        });
+        window.location.href = `/generate.html?${params.toString()}`;
+      }
     });
   }
   return el;

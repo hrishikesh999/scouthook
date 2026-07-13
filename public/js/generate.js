@@ -52,6 +52,7 @@ let chatAnswers         = {};
 let mixRecommended      = null;
 let selectedVaultIdeaId  = null; // set when user picks a vault idea
 let selectedIdeaCardId   = null; // set when arriving from a dashboard "Today's 3" card
+let _ideaCardModePending = false; // true from init until startIdeaCardMode settles — blocks mix-recommendation override
 let _ideaCard = { active: false, card: null, step: 0, answers: [] }; // idea-card 2-question flow
 let _pendingVaultIdeaId  = null; // vault idea awaiting type selection in picker
 let _pendingVaultIdeaSeed = '';  // brief/seed text for pending vault idea
@@ -505,7 +506,12 @@ async function loadMixRecommendation() {
     }
 
     markRecommendedBtn();
-    if (mixRecommended && mixRecommended !== selectedType && !chatInput.value.trim()) {
+    // Never override an active idea-card / vault-idea handoff: those set the type
+    // deliberately and drive the 2-question flow, whose chat input is empty by
+    // design. Without this guard, a mix-recommendation resolving after
+    // startIdeaCardMode wipes the 2-question flow back to the generic step 1.
+    if (mixRecommended && mixRecommended !== selectedType && !chatInput.value.trim()
+        && !selectedIdeaCardId && !selectedVaultIdeaId && !_ideaCardModePending) {
       selectType(mixRecommended);
     }
   } catch { /* non-fatal */ }
@@ -2343,6 +2349,17 @@ const chat = (() => {
     if (chatInput.value.trim() || !_type) { legacy(card); return; }
 
     _ideaCard = { active: true, card, step: 0, answers: [] };
+
+    // Enter focused mode: hide the generic header + type pills (the "step 1"
+    // chrome) so a reach/convert card doesn't flash the default screen behind
+    // the 2-question flow. Mirrors selectType()'s guided-flow branch.
+    const _genHeader = document.querySelector('.gen-header');
+    const _startingPills = document.getElementById('starting-pills');
+    const _pillQ = document.getElementById('pill-question');
+    if (_genHeader)     _genHeader.style.display     = 'none';
+    if (_startingPills) _startingPills.style.display = 'none';
+    if (_pillQ)        { _pillQ.textContent = ''; _pillQ.classList.remove('visible'); }
+
     chatThread.innerHTML = '';
     chatThread.style.display = '';
 
@@ -3106,6 +3123,16 @@ async function init() {
   const planBlocked = await checkPlanGate();
   if (planBlocked) return;
 
+  const urlParams      = new URLSearchParams(location.search);
+  const urlType        = urlParams.get('type');
+  const urlIdea        = urlParams.get('idea');
+  const urlVaultIdeaId = urlParams.get('vault_idea_id');
+  const urlIdeaCardId  = urlParams.get('idea_card');
+
+  // Set BEFORE loadMixRecommendation fires so its (async) result can never
+  // override the idea-card 2-question flow back to the generic step 1.
+  _ideaCardModePending = !!urlIdeaCardId;
+
   // Default to reach immediately; loadMixRecommendation may update this
   selectType('reach');
 
@@ -3114,12 +3141,6 @@ async function init() {
   checkVaultEmptyState();     // fire-and-forget — hides "Get ideas" if vault has no documents
   prefetchIdeas();            // fire-and-forget — warms idea cache for instant vault panel
   loadProfileSelector();      // fire-and-forget — shows "Creating for" selector if >1 profile
-
-  const urlParams      = new URLSearchParams(location.search);
-  const urlType        = urlParams.get('type');
-  const urlIdea        = urlParams.get('idea');
-  const urlVaultIdeaId = urlParams.get('vault_idea_id');
-  const urlIdeaCardId  = urlParams.get('idea_card');
 
   if (urlType && CHAT_CONFIGS[urlType]) {
     selectType(urlType);

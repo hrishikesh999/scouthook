@@ -263,22 +263,27 @@ async function saveChunks(docId, chunks, userId, tenantId) {
 async function classifyAndStoreDoc(docId, chunks, filename, userProfile, userId, tenantId) {
   const insights = await classifyChunks(chunks, filename, userProfile);
 
-  const insertInsight = db.prepare(`
-    INSERT INTO vault_insights (user_id, tenant_id, document_id, category, content, source_ref)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `);
-  for (const ins of insights) {
-    insertInsight.run(userId, tenantId, docId, ins.category, ins.content, ins.source_ref || null);
-  }
-
-  if (chunks.length) {
-    const ids = chunks.map(() => '?').join(',');
-    db.prepare(`UPDATE vault_chunks SET mined_at = now() WHERE id IN (${ids})`).run(...chunks.map(c => c.id));
-  }
-
-  await db.prepare(`
-    UPDATE vault_documents SET status = 'ready', ideas_mined = ideas_mined + ?, updated_at = now() WHERE id = ?
-  `).run(insights.length, docId);
+  // Persist insights → mark chunks classified → flip status, atomically and in
+  // that order. .run() is async and MUST be awaited: firing them un-awaited
+  // races status='ready' ahead of the inserts (panel shows a wrong count) and
+  // swallows insert failures. A transaction means a mid-write failure rolls back
+  // and leaves the chunks unmined, so POST /mine can retry the document.
+  await db.transaction(async (tx) => {
+    const insertInsight = tx.prepare(`
+      INSERT INTO vault_insights (user_id, tenant_id, document_id, category, content, source_ref)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `);
+    for (const ins of insights) {
+      await insertInsight.run(userId, tenantId, docId, ins.category, ins.content, ins.source_ref || null);
+    }
+    if (chunks.length) {
+      const ids = chunks.map(() => '?').join(',');
+      await tx.prepare(`UPDATE vault_chunks SET mined_at = now() WHERE id IN (${ids})`).run(...chunks.map(c => c.id));
+    }
+    await tx.prepare(`
+      UPDATE vault_documents SET status = 'ready', ideas_mined = ideas_mined + ?, updated_at = now() WHERE id = ?
+    `).run(insights.length, docId);
+  });
 
   return insights.length;
 }

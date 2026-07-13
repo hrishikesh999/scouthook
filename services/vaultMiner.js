@@ -361,7 +361,10 @@ ${chunkContent}`;
 
   const message = await client.messages.create({
     model:      SONNET_MODEL,
-    max_tokens: 4000,
+    // Classification can surface many items per batch (every quote/lesson/etc.);
+    // 8000 leaves headroom so a dense 20-chunk batch's JSON isn't truncated
+    // (truncated JSON → parse failure → that batch silently yields 0 insights).
+    max_tokens: 8000,
     system:     buildClassifySystemPrompt(userProfile),
     messages:   [{ role: 'user', content: userPrompt }],
   });

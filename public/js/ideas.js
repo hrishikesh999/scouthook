@@ -66,15 +66,9 @@ function buildAnsweredCard(item) {
   const el = document.createElement('div');
   el.className = 'ti-card ti-card--answered';
   el.innerHTML =
-    '<div class="ti-card-head">' +
-      '<div class="ti-card-head-text">' +
-        '<div class="ti-card-head-top">' +
-          '<span class="ti-type-chip ti-type-answered">Answered</span>' +
-        '</div>' +
-        '<p class="ti-provenance">' + esc(item.question || 'Your answer') + '</p>' +
-      '</div>' +
-    '</div>' +
-    '<p class="ti-hook">' + esc(item.answer || '') + '</p>' +
+    '<span class="ti-type-chip ti-type-answered tia-chip">Answered</span>' +
+    '<p class="tia-question">' + esc(item.question || 'Your answer') + '</p>' +
+    '<p class="tia-answer">' + esc(item.answer || '') + '</p>' +
     '<div class="ti-actions">' +
       (item.used
         ? '<span class="ti-answered-note">Used ✓</span>'

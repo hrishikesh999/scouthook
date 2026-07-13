@@ -11,3 +11,6 @@ generated/*.pdf
 generated/*.zip
 .cursor/
 .claude/
+
+# Local product/release docs — not part of the app
+ScoutHook_Product_Release_July_2026.pdf

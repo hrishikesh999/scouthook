@@ -28,23 +28,15 @@
       <!-- On-demand question slot — filled when "Ask me a question" is tapped -->
       <div id="ideas-question-slot" class="ti-cards ideas-question-slot" hidden aria-live="polite"></div>
 
-      <!-- Saved queue -->
-      <section role="region" aria-label="Saved ideas">
+      <!-- Saved ideas + answered questions share one 3-col grid; answered cards
+           carry an "Answered" badge to set them apart from post ideas. -->
+      <section role="region" aria-label="Saved ideas and answered questions">
         <div id="ideas-queue" class="ti-cards ideas-queue" aria-live="polite">
           <div class="skeleton-pulse" aria-hidden="true" style="display:flex;flex-direction:column;gap:var(--space-3)">
             <div class="skeleton-draft-row"></div>
             <div class="skeleton-draft-row"></div>
           </div>
         </div>
-      </section>
-
-      <!-- Answered questions history -->
-      <section id="ideas-answered-section" role="region" aria-label="Answered questions" hidden>
-        <div class="card-header ideas-answered-header">
-          <span class="card-title">Answered questions</span>
-          <span class="ideas-answered-note">Each answer is a vault memory — write from it any time.</span>
-        </div>
-        <div id="ideas-answered" class="ideas-answered-list"></div>
       </section>
 
     </div><!-- /ideas-page -->

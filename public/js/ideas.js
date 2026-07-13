@@ -15,15 +15,14 @@ init();
 
 const esc = (s) => (window.ScoutIdeaCards ? window.ScoutIdeaCards.escHtml(s) : s || '');
 
-/* ── Saved queue + answered history ──────────────────────────── */
+/* ── Saved queue + answered questions (one shared 3-col grid) ──── */
 async function loadQueue() {
   const queueEl = document.getElementById('ideas-queue');
   try {
     // cachedFetch: consumes the router prefetch; mutations bust this key in idea-cards.js
     const data = await cachedFetch('/api/ideas/queue', { credentials: 'same-origin' }, 60_000);
     if (!data || !data.ok) throw new Error('queue_unavailable');
-    renderQueue(data.saved || []);
-    renderAnswered(data.answered || []);
+    renderGrid(data.saved || [], data.answered || []);
     // Refresh the sidebar badge — visiting the tab is the natural "seen" moment
     if (typeof window.__refreshIdeasBadge === 'function') window.__refreshIdeasBadge();
   } catch {
@@ -39,10 +38,13 @@ function queueEmptyState() {
     </div>`;
 }
 
-function renderQueue(cards) {
+// Saved ideas and answered questions live in the same 3-col grid. Answered
+// cards reuse the .ti-card shell and carry an "Answered" badge so they read as
+// a distinct type without needing a separate section.
+function renderGrid(saved, answered) {
   const queueEl = document.getElementById('ideas-queue');
   queueEl.innerHTML = '';
-  if (!cards.length) {
+  if (!saved.length && !answered.length) {
     queueEl.innerHTML = queueEmptyState();
     return;
   }
@@ -50,43 +52,45 @@ function renderQueue(cards) {
     if (typeof window.__refreshIdeasBadge === 'function') window.__refreshIdeasBadge();
     if (!queueEl.querySelector('.ti-card')) queueEl.innerHTML = queueEmptyState();
   };
-  cards.forEach(card => {
+  saved.forEach(card => {
     queueEl.appendChild(window.ScoutIdeaCards.buildCard(card, { mode: 'queue', onRemoved }));
+  });
+  answered.forEach(item => {
+    queueEl.appendChild(buildAnsweredCard(item));
   });
 }
 
-/* Answered questions — each is a vault memory; "Write this" drafts from the Q+A */
-function renderAnswered(items) {
-  const section = document.getElementById('ideas-answered-section');
-  const list    = document.getElementById('ideas-answered');
-  if (!section || !list || !items.length) return;
-  list.innerHTML = '';
-  items.forEach(item => {
-    const row = document.createElement('div');
-    row.className = 'ideas-answered-row';
-    row.innerHTML = `
-      <div class="ideas-answered-left">
-        <p class="ideas-answered-q">${esc(item.question || 'Daily question')}</p>
-        <p class="ideas-answered-a">${esc(item.answer || '')}</p>
-      </div>
-      <div class="ideas-answered-actions">
-        ${item.used
-          ? '<span class="ti-answered-note">Used ✓</span>'
-          : '<button class="ti-ghost-btn ideas-answered-write" type="button">Write this →</button>'}
-      </div>`;
-    const writeBtn = row.querySelector('.ideas-answered-write');
-    if (writeBtn) {
-      writeBtn.addEventListener('click', () => {
-        const params = new URLSearchParams({
-          type: ['reach', 'trust', 'convert'].includes(item.post_type) ? item.post_type : 'reach',
-          idea: item.answer || item.hook || item.question,
-        });
-        window.location.href = `/generate.html?${params.toString()}`;
+/* Answered question card — each is a vault memory; "Write this" drafts from the
+   answer (real user words, so it's prefilled directly — no idea_card flow). */
+function buildAnsweredCard(item) {
+  const el = document.createElement('div');
+  el.className = 'ti-card ti-card--answered';
+  el.innerHTML =
+    '<div class="ti-card-head">' +
+      '<div class="ti-card-head-text">' +
+        '<div class="ti-card-head-top">' +
+          '<span class="ti-type-chip ti-type-answered">Answered</span>' +
+        '</div>' +
+        '<p class="ti-provenance">' + esc(item.question || 'Your answer') + '</p>' +
+      '</div>' +
+    '</div>' +
+    '<p class="ti-hook">' + esc(item.answer || '') + '</p>' +
+    '<div class="ti-actions">' +
+      (item.used
+        ? '<span class="ti-answered-note">Used ✓</span>'
+        : '<button class="ti-write-btn ideas-answered-write" type="button">Write this →</button>') +
+    '</div>';
+  const writeBtn = el.querySelector('.ideas-answered-write');
+  if (writeBtn) {
+    writeBtn.addEventListener('click', () => {
+      const params = new URLSearchParams({
+        type: ['reach', 'trust', 'convert'].includes(item.post_type) ? item.post_type : 'reach',
+        idea: item.answer || item.hook || item.question,
       });
-    }
-    list.appendChild(row);
-  });
-  section.hidden = false;
+      window.location.href = `/generate.html?${params.toString()}`;
+    });
+  }
+  return el;
 }
 
 /* ── "Ask me a question" — mint an on-demand question card ───── */

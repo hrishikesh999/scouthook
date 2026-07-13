@@ -4146,6 +4146,17 @@ body.has-trial-banner #main-content {
 .ti-type-trust   { background: #EFF6FF; color: #1D4ED8; }
 .ti-type-convert { background: #FEF3C7; color: #B45309; }
 .ti-type-lead    { background: #FDF2F8; color: #BE185D; }
+/* Answered-question cards: slate chip + faint tint so they read as reference
+   material (your own words), distinct from the funnel-typed post ideas. */
+.ti-type-answered { background: #F1F5F9; color: #475569; }
+.ti-card--answered { background: #FCFCFD; }
+.ti-card--answered .ti-hook {
+  font-style: italic;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+}
 
 .ti-provenance {
   font-size: 12px;
@@ -4346,41 +4357,6 @@ body.has-trial-banner #main-content {
 @media (max-width: 1200px) {
   .ideas-queue { grid-template-columns: repeat(2, 1fr); }
 }
-
-.ideas-answered-header { margin-bottom: var(--space-3); }
-.ideas-answered-note { font-size: 12px; color: var(--text-muted); }
-.ideas-answered-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-.ideas-answered-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: var(--space-4);
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  padding: var(--space-4) var(--space-5);
-}
-.ideas-answered-left { min-width: 0; }
-.ideas-answered-q {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-heading);
-  font-family: var(--font-sans);
-  margin-bottom: 2px;
-}
-.ideas-answered-a {
-  font-size: 13px;
-  color: var(--text-muted);
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-}
-.ideas-answered-actions { flex-shrink: 0; }
 
 /* Global Ideas pill */
 .ideas-pill {

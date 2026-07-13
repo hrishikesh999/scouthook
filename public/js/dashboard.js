@@ -78,10 +78,13 @@ async function loadStreak() {
     if (!res.ok) return;
     const data = await res.json();
     if (!data.ok || !data.streak_count) return; // 0 → stay quiet, no pressure
-    const days = data.streak_count === 1 ? '1 day' : `${data.streak_count} days`;
-    chip.innerHTML = `
-      <span class="ti-streak-value">Consistency: ${days}</span>
-      <span class="ti-streak-sub">${data.active_today ? '✓ counted today' : 'save, answer or write to keep it going'}</span>`;
+    // A plain "🔥 N-day streak" reads instantly; the old "Consistency / counted
+    // today" wording confused new users. Tooltip carries the how-to-keep-it detail.
+    const n   = data.streak_count;
+    const tip = data.active_today
+      ? "You've shown up today — nice."
+      : 'Save, answer, or write a post today to keep it going.';
+    chip.innerHTML = `<span class="ti-streak-value" title="${tip}">🔥 ${n}-day streak</span>`;
     chip.hidden = false;
   } catch {
     // Non-fatal — the chip is a progressive enhancement

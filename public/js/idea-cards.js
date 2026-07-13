@@ -131,10 +131,13 @@
     el.className = 'ti-card';
     el.dataset.id = card.id;
 
+    // 'today' (dashboard + pill drawer): one clear labelled CTA plus two compact
+    // icon buttons — three labelled buttons don't fit the card width and wrap.
+    // 'queue' (Ideas tab): only two buttons, so keep the "Remove" label.
     var secondary = mode === 'queue'
       ? '<button class="ti-ghost-btn ti-remove-btn" type="button" aria-label="Remove from queue">' + ICON_REMOVE + '<span>Remove</span></button>'
-      : '<button class="ti-ghost-btn ti-save-btn" type="button"' + (card.status === 'saved' ? ' disabled' : '') + '>' + ICON_SAVE + '<span>' + (card.status === 'saved' ? 'Saved ✓' : 'Save') + '</span></button>' +
-        '<button class="ti-ghost-btn ti-dismiss-btn" type="button" aria-label="Not for me">' + ICON_DISMISS + '<span>Not for me</span></button>';
+      : '<button class="ti-ghost-btn ti-ghost-btn--icon ti-save-btn" type="button" title="Save for later" aria-label="Save for later"' + (card.status === 'saved' ? ' disabled' : '') + '>' + ICON_SAVE + '</button>' +
+        '<button class="ti-ghost-btn ti-ghost-btn--icon ti-dismiss-btn" type="button" title="Not for me" aria-label="Not for me">' + ICON_DISMISS + '</button>';
 
     el.innerHTML =
       cardHeadHtml('<span class="ti-type-chip ' + meta.cls + '">' + meta.label + '</span>', esc(card.provenance_label || '')) +

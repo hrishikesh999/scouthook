@@ -218,7 +218,13 @@ async function fetchServedHistory(tenantId) {
 // ---------------------------------------------------------------------------
 // T3 — vault ideas (hook already written by the fire-and-forget Haiku pass)
 // ---------------------------------------------------------------------------
-async function pickVaultCards(tenantId, recommendedType, usedVaultIdeaIds) {
+async function pickVaultCards(tenantId, recommendedType, usedVaultIdeaIds, cap = T3_DAILY_CAP) {
+  if (cap <= 0) return [];
+  // Fix #2 (vault consolidation): document material now reaches generation via
+  // vault_insights (anchored to an LLM slot), so legacy DOCUMENT-MINED vault_ideas
+  // are no longer served here — they'd double-dip the same documents and crowd
+  // out the insight path. Kept: idea_engine suggestions, auto_extracted facts,
+  // and daily_question answers (all documentless, the user's own material).
   const rows = await db.prepare(`
     SELECT vi.id, vi.seed_text, vi.funnel_type, vi.hook_preview, vd.filename
     FROM   vault_ideas vi
@@ -226,6 +232,7 @@ async function pickVaultCards(tenantId, recommendedType, usedVaultIdeaIds) {
     WHERE  vi.tenant_id = ?
       AND  vi.status = 'fresh'
       AND  vi.hook_preview IS NOT NULL AND vi.hook_preview <> ''
+      AND  vi.document_id IS NULL
     ORDER  BY (vi.funnel_type = ?) DESC, vi.created_at DESC
     LIMIT  20
   `).all(tenantId, recommendedType);
@@ -255,7 +262,7 @@ async function pickVaultCards(tenantId, recommendedType, usedVaultIdeaIds) {
   // get a generic vault label — their source_ref holds a rationale, not a name.
   return rows
     .filter(r => !usedVaultIdeaIds.has(Number(r.id)) && qualityCheck(r.hook_preview) && semanticDedup(r.hook_preview))
-    .slice(0, T3_DAILY_CAP)
+    .slice(0, cap)
     .map(r => ({
       tier: 3,
       title: null,
@@ -553,13 +560,22 @@ async function getDailyCards(userId, tenantId) {
   const pillars = parsePillars(profile);
   const voice = parseVoiceContext(profile);
 
-  let cards = await pickVaultCards(tenantId, recommendedType, history.usedVaultIdeaIds);
+  // Fix #1: fetch the anchor insight BEFORE the vault fill so we can reserve it a
+  // slot. When one exists, cap the pre-written vault cards at T3_DAILY_CAP-1 —
+  // otherwise a deep vault_ideas backlog fills every slot and the insight (which
+  // rides one LLM slot) never gets served. Guarantees one insight-grounded card/day.
+  const anchorInsight = await fetchAnchorInsight(tenantId, history.usedInsightIds);
+  const vaultCap = anchorInsight ? T3_DAILY_CAP - 1 : T3_DAILY_CAP;
+
+  let cards = await pickVaultCards(tenantId, recommendedType, history.usedVaultIdeaIds, vaultCap);
 
   // Thin vault supply (fewer than 2 T3 cards) → reserve the last slot for the
   // daily question: answering it deposits a vault memory, which un-thins
   // tomorrow's supply. Self-balancing — question cards stop appearing once
-  // the vault can fill the day on its own. (Spec R4.)
-  const askQuestion = cards.length < 2;
+  // the vault can fill the day on its own. (Spec R4.) The anchor insight counts
+  // as supply — otherwise capping vault for it (Fix #1) would trip this and the
+  // question would eat the slot we just reserved.
+  const askQuestion = (cards.length + (anchorInsight ? 1 : 0)) < 2;
   const fillTarget = askQuestion ? CARDS_PER_DAY - 1 : CARDS_PER_DAY;
 
   // T3 vault cards are already written — the LLM call only writes their two
@@ -567,12 +583,9 @@ async function getDailyCards(userId, tenantId) {
   const presetCards = cards.map((c, idx) => ({ ref: `p${idx}`, hook: c.hook, post_type: c.post_type }));
 
   const remaining = fillTarget - cards.length;
-  const [sequelSeed, anchorInsight] = remaining > 0
-    ? await Promise.all([
-        pickSequelSeed(tenantId, history.usedPostRefs),
-        fetchAnchorInsight(tenantId, history.usedInsightIds),
-      ])
-    : [null, null];
+  const sequelSeed = remaining > 0
+    ? await pickSequelSeed(tenantId, history.usedPostRefs)
+    : null;
   const hasProfileSubstance = !!(profile?.brand_industry || profile?.elevator_main_result || profile?.audience_description || pillars.length);
   let presetQuestions = {};
   // A vault insight alone is enough grounding to run the call, even with a thin profile.

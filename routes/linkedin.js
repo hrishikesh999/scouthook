@@ -10,6 +10,7 @@ const { addScheduledJob, addCommentJob, removeScheduledJob, isSchedulerEnabled }
 const { syncPostMetrics, RateLimitError } = require('../services/linkedinMetrics');
 const { getUserPlan } = require('../services/subscription');
 const { planHasFeature } = require('../lib/planFeatures');
+const { canonicalAssetType } = require('../lib/assetType');
 const { extractVoiceDNAFromLinkedIn } = require('../services/voiceExtraction');
 
 function sha256Hex(s) {
@@ -914,11 +915,32 @@ router.post('/schedule', async (req, res) => {
   }
 
   try {
-    const resolvedAssetType = carousel_pdf_url ? 'carousel' : (image_url ? 'image' : null);
+    // Resolve the asset to schedule. Prefer what the client sent, but fall back
+    // to whatever graphic is already persisted on the draft (generated_posts).
+    // The scheduled asset must never depend solely on transient editor state —
+    // if the browser omits image_url/carousel_pdf_url for a post that already
+    // has an attached graphic, the server re-attaches it so it can't silently
+    // publish as text-only. The server, not the client, is authoritative.
+    let resolvedAssetType  = carousel_pdf_url ? 'carousel' : (image_url ? 'image' : null);
+    let resolvedAssetUrl   = (carousel_pdf_url || image_url)?.trim() || null;
+    let resolvedPreviewUrl = asset_preview_url?.trim() || null;
+    let resolvedSlideCount = asset_slide_count || null;
+    if (!resolvedAssetUrl && post_id) {
+      const draftAsset = await db.prepare(
+        'SELECT asset_type, asset_url, asset_preview_url, asset_slide_count FROM generated_posts WHERE id = ? AND user_id = ? AND tenant_id = ?'
+      ).get(post_id, userId, tenantId);
+      if (draftAsset?.asset_url) {
+        resolvedAssetUrl   = draftAsset.asset_url;
+        resolvedAssetType  = canonicalAssetType(draftAsset.asset_type, draftAsset.asset_url);
+        resolvedPreviewUrl = resolvedPreviewUrl || draftAsset.asset_preview_url || null;
+        resolvedSlideCount = resolvedSlideCount || draftAsset.asset_slide_count || null;
+      }
+    }
+
     const payloadHash = sha256Hex(JSON.stringify({
       content: content.trim(),
       asset_type: resolvedAssetType,
-      asset_url: (carousel_pdf_url || image_url)?.trim() || null,
+      asset_url: resolvedAssetUrl,
       scheduled_for: scheduledDate.toISOString(),
       first_comment: trimmedFirstComment,
     }));
@@ -936,7 +958,7 @@ router.post('/schedule', async (req, res) => {
         content.trim(),
         scheduledDate.toISOString(),
         resolvedAssetType,
-        (carousel_pdf_url || image_url)?.trim() || null,
+        resolvedAssetUrl,
         payloadHash,
         trimmedFirstComment,
         trimmedFirstComment ? 'pending' : null,
@@ -946,7 +968,7 @@ router.post('/schedule', async (req, res) => {
 
       if (post_id) {
         const assetType = resolvedAssetType;
-        const assetUrl  = (carousel_pdf_url || image_url)?.trim() || null;
+        const assetUrl  = resolvedAssetUrl;
         await tx.prepare(`
           UPDATE generated_posts
           SET status = 'scheduled',
@@ -955,7 +977,7 @@ router.post('/schedule', async (req, res) => {
               asset_preview_url = COALESCE(?, asset_preview_url),
               asset_slide_count = COALESCE(?, asset_slide_count)
           WHERE id = ? AND user_id = ? AND tenant_id = ? AND status = 'draft'
-        `).run(assetType, assetUrl, asset_preview_url?.trim() || null, asset_slide_count || null, post_id, userId, tenantId);
+        `).run(assetType, assetUrl, resolvedPreviewUrl, resolvedSlideCount, post_id, userId, tenantId);
       }
     });
 

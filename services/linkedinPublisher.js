@@ -6,6 +6,7 @@ const { sendEmailToUser } = require('../emails');
 const path = require('path');
 const storage = require('./storage');
 const crypto = require('crypto');
+const { canonicalAssetType } = require('../lib/assetType');
 
 const LINKEDIN_UGC_URL = 'https://api.linkedin.com/v2/ugcPosts';
 /** Consumer "Share on LinkedIn" image flow — not rest/images + rest/posts (Marketing). */
@@ -698,12 +699,19 @@ async function publishScheduledPost(scheduledPostId, { attemptsMade = 0, maxAtte
       `).run(scheduledPostId, row.user_id, row.tenant_id, `attempt=${row.attempts}`);
     } catch { /* non-fatal */ }
 
-    // Build publish options: asset type + profile/connection context
+    // Build publish options: asset type + profile/connection context.
+    // Canonicalize the stored asset_type — rows can carry a raw draft type
+    // (e.g. 'html_template', 'media_image', 'carousel_pack') that must still map
+    // to an image/carousel upload. A strict === 'image' check here would silently
+    // publish those rows as text-only (observed in prod on legacy rows).
     const publishOpts = {};
-    if (row.asset_type === 'carousel' && row.asset_url) {
-      publishOpts.carousel_pdf_url = row.asset_url;
-    } else if (row.asset_type === 'image' && row.asset_url) {
-      publishOpts.image_url = row.asset_url;
+    if (row.asset_url) {
+      const canonType = canonicalAssetType(row.asset_type, row.asset_url);
+      if (canonType === 'carousel') {
+        publishOpts.carousel_pdf_url = row.asset_url;
+      } else if (canonType === 'image') {
+        publishOpts.image_url = row.asset_url;
+      }
     }
     // Idempotency guard: skip the API call if a linkedin_post_id was already
     // persisted by a previous attempt that failed after the API call.

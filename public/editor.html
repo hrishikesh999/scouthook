@@ -3280,43 +3280,72 @@ function _startHtmlTplJobPoll(jobId) {
   }, 1500);
 }
 
-function _doSaveHtmlTemplate() {
-  attachedAssetUrl = currentAssetUrl; attachedAssetType = 'html_template';
-  attachedPreviewUrl = currentPreviewUrl; attachedSlideCount = 0;
+async function _doSaveHtmlTemplate() {
+  // Snapshot the rendered asset before any modal teardown can mutate it.
+  const assetUrl   = currentAssetUrl;
+  const previewUrl = currentPreviewUrl;
+  if (!assetUrl) { alert('The design is still rendering. Please wait for the preview, then Insert.'); return; }
+
+  const insertBtn = document.getElementById('html-tpl-insert-btn');
+  const insertLabel = insertBtn ? insertBtn.textContent : 'Insert in Post';
+
+  // Persist the graphic to the draft FIRST and confirm it stuck. The attached
+  // asset must live on the server, not only in volatile browser state — if this
+  // write fails silently (e.g. the post is no longer editable), scheduling would
+  // publish text-only with no warning. So we do NOT mark the post as having a
+  // graphic unless the server acknowledges the write.
+  if (currentPostId) {
+    if (insertBtn) { insertBtn.disabled = true; insertBtn.textContent = 'Saving…'; }
+    let ok = false, errCode = null;
+    try {
+      const res = await fetch(`/api/posts/${encodeURIComponent(String(currentPostId))}`, {
+        method: 'PATCH', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: getPostContent(),
+          asset_url: assetUrl,
+          asset_preview_url: previewUrl,
+          asset_type: 'html_template',
+          asset_slide_count: 0,
+        }),
+      });
+      const d = await res.json().catch(() => ({}));
+      ok = res.ok && d.ok;
+      errCode = d.error || null;
+    } catch { ok = false; }
+
+    if (!ok) {
+      if (insertBtn) { insertBtn.disabled = false; insertBtn.textContent = insertLabel; }
+      alert(errCode === 'post_not_editable'
+        ? 'This post can no longer be edited, so the design couldn’t be attached. Pause scheduling (or duplicate the post), then insert the design again.'
+        : 'Could not attach the design to your post — please try Insert again. (The graphic was NOT saved.)');
+      return; // keep the modal open; the post is NOT marked as having a graphic
+    }
+    _lastAutoSavedContent = getPostContent();
+    updateAutosaveIndicator();
+    if (insertBtn) { insertBtn.textContent = insertLabel; }
+  }
+
+  // Server confirmed the write — now reflect the attachment in editor state/UI.
+  attachedAssetUrl = assetUrl; attachedAssetType = 'html_template';
+  attachedPreviewUrl = previewUrl; attachedSlideCount = 0;
   const chipLabel = document.getElementById('asset-chip-label');
   const chip = document.getElementById('asset-chip');
   if (chipLabel) chipLabel.textContent = 'Design Template';
   if (chip) chip.classList.remove('hidden');
   renderPreviewAsset(); closeHtmlTemplateModal();
-  // Persist to DB immediately so auto-save and page reloads don't silently drop the asset
-  if (currentPostId) {
-    fetch(`/api/posts/${encodeURIComponent(String(currentPostId))}`, {
-      method: 'PATCH', credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        content: getPostContent(),
-        asset_url: currentAssetUrl,
-        asset_preview_url: currentPreviewUrl,
-        asset_type: 'html_template',
-        asset_slide_count: 0,
-      }),
-    }).then(r => r.json()).then(d => {
-      if (d.ok) { _lastAutoSavedContent = getPostContent(); updateAutosaveIndicator(); }
-    }).catch(() => {});
-  }
-  // Also copy the rendered design into the permanent Media Library
-  if (currentAssetUrl) {
-    const tplName = (_htmlTplSelectedMeta && _htmlTplSelectedMeta.name) || 'design-template';
-    fetch('/api/media/save-generated', {
-      method: 'POST', credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        fileUrl: currentAssetUrl,
-        filename: `${tplName}.png`,
-        mimeType: 'image/png',
-      }),
-    }).catch(() => {});
-  }
+
+  // Also copy the rendered design into the permanent Media Library (best-effort)
+  const tplName = (_htmlTplSelectedMeta && _htmlTplSelectedMeta.name) || 'design-template';
+  fetch('/api/media/save-generated', {
+    method: 'POST', credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      fileUrl: assetUrl,
+      filename: `${tplName}.png`,
+      mimeType: 'image/png',
+    }),
+  }).catch(() => {});
 }
 
 
@@ -3415,10 +3444,36 @@ function buildDrawerCard(file) {
       <span class="media-filename" title="${escHtml(file.filename)}">${escHtml(truncMediaName(file.filename))}</span>
       <span class="media-format-tag">${escHtml(file.format_tag || 'File')}</span>
     </div>`;
-  const attach = () => {
-    attachedAssetUrl   = file.url;
-    attachedAssetType  = isPdf ? 'media_pdf' : 'media_image';
-    attachedPreviewUrl = isPdf ? null : file.url;
+  const attach = async () => {
+    const url   = file.url;
+    const aType = isPdf ? 'media_pdf' : 'media_image';
+    const pUrl  = isPdf ? null : file.url;
+    // Persist the attachment to the draft and confirm it stuck before marking the
+    // post as having a graphic — the binding must live on the server, not only in
+    // browser state, or a reload/schedule can silently drop it (text-only post).
+    if (currentPostId) {
+      let ok = false, errCode = null;
+      try {
+        const res = await fetch(`/api/posts/${encodeURIComponent(String(currentPostId))}`, {
+          method: 'PATCH', credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: getPostContent(), asset_url: url, asset_preview_url: pUrl, asset_type: aType, asset_slide_count: 0 }),
+        });
+        const d = await res.json().catch(() => ({}));
+        ok = res.ok && d.ok; errCode = d.error || null;
+      } catch { ok = false; }
+      if (!ok) {
+        alert(errCode === 'post_not_editable'
+          ? 'This post can no longer be edited, so the file couldn’t be attached. Pause scheduling (or duplicate the post), then attach again.'
+          : 'Could not attach the file to your post — please try again. (Nothing was saved.)');
+        return;
+      }
+      _lastAutoSavedContent = getPostContent();
+      updateAutosaveIndicator();
+    }
+    attachedAssetUrl   = url;
+    attachedAssetType  = aType;
+    attachedPreviewUrl = pUrl;
     attachedSlideCount = 0;
     const chipLabel = document.getElementById('asset-chip-label');
     const chip      = document.getElementById('asset-chip');

@@ -138,12 +138,151 @@ async function getValidAccessToken(workspaceId) {
 }
 
 // ---------------------------------------------------------------------------
+// Profile photo — re-fetch the current LinkedIn CDN photo URL
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetch the member's current profile photo URL from the OpenID userinfo
+ * endpoint. LinkedIn CDN photo URLs are time-limited signed URLs that expire
+ * independently of the OAuth token, so we re-pull a fresh one whenever we
+ * refresh the token. Best-effort — returns null on any failure so callers can
+ * COALESCE and leave the stored URL untouched.
+ *
+ * @param {string} accessToken  Plaintext access token
+ * @returns {Promise<string|null>}
+ */
+async function fetchLinkedInPhotoUrl(accessToken) {
+  try {
+    const res = await fetch('https://api.linkedin.com/v2/userinfo', {
+      headers: { 'Authorization': `Bearer ${accessToken}` },
+    });
+    if (!res.ok) {
+      console.warn('[linkedinOAuth] userinfo photo re-fetch failed:', res.status);
+      return null;
+    }
+    const profile = await res.json();
+    return profile.picture || null;
+  } catch (e) {
+    console.warn('[linkedinOAuth] userinfo photo re-fetch error (non-fatal):', e.message);
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Profile photo caching — mirror the CDN image into our own storage
+// ---------------------------------------------------------------------------
+
+const AVATAR_MAX_BYTES = 3 * 1024 * 1024; // 3 MB ceiling — profile photos are tiny
+const AVATAR_EXT_BY_TYPE = {
+  'image/jpeg': 'jpg',
+  'image/jpg':  'jpg',
+  'image/png':  'png',
+  'image/webp': 'webp',
+  'image/gif':  'gif',
+};
+
+/**
+ * Download a LinkedIn CDN photo and mirror it into our own storage so the app
+ * never depends on the CDN URL staying valid. Filename is derived from a stable
+ * member key, so re-caching the same member overwrites in place (no orphans).
+ *
+ * Best-effort — returns null on any failure (bad URL, non-image, oversize,
+ * network error) so callers can fall back to the raw remote URL.
+ *
+ * @param {string} remoteUrl  A LinkedIn media.licdn.com photo URL
+ * @param {string} memberKey  Stable identifier (linkedin_member_id or account_key)
+ * @returns {Promise<string|null>}  A stable app-relative URL, e.g. '/linkedin-avatar/<hash>.jpg'
+ */
+async function cacheLinkedInAvatar(remoteUrl, memberKey) {
+  if (!remoteUrl || !memberKey) return null;
+  const storage = require('./storage');
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    let res;
+    try {
+      res = await fetch(remoteUrl, { signal: controller.signal });
+    } finally {
+      clearTimeout(timeout);
+    }
+    if (!res.ok) {
+      console.warn('[linkedinOAuth] avatar download failed:', res.status);
+      return null;
+    }
+
+    const contentType = (res.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
+    const ext = AVATAR_EXT_BY_TYPE[contentType];
+    if (!ext) {
+      console.warn('[linkedinOAuth] avatar has non-image content-type:', contentType || '(none)');
+      return null;
+    }
+
+    const arrayBuf = await res.arrayBuffer();
+    const buffer = Buffer.from(arrayBuf);
+    if (buffer.length === 0 || buffer.length > AVATAR_MAX_BYTES) {
+      console.warn('[linkedinOAuth] avatar size out of bounds:', buffer.length);
+      return null;
+    }
+
+    const hash = crypto.createHash('sha256').update(String(memberKey), 'utf8').digest('hex').slice(0, 32);
+    const filename = `${hash}.${ext}`;
+    await storage.uploadToKey(buffer, storage.buildLinkedInAvatarKey(filename), contentType === 'image/jpg' ? 'image/jpeg' : contentType);
+    return `/linkedin-avatar/${filename}`;
+  } catch (e) {
+    console.warn('[linkedinOAuth] avatar cache error (non-fatal):', e.message);
+    return null;
+  }
+}
+
+const AVATAR_MIME_BY_EXT = {
+  jpg:  'image/jpeg',
+  jpeg: 'image/jpeg',
+  png:  'image/png',
+  webp: 'image/webp',
+  gif:  'image/gif',
+};
+
+/**
+ * Resolve a stored avatar_url (either a cached '/linkedin-avatar/<hash>.jpg' path
+ * or a raw remote CDN URL) into a base64 data URI for server-side embedding
+ * (e.g. Satori visual rendering). Cached avatars are read directly from storage;
+ * remote URLs are fetched over HTTP. Best-effort — returns null on any failure.
+ *
+ * @param {string} avatarUrl
+ * @returns {Promise<string|null>}  data:image/...;base64,... or null
+ */
+async function loadLinkedInAvatarDataUri(avatarUrl) {
+  if (!avatarUrl) return null;
+  const url = avatarUrl.trim();
+  try {
+    const cached = url.match(/^\/linkedin-avatar\/([0-9a-f]{1,64}\.(?:jpg|jpeg|png|gif|webp))$/i);
+    if (cached) {
+      const storage = require('./storage');
+      const filename = cached[1];
+      const buf = await storage.download(storage.buildLinkedInAvatarKey(filename));
+      const ext = filename.split('.').pop().toLowerCase();
+      const mime = AVATAR_MIME_BY_EXT[ext] || 'image/jpeg';
+      return `data:${mime};base64,${buf.toString('base64')}`;
+    }
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const buf = await res.arrayBuffer();
+    const mime = (res.headers.get('content-type') || 'image/jpeg').split(';')[0].trim();
+    return `data:${mime};base64,${Buffer.from(buf).toString('base64')}`;
+  } catch (e) {
+    console.warn('[linkedinOAuth] loadLinkedInAvatarDataUri failed (non-fatal):', e.message);
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Token refresh — writes back to linkedin_connections
 // ---------------------------------------------------------------------------
 
 /**
  * Exchange a refresh token for new tokens and update ALL connections sharing
- * the same linkedin_member_id in the workspace.
+ * the same linkedin_member_id in the workspace. Also re-pulls the profile
+ * photo URL so it never ages out while the connection stays active.
  *
  * @param {object} connection  Row from linkedin_connections
  * @returns {Promise<string>}  New plaintext access token
@@ -178,16 +317,31 @@ async function refreshConnectionToken(connection) {
   const newRefreshTokenEnc = tokens.refresh_token ? encrypt(tokens.refresh_token) : null;
   const newExpiresAt = new Date(Date.now() + (tokens.expires_in || 5184000) * 1000).toISOString();
 
+  // Re-pull a fresh CDN photo URL for personal accounts only (null on failure or
+  // for org pages → leaves the stored URL / org logo intact), then mirror it into
+  // our own storage so avatar_url points at a stable, non-expiring app URL.
+  let freshPhoto = null;
+  if (connection.account_type === 'personal') {
+    const remotePhoto = await fetchLinkedInPhotoUrl(tokens.access_token);
+    if (remotePhoto) {
+      const memberKey = connection.linkedin_member_id || connection.account_key;
+      freshPhoto = (await cacheLinkedInAvatar(remotePhoto, memberKey)) || remotePhoto;
+    }
+  }
+
   if (connection.linkedin_member_id) {
-    // Update all connections in this workspace sharing the same member_id
+    // Update all connections in this workspace sharing the same member_id.
+    // Only personal connections carry a member_id, so refreshing avatar_url here
+    // never clobbers org-page logos (those rows have linkedin_member_id = NULL).
     await db.prepare(`
       UPDATE linkedin_connections
       SET access_token_enc  = ?,
           refresh_token_enc = COALESCE(?, refresh_token_enc),
           expires_at        = ?,
+          avatar_url        = COALESCE(?, avatar_url),
           updated_at        = now()
       WHERE workspace_id = ? AND linkedin_member_id = ?
-    `).run(newAccessTokenEnc, newRefreshTokenEnc, newExpiresAt,
+    `).run(newAccessTokenEnc, newRefreshTokenEnc, newExpiresAt, freshPhoto,
            connection.workspace_id, connection.linkedin_member_id);
   } else {
     await db.prepare(`
@@ -195,9 +349,10 @@ async function refreshConnectionToken(connection) {
       SET access_token_enc  = ?,
           refresh_token_enc = COALESCE(?, refresh_token_enc),
           expires_at        = ?,
+          avatar_url        = COALESCE(?, avatar_url),
           updated_at        = now()
       WHERE id = ?
-    `).run(newAccessTokenEnc, newRefreshTokenEnc, newExpiresAt, connection.id);
+    `).run(newAccessTokenEnc, newRefreshTokenEnc, newExpiresAt, freshPhoto, connection.id);
   }
 
   return decrypt(newAccessTokenEnc);
@@ -264,4 +419,7 @@ module.exports = {
   revokeLinkedInToken,
   createReconnectNotification,
   notifyAllWorkspaceMembersReconnect,
+  fetchLinkedInPhotoUrl,
+  cacheLinkedInAvatar,
+  loadLinkedInAvatarDataUri,
 };

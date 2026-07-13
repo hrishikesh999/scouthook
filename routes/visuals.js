@@ -16,6 +16,7 @@ const { renderTemplate, extractTemplateSlots, startRenderJob, getRenderJobStatus
 const { extractCarouselPackContent, startCarouselPackJob, getCarouselJobStatus, loadPack } = require('../services/carouselPackRenderer');
 const { canGenerateVisual, logVisualGeneration, getUserPlan } = require('../services/subscription');
 const { planHasFeature } = require('../lib/planFeatures');
+const { loadLinkedInAvatarDataUri } = require('../services/linkedinOAuth');
 
 // ---------------------------------------------------------------------------
 // POST /api/visuals/:postId
@@ -196,18 +197,8 @@ router.post('/:postId', async (req, res) => {
         return res.status(400).json({ ok: false, error: 'branded_quote_requires_linkedin' });
       }
 
-      let photoDataUri;
-      try {
-        const photoRes = await fetch(photoUrl);
-        if (!photoRes.ok) {
-          return res.status(502).json({ ok: false, error: 'branded_quote_photo_fetch_failed' });
-        }
-        const buf = await photoRes.arrayBuffer();
-        const rawMime = photoRes.headers.get('content-type') || 'image/jpeg';
-        const mime = rawMime.split(';')[0].trim();
-        photoDataUri = `data:${mime};base64,${Buffer.from(buf).toString('base64')}`;
-      } catch (fetchErr) {
-        console.warn('[visuals] branded_quote photo fetch:', fetchErr.message);
+      const photoDataUri = await loadLinkedInAvatarDataUri(photoUrl);
+      if (!photoDataUri) {
         return res.status(502).json({ ok: false, error: 'branded_quote_photo_fetch_failed' });
       }
 
@@ -249,14 +240,10 @@ router.post('/:postId', async (req, res) => {
       ).get(tenantId);
       let linkedinData = {};
       if (li?.avatar_url) {
-        try {
-          const photoRes = await fetch(li.avatar_url.trim());
-          if (photoRes.ok) {
-            const buf = await photoRes.arrayBuffer();
-            const mime = (photoRes.headers.get('content-type') || 'image/jpeg').split(';')[0].trim();
-            linkedinData = { photoDataUri: `data:${mime};base64,${Buffer.from(buf).toString('base64')}`, name: li.display_name?.trim() || '' };
-          }
-        } catch {}
+        const dataUri = await loadLinkedInAvatarDataUri(li.avatar_url);
+        if (dataUri) {
+          linkedinData = { photoDataUri: dataUri, name: li.display_name?.trim() || '' };
+        }
       }
       const result = await renderClientWin(post, brand, renderContent, { userId, tenantId }, variant, linkedinData);
       await logVisualGeneration(userId, tenantId, postId, visual_type);

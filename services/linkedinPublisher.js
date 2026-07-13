@@ -1,7 +1,7 @@
 'use strict';
 
 const { db } = require('../db');
-const { encrypt, decrypt } = require('./linkedinOAuth');
+const { encrypt, decrypt, fetchLinkedInPhotoUrl, cacheLinkedInAvatar } = require('./linkedinOAuth');
 const { sendEmailToUser } = require('../emails');
 const path = require('path');
 const storage = require('./storage');
@@ -113,6 +113,20 @@ async function refreshConnectionToken(connection) {
   const newRefreshTokenEnc = tokens.refresh_token ? encrypt(tokens.refresh_token) : null;
   const newExpiresAt = new Date(Date.now() + (tokens.expires_in || 5184000) * 1000).toISOString();
 
+  // Re-pull a fresh CDN photo URL for personal accounts only. LinkedIn photo URLs
+  // are time-limited signed URLs that expire independently of the OAuth token; we
+  // mirror the fresh one into our own storage so avatar_url points at a stable,
+  // non-expiring app URL. null on failure or for org pages → COALESCE leaves the
+  // stored URL / logo intact.
+  let freshPhoto = null;
+  if (connection.account_type === 'personal') {
+    const remotePhoto = await fetchLinkedInPhotoUrl(tokens.access_token);
+    if (remotePhoto) {
+      const memberKey = connection.linkedin_member_id || connection.account_key;
+      freshPhoto = (await cacheLinkedInAvatar(remotePhoto, memberKey)) || remotePhoto;
+    }
+  }
+
   if (connection.linkedin_member_id) {
     // Update all connections in the workspace sharing this member_id
     // (personal connection + any org pages that use the same underlying token)
@@ -121,9 +135,10 @@ async function refreshConnectionToken(connection) {
       SET access_token_enc  = ?,
           refresh_token_enc = COALESCE(?, refresh_token_enc),
           expires_at        = ?,
+          avatar_url        = COALESCE(?, avatar_url),
           updated_at        = now()
       WHERE workspace_id = ? AND linkedin_member_id = ?
-    `).run(newAccessTokenEnc, newRefreshTokenEnc, newExpiresAt,
+    `).run(newAccessTokenEnc, newRefreshTokenEnc, newExpiresAt, freshPhoto,
            connection.workspace_id, connection.linkedin_member_id);
   } else {
     await db.prepare(`
@@ -131,9 +146,10 @@ async function refreshConnectionToken(connection) {
       SET access_token_enc  = ?,
           refresh_token_enc = COALESCE(?, refresh_token_enc),
           expires_at        = ?,
+          avatar_url        = COALESCE(?, avatar_url),
           updated_at        = now()
       WHERE id = ?
-    `).run(newAccessTokenEnc, newRefreshTokenEnc, newExpiresAt, connection.id);
+    `).run(newAccessTokenEnc, newRefreshTokenEnc, newExpiresAt, freshPhoto, connection.id);
   }
 
   return decrypt(newAccessTokenEnc);

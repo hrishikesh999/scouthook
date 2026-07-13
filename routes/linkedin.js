@@ -4,7 +4,7 @@ const crypto  = require('crypto');
 const express = require('express');
 const router  = express.Router();
 const { db, getSetting } = require('../db');
-const { encrypt, decrypt } = require('../services/linkedinOAuth');
+const { encrypt, decrypt, cacheLinkedInAvatar } = require('../services/linkedinOAuth');
 const { publishNow } = require('../services/linkedinPublisher');
 const { addScheduledJob, addCommentJob, removeScheduledJob, isSchedulerEnabled } = require('../services/scheduler');
 const { syncPostMetrics, RateLimitError } = require('../services/linkedinMetrics');
@@ -466,6 +466,12 @@ router.get('/callback', async (req, res) => {
     const accessTokenEnc  = encrypt(tokens.access_token);
     const refreshTokenEnc = tokens.refresh_token ? encrypt(tokens.refresh_token) : null;
     const accountKey      = linkedin_member_id ? 'person_' + linkedin_member_id : 'person_unknown_' + crypto.randomUUID();
+
+    // Mirror the LinkedIn CDN photo into our own storage so avatar_url points at a
+    // stable, non-expiring app URL. Falls back to the raw CDN URL if caching fails.
+    if (linkedin_photo) {
+      linkedin_photo = (await cacheLinkedInAvatar(linkedin_photo, linkedin_member_id || accountKey)) || linkedin_photo;
+    }
 
     // Check if this is a reconnect (connection already exists for this account_key)
     const existingConn = await db.prepare(

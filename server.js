@@ -825,6 +825,16 @@ app.get('/feedback-attachment/:filename', async (req, res, next) => {
   await storage.stream(key, res, next);
 });
 
+// Serve cached LinkedIn profile photos — hash filenames are unguessable and the
+// images are public on LinkedIn, so no session auth required.
+app.get('/linkedin-avatar/:filename', async (req, res, next) => {
+  const filename = path.basename(req.params.filename);
+  if (!/^[0-9a-f]{1,64}\.(jpg|jpeg|png|gif|webp)$/i.test(filename)) return res.status(404).end();
+  res.setHeader('Cache-Control', 'public, max-age=3600');
+  const key = storage.buildLinkedInAvatarKey(filename);
+  await storage.stream(key, res, next);
+});
+
 // JSON errors for API routes (Express 4 does not catch async throws without express-async-errors)
 app.use((err, req, res, next) => {
   if (res.headersSent) return next(err);

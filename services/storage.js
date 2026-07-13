@@ -106,6 +106,15 @@ function buildFeedbackKey(filename) {
 }
 
 /**
+ * Cached LinkedIn profile photos — hash-based filename so no auth guard needed.
+ * LinkedIn CDN photo URLs are time-limited signed URLs; we mirror them here so
+ * the app never depends on those URLs staying valid.
+ */
+function buildLinkedInAvatarKey(filename) {
+  return prefixed(`linkedin-avatars/${filename}`);
+}
+
+/**
  * Admin template key (no prefix — prefix applied by uploadAdmin/downloadAdmin).
  * e.g. buildTemplateKey('uuid') → 'global/templates/uuid.html'
  */
@@ -351,6 +360,7 @@ async function removeAdmin(rawKey) {
 module.exports = {
   // Key builders (full key with prefix)
   buildMemberKey, buildWorkspaceAssetKey, buildVaultKey, buildAffiliateKey, buildFeedbackKey,
+  buildLinkedInAvatarKey,
   // Key builders (raw key, no prefix — for use with uploadAdmin/downloadAdmin)
   buildTemplateKey, buildThumbnailKey, buildOriginalImageKey,
   // Utilities

@@ -3768,7 +3768,7 @@ function wireSchedule() {
         ...(selectedConnectionId ? { connectionId: selectedConnectionId } : {}),
       };
       if (attachedAssetUrl) {
-        if (attachedAssetType === 'carousel' || attachedAssetType === 'media_pdf') {
+        if (attachedAssetType === 'carousel' || attachedAssetType === 'media_pdf' || attachedAssetType === 'carousel_pack') {
           payload.carousel_pdf_url    = attachedAssetUrl;
           payload.asset_preview_url   = attachedPreviewUrl || null;
           payload.asset_slide_count   = attachedSlideCount || 0;
@@ -3825,7 +3825,7 @@ function wireSchedule() {
       const payload = { content, postId: currentPostId };
       if (selectedConnectionId) payload.connectionId = selectedConnectionId;
       if (attachedAssetUrl) {
-        if (attachedAssetType === 'carousel' || attachedAssetType === 'media_pdf') {
+        if (attachedAssetType === 'carousel' || attachedAssetType === 'media_pdf' || attachedAssetType === 'carousel_pack') {
           payload.carousel_pdf_url  = attachedAssetUrl;
           payload.asset_preview_url = attachedPreviewUrl || null;
           payload.asset_slide_count = attachedSlideCount || 0;

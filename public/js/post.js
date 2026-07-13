@@ -81,22 +81,38 @@ function populateLiCard(post, profile) {
   bodyEl.innerHTML = bodyToHtml((post.content || '').trim());
 }
 
+// Mirror lib/assetType.js on the client: collapse any stored asset type — plus
+// a URL-extension fallback — to the canonical 'image' | 'carousel' the card
+// knows how to render. Keeps display working even if an un-normalized row slips
+// through the API.
+function canonicalAssetType(assetType, assetUrl) {
+  const t = String(assetType || '').toLowerCase();
+  if (t === 'image' || t === 'media_image' || t === 'html_template') return 'image';
+  if (t === 'carousel' || t === 'media_pdf' || t === 'carousel_pack') return 'carousel';
+  const url = String(assetUrl || '').split('?')[0].toLowerCase();
+  if (/\.pdf$/.test(url)) return 'carousel';
+  if (/\.(png|jpe?g|gif|webp|svg)$/.test(url)) return 'image';
+  return null;
+}
+
 function populateAsset(post) {
   const el = document.getElementById('post-li-asset');
   if (!el) return;
 
-  if (post.asset_type === 'image' && post.asset_url) {
-    el.innerHTML = `<img src="${escHtml(post.asset_url)}" alt="Attached image" style="width:calc(100% + 32px);margin:8px -16px;display:block;max-height:560px;object-fit:cover">`;
+  const assetType = canonicalAssetType(post.asset_type, post.asset_url || post.asset_preview_url);
+
+  if (assetType === 'image' && post.asset_url) {
+    el.innerHTML = `<img src="${escHtml(post.asset_url)}" alt="Attached image" style="width:calc(100% + 32px);margin:8px -16px;display:block;max-height:560px;object-fit:cover" onerror="this.closest('#post-li-asset').hidden=true">`;
     el.hidden = false;
     return;
   }
 
-  if (post.asset_type === 'carousel') {
+  if (assetType === 'carousel') {
     const slideLabel = post.asset_slide_count > 1 ? `${post.asset_slide_count} slides` : 'Document';
     if (post.asset_preview_url) {
       el.innerHTML = `
         <a href="${escHtml(post.asset_url || post.asset_preview_url)}" target="_blank" rel="noopener noreferrer" style="display:block;margin:8px -16px;position:relative">
-          <img src="${escHtml(post.asset_preview_url)}" alt="Carousel preview" style="width:100%;display:block;max-height:560px;object-fit:cover">
+          <img src="${escHtml(post.asset_preview_url)}" alt="Carousel preview" style="width:100%;display:block;max-height:560px;object-fit:cover" onerror="this.style.display='none'">
           <span style="position:absolute;bottom:8px;left:8px;background:rgba(0,0,0,0.65);color:#fff;font-size:11px;font-weight:600;padding:3px 8px;border-radius:4px">${escHtml(slideLabel)}</span>
         </a>`;
       el.hidden = false;

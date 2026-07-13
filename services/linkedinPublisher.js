@@ -725,11 +725,17 @@ async function publishScheduledPost(scheduledPostId, { attemptsMade = 0, maxAtte
 
     // Stamp the originating draft as published, including the linkedin_post_id.
     if (row.post_id) {
+      // Carry the asset type/url from the scheduled payload onto the draft. The
+      // schedule-time write to generated_posts is gated on status='draft', so a
+      // re-scheduled/edited post could reach here with its asset fields unset;
+      // COALESCE keeps preview_url/slide_count that were persisted at schedule time.
       await db.prepare(`
         UPDATE generated_posts
-        SET status = 'published', published_at = CURRENT_TIMESTAMP, linkedin_post_id = ?
+        SET status = 'published', published_at = CURRENT_TIMESTAMP, linkedin_post_id = ?,
+            asset_type = COALESCE(?, asset_type),
+            asset_url  = COALESCE(?, asset_url)
         WHERE id = ? AND user_id = ? AND tenant_id = ?
-      `).run(linkedin_post_id, row.post_id, row.user_id, row.tenant_id);
+      `).run(linkedin_post_id, row.asset_type || null, row.asset_url || null, row.post_id, row.user_id, row.tenant_id);
 
       // Trial email — evaluate immediately after first publish (no settle needed)
       require('./trialEmails').evaluateAndSend(row.user_id, row.tenant_id).catch(() => {});

@@ -4,6 +4,7 @@ const express = require('express');
 const router  = express.Router();
 const { db }  = require('../db');
 const { getUserPlan } = require('../services/subscription');
+const { withNormalizedAsset } = require('../lib/assetType');
 
 const VALID_TAGS = new Set(['strong', 'decent', 'weak']);
 
@@ -44,7 +45,7 @@ router.get('/:id(\\d+)', async (req, res) => {
     `).get(postId, tenantId);
 
     const payload = {
-      ...post,
+      ...withNormalizedAsset(post),
       scheduled_post_id: sched?.scheduled_post_id ?? null,
       scheduled_for:     sched?.scheduled_for ?? null,
       scheduled_status:  sched?.scheduled_status ?? null,

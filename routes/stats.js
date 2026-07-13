@@ -6,6 +6,7 @@ const { db } = require('../db');
 const { removeScheduledJob } = require('../services/scheduler');
 const { captureVoiceRefinement } = require('../services/voiceExtraction');
 const { runQualityGate }        = require('../services/qualityGate');
+const { canonicalAssetType }    = require('../lib/assetType');
 
 // Lightweight Levenshtein distance — used only for edit-ratio comparison.
 // Uses single-array DP for O(min(m,n)) space. Safe for post-length strings (~500 chars).
@@ -502,6 +503,9 @@ router.get('/posts', async (req, res) => {
         ORDER  BY published_at DESC
         LIMIT  100
       `).all(tenantId);
+      // Collapse raw draft asset types (media_image, carousel_pack, …) to the
+      // canonical image/carousel the list badge understands.
+      posts = posts.map(p => ({ ...p, asset_type: canonicalAssetType(p.asset_type, null) }));
     } else {
       posts = await db.prepare(`
         SELECT id, LEFT(content, 200) AS content, quality_score, passed_gate, format_slug, status, created_at, funnel_type, first_comment

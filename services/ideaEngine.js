@@ -193,6 +193,7 @@ async function fetchServedHistory(tenantId) {
   `).all(tenantId);
 
   const usedVaultIdeaIds = new Set();
+  const usedInsightIds = new Set();
   const usedEvergreenSlugs = new Set();
   const usedPostRefs = new Set();
   const usedQuestionSlugs = new Set();
@@ -200,7 +201,8 @@ async function fetchServedHistory(tenantId) {
   const savedHooks = [];     // acted on — positive taste signal
   const dismissedHooks = []; // rejected — negative taste signal
   for (const r of rows) {
-    if (r.provenance_ref?.startsWith('vault_idea:')) usedVaultIdeaIds.add(Number(r.provenance_ref.slice(11)));
+    if (r.provenance_ref?.startsWith('vault_idea:'))    usedVaultIdeaIds.add(Number(r.provenance_ref.slice(11)));
+    if (r.provenance_ref?.startsWith('vault_insight:')) usedInsightIds.add(Number(r.provenance_ref.slice(14)));
     if (r.provenance_ref?.startsWith('evergreen:'))  usedEvergreenSlugs.add(r.provenance_ref.slice(10));
     if (r.provenance_ref?.startsWith('post:'))       usedPostRefs.add(r.provenance_ref);
     if (r.provenance_ref?.startsWith('question:'))   usedQuestionSlugs.add(r.provenance_ref.slice(9));
@@ -210,7 +212,7 @@ async function fetchServedHistory(tenantId) {
       else if (r.status === 'dismissed' && dismissedHooks.length < 5) dismissedHooks.push(r.hook);
     }
   }
-  return { usedVaultIdeaIds, usedEvergreenSlugs, usedPostRefs, usedQuestionSlugs, recentTitles, savedHooks, dismissedHooks };
+  return { usedVaultIdeaIds, usedInsightIds, usedEvergreenSlugs, usedPostRefs, usedQuestionSlugs, recentTitles, savedHooks, dismissedHooks };
 }
 
 // ---------------------------------------------------------------------------
@@ -282,6 +284,33 @@ async function pickSequelSeed(tenantId, usedPostRefs) {
   return rows.find(r => !usedPostRefs.has(`post:${r.id}`)) || null;
 }
 
+// ---------------------------------------------------------------------------
+// Anchor insight — one document insight to ground a single LLM card slot
+// (mirrors pickSequelSeed). Least-recently-used first so the vault rotates
+// through its material rather than repeating the same insight; skips insights
+// already anchored in the last 60 days. Cheap SQL, no LLM.
+// ---------------------------------------------------------------------------
+async function fetchAnchorInsight(tenantId, usedInsightIds) {
+  const rows = await db.prepare(`
+    SELECT vi.id, vi.category, vi.content, vd.filename
+    FROM   vault_insights vi
+    LEFT   JOIN vault_documents vd ON vd.id = vi.document_id
+    WHERE  vi.tenant_id = ?
+    ORDER  BY vi.last_used_at ASC NULLS FIRST, vi.used_count ASC, vi.created_at DESC
+    LIMIT  10
+  `).all(tenantId);
+  return rows.find(r => !usedInsightIds.has(Number(r.id))) || null;
+}
+
+// Fire-and-forget: record that an insight was fed to generation (rotation signal).
+function bumpInsightUsage(insightId, tenantId) {
+  Promise.resolve(
+    db.prepare(
+      'UPDATE vault_insights SET used_count = used_count + 1, last_used_at = now() WHERE id = ? AND tenant_id = ?'
+    ).run(insightId, tenantId)
+  ).catch(err => console.error('[ideaEngine] bumpInsightUsage failed (non-fatal):', err.message));
+}
+
 // Structured-output schema for the daily card+questions call. Object-length
 // constraints aren't supported by json_schema, so counts are trimmed in code.
 const IDEA_SCHEMA = {
@@ -344,7 +373,7 @@ function llmQuestions(postType, qMoment, qProof) {
 // { cards, presetQuestions } where presetQuestions is keyed by ref.
 // ---------------------------------------------------------------------------
 async function generateLlmCardsAndQuestions({
-  profile, pillars, recommendedType, sequelSeed, recentTitles,
+  profile, pillars, recommendedType, sequelSeed, anchorInsight, recentTitles,
   voice, answeredQuestions, recentPosts, savedHooks, dismissedHooks,
   presetCards, count,
 }) {
@@ -395,6 +424,14 @@ async function generateLlmCardsAndQuestions({
     ? `\nPRESET CARDS (these are already written — do NOT rewrite them; only write their two questions, returned in "preset_questions" keyed by "ref"):\n${presetCards.map(p => `- ref: ${p.ref} — hook: "${p.hook}" (${p.post_type})`).join('\n')}\n`
     : '';
 
+  // Anchor one card slot to a specific vault insight — the slot AFTER the sequel
+  // (sequel owns idea #1 when present). Only when there's room. This grounds the
+  // card in the author's own document without diluting the whole batch.
+  const insightSlot = anchorInsight ? (sequelSeed ? 2 : 1) : 0; // 1-based; 0 = none
+  const insightBlock = (insightSlot && insightSlot <= count)
+    ? `\nIdea #${insightSlot} must be grounded in this specific material from the author's OWN document — build a post premise directly on it, staying faithful to what it says (do not contradict or generalise it away):\n"""${String(anchorInsight.content || '').slice(0, 500)}"""\n`
+    : '';
+
   const message = await client.messages.create({
     model: SONNET_MODEL,
     max_tokens: 8000, // adaptive thinking (on by default for Sonnet 5) shares this budget
@@ -405,7 +442,7 @@ async function generateLlmCardsAndQuestions({
 
 CONSULTANT PROFILE:
 ${context}
-${voiceBlock}${answeredBlock}${postsBlock}${tasteBlock}${sequelBlock}${presetBlock}${recentTitles.length ? `\nDo NOT repeat any of these recently suggested angles:\n${recentTitles.slice(-30).map(t => `- ${t}`).join('\n')}\n` : ''}
+${voiceBlock}${answeredBlock}${postsBlock}${tasteBlock}${sequelBlock}${insightBlock}${presetBlock}${recentTitles.length ? `\nDo NOT repeat any of these recently suggested angles:\n${recentTitles.slice(-30).map(t => `- ${t}`).join('\n')}\n` : ''}
 CRITICAL: Each card MUST reveal something about THEIR work or their audience's challenges — never generic "how to scale" advice. Use this template:
 
 REACH cards: A specific moment from your consulting work that shows how your audience is different, a client situation that surprised you, or a pattern you've seen repeatedly.
@@ -443,16 +480,21 @@ Return a JSON object with "cards" (${count} objects: title, hook, textarea_input
     .filter(i => i && typeof i.hook === 'string' && i.hook.trim())
     .slice(0, count)
     .map((i, idx) => {
-      const isSequel = !!sequelSeed && idx === 0;
+      const isSequel  = !!sequelSeed && idx === 0;
+      // insightSlot is 1-based; the anchored card is at array index insightSlot-1.
+      const isInsight = !isSequel && insightSlot > 0 && idx === insightSlot - 1;
       const postType = ['reach', 'trust', 'convert', 'lead_magnet'].includes(i.post_type) ? i.post_type : recommendedType;
+      const docName = isInsight && anchorInsight.filename
+        ? `From your doc: ${String(anchorInsight.filename).slice(0, 70)}`
+        : 'From your content vault';
       return {
-        tier: isSequel ? 2 : 1,
+        tier: isSequel ? 2 : (isInsight ? 3 : 1),
         title: typeof i.title === 'string' ? i.title.slice(0, 120) : null,
         hook: i.hook.trim(),
         textarea_input: typeof i.textarea_input === 'string' ? i.textarea_input : '',
         post_type: postType,
-        provenance_ref: isSequel ? `post:${sequelSeed.id}` : 'profile',
-        provenance_label: isSequel ? 'Sequel to your top post this month' : 'From your positioning',
+        provenance_ref: isSequel ? `post:${sequelSeed.id}` : (isInsight ? `vault_insight:${anchorInsight.id}` : 'profile'),
+        provenance_label: isSequel ? 'Sequel to your top post this month' : (isInsight ? docName : 'From your positioning'),
         is_question: false,
         questions: llmQuestions(postType, i.q_moment, i.q_proof),
       };
@@ -525,13 +567,19 @@ async function getDailyCards(userId, tenantId) {
   const presetCards = cards.map((c, idx) => ({ ref: `p${idx}`, hook: c.hook, post_type: c.post_type }));
 
   const remaining = fillTarget - cards.length;
-  const sequelSeed = remaining > 0 ? await pickSequelSeed(tenantId, history.usedPostRefs) : null;
+  const [sequelSeed, anchorInsight] = remaining > 0
+    ? await Promise.all([
+        pickSequelSeed(tenantId, history.usedPostRefs),
+        fetchAnchorInsight(tenantId, history.usedInsightIds),
+      ])
+    : [null, null];
   const hasProfileSubstance = !!(profile?.brand_industry || profile?.elevator_main_result || profile?.audience_description || pillars.length);
   let presetQuestions = {};
-  if ((remaining > 0 || presetCards.length) && (hasProfileSubstance || sequelSeed)) {
+  // A vault insight alone is enough grounding to run the call, even with a thin profile.
+  if ((remaining > 0 || presetCards.length) && (hasProfileSubstance || sequelSeed || anchorInsight)) {
     try {
       const result = await generateLlmCardsAndQuestions({
-        profile, pillars, recommendedType, sequelSeed,
+        profile, pillars, recommendedType, sequelSeed, anchorInsight,
         recentTitles: history.recentTitles,
         voice, answeredQuestions, recentPosts,
         savedHooks: history.savedHooks, dismissedHooks: history.dismissedHooks,
@@ -592,6 +640,11 @@ async function getDailyCards(userId, tenantId) {
       c.questions ? JSON.stringify(c.questions) : null
     );
     inserted.push({ id: result.lastInsertRowid, status: 'served', served_on: null, ...c, questions: c.questions || null });
+  }
+
+  // Rotate the anchor insight only if it actually made it into a served card.
+  if (anchorInsight && inserted.some(c => c.provenance_ref === `vault_insight:${anchorInsight.id}`)) {
+    bumpInsightUsage(anchorInsight.id, tenantId);
   }
 
   logCardEvent('idea_cards_served', userId, tenantId, {

@@ -306,54 +306,46 @@ function chunkText(text, totalPages) {
   return chunks;
 }
 
-// ── Mining prompt ────────────────────────────────────────────────────────────
+// ── Classification prompt ────────────────────────────────────────────────────
 
-function buildMiningSystemPrompt(userProfile = {}) {
-  const niche        = userProfile.brand_industry         || 'their professional field';
-  const audience     = userProfile.audience_description    || 'professionals in the field';
-  const audiencePain = userProfile.audience_obstacles      || 'professional challenges in their field';
-  const contrarian   = userProfile.brand_core_beliefs      || 'challenge common assumptions with specificity';
+const INSIGHT_CATEGORIES = ['quote', 'lesson', 'advice', 'mindset_shift', 'key_insight', 'strategy'];
 
-  return `You are a LinkedIn content strategist extracting post ideas from a professional's own document.
+function buildClassifySystemPrompt(userProfile = {}) {
+  const niche    = userProfile.brand_industry      || 'their professional field';
+  const audience = userProfile.audience_description || 'professionals in the field';
+
+  return `You are organising a professional's own document into reusable content material.
 
 AUTHOR CONTEXT:
 - Niche: ${niche}
 - Audience: ${audience}
-- What keeps their audience up: ${audiencePain}
-- Their contrarian lens: ${contrarian}
 
 YOUR JOB:
-Find ideas that would make compelling LinkedIn posts for this specific author and audience.
-Not summaries of what the document says — post-ready premises the author could stand behind.
+Extract the material in this document that could later fuel LinkedIn content — NOT post ideas, just the raw building blocks, faithfully captured. Classify each item into exactly one category:
 
-Each idea MUST be:
-- Written in FIRST PERSON ("I", "we", "my") — as if the author is already saying it on LinkedIn
-- A POSITIONED PREMISE with a clear point of view — not a balanced observation
-- SPECIFIC to this niche and audience — not generic business advice that applies to anyone
-- GROUNDED in something concrete from the document (a number, outcome, client scenario, timeframe)
+- "quote": A memorable, verbatim line worth quoting — the author's own striking phrasing. Copy it word-for-word.
+- "lesson": A lesson learned or hard-won takeaway, stated as a complete thought.
+- "advice": A concrete, actionable recommendation the author gives.
+- "mindset_shift": A reframe — an old belief replaced by a better one. Format the content EXACTLY as "From: <old belief> → To: <new belief>".
+- "key_insight": A non-obvious truth or observation central to the document's argument.
+- "strategy": A named method, framework, system, or repeatable approach.
 
-Do NOT extract:
-- Generic advice that could appear in any business book
-- Third-person observations ("Most organisations…" or "Many consultants…")
-- Facts or statistics without the author's personal angle on them
-- Simple summaries of what the document says
-- Ideas that could equally apply to any professional in any field
+RULES:
+- Stay FAITHFUL to the document. Capture what is actually there — do not invent, editorialise, or add the author's "angle". This is extraction, not ideation.
+- Each item must stand alone and make sense out of context.
+- Prefer specific over generic. Skip filler, pleasantries, and throat-clearing.
+- "quote" content is verbatim; every other category may be lightly condensed to one clean sentence (two for mindset_shift).
+- No duplicates — if two passages say the same thing, keep the stronger one once.
+- "source_ref": copy the exact label from the [brackets] before the passage each item came from.
 
-For EACH idea return exactly five fields:
-- "seed_text": 1–2 sentences, first person, with a clear position. Specific enough to anchor real follow-up answers. This is what the author uses as their starting point — make it feel like something they'd say, not something an analyst would write about them.
-- "hook_line": The single most arresting LinkedIn opening line this idea could become. Max 14 words. Must stop a scrolling ${audience} mid-scroll. Written in the author's voice. No filler openers like "Here's the thing:" or "Unpopular opinion:".
-- "source_ref": Copy the exact label from the [brackets] before the passage this idea came from (e.g. "chunk_0", "chunk_3").
-- "funnel_type": One of "reach" (broad stories, observations, hot takes — maximise impressions), "trust" (frameworks, methodologies, expertise demonstrations — build authority), or "convert" (offers, case studies, client results — drive inbound).
-- "hook_archetype": One of "CONFESSION", "BEFORE_AFTER", "INSIGHT", "DIRECT_ADDRESS", "NUMBER", "MYTH_BUST", "CURIOSITY_GAP", "REFRAME".
-
-Return ONLY a JSON array. No other text.`;
+Return ONLY a JSON array of objects, each: { "category": <one of the six>, "content": <string>, "source_ref": <string> }. No other text.`;
 }
 
 /**
- * Mine a batch of chunk contents for post-ready premises.
- * Returns Array<{ seed_text, hook_line, source_ref }>
+ * Classify a batch of chunk contents into reusable insights.
+ * Returns Array<{ category, content, source_ref }>.
  */
-async function mineChunkBatch(chunks, documentFilename, userProfile, apiKey) {
+async function classifyChunkBatch(chunks, documentFilename, userProfile, apiKey) {
   const client = new Anthropic({ apiKey });
 
   const chunkContent = chunks
@@ -362,7 +354,7 @@ async function mineChunkBatch(chunks, documentFilename, userProfile, apiKey) {
 
   const userPrompt = `Document: "${documentFilename}"
 
-Extract up to ${chunks.length * 2} post-ready ideas from the following content. Return only a JSON array.
+Organise the following content into reusable insights. Return only a JSON array.
 
 CONTENT:
 ${chunkContent}`;
@@ -370,7 +362,7 @@ ${chunkContent}`;
   const message = await client.messages.create({
     model:      SONNET_MODEL,
     max_tokens: 4000,
-    system:     buildMiningSystemPrompt(userProfile),
+    system:     buildClassifySystemPrompt(userProfile),
     messages:   [{ role: 'user', content: userPrompt }],
   });
 
@@ -382,25 +374,75 @@ ${chunkContent}`;
   } catch {
     parsed = [];
   }
-
   if (!Array.isArray(parsed)) return [];
 
-  const VALID_FUNNELS    = ['reach', 'trust', 'convert'];
-  const VALID_ARCHETYPES = ['CONFESSION', 'BEFORE_AFTER', 'INSIGHT', 'DIRECT_ADDRESS', 'NUMBER', 'MYTH_BUST', 'CURIOSITY_GAP', 'REFRAME'];
-
   return parsed
-    .filter(item => typeof item.seed_text === 'string' && item.seed_text.trim())
+    .filter(item => item && typeof item.content === 'string' && item.content.trim())
     .map(item => {
-      const ft = typeof item.funnel_type === 'string' ? item.funnel_type.trim().toLowerCase() : '';
-      const ha = typeof item.hook_archetype === 'string' ? item.hook_archetype.trim().toUpperCase() : '';
+      const cat = typeof item.category === 'string' ? item.category.trim().toLowerCase() : '';
       return {
-        seed_text:      item.seed_text.trim(),
-        hook_line:      typeof item.hook_line === 'string' ? item.hook_line.trim() : null,
-        source_ref:     typeof item.source_ref === 'string' ? item.source_ref.trim() : '',
-        funnel_type:    VALID_FUNNELS.includes(ft) ? ft : 'reach',
-        hook_archetype: VALID_ARCHETYPES.includes(ha) ? ha : 'INSIGHT',
+        category:   INSIGHT_CATEGORIES.includes(cat) ? cat : 'key_insight',
+        content:    item.content.trim(),
+        source_ref: typeof item.source_ref === 'string' ? item.source_ref.trim() : '',
       };
     });
+}
+
+/**
+ * Classify an array of stored chunks into reusable insights.
+ * Same batching shape as the former mining engine (parallel batches, chunk-ref
+ * attribution) — only the prompt/output differ.
+ *
+ * @param {Array<{ id, content, sourceRef }>} chunks  — rows from vault_chunks
+ * @param {string} documentFilename
+ * @param {object} userProfile  — row from user_profiles (audience-aware)
+ * @returns {Promise<Array<{ category, content, source_ref }>>}
+ */
+async function classifyChunks(chunks, documentFilename, userProfile = {}) {
+  const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
+  if (!apiKey) throw new Error('anthropic_api_key not configured');
+
+  const BATCH_SIZE = 20;
+
+  const batches = [];
+  for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
+    const batch = chunks.slice(i, i + BATCH_SIZE);
+    const batchInput = batch.map((c, j) => ({
+      sourceRef:  `chunk_${j}`,
+      displayRef: c.sourceRef || c.source_ref || `chunk ${c.chunk_index ?? j}`,
+      content:    c.content,
+    }));
+    batches.push({ batchInput });
+  }
+
+  const batchResults = await Promise.all(
+    batches.map(({ batchInput }, bi) =>
+      classifyChunkBatch(batchInput, documentFilename, userProfile, apiKey)
+        .catch(err => {
+          console.warn(`[vaultMiner] classify batch ${bi} failed:`, err.message);
+          return [];
+        })
+    )
+  );
+
+  // Resolve each item's source_ref (chunk_N) back to that batch's display label.
+  const allInsights = [];
+  for (let bi = 0; bi < batches.length; bi++) {
+    const { batchInput } = batches[bi];
+    for (const item of batchResults[bi]) {
+      const matchedJ = item.source_ref?.match(/^chunk_(\d+)$/)?.[1];
+      const displayRef = matchedJ !== undefined
+        ? (batchInput[Number(matchedJ)]?.displayRef || item.source_ref)
+        : (batchInput[0]?.displayRef || item.source_ref);
+      allInsights.push({
+        category:   item.category,
+        content:    item.content,
+        source_ref: displayRef,
+      });
+    }
+  }
+
+  return allInsights;
 }
 
 // ── Public API ───────────────────────────────────────────────────────────────
@@ -431,70 +473,6 @@ async function extractAndChunkUrl(url) {
     throw new Error('URL returned no usable text content');
   }
   return chunkText(text, null);
-}
-
-/**
- * Run the mining engine on an array of stored chunks.
- * Batches chunks to keep prompts manageable.
- *
- * @param {Array<{ id, content, sourceRef }>} chunks       — rows from vault_chunks
- * @param {string}                            documentFilename
- * @param {object}                            userProfile   — row from user_profiles (for audience-aware mining)
- * @returns {Promise<Array<{ chunkId, seed_text, hook_line, source_ref }>>}
- */
-async function mineChunks(chunks, documentFilename, userProfile = {}) {
-  const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
-  if (!apiKey) throw new Error('anthropic_api_key not configured');
-
-  // Large batches keep the number of API calls low; Sonnet's 200K context
-  // handles 20 × 500-word chunks (~14K tokens) with room to spare.
-  const BATCH_SIZE = 20;
-
-  // Build all batches upfront
-  const batches = [];
-  for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
-    const batch = chunks.slice(i, i + BATCH_SIZE);
-    const batchInput = batch.map((c, j) => ({
-      sourceRef:  `chunk_${j}`,
-      displayRef: c.sourceRef || c.source_ref || `chunk ${c.chunk_index ?? j}`,
-      content:    c.content,
-    }));
-    const sourceRefToId = new Map(batch.map((c, j) => [`chunk_${j}`, c.id]));
-    batches.push({ batchInput, sourceRefToId, batch });
-  }
-
-  // Run all batches in parallel — they are independent slices of the same doc
-  const batchResults = await Promise.all(
-    batches.map(({ batchInput, batch }, bi) =>
-      mineChunkBatch(batchInput, documentFilename, userProfile, apiKey)
-        .catch(err => {
-          console.warn(`[vaultMiner] batch ${bi} failed:`, err.message);
-          return [];
-        })
-    )
-  );
-
-  const allSeeds = [];
-  for (let bi = 0; bi < batches.length; bi++) {
-    const { batchInput, sourceRefToId, batch } = batches[bi];
-    for (const seed of batchResults[bi]) {
-      const chunkId = sourceRefToId.get(seed.source_ref) || batch[0].id;
-      const matchedJ = seed.source_ref?.match(/^chunk_(\d+)$/)?.[1];
-      const displayRef = matchedJ !== undefined
-        ? (batchInput[Number(matchedJ)]?.displayRef || seed.source_ref)
-        : (batchInput[0]?.displayRef || seed.source_ref);
-      allSeeds.push({
-        chunkId,
-        seed_text:      seed.seed_text,
-        hook_line:      seed.hook_line || null,
-        source_ref:     displayRef,
-        funnel_type:    seed.funnel_type    || 'reach',
-        hook_archetype: seed.hook_archetype || 'INSIGHT',
-      });
-    }
-  }
-
-  return allSeeds;
 }
 
 /**
@@ -615,7 +593,7 @@ function findArticleLinks(html, baseUrl, sourceUrl) {
 module.exports = {
   extractAndChunk,
   extractAndChunkUrl,
-  mineChunks,
+  classifyChunks,
   extractUrl,
   extractText,
   chunkText,

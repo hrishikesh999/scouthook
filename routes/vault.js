@@ -15,7 +15,7 @@ const express     = require('express');
 const router      = express.Router();
 const { db }      = require('../db');
 const storage     = require('../services/storage');
-const { extractAndChunk, extractAndChunkUrl, mineChunks, chunkText, extractYoutube, extractGoogleDrive } = require('../services/vaultMiner');
+const { extractAndChunk, extractAndChunkUrl, classifyChunks, chunkText, extractYoutube, extractGoogleDrive } = require('../services/vaultMiner');
 const { canUploadVaultDoc } = require('../services/subscription');
 
 const HAIKU_MODEL  = 'claude-haiku-4-5-20251001';
@@ -257,6 +257,32 @@ async function saveChunks(docId, chunks, userId, tenantId) {
 // ── Server-side mining for a single document ──────────────────────────────────
 // Called automatically after extraction so mining runs regardless of whether
 // the user stays on the vault page. The frontend only needs to poll for status.
+// Classify one document's unmined chunks into vault_insights, mark them mined,
+// and record the insight count. Shared by the auto-process path and POST /mine.
+// (vault_chunks.mined_at doubles as "classified_at" — same one-pass semantics.)
+async function classifyAndStoreDoc(docId, chunks, filename, userProfile, userId, tenantId) {
+  const insights = await classifyChunks(chunks, filename, userProfile);
+
+  const insertInsight = db.prepare(`
+    INSERT INTO vault_insights (user_id, tenant_id, document_id, category, content, source_ref)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `);
+  for (const ins of insights) {
+    insertInsight.run(userId, tenantId, docId, ins.category, ins.content, ins.source_ref || null);
+  }
+
+  if (chunks.length) {
+    const ids = chunks.map(() => '?').join(',');
+    db.prepare(`UPDATE vault_chunks SET mined_at = now() WHERE id IN (${ids})`).run(...chunks.map(c => c.id));
+  }
+
+  await db.prepare(`
+    UPDATE vault_documents SET status = 'ready', ideas_mined = ideas_mined + ?, updated_at = now() WHERE id = ?
+  `).run(insights.length, docId);
+
+  return insights.length;
+}
+
 async function mineDocumentById(docId, userId, tenantId) {
   const unmined = await db.prepare(`
     SELECT vc.id, vc.document_id, vc.chunk_index, vc.content, vc.source_ref,
@@ -276,32 +302,9 @@ async function mineDocumentById(docId, userId, tenantId) {
 
   const filename    = unmined[0].filename;
   const userProfile = await fetchMiningProfile(tenantId) || {};
+  const n = await classifyAndStoreDoc(docId, unmined, filename, userProfile, userId, tenantId);
 
-  const seeds = await mineChunks(unmined, filename, userProfile);
-
-  const docFilename = filename.length > 60 ? filename.slice(0, 57) + '…' : filename;
-
-  const insertIdea = db.prepare(`
-    INSERT INTO vault_ideas
-      (user_id, tenant_id, document_id, chunk_id, seed_text, source_ref, funnel_type, hook_archetype, hook_preview)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-  for (const seed of seeds) {
-    const sourceRef = `From: "${docFilename}" · ${seed.source_ref}`;
-    insertIdea.run(userId, tenantId, docId, seed.chunkId, seed.seed_text, sourceRef, seed.funnel_type, seed.hook_archetype, seed.hook_line || null);
-  }
-
-  // Bulk-mark chunks as mined
-  if (unmined.length) {
-    const ids = unmined.map(() => '?').join(',');
-    db.prepare(`UPDATE vault_chunks SET mined_at = now() WHERE id IN (${ids})`).run(...unmined.map(c => c.id));
-  }
-
-  await db.prepare(`
-    UPDATE vault_documents SET status = 'ready', ideas_mined = ideas_mined + ?, updated_at = now() WHERE id = ?
-  `).run(seeds.length, docId);
-
-  console.log(`[vault] doc=${docId} auto-mined ${seeds.length} seeds`);
+  console.log(`[vault] doc=${docId} classified into ${n} insights`);
 }
 
 // ---------------------------------------------------------------------------
@@ -391,45 +394,61 @@ router.post('/mine', async (req, res) => {
     byDoc.get(chunk.document_id).chunks.push(chunk);
   }
 
-  // Fetch workspace default profile for audience-aware mining
+  // Fetch workspace default profile for audience-aware classification
   const userProfile = await fetchMiningProfile(tenantId) || {};
 
-  let totalSeeds = 0;
+  let totalInsights = 0;
 
   for (const [docId, { filename, chunks }] of byDoc) {
     try {
-      const seeds = await mineChunks(chunks, filename, userProfile);
-
-      const docFilename = filename.length > 60 ? filename.slice(0, 57) + '…' : filename;
-
-      const insertIdea = db.prepare(`
-        INSERT INTO vault_ideas
-          (user_id, tenant_id, document_id, chunk_id, seed_text, source_ref, funnel_type, hook_archetype, hook_preview)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `);
-      for (const seed of seeds) {
-        const sourceRef = `From: "${docFilename}" · ${seed.source_ref}`;
-        insertIdea.run(userId, tenantId, docId, seed.chunkId, seed.seed_text, sourceRef, seed.funnel_type, seed.hook_archetype, seed.hook_line || null);
-        totalSeeds++;
-      }
-
-      // Bulk-mark chunks as mined
-      if (chunks.length) {
-        const ids = chunks.map(() => '?').join(',');
-        db.prepare(`UPDATE vault_chunks SET mined_at = now() WHERE id IN (${ids})`).run(...chunks.map(c => c.id));
-      }
-
-      // Mark document as ready and record idea count
-      await db.prepare(`
-        UPDATE vault_documents SET status = 'ready', ideas_mined = ideas_mined + ?, updated_at = now() WHERE id = ?
-      `).run(seeds.length, docId);
-
+      totalInsights += await classifyAndStoreDoc(docId, chunks, filename, userProfile, userId, tenantId);
     } catch (err) {
       console.error(`[vault/mine] doc=${docId} failed:`, err.message);
     }
   }
 
-  console.log(`[vault/mine] user=${userId} created ${totalSeeds} seeds`);
+  console.log(`[vault/mine] user=${userId} created ${totalInsights} insights`);
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/vault/insights?document_id= — reusable insights for a document,
+// grouped by category (for the vault knowledge-store overlay).
+// ---------------------------------------------------------------------------
+const INSIGHT_CATEGORY_ORDER = ['key_insight', 'strategy', 'advice', 'lesson', 'mindset_shift', 'quote'];
+
+router.get('/insights', async (req, res) => {
+  const { tenantId } = req;
+  if (!requireUser(req, res)) return;
+
+  const { document_id } = req.query;
+
+  let sql  = `SELECT id, document_id, category, content, source_ref, created_at
+              FROM   vault_insights WHERE tenant_id = ?`;
+  const args = [tenantId];
+  if (document_id) { sql += ` AND document_id = ?`; args.push(Number(document_id)); }
+  sql += ` ORDER BY created_at DESC`;
+
+  const rows = await db.prepare(sql).all(...args);
+
+  // Group into { category, label, items[] } in a stable display order.
+  const LABELS = {
+    key_insight:   'Key Insights',
+    strategy:      'Strategies',
+    advice:        'Actionable Advice',
+    lesson:        'Lessons Learned',
+    mindset_shift: 'Mindset Shifts',
+    quote:         'Memorable Quotes',
+  };
+  const byCat = new Map();
+  for (const r of rows) {
+    if (!byCat.has(r.category)) byCat.set(r.category, []);
+    byCat.get(r.category).push({ id: r.id, content: r.content, source_ref: r.source_ref });
+  }
+  const groups = INSIGHT_CATEGORY_ORDER
+    .filter(cat => byCat.has(cat))
+    .map(cat => ({ category: cat, label: LABELS[cat] || cat, items: byCat.get(cat) }));
+
+  return res.json({ ok: true, total: rows.length, groups });
 });
 
 // ---------------------------------------------------------------------------

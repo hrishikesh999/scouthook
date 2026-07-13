@@ -136,101 +136,20 @@
     </div>
   </div>
 
-  <!-- Ideas slide-over panel (hidden until a card is clicked) -->
-  <div id="vault-ideas-overlay" class="vault-ideas-overlay" style="display:none" role="dialog" aria-modal="true" aria-label="Ideas panel">
+  <!-- Insights slide-over panel (hidden until a document is clicked) -->
+  <div id="vault-ideas-overlay" class="vault-ideas-overlay" style="display:none" role="dialog" aria-modal="true" aria-label="Document insights">
     <div class="vault-ideas-panel">
       <div class="vault-ideas-panel-header">
         <div style="min-width:0">
-          <h2 class="vault-ideas-panel-title" id="vault-ideas-panel-title">Ideas mined</h2>
+          <h2 class="vault-ideas-panel-title" id="vault-ideas-panel-title">Insights</h2>
           <p class="vault-ideas-panel-sub" id="vault-ideas-panel-sub"></p>
         </div>
-        <button id="vault-ideas-close" class="vault-ideas-close" aria-label="Close ideas panel">✕</button>
+        <button id="vault-ideas-close" class="vault-ideas-close" aria-label="Close insights panel">✕</button>
       </div>
       <div id="vault-ideas-body" class="vault-ideas-body" aria-live="polite"></div>
     </div>
   </div>
 
-  <!-- ── Post type picker (shown before navigating to generate) ── -->
-  <div id="vault-type-picker-overlay" class="vault-add-overlay" style="display:none" role="dialog" aria-modal="true" aria-label="Choose a post type">
-    <div class="vault-add-modal vault-type-picker-modal">
-      <div class="vault-add-modal-header">
-        <span style="min-width:60px"></span>
-        <h2 class="vault-add-modal-title">Choose a post type</h2>
-        <button id="vault-type-picker-close" class="vault-add-close" type="button" aria-label="Close">✕</button>
-      </div>
-      <div class="vault-type-grid">
-        <button class="vault-type-card" data-type="trust">
-          <span class="vault-type-card-icon">✏️</span>
-          <div class="vault-type-card-body">
-            <span class="vault-type-card-title">Authority / Expertise</span>
-            <span class="vault-type-card-desc">Teach or clarify a concept</span>
-          </div>
-        </button>
-        <button class="vault-type-card" data-type="story">
-          <span class="vault-type-card-icon">📖</span>
-          <div class="vault-type-card-body">
-            <span class="vault-type-card-title">Story / Experience</span>
-            <span class="vault-type-card-desc">A moment that shaped you</span>
-          </div>
-        </button>
-        <button class="vault-type-card" data-type="bts">
-          <span class="vault-type-card-icon">🎬</span>
-          <div class="vault-type-card-body">
-            <span class="vault-type-card-title">Behind the Scenes</span>
-            <span class="vault-type-card-desc">Show your process</span>
-          </div>
-        </button>
-        <button class="vault-type-card" data-type="contrarian">
-          <span class="vault-type-card-icon">🔥</span>
-          <div class="vault-type-card-body">
-            <span class="vault-type-card-title">Contrarian / Hot Take</span>
-            <span class="vault-type-card-desc">Challenge a belief</span>
-          </div>
-        </button>
-        <button class="vault-type-card" data-type="framework">
-          <span class="vault-type-card-icon">📚</span>
-          <div class="vault-type-card-body">
-            <span class="vault-type-card-title">Framework / How-To</span>
-            <span class="vault-type-card-desc">Step-by-step guidance</span>
-          </div>
-        </button>
-        <button class="vault-type-card" data-type="announcement">
-          <span class="vault-type-card-icon">🎉</span>
-          <div class="vault-type-card-body">
-            <span class="vault-type-card-title">Announcement</span>
-            <span class="vault-type-card-desc">Share news or a launch</span>
-          </div>
-        </button>
-        <button class="vault-type-card" data-type="lead_gen">
-          <span class="vault-type-card-icon">🎯</span>
-          <div class="vault-type-card-body">
-            <span class="vault-type-card-title">Lead Gen / Offer</span>
-            <span class="vault-type-card-desc">Attract your ideal client</span>
-          </div>
-        </button>
-        <button class="vault-type-card" data-type="lessons_learned">
-          <span class="vault-type-card-icon">📝</span>
-          <div class="vault-type-card-body">
-            <span class="vault-type-card-title">Lessons Learned</span>
-            <span class="vault-type-card-desc">Wisdom from experience</span>
-          </div>
-        </button>
-        <button class="vault-type-card" data-type="pis">
-          <span class="vault-type-card-icon">💡</span>
-          <div class="vault-type-card-body">
-            <span class="vault-type-card-title">Problem-Insight-Solution</span>
-            <span class="vault-type-card-desc">Diagnose a problem</span>
-          </div>
-        </button>
-        <button class="vault-type-card" data-type="results">
-          <span class="vault-type-card-icon">📊</span>
-          <div class="vault-type-card-body">
-            <span class="vault-type-card-title">Results / Case Study</span>
-            <span class="vault-type-card-desc">Prove your impact</span>
-          </div>
-        </button>
-      </div>
-    </div>
   </div><!-- /main-content -->
 
   <script src="/js/session.js"></script>
@@ -272,12 +191,6 @@
   const ideasTitle   = document.getElementById('vault-ideas-panel-title');
   const ideasSub     = document.getElementById('vault-ideas-panel-sub');
 
-  const typePickerOverlay = document.getElementById('vault-type-picker-overlay');
-  const typePickerClose   = document.getElementById('vault-type-picker-close');
-
-  let _pendingIdeaId   = null;
-  let _pendingIdeaSeed = '';
-
   // ── Add Knowledge modal ─────────────────────────────────────────────────────
   addBtn.addEventListener('click', openAddModal);
 
@@ -303,36 +216,9 @@
   addBack.addEventListener('click', () => { showStep1(); clearModalStatus(); });
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
-      if (typePickerOverlay.style.display !== 'none') closeTypePicker();
-      else if (addOverlay.style.display !== 'none') closeAddModal();
+      if (addOverlay.style.display !== 'none') closeAddModal();
       else if (ideasOverlay.style.display !== 'none') closeIdeasPanel();
     }
-  });
-
-  // ── Type picker ───────────────────────────────────────────────────────────
-  function openTypePicker(ideaId, ideaSeed) {
-    _pendingIdeaId   = ideaId;
-    _pendingIdeaSeed = ideaSeed;
-    typePickerOverlay.style.display = 'flex';
-  }
-
-  function closeTypePicker() {
-    typePickerOverlay.style.display = 'none';
-    _pendingIdeaId   = null;
-    _pendingIdeaSeed = '';
-  }
-
-  typePickerClose.addEventListener('click', closeTypePicker);
-  typePickerOverlay.addEventListener('click', e => { if (e.target === typePickerOverlay) closeTypePicker(); });
-
-  typePickerOverlay.querySelectorAll('.vault-type-card').forEach(card => {
-    card.addEventListener('click', () => {
-      const type = card.dataset.type;
-      const seed = _pendingIdeaSeed.slice(0, 800);
-      const url  = `/generate.html?type=${encodeURIComponent(type)}&idea=${encodeURIComponent(seed)}&vault_idea_id=${encodeURIComponent(_pendingIdeaId || '')}`;
-      closeTypePicker();
-      window.location.href = url;
-    });
   });
 
   function showStep1() {
@@ -535,19 +421,21 @@
     const effSt   = effectiveStatus(doc);
     const badge   = statusBadge(effSt);
     const date    = new Date(doc.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-    const ideaStr = doc.ideas_mined ? ` · ${doc.ideas_mined} idea${doc.ideas_mined !== 1 ? 's' : ''} found` : '';
-    const meta    = `${doc.source_type.toUpperCase()} · ${date}${doc.chunk_count ? ` · ${doc.chunk_count} sections` : ''}${ideaStr}`;
+    // ideas_mined column now counts classified insights (reused, not renamed).
+    const nInsights = doc.ideas_mined || 0;
+    const insightStr = nInsights ? ` · ${nInsights} insight${nInsights !== 1 ? 's' : ''}` : '';
+    const meta    = `${doc.source_type.toUpperCase()} · ${date}${doc.chunk_count ? ` · ${doc.chunk_count} sections` : ''}${insightStr}`;
     const errMsg  = doc.status === 'error' && doc.error_message
       ? `<p style="font-size:0.75rem;color:var(--text-danger);margin:4px 0 0 0">${escHtml(doc.error_message)}</p>` : '';
 
-    const isNewlyMined = newlyMinedIds.has(doc.id) && !!doc.ideas_mined;
-    const bodyAttrs = `data-id="${doc.id}" data-name="${escHtml(doc.filename)}" data-count="${doc.ideas_mined || 0}"`;
-    const bodyStart = doc.ideas_mined
-      ? `<button class="vault-doc-card-body-btn" type="button" title="View ${doc.ideas_mined} mined idea${doc.ideas_mined !== 1 ? 's' : ''}" ${bodyAttrs}>`
+    const isNewlyMined = newlyMinedIds.has(doc.id) && !!nInsights;
+    const bodyAttrs = `data-id="${doc.id}" data-name="${escHtml(doc.filename)}" data-count="${nInsights}"`;
+    const bodyStart = nInsights
+      ? `<button class="vault-doc-card-body-btn" type="button" title="View ${nInsights} insight${nInsights !== 1 ? 's' : ''}" ${bodyAttrs}>`
       : `<div class="vault-doc-body">`;
-    const bodyEnd   = doc.ideas_mined ? `</button>` : `</div>`;
+    const bodyEnd   = nInsights ? `</button>` : `</div>`;
     const ctaLine   = isNewlyMined
-      ? `<p class="vault-doc-card-cta">✨ ${doc.ideas_mined} idea${doc.ideas_mined !== 1 ? 's' : ''} ready — tap to explore <span class="vault-doc-card-cta-arrow">→</span></p>`
+      ? `<p class="vault-doc-card-cta">✨ ${nInsights} insight${nInsights !== 1 ? 's' : ''} organized — tap to view <span class="vault-doc-card-cta-arrow">→</span></p>`
       : '';
 
     return `
@@ -567,7 +455,7 @@
   }
 
   function statusBadge(status) {
-    const labels = { pending: 'Pending', indexing: 'Indexing…', mining: 'Mining ideas…', ready: 'Ready', error: 'Error' };
+    const labels = { pending: 'Pending', indexing: 'Indexing…', mining: 'Organizing…', ready: 'Ready', error: 'Error' };
     return `<span class="vault-status-badge ${status}"><span class="vault-status-dot"></span>${labels[status] || status}</span>`;
   }
 
@@ -671,10 +559,10 @@
       <div class="vault-mine-banner" id="vault-mine-banner">
         <span class="vault-mine-banner-icon">✨</span>
         <div class="vault-mine-banner-body">
-          <p class="vault-mine-banner-title">${count} idea${count !== 1 ? 's' : ''} mined from &ldquo;${escHtml(short)}&rdquo;</p>
-          <p class="vault-mine-banner-sub">Click the file card below to explore them</p>
+          <p class="vault-mine-banner-title">${count} insight${count !== 1 ? 's' : ''} organized from &ldquo;${escHtml(short)}&rdquo;</p>
+          <p class="vault-mine-banner-sub">ScoutHook will use these to generate your daily ideas</p>
         </div>
-        <button class="vault-mine-banner-btn" id="vault-mine-view-btn">View ideas</button>
+        <button class="vault-mine-banner-btn" id="vault-mine-view-btn">View insights</button>
         <button class="vault-mine-banner-dismiss" aria-label="Dismiss">✕</button>
       </div>`;
     document.getElementById('vault-mine-view-btn').addEventListener('click', () => {
@@ -691,63 +579,62 @@
     if (el) el.remove();
   }
 
-  async function openIdeasPanel(docId, docFilename, ideaCount) {
+  async function openIdeasPanel(docId, docFilename, insightCount) {
     newlyMinedIds.delete(docId);
     dismissMineBanner();
     const card = docList.querySelector(`.vault-doc-card[data-id="${docId}"]`);
     if (card) card.removeAttribute('data-newly-mined');
 
     ideasOverlay.dataset.docId = String(docId);
-    ideasTitle.textContent     = `${ideaCount} idea${ideaCount !== 1 ? 's' : ''} mined`;
+    ideasTitle.textContent     = `${insightCount} insight${insightCount !== 1 ? 's' : ''} organized`;
     ideasSub.textContent       = docFilename;
-    ideasBody.innerHTML        = '<p class="vault-ideas-loading">Loading ideas…</p>';
+    ideasBody.innerHTML        = '<p class="vault-ideas-loading">Loading insights…</p>';
     ideasOverlay.style.display = 'flex';
 
     try {
-      const res  = await fetch(`/api/vault/ideas?document_id=${docId}`);
+      const res  = await fetch(`/api/vault/insights?document_id=${docId}`);
       const data = await res.json();
-      if (!data.ok) throw new Error(data.error || 'Failed to load ideas');
+      if (!data.ok) throw new Error(data.error || 'Failed to load insights');
 
-      const ideas = data.ideas || [];
-      if (!ideas.length) {
-        ideasBody.innerHTML = '<p class="vault-ideas-empty">No ideas found for this document yet.</p>';
+      const groups = data.groups || [];
+      if (!groups.length) {
+        ideasBody.innerHTML = '<p class="vault-ideas-empty">No insights found for this document yet.</p>';
         return;
       }
 
-      ideasBody.innerHTML = ideas.map(idea => renderIdeaItem(idea)).join('');
+      ideasBody.innerHTML = groups.map(renderInsightGroup).join('');
     } catch (err) {
-      ideasBody.innerHTML = `<p class="vault-ideas-empty" style="color:var(--text-danger)">Could not load ideas: ${escHtml(err.message)}</p>`;
+      ideasBody.innerHTML = `<p class="vault-ideas-empty" style="color:var(--text-danger)">Could not load insights: ${escHtml(err.message)}</p>`;
     }
   }
 
-  function renderIdeaItem(idea) {
-    const funnel   = (idea.funnel_type || 'reach').toLowerCase();
-    const label    = { reach: 'Reach', trust: 'Trust', convert: 'Convert' }[funnel] || funnel;
-    const hook     = idea.hook_preview || '';
-    const seed     = idea.seed_text    || '';
-    const display  = hook || seed;
-    const detail   = hook ? seed : '';
-    const ideaSeed = (seed || hook);
-
+  // A category section: heading + a list of insight lines. Quotes render
+  // italic; mindset shifts ("From: X → To: Y") split onto two labelled lines.
+  function renderInsightGroup(group) {
+    const items = (group.items || []).map(it => renderInsightItem(group.category, it.content)).join('');
     return `
-      <div class="vault-idea-item">
-        <span class="vault-idea-funnel ${funnel}">${escHtml(label)}</span>
-        <p class="vault-idea-hook">${escHtml(display)}</p>
-        ${detail ? `<p class="vault-idea-seed">${escHtml(detail)}</p>` : ''}
-        <div class="vault-idea-actions">
-          <button class="vault-idea-generate" type="button"
-            data-idea-id="${escHtml(String(idea.id || ''))}"
-            data-idea-seed="${escHtml(ideaSeed)}">Generate post →</button>
-        </div>
-      </div>`;
+      <section class="vault-insight-group">
+        <h3 class="vault-insight-group-title">${escHtml(group.label)}</h3>
+        <div class="vault-insight-list">${items}</div>
+      </section>`;
   }
 
-  // Delegate clicks on "Generate post" buttons inside the ideas panel
-  ideasBody.addEventListener('click', e => {
-    const btn = e.target.closest('.vault-idea-generate');
-    if (!btn) return;
-    openTypePicker(btn.dataset.ideaId, btn.dataset.ideaSeed);
-  });
+  function renderInsightItem(category, content) {
+    const text = String(content || '').trim();
+    if (category === 'quote') {
+      return `<p class="vault-insight-item vault-insight-quote">${escHtml(text)}</p>`;
+    }
+    if (category === 'mindset_shift') {
+      const m = text.match(/^from:\s*(.+?)\s*(?:→|->|to:)\s*(.+)$/i);
+      if (m) {
+        return `<div class="vault-insight-item vault-insight-shift">
+          <p><span class="vault-insight-shift-label">From</span> ${escHtml(m[1].replace(/^to:\s*/i, ''))}</p>
+          <p><span class="vault-insight-shift-label">To</span> ${escHtml(m[2])}</p>
+        </div>`;
+      }
+    }
+    return `<p class="vault-insight-item"><span class="vault-insight-tick" aria-hidden="true">✓</span>${escHtml(text)}</p>`;
+  }
 
   loadDocuments();
   </script>

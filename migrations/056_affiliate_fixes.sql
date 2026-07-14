@@ -8,11 +8,16 @@ CREATE UNIQUE INDEX IF NOT EXISTS affiliate_payouts_one_pending
   WHERE status = 'pending';
 
 -- Click deduplication: one unique click counted per IP per referral code per UTC day.
--- Uses floor(epoch/86400) instead of DATE(created_at) because DATE(timestamptz)
--- is STABLE (timezone-dependent), not IMMUTABLE — PostgreSQL forbids STABLE
--- functions in index expressions.
+-- extract(epoch from timestamptz) is itself STABLE, not IMMUTABLE — the generic extract()
+-- dispatch also covers timezone-dependent fields (hour, day, etc.), so PostgreSQL won't allow
+-- it directly in an index expression even though epoch itself is timezone-invariant. Wrap it in
+-- a same-body SQL function marked IMMUTABLE so the index can be built.
+CREATE OR REPLACE FUNCTION affiliate_click_epoch_day(ts TIMESTAMPTZ) RETURNS BIGINT AS $$
+  SELECT floor(extract(epoch from ts) / 86400)::bigint
+$$ LANGUAGE sql IMMUTABLE;
+
 CREATE UNIQUE INDEX IF NOT EXISTS affiliate_clicks_dedup
-  ON affiliate_clicks (referral_code, ip_hash, (floor(extract(epoch from created_at) / 86400))::bigint);
+  ON affiliate_clicks (referral_code, ip_hash, affiliate_click_epoch_day(created_at));
 
 -- Track when referral status last changed (useful for auditing churn detection)
 ALTER TABLE affiliate_referrals

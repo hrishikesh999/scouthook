@@ -56,12 +56,26 @@ async function fetchPublishedExamples(profileId) {
   }
 }
 
-function getLengthGuidance(funnelType) {
+// User-chosen post length (Short/Medium/Long pills) → explicit word bands.
+// Single source of truth for every reach/convert + vault generation path so the
+// pill choice actually drives output length. Ranges mirror the generate.html
+// hints (Short ≤100 / Medium 120–250 / Long 300–500).
+const LENGTH_BANDS = {
+  Short:  '70–110 words. One sharp idea, tightly expressed. Cut anything that is not essential.',
+  Medium: '120–250 words. Room to develop the idea with a clear arc, without padding.',
+  Long:   '300–500 words. A fuller treatment — develop the arc completely; do not truncate to stay short.',
+};
+
+// When the user picked a length, honour it; otherwise fall back to the
+// funnel-type default guidance (keeps output byte-identical for callers that
+// pass no preference).
+function getLengthGuidance(funnelType, lengthPreference = null) {
+  if (lengthPreference && LENGTH_BANDS[lengthPreference]) return LENGTH_BANDS[lengthPreference];
   const targets = LINKEDIN_RULES.postLengthTargets;
   return (targets[funnelType] || targets.default).guidance;
 }
 
-function buildPostTypeBlock(postType) {
+function buildPostTypeBlock(postType, lengthPreference = null) {
   const blocks = {
     reach: `POST GOAL: REACH
 This post must attract new readers outside the author's existing audience.
@@ -81,7 +95,14 @@ Structure: numbered framework, checklist, or dense stat cluster — every line i
 Closing: A bookmark nudge — "Save this for next time you [specific situation]."
 TARGET LENGTH: 250–400 words. Tight and information-dense. Every sentence earns its place as reference material. No narrative padding — just the signal, compressed.`,
   };
-  return postType && blocks[postType] ? `\n${blocks[postType]}\n` : '';
+  let block = postType && blocks[postType] ? blocks[postType] : null;
+  if (!block) return '';
+  // Override the block's default TARGET LENGTH line with the user's pill choice.
+  // Absent a preference, the string is returned untouched (snapshot-safe).
+  if (lengthPreference && LENGTH_BANDS[lengthPreference]) {
+    block = block.replace(/TARGET LENGTH:[\s\S]*$/, `TARGET LENGTH: ${LENGTH_BANDS[lengthPreference]}`);
+  }
+  return `\n${block}\n`;
 }
 
 function buildCtaInstruction(funnelType, convertCtaIntent = null) {
@@ -99,10 +120,10 @@ function buildCtaInstruction(funnelType, convertCtaIntent = null) {
 /**
  * Stage 2 system prompt — voice writing with full author context.
  */
-function buildVoiceWritingSystemPrompt(userProfile, ctaInstruction = '', postType = null, examplesBlock = '') {
+function buildVoiceWritingSystemPrompt(userProfile, ctaInstruction = '', postType = null, examplesBlock = '', lengthPreference = null) {
   const phraseLibraryBlock = buildPhraseLibraryBlock(userProfile);
   const voiceDNABlock      = buildVoiceDNABlock(userProfile);
-  const postTypeBlock      = buildPostTypeBlock(postType);
+  const postTypeBlock      = buildPostTypeBlock(postType, lengthPreference);
 
   return `You are writing a LinkedIn post for a professional. You have full creative authority — structure, hook, tone, arc.
 ${examplesBlock}${phraseLibraryBlock}${voiceDNABlock}${postTypeBlock}
@@ -171,7 +192,7 @@ Write a LinkedIn post that:
 - Reads as the author sharing hard-won, specific knowledge — not an AI summary of it
 - Every factual claim must trace back to the source text above; if a claim cannot be grounded in the source, omit it rather than approximating or inventing
 
-LENGTH: ${getLengthGuidance(vaultIdea.funnel_type)}
+LENGTH: ${getLengthGuidance(vaultIdea.funnel_type, options.lengthPreference)}
 
 Return ONLY valid JSON in this exact structure:
 {
@@ -209,7 +230,7 @@ Write a post that:
 - Sounds like a person talking, not a professional presenting
 - Does NOT lecture, summarise, or explain — it provokes and connects
 
-LENGTH: ${getLengthGuidance('reach')}
+LENGTH: ${getLengthGuidance('reach', options.lengthPreference)}
 
 Return ONLY valid JSON in this exact structure:
 {
@@ -299,10 +320,11 @@ function validateSinglePostResponse(parsed) {
  */
 async function vaultSeedToPost(vaultIdea, chunkText, userProfile, options = {}) {
   const userPromptOverride = vaultIdea.funnel_type === 'reach'
-    ? buildReachUserPrompt(vaultIdea, { rawIdea: options.rawIdea })
+    ? buildReachUserPrompt(vaultIdea, { rawIdea: options.rawIdea, lengthPreference: options.lengthPreference })
     : buildVaultUserPrompt(vaultIdea, chunkText, {
         rawIdea:         options.rawIdea,
         neighborContext: options.neighborContext || null,
+        lengthPreference: options.lengthPreference,
       });
 
   return runSinglePostGeneration({
@@ -335,6 +357,7 @@ async function ideaToPost(rawIdea, userProfile, options = {}) {
 
   const postType         = options.postType || null;
   const convertCtaIntent = options.convertCtaIntent || null;
+  const lengthPreference = options.lengthPreference || null;
 
   const shouldCheckSubstance = !options.skipSubstanceCheck && rawIdea.trim().length >= 15;
 
@@ -361,7 +384,7 @@ async function ideaToPost(rawIdea, userProfile, options = {}) {
   options.onStep?.({ step: 'writing', label: 'Writing in your voice...' });
 
   const ctaInstruction = buildCtaInstruction(postType, convertCtaIntent);
-  const systemPrompt   = buildVoiceWritingSystemPrompt(userProfile, ctaInstruction, postType, examplesBlock);
+  const systemPrompt   = buildVoiceWritingSystemPrompt(userProfile, ctaInstruction, postType, examplesBlock, lengthPreference);
   const extraHints     = [options._funnelHint, options.qualityRetryHint, options._regenerateHint].filter(Boolean).join('\n\n');
 
   // ── Streaming path ──────────────────────────────────────────────────────────

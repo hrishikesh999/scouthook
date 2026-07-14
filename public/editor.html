@@ -424,34 +424,6 @@
     <div class="success-sheet-actions" id="success-sheet-actions"></div>
   </div>
 
-  <!-- Visual Boost Overlay (shown once after post generation) -->
-  <div id="visual-boost-overlay" class="visual-boost-overlay" aria-modal="true" role="dialog" aria-hidden="true">
-    <div class="vbo-card">
-      <div class="vbo-header">
-        <h2 class="vbo-title">Your post is ready, how about some visual?</h2>
-        <p class="vbo-subtitle">LinkedIn posts with a visual get 3&times; more reach</p>
-      </div>
-      <div class="vbo-tiles">
-        <button class="vbo-tile vbo-tile--featured" data-type="html_template">
-          <span class="vbo-tile-badge">Recommended</span>
-          <span class="vbo-tile-icon">🎨</span>
-          <span class="vbo-tile-name">Design Template</span>
-          <span class="vbo-tile-desc">Pro-designed visual from your post</span>
-        </button>
-        <button class="vbo-tile" data-type="media">
-          <span class="vbo-tile-icon">📎</span>
-          <span class="vbo-tile-name">Attach Image</span>
-          <span class="vbo-tile-desc">Upload a photo or PDF</span>
-        </button>
-        <button class="vbo-tile" data-type="text_only">
-          <span class="vbo-tile-icon">📝</span>
-          <span class="vbo-tile-name">Text Only</span>
-          <span class="vbo-tile-desc">Post without any visual</span>
-        </button>
-      </div>
-    </div>
-  </div>
-
   </div>
   <!-- /main-content -->
 
@@ -485,7 +457,6 @@ let _mediaDrawerMode = 'attach';
 const visualCache = new Map();
 
 let _autoSaveTimer        = null;
-let _pendingBoostOverlay  = false;
 let _lastAutoSavedContent = null;
 
 let postVersions  = [];  // [{text, label}] — AI improvement snapshots
@@ -733,11 +704,6 @@ async function loadPost(id) {
     }
 
     checkIfScheduled(currentPostId);
-
-    if (_pendingBoostOverlay) {
-      _pendingBoostOverlay = false;
-      setTimeout(showBoostOverlay, 300);
-    }
 
   } catch {
     const ta = document.getElementById('post-body');
@@ -3420,25 +3386,6 @@ function _showInsertBtn() {
 }
 
 /* ════════════════════════════════════════════════════════════════════════
-   VISUAL BOOST OVERLAY
-════════════════════════════════════════════════════════════════════════ */
-function showBoostOverlay() {
-  const el = document.getElementById('visual-boost-overlay');
-  if (!el) return;
-  el.setAttribute('aria-hidden', 'false');
-  requestAnimationFrame(() => el.classList.add('visible'));
-}
-
-/* DEAD CODE MARKER — remove everything below until next marker */
-
-function hideBoostOverlay() {
-  const el = document.getElementById('visual-boost-overlay');
-  if (!el) return;
-  el.classList.remove('visible');
-  el.setAttribute('aria-hidden', 'true');
-}
-
-/* ════════════════════════════════════════════════════════════════════════
    MEDIA MODAL
 ════════════════════════════════════════════════════════════════════════ */
 async function openMediaDrawer() {
@@ -3845,8 +3792,7 @@ function bindEvents() {
   /* ESC */
   document.addEventListener('keydown', e => {
     if (e.key !== 'Escape') return;
-    if (document.getElementById('visual-boost-overlay').classList.contains('visible')) hideBoostOverlay();
-    else if (document.getElementById('success-sheet').classList.contains('visible'))   closeSuccessSheet();
+    if (document.getElementById('success-sheet').classList.contains('visible'))        closeSuccessSheet();
     else if (document.getElementById('schedule-modal').classList.contains('visible'))  closeModal();
     else if (document.getElementById('html-tpl-overlay')?.getAttribute('aria-hidden') !== 'true')     attemptCloseHtmlTemplateModal();
     else if (document.getElementById('media-modal-overlay')?.getAttribute('aria-hidden') !== 'true')  closeMediaDrawer();
@@ -4056,19 +4002,6 @@ function wireVisualButtons() {
   // Backdrop clicks intentionally do nothing — an accidental click outside
   // the modal must never prompt or close it. The only ways out are the
   // Close button, Cancel, or Escape (all guarded by the dirty-check above).
-
-  // Visual Boost Overlay tiles + backdrop click
-  document.getElementById('visual-boost-overlay')?.addEventListener('click', e => {
-    if (e.target === e.currentTarget) hideBoostOverlay();
-  });
-  document.querySelectorAll('.vbo-tile').forEach(tile => {
-    tile.addEventListener('click', () => {
-      const type = tile.dataset.type;
-      hideBoostOverlay();
-      if      (type === 'html_template')  openHtmlTemplateModal();
-      else if (type === 'media')          openMediaDrawer();
-    });
-  });
 }
 
 function wireAssetChip() {
@@ -4180,16 +4113,48 @@ async function doAutoSave() {
 }
 
 
+/* Paint the just-generated post text (handed off via sessionStorage) so there's
+   no empty-editor flash before loadPost()'s fetch resolves. Only trusts the stash
+   when its id matches the post we're opening. */
+function prefillFromGeneration() {
+  let stash = null;
+  try { stash = JSON.parse(sessionStorage.getItem('sh_gen_post') || 'null'); } catch { stash = null; }
+  sessionStorage.removeItem('sh_gen_post');
+  if (!stash || String(stash.id) !== String(postId) || typeof stash.content !== 'string') return;
+  const pb = document.getElementById('post-body');
+  if (!pb) return;
+  pb.value = normalizeFullStopSpacing(stash.content);
+  autosizeTextarea(pb);
+  syncBackdrop();
+}
+
+/* Celebrate a freshly created post — a light confetti burst (deliberately gentler
+   than the publish celebration, which stays the bigger moment). */
+function celebrateCreation() {
+  if (typeof confetti !== 'function') return;
+  const opts = { disableForReducedMotion: true, zIndex: 9999 };
+  setTimeout(() => {
+    confetti({ ...opts, particleCount: 60, angle: 60,  spread: 55, origin: { x: 0, y: 0.7 } });
+    confetti({ ...opts, particleCount: 60, angle: 120, spread: 55, origin: { x: 1, y: 0.7 } });
+  }, 180);
+}
+
 /* ════════════════════════════════════════════════════════════════════════
    INIT
 ════════════════════════════════════════════════════════════════════════ */
 function init() {
-  // Fresh-from-generation: smooth fade-in + open in Preview so user sees the result first
+  // Fresh-from-generation: smooth fade-in + open in Preview so user sees the result first.
+  // The "add a visual?" boost overlay used to auto-pop here — removed as an unwanted
+  // interruption. Visuals are still one click away via the editor's visual toolbar.
   if (sessionStorage.getItem('sh_from_gen') === '1') {
     sessionStorage.removeItem('sh_from_gen');
     document.getElementById('editor')?.classList.add('is-fresh');
-    _pendingBoostOverlay = true;
+    // Paint the post the generator already produced so the editor never shows an
+    // empty textarea while loadPost()'s own fetch is in flight (loadPost reconciles
+    // with the canonical content + metadata a moment later).
+    prefillFromGeneration();
     switchTab('preview');
+    celebrateCreation();
   }
 
   bindEvents();

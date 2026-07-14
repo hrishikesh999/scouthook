@@ -463,6 +463,7 @@ router.post('/', async (req, res) => {
           const legacy = await ideaToPost(raw_idea, profile, {
             postType:            post_type,
             convertCtaIntent:    convert_cta_intent || null,
+            lengthPreference:    length_preference || null,
             skipSubstanceCheck:  !!skip_substance_check,
           });
           archetypeUsed   = legacy.archetypeUsed;
@@ -546,6 +547,7 @@ router.post('/', async (req, res) => {
         postType:           post_type || vaultIdea.funnel_type || null,
         tensionStatement:   tension_statement || null,
         convertCtaIntent:   convert_cta_intent || null,
+        lengthPreference:   length_preference || null,
         skipSubstanceCheck: true,
       });
       const primaryGate = runQualityGate(
@@ -575,6 +577,7 @@ router.post('/', async (req, res) => {
       const legacyResult = await ideaToPost(raw_idea, profile, {
         postType:           post_type,
         convertCtaIntent:   convert_cta_intent || null,
+        lengthPreference:   length_preference || null,
         skipSubstanceCheck: !!skip_substance_check,
       });
       const legacyGate = runQualityGate(

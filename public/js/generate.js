@@ -64,7 +64,8 @@ let _shownVaultIds      = new Set(); // vault idea IDs shown this session — ro
 let _shownAITopics      = [];        // AI topic titles shown this session — passed as exclusion list
 let _shownIdeaHooks     = [];        // idea engine hook lines shown — passed as exclude_hooks
 let _currentPostTypeFilter = null;   // active filter chip in the idea engine
-let _authorityLengthPreference = 'Medium'; // length choice for Authority/Expertise posts (set via chat)
+let _lengthPreference = 'Medium'; // unified Short/Medium/Long choice — drives length_preference on every flow
+let _awaitingLength   = false;    // true while the length pills are shown — blocks stray send/advance
 let _authorityCtaIntent        = '';       // CTA intent for Authority/Expertise posts
 let _authorityIdeaBrief        = '';       // stores the user's idea while waiting for length selection
 let _authorityMisconception    = '';       // stores misconception answer (step 1)
@@ -73,45 +74,36 @@ let _storyChatStep          = 0;           // 0=event, 1=shift, 2=details, 3=len
 let _storyEvent             = '';
 let _storyShift             = '';
 let _storySupportingDetails = '';
-let _storyLengthPreference  = 'Medium';
 let _btsChatStep            = 0;           // 0=topic, 1=turning_point, 2=context, 3=length
 let _btsTopic               = '';
 let _btsTurningPoint        = '';
 let _btsSupportingContext   = '';
-let _btsLengthPreference    = 'Medium';
 let _contrarianChatStep         = 0;       // 0=belief, 1=pov, 2=reason, 3=length
 let _contrarianBelief           = '';
 let _contrarianPov              = '';
 let _contrarianSupportingReason = '';
-let _contrarianLengthPreference = 'Medium';
 let _frameworkChatStep         = 0;        // 0=topic, 1=context, 2=length
 let _frameworkTopic            = '';
 let _frameworkContext          = '';
-let _frameworkLengthPreference = 'Medium';
 let _announcementChatStep      = 0;        // 0=occasion, 1=length
 let _announcementOccasion      = '';
-let _announcementLengthPreference = 'Medium';
 let _leadGenChatStep         = 0;          // 0=problem, 1=desired_outcome, 2=offer, 3=cta, 4=length
 let _leadGenCoreProblem      = '';
 let _leadGenDesiredOutcome   = '';
 let _leadGenOfferDesc        = '';
 let _leadGenCtaText          = '';
-let _leadGenLengthPreference = 'Medium';
 let _lessonsChatStep          = 0;         // 0=event, 1=obstacle, 2=key_lesson, 3=changed_you, 4=length
 let _lessonsEvent             = '';
 let _lessonsObstacle          = '';
 let _lessonsKeyLesson         = '';
 let _lessonsChangedYou        = '';
-let _lessonsLengthPreference  = 'Medium';
 let _pisChatStep         = 0;  // 0=problem, 1=insight, 2=length
 let _pisProblem          = '';
 let _pisInsight          = '';
-let _pisLengthPreference = 'Medium';
 let _resultsChatStep         = 0;  // 0=outcome, 1=mechanism, 2=who_for, 3=length
 let _resultsOutcome          = '';
 let _resultsMechanism        = '';
 let _resultsWhoFor           = '';
-let _resultsLengthPreference = 'Medium';
 let _prefetchedIdeas    = null;      // prefetched result from /api/vault/generate-ideas
 let _prefetchPromise    = null;      // in-flight prefetch promise (reused if user clicks early)
 let _allFreshIdeas      = [];        // all fetched fresh ideas — filters applied client-side
@@ -956,42 +948,60 @@ const chat = (() => {
     return wrap;
   }
 
-  // Authority/Expertise step 2: render length-choice bot bubble with label + help text + chips
-  function showAuthorityLengthQuestion() {
-    const bubble = addQuestionBubble(
-      'Post length',
-      'Choose how deep you want to go. Short = one sharp idea. Medium = explained clearly. Long = detailed breakdown.'
-    );
+  // Shared length picker — the single Short/Medium/Long renderer used by every
+  // flow (all 10 guided types + the reach/convert coach, idea-card and vault
+  // paths). Sets the unified _lengthPreference, then runs opts.onPick to generate.
+  //   opts.help    — help line under the "Post length" label (optional)
+  //   opts.options — [{ value, label, hint }] chips (defaults to the word-count set)
+  //   opts.onPick  — (value, label) => void, fired after the choice is recorded
+  const DEFAULT_LENGTH_OPTIONS = [
+    { value: 'Short',  label: 'Short',  hint: '≤100 words'    },
+    { value: 'Medium', label: 'Medium', hint: '120-250 words' },
+    { value: 'Long',   label: 'Long',   hint: '300-500 words' },
+  ];
+  const DEFAULT_LENGTH_HELP =
+    'Choose how long the post should be. Short = one sharp idea. Medium = explained clearly. Long = detailed breakdown.';
+
+  function showLengthQuestion(opts) {
+    opts = opts || {};
+    _awaitingLength = true;
+    const bubble = addQuestionBubble('Post length', opts.help || DEFAULT_LENGTH_HELP);
 
     const chips = document.createElement('div');
     chips.className = 'authority-length-chips';
 
-    const lengths = [
-      { value: 'Short',  label: 'Short',  hint: '≤100 words'   },
-      { value: 'Medium', label: 'Medium', hint: '120-250 words' },
-      { value: 'Long',   label: 'Long',   hint: '300-500 words' },
-    ];
-
-    lengths.forEach(({ value, label, hint }) => {
+    (opts.options || DEFAULT_LENGTH_OPTIONS).forEach(({ value, label, hint }) => {
       const btn = document.createElement('button');
       btn.className = 'length-chip';
       btn.type      = 'button';
       btn.innerHTML = `${label} <span class="length-chip-hint">${hint}</span>`;
       btn.addEventListener('click', () => {
-        _authorityLengthPreference = value;
+        if (!_awaitingLength) return; // guard against double-tap after the pick
+        _awaitingLength    = false;
+        _lengthPreference  = value;
         chips.querySelectorAll('.length-chip').forEach(c => c.classList.remove('active'));
         btn.classList.add('active');
         addUser(label);
-        const ideaWithContext = _authorityMisconception
-          ? _authorityIdeaBrief + '\n\nCOMMON MISCONCEPTION: ' + _authorityMisconception
-          : _authorityIdeaBrief;
-        triggerGenerate({ enrichedIdea: ideaWithContext });
+        if (typeof opts.onPick === 'function') opts.onPick(value, label);
       });
       chips.appendChild(btn);
     });
 
     bubble.appendChild(chips);
     scrollChatToBottom();
+  }
+
+  // Authority/Expertise step 2: length choice → generate.
+  function showAuthorityLengthQuestion() {
+    showLengthQuestion({
+      help: 'Choose how deep you want to go. Short = one sharp idea. Medium = explained clearly. Long = detailed breakdown.',
+      onPick: () => {
+        const ideaWithContext = _authorityMisconception
+          ? _authorityIdeaBrief + '\n\nCOMMON MISCONCEPTION: ' + _authorityMisconception
+          : _authorityIdeaBrief;
+        triggerGenerate({ enrichedIdea: ideaWithContext });
+      },
+    });
   }
 
   // ── Story / Personal Experience step renderers ──────────────────────────
@@ -1030,34 +1040,15 @@ const chat = (() => {
   }
 
   function showStoryLengthQuestion() {
-    const bubble = addQuestionBubble(
-      'Post length',
-      'Choose how deep you want to go. Short = one sharp beat. Medium = full arc. Long = detailed breakdown.'
-    );
-    const chips = document.createElement('div');
-    chips.className = 'authority-length-chips';
-
-    [
-      { value: 'Short',  label: 'Short',  hint: '8–12 lines'  },
-      { value: 'Medium', label: 'Medium', hint: '12–18 lines' },
-      { value: 'Long',   label: 'Long',   hint: '18–30 lines' },
-    ].forEach(({ value, label, hint }) => {
-      const btn = document.createElement('button');
-      btn.className = 'length-chip';
-      btn.type      = 'button';
-      btn.innerHTML = `${label} <span class="length-chip-hint">${hint}</span>`;
-      btn.addEventListener('click', () => {
-        _storyLengthPreference = value;
-        chips.querySelectorAll('.length-chip').forEach(c => c.classList.remove('active'));
-        btn.classList.add('active');
-        addUser(label);
-        triggerGenerate({ enrichedIdea: _buildStoryPrompt() });
-      });
-      chips.appendChild(btn);
+    showLengthQuestion({
+      help: 'Choose how deep you want to go. Short = one sharp beat. Medium = full arc. Long = detailed breakdown.',
+      options: [
+        { value: 'Short',  label: 'Short',  hint: '8–12 lines'  },
+        { value: 'Medium', label: 'Medium', hint: '12–18 lines' },
+        { value: 'Long',   label: 'Long',   hint: '18–30 lines' },
+      ],
+      onPick: () => triggerGenerate({ enrichedIdea: _buildStoryPrompt() }),
     });
-
-    bubble.appendChild(chips);
-    scrollChatToBottom();
   }
 
   function _buildStoryPrompt() {
@@ -1130,34 +1121,15 @@ const chat = (() => {
   }
 
   function showLessonsLengthQuestion() {
-    const bubble = addQuestionBubble(
-      'Post length',
-      'Choose how deep you want to go. Short = one sharp lesson. Medium = full arc. Long = detailed reflection.'
-    );
-    const chips = document.createElement('div');
-    chips.className = 'authority-length-chips';
-
-    [
-      { value: 'Short',  label: 'Short',  hint: '8–12 lines'  },
-      { value: 'Medium', label: 'Medium', hint: '12–18 lines' },
-      { value: 'Long',   label: 'Long',   hint: '18–28 lines' },
-    ].forEach(({ value, label, hint }) => {
-      const btn = document.createElement('button');
-      btn.className = 'length-chip';
-      btn.type      = 'button';
-      btn.innerHTML = `${label} <span class="length-chip-hint">${hint}</span>`;
-      btn.addEventListener('click', () => {
-        _lessonsLengthPreference = value;
-        chips.querySelectorAll('.length-chip').forEach(c => c.classList.remove('active'));
-        btn.classList.add('active');
-        addUser(label);
-        triggerGenerate({ enrichedIdea: _buildLessonsPrompt() });
-      });
-      chips.appendChild(btn);
+    showLengthQuestion({
+      help: 'Choose how deep you want to go. Short = one sharp lesson. Medium = full arc. Long = detailed reflection.',
+      options: [
+        { value: 'Short',  label: 'Short',  hint: '8–12 lines'  },
+        { value: 'Medium', label: 'Medium', hint: '12–18 lines' },
+        { value: 'Long',   label: 'Long',   hint: '18–28 lines' },
+      ],
+      onPick: () => triggerGenerate({ enrichedIdea: _buildLessonsPrompt() }),
     });
-
-    bubble.appendChild(chips);
-    scrollChatToBottom();
   }
 
   function _buildLessonsPrompt() {
@@ -1194,34 +1166,15 @@ const chat = (() => {
   }
 
   function showPisLengthQuestion() {
-    const bubble = addQuestionBubble(
-      'Post length',
-      'Short = tight problem + one clear insight. Medium = full PIS arc. Long = detailed framework breakdown.'
-    );
-    const chips = document.createElement('div');
-    chips.className = 'authority-length-chips';
-
-    [
-      { value: 'Short',  label: 'Short',  hint: '8–12 lines'  },
-      { value: 'Medium', label: 'Medium', hint: '12–18 lines' },
-      { value: 'Long',   label: 'Long',   hint: '18–25 lines' },
-    ].forEach(({ value, label, hint }) => {
-      const btn = document.createElement('button');
-      btn.className = 'length-chip';
-      btn.type      = 'button';
-      btn.innerHTML = `${label} <span class="length-chip-hint">${hint}</span>`;
-      btn.addEventListener('click', () => {
-        _pisLengthPreference = value;
-        chips.querySelectorAll('.length-chip').forEach(c => c.classList.remove('active'));
-        btn.classList.add('active');
-        addUser(label);
-        triggerGenerate({ enrichedIdea: _buildPisPrompt() });
-      });
-      chips.appendChild(btn);
+    showLengthQuestion({
+      help: 'Short = tight problem + one clear insight. Medium = full PIS arc. Long = detailed framework breakdown.',
+      options: [
+        { value: 'Short',  label: 'Short',  hint: '8–12 lines'  },
+        { value: 'Medium', label: 'Medium', hint: '12–18 lines' },
+        { value: 'Long',   label: 'Long',   hint: '18–25 lines' },
+      ],
+      onPick: () => triggerGenerate({ enrichedIdea: _buildPisPrompt() }),
     });
-
-    bubble.appendChild(chips);
-    scrollChatToBottom();
   }
 
   function _buildPisPrompt() {
@@ -1281,34 +1234,15 @@ const chat = (() => {
   }
 
   function showResultsLengthQuestion() {
-    const bubble = addQuestionBubble(
-      'Post length',
-      'Short = tight hook + result + one lesson. Medium = full arc. Long = detailed breakdown.'
-    );
-    const chips = document.createElement('div');
-    chips.className = 'authority-length-chips';
-
-    [
-      { value: 'Short',  label: 'Short',  hint: '8–12 lines'  },
-      { value: 'Medium', label: 'Medium', hint: '12–18 lines' },
-      { value: 'Long',   label: 'Long',   hint: '18–28 lines' },
-    ].forEach(({ value, label, hint }) => {
-      const btn = document.createElement('button');
-      btn.className = 'length-chip';
-      btn.type      = 'button';
-      btn.innerHTML = `${label} <span class="length-chip-hint">${hint}</span>`;
-      btn.addEventListener('click', () => {
-        _resultsLengthPreference = value;
-        chips.querySelectorAll('.length-chip').forEach(c => c.classList.remove('active'));
-        btn.classList.add('active');
-        addUser(label);
-        triggerGenerate({ enrichedIdea: _buildResultsPrompt() });
-      });
-      chips.appendChild(btn);
+    showLengthQuestion({
+      help: 'Short = tight hook + result + one lesson. Medium = full arc. Long = detailed breakdown.',
+      options: [
+        { value: 'Short',  label: 'Short',  hint: '8–12 lines'  },
+        { value: 'Medium', label: 'Medium', hint: '12–18 lines' },
+        { value: 'Long',   label: 'Long',   hint: '18–28 lines' },
+      ],
+      onPick: () => triggerGenerate({ enrichedIdea: _buildResultsPrompt() }),
     });
-
-    bubble.appendChild(chips);
-    scrollChatToBottom();
   }
 
   function _buildResultsPrompt() {
@@ -1354,34 +1288,10 @@ const chat = (() => {
   }
 
   function showBtsLengthQuestion() {
-    const bubble = addQuestionBubble(
-      'Post length',
-      'Choose how deep you want to go. Short = one sharp observation. Medium = process breakdown. Long = detailed walkthrough.'
-    );
-    const chips = document.createElement('div');
-    chips.className = 'authority-length-chips';
-
-    [
-      { value: 'Short',  label: 'Short',  hint: '≤100 words'   },
-      { value: 'Medium', label: 'Medium', hint: '120-250 words' },
-      { value: 'Long',   label: 'Long',   hint: '300-500 words' },
-    ].forEach(({ value, label, hint }) => {
-      const btn = document.createElement('button');
-      btn.className = 'length-chip';
-      btn.type      = 'button';
-      btn.innerHTML = `${label} <span class="length-chip-hint">${hint}</span>`;
-      btn.addEventListener('click', () => {
-        _btsLengthPreference = value;
-        chips.querySelectorAll('.length-chip').forEach(c => c.classList.remove('active'));
-        btn.classList.add('active');
-        addUser(label);
-        triggerGenerate({ enrichedIdea: _buildBtsPrompt() });
-      });
-      chips.appendChild(btn);
+    showLengthQuestion({
+      help: 'Choose how deep you want to go. Short = one sharp observation. Medium = process breakdown. Long = detailed walkthrough.',
+      onPick: () => triggerGenerate({ enrichedIdea: _buildBtsPrompt() }),
     });
-
-    bubble.appendChild(chips);
-    scrollChatToBottom();
   }
 
   function _buildBtsPrompt() {
@@ -1431,34 +1341,15 @@ const chat = (() => {
   }
 
   function showContrarianLengthQuestion() {
-    const bubble = addQuestionBubble(
-      'Post length',
-      'Short = a sharp, punchy take. Medium = belief + reasoning. Long = full breakdown with implication.'
-    );
-    const chips = document.createElement('div');
-    chips.className = 'authority-length-chips';
-
-    [
-      { value: 'Short',  label: 'Short',  hint: '6–10 lines'  },
-      { value: 'Medium', label: 'Medium', hint: '10–15 lines' },
-      { value: 'Long',   label: 'Long',   hint: '15–25 lines' },
-    ].forEach(({ value, label, hint }) => {
-      const btn = document.createElement('button');
-      btn.className = 'length-chip';
-      btn.type      = 'button';
-      btn.innerHTML = `${label} <span class="length-chip-hint">${hint}</span>`;
-      btn.addEventListener('click', () => {
-        _contrarianLengthPreference = value;
-        chips.querySelectorAll('.length-chip').forEach(c => c.classList.remove('active'));
-        btn.classList.add('active');
-        addUser(label);
-        triggerGenerate({ enrichedIdea: _buildContrarianPrompt() });
-      });
-      chips.appendChild(btn);
+    showLengthQuestion({
+      help: 'Short = a sharp, punchy take. Medium = belief + reasoning. Long = full breakdown with implication.',
+      options: [
+        { value: 'Short',  label: 'Short',  hint: '6–10 lines'  },
+        { value: 'Medium', label: 'Medium', hint: '10–15 lines' },
+        { value: 'Long',   label: 'Long',   hint: '15–25 lines' },
+      ],
+      onPick: () => triggerGenerate({ enrichedIdea: _buildContrarianPrompt() }),
     });
-
-    bubble.appendChild(chips);
-    scrollChatToBottom();
   }
 
   function _buildContrarianPrompt() {
@@ -1498,34 +1389,15 @@ const chat = (() => {
   }
 
   function showFrameworkLengthQuestion() {
-    const bubble = addQuestionBubble(
-      'Post length',
-      'Short = tight punchy lesson. Medium = full framework with steps. Long = detailed breakdown with examples.'
-    );
-    const chips = document.createElement('div');
-    chips.className = 'authority-length-chips';
-
-    [
-      { value: 'Short',  label: 'Short',  hint: '6–10 lines'  },
-      { value: 'Medium', label: 'Medium', hint: '10–15 lines' },
-      { value: 'Long',   label: 'Long',   hint: '15–25 lines' },
-    ].forEach(({ value, label, hint }) => {
-      const btn = document.createElement('button');
-      btn.className = 'length-chip';
-      btn.type      = 'button';
-      btn.innerHTML = `${label} <span class="length-chip-hint">${hint}</span>`;
-      btn.addEventListener('click', () => {
-        _frameworkLengthPreference = value;
-        chips.querySelectorAll('.length-chip').forEach(c => c.classList.remove('active'));
-        btn.classList.add('active');
-        addUser(label);
-        triggerGenerate({ enrichedIdea: _buildFrameworkPrompt() });
-      });
-      chips.appendChild(btn);
+    showLengthQuestion({
+      help: 'Short = tight punchy lesson. Medium = full framework with steps. Long = detailed breakdown with examples.',
+      options: [
+        { value: 'Short',  label: 'Short',  hint: '6–10 lines'  },
+        { value: 'Medium', label: 'Medium', hint: '10–15 lines' },
+        { value: 'Long',   label: 'Long',   hint: '15–25 lines' },
+      ],
+      onPick: () => triggerGenerate({ enrichedIdea: _buildFrameworkPrompt() }),
     });
-
-    bubble.appendChild(chips);
-    scrollChatToBottom();
   }
 
   function _buildFrameworkPrompt() {
@@ -1537,34 +1409,15 @@ const chat = (() => {
   }
 
   function showAnnouncementLengthQuestion() {
-    const bubble = addQuestionBubble(
-      'Post length',
-      'Short for a quick warm note, Medium for a fuller message.'
-    );
-    const chips = document.createElement('div');
-    chips.className = 'authority-length-chips';
-
-    [
-      { value: 'Short',  label: 'Short',  hint: '≤100 words'   },
-      { value: 'Medium', label: 'Medium', hint: '60–120 words'  },
-      { value: 'Long',   label: 'Long',   hint: '150–200 words' },
-    ].forEach(({ value, label, hint }) => {
-      const btn = document.createElement('button');
-      btn.className = 'length-chip';
-      btn.type      = 'button';
-      btn.innerHTML = `${label} <span class="length-chip-hint">${hint}</span>`;
-      btn.addEventListener('click', () => {
-        _announcementLengthPreference = value;
-        chips.querySelectorAll('.length-chip').forEach(c => c.classList.remove('active'));
-        btn.classList.add('active');
-        addUser(label);
-        triggerGenerate({ enrichedIdea: _buildAnnouncementPrompt() });
-      });
-      chips.appendChild(btn);
+    showLengthQuestion({
+      help: 'Short for a quick warm note, Medium for a fuller message.',
+      options: [
+        { value: 'Short',  label: 'Short',  hint: '≤100 words'   },
+        { value: 'Medium', label: 'Medium', hint: '60–120 words'  },
+        { value: 'Long',   label: 'Long',   hint: '150–200 words' },
+      ],
+      onPick: () => triggerGenerate({ enrichedIdea: _buildAnnouncementPrompt() }),
     });
-
-    bubble.appendChild(chips);
-    scrollChatToBottom();
   }
 
   function _buildAnnouncementPrompt() {
@@ -1630,34 +1483,15 @@ const chat = (() => {
   }
 
   function showLeadGenLengthQuestion() {
-    const bubble = addQuestionBubble(
-      'Post length',
-      'Short = hook + pain + one insight + soft invite. Medium = full structure. Long = fuller treatment with desire arc.'
-    );
-    const chips = document.createElement('div');
-    chips.className = 'authority-length-chips';
-
-    [
-      { value: 'Short',  label: 'Short',  hint: '6–10 lines'  },
-      { value: 'Medium', label: 'Medium', hint: '10–15 lines' },
-      { value: 'Long',   label: 'Long',   hint: '15–22 lines' },
-    ].forEach(({ value, label, hint }) => {
-      const btn = document.createElement('button');
-      btn.className = 'length-chip';
-      btn.type      = 'button';
-      btn.innerHTML = `${label} <span class="length-chip-hint">${hint}</span>`;
-      btn.addEventListener('click', () => {
-        _leadGenLengthPreference = value;
-        chips.querySelectorAll('.length-chip').forEach(c => c.classList.remove('active'));
-        btn.classList.add('active');
-        addUser(label);
-        triggerGenerate({ enrichedIdea: _buildLeadGenPrompt() });
-      });
-      chips.appendChild(btn);
+    showLengthQuestion({
+      help: 'Short = hook + pain + one insight + soft invite. Medium = full structure. Long = fuller treatment with desire arc.',
+      options: [
+        { value: 'Short',  label: 'Short',  hint: '6–10 lines'  },
+        { value: 'Medium', label: 'Medium', hint: '10–15 lines' },
+        { value: 'Long',   label: 'Long',   hint: '15–22 lines' },
+      ],
+      onPick: () => triggerGenerate({ enrichedIdea: _buildLeadGenPrompt() }),
     });
-
-    bubble.appendChild(chips);
-    scrollChatToBottom();
   }
 
   function _buildLeadGenPrompt() {
@@ -1709,54 +1543,46 @@ const chat = (() => {
     // Switching post type exits idea-card mode (thread is cleared below anyway).
     // selectedIdeaCardId is intentionally kept so funnel stamping still works.
     _ideaCard = { active: false, card: null, step: 0, answers: [] };
+    _lengthPreference      = 'Medium';
+    _awaitingLength        = false;
     _authorityIdeaBrief    = '';
     _authorityMisconception = '';
     _authorityChatStep     = 0;
-    _authorityLengthPreference = 'Medium';
     _authorityCtaIntent    = '';
     _storyChatStep          = 0;
     _storyEvent             = '';
     _storyShift             = '';
     _storySupportingDetails = '';
-    _storyLengthPreference  = 'Medium';
     _btsChatStep            = 0;
     _btsTopic               = '';
     _btsTurningPoint        = '';
     _btsSupportingContext   = '';
-    _btsLengthPreference    = 'Medium';
     _contrarianChatStep         = 0;
     _contrarianBelief           = '';
     _contrarianPov              = '';
     _contrarianSupportingReason = '';
-    _contrarianLengthPreference = 'Medium';
     _frameworkChatStep         = 0;
     _frameworkTopic            = '';
     _frameworkContext          = '';
-    _frameworkLengthPreference = 'Medium';
     _announcementChatStep      = 0;
     _announcementOccasion      = '';
-    _announcementLengthPreference = 'Medium';
     _leadGenChatStep         = 0;
     _leadGenCoreProblem      = '';
     _leadGenDesiredOutcome   = '';
     _leadGenOfferDesc        = '';
     _leadGenCtaText          = '';
-    _leadGenLengthPreference = 'Medium';
     _lessonsChatStep          = 0;
     _lessonsEvent             = '';
     _lessonsObstacle          = '';
     _lessonsKeyLesson         = '';
     _lessonsChangedYou        = '';
-    _lessonsLengthPreference  = 'Medium';
     _pisChatStep         = 0;
     _pisProblem          = '';
     _pisInsight          = '';
-    _pisLengthPreference = 'Medium';
     _resultsChatStep         = 0;
     _resultsOutcome          = '';
     _resultsMechanism        = '';
     _resultsWhoFor           = '';
-    _resultsLengthPreference = 'Medium';
     _coach = { active: false, originalBrief: '', history: [], exchangeCount: 0, awaitingSkip: false, pendingQ: null, intakeInFlight: false, seq: (_coach.seq ?? 0) + 1 };
 
     chatThread.innerHTML = '';
@@ -1820,6 +1646,9 @@ const chat = (() => {
     // Block double-submit while an intake call is already in flight
     if (_coach.intakeInFlight) return;
 
+    // Length pills are showing — the choice comes from a chip click, not a send.
+    if (_awaitingLength) return;
+
     const val = chatInput.value.trim();
     if (!val) { showChatInputError('Add something before generating.'); chatInput.focus(); return; }
     // Idea-card answers are often short and specific ("doubled it", "$40k in Q3")
@@ -1850,23 +1679,26 @@ const chat = (() => {
         _ideaCard.step = 1;
         addQuestionBubble(items[1].q, items[1].help);
         chatInput.placeholder = '1–3 sentences, plain words…';
-        renderStepDots(1, 2);
+        renderStepDots(1, 3);
         chatInput.focus();
         return;
       }
-      // Q2 answered — compose the brief and generate.
-      triggerGenerate({ enrichedIdea: composeIdeaBrief(), skipSubstanceCheck: true });
+      // Q2 answered — compose the brief, ask length, then generate.
+      const ideaBrief = composeIdeaBrief();
+      renderStepDots(2, 3);
+      showLengthQuestion({ onPick: () => triggerGenerate({ enrichedIdea: ideaBrief, skipSubstanceCheck: true }) });
       return;
     }
 
     // Not in coach yet — this is the initial brief submission
 
-    // Vault idea: brief is already complete — skip all guided questions, generate directly.
+    // Vault idea: brief is already complete — ask length, then generate.
     if (selectedVaultIdeaId) {
       addUser(val);
       chatThread.style.display = '';
       hideVaultContextNote();
-      triggerGenerate({ enrichedIdea: val });
+      const vaultBrief = val;
+      showLengthQuestion({ onPick: () => triggerGenerate({ enrichedIdea: vaultBrief }) });
       return;
     }
 
@@ -2164,7 +1996,7 @@ const chat = (() => {
 
     // Skip intake entirely when the brief is already detailed — saves a Haiku round trip
     if (isBriefRich(val)) {
-      triggerGenerate({ enrichedIdea: val });
+      coachGenerate({ enrichedIdea: val });
       return;
     }
 
@@ -2179,8 +2011,8 @@ const chat = (() => {
       if (_coach.seq !== capturedSeq) return;
 
       if (intake.ready) {
-        // Brief is already strong — generate straight away
-        triggerGenerate({ enrichedIdea: val });
+        // Brief is already strong — skip straight to the length pick + generate
+        coachGenerate({ enrichedIdea: val });
         return;
       }
       // Start the coach
@@ -2262,8 +2094,15 @@ const chat = (() => {
     if (qa.length) {
       enriched += '\n\nAdditional context from our conversation:\n' + qa.join('\n\n');
     }
-    updateSendBtn(); // ensures button shows correct state before processing screen takes over
-    triggerGenerate({ enrichedIdea: enriched, skipSubstanceCheck: true });
+    coachGenerate({ enrichedIdea: enriched, skipSubstanceCheck: true });
+  }
+
+  // reach/convert have no guided length step of their own — ask it at each point
+  // the coach decides to generate, so length control is consistent everywhere.
+  function coachGenerate(triggerOpts) {
+    _coach.active = false;
+    updateSendBtn(); // reset the send button out of coach mode before the length pick
+    showLengthQuestion({ onPick: () => triggerGenerate(triggerOpts) });
   }
 
   function isBriefRich(text) {
@@ -2396,7 +2235,7 @@ const chat = (() => {
 
     addQuestionBubble(items[0].q, items[0].help);
     chatInput.placeholder = '1–3 sentences, plain words…';
-    renderStepDots(0, 2);
+    renderStepDots(0, 3);
     chatInput.focus();
   }
 
@@ -2504,6 +2343,18 @@ voiceCtrl = initVoiceInput({
   btn:   document.getElementById('mic-btn'),
 });
 
+/* Hand the freshly generated post to the editor: flag the fresh-from-gen entry
+ * and stash the post text keyed by id so the editor can paint it instantly —
+ * no empty-textarea flash while its own /api/generate/post fetch is in flight. */
+function handOffToEditor(postId, postContent) {
+  try {
+    sessionStorage.setItem('sh_from_gen', '1');
+    if (postId && typeof postContent === 'string' && postContent.trim()) {
+      sessionStorage.setItem('sh_gen_post', JSON.stringify({ id: postId, content: postContent }));
+    }
+  } catch { /* storage unavailable — editor still hydrates via its own fetch */ }
+}
+
 /* ── Generate ────────────────────────────────────────────────── */
 chatImproveInput.addEventListener('click', () => {
   hideSubstanceWarning();
@@ -2545,45 +2396,11 @@ async function triggerGenerate(opts = {}) {
     if (_ideaCard.active && _ideaCard.answers.length)   body.idea_answers         = _ideaCard.answers.join('\n');
     if (opts.enrichedIdea || opts.skipSubstanceCheck)   body.skip_substance_check = true;
     if (shouldStream)                                   body.streaming            = true;
-    // Authority/Expertise-specific params
-    if (selectedType === 'trust') {
-      body.length_preference = _authorityLengthPreference || 'Medium';
-      body.cta_intent        = _authorityCtaIntent || '';
-    }
-    // Story/Personal Experience-specific params
-    if (selectedType === 'story') {
-      body.length_preference = _storyLengthPreference || 'Medium';
-      body.cta_intent        = '';
-    }
-    // Behind-the-Scenes-specific params
-    if (selectedType === 'bts') {
-      body.length_preference = _btsLengthPreference || 'Medium';
-      body.cta_intent        = '';
-    }
-    // Contrarian / Hot Take-specific params
-    if (selectedType === 'contrarian') {
-      body.length_preference = _contrarianLengthPreference || 'Medium';
-    }
-    // Framework / How-To-specific params
-    if (selectedType === 'framework') {
-      body.length_preference = _frameworkLengthPreference || 'Medium';
-    }
-    // Announcement-specific params
-    if (selectedType === 'announcement') {
-      body.length_preference = _announcementLengthPreference || 'Medium';
-    }
-    // Lead Gen / Offer-specific params
-    if (selectedType === 'lead_gen') {
-      body.length_preference = _leadGenLengthPreference || 'Medium';
-    }
-    // Problem-Insight-Solution-specific params
-    if (selectedType === 'pis') {
-      body.length_preference = _pisLengthPreference || 'Medium';
-    }
-    // Results / Case Study-specific params
-    if (selectedType === 'results') {
-      body.length_preference = _resultsLengthPreference || 'Medium';
-    }
+    // Unified Short/Medium/Long choice — every flow (guided, reach/convert coach,
+    // idea-card and vault) collects it through the shared length picker.
+    body.length_preference = _lengthPreference || 'Medium';
+    // CTA intent is Authority-only (the guided Authority flow captures it).
+    if (selectedType === 'trust') body.cta_intent = _authorityCtaIntent || '';
 
     const res = await fetch('/api/generate', {
       method: 'POST', headers: apiHeaders(), body: JSON.stringify(body), signal: controller.signal,
@@ -2636,11 +2453,11 @@ async function triggerGenerate(opts = {}) {
 
       if (!sseResult?.post_id) throw new Error('stream_incomplete');
 
-      await sleep(400);
+      handOffToEditor(sseResult.post_id, sseResult.post);
+      await sleep(250);
       const card1 = document.getElementById('guided-chat');
-      if (card1) { card1.style.transition = 'opacity 0.35s ease'; card1.style.opacity = '0'; }
-      await sleep(350);
-      sessionStorage.setItem('sh_from_gen', '1');
+      if (card1) { card1.style.transition = 'opacity 0.25s ease'; card1.style.opacity = '0'; }
+      await sleep(250);
       window.location.href = `/editor/${encodeURIComponent(sseResult.post_id)}`;
       return;
     }
@@ -2657,11 +2474,11 @@ async function triggerGenerate(opts = {}) {
     }
 
     finaliseProcessingSteps(data);
-    await sleep(400);
+    handOffToEditor(data.id, data.post);
+    await sleep(250);
     const card2 = document.getElementById('guided-chat');
-    if (card2) { card2.style.transition = 'opacity 0.35s ease'; card2.style.opacity = '0'; }
-    await sleep(350);
-    sessionStorage.setItem('sh_from_gen', '1');
+    if (card2) { card2.style.transition = 'opacity 0.25s ease'; card2.style.opacity = '0'; }
+    await sleep(250);
     window.location.href = `/editor/${encodeURIComponent(data.id)}`;
 
   } catch (err) {

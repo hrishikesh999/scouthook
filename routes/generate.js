@@ -120,6 +120,13 @@ const POST_TYPE_DISPATCH = {
   results:         { fn: generateResultsPost,        label: 'Building your results post...' },
 };
 
+// The Idea Engine (idea cards, evergreen bank, daily questions) still tags ideas
+// with the pre-consolidation 3-archetype taxonomy. 'trust' overlaps with a real
+// dispatch format above and is handled by it; 'reach'/'convert' have no dispatch
+// entry, so a card carrying either falls through to this legacy path — the same
+// ideaToPost() generator the doc-upload path already uses — instead of dead-ending.
+const LEGACY_ARCHETYPES = ['reach', 'convert'];
+
 // Run a guided post-type generation and its quality gate. Single choke point for both the
 // streaming and non-streaming handlers (and the Phase 5 retry loop). Every wrapper shares the
 // (rawIdea, profile, { lengthPreference, ctaIntent }) signature; ones that ignore ctaIntent
@@ -441,13 +448,31 @@ router.post('/', async (req, res) => {
 
       try {
         const dispatch = POST_TYPE_DISPATCH[post_type];
-        if (!dispatch) {
+        const isLegacy = !dispatch && LEGACY_ARCHETYPES.includes(post_type);
+        if (!dispatch && !isLegacy) {
           sseWrite('error', { error: 'post_type_required' });
           return res.end();
         }
 
-        sseWrite('step', { step: 'analyzing', label: dispatch.label });
-        const { result, gate } = await runGuidedGeneration(post_type, raw_idea, profile, { length_preference, cta_intent });
+        sseWrite('step', { step: 'analyzing', label: dispatch ? dispatch.label : 'Crafting your post...' });
+
+        let result, gate, archetypeUsed = null, contentFeedback = null;
+        if (dispatch) {
+          ({ result, gate } = await runGuidedGeneration(post_type, raw_idea, profile, { length_preference, cta_intent }));
+        } else {
+          const legacy = await ideaToPost(raw_idea, profile, {
+            postType:            post_type,
+            convertCtaIntent:    convert_cta_intent || null,
+            skipSubstanceCheck:  !!skip_substance_check,
+          });
+          archetypeUsed   = legacy.archetypeUsed;
+          contentFeedback = legacy.contentFeedback;
+          result = { post: legacy.post, synthesis: legacy.synthesis };
+          gate = runQualityGate(
+            result.post,
+            gateOptions({ format_slug: IDEA_SLUG, content: result.post }, profile, 'idea', archetypeUsed, post_type)
+          );
+        }
 
         sseWrite('step', { step: 'saving', label: 'Final quality check...' });
 
@@ -470,7 +495,7 @@ router.post('/', async (req, res) => {
           result.post, result.post,
           gate.score, JSON.stringify(gate.flags), gate.passed_gate ? 1 : 0,
           post_type, null,
-          raw_idea || null, null, source || null,
+          raw_idea || null, archetypeUsed, source || null,
           post_type, gate.verdict || null
         );
         const primaryId = primaryInsert.lastInsertRowid;
@@ -482,11 +507,11 @@ router.post('/', async (req, res) => {
           run_id:           runId,
           post:             result.post,
           quality:          { ...primaryQuality, verdict: gate.verdict },
-          archetypeUsed:    null,
+          archetypeUsed,
           funnel_type:      post_type,
           post_type:        post_type,
           stage1Blueprint:  null,
-          content_feedback: null,
+          content_feedback: contentFeedback,
         });
         return res.end();
 
@@ -542,6 +567,26 @@ router.post('/', async (req, res) => {
         archetypeUsed:  vaultResult.archetypeUsed,
         primaryGate,
         contentFeedback: null,
+      };
+    } else if (LEGACY_ARCHETYPES.includes(post_type)) {
+      // ── Legacy 3-archetype path (reach/convert) ─────────────────────────────
+      // Idea-card-driven generation with no vault_idea_id — same generator
+      // ideaToPost() the doc-upload path already uses.
+      const legacyResult = await ideaToPost(raw_idea, profile, {
+        postType:           post_type,
+        convertCtaIntent:   convert_cta_intent || null,
+        skipSubstanceCheck: !!skip_substance_check,
+      });
+      const legacyGate = runQualityGate(
+        legacyResult.post,
+        gateOptions({ format_slug: IDEA_SLUG, content: legacyResult.post }, profile, 'idea', legacyResult.archetypeUsed, funnelTypeForGate)
+      );
+      ideaResult = {
+        synthesis:       legacyResult.synthesis,
+        post:            legacyResult.post,
+        archetypeUsed:   legacyResult.archetypeUsed,
+        primaryGate:     legacyGate,
+        contentFeedback: legacyResult.contentFeedback,
       };
     } else {
       throw Object.assign(new Error('post_type_required'), { status: 400 });

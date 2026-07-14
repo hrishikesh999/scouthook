@@ -21,6 +21,7 @@ const { sendEmailToUser } = require('../emails');
 const { resolveProfile } = require('../lib/resolveProfile');
 const { planHasFeature } = require('../lib/planFeatures');
 const { buildVaultContextBlock } = require('../services/vaultContext');
+const { extractAuthorRealText } = require('../services/generationCore');
 
 // ---------------------------------------------------------------------------
 // Sliding window rate limiter — 10 generations per hour per user.
@@ -101,6 +102,44 @@ function buildQualityPayload(gate, synthesisAttempt, isPrimary) {
 }
 
 const IDEA_SLUG = 'idea';
+
+// Guided post-type dispatch — every post_type maps to a wrapper over services/postEngine.js.
+// Both the streaming and non-streaming handlers below drive generation through this one table
+// and runGuidedGeneration(), so the per-type logic (generate + quality gate) lives in exactly
+// one place. See sprint-authenticity-pipeline.md (Phase 3).
+const POST_TYPE_DISPATCH = {
+  trust:           { fn: generateAuthorityPost,      label: 'Crafting your post...' },
+  story:           { fn: generateStoryPost,          label: 'Crafting your story...' },
+  lessons_learned: { fn: generateLessonsLearnedPost, label: 'Crafting your lessons learned post...' },
+  bts:             { fn: generateBtsPost,            label: 'Crafting your BTS post...' },
+  contrarian:      { fn: generateContrarianPost,     label: 'Crafting your hot take...' },
+  framework:       { fn: generateFrameworkPost,      label: 'Building your framework...' },
+  announcement:    { fn: generateAnnouncementPost,   label: 'Writing your announcement...' },
+  lead_gen:        { fn: generateLeadGenPost,        label: 'Crafting your offer post...' },
+  pis:             { fn: generatePisPost,            label: 'Crafting your PIS post...' },
+  results:         { fn: generateResultsPost,        label: 'Building your results post...' },
+};
+
+// Run a guided post-type generation and its quality gate. Single choke point for both the
+// streaming and non-streaming handlers (and the Phase 5 retry loop). Every wrapper shares the
+// (rawIdea, profile, { lengthPreference, ctaIntent }) signature; ones that ignore ctaIntent
+// simply drop it.
+async function runGuidedGeneration(post_type, raw_idea, profile, { length_preference, cta_intent } = {}) {
+  const dispatch = POST_TYPE_DISPATCH[post_type];
+  if (!dispatch) throw Object.assign(new Error('post_type_required'), { status: 400 });
+  const result = await dispatch.fn(raw_idea, profile, {
+    lengthPreference: length_preference || 'Medium',
+    ctaIntent:        cta_intent || '',
+  });
+  const gate = runQualityGate(result.post, {
+    ...gateOptions({ format_slug: IDEA_SLUG, content: result.post }, profile, 'idea', null, post_type),
+    postType: post_type,
+    // Provenance: flag numbers in the post that aren't in the author's real input
+    // (AI-suggested angle text is stripped out, so lifting a stat from it counts).
+    authorRealText: extractAuthorRealText(raw_idea),
+  });
+  return { result, gate };
+}
 const IDEA_INSIGHT_SLUG = 'idea_insight';
 
 function assembleExtractionInputs(postType, answers, tensionStatement) {
@@ -317,29 +356,39 @@ router.post('/', async (req, res) => {
   let ragContext = [];
   if (!vaultIdea && raw_idea && raw_idea.trim().length > 20) {
     try {
+      // Retrieve the author's OWN material by relevance from two sources:
+      //   1. vault_chunks — passages from uploaded documents.
+      //   2. vault_ideas (auto_extracted + daily_question) — facts mined from what
+      //      the user actually typed or answered. These carry NO document_id, so the
+      //      old vault_documents inner-JOIN silently excluded them from retrieval
+      //      forever — the user's realest material never reached generation.
+      // Both arms require a genuine full-text match (@@) and clear a rank floor, so
+      // when nothing is relevant we inject NOTHING. (The old code fell back to the 3
+      // most-recent ideas regardless of topic, forcing off-topic quotes into posts.)
+      const q = raw_idea.slice(0, 500);
       ragContext = await db.prepare(`
-        SELECT vc.content, vc.source_ref, vd.filename,
-               ts_rank(to_tsvector('english', vc.content),
-                       plainto_tsquery('english', ?)) AS rank
-        FROM   vault_chunks vc
-        JOIN   vault_documents vd ON vd.id = vc.document_id
-        WHERE  vc.tenant_id = ?
-          AND  to_tsvector('english', vc.content)
-                 @@ plainto_tsquery('english', ?)
+        SELECT content, source_ref, filename FROM (
+          SELECT vc.content AS content, vc.source_ref AS source_ref, vd.filename AS filename,
+                 ts_rank(to_tsvector('english', vc.content), plainto_tsquery('english', ?)) AS rank
+          FROM   vault_chunks vc
+          JOIN   vault_documents vd ON vd.id = vc.document_id
+          WHERE  vc.tenant_id = ?
+            AND  to_tsvector('english', vc.content) @@ plainto_tsquery('english', ?)
+          UNION ALL
+          SELECT vi.seed_text AS content, vi.source_ref AS source_ref,
+                 COALESCE(vd.filename, 'Your saved notes') AS filename,
+                 ts_rank(to_tsvector('english', vi.seed_text), plainto_tsquery('english', ?)) AS rank
+          FROM   vault_ideas vi
+          LEFT   JOIN vault_documents vd ON vd.id = vi.document_id
+          WHERE  vi.tenant_id = ?
+            AND  vi.status <> 'discarded'
+            AND  vi.source IN ('auto_extracted', 'daily_question')
+            AND  to_tsvector('english', vi.seed_text) @@ plainto_tsquery('english', ?)
+        ) combined
+        WHERE rank > 0.02
         ORDER  BY rank DESC
         LIMIT  3
-      `).all(raw_idea.slice(0, 500), tenantId, raw_idea.slice(0, 500));
-
-      if (ragContext.length === 0) {
-        ragContext = await db.prepare(`
-          SELECT vi.seed_text AS content, vi.source_ref, vd.filename
-          FROM   vault_ideas vi
-          JOIN   vault_documents vd ON vd.id = vi.document_id
-          WHERE  vi.tenant_id = ? AND vi.status != 'discarded'
-          ORDER  BY vi.created_at DESC
-          LIMIT  3
-        `).all(tenantId);
-      }
+      `).all(q, tenantId, q, q, tenantId, q);
     } catch { ragContext = []; }
   }
 
@@ -391,596 +440,54 @@ router.post('/', async (req, res) => {
       };
 
       try {
-        // ── Authority/Expertise path (trust post type) ─────────────────────
-        if (post_type === 'trust') {
-          sseWrite('step', { step: 'analyzing', label: 'Crafting your post...' });
-
-          const authorityResult = await generateAuthorityPost(raw_idea, profile, {
-            lengthPreference: length_preference || 'Medium',
-            ctaIntent:        cta_intent || '',
-          });
-
-          sseWrite('step', { step: 'saving', label: 'Final quality check...' });
-
-          const primaryGate = runQualityGate(authorityResult.post, {
-            ...gateOptions(
-              { format_slug: IDEA_SLUG, content: authorityResult.post },
-              profile, 'idea', null, 'trust'
-            ),
-            postType: 'trust',
-          });
-
-          const runResult = await db.prepare(`
-            INSERT INTO generation_runs (user_id, tenant_id, path, input_data, synthesis)
-            VALUES (?, ?, ?, ?, ?)
-            RETURNING id
-          `).run(userId, tenantId, genPath, JSON.stringify({ raw_idea }), JSON.stringify(authorityResult.synthesis));
-          const runId = runResult.lastInsertRowid;
-
-          const primaryInsert = await db.prepare(`
-            INSERT INTO generated_posts
-              (run_id, user_id, tenant_id, profile_id, format_slug, content, ai_content, quality_score, quality_flags, passed_gate,
-               funnel_type, vault_source_ref, idea_input, archetype_used, source,
-               post_type, quality_verdict)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            RETURNING id
-          `).run(
-            runId, userId, tenantId, profile.id, IDEA_SLUG,
-            authorityResult.post, authorityResult.post,
-            primaryGate.score, JSON.stringify(primaryGate.flags), primaryGate.passed_gate ? 1 : 0,
-            'trust', null,
-            raw_idea || null,
-            null,
-            source || null,
-            'trust',
-            primaryGate.verdict || null
-          );
-          const primaryId = primaryInsert.lastInsertRowid;
-
-          const primaryQuality = buildQualityPayload(primaryGate, 1, true);
-
-          sseWrite('done', {
-            post_id:          primaryId,
-            run_id:           runId,
-            post:             authorityResult.post,
-            quality:          { ...primaryQuality, verdict: primaryGate.verdict },
-            archetypeUsed:    null,
-            funnel_type:      'trust',
-            post_type:        'trust',
-            stage1Blueprint:  null,
-            content_feedback: null,
-          });
+        const dispatch = POST_TYPE_DISPATCH[post_type];
+        if (!dispatch) {
+          sseWrite('error', { error: 'post_type_required' });
           return res.end();
         }
 
-        // ── Story / Personal Experience path ──────────────────────────────
-        if (post_type === 'story') {
-          sseWrite('step', { step: 'analyzing', label: 'Crafting your story...' });
-
-          const storyResult = await generateStoryPost(raw_idea, profile, {
-            lengthPreference: length_preference || 'Medium',
-            ctaIntent:        cta_intent || '',
-          });
-
-          sseWrite('step', { step: 'saving', label: 'Final quality check...' });
-
-          const storyGate = runQualityGate(storyResult.post, {
-            ...gateOptions(
-              { format_slug: IDEA_SLUG, content: storyResult.post },
-              profile, 'idea', null, 'story'
-            ),
-            postType: 'story',
-          });
-
-          const storyRunResult = await db.prepare(`
-            INSERT INTO generation_runs (user_id, tenant_id, path, input_data, synthesis)
-            VALUES (?, ?, ?, ?, ?)
-            RETURNING id
-          `).run(userId, tenantId, genPath, JSON.stringify({ raw_idea }), JSON.stringify(storyResult.synthesis));
-          const storyRunId = storyRunResult.lastInsertRowid;
-
-          const storyInsert = await db.prepare(`
-            INSERT INTO generated_posts
-              (run_id, user_id, tenant_id, profile_id, format_slug, content, ai_content, quality_score, quality_flags, passed_gate,
-               funnel_type, vault_source_ref, idea_input, archetype_used, source,
-               post_type, quality_verdict)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            RETURNING id
-          `).run(
-            storyRunId, userId, tenantId, profile.id, IDEA_SLUG,
-            storyResult.post, storyResult.post,
-            storyGate.score, JSON.stringify(storyGate.flags), storyGate.passed_gate ? 1 : 0,
-            'story', null,
-            raw_idea || null, null, source || null,
-            'story', storyGate.verdict || null
-          );
-          const storyId = storyInsert.lastInsertRowid;
-
-          const storyQuality = buildQualityPayload(storyGate, 1, true);
-
-          sseWrite('done', {
-            post_id:          storyId,
-            run_id:           storyRunId,
-            post:             storyResult.post,
-            quality:          { ...storyQuality, verdict: storyGate.verdict },
-            archetypeUsed:    null,
-            funnel_type:      'story',
-            post_type:        'story',
-            stage1Blueprint:  null,
-            content_feedback: null,
-          });
-          return res.end();
-        }
-
-        // ── Lessons Learned path ──────────────────────────────────────────
-        if (post_type === 'lessons_learned') {
-          sseWrite('step', { step: 'analyzing', label: 'Crafting your lessons learned post...' });
-
-          const lessonsResult = await generateLessonsLearnedPost(raw_idea, profile, {
-            lengthPreference: length_preference || 'Medium',
-            ctaIntent:        cta_intent || '',
-          });
-
-          sseWrite('step', { step: 'saving', label: 'Final quality check...' });
-
-          const lessonsGate = runQualityGate(lessonsResult.post, {
-            ...gateOptions(
-              { format_slug: IDEA_SLUG, content: lessonsResult.post },
-              profile, 'idea', null, 'lessons_learned'
-            ),
-            postType: 'lessons_learned',
-          });
-
-          const lessonsRunResult = await db.prepare(`
-            INSERT INTO generation_runs (user_id, tenant_id, path, input_data, synthesis)
-            VALUES (?, ?, ?, ?, ?)
-            RETURNING id
-          `).run(userId, tenantId, genPath, JSON.stringify({ raw_idea }), JSON.stringify(lessonsResult.synthesis));
-          const lessonsRunId = lessonsRunResult.lastInsertRowid;
-
-          const lessonsInsert = await db.prepare(`
-            INSERT INTO generated_posts
-              (run_id, user_id, tenant_id, profile_id, format_slug, content, ai_content, quality_score, quality_flags, passed_gate,
-               funnel_type, vault_source_ref, idea_input, archetype_used, source,
-               post_type, quality_verdict)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            RETURNING id
-          `).run(
-            lessonsRunId, userId, tenantId, profile.id, IDEA_SLUG,
-            lessonsResult.post, lessonsResult.post,
-            lessonsGate.score, JSON.stringify(lessonsGate.flags), lessonsGate.passed_gate ? 1 : 0,
-            'lessons_learned', null,
-            raw_idea || null, null, source || null,
-            'lessons_learned', lessonsGate.verdict || null
-          );
-          const lessonsId = lessonsInsert.lastInsertRowid;
-
-          const lessonsQuality = buildQualityPayload(lessonsGate, 1, true);
-
-          sseWrite('done', {
-            post_id:          lessonsId,
-            run_id:           lessonsRunId,
-            post:             lessonsResult.post,
-            quality:          { ...lessonsQuality, verdict: lessonsGate.verdict },
-            archetypeUsed:    null,
-            funnel_type:      'lessons_learned',
-            post_type:        'lessons_learned',
-            stage1Blueprint:  null,
-            content_feedback: null,
-          });
-          return res.end();
-        }
-
-        // ── Behind-the-Scenes path ────────────────────────────────────────
-        if (post_type === 'bts') {
-          sseWrite('step', { step: 'analyzing', label: 'Crafting your BTS post...' });
-
-          const btsResult = await generateBtsPost(raw_idea, profile, {
-            lengthPreference: length_preference || 'Medium',
-            ctaIntent:        cta_intent || '',
-          });
-
-          sseWrite('step', { step: 'saving', label: 'Final quality check...' });
-
-          const btsGate = runQualityGate(btsResult.post, {
-            ...gateOptions(
-              { format_slug: IDEA_SLUG, content: btsResult.post },
-              profile, 'idea', null, 'bts'
-            ),
-            postType: 'bts',
-          });
-
-          const btsRunResult = await db.prepare(`
-            INSERT INTO generation_runs (user_id, tenant_id, path, input_data, synthesis)
-            VALUES (?, ?, ?, ?, ?)
-            RETURNING id
-          `).run(userId, tenantId, genPath, JSON.stringify({ raw_idea }), JSON.stringify(btsResult.synthesis));
-          const btsRunId = btsRunResult.lastInsertRowid;
-
-          const btsInsert = await db.prepare(`
-            INSERT INTO generated_posts
-              (run_id, user_id, tenant_id, profile_id, format_slug, content, ai_content, quality_score, quality_flags, passed_gate,
-               funnel_type, vault_source_ref, idea_input, archetype_used, source,
-               post_type, quality_verdict)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            RETURNING id
-          `).run(
-            btsRunId, userId, tenantId, profile.id, IDEA_SLUG,
-            btsResult.post, btsResult.post,
-            btsGate.score, JSON.stringify(btsGate.flags), btsGate.passed_gate ? 1 : 0,
-            'bts', null,
-            raw_idea || null, null, source || null,
-            'bts', btsGate.verdict || null
-          );
-          const btsId = btsInsert.lastInsertRowid;
-
-          const btsQuality = buildQualityPayload(btsGate, 1, true);
-
-          sseWrite('done', {
-            post_id:          btsId,
-            run_id:           btsRunId,
-            post:             btsResult.post,
-            quality:          { ...btsQuality, verdict: btsGate.verdict },
-            archetypeUsed:    null,
-            funnel_type:      'bts',
-            post_type:        'bts',
-            stage1Blueprint:  null,
-            content_feedback: null,
-          });
-          return res.end();
-        }
-
-        // ── Contrarian / Hot Take path ────────────────────────────────────
-        if (post_type === 'contrarian') {
-          sseWrite('step', { step: 'analyzing', label: 'Crafting your hot take...' });
-
-          const contrarianResult = await generateContrarianPost(raw_idea, profile, {
-            lengthPreference: length_preference || 'Medium',
-          });
-
-          sseWrite('step', { step: 'saving', label: 'Final quality check...' });
-
-          const contrarianGate = runQualityGate(contrarianResult.post, {
-            ...gateOptions(
-              { format_slug: IDEA_SLUG, content: contrarianResult.post },
-              profile, 'idea', null, 'contrarian'
-            ),
-            postType: 'contrarian',
-          });
-
-          const contrarianRunResult = await db.prepare(`
-            INSERT INTO generation_runs (user_id, tenant_id, path, input_data, synthesis)
-            VALUES (?, ?, ?, ?, ?)
-            RETURNING id
-          `).run(userId, tenantId, genPath, JSON.stringify({ raw_idea }), JSON.stringify(contrarianResult.synthesis));
-          const contrarianRunId = contrarianRunResult.lastInsertRowid;
-
-          const contrarianInsert = await db.prepare(`
-            INSERT INTO generated_posts
-              (run_id, user_id, tenant_id, profile_id, format_slug, content, ai_content, quality_score, quality_flags, passed_gate,
-               funnel_type, vault_source_ref, idea_input, archetype_used, source,
-               post_type, quality_verdict)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            RETURNING id
-          `).run(
-            contrarianRunId, userId, tenantId, profile.id, IDEA_SLUG,
-            contrarianResult.post, contrarianResult.post,
-            contrarianGate.score, JSON.stringify(contrarianGate.flags), contrarianGate.passed_gate ? 1 : 0,
-            'contrarian', null,
-            raw_idea || null, null, source || null,
-            'contrarian', contrarianGate.verdict || null
-          );
-          const contrarianId = contrarianInsert.lastInsertRowid;
-
-          const contrarianQuality = buildQualityPayload(contrarianGate, 1, true);
-
-          sseWrite('done', {
-            post_id:          contrarianId,
-            run_id:           contrarianRunId,
-            post:             contrarianResult.post,
-            quality:          { ...contrarianQuality, verdict: contrarianGate.verdict },
-            archetypeUsed:    null,
-            funnel_type:      'contrarian',
-            post_type:        'contrarian',
-            stage1Blueprint:  null,
-            content_feedback: null,
-          });
-          return res.end();
-        }
-
-        // ── Framework / How-To path ───────────────────────────────────────
-        if (post_type === 'framework') {
-          sseWrite('step', { step: 'analyzing', label: 'Building your framework...' });
-
-          const frameworkResult = await generateFrameworkPost(raw_idea, profile, {
-            lengthPreference: length_preference || 'Medium',
-          });
-
-          sseWrite('step', { step: 'saving', label: 'Final quality check...' });
-
-          const frameworkGate = runQualityGate(frameworkResult.post, {
-            ...gateOptions(
-              { format_slug: IDEA_SLUG, content: frameworkResult.post },
-              profile, 'idea', null, 'framework'
-            ),
-            postType: 'framework',
-          });
-
-          const frameworkRunResult = await db.prepare(`
-            INSERT INTO generation_runs (user_id, tenant_id, path, input_data, synthesis)
-            VALUES (?, ?, ?, ?, ?)
-            RETURNING id
-          `).run(userId, tenantId, genPath, JSON.stringify({ raw_idea }), JSON.stringify(frameworkResult.synthesis));
-          const frameworkRunId = frameworkRunResult.lastInsertRowid;
-
-          const frameworkInsert = await db.prepare(`
-            INSERT INTO generated_posts
-              (run_id, user_id, tenant_id, profile_id, format_slug, content, ai_content, quality_score, quality_flags, passed_gate,
-               funnel_type, vault_source_ref, idea_input, archetype_used, source,
-               post_type, quality_verdict)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            RETURNING id
-          `).run(
-            frameworkRunId, userId, tenantId, profile.id, IDEA_SLUG,
-            frameworkResult.post, frameworkResult.post,
-            frameworkGate.score, JSON.stringify(frameworkGate.flags), frameworkGate.passed_gate ? 1 : 0,
-            'framework', null,
-            raw_idea || null, null, source || null,
-            'framework', frameworkGate.verdict || null
-          );
-          const frameworkId = frameworkInsert.lastInsertRowid;
-
-          const frameworkQuality = buildQualityPayload(frameworkGate, 1, true);
-
-          sseWrite('done', {
-            post_id:          frameworkId,
-            run_id:           frameworkRunId,
-            post:             frameworkResult.post,
-            quality:          { ...frameworkQuality, verdict: frameworkGate.verdict },
-            archetypeUsed:    null,
-            funnel_type:      'framework',
-            post_type:        'framework',
-            stage1Blueprint:  null,
-            content_feedback: null,
-          });
-          return res.end();
-        }
-
-        // ── Announcement path ─────────────────────────────────────────────
-        if (post_type === 'announcement') {
-          sseWrite('step', { step: 'analyzing', label: 'Writing your announcement...' });
-
-          const annResult = await generateAnnouncementPost(raw_idea, profile, {
-            lengthPreference: length_preference || 'Medium',
-          });
-
-          sseWrite('step', { step: 'saving', label: 'Final quality check...' });
-
-          const annGate = runQualityGate(annResult.post, {
-            ...gateOptions(
-              { format_slug: IDEA_SLUG, content: annResult.post },
-              profile, 'idea', null, 'announcement'
-            ),
-            postType: 'announcement',
-          });
-
-          const annRunResult = await db.prepare(`
-            INSERT INTO generation_runs (user_id, tenant_id, path, input_data, synthesis)
-            VALUES (?, ?, ?, ?, ?)
-            RETURNING id
-          `).run(userId, tenantId, genPath, JSON.stringify({ raw_idea }), JSON.stringify(annResult.synthesis));
-          const annRunId = annRunResult.lastInsertRowid;
-
-          const annInsert = await db.prepare(`
-            INSERT INTO generated_posts
-              (run_id, user_id, tenant_id, profile_id, format_slug, content, ai_content, quality_score, quality_flags, passed_gate,
-               funnel_type, vault_source_ref, idea_input, archetype_used, source,
-               post_type, quality_verdict)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            RETURNING id
-          `).run(
-            annRunId, userId, tenantId, profile.id, IDEA_SLUG,
-            annResult.post, annResult.post,
-            annGate.score, JSON.stringify(annGate.flags), annGate.passed_gate ? 1 : 0,
-            'announcement', null,
-            raw_idea || null, null, source || null,
-            'announcement', annGate.verdict || null
-          );
-          const annId = annInsert.lastInsertRowid;
-
-          const annQuality = buildQualityPayload(annGate, 1, true);
-
-          sseWrite('done', {
-            post_id:          annId,
-            run_id:           annRunId,
-            post:             annResult.post,
-            quality:          { ...annQuality, verdict: annGate.verdict },
-            archetypeUsed:    null,
-            funnel_type:      'announcement',
-            post_type:        'announcement',
-            stage1Blueprint:  null,
-            content_feedback: null,
-          });
-          return res.end();
-        }
-
-        // ── Lead Gen / Offer path ─────────────────────────────────────────
-        if (post_type === 'lead_gen') {
-          sseWrite('step', { step: 'analyzing', label: 'Crafting your offer post...' });
-
-          const leadGenResult = await generateLeadGenPost(raw_idea, profile, {
-            lengthPreference: length_preference || 'Medium',
-          });
-
-          sseWrite('step', { step: 'saving', label: 'Final quality check...' });
-
-          const leadGenGate = runQualityGate(leadGenResult.post, {
-            ...gateOptions(
-              { format_slug: IDEA_SLUG, content: leadGenResult.post },
-              profile, 'idea', null, 'lead_gen'
-            ),
-            postType: 'lead_gen',
-          });
-
-          const leadGenRunResult = await db.prepare(`
-            INSERT INTO generation_runs (user_id, tenant_id, path, input_data, synthesis)
-            VALUES (?, ?, ?, ?, ?)
-            RETURNING id
-          `).run(userId, tenantId, genPath, JSON.stringify({ raw_idea }), JSON.stringify(leadGenResult.synthesis));
-          const leadGenRunId = leadGenRunResult.lastInsertRowid;
-
-          const leadGenInsert = await db.prepare(`
-            INSERT INTO generated_posts
-              (run_id, user_id, tenant_id, profile_id, format_slug, content, ai_content, quality_score, quality_flags, passed_gate,
-               funnel_type, vault_source_ref, idea_input, archetype_used, source,
-               post_type, quality_verdict)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            RETURNING id
-          `).run(
-            leadGenRunId, userId, tenantId, profile.id, IDEA_SLUG,
-            leadGenResult.post, leadGenResult.post,
-            leadGenGate.score, JSON.stringify(leadGenGate.flags), leadGenGate.passed_gate ? 1 : 0,
-            'lead_gen', null,
-            raw_idea || null, null, source || null,
-            'lead_gen', leadGenGate.verdict || null
-          );
-          const leadGenId = leadGenInsert.lastInsertRowid;
-
-          const leadGenQuality = buildQualityPayload(leadGenGate, 1, true);
-
-          sseWrite('done', {
-            post_id:          leadGenId,
-            run_id:           leadGenRunId,
-            post:             leadGenResult.post,
-            quality:          { ...leadGenQuality, verdict: leadGenGate.verdict },
-            archetypeUsed:    null,
-            funnel_type:      'lead_gen',
-            post_type:        'lead_gen',
-            stage1Blueprint:  null,
-            content_feedback: null,
-          });
-          return res.end();
-        }
-
-        // ── Problem-Insight-Solution path ──────────────────────────────────
-        if (post_type === 'pis') {
-          sseWrite('step', { step: 'analyzing', label: 'Crafting your PIS post...' });
-
-          const pisResult = await generatePisPost(raw_idea, profile, {
-            lengthPreference: length_preference || 'Medium',
-          });
-
-          sseWrite('step', { step: 'saving', label: 'Final quality check...' });
-
-          const pisGate = runQualityGate(pisResult.post, {
-            ...gateOptions(
-              { format_slug: IDEA_SLUG, content: pisResult.post },
-              profile, 'idea', null, 'pis'
-            ),
-            postType: 'pis',
-          });
-
-          const pisRunResult = await db.prepare(`
-            INSERT INTO generation_runs (user_id, tenant_id, path, input_data, synthesis)
-            VALUES (?, ?, ?, ?, ?)
-            RETURNING id
-          `).run(userId, tenantId, genPath, JSON.stringify({ raw_idea }), JSON.stringify(pisResult.synthesis));
-          const pisRunId = pisRunResult.lastInsertRowid;
-
-          const pisInsert = await db.prepare(`
-            INSERT INTO generated_posts
-              (run_id, user_id, tenant_id, profile_id, format_slug, content, ai_content, quality_score, quality_flags, passed_gate,
-               funnel_type, vault_source_ref, idea_input, archetype_used, source,
-               post_type, quality_verdict)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            RETURNING id
-          `).run(
-            pisRunId, userId, tenantId, profile.id, IDEA_SLUG,
-            pisResult.post, pisResult.post,
-            pisGate.score, JSON.stringify(pisGate.flags), pisGate.passed_gate ? 1 : 0,
-            'pis', null,
-            raw_idea || null, null, source || null,
-            'pis', pisGate.verdict || null
-          );
-          const pisId = pisInsert.lastInsertRowid;
-
-          const pisQuality = buildQualityPayload(pisGate, 1, true);
-
-          sseWrite('done', {
-            post_id:          pisId,
-            run_id:           pisRunId,
-            post:             pisResult.post,
-            quality:          { ...pisQuality, verdict: pisGate.verdict },
-            archetypeUsed:    null,
-            funnel_type:      'pis',
-            post_type:        'pis',
-            stage1Blueprint:  null,
-            content_feedback: null,
-          });
-          return res.end();
-        }
-
-        // ── Results / Case Study path ──────────────────────────────────────
-        if (post_type === 'results') {
-          sseWrite('step', { step: 'analyzing', label: 'Building your results post...' });
-
-          const resultsResult = await generateResultsPost(raw_idea, profile, {
-            lengthPreference: length_preference || 'Medium',
-            ctaIntent:        cta_intent || '',
-          });
-
-          sseWrite('step', { step: 'saving', label: 'Final quality check...' });
-
-          const resultsGate = runQualityGate(resultsResult.post, {
-            ...gateOptions(
-              { format_slug: IDEA_SLUG, content: resultsResult.post },
-              profile, 'idea', null, 'results'
-            ),
-            postType: 'results',
-          });
-
-          const resultsRunResult = await db.prepare(`
-            INSERT INTO generation_runs (user_id, tenant_id, path, input_data, synthesis)
-            VALUES (?, ?, ?, ?, ?)
-            RETURNING id
-          `).run(userId, tenantId, genPath, JSON.stringify({ raw_idea }), JSON.stringify(resultsResult.synthesis));
-          const resultsRunId = resultsRunResult.lastInsertRowid;
-
-          const resultsInsert = await db.prepare(`
-            INSERT INTO generated_posts
-              (run_id, user_id, tenant_id, profile_id, format_slug, content, ai_content, quality_score, quality_flags, passed_gate,
-               funnel_type, vault_source_ref, idea_input, archetype_used, source,
-               post_type, quality_verdict)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            RETURNING id
-          `).run(
-            resultsRunId, userId, tenantId, profile.id, IDEA_SLUG,
-            resultsResult.post, resultsResult.post,
-            resultsGate.score, JSON.stringify(resultsGate.flags), resultsGate.passed_gate ? 1 : 0,
-            'results', null,
-            raw_idea || null, null, source || null,
-            'results', resultsGate.verdict || null
-          );
-          const resultsId = resultsInsert.lastInsertRowid;
-
-          const resultsQuality = buildQualityPayload(resultsGate, 1, true);
-
-          sseWrite('done', {
-            post_id:          resultsId,
-            run_id:           resultsRunId,
-            post:             resultsResult.post,
-            quality:          { ...resultsQuality, verdict: resultsGate.verdict },
-            archetypeUsed:    null,
-            funnel_type:      'results',
-            post_type:        'results',
-            stage1Blueprint:  null,
-            content_feedback: null,
-          });
-          return res.end();
-        }
-
-        // No matched post_type — all generation requires a guided post type
-        sseWrite('error', { error: 'post_type_required' });
+        sseWrite('step', { step: 'analyzing', label: dispatch.label });
+        const { result, gate } = await runGuidedGeneration(post_type, raw_idea, profile, { length_preference, cta_intent });
+
+        sseWrite('step', { step: 'saving', label: 'Final quality check...' });
+
+        const runResult = await db.prepare(`
+          INSERT INTO generation_runs (user_id, tenant_id, path, input_data, synthesis)
+          VALUES (?, ?, ?, ?, ?)
+          RETURNING id
+        `).run(userId, tenantId, genPath, JSON.stringify({ raw_idea }), JSON.stringify(result.synthesis));
+        const runId = runResult.lastInsertRowid;
+
+        const primaryInsert = await db.prepare(`
+          INSERT INTO generated_posts
+            (run_id, user_id, tenant_id, profile_id, format_slug, content, ai_content, quality_score, quality_flags, passed_gate,
+             funnel_type, vault_source_ref, idea_input, archetype_used, source,
+             post_type, quality_verdict)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          RETURNING id
+        `).run(
+          runId, userId, tenantId, profile.id, IDEA_SLUG,
+          result.post, result.post,
+          gate.score, JSON.stringify(gate.flags), gate.passed_gate ? 1 : 0,
+          post_type, null,
+          raw_idea || null, null, source || null,
+          post_type, gate.verdict || null
+        );
+        const primaryId = primaryInsert.lastInsertRowid;
+
+        const primaryQuality = buildQualityPayload(gate, 1, true);
+
+        sseWrite('done', {
+          post_id:          primaryId,
+          run_id:           runId,
+          post:             result.post,
+          quality:          { ...primaryQuality, verdict: gate.verdict },
+          archetypeUsed:    null,
+          funnel_type:      post_type,
+          post_type:        post_type,
+          stage1Blueprint:  null,
+          content_feedback: null,
+        });
         return res.end();
 
       } catch (sseErr) {
@@ -996,199 +503,14 @@ router.post('/', async (req, res) => {
       }
     }
 
-    // ── Authority/Expertise path (non-streaming, trust post type) ────────────
-    if (post_type === 'trust') {
-      const authorityResult = await generateAuthorityPost(raw_idea, profile, {
-        lengthPreference: length_preference || 'Medium',
-        ctaIntent:        cta_intent || '',
-      });
-      const primaryGate = runQualityGate(authorityResult.post, {
-        ...gateOptions(
-          { format_slug: IDEA_SLUG, content: authorityResult.post },
-          profile, 'idea', null, 'trust'
-        ),
-        postType: 'trust',
-      });
+    // ── Guided post-type path (non-streaming) — all 10 types via one dispatch ─
+    if (POST_TYPE_DISPATCH[post_type]) {
+      const { result, gate } = await runGuidedGeneration(post_type, raw_idea, profile, { length_preference, cta_intent });
       ideaResult = {
-        synthesis:       authorityResult.synthesis,
-        post:            authorityResult.post,
+        synthesis:       result.synthesis,
+        post:            result.post,
         archetypeUsed:   null,
-        primaryGate,
-        contentFeedback: null,
-      };
-    } else if (post_type === 'story') {
-      // ── Story / Personal Experience path (non-streaming) ─────────────────
-      const storyResult = await generateStoryPost(raw_idea, profile, {
-        lengthPreference: length_preference || 'Medium',
-        ctaIntent:        cta_intent || '',
-      });
-      const storyGate = runQualityGate(storyResult.post, {
-        ...gateOptions(
-          { format_slug: IDEA_SLUG, content: storyResult.post },
-          profile, 'idea', null, 'story'
-        ),
-        postType: 'story',
-      });
-      ideaResult = {
-        synthesis:       storyResult.synthesis,
-        post:            storyResult.post,
-        archetypeUsed:   null,
-        primaryGate:     storyGate,
-        contentFeedback: null,
-      };
-    } else if (post_type === 'lessons_learned') {
-      // ── Lessons Learned path (non-streaming) ─────────────────────────────
-      const lessonsResult = await generateLessonsLearnedPost(raw_idea, profile, {
-        lengthPreference: length_preference || 'Medium',
-        ctaIntent:        cta_intent || '',
-      });
-      const lessonsGate = runQualityGate(lessonsResult.post, {
-        ...gateOptions(
-          { format_slug: IDEA_SLUG, content: lessonsResult.post },
-          profile, 'idea', null, 'lessons_learned'
-        ),
-        postType: 'lessons_learned',
-      });
-      ideaResult = {
-        synthesis:       lessonsResult.synthesis,
-        post:            lessonsResult.post,
-        archetypeUsed:   null,
-        primaryGate:     lessonsGate,
-        contentFeedback: null,
-      };
-    } else if (post_type === 'bts') {
-      // ── Behind-the-Scenes path (non-streaming) ────────────────────────────
-      const btsResult = await generateBtsPost(raw_idea, profile, {
-        lengthPreference: length_preference || 'Medium',
-        ctaIntent:        cta_intent || '',
-      });
-      const btsGate = runQualityGate(btsResult.post, {
-        ...gateOptions(
-          { format_slug: IDEA_SLUG, content: btsResult.post },
-          profile, 'idea', null, 'bts'
-        ),
-        postType: 'bts',
-      });
-      ideaResult = {
-        synthesis:       btsResult.synthesis,
-        post:            btsResult.post,
-        archetypeUsed:   null,
-        primaryGate:     btsGate,
-        contentFeedback: null,
-      };
-    } else if (post_type === 'contrarian') {
-      // ── Contrarian / Hot Take path (non-streaming) ────────────────────────
-      const contrarianResult = await generateContrarianPost(raw_idea, profile, {
-        lengthPreference: length_preference || 'Medium',
-      });
-      const contrarianGate = runQualityGate(contrarianResult.post, {
-        ...gateOptions(
-          { format_slug: IDEA_SLUG, content: contrarianResult.post },
-          profile, 'idea', null, 'contrarian'
-        ),
-        postType: 'contrarian',
-      });
-      ideaResult = {
-        synthesis:       contrarianResult.synthesis,
-        post:            contrarianResult.post,
-        archetypeUsed:   null,
-        primaryGate:     contrarianGate,
-        contentFeedback: null,
-      };
-    } else if (post_type === 'framework') {
-      // ── Framework / How-To path (non-streaming) ───────────────────────
-      const frameworkResult = await generateFrameworkPost(raw_idea, profile, {
-        lengthPreference: length_preference || 'Medium',
-      });
-      const frameworkGate = runQualityGate(frameworkResult.post, {
-        ...gateOptions(
-          { format_slug: IDEA_SLUG, content: frameworkResult.post },
-          profile, 'idea', null, 'framework'
-        ),
-        postType: 'framework',
-      });
-      ideaResult = {
-        synthesis:       frameworkResult.synthesis,
-        post:            frameworkResult.post,
-        archetypeUsed:   null,
-        primaryGate:     frameworkGate,
-        contentFeedback: null,
-      };
-    } else if (post_type === 'announcement') {
-      // ── Announcement path (non-streaming) ────────────────────────────────
-      const annResult = await generateAnnouncementPost(raw_idea, profile, {
-        lengthPreference: length_preference || 'Medium',
-      });
-      const annGate = runQualityGate(annResult.post, {
-        ...gateOptions(
-          { format_slug: IDEA_SLUG, content: annResult.post },
-          profile, 'idea', null, 'announcement'
-        ),
-        postType: 'announcement',
-      });
-      ideaResult = {
-        synthesis:       annResult.synthesis,
-        post:            annResult.post,
-        archetypeUsed:   null,
-        primaryGate:     annGate,
-        contentFeedback: null,
-      };
-    } else if (post_type === 'lead_gen') {
-      // ── Lead Gen / Offer path (non-streaming) ────────────────────────────
-      const leadGenResult = await generateLeadGenPost(raw_idea, profile, {
-        lengthPreference: length_preference || 'Medium',
-      });
-      const leadGenGate = runQualityGate(leadGenResult.post, {
-        ...gateOptions(
-          { format_slug: IDEA_SLUG, content: leadGenResult.post },
-          profile, 'idea', null, 'lead_gen'
-        ),
-        postType: 'lead_gen',
-      });
-      ideaResult = {
-        synthesis:       leadGenResult.synthesis,
-        post:            leadGenResult.post,
-        archetypeUsed:   null,
-        primaryGate:     leadGenGate,
-        contentFeedback: null,
-      };
-    } else if (post_type === 'pis') {
-      // ── Problem-Insight-Solution path (non-streaming) ────────────────────
-      const pisResult = await generatePisPost(raw_idea, profile, {
-        lengthPreference: length_preference || 'Medium',
-      });
-      const pisGate = runQualityGate(pisResult.post, {
-        ...gateOptions(
-          { format_slug: IDEA_SLUG, content: pisResult.post },
-          profile, 'idea', null, 'pis'
-        ),
-        postType: 'pis',
-      });
-      ideaResult = {
-        synthesis:       pisResult.synthesis,
-        post:            pisResult.post,
-        archetypeUsed:   null,
-        primaryGate:     pisGate,
-        contentFeedback: null,
-      };
-    } else if (post_type === 'results') {
-      // ── Results / Case Study path (non-streaming) ─────────────────────────
-      const resultsResult = await generateResultsPost(raw_idea, profile, {
-        lengthPreference: length_preference || 'Medium',
-        ctaIntent:        cta_intent || '',
-      });
-      const resultsGate = runQualityGate(resultsResult.post, {
-        ...gateOptions(
-          { format_slug: IDEA_SLUG, content: resultsResult.post },
-          profile, 'idea', null, 'results'
-        ),
-        postType: 'results',
-      });
-      ideaResult = {
-        synthesis:       resultsResult.synthesis,
-        post:            resultsResult.post,
-        archetypeUsed:   null,
-        primaryGate:     resultsGate,
+        primaryGate:     gate,
         contentFeedback: null,
       };
     } else if (vaultIdea) {

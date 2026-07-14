@@ -1,43 +1,37 @@
 'use strict';
 
-const { LINKEDIN_RULES } = require('../modules/formatIntelligence/rules');
-
 // ---------------------------------------------------------------------------
-// Quality Gate — mechanical checks only.
-// All checks are 100% deterministic: exact phrase match, pattern match,
-// or word/character count. No ML, no heuristics.
+// Quality Gate — objective / integrity checks only.
+//
+// Deliberately NOT a taste critic. It does not score voice, hooks, clichés, or
+// "AI-sounding-ness" — that judgement belongs to the human reviewing the post,
+// and the generator itself (services/generationCore.js + postEngine.js) is where
+// authentic writing is produced. This gate only flags things that are objectively
+// wrong or have a concrete consequence:
+//   - FABRICATED_SPECIFIC — a number in the post that isn't in the author's input
+//     (a trust/integrity problem, not a style opinion).
+//   - ENGAGEMENT_BAIT     — patterns LinkedIn's algorithm actively penalises.
+//   - KEYWORD_MISSING     — a lead-magnet CTA that won't function without its keyword.
+//   - AI_LANGUAGE_DETECTED — leaked assistant text ("as an AI…", "I hope this helps").
+//   - TOO_SHORT           — output too short to be a usable post (generation failure).
+// A clean post scores 100 with a null verdict: no news is good news.
+//
+// All checks are 100% deterministic (exact phrase / pattern / word count).
 // ---------------------------------------------------------------------------
 
-// Check 4 — exact AI giveaway phrases (never legitimate in authentic writing)
-const AI_GIVEAWAY_PHRASES = [
+// Leaked assistant text — genuine authorship giveaways, never legitimate in a post.
+// (The old list also carried taste clichés like "in conclusion" / "the power of";
+// those were removed — the gate no longer polices style.)
+const AI_LEAKAGE_PHRASES = [
   'as an ai',
+  'as a language model',
   'i cannot',
   'i do not have personal',
-  'as a language model',
-  'it is important to note',
-  'in conclusion',
-  'to summarize',
   'i hope this helps',
   'feel free to',
-  'it goes without saying',
-  'needless to say',
-  'in today\'s fast-paced',
-  'in the realm of',
-  'a testament to',
-  'the power of',
 ];
 
-// Check 4c — 2026 viral template patterns
-// These saturated copywriting structures are now identifiable suppression triggers
-// in LinkedIn's composite AI-probability classifier.
-const VIRAL_TEMPLATE_PATTERNS = [
-  { pattern: /\bstop\b.{0,30}\bstart\b/i,         phrase: 'Stop [X], start [Y]' },
-  { pattern: /here'?s what nobody tells you/i,      phrase: "Here's what nobody tells you" },
-  { pattern: /^the result\?/im,                     phrase: 'The result? (standalone line)' },
-  { pattern: /it'?s not\b.{1,40}\bit'?s\b/i,      phrase: "It's not [X], it's [Y]" },
-];
-
-// Check 4b — engagement bait (exact patterns — always wrong on LinkedIn)
+// Engagement bait — exact patterns LinkedIn's 2026 algorithm penalises.
 const ENGAGEMENT_BAIT_PATTERNS = [
   /comment\s+yes\b/i, /comment\s+no\b/i, /type\s+yes\b/i, /type\s+1\b/i,
   /tag\s+someone\b/i, /tag\s+a\s+friend\b/i, /tag\s+a\s+colleague\b/i,
@@ -45,30 +39,71 @@ const ENGAGEMENT_BAIT_PATTERNS = [
   /comment\s+if\s+you\b/i,
 ];
 
+// ── FABRICATED_SPECIFIC — hard numeric specifics in the post that do not appear
+// in the author's real input. Conservative by design: only percentages, currency,
+// multipliers, and metric+timeframe phrases are checked, and only exact numeric
+// cores are compared, so list counts ("3 steps") and idioms ("6 figures") are
+// never flagged.
+const NUMBER_WORDS = {
+  zero: '0', one: '1', two: '2', three: '3', four: '4', five: '5', six: '6',
+  seven: '7', eight: '8', nine: '9', ten: '10', eleven: '11', twelve: '12',
+  twenty: '20', thirty: '30', forty: '40', fifty: '50', sixty: '60',
+  seventy: '70', eighty: '80', ninety: '90', hundred: '100', thousand: '1000', million: '1000000',
+};
+
+const HARD_SPECIFIC_PATTERNS = [
+  /\b\d{1,3}(?:\.\d+)?\s?%/g,                        // percentages: 20%, 12.5 %
+  /[$£€]\s?\d[\d,]*(?:\.\d+)?[kKmM]?/g,               // currency: $1,000, £50k
+  /\b\d+(?:\.\d+)?x\b/gi,                            // multipliers: 3x, 10x
+  /\b\d+\s?(?:days?|weeks?|months?|years?)\b/gi,      // metric+timeframe: 3 months
+];
+
+function normaliseNumericCore(s) {
+  return (s.match(/\d[\d,.]*/) || [''])[0].replace(/[,\s]/g, '').replace(/\.0+$/, '');
+}
+
+function realNumberSet(authorRealText) {
+  const set = new Set();
+  const t = (authorRealText || '').toLowerCase();
+  for (const n of t.match(/\d[\d,.]*/g) || []) set.add(n.replace(/[,\s]/g, '').replace(/\.0+$/, ''));
+  for (const [word, digit] of Object.entries(NUMBER_WORDS)) {
+    if (new RegExp(`\\b${word}\\b`).test(t)) set.add(digit);
+  }
+  return set;
+}
+
+function findFabricatedSpecifics(post, authorRealText) {
+  const real = realNumberSet(authorRealText);
+  const flagged = [];
+  for (const re of HARD_SPECIFIC_PATTERNS) {
+    for (const m of (post || '').matchAll(re)) {
+      const core = normaliseNumericCore(m[0]);
+      if (core && !real.has(core)) flagged.push(m[0].trim());
+    }
+  }
+  return [...new Set(flagged)];
+}
+
 function countWords(s) {
   return s.trim().split(/\s+/).filter(Boolean).length;
 }
 
-function countHashtags(text) {
-  const m = text.match(/#[\wÀ-ɏ]+/g);
-  return m ? m.length : 0;
-}
-
 /**
- * Run the mechanical quality gate.
+ * Run the objective quality gate.
  *
  * @param {string} postText
  * @param {{
  *   postType?: string|null,
  *   keyword?: string|null,
  *   funnelType?: string|null,
+ *   authorRealText?: string|null,   // enables the FABRICATED_SPECIFIC check
  * }} options
  */
 function runQualityGate(postText, options = {}) {
   const {
-    funnelType = null,
-    postType   = null,
-    keyword    = null,
+    postType       = null,
+    keyword        = null,
+    authorRealText = null,
   } = options;
 
   const text      = postText || '';
@@ -79,52 +114,18 @@ function runQualityGate(postText, options = {}) {
   const matches   = {};
   let   score     = 100;
 
-  // Extract structural elements once — reused across multiple checks
-  const allLines        = text.split(/\n/).map(l => l.trim());
-  const firstLine       = allLines[0] || '';
-  const lowerFirstLine  = firstLine.toLowerCase();
-  const lastSubstantive = [...allLines].reverse().find(l => l.length > 0 && !l.startsWith('#')) || '';
-
-  // ── Check 1 — Cliché / blocklist ──────────────────────────────────────────
-  const blocklist = LINKEDIN_RULES.blocklist || [];
-  let clicheDeducted = false;
-  for (const phrase of blocklist) {
-    if (lowerFull.includes(phrase.toLowerCase())) {
-      warnings.push(`Cliché detected: "${phrase}" — LinkedIn's classifier treats this as low-quality filler`);
-      if (!flags.includes('CLICHE_DETECTED')) flags.push('CLICHE_DETECTED');
-      (matches.CLICHE_DETECTED ??= []).push(phrase);
-      if (!clicheDeducted) { score -= 15; clicheDeducted = true; }
-    }
-  }
-
-  // ── Check 2 — Hook quality ─────────────────────────────────────────────────
-  const firstLineWords = countWords(firstLine);
-  if (firstLineWords > (LINKEDIN_RULES.hook.maxWords || 15)) {
-    warnings.push(`Hook is ${firstLineWords} words — keep the first line under ${LINKEDIN_RULES.hook.maxWords} words to stop the scroll`);
-    flags.push('HOOK_TOO_LONG');
-    score -= 10;
-  }
-
-  const weakOpener = (LINKEDIN_RULES.hook.forbiddenStarters || [])
-    .find(s => lowerFirstLine.startsWith(s.toLowerCase()));
-  if (weakOpener) {
-    warnings.push(`Weak hook opener: starts with "${weakOpener}" — this signals announcement, not intrigue`);
-    flags.push('WEAK_HOOK_OPENER');
-    score -= 15;
-  }
-
-  // ── Check 4 — AI giveaway phrases ─────────────────────────────────────────
-  let aiGiveawayDeducted = false;
-  for (const phrase of AI_GIVEAWAY_PHRASES) {
+  // ── AI leakage phrases ────────────────────────────────────────────────────
+  let aiLeakDeducted = false;
+  for (const phrase of AI_LEAKAGE_PHRASES) {
     if (lowerFull.includes(phrase)) {
-      errors.push(`AI giveaway phrase detected: "${phrase}"`);
+      errors.push(`Leftover AI phrasing detected: "${phrase}"`);
       if (!flags.includes('AI_LANGUAGE_DETECTED')) flags.push('AI_LANGUAGE_DETECTED');
       (matches.AI_LANGUAGE_DETECTED ??= []).push(phrase);
-      if (!aiGiveawayDeducted) { score -= 30; aiGiveawayDeducted = true; }
+      if (!aiLeakDeducted) { score -= 30; aiLeakDeducted = true; }
     }
   }
 
-  // ── Check 4b — Engagement bait ────────────────────────────────────────────
+  // ── Engagement bait ───────────────────────────────────────────────────────
   const baitHit = ENGAGEMENT_BAIT_PATTERNS.map(p => p.exec(text)).find(Boolean);
   if (baitHit) {
     errors.push("Engagement bait detected — LinkedIn's 2026 algorithm actively penalises these patterns");
@@ -133,53 +134,18 @@ function runQualityGate(postText, options = {}) {
     score -= 30;
   }
 
-  // ── Check 4c — 2026 viral template patterns ────────────────────────────────
-  let viralDeducted = false;
-  for (const { pattern, phrase } of VIRAL_TEMPLATE_PATTERNS) {
-    if (pattern.test(text)) {
-      warnings.push(`Viral template pattern: "${phrase}" — LinkedIn's 2026 classifier flags these saturated structures`);
-      if (!flags.includes('VIRAL_TEMPLATE')) flags.push('VIRAL_TEMPLATE');
-      (matches.VIRAL_TEMPLATE ??= []).push(phrase);
-      if (!viralDeducted) { score -= 10; viralDeducted = true; }
+  // ── Fabricated specifics (only when the author's real material is supplied) ─
+  if (authorRealText && authorRealText.trim()) {
+    const fabricated = findFabricatedSpecifics(text, authorRealText);
+    if (fabricated.length) {
+      warnings.push(`Unverified number(s) not found in your input: ${fabricated.join(', ')} — the model may have invented these. Confirm they're real or remove them.`);
+      flags.push('FABRICATED_SPECIFIC');
+      matches.FABRICATED_SPECIFIC = fabricated;
+      score -= 15;
     }
   }
 
-  // ── Check 5 — Hashtag spam ─────────────────────────────────────────────────
-  const hc   = countHashtags(text);
-  const maxH = LINKEDIN_RULES.post.maxHashtags;
-  if (hc > maxH) {
-    errors.push(`Too many hashtags (${hc}, max ${maxH})`);
-    flags.push('HASHTAG_SPAM');
-    score -= 10 * (hc - maxH);
-  }
-
-  // ── Check 6 — Post length ──────────────────────────────────────────────────
-  const totalWords   = countWords(text);
-  const funnelTarget = LINKEDIN_RULES.postLengthTargets?.[funnelType] || null;
-  const effectiveMin = funnelType === 'reach' ? 80 : (funnelTarget?.min ?? LINKEDIN_RULES.post.minWords);
-
-  if (totalWords < 20) {
-    errors.push(`Post is too short to evaluate (${totalWords} words) — a LinkedIn post needs at least 80 words`);
-    flags.push('TOO_SHORT');
-    score -= 70;
-  } else if (totalWords < effectiveMin) {
-    const pct = totalWords / effectiveMin;
-    const deduction = pct < 0.4 ? 45 : pct < 0.65 ? 28 : 12;
-    warnings.push(`Post is short at ${totalWords} words — aim for at least ${effectiveMin}`);
-    flags.push('TOO_SHORT');
-    score -= deduction;
-  }
-
-  // ── Check 7 — No CTA / closing question (soft warning) ────────────────────
-  const hasCta = lastSubstantive.endsWith('?') ||
-    /\b(dm|message me|comment|follow|subscribe|share|reply|reach out|send me)\b/i.test(lastSubstantive);
-  if (!hasCta && totalWords >= 20) {
-    warnings.push('No closing question or CTA — reach posts perform better with a debate-inviting question at the end');
-    flags.push('NO_CTA');
-    score -= 8;
-  }
-
-  // ── Lead magnet keyword ────────────────────────────────────────────────────
+  // ── Lead-magnet keyword (functional CTA check) ────────────────────────────
   if (postType === 'lead_magnet' && keyword) {
     const kw = keyword.trim().toUpperCase();
     if (!text.toUpperCase().includes(kw)) {
@@ -189,42 +155,41 @@ function runQualityGate(postText, options = {}) {
     }
   }
 
+  // ── Too short to be a usable post (generation failure, not a length opinion) ─
+  const totalWords = countWords(text);
+  if (totalWords < 20) {
+    errors.push(`Post is too short to be usable (${totalWords} words)`);
+    flags.push('TOO_SHORT');
+    score -= 70;
+  }
+
   score = Math.max(0, Math.min(100, score));
 
   const passed = errors.length === 0 && !flags.includes('TOO_SHORT');
 
+  // Dimensions retained for API compatibility; they now reflect ONLY objective
+  // flags (no hook/voice/cliché taste grading).
   const dimensions = {
-    hook: Math.max(0, 100
-      - (flags.includes('HOOK_TOO_LONG')    ? 25 : 0)
-      - (flags.includes('WEAK_HOOK_OPENER') ? 30 : 0)),
-    voice:      Math.max(0, 100
-      - (flags.includes('AI_LANGUAGE_DETECTED') ? 60 : 0)
-      - (flags.includes('VIRAL_TEMPLATE')        ? 20 : 0)
-      - (flags.includes('CLICHE_DETECTED')       ? 20 : 0)),
-    substance:  100,
-    structure:  Math.max(0, 100
-      - (flags.includes('TOO_SHORT')    ? 55 : 0)
-      - (flags.includes('HASHTAG_SPAM') ? 25 : 0)),
-    engagement: Math.max(0, 100
-      - (flags.includes('ENGAGEMENT_BAIT') ? 60 : 0)
-      - (flags.includes('NO_CTA')          ? 15 : 0)),
+    hook:       100,
+    voice:      Math.max(0, 100 - (flags.includes('AI_LANGUAGE_DETECTED') ? 60 : 0)),
+    substance:  Math.max(0, 100 - (flags.includes('FABRICATED_SPECIFIC') ? 40 : 0)),
+    structure:  Math.max(0, 100 - (flags.includes('TOO_SHORT') ? 55 : 0)),
+    engagement: Math.max(0, 100 - (flags.includes('ENGAGEMENT_BAIT') ? 60 : 0)),
   };
 
-  let verdict;
-  if (flags.includes('TOO_SHORT') && totalWords < 20) {
-    verdict = 'Post is too short — write at least 80 words before publishing.';
-  } else if (flags.includes('TOO_SHORT')) {
-    verdict = `Post is only ${totalWords} words — flesh it out before publishing. Aim for at least ${effectiveMin} words.`;
+  // Verdict: only surfaced for a real, objective problem. A clean post returns
+  // null — the gate has no opinion on good writing.
+  let verdict = null;
+  if (flags.includes('TOO_SHORT')) {
+    verdict = `This came back too short to use (${totalWords} words). Regenerate it.`;
   } else if (flags.includes('KEYWORD_MISSING')) {
-    verdict = `The keyword didn't make it into the CTA. Check the post manually — it must say "Comment ${keyword || '[KEYWORD]'}" for the lead magnet to work.`;
+    verdict = `The keyword didn't make it into the CTA — the post must say "Comment ${keyword || '[KEYWORD]'}" for the lead magnet to work.`;
   } else if (flags.includes('AI_LANGUAGE_DETECTED')) {
-    verdict = 'This reads like AI wrote it. Regenerate or rewrite the flagged sections before posting.';
-  } else if (flags.includes('VIRAL_TEMPLATE')) {
-    verdict = "Viral template phrases detected — LinkedIn's 2026 classifier flags these saturated structures. Rewrite the flagged lines.";
-  } else if (passed) {
-    verdict = 'Your hook is doing exactly what it should. This one will stop people mid-scroll.';
-  } else {
-    verdict = 'Review the issues above before publishing.';
+    verdict = 'This contains leftover AI phrasing. Edit the flagged text before posting.';
+  } else if (flags.includes('ENGAGEMENT_BAIT')) {
+    verdict = "Engagement bait is here — LinkedIn penalises it. Rewrite the flagged line before posting.";
+  } else if (flags.includes('FABRICATED_SPECIFIC')) {
+    verdict = `This post cites ${matches.FABRICATED_SPECIFIC.join(', ')}, which isn't in your input. If it's real, keep it — if the model invented it, edit before publishing.`;
   }
 
   return {

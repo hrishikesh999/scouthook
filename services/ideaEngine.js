@@ -458,7 +458,7 @@ CONVERT cards: A specific result you or a client achieved, a before/after that i
 
 Rules for every card:
 - "hook" is the actual FIRST LINE of the post (≤ 2 sentences) — specific, grounded, no generic advice
-- "textarea_input" is 2–3 first-person sentences the author would type as raw material (e.g., "A client told me X" or "I realized Y when..."), with specific detail
+- "textarea_input" is a 1–2 sentence SECOND-PERSON premise describing the angle the author could write about (e.g., "You've seen clients treat their email list like a megaphone" or "The gap most 6-figure creators hit is monetisation, not audience"). Do NOT write it as a first-person anecdote and do NOT invent specific numbers, named clients, or outcomes — those are the author's to supply in their answers. It is a prompt to react to, not a fact to repeat.
 - "title" is a 3–7 word topic label
 - "post_type" is one of reach|trust|convert — at least one must be "${recommendedType}"
 - Each hook must pass this test: "Could I only write this based on my specific consulting experience?" If not, it's too generic.

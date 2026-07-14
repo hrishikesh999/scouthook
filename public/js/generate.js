@@ -2294,18 +2294,22 @@ const chat = (() => {
   function composeIdeaBrief() {
     const c = _ideaCard.card;
     const items = c.questions.items;
-    const parts = [c.hook];
-    if (c.textarea_input) {
-      // Question cards: textarea_input is the author's own answer to the prompt
-      // (real words). Regular cards: an AI-suggested angle (context only).
-      parts.push(c.is_question
-        ? '[The author\'s answer to the prompt above — their real words:]\n' + c.textarea_input
-        : '[Idea context — AI-suggested angle, NOT the author\'s words:]\n' + c.textarea_input);
+    const parts = [];
+    // Provenance tags (Phase 4) — the backend's authenticity core and the
+    // FABRICATED_SPECIFIC quality gate rely on these exact markers.
+    // Question cards: the hook is a prompt and textarea_input is the author's own
+    // real answer. Regular cards: hook + textarea_input are an AI-suggested angle,
+    // steering only — the model must not lift facts/numbers from them.
+    const angle = c.hook + (c.textarea_input ? '\n' + c.textarea_input : '');
+    if (c.is_question) {
+      parts.push('[AUTHOR-REAL]\n' + angle + '\n[/AUTHOR-REAL]');
+    } else {
+      parts.push('[AI-SUGGESTED]\n' + angle + '\n[/AI-SUGGESTED]');
     }
     const qa = _ideaCard.answers
       .map((a, i) => `Q: ${items[i] ? items[i].q : ''}\nA: ${a}`)
       .join('\n');
-    parts.push('[The author\'s own answers — treat these as the real experience to build on:]\n' + qa);
+    parts.push('[AUTHOR-REAL] The author\'s own answers, the real experience to build on:\n' + qa + '\n[/AUTHOR-REAL]');
     return parts.join('\n\n');
   }
 

@@ -4,7 +4,14 @@ const Anthropic = require('@anthropic-ai/sdk');
 const { db, getSetting } = require('../db');
 const { extractJsonFromResponse } = require('./voiceFingerprint');
 const { buildVoiceDNABlock } = require('./voiceExtraction');
-const { AI_TELLS_PROHIBITION, sanitiseAiTells } = require('./postSanitiser');
+const {
+  AI_TELLS_PROHIBITION,
+  sanitiseAiTells,
+  WRITING_CRAFT_RULES,
+  SPECIFICITY_MANDATE,
+  SELF_CHECK,
+  buildPhraseLibraryBlock,
+} = require('./generationCore');
 const { LINKEDIN_RULES } = require('../modules/formatIntelligence/rules');
 
 const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
@@ -49,28 +56,6 @@ async function fetchPublishedExamples(profileId) {
   }
 }
 
-function buildPhraseLibraryBlock(userProfile) {
-  if (!userProfile.writing_sample_phrases) return '';
-  let phrases;
-  try {
-    phrases = JSON.parse(userProfile.writing_sample_phrases);
-  } catch {
-    return '';
-  }
-  if (!Array.isArray(phrases) || !phrases.length) return '';
-  const top = phrases
-    .filter(p => p.phrase && typeof p.specificity_score === 'number')
-    .sort((a, b) => b.specificity_score - a.specificity_score)
-    .slice(0, 5);
-  if (!top.length) return '';
-  const lines = top.map(p => `• ${p.phrase}`).join('\n');
-  return `\nPHRASE LIBRARY — exact language from the author's own writing (study these first):
-${lines}
-
-Study these samples before writing. Match the rhythm, directness, and vocabulary — not the content.
-Use verbatim phrases where they fit naturally; never force inclusion or restructure the argument to accommodate one.\n`;
-}
-
 function getLengthGuidance(funnelType) {
   const targets = LINKEDIN_RULES.postLengthTargets;
   return (targets[funnelType] || targets.default).guidance;
@@ -111,23 +96,6 @@ function buildCtaInstruction(funnelType, convertCtaIntent = null) {
   return `\nCLOSING:\n${funnelInstructions[funnelType] || funnelInstructions.trust}`;
 }
 
-const SPECIFICITY_MANDATE = `
-SPECIFICITY RULE:
-Any number, name, timeframe, or concrete detail that appears in the raw idea is sacred — preserve it verbatim, never approximate or generalise it.
-Never invent statistics, metrics, or outcomes that are not in the input.
-When the input has no numbers: do NOT use [SPECIFIC NEEDED] markers and do NOT invent figures. Instead, ground the post in what IS concrete — the specific scenario, the named decision, the role of the person, the direction of change, the exact moment. "I stopped sending follow-up emails entirely" is specific. "I changed my outreach approach" is not. The situation itself is the specificity — use it.
-NEVER output placeholder text in square brackets (e.g. [specific result], [add detail here], [your niche], [metric]). Square brackets break the post and are never acceptable. If a concrete detail is missing, write around it naturally using the author's niche and audience context — or make a plausible inference from what is given.`;
-
-const SELF_CHECK = `
-SELF-CHECK BEFORE OUTPUTTING:
-1. Does line 1 stop the scroll without needing context? If not, rewrite it.
-2. Is the post grounded in the concrete details from the input — a specific scenario, decision, moment, or role? If it reads as generic advice that could apply to anyone, rewrite it using the specific situation in the raw idea. Do NOT add [SPECIFIC NEEDED] markers.
-3. Are any banned words or em dashes present? If yes, replace them.
-4. Does the closing match the post goal? (reach=debate question, trust=reframe, convert=direct ask, save=bookmark nudge)
-5. Would someone who knows this author think "that sounds like them"? If not, rewrite.
-6. Is the sharpest, most surprising insight placed in the final third of the body — not given away in the setup? If the best line appears in the first half, move it down.
-Output only the post as plain text after all six pass. No JSON. No labels. No explanation.`;
-
 /**
  * Stage 2 system prompt — voice writing with full author context.
  */
@@ -148,29 +116,7 @@ ${firstBelief(userProfile) ? `
 EDITORIAL CONTEXT (the author's established worldview — let this colour the angle and framing):
 ${firstBelief(userProfile)}
 ` : ''}
-HOOK (first line — non-negotiable):
-- Under 15 words. A complete stranger must stop scrolling on line 1 alone, with no context.
-- Lead with the most specific, surprising, or contradictory element of the idea.
-- Never open with "I am", "We", "Here", "In today", or "If you" — these are announcement openers, not hooks.
-
-ABOVE THE FOLD:
-- LinkedIn shows only the first 2–3 lines before "see more". 60–70% of readers never tap through.
-- Lines 2–3 must deepen the tension from line 1 — not explain, contextualise, or set up.
-- Make the reader feel they will miss something important if they do not keep reading.
-
-DEPTH:
-- Save the sharpest, most surprising insight for the final third of the body.
-- Readers who finish should feel rewarded. Front-load enough to keep them reading — back-load the best line to make finishing worth it.
-
-POINT OF VIEW (non-negotiable):
-Take the strongest defensible position the raw idea supports — not the safest one.
-Never present both sides without choosing one. A hedged first draft cannot be sharpened; a strong one can be dialled back.
-If the idea contains a provocative angle, lead with it — do not bury it in the body.
-
-LINKEDIN FORMATTING (non-negotiable):
-- One sentence per line. Never write paragraph blocks. Every sentence gets its own line.
-- Put a blank line between every 2–3 lines to create visual breathing room.
-- The post must be visually scannable — a wall of text kills engagement before anyone reads it.
+${WRITING_CRAFT_RULES}
 ${AI_TELLS_PROHIBITION}${SPECIFICITY_MANDATE}${ctaInstruction}`;
 }
 
@@ -724,4 +670,4 @@ Any number, percentage, named company, role, timeframe, or measurable outcome st
 ${AI_TELLS_PROHIBITION}`;
 }
 
-module.exports = { ideaToPost, vaultSeedToPost, buildRefineSystemPrompt, buildImproveSystemPrompt, fetchPublishedExamples };
+module.exports = { ideaToPost, vaultSeedToPost, buildRefineSystemPrompt, buildImproveSystemPrompt, fetchPublishedExamples, buildVoiceWritingSystemPrompt };

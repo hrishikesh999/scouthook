@@ -4239,11 +4239,18 @@ body.has-trial-banner #main-content {
   cursor: pointer;
   transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
-/* Icon-only ghost button (Save / Not-for-me on 'today' cards) — square, no label */
+/* Icon-only ghost button (Not-for-me on 'today' cards) — square, no label */
 .ti-ghost-btn--icon {
   width: 34px;
   padding: 0;
   justify-content: center;
+}
+/* Compact labelled ghost button (Save on 'today' cards) — smaller than the
+   primary "Write this →" so the labelled "Save" reads clearly without dominating */
+.ti-ghost-btn--sm {
+  height: 34px;
+  padding: 0 var(--space-3);
+  font-size: 12px;
 }
 .ti-ghost-btn:hover:not(:disabled) { background: var(--bg-pill); color: var(--text-heading); border-color: #D4D4D8; }
 .ti-ghost-btn:disabled { cursor: default; color: var(--brand); border-color: var(--border); }

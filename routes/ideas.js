@@ -55,7 +55,9 @@ router.get('/today', async (req, res) => {
       ok: true,
       fresh,
       cards: cards
-        .filter(c => c.status !== 'dismissed')
+        // Saved cards move to the Ideas queue; dismissed cards are gone — either
+        // way they must not linger on today's dashboard list.
+        .filter(c => c.status !== 'dismissed' && c.status !== 'saved')
         .map(c => ({
           id: c.id,
           hook: c.hook,

@@ -37,7 +37,6 @@
     return typeof apiHeaders === 'function' ? apiHeaders() : {};
   }
 
-  var ICON_SAVE   = '<svg class="ti-btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>';
   var ICON_DISMISS = '<svg class="ti-btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
   var ICON_REMOVE = '<svg class="ti-btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
   var ICON_PERSON = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
@@ -136,7 +135,7 @@
     // 'queue' (Ideas tab): only two buttons, so keep the "Remove" label.
     var secondary = mode === 'queue'
       ? '<button class="ti-ghost-btn ti-remove-btn" type="button" aria-label="Remove from queue">' + ICON_REMOVE + '<span>Remove</span></button>'
-      : '<button class="ti-ghost-btn ti-ghost-btn--icon ti-save-btn" type="button" title="Save for later" aria-label="Save for later"' + (card.status === 'saved' ? ' disabled' : '') + '>' + ICON_SAVE + '</button>' +
+      : '<button class="ti-ghost-btn ti-ghost-btn--sm ti-save-btn" type="button" title="Save for later" aria-label="Save for later"' + (card.status === 'saved' ? ' disabled' : '') + '>' + (card.status === 'saved' ? 'Saved' : 'Save') + '</button>' +
         '<button class="ti-ghost-btn ti-ghost-btn--icon ti-dismiss-btn" type="button" title="Not for me" aria-label="Not for me">' + ICON_DISMISS + '</button>';
 
     el.innerHTML =

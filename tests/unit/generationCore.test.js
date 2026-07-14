@@ -73,6 +73,24 @@ describe('generationCore — shared author context', () => {
     expect(out).toContain('VOICE DNA (distilled voice signature');
   });
 
+  test('audience resonance mandate precedes the data and instructs picking one dimension', () => {
+    const out = core.buildSharedAuthorContext(profile);
+    expect(out).toContain('AUDIENCE RESONANCE (non-negotiable):');
+    expect(out).toContain('pick the ONE belief, desire, or problem');
+    expect(out).toContain('Do NOT gesture at the whole list');
+    const iMandate = out.indexOf('AUDIENCE RESONANCE (non-negotiable):');
+    const iData = out.indexOf('TARGET AUDIENCE:');
+    expect(iMandate).toBeGreaterThan(-1);
+    expect(iData).toBeGreaterThan(iMandate);
+  });
+
+  test('resonance mandate is omitted when the profile has no audience fields', () => {
+    const out = core.buildSharedAuthorContext({ brand_description: 'I help course creators' });
+    expect(out).toContain('BRAND VOICE:');
+    expect(out).not.toContain('AUDIENCE RESONANCE');
+    expect(out).not.toContain('TARGET AUDIENCE:');
+  });
+
   test('phrase library is included by default and omittable', () => {
     expect(core.buildSharedAuthorContext(profile)).toContain('PHRASE LIBRARY');
     expect(core.buildSharedAuthorContext(profile, { includePhraseLibrary: false }))
@@ -92,6 +110,7 @@ describe('generationCore — shared author context', () => {
     expect(out).toContain('## AUTHOR CONTEXT');
     expect(out).not.toContain('BRAND VOICE:');
     expect(out).not.toContain('PHRASE LIBRARY');
+    expect(out).not.toContain('AUDIENCE RESONANCE');
   });
 
   test('tolerates malformed JSON fields without throwing', () => {

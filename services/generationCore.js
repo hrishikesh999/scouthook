@@ -218,7 +218,19 @@ function buildSharedAuthorContext(profile, { includePhraseLibrary = true } = {})
   if (profile.audience_market_sophistication)  audLines.push(`- Market sophistication: ${profile.audience_market_sophistication}`);
 
   if (audLines.length) {
-    lines.push('TARGET AUDIENCE:', ...audLines, '');
+    lines.push(
+      'AUDIENCE RESONANCE (non-negotiable):',
+      'This post must land for THIS specific reader — not a generic professional.',
+      'Before writing, pick the ONE belief, desire, or problem below that this idea speaks to',
+      'most directly. Root the whole post in it:',
+      '- Name the problem in the reader\'s own words, the way they\'d describe it to a peer.',
+      '- Mirror how they already think about it — meet them at their current belief, then move it.',
+      '- Tie the payoff to what they actually want, not to what the author sells.',
+      'The reader should feel this was written for them. Do NOT gesture at the whole list —',
+      'commit to the one or two dimensions that fit this idea.',
+      '',
+      'TARGET AUDIENCE:', ...audLines, ''
+    );
   }
 
   // Authority proof

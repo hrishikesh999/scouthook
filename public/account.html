@@ -148,6 +148,43 @@
         </div>
       </div>
 
+      <!-- Connect Claude (MCP) card -->
+      <div class="profile-card" id="mcp-connector-card">
+        <div class="profile-field" style="margin-bottom:0">
+          <label class="field-label">Connect Claude</label>
+          <p class="field-helper" style="margin:8px 0 16px">Use ScoutHook from inside Claude — draft posts in your voice, pull your idea cards, and check your queue. Create a token, then add ScoutHook as a custom connector in Claude.</p>
+
+          <div style="margin-bottom:16px">
+            <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:6px">Connector URL</label>
+            <div style="display:flex;align-items:center;gap:8px">
+              <code id="mcp-url" style="flex:1;font-size:13px;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg-pill);color:var(--text);overflow:auto;white-space:nowrap">—</code>
+              <button id="mcp-url-copy" type="button" class="btn-outlined" style="font-size:12px;height:34px;padding:0 12px;flex-shrink:0">Copy</button>
+            </div>
+          </div>
+
+          <!-- Freshly-minted token, shown once -->
+          <div id="mcp-new-token" style="display:none;margin-bottom:16px;padding:12px 14px;border-radius:10px;border:1px solid var(--border-accent,var(--accent,#6366f1));background:var(--bg-pill)">
+            <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:6px">Your new token — copy it now, it won't be shown again</div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <code id="mcp-new-token-value" style="flex:1;font-size:13px;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg-surface);color:var(--text);overflow:auto;white-space:nowrap"></code>
+              <button id="mcp-new-token-copy" type="button" class="btn-outlined" style="font-size:12px;height:34px;padding:0 12px;flex-shrink:0">Copy</button>
+            </div>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+            <input id="mcp-token-label" type="text" maxlength="80" placeholder="Name this token (e.g. Claude on my laptop)" class="field-input" style="flex:1;height:36px;font-size:13px">
+            <button id="mcp-token-create" type="button" class="btn-outlined" style="font-size:12px;height:36px;padding:0 14px;flex-shrink:0">Create token</button>
+          </div>
+
+          <div id="mcp-token-list" style="display:none">
+            <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:6px">Your tokens</label>
+            <div id="mcp-token-rows"></div>
+          </div>
+          <div id="mcp-token-empty" style="display:none;font-size:13px;color:var(--text-muted)">No tokens yet. Create one to connect Claude.</div>
+          <div id="mcp-feedback" style="display:none;font-size:12px;margin-top:10px"></div>
+        </div>
+      </div>
+
       <!-- Danger Zone card -->
       <div class="profile-card profile-card--danger" id="danger-zone-card">
         <div class="profile-field" style="margin-bottom:0">
@@ -193,6 +230,7 @@
   <script src="/js/idea-cards.js"></script>
   <script src="/js/ideas-pill.js"></script>
   <script src="/js/settings-nav.js"></script>
+  <script src="/js/mcp-connector.js"></script>
   <script>
     // Sign-in card (provider-aware)
     (async () => {

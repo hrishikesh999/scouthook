@@ -691,7 +691,14 @@ function requireVaultFeatureForWrites(req, res, next) {
   return requireFeature('vault')(req, res, next);
 }
 
+// MCP server (Model Context Protocol) — lets Claude and other MCP clients reach
+// ScoutHook. Authenticated by its own bearer personal-access-token, NOT the
+// browser session, so it deliberately sits outside the requireWorkspaceMember
+// chain below. See docs/mcp-server-plan.md and routes/mcp.js.
+app.use('/mcp', require('./routes/mcp'));
+
 // Workspace-scoped routes — require authenticated session + valid workspace membership
+app.use('/api/mcp-tokens',    requireWorkspaceMember, require('./routes/mcpTokens'));
 app.use('/api/profile',       requireWorkspaceMember, require('./routes/profile'));
 app.use('/api/recipes',       requireWorkspaceMember, require('./routes/recipes'));
 app.use('/api/generate',      requireWorkspaceMember, requireWorkspaceActive, require('./routes/generate'));

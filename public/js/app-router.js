@@ -149,6 +149,30 @@
     });
   }
 
+  // Remove same-origin stylesheets the incoming page doesn't declare.
+  //
+  // Page-specific CSS carries unscoped !important layout rules — editor.css pins
+  // #main-content to 100vh with overflow:hidden — and #main-content exists on
+  // every page. Without this, opening the editor (a full page load, so editor.css
+  // lands in <head>) and then navigating via the sidebar leaves editor.css behind
+  // and kills scrolling on every subsequent page until a full reload.
+  //
+  // Third-party sheets are left alone: brand.js injects Google Fonts at runtime,
+  // and those are never declared in a page's HTML.
+  function removeStaleStylesheets(newLinks) {
+    const keep = new Set();
+    for (const link of newLinks) {
+      const pathname = getPathname(link.getAttribute('href'));
+      if (pathname) keep.add(pathname);
+    }
+    for (const link of document.querySelectorAll('link[rel="stylesheet"]')) {
+      let u;
+      try { u = new URL(link.href, location.origin); } catch { continue; }
+      if (u.origin !== location.origin) continue;
+      if (!keep.has(u.pathname)) link.remove();
+    }
+  }
+
   async function navigate(url, { replace = false, isPopState = false } = {}) {
     const pathname = getPathname(url);
     if (!pathname || !(pathname in PAGE_SCRIPTS)) {
@@ -231,6 +255,10 @@
     // Ensure any page-specific CSS is loaded before swapping
     const newLinks = doc.querySelectorAll('link[rel="stylesheet"]');
     await Promise.all(Array.from(newLinks).map(link => ensureStylesheet(link.getAttribute('href'))));
+
+    // ...then drop the outgoing page's CSS, after the new sheets have loaded so
+    // there's no unstyled flash in between.
+    removeStaleStylesheets(newLinks);
 
     // Collect inline scripts from the fetched document body (page-specific logic)
     const inlineScripts = Array.from(doc.body.querySelectorAll('script:not([src])'));

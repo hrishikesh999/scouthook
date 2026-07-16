@@ -544,6 +544,13 @@ async function waitForDocumentAvailable(accessToken, documentUrn) {
  * @returns {Promise<{ linkedin_post_id: string }>}
  */
 async function publishNow(userId, tenantId, content, options = {}) {
+  // Plan gate — publishing requires an active plan. Checked here (the single
+  // choke point) so it covers both immediate publishes and scheduled posts
+  // whose plan expired between scheduling and fire time.
+  const { getUserPlan } = require('./subscription');
+  const plan = await getUserPlan(userId);
+  if (plan === 'expired') throw new Error('plan_expired');
+
   // Rate limit — 1 post/hour
   await checkRateLimit(userId, tenantId);
 
@@ -594,6 +601,7 @@ async function publishNow(userId, tenantId, content, options = {}) {
 
 // Errors that should NOT be retried — user action is needed to resolve them.
 const NON_RETRIABLE_ERRORS = new Set([
+  'plan_expired',
   'not_connected',
   'rate_limit_exceeded',
   'scheduled_payload_mismatch',
@@ -881,6 +889,7 @@ async function publishScheduledPost(scheduledPostId, { attemptsMade = 0, maxAtte
             ? new Date(meta.scheduled_for).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })
             : 'the scheduled time';
           const errorReasonMap = {
+            plan_expired:                        'Your ScoutHook plan has expired — renew your subscription to continue publishing.',
             reconnect_required:                  'Your LinkedIn connection has expired — please reconnect.',
             not_connected:                       'Your LinkedIn account is not connected.',
             rate_limit_exceeded:                 'You reached LinkedIn\'s posting rate limit (1 post/hour).',
@@ -932,8 +941,29 @@ async function publishScheduledPost(scheduledPostId, { attemptsMade = 0, maxAtte
 }
 
 /**
+ * Mark a first comment failed and record why in scheduled_post_events so
+ * failures are diagnosable without server console access.
+ */
+async function markFirstCommentFailed(scheduledPostId, tenantId, userId, reason) {
+  await db.prepare(
+    "UPDATE scheduled_posts SET first_comment_status = 'failed', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ?"
+  ).run(scheduledPostId, tenantId);
+  try {
+    await db.prepare(
+      "INSERT INTO scheduled_post_events (scheduled_post_id, user_id, tenant_id, event_type, message) VALUES (?, ?, ?, 'first_comment_failed', ?)"
+    ).run(scheduledPostId, userId, tenantId, String(reason).slice(0, 500));
+  } catch { /* non-fatal */ }
+}
+
+/**
  * Post the first comment on a published post. Called by the BullMQ 'post-comment' job
  * 60 seconds after the post goes live.
+ *
+ * Uses the unversioned v2 socialActions endpoint — the versioned
+ * /rest/socialActions API belongs to the Community Management product
+ * (w_member_social_feed, partner-gated) which this app does not have; calling
+ * it with a consumer w_member_social token returns 403. Comment creation is
+ * within the w_member_social scope via the v2 endpoint.
  */
 async function publishFirstComment(scheduledPostId) {
   const row = await db.prepare(
@@ -946,19 +976,15 @@ async function publishFirstComment(scheduledPostId) {
 
   const conn = await resolveConnection(row.tenant_id);
   if (!conn) {
-    await db.prepare(
-      "UPDATE scheduled_posts SET first_comment_status = 'failed', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ?"
-    ).run(scheduledPostId, row.tenant_id);
+    await markFirstCommentFailed(scheduledPostId, row.tenant_id, row.user_id, 'not_connected');
     return;
   }
 
   let accessToken;
   try {
     accessToken = await getValidConnectionToken(conn);
-  } catch {
-    await db.prepare(
-      "UPDATE scheduled_posts SET first_comment_status = 'failed', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ?"
-    ).run(scheduledPostId, row.tenant_id);
+  } catch (e) {
+    await markFirstCommentFailed(scheduledPostId, row.tenant_id, row.user_id, `token: ${e.message}`);
     return;
   }
 
@@ -969,17 +995,17 @@ async function publishFirstComment(scheduledPostId) {
   const shareUrn = row.linkedin_post_id;
 
   const res = await fetch(
-    `https://api.linkedin.com/rest/socialActions/${encodeURIComponent(shareUrn)}/comments`,
+    `https://api.linkedin.com/v2/socialActions/${encodeURIComponent(shareUrn)}/comments`,
     {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
-        'LinkedIn-Version': LINKEDIN_API_VERSION,
         'X-Restli-Protocol-Version': '2.0.0',
       },
       body: JSON.stringify({
         actor: actorUrn,
+        object: shareUrn,
         message: { text: row.first_comment },
       }),
     }
@@ -988,9 +1014,12 @@ async function publishFirstComment(scheduledPostId) {
   if (!res.ok) {
     const errText = await res.text().catch(() => '');
     console.error(`[publisher] first comment failed for scheduledPostId=${scheduledPostId}: ${res.status} ${errText}`);
-    await db.prepare(
-      "UPDATE scheduled_posts SET first_comment_status = 'failed', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ?"
-    ).run(scheduledPostId, row.tenant_id);
+    // Transient (throttle / server error): leave status 'pending' and throw so
+    // the BullMQ 'post-comment' job retries (attempts: 2, fixed 30s backoff).
+    if (res.status === 429 || res.status >= 500) {
+      throw new Error(`first_comment_transient_${res.status}`);
+    }
+    await markFirstCommentFailed(scheduledPostId, row.tenant_id, row.user_id, `${res.status} ${errText}`);
     // Do not throw — the status is persisted and the guard above prevents retries.
     return;
   }

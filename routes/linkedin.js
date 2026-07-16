@@ -775,6 +775,7 @@ router.post('/publish', async (req, res) => {
 
     return res.json({ ok: true, linkedin_post_id: result.linkedin_post_id });
   } catch (err) {
+    if (err.message === 'plan_expired')       return res.status(403).json({ ok: false, error: 'plan_expired' });
     if (err.message === 'not_connected')      return res.status(401).json({ ok: false, error: 'not_connected' });
     if (err.message === 'reconnect_required') return res.status(401).json({ ok: false, error: 'reconnect_required' });
     if (err.message === 'rate_limit_exceeded') return res.status(429).json({ ok: false, error: 'rate_limit_exceeded' });
@@ -1129,6 +1130,12 @@ router.post('/scheduled/:id/reschedule', async (req, res) => {
 
   if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
   if (!Number.isFinite(id)) return res.status(400).json({ ok: false, error: 'invalid_id' });
+
+  // Rescheduling requires an active plan — same gate as /schedule.
+  const reschedulePlan = await getUserPlan(userId);
+  if (!planHasFeature(reschedulePlan, 'scheduling')) {
+    return res.status(403).json({ ok: false, error: 'feature_not_available', feature: 'scheduling', requiredPlan: 'pro' });
+  }
 
   const schedulingEnabled = String((await getSetting('scheduling_enabled')) ?? '1').trim();
   if (schedulingEnabled === '0' || schedulingEnabled.toLowerCase() === 'false') {

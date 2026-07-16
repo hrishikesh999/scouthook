@@ -3904,6 +3904,7 @@ function wireSchedule() {
       const data = await res.json();
       if (!res.ok || !data.ok) {
         const errMap = {
+          plan_expired:     'Your ScoutHook plan has expired. Renew your subscription to publish.',
           publish_blocked_scheduled: 'This post is scheduled. Pause scheduling before publishing immediately.',
           not_connected:    'LinkedIn is not connected. Please reconnect your account.',
           token_expired:    'Your LinkedIn session has expired. Reconnect your account in Settings.',

@@ -202,6 +202,7 @@ function renderFailedRow(post) {
     : '';
 
   var errorMap = {
+    plan_expired: 'ScoutHook plan expired — renew to publish',
     reconnect_required: 'LinkedIn connection expired',
     not_connected: 'LinkedIn not connected',
     rate_limit_exceeded: 'Rate limit exceeded',
@@ -358,6 +359,7 @@ function init() {
                 scheduled_for_too_soon: 'Please pick a time at least 5 minutes in the future.',
                 scheduled_for_too_far:  'Please pick a time within the next 30 days.',
                 scheduling_unavailable: 'Scheduler is unavailable — try again shortly.',
+                feature_not_available:  'Your ScoutHook plan has expired — renew your subscription to reschedule posts.',
               };
               alert(msgs[data.error] || 'Could not reschedule: ' + data.error);
             }
@@ -378,6 +380,8 @@ function init() {
             if (data.ok) {
               cachedFetch.bust('/api/linkedin/scheduled');
               reloadStream();
+            } else if (data.error === 'feature_not_available') {
+              alert('Your ScoutHook plan has expired — renew your subscription to publish posts.');
             } else {
               alert('Could not publish: ' + data.error);
             }

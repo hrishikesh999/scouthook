@@ -191,27 +191,44 @@ if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
     clientSecret: GOOGLE_CLIENT_SECRET,
     callbackURL: GOOGLE_CALLBACK_URL || '/auth/google/callback',
   }, async (accessToken, refreshToken, profile, done) => {
-    const email = profile?.emails?.[0]?.value || null;
+    const email = profile?.emails?.[0]?.value ? profile.emails[0].value.trim().toLowerCase() : null;
     const photo = profile?.photos?.[0]?.value || null;
     const googleId = profile?.id || null;
-    const userId = googleId ? `google:${googleId}` : (email ? `google_email:${email}` : null);
-    console.log(`[auth/google] login email=${email} googleId=${googleId} userId=${userId}`);
-    if (!userId) return done(null, false);
+    const googleUserId = googleId ? `google:${googleId}` : (email ? `google_email:${email}` : null);
+    console.log(`[auth/google] login email=${email} googleId=${googleId} userId=${googleUserId}`);
+    if (!googleUserId) return done(null, false);
 
     try {
       const displayName = profile?.displayName || email || 'User';
 
-      // 1. Upsert identity row (identity-only — no voice DNA or brand columns post-migration)
-      const result = await db.prepare(`
-        INSERT INTO user_profiles (user_id, email, display_name)
-        VALUES (?, ?, ?)
-        ON CONFLICT(user_id) DO UPDATE SET
-          email        = EXCLUDED.email,
-          display_name = EXCLUDED.display_name
-        RETURNING (xmax = 0) AS is_new_row
-      `).get(userId, email, displayName);
+      // 0. An account with this email may already exist under a different
+      // user_id (e.g. signed up via email/password first). user_profiles.email
+      // is globally unique (migration 063), so linking to that existing
+      // identity — rather than inserting a second row for the same email —
+      // is required, not optional: the plain insert below would otherwise
+      // throw a unique-violation and Google login would fail for that user.
+      const existingByEmail = email
+        ? await db.prepare('SELECT user_id FROM user_profiles WHERE email = ? AND user_id != ?').get(email, googleUserId)
+        : null;
+      const userId = existingByEmail ? existingByEmail.user_id : googleUserId;
 
-      // 2. Upsert auth_providers row (idempotent on every login)
+      // 1. Upsert identity row (identity-only — no voice DNA or brand columns post-migration)
+      // Skipped when linking to a pre-existing email/password identity — that
+      // row already has the right email; we don't want to clobber its display_name.
+      let result;
+      if (!existingByEmail) {
+        result = await db.prepare(`
+          INSERT INTO user_profiles (user_id, email, display_name)
+          VALUES (?, ?, ?)
+          ON CONFLICT(user_id) DO UPDATE SET
+            email        = EXCLUDED.email,
+            display_name = EXCLUDED.display_name
+          RETURNING (xmax = 0) AS is_new_row
+        `).get(userId, email, displayName);
+      }
+
+      // 2. Upsert auth_providers row (idempotent on every login), linked to
+      // the canonical user_id resolved above.
       await db.prepare(`
         INSERT INTO auth_providers (user_id, provider, provider_id)
         VALUES (?, 'google', ?)

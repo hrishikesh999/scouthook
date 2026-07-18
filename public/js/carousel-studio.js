@@ -34,6 +34,12 @@
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
+  // Content-class roles sit in the swipeable middle: reorderable, duplicable,
+  // deletable, interchangeable. Title (cover) and closing (payoff) are pinned.
+  const CONTENT_CLASS = new Set(['content', 'stat', 'list', 'quote', 'comparison', 'cta']);
+  const isContent = role => CONTENT_CLASS.has(role);
+  const contentCount = () => deck.slides.filter(s => isContent(s.role)).length;
+
   // ── Slot mapping: canonical ↔ template-specific ──────────────────────────
 
   function slotMapsFor(role) {
@@ -332,14 +338,14 @@
       const div = document.createElement('div');
       div.className = 'cstudio-thumb' + (i === activeIdx ? ' active' : '');
       div.dataset.idx = i;
-      div.draggable = slide.role === 'content';
+      div.draggable = isContent(slide.role);
       div.style.height = Math.round(dims.height * scale) + 'px';
       div.innerHTML = `
         <span class="num">${i + 1}</span>
         <iframe style="width:${dims.width}px;height:${dims.height}px;transform:scale(${scale})" sandbox="allow-scripts" tabindex="-1"></iframe>
         <div class="acts">
-          ${slide.role === 'content' ? '<button data-act="dup" title="Duplicate">⧉</button>' : ''}
-          ${slide.role === 'content' && deck.slides.filter(s => s.role === 'content').length > 1 ? '<button data-act="del" title="Delete">✕</button>' : ''}
+          ${isContent(slide.role) ? '<button data-act="dup" title="Duplicate">⧉</button>' : ''}
+          ${isContent(slide.role) && contentCount() > 1 ? '<button data-act="del" title="Delete">✕</button>' : ''}
         </div>`;
       div.querySelector('iframe').srcdoc = buildSlideDoc(slide, i, false);
       div.addEventListener('click', e => {
@@ -349,12 +355,12 @@
       });
       // Drag reorder (content slides only, between title and closing)
       div.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', String(i)); });
-      div.addEventListener('dragover', e => { if (slide.role === 'content') e.preventDefault(); });
+      div.addEventListener('dragover', e => { if (isContent(slide.role)) e.preventDefault(); });
       div.addEventListener('drop', e => {
         e.preventDefault();
         const from = parseInt(e.dataTransfer.getData('text/plain'), 10);
         if (Number.isNaN(from) || from === i) return;
-        if (deck.slides[from]?.role !== 'content' || slide.role !== 'content') return;
+        if (!isContent(deck.slides[from]?.role) || !isContent(slide.role)) return;
         const [moved] = deck.slides.splice(from, 1);
         deck.slides.splice(i, 0, moved);
         activeIdx = i;
@@ -541,13 +547,13 @@
 
   function slideAction(act, i) {
     const slide = deck.slides[i];
-    if (act === 'dup' && slide.role === 'content') {
+    if (act === 'dup' && isContent(slide.role)) {
       const copy = JSON.parse(JSON.stringify(slide));
       copy.id = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()));
       deck.slides.splice(i + 1, 0, copy);
       activeIdx = i + 1;
-    } else if (act === 'del' && slide.role === 'content') {
-      if (deck.slides.filter(s => s.role === 'content').length <= 1) return;
+    } else if (act === 'del' && isContent(slide.role)) {
+      if (contentCount() <= 1) return;
       deck.slides.splice(i, 1);
       activeIdx = Math.min(activeIdx, deck.slides.length - 1);
     } else return;
@@ -555,14 +561,16 @@
   }
 
   function addSlide() {
-    const contentTpl = deck.slides.find(s => s.role === 'content') ||
-      Object.entries(tplById).map(([id, t]) => ({ template_id: id, ...t })).find(t => t.role === 'content');
+    // Prefer reusing a content-class template already in the deck; else any
+    // content-class template the pack provides.
+    const contentTpl = deck.slides.find(s => isContent(s.role)) ||
+      Object.entries(tplById).map(([id, t]) => ({ template_id: id, ...t })).find(t => isContent(t.role));
     if (!contentTpl) return;
     const insertAt = deck.slides.findIndex(s => s.role === 'closing');
     const slide = {
       id: (crypto.randomUUID ? crypto.randomUUID() : String(Date.now())),
       template_id: contentTpl.template_id,
-      role: 'content',
+      role: contentTpl.role || 'content',
       locked: true,
       slots: {},
     };

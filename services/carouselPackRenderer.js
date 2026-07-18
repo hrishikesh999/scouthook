@@ -8,6 +8,8 @@ const { callRenderService } = require('./templateRenderer');
 const { buildCarouselPdfFromBuffers } = require('./carouselGenerator');
 const { loadLinkedInAvatarDataUri } = require('./linkedinOAuth');
 const { extractJsonFromResponse, getAnthropicMessageText } = require('./voiceFingerprint');
+const { buildSharedAuthorContext } = require('./generationCore');
+const { resolveProfile } = require('../lib/resolveProfile');
 const { redisSet, redisGet } = require('./redis');
 
 // ---------------------------------------------------------------------------
@@ -126,14 +128,40 @@ async function extractCarouselPackContent(post, pack, slides) {
 
   const { min_content_slides: minSlides = 3, max_content_slides: maxSlides = 8 } = pack;
 
-  const prompt = `Re-plan this LinkedIn post as a swipe-through carousel. Do NOT chop the post into fragments — a carousel is a different rhetorical form: a reader decides at every slide whether to swipe again. Plan the narrative arc first (hook → promise → one idea per slide with rising momentum → payoff), then write each slide for that arc.
+  // Archetype-aware planning: if the pack ships typed middle slides (stat,
+  // list, quote, comparison, cta), let the planner tag each content slide so
+  // it maps to the matching design (buildDeckFromExtract reads `archetype`).
+  const CONTENT_CLASS = ['content', 'stat', 'list', 'quote', 'comparison', 'cta'];
+  const archetypes = [...new Set(slides.map(s => s.role).filter(r => CONTENT_CLASS.includes(r) && r !== 'content'))];
+  const ARCHETYPE_HELP = {
+    stat: 'a single big number/metric that lands hard',
+    list: 'a short scannable list of points',
+    quote: 'a pulled quote or one-line principle',
+    comparison: 'a this-vs-that / before-vs-after contrast',
+    cta: 'a mid-deck nudge to act',
+  };
+  const archetypeBlock = archetypes.length
+    ? `\nThis pack offers typed slide layouts. For each content slide, add an "archetype" field set to ONE of: ${archetypes.join(', ')} (${archetypes.map(a => `${a} = ${ARCHETYPE_HELP[a] || a}`).join('; ')}). Choose the archetype that fits the idea; use it only where it genuinely suits the content.\n`
+    : '';
+
+  // Voice DNA + ICP resonance — same author context every other generation
+  // path uses, so carousel copy sounds like the author, not a template.
+  let authorContext = '';
+  try {
+    const profile = await resolveProfile(post.tenant_id);
+    if (profile) authorContext = buildSharedAuthorContext(profile) + '\n\n';
+  } catch (err) {
+    console.warn('[carouselPackRenderer] author context skipped:', err.message);
+  }
+
+  const prompt = `${authorContext}Re-plan this LinkedIn post as a swipe-through carousel. Do NOT chop the post into fragments — a carousel is a different rhetorical form: a reader decides at every slide whether to swipe again. Plan the narrative arc first (hook → promise → one idea per slide with rising momentum → payoff), then write each slide for that arc.
 
 COVER SLIDE — generate THREE distinct cover options (different angles: e.g. bold claim, specific number/result, tension or question). Fields for each:
 ${titleSlots.map(s => `- "${s}": string`).join('\n')}
 Cover rules: the main headline field must be 8 words or fewer. It has one job — stop the scroll. No generic labels, no "A guide to…".
 
 CONTENT SLIDES — ${minSlides} to ${maxSlides} slides, ONE idea each:
-${contentSlots.map(s => `- "${s}": string`).join('\n')}
+${contentSlots.map(s => `- "${s}": string`).join('\n')}${archetypeBlock}
 Content rules:
 - Max 30 words per slide across all fields. Big type, not paragraphs.
 - Each slide must earn the next swipe: end on tension, an open loop, or a setup the next slide pays off.
@@ -322,10 +350,14 @@ async function renderCarouselPack(post, packId, userOverrides, brand, ctx) {
     ? userOverrides
     : await extractCarouselPackContent(post, pack, slides);
 
-  // Build ordered slide list: title, content[0..N], closing
+  // Build ordered slide list: title, content[0..N], closing. Content-class
+  // archetypes (stat/list/quote/comparison/cta) count as content templates.
+  const CONTENT_CLASS = new Set(['content', 'stat', 'list', 'quote', 'comparison', 'cta']);
   const titleSlides = slides.filter(s => s.role === 'title');
-  const contentTemplates = slides.filter(s => s.role === 'content');
+  const contentTemplates = slides.filter(s => CONTENT_CLASS.has(s.role));
   const closingSlides = slides.filter(s => s.role === 'closing');
+  const contentByRole = {};
+  for (const t of contentTemplates) if (!contentByRole[t.role]) contentByRole[t.role] = t;
 
   const contentData = extracted.content_slides || [];
   const slideQueue = [];
@@ -335,10 +367,15 @@ async function renderCarouselPack(post, packId, userOverrides, brand, ctx) {
     slideQueue.push({ slide: titleSlides[0], content: extracted.title || {}, role: 'title' });
   }
 
-  // Content slides — round-robin through content templates
+  // Content slides — honor the planner's archetype hint, else round-robin
   for (let i = 0; i < contentData.length; i++) {
-    const tpl = contentTemplates[i % contentTemplates.length] || contentTemplates[0];
-    if (tpl) slideQueue.push({ slide: tpl, content: contentData[i], role: 'content' });
+    const data = contentData[i] || {};
+    const hinted = typeof data.archetype === 'string' ? contentByRole[data.archetype] : null;
+    const tpl = hinted || contentTemplates[i % contentTemplates.length] || contentTemplates[0];
+    if (tpl) {
+      const { archetype, ...slotData } = data;
+      slideQueue.push({ slide: tpl, content: slotData, role: tpl.role });
+    }
   }
 
   // Closing

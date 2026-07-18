@@ -96,11 +96,23 @@ Shipped:
 
 **Parity rule (unchanged):** server-side `templateSlotInjector` stays the single source of truth for slot injection; client previews reuse the single-template editor's injection logic.
 
-> **BUILD STATUS 2026-07-18: Phases 0–5 code-complete in one session (all uncommitted).**
-> Remaining before launch: `npm run migrate` (075) · Phase 0.5 pack production (Canva) · live end-to-end
-> run with a real pack (extraction → Studio → render → publish) · LinkedIn portrait-PDF verify ·
-> "Create a carousel" creation-flow entry point (deferred — needs product placement decision) ·
-> archetype role extension beyond title/content/closing (deferred).
+> **BUILD STATUS 2026-07-18: ALL code phases complete (0–6). First batch committed c4946b3;
+> second batch (Voice DNA, archetypes, entry point) follows.**
+> Remaining is non-code: `npm run migrate` (075 + 076) · Phase 0.5 pack production (Canva) ·
+> live end-to-end run (extraction → Studio → render → publish) · LinkedIn portrait-PDF verify.
+> Deferred by choice: "write-from-topic" carousel (current entry point routes through an existing
+> post + pack); analytics instrumentation.
+>
+> **Phase 5b (Voice DNA):** `extractCarouselPackContent` now prepends `buildSharedAuthorContext`
+> (resolveProfile by post.tenant_id) — carousel copy uses the same voice+ICP context as every
+> other generation path.
+> **Phase 4b (archetypes):** migration 076 widens the role CHECK to add stat/list/quote/comparison/cta
+> (content-class: swipeable middle, interchangeable with 'content'). carouselDeck CONTENT_ROLES +
+> archetype-hint mapping in buildDeckFromExtract; planner emits an `archetype` field when the pack
+> ships typed slides; legacy round-robin + Studio (isContent helper) + admin variant role list all
+> archetype-aware. Backward compatible.
+> **Phase 6b (entry point):** "Carousel" button in the editor visual action bar →
+> `openHtmlTemplateModal({category:'__carousel__'})` → pack pick launches the Studio.
 
 ## Phase 2 — Studio UI ✅ DONE 2026-07-18 (code) ← MVP line
 

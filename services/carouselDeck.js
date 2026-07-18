@@ -27,7 +27,12 @@ const { db, getSetting } = require('../db');
 const { extractJsonFromResponse, getAnthropicMessageText } = require('./voiceFingerprint');
 
 const DECK_VERSION = 1;
-const VALID_ROLES = new Set(['title', 'content', 'closing']);
+// Content-class archetypes sit in the swipeable middle and are interchangeable
+// with plain 'content'. Title is always the cover (first); closing is always
+// the payoff (last).
+const CONTENT_ROLES = new Set(['content', 'stat', 'list', 'quote', 'comparison', 'cta']);
+const VALID_ROLES = new Set(['title', 'closing', ...CONTENT_ROLES]);
+const isContentRole = role => CONTENT_ROLES.has(role);
 const MAX_SLIDES = 20;
 const MAX_SLOT_LENGTH = 600;
 const HEX_RE = /^#[0-9a-f]{6}$/i;
@@ -38,8 +43,13 @@ const HEX_RE = /^#[0-9a-f]{6}$/i;
 
 function buildDeckFromExtract(pack, slides, extracted) {
   const titleTpl = slides.find(s => s.role === 'title') || null;
-  const contentTpls = slides.filter(s => s.role === 'content');
+  const contentTpls = slides.filter(s => isContentRole(s.role));
   const closingTpl = slides.find(s => s.role === 'closing') || null;
+
+  // Archetype index: role → first template of that role, for mapping planner
+  // archetype hints onto the right slide design.
+  const tplByRole = {};
+  for (const t of contentTpls) if (!tplByRole[t.role]) tplByRole[t.role] = t;
 
   const deckSlides = [];
 
@@ -55,14 +65,18 @@ function buildDeckFromExtract(pack, slides, extracted) {
 
   const contentData = extracted.content_slides || [];
   for (let i = 0; i < contentData.length; i++) {
-    const tpl = contentTpls[i % contentTpls.length] || contentTpls[0];
+    const data = contentData[i] || {};
+    // Prefer a template matching the planner's archetype hint; else round-robin.
+    const hinted = typeof data.archetype === 'string' ? tplByRole[data.archetype] : null;
+    const tpl = hinted || contentTpls[i % contentTpls.length] || contentTpls[0];
     if (!tpl) break;
+    const { archetype, ...slotData } = data;
     deckSlides.push({
       id: crypto.randomUUID(),
       template_id: tpl.template_id,
-      role: 'content',
+      role: tpl.role,
       locked: false,
-      slots: sanitizeSlots(contentData[i]),
+      slots: sanitizeSlots(slotData),
     });
   }
 

@@ -293,7 +293,7 @@ router.post('/:id/variants', express.json({ limit: '60mb' }), async (req, res) =
   try {
     const packId = req.params.id;
     const { role, slides } = req.body || {};
-    if (!['title', 'content', 'closing'].includes(role)) {
+    if (!['title', 'content', 'closing', 'stat', 'list', 'quote', 'comparison', 'cta'].includes(role)) {
       return res.status(400).json({ ok: false, error: 'invalid_role' });
     }
     if (!Array.isArray(slides) || !slides.length) {

@@ -4,7 +4,7 @@ const Anthropic = require('@anthropic-ai/sdk');
 const { db, getSetting } = require('../db');
 const storage = require('./storage');
 const { injectSlots } = require('./templateSlotInjector');
-const { callRenderService } = require('./templateRenderer');
+const { callRenderService, resolveBrandRole } = require('./templateRenderer');
 const { buildCarouselPdfFromBuffers } = require('./carouselGenerator');
 const { loadLinkedInAvatarDataUri } = require('./linkedinOAuth');
 const { extractJsonFromResponse, getAnthropicMessageText } = require('./voiceFingerprint');
@@ -257,11 +257,20 @@ function resolveColorSlots(manifest, variableMap, role, brand, userOverrides) {
       if (roleMapping[role] === '--' + varName) { canonicalName = canonical; break; }
     }
 
+    // Precedence: user override > explicit admin brand-role mapping >
+    // legacy default:'brand' var-name mapping > literal default hex.
     if (overrideColors[canonicalName] || overrideColors[key]) {
       colorSlots[key] = overrideColors[canonicalName] || overrideColors[key];
+    } else if (def.brandRole) {
+      // Same resolution the design-template renderer uses. null = unrecognized
+      // role → keep the template's own color (do not repaint with accent).
+      const resolved = resolveBrandRole(def.brandRole, brand);
+      if (resolved) colorSlots[key] = resolved;
+      else if (def.default && def.default !== 'brand') colorSlots[key] = def.default;
     } else if (def.default === 'brand') {
-      const colorRole = varName;
-      colorSlots[key] = brand[colorRole] || brand.accent || '#0f766e';
+      // Legacy: role guessed from the CSS var name.
+      const resolved = resolveBrandRole(varName, brand);
+      colorSlots[key] = resolved || brand.accent || '#0f766e';
     } else if (def.default) {
       colorSlots[key] = def.default;
     }

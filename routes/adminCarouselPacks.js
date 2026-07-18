@@ -72,7 +72,8 @@ router.get('/', async (req, res) => {
     for (const pack of packs) {
       pack.slides = await db.prepare(
         `SELECT s.id, s.template_id, s.role, s.slide_order,
-                t.name AS template_name, t.thumbnail_r2_key AS template_thumbnail
+                t.name AS template_name, t.thumbnail_r2_key AS template_thumbnail,
+                t.slot_manifest
          FROM carousel_pack_slides s
          JOIN html_templates t ON t.id = s.template_id
          WHERE s.pack_id = ?
@@ -276,6 +277,54 @@ async function _runConversionJob(jobId, images, roles, meta) {
     await _setConversionJob(jobId, { status: 'failed', progress: null, pack_id: null, error: err.message });
   }
 }
+
+// ---------------------------------------------------------------------------
+// PUT /slides/:templateId/colors — brand mapping for a slide template
+//
+// { colors: { "color:bg": { brandRole: "bg"|"", default: "#hex" }, ... } }
+//
+// Merges brand-role + default into the template's slot_manifest color slots,
+// so the carousel renderer applies workspace brand colors (parity with the
+// design-template brand mapping). Only touches color: slots present in body.
+// ---------------------------------------------------------------------------
+
+router.put('/slides/:templateId/colors', express.json({ limit: '256kb' }), async (req, res) => {
+  try {
+    const { templateId } = req.params;
+    const { colors } = req.body || {};
+    if (!colors || typeof colors !== 'object') {
+      return res.status(400).json({ ok: false, error: 'colors_object_required' });
+    }
+
+    const tpl = await db.prepare('SELECT id, slot_manifest FROM html_templates WHERE id = ?').get(templateId);
+    if (!tpl) return res.status(404).json({ ok: false, error: 'template_not_found' });
+
+    const manifest = typeof tpl.slot_manifest === 'string'
+      ? JSON.parse(tpl.slot_manifest) : (tpl.slot_manifest || {});
+    if (!manifest.slots) manifest.slots = {};
+
+    const VALID_ROLES = new Set(['bg', 'accent', 'text', 'text_muted', 'secondary_bg', 'secondary_text', 'border', 'overlay']);
+    const HEX = /^#[0-9a-fA-F]{6}$/;
+
+    for (const [key, cfg] of Object.entries(colors)) {
+      if (!key.startsWith('color:') || !manifest.slots[key] || typeof cfg !== 'object') continue;
+      const def = manifest.slots[key];
+      if ('brandRole' in cfg) {
+        if (cfg.brandRole && VALID_ROLES.has(cfg.brandRole)) def.brandRole = cfg.brandRole;
+        else delete def.brandRole; // '' / invalid → unmapped
+      }
+      if (typeof cfg.default === 'string' && HEX.test(cfg.default)) def.default = cfg.default;
+    }
+
+    await db.prepare('UPDATE html_templates SET slot_manifest = ? WHERE id = ?')
+      .run(JSON.stringify(manifest), templateId);
+
+    res.json({ ok: true, slot_manifest: manifest });
+  } catch (err) {
+    console.error('[adminCarouselPacks] slide colors error:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
 
 // ---------------------------------------------------------------------------
 // POST /:id/variants — add layout variants to an existing pack

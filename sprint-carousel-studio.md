@@ -113,6 +113,14 @@ Shipped:
 > archetype-aware. Backward compatible.
 > **Phase 6b (entry point):** "Carousel" button in the editor visual action bar →
 > `openHtmlTemplateModal({category:'__carousel__'})` → pack pick launches the Studio.
+>
+> **Brand mapping (admin parity with design templates):** after conversion, the carousel
+> pack slide editor now shows a brand-role dropdown per color slot (bg/accent/text/…),
+> seeded from the stored manifest, with a "Save brand mapping" button →
+> `PUT /admin/carousel-packs/slides/:templateId/colors` (merges brandRole+default into the
+> template manifest). Renderer parity: `resolveColorSlots` now honors `def.brandRole` via the
+> shared `resolveBrandRole` (exported from templateRenderer), precedence
+> override > brandRole > legacy default:'brand' > hex. Admin list SELECT returns slot_manifest.
 
 ## Phase 2 — Studio UI ✅ DONE 2026-07-18 (code) ← MVP line
 

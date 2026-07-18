@@ -203,6 +203,34 @@
   let _packData = null;
   let _selectedSlideIdx = -1;
   let _slideHtmlCache = {};
+  let _currentSlideTemplateId = null;
+  let _slideColorEdits = {}; // 'color:var' → { brandRole, default } for the active slide
+
+  // Brand-role mapping (parity with the design-template form)
+  const BRAND_ROLE_LABELS = { bg: 'brand.bg', accent: 'brand.accent', text: 'brand.text', text_muted: 'blend(text,bg)', secondary_bg: 'brand.2nd_bg', secondary_text: 'brand.2nd_text', border: 'blend(text,bg)', overlay: 'rgba overlay' };
+  const PREVIEW_BRAND = { bg: '#0F1A3C', accent: '#0D7A5F', text: '#F0F4FF', secondary_bg: '#16234d', secondary_text: '#c7d2fe' };
+  function _autoDetectBrandRole(varName) {
+    const r = (varName || '').toLowerCase();
+    if (/^(bg|background|card_bg|card-bg|surface|secondary_bg|secondary-bg)$/.test(r)) return 'bg';
+    if (/^(text|heading|heading_color|title|subtitle|body|label|caption)$/.test(r)) return 'text';
+    if (/^(text_muted|text-muted|muted|secondary_text|secondary-text)$/.test(r)) return 'text_muted';
+    if (/^(accent|brand|highlight|primary|cta|button|badge|tag|link)$/.test(r)) return 'accent';
+    if (/^(border|line|divider|separator|rule)$/.test(r)) return 'border';
+    if (/^(overlay)$/.test(r)) return 'overlay';
+    return 'accent';
+  }
+  function _blendHex(a, b, ratio) {
+    const p = h => [1,3,5].map(i => parseInt(h.slice(i,i+2),16));
+    try { const A=p(a),B=p(b); return '#'+A.map((c,i)=>Math.round(c*(1-ratio)+B[i]*ratio).toString(16).padStart(2,'0')).join(''); }
+    catch { return a; }
+  }
+  function _resolvePreviewBrand(role) {
+    const r = (role || '').toLowerCase();
+    if (PREVIEW_BRAND[r]) return PREVIEW_BRAND[r];
+    if (r === 'text_muted' || r === 'border') return _blendHex(PREVIEW_BRAND.text, PREVIEW_BRAND.bg, r === 'border' ? 0.2 : 0.45);
+    if (r === 'overlay') return 'rgba(0,0,0,0.5)';
+    return PREVIEW_BRAND.accent;
+  }
 
   // ── Auth ──────────────────────────────────────────────────────────────────
   const saved = sessionStorage.getItem('adminPw');
@@ -322,6 +350,19 @@
     const previewPane = document.getElementById('slide-preview');
     const slotsPane = document.getElementById('slide-slot-list');
     document.getElementById('slide-editor').style.display = '';
+
+    // Seed brand-mapping state from the stored manifest so existing brandRole /
+    // default values show up (parity with the design-template editor).
+    _currentSlideTemplateId = slide.template_id;
+    _slideColorEdits = {};
+    const manifest = typeof slide.slot_manifest === 'string'
+      ? (() => { try { return JSON.parse(slide.slot_manifest); } catch { return {}; } })()
+      : (slide.slot_manifest || {});
+    for (const [key, def] of Object.entries(manifest.slots || {})) {
+      if (key.startsWith('color:') && def && typeof def === 'object') {
+        _slideColorEdits[key] = { brandRole: def.brandRole || '', default: (def.default && def.default !== 'brand') ? def.default : '' };
+      }
+    }
 
     previewPane.innerHTML = '<div style="color:var(--text-muted);font-size:.85rem">Loading preview...</div>';
     slotsPane.innerHTML = '<div style="color:var(--text-muted);font-size:.82rem">Loading slots...</div>';
@@ -452,20 +493,43 @@
       </div>`).join('');
     }
     if (colorSlots.length) {
-      html += '<div class="slide-slots-title" style="margin-top:12px">Colors</div>';
+      html += '<div class="slide-slots-title" style="margin-top:12px">Colors &amp; brand mapping</div>';
       html += colorSlots.map(s => {
         const varName = s.key.slice('color:'.length);
-        const val = s.config.default || '#cccccc';
+        const edit = _slideColorEdits[s.key] || {};
+        const val = edit.default || s.config.default || '#cccccc';
+        const curRole = edit.brandRole || '';
+        const autoRole = _autoDetectBrandRole(varName);
+        const opt = (v, label) => `<option value="${v}"${curRole === v ? ' selected' : ''}>${label}</option>`;
         return `<div class="slot-card">
           <div class="slot-card__header"><span class="slot-type slot-type--color">Color</span><span class="slot-card__key">${esc(varName)}</span></div>
-          <div class="slot-card__body">
-            <div class="slot-card__field"><label>Color</label><div style="display:flex;gap:4px;align-items:center">
+          <div class="slot-card__body" style="flex-direction:column;align-items:stretch;gap:8px">
+            <div class="slot-card__field"><label>Default color</label><div style="display:flex;gap:4px;align-items:center">
               <input type="color" data-slot="${esc(s.key)}" data-type="color" value="${esc(val)}">
               <input type="text" class="hex-input" data-slot="${esc(s.key)}" data-type="color-hex" value="${esc(val)}" maxlength="9">
+            </div></div>
+            <div class="slot-card__field"><label>Brand role</label><div style="display:flex;gap:6px;align-items:center">
+              <select data-slot="${esc(s.key)}" data-type="brand-role" style="font-size:.78rem;padding:4px 8px;border:1px solid var(--border);border-radius:5px;flex:1;cursor:pointer;background:#fff">
+                ${opt('', 'None (keep default)')}
+                ${opt('auto', `Auto → ${esc(autoRole)}`)}
+                ${opt('bg', 'Background')}
+                ${opt('accent', 'Accent')}
+                ${opt('text', 'Text')}
+                ${opt('text_muted', 'Text Muted')}
+                ${opt('secondary_bg', 'Secondary BG')}
+                ${opt('secondary_text', 'Secondary Text')}
+                ${opt('border', 'Border')}
+                ${opt('overlay', 'Overlay')}
+              </select>
+              ${curRole ? `<span style="font-size:.68rem;font-weight:600;color:#0f766e;background:#f0fdf4;padding:3px 8px;border-radius:4px;white-space:nowrap">→ ${esc(BRAND_ROLE_LABELS[curRole === 'auto' ? autoRole : curRole] || (curRole === 'auto' ? autoRole : curRole))}</span>` : ''}
             </div></div>
           </div>
         </div>`;
       }).join('');
+      html += `<div style="margin-top:10px;display:flex;gap:10px;align-items:center">
+        <button id="btn-save-brand-map" class="btn btn--secondary" type="button">Save brand mapping</button>
+        <span id="brand-map-status" style="font-size:.8rem;color:var(--text-muted)"></span>
+      </div>`;
     }
     if (imageSlots.length) {
       html += '<div class="slide-slots-title" style="margin-top:12px">Images</div>';
@@ -490,25 +554,77 @@
       });
     });
 
-    // Color pickers → live update iframe
+    const _postVar = (slot, value) => {
+      const varName = '--' + slot.slice('color:'.length);
+      document.getElementById('cp-slide-iframe')?.contentWindow?.postMessage({ type: 'cp-set-var', name: varName, value }, '*');
+    };
+
+    // Color pickers → live update iframe + record default edit
     list.querySelectorAll('input[data-type="color"]').forEach(picker => {
       const slot = picker.dataset.slot;
       const hexInput = list.querySelector(`.hex-input[data-slot="${slot}"]`);
       picker.addEventListener('input', () => {
         if (hexInput) hexInput.value = picker.value;
-        const varName = '--' + slot.slice('color:'.length);
-        const iframe = document.getElementById('cp-slide-iframe');
-        iframe?.contentWindow?.postMessage({ type: 'cp-set-var', name: varName, value: picker.value }, '*');
+        _slideColorEdits[slot] = { ...(_slideColorEdits[slot] || {}), default: picker.value };
+        _postVar(slot, picker.value);
       });
       if (hexInput) {
         hexInput.addEventListener('input', () => {
           if (/^#[0-9a-fA-F]{6}$/.test(hexInput.value)) {
             picker.value = hexInput.value;
-            const varName = '--' + slot.slice('color:'.length);
-            const iframe = document.getElementById('cp-slide-iframe');
-            iframe?.contentWindow?.postMessage({ type: 'cp-set-var', name: varName, value: hexInput.value }, '*');
+            _slideColorEdits[slot] = { ...(_slideColorEdits[slot] || {}), default: hexInput.value };
+            _postVar(slot, hexInput.value);
           }
         });
+      }
+    });
+
+    // Brand-role dropdowns → record + preview the resolved brand color
+    list.querySelectorAll('select[data-type="brand-role"]').forEach(sel => {
+      const slot = sel.dataset.slot;
+      sel.addEventListener('change', () => {
+        const role = sel.value;
+        _slideColorEdits[slot] = { ...(_slideColorEdits[slot] || {}), brandRole: role };
+        if (role) {
+          const resolvedRole = role === 'auto' ? _autoDetectBrandRole(slot.slice('color:'.length)) : role;
+          _postVar(slot, _resolvePreviewBrand(resolvedRole));
+        } else {
+          _postVar(slot, (_slideColorEdits[slot].default) || '#cccccc');
+        }
+        // Re-render to refresh the resolved-role badge
+        const slots = scanSlotsFromHtml(_slideHtmlCache[_currentSlideTemplateId] || '');
+        renderSlideSlotCards(slots, _currentSlideTemplateId);
+      });
+    });
+
+    // Save brand mapping → persist to the template manifest
+    const saveBtn = document.getElementById('btn-save-brand-map');
+    if (saveBtn) saveBtn.addEventListener('click', async () => {
+      const status = document.getElementById('brand-map-status');
+      saveBtn.disabled = true; saveBtn.textContent = 'Saving…'; if (status) status.textContent = '';
+      try {
+        const colors = {};
+        for (const [key, edit] of Object.entries(_slideColorEdits)) {
+          const role = edit.brandRole === 'auto'
+            ? _autoDetectBrandRole(key.slice('color:'.length))
+            : (edit.brandRole || '');
+          const entry = { brandRole: role };
+          if (edit.default && /^#[0-9a-fA-F]{6}$/.test(edit.default)) entry.default = edit.default;
+          colors[key] = entry;
+        }
+        const r = await adminFetch(`/admin/carousel-packs/slides/${_currentSlideTemplateId}/colors`, {
+          method: 'PUT', body: JSON.stringify({ colors }),
+        });
+        const data = await r.json();
+        if (!data.ok) throw new Error(data.error || 'Save failed');
+        // Reflect saved manifest back into the in-memory pack data
+        const slide = (_packData?.slides || []).find(s => s.template_id === _currentSlideTemplateId);
+        if (slide) slide.slot_manifest = data.slot_manifest;
+        if (status) { status.style.color = 'var(--success,#059669)'; status.textContent = 'Saved.'; }
+      } catch (err) {
+        if (status) { status.style.color = 'var(--error,#dc2626)'; status.textContent = err.message; }
+      } finally {
+        saveBtn.disabled = false; saveBtn.textContent = 'Save brand mapping';
       }
     });
   }

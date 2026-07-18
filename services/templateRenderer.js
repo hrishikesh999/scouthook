@@ -418,4 +418,4 @@ async function getRenderJobStatus(jobId) {
   return renderJobs.get(jobId) || null;
 }
 
-module.exports = { renderTemplate, extractTemplateSlots, generateTemplateThumbnail, startRenderJob, getRenderJobStatus, callRenderService };
+module.exports = { renderTemplate, extractTemplateSlots, generateTemplateThumbnail, startRenderJob, getRenderJobStatus, callRenderService, resolveBrandRole, blendHex };

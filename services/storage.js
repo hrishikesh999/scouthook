@@ -135,6 +135,20 @@ function buildOriginalImageKey(templateId) {
 }
 
 /**
+ * Dedicated storage path for carousel pack slides, kept separate from design
+ * templates (which live under global/templates|thumbnails). Serving reads the
+ * stored key from the DB, so existing slides under the old prefix keep working.
+ * e.g. buildCarouselSlideKey('uuid') → 'global/carousel-slides/uuid.html'
+ */
+function buildCarouselSlideKey(templateId) {
+  return `global/carousel-slides/${templateId}.html`;
+}
+
+function buildCarouselSlideThumbnailKey(templateId) {
+  return `global/carousel-thumbnails/${templateId}.png`;
+}
+
+/**
  * Returns a direct public URL for a raw admin key, or null if R2_PUBLIC_URL is not configured.
  * Requires the R2 bucket to have a public domain (custom domain or pub-*.r2.dev) set via R2_PUBLIC_URL.
  * @param {string} rawKey  e.g. 'global/thumbnails/uuid.png'
@@ -363,6 +377,7 @@ module.exports = {
   buildLinkedInAvatarKey,
   // Key builders (raw key, no prefix — for use with uploadAdmin/downloadAdmin)
   buildTemplateKey, buildThumbnailKey, buildOriginalImageKey,
+  buildCarouselSlideKey, buildCarouselSlideThumbnailKey,
   // Utilities
   getBackend, getPublicUrl,
   // User-content API

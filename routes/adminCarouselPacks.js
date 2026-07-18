@@ -171,13 +171,13 @@ async function _runConversionJob(jobId, images, roles, meta) {
 
       const cleanHtml = stripScriptTags(t.html);
       const templateId = crypto.randomUUID();
-      const htmlKey = storage.buildTemplateKey(templateId);
+      const htmlKey = storage.buildCarouselSlideKey(templateId);
       await storage.uploadAdmin(Buffer.from(cleanHtml, 'utf8'), htmlKey, 'text/html');
 
       let thumbnailKey = null;
       try {
         const thumbBuf = await generateTemplateThumbnail(cleanHtml, manifest);
-        thumbnailKey = storage.buildThumbnailKey(templateId);
+        thumbnailKey = storage.buildCarouselSlideThumbnailKey(templateId);
         await storage.uploadAdmin(thumbBuf, thumbnailKey, 'image/png');
       } catch (err) {
         console.warn('[adminCarouselPacks] thumbnail failed for slide %d: %s', i + 1, err.message);
@@ -408,13 +408,13 @@ async function _runVariantJob(jobId, pack, base, role, images) {
       try { manifest = readSlotManifest(t.html); } catch { manifest = t.manifest; }
       const cleanHtml = stripScriptTags(t.html);
       const templateId = crypto.randomUUID();
-      const htmlKey = storage.buildTemplateKey(templateId);
+      const htmlKey = storage.buildCarouselSlideKey(templateId);
       await storage.uploadAdmin(Buffer.from(cleanHtml, 'utf8'), htmlKey, 'text/html');
 
       let thumbnailKey = null;
       try {
         const thumbBuf = await generateTemplateThumbnail(cleanHtml, manifest);
-        thumbnailKey = storage.buildThumbnailKey(templateId);
+        thumbnailKey = storage.buildCarouselSlideThumbnailKey(templateId);
         await storage.uploadAdmin(thumbBuf, thumbnailKey, 'image/png');
       } catch (err) {
         console.warn('[adminCarouselPacks] variant thumbnail failed: %s', err.message);

@@ -71,12 +71,21 @@ router.use(requireAdminPassword);
 
 router.get('/', async (req, res) => {
   try {
-    const rows = await db.prepare(
+    // Exclude carousel pack slides — they live in html_templates (flagged
+    // is_carousel_slide) but are managed under Carousel Packs, not the Design
+    // Templates gallery. Fall back to unfiltered if migration 065 isn't applied.
+    const select = (whereCarousel) =>
       `SELECT id, name, description, category, active, sort_order,
               slot_manifest, html_r2_key, thumbnail_r2_key, created_at
        FROM html_templates
-       ORDER BY sort_order ASC, created_at ASC`
-    ).all();
+       ${whereCarousel}
+       ORDER BY sort_order ASC, created_at ASC`;
+    let rows;
+    try {
+      rows = await db.prepare(select('WHERE is_carousel_slide IS NOT TRUE')).all();
+    } catch {
+      rows = await db.prepare(select('')).all();
+    }
     res.json({ ok: true, templates: rows });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });

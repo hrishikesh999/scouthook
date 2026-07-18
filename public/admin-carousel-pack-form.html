@@ -156,7 +156,16 @@
                 <div style="color:var(--text-muted);font-size:.85rem">Select a slide above</div>
               </div>
               <div class="slide-slots" id="slide-slots">
-                <div class="slide-slots-title">Slots</div>
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+                  <div class="slide-slots-title" style="margin:0;flex:1">Slots</div>
+                  <a id="btn-polish-html" href="#" target="_blank" rel="noopener"
+                     class="btn btn--sm btn--secondary" style="font-size:.75rem;white-space:nowrap"
+                     title="Open the full HTML editor for this slide — hand-polish the layout, with live preview and version history">✎ Edit / polish HTML</a>
+                </div>
+                <p class="text-muted" style="font-size:.72rem;margin:-4px 0 10px">
+                  AI conversion gets ~90% there. For the last 10%, open the HTML editor to hand-tune the
+                  markup/CSS (live preview, versioned, revertable). Changes appear here after you reopen the pack.
+                </p>
                 <div id="slide-slot-list"></div>
               </div>
             </div>
@@ -350,6 +359,10 @@
     const previewPane = document.getElementById('slide-preview');
     const slotsPane = document.getElementById('slide-slot-list');
     document.getElementById('slide-editor').style.display = '';
+
+    // Point the "polish HTML" button at the full editor for this slide.
+    const polishBtn = document.getElementById('btn-polish-html');
+    if (polishBtn) polishBtn.href = `/admin-html-template-form.html?id=${encodeURIComponent(slide.template_id)}`;
 
     // Seed brand-mapping state from the stored manifest so existing brandRole /
     // default values show up (parity with the design-template editor).

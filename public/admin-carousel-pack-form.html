@@ -127,7 +127,7 @@
                 <div id="upload-zone" class="upload-zone" role="button" tabindex="0">
                   <div class="upload-zone__icon">📑</div>
                   <div class="upload-zone__text"><strong>Drop slide images here</strong> or click to browse</div>
-                  <div class="upload-zone__hint">PNG, JPG, WebP, or SVG. Select in order (title first, closing last). Max 10 MB each.</div>
+                  <div class="upload-zone__hint">PNG, JPG, WebP, or SVG. Select in order (title first, closing last). Max 10 MB each.<br>Recommended: portrait 1080×1350 (more feed real estate). All slides in a pack must share one aspect ratio.</div>
                 </div>
                 <input type="file" id="file-input" accept="image/png,image/jpeg,image/webp,image/svg+xml" multiple hidden>
               </div>
@@ -159,6 +159,30 @@
                 <div class="slide-slots-title">Slots</div>
                 <div id="slide-slot-list"></div>
               </div>
+            </div>
+
+            <!-- Layout variants: alternate designs converted into this pack's
+                 reference set; surfaced only in the user-facing Studio -->
+            <div style="margin-top:var(--space-lg);border-top:1px solid var(--border);padding-top:var(--space-md)">
+              <div class="slide-slots-title">Add layout variants</div>
+              <p class="text-muted" style="font-size:.8rem;margin:4px 0 10px">
+                Upload alternate designs for one role. They convert against this pack's slot/color reference set
+                and appear as switchable layouts in the user's Carousel Studio. Same aspect ratio as the pack.
+              </p>
+              <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+                <select id="variant-role" style="font-size:.85rem;padding:6px 8px">
+                  <option value="content">content</option>
+                  <option value="title">title</option>
+                  <option value="closing">closing</option>
+                </select>
+                <input type="file" id="variant-files" accept="image/png,image/jpeg,image/webp,image/svg+xml" multiple style="font-size:.8rem">
+                <button id="btn-add-variants" class="btn btn--secondary" type="button">Convert variants</button>
+              </div>
+              <div id="variant-progress" style="display:none;margin-top:10px">
+                <div style="font-weight:600;font-size:.85rem" id="variant-status">Converting…</div>
+                <div class="progress-bar"><div class="progress-bar__fill" id="variant-bar" style="width:0%"></div></div>
+              </div>
+              <div id="variant-result" style="margin-top:8px;font-size:.85rem"></div>
             </div>
           </div>
 
@@ -213,6 +237,26 @@
   // ── Load existing pack ────────────────────────────────────────────────────
   async function loadPack() {
     document.getElementById('page-title').textContent = 'Edit Carousel Pack';
+
+    // Show any color warnings carried over from the conversion job (gray-box
+    // detection: all color slots resolved to one value on some slide).
+    try {
+      const wKey = `packColorWarnings:${packId}`;
+      const stored = sessionStorage.getItem(wKey);
+      if (stored) {
+        sessionStorage.removeItem(wKey);
+        const warnings = JSON.parse(stored);
+        if (Array.isArray(warnings) && warnings.length) {
+          const el = document.getElementById('form-error');
+          el.style.background = '#fef9c3';
+          el.style.color = '#854d0e';
+          el.textContent = '⚠ Possible gray-box slides — ' + warnings
+            .map(w => `slide ${w.slide} (${w.role}): ${w.message}`)
+            .join(' · ') + ' Open each affected slide template in the HTML template admin and use "Refine to match original".';
+          el.classList.remove('hidden');
+        }
+      }
+    } catch {}
     document.getElementById('edit-tabs').style.display = '';
     document.getElementById('upload-section').style.display = 'none';
     document.getElementById('btn-convert').style.display = 'none';
@@ -580,6 +624,11 @@
             clearInterval(poll);
             bar.style.width = '100%';
             status.textContent = `Done! ${job.slides_created} slides converted.`;
+            // Uniform-color slides render as invisible gray boxes — carry the
+            // warning across the redirect so the edit page can show it.
+            if (job.warnings && job.warnings.length) {
+              try { sessionStorage.setItem(`packColorWarnings:${job.pack_id}`, JSON.stringify(job.warnings)); } catch {}
+            }
             setTimeout(() => { location.href = `/admin-carousel-pack-form.html?id=${job.pack_id}`; }, 1200);
           } else if (job.status === 'failed') {
             clearInterval(poll);
@@ -598,6 +647,76 @@
       showError(err.message);
       btn.disabled = false; btn.textContent = 'Convert & Save';
       progress.style.display = 'none';
+    }
+  });
+
+  // ── Add layout variants (edit mode) ───────────────────────────────────────
+  document.getElementById('btn-add-variants').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-add-variants');
+    const role = document.getElementById('variant-role').value;
+    const files = Array.from(document.getElementById('variant-files').files).filter(f =>
+      ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'].includes(f.type) && f.size <= 10 * 1024 * 1024
+    );
+    const progress = document.getElementById('variant-progress');
+    const status = document.getElementById('variant-status');
+    const bar = document.getElementById('variant-bar');
+    const result = document.getElementById('variant-result');
+    if (!packId) { alert('Save the pack first.'); return; }
+    if (!files.length) { alert('Select at least one image (PNG, JPG, WebP, or SVG, max 10 MB).'); return; }
+
+    btn.disabled = true; btn.textContent = 'Converting…';
+    progress.style.display = ''; bar.style.width = '10%'; result.textContent = '';
+
+    try {
+      const slides = await Promise.all(files.map(f => new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = e => resolve({ data: e.target.result.split(',')[1], contentType: f.type });
+        reader.onerror = reject;
+        reader.readAsDataURL(f);
+      })));
+
+      const r = await adminFetch(`/admin/carousel-packs/${packId}/variants`, {
+        method: 'POST', body: JSON.stringify({ role, slides }),
+      });
+      const data = await r.json();
+      if (!data.ok) throw new Error(data.error || 'Upload failed');
+
+      const poll = setInterval(async () => {
+        try {
+          const jr = await adminFetch(`/admin/carousel-packs/jobs/${data.job_id}`);
+          const job = await jr.json();
+          if (!job.ok) { clearInterval(poll); throw new Error(job.error || 'Job not found'); }
+          if (job.status === 'converting' && job.progress) {
+            bar.style.width = `${10 + (job.progress.current / job.progress.total) * 75}%`;
+            status.textContent = `Converting variant ${Math.max(1, job.progress.current)} of ${job.progress.total}…`;
+          } else if (job.status === 'saving') {
+            bar.style.width = '90%'; status.textContent = 'Saving templates…';
+          } else if (job.status === 'done') {
+            clearInterval(poll);
+            bar.style.width = '100%';
+            status.textContent = 'Done.';
+            result.style.color = 'var(--success, #059669)';
+            result.textContent = `${job.slides_created} variant(s) added for role "${role}".` +
+              (job.warnings?.length ? ' ⚠ ' + job.warnings.map(w => w.message).join(' · ') : '');
+            btn.disabled = false; btn.textContent = 'Convert variants';
+            document.getElementById('variant-files').value = '';
+          } else if (job.status === 'failed') {
+            clearInterval(poll);
+            throw new Error(job.error || 'Conversion failed');
+          }
+        } catch (pollErr) {
+          clearInterval(poll);
+          progress.style.display = 'none';
+          result.style.color = 'var(--error, #dc2626)';
+          result.textContent = pollErr.message;
+          btn.disabled = false; btn.textContent = 'Convert variants';
+        }
+      }, 3000);
+    } catch (err) {
+      progress.style.display = 'none';
+      result.style.color = 'var(--error, #dc2626)';
+      result.textContent = err.message;
+      btn.disabled = false; btn.textContent = 'Convert variants';
     }
   });
 

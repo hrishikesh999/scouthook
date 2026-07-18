@@ -735,6 +735,7 @@ app.use('/api/vault',         requireWorkspaceMember, requireWorkspaceActive, re
 app.use('/api/ideas',         requireWorkspaceMember, requireWorkspaceActive, require('./routes/ideas'));
 app.use('/api/funnel',        requireWorkspaceMember, require('./routes/funnel'));
 app.use('/api/posts',         requireWorkspaceMember, require('./routes/performance'));
+app.use('/api/posts',         requireWorkspaceMember, require('./routes/carouselDrafts'));
 app.use('/api/workspaces',    require('./routes/workspaces'));
 app.use('/api/invites',       require('./routes/invites'));
 // User-scoped routes — require authenticated user, no workspace check

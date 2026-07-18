@@ -30,7 +30,7 @@ async function convertCarouselImages(images, roles, onProgress) {
     instructions: `This is a ${roles[0]} slide in a multi-slide carousel template. Mark all editable text as data-slot and all colors as CSS custom properties.`,
   });
 
-  templates.push({ html: first.html, manifest: first.manifest, role: roles[0] });
+  templates.push({ html: first.html, manifest: first.manifest, role: roles[0], colorWarning: first.colorWarning || null });
   if (onProgress) await onProgress(1);
 
   // Extract reference set from the first template's manifest
@@ -50,7 +50,7 @@ async function convertCarouselImages(images, roles, onProgress) {
       instructions: constraints,
     });
 
-    templates.push({ html: result.html, manifest: result.manifest, role });
+    templates.push({ html: result.html, manifest: result.manifest, role, colorWarning: result.colorWarning || null });
     if (onProgress) await onProgress(i + 1);
   }
 
@@ -61,7 +61,15 @@ async function convertCarouselImages(images, roles, onProgress) {
     Object.keys(variableMap.colors).length,
     Object.keys(variableMap.slots).length);
 
-  return { templates, variableMap };
+  // Uniform-color conversions render as invisible gray boxes (see the
+  // single-template gray-box fix in templateFromImage.js) — surface them
+  // per-slide so the admin route can warn instead of silently saving a
+  // broken pack.
+  const warnings = templates
+    .map((t, i) => t.colorWarning ? { slide: i + 1, role: t.role, message: t.colorWarning } : null)
+    .filter(Boolean);
+
+  return { templates, variableMap, warnings };
 }
 
 /**
@@ -184,4 +192,36 @@ function buildVariableMap(templates) {
   return { colors, slots, fonts };
 }
 
-module.exports = { convertCarouselImages, buildVariableMap };
+/**
+ * Convert alternate-layout images into variants for an EXISTING pack.
+ * The reference set comes from one of the pack's current templates, so the
+ * new templates share its CSS variable names, slot names, and fonts — which
+ * is what makes variant switching lossless in the Studio.
+ *
+ * @param {string} refHtml      HTML of the pack template anchoring the reference set
+ * @param {object} refManifest  its slot manifest
+ * @param {{ buffer: Buffer, contentType: string }[]} images
+ * @param {string} role         'title' | 'content' | 'closing'
+ */
+async function convertVariantImages(refHtml, refManifest, images, role, onProgress) {
+  if (!images.length) throw new Error('No images provided');
+  const ref = extractReferenceSet(refManifest, refHtml);
+  const templates = [];
+  for (let i = 0; i < images.length; i++) {
+    console.log('[carouselFromImages] converting variant %d/%d (role=%s)', i + 1, images.length, role);
+    if (onProgress) await onProgress(i);
+    const constraints = buildConstraintInstructions(ref, role);
+    const result = await generateTemplateFromImage(images[i].buffer, {
+      contentType: images[i].contentType,
+      instructions: constraints,
+    });
+    templates.push({ html: result.html, manifest: result.manifest, role, colorWarning: result.colorWarning || null });
+    if (onProgress) await onProgress(i + 1);
+  }
+  const warnings = templates
+    .map((t, i) => t.colorWarning ? { slide: i + 1, role: t.role, message: t.colorWarning } : null)
+    .filter(Boolean);
+  return { templates, warnings };
+}
+
+module.exports = { convertCarouselImages, convertVariantImages, buildVariableMap };

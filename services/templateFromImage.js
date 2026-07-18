@@ -1714,7 +1714,26 @@ async function generateTemplateFromImage(imageBuffer, options = {}) {
     ? [...new Set(colorDefaults)][0]
     : null;
 
-  return { html, manifest, matchScore, colorWarning: colorUniform ? `All ${colorDefaults.length} color slots resolved to the same value (${colorUniform}) — use "Refine to match original" to fix the colors.` : null };
+  // Aspect-ratio compliance check (RULE 9): a portrait source converted with
+  // square manifest dimensions renders clipped or letterboxed. Warn — don't
+  // silently override, since the HTML's own fixed sizing must stay in sync
+  // with the manifest.
+  let dimensionWarning = null;
+  if (originalMeta?.width && originalMeta?.height && manifest.dimensions?.width && manifest.dimensions?.height) {
+    const srcAspect = originalMeta.width / originalMeta.height;
+    const tplAspect = manifest.dimensions.width / manifest.dimensions.height;
+    if (Math.abs(srcAspect - tplAspect) / srcAspect > 0.05) {
+      dimensionWarning = `Template dimensions ${manifest.dimensions.width}×${manifest.dimensions.height} don't match the source image aspect ratio (${originalMeta.width}×${originalMeta.height}) — the rendered slide may be clipped or letterboxed.`;
+      console.warn('[templateFromImage] ⚠️  %s', dimensionWarning);
+    }
+  }
+
+  const warningParts = [
+    colorUniform ? `All ${colorDefaults.length} color slots resolved to the same value (${colorUniform}) — use "Refine to match original" to fix the colors.` : null,
+    dimensionWarning,
+  ].filter(Boolean);
+
+  return { html, manifest, matchScore, colorWarning: warningParts.length ? warningParts.join(' ') : null };
 }
 
 // ---------------------------------------------------------------------------

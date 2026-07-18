@@ -7,7 +7,7 @@ const { db }  = require('../db');
 const storage = require('../services/storage');
 const { readSlotManifest, stripScriptTags } = require('../services/templateSlotInjector');
 const { generateTemplateThumbnail } = require('../services/templateRenderer');
-const { convertCarouselImages } = require('../services/carouselFromImages');
+const { convertCarouselImages, convertVariantImages } = require('../services/carouselFromImages');
 const { redisSet, redisGet } = require('../services/redis');
 
 // ---------------------------------------------------------------------------
@@ -150,7 +150,7 @@ async function _runConversionJob(jobId, images, roles, meta) {
     console.log('[adminCarouselPacks] job %s: converting %d slides, name=%s', jobId, total, meta.name);
 
     // Phase 1: Convert all images (carousel-aware) — this is the slow part
-    const { templates, variableMap } = await convertCarouselImages(images, roles, async (i) => {
+    const { templates, variableMap, warnings } = await convertCarouselImages(images, roles, async (i) => {
       await _setConversionJob(jobId, {
         status: 'converting', progress: { current: i, total }, pack_id: null, error: null,
       });
@@ -188,6 +188,15 @@ async function _runConversionJob(jobId, images, roles, meta) {
     // Phase 3: All DB inserts in a single transaction
     const packId = crypto.randomUUID();
 
+    // Column probe outside the transaction — a failed statement inside a
+    // Postgres transaction aborts it, so the insert can't try/catch its way
+    // to a fallback there.
+    let hasAspectColumn = false;
+    try {
+      await db.prepare('SELECT aspect_ratio FROM carousel_packs LIMIT 1').get();
+      hasAspectColumn = true;
+    } catch { /* migration 075 not applied yet */ }
+
     await db.transaction(async (tx) => {
       for (const p of prepared) {
         try {
@@ -216,16 +225,34 @@ async function _runConversionJob(jobId, images, roles, meta) {
 
       const packThumbnail = prepared.length > 0 ? prepared[0].thumbnailKey : null;
 
-      await tx.prepare(
-        `INSERT INTO carousel_packs
-           (id, name, description, thumbnail_r2_key, category, variable_map,
-            min_content_slides, max_content_slides, sort_order)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`
-      ).run(
-        packId, meta.name, meta.description || null, packThumbnail,
-        meta.category || null, JSON.stringify(variableMap),
-        meta.min_content_slides || 3, meta.max_content_slides || 8,
-      );
+      // Derive the pack's aspect ratio from the first slide's template
+      // dimensions (all slides in a pack share one aspect).
+      const dims = prepared[0]?.manifest?.dimensions || {};
+      const aspectRatio = (dims.width && dims.height && dims.height > dims.width) ? 'portrait' : 'square';
+
+      if (hasAspectColumn) {
+        await tx.prepare(
+          `INSERT INTO carousel_packs
+             (id, name, description, thumbnail_r2_key, category, variable_map,
+              min_content_slides, max_content_slides, aspect_ratio, sort_order)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`
+        ).run(
+          packId, meta.name, meta.description || null, packThumbnail,
+          meta.category || null, JSON.stringify(variableMap),
+          meta.min_content_slides || 3, meta.max_content_slides || 8, aspectRatio,
+        );
+      } else {
+        await tx.prepare(
+          `INSERT INTO carousel_packs
+             (id, name, description, thumbnail_r2_key, category, variable_map,
+              min_content_slides, max_content_slides, sort_order)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`
+        ).run(
+          packId, meta.name, meta.description || null, packThumbnail,
+          meta.category || null, JSON.stringify(variableMap),
+          meta.min_content_slides || 3, meta.max_content_slides || 8,
+        );
+      }
 
       for (const p of prepared) {
         await tx.prepare(
@@ -241,11 +268,129 @@ async function _runConversionJob(jobId, images, roles, meta) {
     await _setConversionJob(jobId, {
       status: 'done', progress: { current: total, total }, pack_id: packId,
       slides_created: prepared.length, variable_map: variableMap, error: null,
+      warnings: (warnings && warnings.length) ? warnings : null,
     });
   } catch (err) {
     console.error('[adminCarouselPacks] job %s failed (%d/%d templates prepared):',
       jobId, 0, total, err.stack || err.message);
     await _setConversionJob(jobId, { status: 'failed', progress: null, pack_id: null, error: err.message });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// POST /:id/variants — add layout variants to an existing pack
+//
+// { role: 'title'|'content'|'closing', slides: [{ data: base64, contentType }] }
+//
+// Variants are converted against the pack's existing reference set (shared
+// slot names/CSS vars), saved as html_templates linked via variant_group to
+// the pack's base template for that role, and NOT added to
+// carousel_pack_slides — the legacy round-robin render is unchanged; only
+// the Studio's variant switcher surfaces them.
+// ---------------------------------------------------------------------------
+
+router.post('/:id/variants', express.json({ limit: '60mb' }), async (req, res) => {
+  try {
+    const packId = req.params.id;
+    const { role, slides } = req.body || {};
+    if (!['title', 'content', 'closing'].includes(role)) {
+      return res.status(400).json({ ok: false, error: 'invalid_role' });
+    }
+    if (!Array.isArray(slides) || !slides.length) {
+      return res.status(400).json({ ok: false, error: 'at_least_one_image_required' });
+    }
+    for (const s of slides) {
+      if (!s.data || !s.contentType) return res.status(400).json({ ok: false, error: 'Each slide must have data and contentType' });
+    }
+
+    const pack = await db.prepare('SELECT * FROM carousel_packs WHERE id = ?').get(packId);
+    if (!pack) return res.status(404).json({ ok: false, error: 'pack_not_found' });
+
+    // Anchor: the pack's first template for this role
+    const base = await db.prepare(
+      `SELECT s.template_id, t.html_r2_key, t.slot_manifest, t.variant_group, t.category
+       FROM carousel_pack_slides s JOIN html_templates t ON t.id = s.template_id
+       WHERE s.pack_id = ? AND s.role = ? ORDER BY s.slide_order LIMIT 1`
+    ).get(packId, role);
+    if (!base) return res.status(404).json({ ok: false, error: `pack_has_no_${role}_slide` });
+
+    const images = slides.map(s => ({ buffer: Buffer.from(s.data, 'base64'), contentType: s.contentType }));
+
+    const jobId = crypto.randomUUID();
+    const total = images.length;
+    conversionJobs.set(jobId, {
+      status: 'converting', progress: { current: 0, total }, pack_id: packId, error: null, createdAt: Date.now(),
+    });
+    _setConversionJob(jobId, { status: 'converting', progress: { current: 0, total }, pack_id: packId, error: null });
+    res.json({ ok: true, job_id: jobId });
+
+    _runVariantJob(jobId, pack, base, role, images)
+      .catch(err => console.error('[adminCarouselPacks] unhandled variant job error:', err));
+  } catch (err) {
+    console.error('[adminCarouselPacks] variants error:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+async function _runVariantJob(jobId, pack, base, role, images) {
+  const total = images.length;
+  try {
+    const refHtmlBuf = await storage.downloadAdmin(base.html_r2_key);
+    const refHtml = refHtmlBuf.toString('utf8');
+    const refManifest = typeof base.slot_manifest === 'string' ? JSON.parse(base.slot_manifest) : (base.slot_manifest || {});
+
+    const { templates, warnings } = await convertVariantImages(refHtml, refManifest, images, role, async (i) => {
+      await _setConversionJob(jobId, { status: 'converting', progress: { current: i, total }, pack_id: pack.id, error: null });
+    });
+
+    await _setConversionJob(jobId, { status: 'saving', progress: { current: total, total }, pack_id: pack.id, error: null });
+
+    // Ensure the base template anchors a variant group
+    let groupId = base.variant_group;
+    if (!groupId) {
+      groupId = crypto.randomUUID();
+      await db.prepare('UPDATE html_templates SET variant_group = ? WHERE id = ?').run(groupId, base.template_id);
+    }
+
+    const created = [];
+    for (let i = 0; i < templates.length; i++) {
+      const t = templates[i];
+      let manifest;
+      try { manifest = readSlotManifest(t.html); } catch { manifest = t.manifest; }
+      const cleanHtml = stripScriptTags(t.html);
+      const templateId = crypto.randomUUID();
+      const htmlKey = storage.buildTemplateKey(templateId);
+      await storage.uploadAdmin(Buffer.from(cleanHtml, 'utf8'), htmlKey, 'text/html');
+
+      let thumbnailKey = null;
+      try {
+        const thumbBuf = await generateTemplateThumbnail(cleanHtml, manifest);
+        thumbnailKey = storage.buildThumbnailKey(templateId);
+        await storage.uploadAdmin(thumbBuf, thumbnailKey, 'image/png');
+      } catch (err) {
+        console.warn('[adminCarouselPacks] variant thumbnail failed: %s', err.message);
+      }
+
+      await db.prepare(
+        `INSERT INTO html_templates
+           (id, name, description, category, html_r2_key, thumbnail_r2_key, slot_manifest, sort_order, is_carousel_slide, variant_group)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, TRUE, ?)`
+      ).run(
+        templateId, `${pack.name} — ${role} variant ${i + 1}`,
+        pack.description || null, base.category || null,
+        htmlKey, thumbnailKey, JSON.stringify(manifest), 100 + i, groupId,
+      );
+      created.push(templateId);
+    }
+
+    await _setConversionJob(jobId, {
+      status: 'done', progress: { current: total, total }, pack_id: pack.id,
+      slides_created: created.length, variant_group: groupId, error: null,
+      warnings: warnings.length ? warnings : null,
+    });
+  } catch (err) {
+    console.error('[adminCarouselPacks] variant job %s failed:', jobId, err.stack || err.message);
+    await _setConversionJob(jobId, { status: 'failed', progress: null, pack_id: pack.id, error: err.message });
   }
 }
 

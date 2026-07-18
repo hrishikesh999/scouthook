@@ -99,6 +99,56 @@ function extractAuthorRealText(rawIdea) {
     .trim();
 }
 
+// ---------------------------------------------------------------------------
+// assembleBrief — turn an interview (initial idea + coach exchanges) into a
+// single provenance-labelled brief string for the generator.
+//
+// Every answer the author typed or spoke is the author's own material: its
+// specifics are real and the model may use them (labelled by slot so the
+// generator knows what each fragment is). An answer the author accepted from a
+// coach `skip_suggestion` WITHOUT editing it is AI-authored text — it steers
+// direction but carries no facts, so it is wrapped in the existing
+// [AI-SUGGESTED]…[/AI-SUGGESTED] markers that the PROVENANCE rule and the
+// FABRICATED_SPECIFIC quality gate already understand.
+//
+// `exchanges` items: { question, answer, gap?, from_skip_suggestion? }
+//   gap is one of moment|proof|tension|audience (from chat-intake) and drives
+//   the human-readable slot label; anything else falls back to a plain Q/A pair.
+// ---------------------------------------------------------------------------
+const BRIEF_SLOT_LABELS = {
+  moment:   "THE MOMENT (author's words)",
+  proof:    "PROOF / NUMBERS (author's words)",
+  tension:  "THE TENSION (author's words)",
+  audience: "WHO THIS IS FOR (author's words)",
+};
+
+function assembleBrief({ initialInput = '', exchanges = [] } = {}) {
+  const parts = [];
+  const seed = String(initialInput || '').trim();
+  if (seed) parts.push(`RAW IDEA (author's words):\n${seed}`);
+
+  for (const ex of Array.isArray(exchanges) ? exchanges : []) {
+    if (!ex || typeof ex.answer !== 'string') continue;
+    const answer = ex.answer.trim();
+    if (!answer) continue;
+    const question = (ex.question || '').trim();
+
+    if (ex.from_skip_suggestion) {
+      // AI-suggested answer accepted unedited — steering only, never a fact source.
+      const body = question ? `${question}\n${answer}` : answer;
+      parts.push(`${AI_SUGGESTED_OPEN}\n${body}\n${AI_SUGGESTED_CLOSE}`);
+      continue;
+    }
+
+    const label = BRIEF_SLOT_LABELS[ex.gap];
+    if (label)        parts.push(`${label}:\n${answer}`);
+    else if (question) parts.push(`Q: ${question}\nA (author's words): ${answer}`);
+    else               parts.push(answer);
+  }
+
+  return parts.join('\n\n');
+}
+
 // New in the consolidation: frameworks/checklists legitimately enumerate, which
 // otherwise collides with the "no three parallel points" rule in AI_TELLS_PROHIBITION.
 const ENUMERATION_CARVEOUT = `STRUCTURE EXCEPTION (numbered lists):
@@ -276,6 +326,7 @@ module.exports = {
   AI_SUGGESTED_OPEN,
   AI_SUGGESTED_CLOSE,
   extractAuthorRealText,
+  assembleBrief,
   buildAuthenticityCore,
   // Author context + phrase library.
   buildPhraseLibraryBlock,

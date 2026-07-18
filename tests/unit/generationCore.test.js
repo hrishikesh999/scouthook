@@ -121,3 +121,76 @@ describe('generationCore — shared author context', () => {
     })).not.toThrow();
   });
 });
+
+describe('generationCore — assembleBrief (interview provenance)', () => {
+  test('labels the seed idea as the author\'s words', () => {
+    const out = core.assembleBrief({ initialInput: 'I lost a deal by over-preparing', exchanges: [] });
+    expect(out).toContain("RAW IDEA (author's words):");
+    expect(out).toContain('I lost a deal by over-preparing');
+  });
+
+  test('maps each gap to its human-readable slot label', () => {
+    const out = core.assembleBrief({
+      initialInput: 'seed',
+      exchanges: [
+        { question: 'What happened?', answer: 'A call last March', gap: 'moment' },
+        { question: 'Numbers?',        answer: '$40k in 6 weeks',  gap: 'proof' },
+        { question: 'The twist?',      answer: 'Everyone sends decks; I sent one line', gap: 'tension' },
+        { question: 'Who for?',        answer: 'B2B founders',      gap: 'audience' },
+      ],
+    });
+    expect(out).toContain("THE MOMENT (author's words):");
+    expect(out).toContain("PROOF / NUMBERS (author's words):");
+    expect(out).toContain("THE TENSION (author's words):");
+    expect(out).toContain("WHO THIS IS FOR (author's words):");
+    expect(out).toContain('$40k in 6 weeks');
+  });
+
+  test('wraps accepted skip-suggestions in [AI-SUGGESTED] and keeps them out of author-real text', () => {
+    const out = core.assembleBrief({
+      initialInput: 'My real seed',
+      exchanges: [
+        { question: 'Numbers?', answer: 'maybe around 3x growth', gap: 'proof', from_skip_suggestion: true },
+        { question: 'Moment?',  answer: 'The Tuesday standup',    gap: 'moment' },
+      ],
+    });
+    expect(out).toContain('[AI-SUGGESTED]');
+    expect(out).toContain('[/AI-SUGGESTED]');
+    // The AI-suggested figure must be stripped from what the quality gate treats as real.
+    const real = core.extractAuthorRealText(out);
+    expect(real).not.toContain('3x growth');
+    // The author's own answer survives.
+    expect(real).toContain('The Tuesday standup');
+    expect(real).toContain('My real seed');
+  });
+
+  test('falls back to a plain Q/A pair when gap is unknown', () => {
+    const out = core.assembleBrief({
+      initialInput: '',
+      exchanges: [{ question: 'Anything else?', answer: 'Just a hunch', gap: 'other' }],
+    });
+    expect(out).toContain('Q: Anything else?');
+    expect(out).toContain("A (author's words): Just a hunch");
+  });
+
+  test('omits empty answers and tolerates missing fields', () => {
+    const out = core.assembleBrief({
+      initialInput: 'seed',
+      exchanges: [
+        { question: 'Q1', answer: '   ', gap: 'moment' },
+        { answer: 'no question here' },
+        null,
+        { question: 'Q2' },
+      ],
+    });
+    expect(out).toContain('seed');
+    expect(out).toContain('no question here');
+    expect(out).not.toContain('Q1');
+    expect(out).not.toContain('Q2');
+  });
+
+  test('returns empty string for empty input', () => {
+    expect(core.assembleBrief({})).toBe('');
+    expect(core.assembleBrief()).toBe('');
+  });
+});

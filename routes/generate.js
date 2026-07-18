@@ -21,7 +21,7 @@ const { sendEmailToUser } = require('../emails');
 const { resolveProfile } = require('../lib/resolveProfile');
 const { planHasFeature } = require('../lib/planFeatures');
 const { buildVaultContextBlock } = require('../services/vaultContext');
-const { extractAuthorRealText } = require('../services/generationCore');
+const { extractAuthorRealText, assembleBrief } = require('../services/generationCore');
 
 // ---------------------------------------------------------------------------
 // Sliding window rate limiter — 10 generations per hour per user.
@@ -206,7 +206,7 @@ router.post('/', async (req, res) => {
     return res.status(403).json({ ok: false, error: 'feature_not_available', feature: 'carousel', requiredPlan: 'pro' });
   }
 
-  const { path: genPath, vault_idea_id, skip_substance_check, interview_answers, funnel_type: bodyFunnelType,
+  const { path: genPath, vault_idea_id, skip_substance_check, interview_answers, interview, funnel_type: bodyFunnelType,
           archetype_override, source, post_type, convert_cta_intent,
           tension_statement, length_preference, cta_intent } = req.body;
   let { raw_idea } = req.body;
@@ -231,11 +231,22 @@ router.post('/', async (req, res) => {
     };
   }
 
-  // Interview path: format Q&A answers into a structured raw_idea string.
-  // Flag is passed to Stage 1 so Haiku knows to synthesise across answers,
-  // not treat the first question line as a hook seed.
+  // Interview path: build the generator brief from the coach exchanges.
+  // The structured `interview` payload is preferred — assembleBrief() labels
+  // each answer by slot and wraps any coach skip-suggestion the user accepted
+  // unedited in [AI-SUGGESTED] markers, so the provenance contract keeps real
+  // material and AI-suggested angles distinct. The legacy `interview_answers`
+  // array (flat Q/A concat) is still supported for older callers.
   let isInterviewPath = false;
-  if (!raw_idea?.trim() && Array.isArray(interview_answers) && interview_answers.length) {
+  let interviewExchanges = null;
+  if (interview && Array.isArray(interview.exchanges) && interview.exchanges.length) {
+    interviewExchanges = interview.exchanges;
+    raw_idea = assembleBrief({
+      initialInput: (raw_idea || interview.initialInput || '').trim(),
+      exchanges:    interviewExchanges,
+    });
+    isInterviewPath = true;
+  } else if (!raw_idea?.trim() && Array.isArray(interview_answers) && interview_answers.length) {
     raw_idea = interview_answers
       .filter(a => a.answer?.trim())
       .map(a => `${a.question}\n${a.answer.trim()}`)
@@ -248,7 +259,11 @@ router.post('/', async (req, res) => {
   // are folded in, but before RAG enrichment mutates raw_idea — so extraction
   // only ever sees what the user actually wrote or spoke.
   // Vault-path input is skipped (that text came out of the vault already).
-  const userTypedInput = (raw_idea || '').trim();
+  // On the interview path raw_idea now carries provenance labels and possibly
+  // [AI-SUGGESTED] blocks — mine only the author's real material for auto-memories.
+  const userTypedInput = isInterviewPath
+    ? extractAuthorRealText(raw_idea).trim()
+    : (raw_idea || '').trim();
   // Idea-card 2-question flow sends the user's two answers separately — those
   // are the real first-person material to mine (raw_idea is a composed brief
   // that also contains the AI-drafted idea context, which we must NOT remember).
@@ -481,7 +496,7 @@ router.post('/', async (req, res) => {
           INSERT INTO generation_runs (user_id, tenant_id, path, input_data, synthesis)
           VALUES (?, ?, ?, ?, ?)
           RETURNING id
-        `).run(userId, tenantId, genPath, JSON.stringify({ raw_idea }), JSON.stringify(result.synthesis));
+        `).run(userId, tenantId, genPath, JSON.stringify(interviewExchanges ? { raw_idea, interview_exchanges: interviewExchanges } : { raw_idea }), JSON.stringify(result.synthesis));
         const runId = runResult.lastInsertRowid;
 
         const primaryInsert = await db.prepare(`
@@ -612,6 +627,7 @@ router.post('/', async (req, res) => {
       const inputData = vaultIdea
         ? { raw_idea, vault_idea_id: vaultIdea.id }
         : { raw_idea };
+      if (interviewExchanges) inputData.interview_exchanges = interviewExchanges;
 
       const runResult = await db.prepare(`
         INSERT INTO generation_runs (user_id, tenant_id, path, input_data, synthesis)

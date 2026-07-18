@@ -1583,7 +1583,7 @@ const chat = (() => {
     _resultsOutcome          = '';
     _resultsMechanism        = '';
     _resultsWhoFor           = '';
-    _coach = { active: false, originalBrief: '', history: [], exchangeCount: 0, awaitingSkip: false, pendingQ: null, intakeInFlight: false, seq: (_coach.seq ?? 0) + 1 };
+    _coach = { active: false, originalBrief: '', history: [], exchanges: [], pendingQuestion: null, pendingGap: null, exchangeCount: 0, awaitingSkip: false, pendingQ: null, intakeInFlight: false, seq: (_coach.seq ?? 0) + 1 };
 
     chatThread.innerHTML = '';
     const q0 = EXTRACTION_QUESTIONS[type][0];
@@ -1661,6 +1661,12 @@ const chat = (() => {
       chatInput.value       = '';
       chatInput.style.height = '';
       _coach.history.push({ role: 'user', content: val });
+      // Record the answered question as a provenance-tagged exchange (author's
+      // own words — from_skip_suggestion:false — so assembleBrief treats it as real).
+      if (_coach.pendingQuestion) {
+        _coach.exchanges.push({ question: _coach.pendingQuestion, gap: _coach.pendingGap, answer: val, from_skip_suggestion: false });
+        _coach.pendingQuestion = null; _coach.pendingGap = null;
+      }
       _coach.exchangeCount++;
       runCoach();
       return;
@@ -2019,6 +2025,8 @@ const chat = (() => {
       _coach.active = true;
       _coach.history.push({ role: 'user', content: val });
       _coach.history.push({ role: 'coach', content: intake.question });
+      _coach.pendingQuestion = intake.question;
+      _coach.pendingGap      = intake.gap || null;
       updateSendBtn();
       const qNum = `${_coach.exchangeCount + 1} of up to 3 — `;
       addBot(qNum + intake.question, {
@@ -2053,6 +2061,8 @@ const chat = (() => {
 
     // Push new question to history so the server has full context next round
     _coach.history.push({ role: 'coach', content: intake.question });
+    _coach.pendingQuestion = intake.question;
+    _coach.pendingGap      = intake.gap || null;
 
     updateSendBtn();
     const qNum = `${_coach.exchangeCount + 1} of up to 3 — `;
@@ -2075,6 +2085,12 @@ const chat = (() => {
       _coach.pendingQ      = null;
       _coach.intakeInFlight = false; // reset in case a previous fetch never cleared it
       _coach.history.push({ role: 'user', content: confirmed });
+      // Accepted skip suggestion = AI-authored text. Tag it so assembleBrief wraps
+      // it in [AI-SUGGESTED] and the model never lifts a fact from it.
+      if (_coach.pendingQuestion) {
+        _coach.exchanges.push({ question: _coach.pendingQuestion, gap: _coach.pendingGap, answer: confirmed, from_skip_suggestion: true });
+        _coach.pendingQuestion = null; _coach.pendingGap = null;
+      }
       _coach.exchangeCount++;
       addUser(confirmed);
       runCoach();
@@ -2082,19 +2098,20 @@ const chat = (() => {
   }
 
   function generateFromCoach() {
-    // Assemble enriched brief: original idea + each coach Q paired with the user's answer
-    let enriched = _coach.originalBrief;
-    const qa = [];
-    for (let i = 0; i < _coach.history.length - 1; i++) {
-      if (_coach.history[i].role === 'coach' && _coach.history[i + 1]?.role === 'user') {
-        qa.push(`Q: ${_coach.history[i].content}\nA: ${_coach.history[i + 1].content}`);
-        i++; // skip the user turn we just consumed
-      }
+    // Send the seed idea + structured exchanges; the server assembles the
+    // provenance-labelled brief via assembleBrief() (answers labelled by slot,
+    // accepted skip-suggestions wrapped in [AI-SUGGESTED]). Preferred over
+    // client-side concatenation so provenance lives in one place (the backend).
+    if (_coach.exchanges.length) {
+      coachGenerate({
+        enrichedIdea:       _coach.originalBrief,
+        interview:          { initialInput: _coach.originalBrief, exchanges: _coach.exchanges.slice() },
+        skipSubstanceCheck: true,
+      });
+      return;
     }
-    if (qa.length) {
-      enriched += '\n\nAdditional context from our conversation:\n' + qa.join('\n\n');
-    }
-    coachGenerate({ enrichedIdea: enriched, skipSubstanceCheck: true });
+    // No structured exchanges captured (edge case) — generate from the seed alone.
+    coachGenerate({ enrichedIdea: _coach.originalBrief, skipSubstanceCheck: true });
   }
 
   // reach/convert have no guided length step of their own — ask it at each point
@@ -2296,6 +2313,38 @@ document.querySelectorAll('.intent-card[data-type]').forEach(pill => {
   });
 });
 
+// Interview front door — enters the adaptive coach (post_type 'reach' → ideaToPost).
+// Uses focused mode (mirrors the "Get ideas" entry) rather than selectType(), which
+// keeps the legacy reach cosmetic behaviour untouched. The coach then assembles a
+// provenance-labelled brief via the interview payload (assembleBrief on the server).
+document.getElementById('intent-interview')?.addEventListener('click', () => {
+  if (document.getElementById('plan-gate-banner')) return;
+  document.querySelectorAll('.intent-card').forEach(p => p.classList.remove('active'));
+  document.getElementById('intent-interview').classList.add('active');
+  document.getElementById('intent-ideas')?.classList.remove('active');
+  const pillQ = document.getElementById('pill-question');
+  if (pillQ) { pillQ.textContent = ''; pillQ.classList.remove('visible'); }
+  const vaultPanel = document.getElementById('vault-panel');
+  if (vaultPanel) { vaultPanel.style.display = 'none'; vaultPanel.innerHTML = ''; }
+
+  selectedType        = 'reach';
+  selectedVaultIdeaId = null;
+
+  const genHeader         = document.querySelector('.gen-header');
+  const startingPills     = document.getElementById('starting-pills');
+  const guidedHeaderRow   = document.getElementById('guided-header-row');
+  const selectedTypeLabel = document.getElementById('selected-type-label');
+  const guidedProgress    = document.getElementById('guided-progress');
+  if (genHeader)         genHeader.style.display       = 'none';
+  if (startingPills)     startingPills.style.display   = 'none';
+  if (guidedHeaderRow)   guidedHeaderRow.style.display = 'flex';
+  if (selectedTypeLabel) selectedTypeLabel.textContent = '💬 Just tell me what happened';
+  if (guidedProgress)    guidedProgress.style.display  = 'none';
+
+  chat.init('reach'); // sets the moment-prompt placeholder, hides the empty thread
+  chatInput?.focus();
+});
+
 /* ── Chat input wiring ───────────────────────────────────────── */
 chatSendBtn.addEventListener('click', () => { voiceCtrl?.stop(); chat.advance(); });
 
@@ -2395,6 +2444,7 @@ async function triggerGenerate(opts = {}) {
     // for vault facts (not the composed brief, which also holds the AI angle).
     if (_ideaCard.active && _ideaCard.answers.length)   body.idea_answers         = _ideaCard.answers.join('\n');
     if (opts.enrichedIdea || opts.skipSubstanceCheck)   body.skip_substance_check = true;
+    if (opts.interview)                                 body.interview            = opts.interview;
     if (shouldStream)                                   body.streaming            = true;
     // Unified Short/Medium/Long choice — every flow (guided, reach/convert coach,
     // idea-card and vault) collects it through the shared length picker.

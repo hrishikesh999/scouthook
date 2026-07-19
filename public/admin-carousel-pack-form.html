@@ -160,11 +160,12 @@
                   <div class="slide-slots-title" style="margin:0;flex:1">Slots</div>
                   <a id="btn-polish-html" href="#" target="_blank" rel="noopener"
                      class="btn btn--sm btn--secondary" style="font-size:.75rem;white-space:nowrap"
-                     title="Open the full HTML editor for this slide — hand-polish the layout, with live preview and version history">✎ Edit / polish HTML</a>
+                     title="Open the visual Slide Polisher — click any element to adjust position, spacing, text, and colors. No code.">✨ Polish slide</a>
                 </div>
                 <p class="text-muted" style="font-size:.72rem;margin:-4px 0 10px">
-                  AI conversion gets ~90% there. For the last 10%, open the HTML editor to hand-tune the
-                  markup/CSS (live preview, versioned, revertable). Changes appear here after you reopen the pack.
+                  AI conversion gets ~90% there. For the last 10%, open the Polisher: click any element to
+                  adjust it visually, with the original design as an overlay to line things up. Every save is
+                  versioned and revertable. Changes appear here after you reopen the pack.
                 </p>
                 <div id="slide-slot-list"></div>
               </div>
@@ -360,9 +361,10 @@
     const slotsPane = document.getElementById('slide-slot-list');
     document.getElementById('slide-editor').style.display = '';
 
-    // Point the "polish HTML" button at the full editor for this slide.
+    // Point the "polish" button at the visual Slide Polisher for this slide
+    // (raw HTML editor remains reachable from inside the polisher).
     const polishBtn = document.getElementById('btn-polish-html');
-    if (polishBtn) polishBtn.href = `/admin-html-template-form.html?id=${encodeURIComponent(slide.template_id)}`;
+    if (polishBtn) polishBtn.href = `/admin-slide-polisher.html?id=${encodeURIComponent(slide.template_id)}&pack=${encodeURIComponent(packId)}`;
 
     // Seed brand-mapping state from the stored manifest so existing brandRole /
     // default values show up (parity with the design-template editor).

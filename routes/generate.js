@@ -1105,6 +1105,63 @@ router.post('/extract-tension', async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// POST /api/generate/structure-brief
+// "Talk it out": turn a 60–90s spoken transcript (from Web Speech, no audio
+// uploaded) into interview fields (moment/proof/tension/audience_hook) + a
+// suggested post type. Any leftover stories the speaker mentioned are banked as
+// vault_ideas (source='talk_capture') to seed future posts.
+// Never blocks — returns empty fields on any failure.
+// Body: { transcript }
+// ---------------------------------------------------------------------------
+router.post('/structure-brief', async (req, res) => {
+  const { userId, tenantId } = req;
+  if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
+
+  const transcript = typeof req.body.transcript === 'string' ? req.body.transcript.trim() : '';
+  if (!transcript) return res.status(400).json({ ok: false, error: 'transcript_required' });
+
+  try {
+    const { structureBrief } = require('../services/briefStructurer');
+    const structured = await structureBrief(transcript);
+
+    // Bank leftover stories for future posts (fire-and-forget, never blocks the response).
+    const leftovers = Array.isArray(structured.leftover_facts) ? structured.leftover_facts : [];
+    if (leftovers.length) {
+      Promise.resolve().then(async () => {
+        for (const f of leftovers) {
+          try {
+            await db.prepare(`
+              INSERT INTO vault_ideas
+                (user_id, tenant_id, seed_text, source_ref, funnel_type, hook_preview, source, status)
+              VALUES (?, ?, ?, ?, ?, ?, 'talk_capture', 'fresh')
+            `).run(userId, tenantId, f.fact, 'Captured from a voice note', null, f.hook || null);
+          } catch (err) {
+            console.error('[structure-brief] leftover insert failed (non-fatal):', err.message);
+          }
+        }
+        Promise.resolve(db.prepare(`
+          INSERT INTO platform_events (event_type, user_id, workspace_id, metadata)
+          VALUES ('talk_capture_leftovers', ?, ?, ?)
+        `).run(userId, tenantId, JSON.stringify({ count: leftovers.length }))).catch(() => {});
+      }).catch(() => {});
+    }
+
+    return res.json({
+      ok:                  true,
+      moment:              structured.moment,
+      proof:               structured.proof,
+      tension:             structured.tension,
+      audience_hook:       structured.audience_hook,
+      suggested_post_type: structured.suggested_post_type,
+      leftover_count:      leftovers.length,
+    });
+  } catch (err) {
+    console.error('[structure-brief] error (non-fatal):', err.message);
+    return res.json({ ok: true, moment: '', proof: '', tension: '', audience_hook: '', suggested_post_type: null, leftover_count: 0 });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // POST /api/generate/chat-intake
 // Adaptive conversational coach. Scores the brief on 4 substance dimensions,
 // returns a targeted question + skip suggestion if gaps remain, or ready:true

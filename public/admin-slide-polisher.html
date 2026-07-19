@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Slide Polisher — ScoutHook Admin</title>
+  <link rel="stylesheet" href="/css/scouthook.css" />
+  <link rel="stylesheet" href="/css/main.css" />
+  <link rel="stylesheet" href="/css/admin.css" />
+  <style>
+    body { overflow: hidden; }
+    .pol-layout { display:flex; height:calc(100vh - 52px); min-height:0; }
+    /* ── Stage ── */
+    .pol-stage { flex:1; background:#e8eaed; overflow:auto; position:relative; display:flex; align-items:flex-start; justify-content:center; padding:28px; }
+    .pol-canvas-outer { flex-shrink:0; }
+    .pol-canvas-wrap { position:relative; transform-origin:top left; box-shadow:0 8px 32px rgba(0,0,0,.18); background:#fff; }
+    .pol-canvas-wrap iframe { display:block; border:0; }
+    #pol-onion { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; display:none; object-fit:fill; }
+    #pol-boxes { position:absolute; inset:0; pointer-events:none; }
+    .pol-box { position:absolute; pointer-events:none; }
+    .pol-box--hover { outline:1.5px dashed rgba(15,118,110,.65); }
+    .pol-box--sel { outline:2.5px solid #0f766e; }
+    .pol-box--sel .pol-box__tag { position:absolute; top:-22px; left:-2px; background:#0f766e; color:#fff; font:600 10.5px/1 Inter,sans-serif; padding:4px 8px; border-radius:4px 4px 0 0; white-space:nowrap; }
+    /* ── Toolbar over stage ── */
+    .pol-stagebar { position:absolute; top:10px; left:50%; transform:translateX(-50%); z-index:5; display:flex; gap:8px; align-items:center; background:#fff; border:1px solid var(--border,#e5e7eb); border-radius:99px; padding:6px 14px; box-shadow:0 4px 16px rgba(0,0,0,.1); font-size:12px; }
+    .pol-stagebar select { font-size:12px; border:0; background:none; cursor:pointer; }
+    .pol-stagebar label { color:var(--text-muted,#6b7280); display:flex; gap:6px; align-items:center; }
+    .pol-stagebar input[type=range] { width:80px; }
+    /* ── Inspector ── */
+    .pol-side { width:308px; flex-shrink:0; border-left:1px solid var(--border,#e5e7eb); background:#fff; display:flex; flex-direction:column; min-height:0; }
+    .pol-side__head { padding:12px 14px; border-bottom:1px solid var(--border,#e5e7eb); }
+    .pol-crumb { display:flex; flex-wrap:wrap; gap:3px; font-size:11px; color:var(--text-muted,#6b7280); }
+    .pol-crumb button { border:0; background:var(--neutral-100,#f3f4f6); border-radius:4px; padding:2px 7px; font-size:11px; cursor:pointer; color:inherit; }
+    .pol-crumb button.cur { background:#0f766e; color:#fff; font-weight:700; }
+    .pol-slot-badge { display:inline-block; margin-top:8px; background:#ecfdf5; color:#065f46; font-size:10.5px; font-weight:700; border-radius:99px; padding:3px 10px; }
+    .pol-panel { flex:1; overflow-y:auto; padding:12px 14px 40px; }
+    .pol-empty { color:var(--text-muted,#6b7280); font-size:12.5px; padding:18px 6px; line-height:1.6; }
+    .pol-sec { margin-bottom:16px; }
+    .pol-sec__title { font-size:10.5px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; color:var(--text-muted,#6b7280); margin-bottom:8px; }
+    .pol-row { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px; font-size:12.5px; }
+    .pol-row > span:first-child { color:#374151; }
+    .pol-step { display:flex; align-items:center; border:1px solid var(--border,#d1d5db); border-radius:7px; overflow:hidden; }
+    .pol-step button { border:0; background:var(--neutral-50,#f9fafb); width:24px; height:26px; cursor:pointer; font-size:13px; line-height:1; color:#374151; }
+    .pol-step button:hover { background:var(--neutral-100,#f3f4f6); }
+    .pol-step input { border:0; width:44px; text-align:center; font-size:12px; height:26px; -moz-appearance:textfield; }
+    .pol-step input::-webkit-inner-spin-button { display:none; }
+    .pol-seg { display:flex; border:1px solid var(--border,#d1d5db); border-radius:7px; overflow:hidden; }
+    .pol-seg button { border:0; background:#fff; padding:5px 9px; cursor:pointer; font-size:12px; color:#374151; }
+    .pol-seg button.on { background:#0f766e; color:#fff; }
+    .pol-color { display:flex; gap:5px; align-items:center; }
+    .pol-color input[type=color] { width:30px; height:26px; border:1px solid var(--border,#d1d5db); border-radius:6px; padding:1px; cursor:pointer; }
+    .pol-side select.pol-sel { font-size:12px; padding:4px 6px; border:1px solid var(--border,#d1d5db); border-radius:6px; background:#fff; }
+    details.pol-fine { margin:-2px 0 8px; }
+    details.pol-fine summary { font-size:11px; color:var(--text-muted,#6b7280); cursor:pointer; }
+    details.pol-fine .pol-row { margin-top:6px; }
+    .pol-actions { display:flex; gap:6px; flex-wrap:wrap; }
+    .pol-actions button { border:1px solid var(--border,#d1d5db); background:#fff; border-radius:7px; font-size:12px; padding:6px 11px; cursor:pointer; }
+    .pol-actions button:hover { background:var(--neutral-50,#f9fafb); }
+    .pol-actions button.danger { color:#dc2626; border-color:#fecaca; }
+    .pol-actions button.danger:hover { background:#fef2f2; }
+    /* ── Footer ── */
+    .pol-foot { border-top:1px solid var(--border,#e5e7eb); padding:10px 14px; display:flex; align-items:center; gap:10px; }
+    .pol-foot .btn { flex:1; }
+    #pol-save-note { font-size:11px; color:var(--text-muted,#6b7280); }
+    .pol-hint { font-size:10.5px; color:var(--text-muted,#9ca3af); margin-top:4px; line-height:1.5; }
+    .kbd { background:var(--neutral-100,#f3f4f6); border:1px solid var(--border,#e5e7eb); border-radius:4px; padding:0 4px; font-size:10px; font-family:monospace; }
+  </style>
+</head>
+<body>
+  <div id="auth-screen" class="admin-auth">
+    <div class="admin-auth__card card">
+      <h2 class="admin-auth__title">ScoutHook Admin</h2>
+      <div class="field"><label for="pw-input">Admin password</label><input type="password" id="pw-input" placeholder="ADMIN_PASSWORD" /></div>
+      <div id="pw-error" class="admin-error-msg hidden"></div>
+      <button id="pw-btn" class="btn btn--primary">Unlock</button>
+    </div>
+  </div>
+
+  <div id="main" class="hidden">
+    <div style="display:flex;align-items:center;gap:14px;padding:9px 16px;border-bottom:1px solid var(--border,#e5e7eb);background:#fff;height:52px;box-sizing:border-box">
+      <a id="pol-back" href="/admin-carousel-packs.html" class="btn btn--sm btn--secondary">← Back</a>
+      <div style="flex:1;min-width:0">
+        <div id="pol-title" style="font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Slide Polisher</div>
+        <div style="font-size:11px;color:var(--text-muted,#6b7280)">Click anything on the slide to adjust it — no code needed.</div>
+      </div>
+      <span id="pol-dirty" style="font-size:11.5px;color:var(--text-muted,#6b7280)"></span>
+      <a id="pol-raw-link" href="#" target="_blank" rel="noopener" style="font-size:11.5px;color:var(--text-muted,#6b7280)">Raw HTML editor ↗</a>
+    </div>
+
+    <div class="pol-layout">
+      <div class="pol-stage" id="pol-stage">
+        <div class="pol-stagebar">
+          <label>Zoom
+            <select id="pol-zoom">
+              <option value="fit" selected>Fit</option>
+              <option value="0.5">50%</option>
+              <option value="0.75">75%</option>
+              <option value="1">100%</option>
+            </select>
+          </label>
+          <span style="color:#e5e7eb">|</span>
+          <label id="pol-onion-ctl" style="display:none">
+            <input type="checkbox" id="pol-onion-toggle"> Original overlay
+            <input type="range" id="pol-onion-opacity" min="0" max="100" value="50">
+          </label>
+          <span id="pol-no-onion" style="display:none;color:var(--text-muted,#9ca3af)">No original image stored</span>
+        </div>
+        <div class="pol-canvas-outer">
+          <div class="pol-canvas-wrap" id="pol-wrap">
+            <iframe id="pol-frame" sandbox="allow-same-origin"></iframe>
+            <img id="pol-onion" alt="">
+            <div id="pol-boxes"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="pol-side">
+        <div class="pol-side__head">
+          <div class="pol-crumb" id="pol-crumb"><span style="color:var(--text-muted,#9ca3af)">Nothing selected</span></div>
+          <div id="pol-slot-badge"></div>
+        </div>
+        <div class="pol-panel" id="pol-panel">
+          <div class="pol-empty">
+            Click any text, shape, or image on the slide to select it.<br><br>
+            <span class="kbd">←→↑↓</span> nudge &nbsp;·&nbsp; <span class="kbd">Shift</span>+arrows nudge ×10<br>
+            <span class="kbd">Esc</span> deselect &nbsp;·&nbsp; <span class="kbd">⌘Z</span> undo<br><br>
+            Turn on <strong>Original overlay</strong> above to see the uploaded design behind the live slide and line things up exactly.
+          </div>
+        </div>
+        <div class="pol-foot">
+          <button id="pol-undo" class="btn btn--sm btn--secondary" disabled>↩ Undo</button>
+          <button id="pol-save" class="btn btn--sm btn--primary" disabled>Save</button>
+        </div>
+        <div style="padding:0 14px 10px"><span id="pol-save-note">Every save keeps a restorable version.</span></div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  'use strict';
+  let adminPw = '';
+  const qs = new URLSearchParams(location.search);
+  const templateId = qs.get('id');
+  const backPack = qs.get('pack');
+
+  // ── State ────────────────────────────────────────────────────────────────
+  let frameDoc = null;
+  let storedManifest = null; // DB copy of slot_manifest (guard for docs without an embedded block)
+  let dims = { width: 1080, height: 1080 };
+  let scale = 1;
+  let selected = null;
+  let hovered = null;
+  let undoStack = [];       // documentElement.innerHTML snapshots
+  let editGesture = false;  // one undo snapshot per control gesture
+  let dirty = false;
+
+  const $ = s => document.querySelector(s);
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+  // ── Auth (standard admin pattern) ────────────────────────────────────────
+  const savedPw = sessionStorage.getItem('adminPw');
+  if (savedPw) { adminPw = savedPw; showMain(); }
+  $('#pw-btn').addEventListener('click', async () => {
+    const pw = $('#pw-input').value.trim();
+    const r = await fetch('/admin/html-templates', { headers: { 'X-Admin-Password': pw } });
+    if (r.status === 401) { $('#pw-error').textContent = 'Wrong password'; $('#pw-error').classList.remove('hidden'); return; }
+    adminPw = pw; sessionStorage.setItem('adminPw', pw); showMain();
+  });
+  $('#pw-input').addEventListener('keydown', e => { if (e.key === 'Enter') $('#pw-btn').click(); });
+  function adminFetch(path, opts = {}) {
+    opts.headers = opts.headers || {};
+    opts.headers['X-Admin-Password'] = adminPw;
+    if (opts.body && typeof opts.body === 'string') opts.headers['Content-Type'] = opts.headers['Content-Type'] || 'application/json';
+    return fetch(path, opts);
+  }
+
+  async function showMain() {
+    $('#auth-screen').classList.add('hidden');
+    $('#main').classList.remove('hidden');
+    if (!templateId) { $('#pol-title').textContent = 'No template id in URL'; return; }
+    if (backPack) $('#pol-back').href = `/admin-carousel-pack-form.html?id=${encodeURIComponent(backPack)}`;
+    $('#pol-raw-link').href = `/admin-html-template-form.html?id=${encodeURIComponent(templateId)}`;
+    await loadTemplate();
+  }
+
+  // ── Load ─────────────────────────────────────────────────────────────────
+  async function loadTemplate() {
+    try {
+      const [metaRes, htmlRes] = await Promise.all([
+        adminFetch(`/admin/html-templates/${templateId}`),
+        adminFetch(`/admin/html-templates/${templateId}/html`),
+      ]);
+      const meta = await metaRes.json();
+      if (!htmlRes.ok) throw new Error('Could not load template HTML');
+      const html = await htmlRes.text();
+
+      const t = meta.template || meta;
+      if (t?.name) $('#pol-title').textContent = `Slide Polisher — ${t.name}`;
+      const md = t?.slot_manifest && (typeof t.slot_manifest === 'string' ? JSON.parse(t.slot_manifest) : t.slot_manifest);
+      if (md) storedManifest = md;
+      if (md?.dimensions?.width) dims = md.dimensions;
+
+      const frame = $('#pol-frame');
+      frame.style.width = dims.width + 'px';
+      frame.style.height = dims.height + 'px';
+      $('#pol-wrap').style.width = dims.width + 'px';
+      $('#pol-wrap').style.height = dims.height + 'px';
+
+      frame.addEventListener('load', onFrameReady, { once: true });
+      frame.srcdoc = html;
+
+      loadOnionSkin();
+    } catch (err) {
+      $('#pol-title').textContent = 'Error: ' + err.message;
+    }
+  }
+
+  async function loadOnionSkin() {
+    try {
+      const r = await adminFetch(`/admin/html-templates/${templateId}/original`);
+      if (!r.ok) throw new Error();
+      const blob = await r.blob();
+      $('#pol-onion').src = URL.createObjectURL(blob);
+      $('#pol-onion-ctl').style.display = '';
+    } catch {
+      $('#pol-no-onion').style.display = '';
+    }
+  }
+
+  function onFrameReady() {
+    frameDoc = $('#pol-frame').contentDocument;
+
+    // Manifest guard: the save endpoint re-reads the manifest FROM the HTML,
+    // and returns an empty one (square dims) when no template-meta block is
+    // embedded — which would silently wipe slot definitions + brand mappings
+    // for slides whose manifest lives only in the DB. Inject the DB copy up
+    // front so it round-trips exactly.
+    if (storedManifest && !frameDoc.querySelector('script#template-meta')) {
+      const s = frameDoc.createElement('script');
+      s.type = 'application/json';
+      s.id = 'template-meta';
+      s.textContent = JSON.stringify(storedManifest);
+      frameDoc.head.appendChild(s);
+    }
+
+    // All interaction is parent-driven; the document itself stays pristine.
+    frameDoc.addEventListener('click', onFrameClick, true);
+    frameDoc.addEventListener('mouseover', e => { hovered = pickable(e.target); drawBoxes(); }, true);
+    frameDoc.addEventListener('mouseout', () => { hovered = null; drawBoxes(); }, true);
+    frameDoc.addEventListener('keydown', onKeydown, true);
+    applyZoom();
+  }
+
+  function pickable(el) {
+    if (!el || !frameDoc) return null;
+    if (el === frameDoc.documentElement || el === frameDoc.body) return null;
+    if (el.nodeType !== 1) return null;
+    return el;
+  }
+
+  function onFrameClick(e) {
+    e.preventDefault(); e.stopPropagation();
+    const el = pickable(e.target);
+    if (el) select(el); else deselect();
+  }
+
+  // ── Zoom / stage ─────────────────────────────────────────────────────────
+  function applyZoom() {
+    const mode = $('#pol-zoom').value;
+    if (mode === 'fit') {
+      const stage = $('#pol-stage');
+      scale = Math.min((stage.clientWidth - 64) / dims.width, (stage.clientHeight - 90) / dims.height, 1);
+    } else {
+      scale = parseFloat(mode);
+    }
+    const wrap = $('#pol-wrap');
+    wrap.style.transform = `scale(${scale})`;
+    // Reserve the scaled footprint so the scroll area sizes correctly
+    const outer = wrap.parentElement;
+    outer.style.width = Math.round(dims.width * scale) + 'px';
+    outer.style.height = Math.round(dims.height * scale) + 'px';
+    drawBoxes();
+  }
+  $('#pol-zoom').addEventListener('change', applyZoom);
+  window.addEventListener('resize', () => { if ($('#pol-zoom').value === 'fit') applyZoom(); });
+
+  // ── Onion skin ───────────────────────────────────────────────────────────
+  $('#pol-onion-toggle').addEventListener('change', e => {
+    const img = $('#pol-onion');
+    img.style.display = e.target.checked ? 'block' : 'none';
+    img.style.opacity = $('#pol-onion-opacity').value / 100;
+  });
+  $('#pol-onion-opacity').addEventListener('input', e => {
+    $('#pol-onion').style.opacity = e.target.value / 100;
+  });
+
+  // ── Selection boxes (drawn inside the scaled wrapper → 1:1 coords) ──────
+  function drawBoxes() {
+    const layer = $('#pol-boxes');
+    layer.innerHTML = '';
+    if (hovered && hovered !== selected && hovered.isConnected) layer.appendChild(makeBox(hovered, 'pol-box--hover'));
+    if (selected && selected.isConnected) layer.appendChild(makeBox(selected, 'pol-box--sel', boxTag(selected)));
+  }
+  function makeBox(el, cls, tag) {
+    const r = el.getBoundingClientRect();
+    const d = document.createElement('div');
+    d.className = 'pol-box ' + cls;
+    d.style.left = r.left + 'px'; d.style.top = r.top + 'px';
+    d.style.width = r.width + 'px'; d.style.height = r.height + 'px';
+    if (tag) d.innerHTML = `<span class="pol-box__tag">${esc(tag)}</span>`;
+    return d;
+  }
+  function boxTag(el) {
+    const slot = el.getAttribute('data-slot');
+    return slot ? `✎ ${slot}` : friendlyName(el);
+  }
+  function friendlyName(el) {
+    const t = el.tagName.toLowerCase();
+    if (/^h[1-6]$/.test(t)) return 'Heading';
+    if (t === 'p' || t === 'span') return 'Text';
+    if (t === 'img') return 'Image';
+    if (t === 'svg' || el.closest && el.tagName === 'path') return 'Graphic';
+    if (t === 'ul' || t === 'ol') return 'List';
+    if (t === 'li') return 'List item';
+    return 'Box';
+  }
+
+  // ── Selection + inspector ────────────────────────────────────────────────
+  function select(el) { selected = el; drawBoxes(); renderCrumb(); renderPanel(); }
+  function deselect() { selected = null; drawBoxes(); renderCrumb(); renderPanel(); }
+
+  function renderCrumb() {
+    const host = $('#pol-crumb');
+    const badge = $('#pol-slot-badge');
+    badge.innerHTML = '';
+    if (!selected) { host.innerHTML = '<span style="color:var(--text-muted,#9ca3af)">Nothing selected</span>'; return; }
+    const chain = [];
+    let n = selected;
+    while (n && n !== frameDoc.body && chain.length < 6) { chain.unshift(n); n = n.parentElement; }
+    host.innerHTML = chain.map((el, i) =>
+      `<button data-i="${i}" class="${el === selected ? 'cur' : ''}">${esc(friendlyName(el))}</button>${i < chain.length - 1 ? '<span>›</span>' : ''}`
+    ).join('');
+    host.querySelectorAll('button').forEach(b => b.addEventListener('click', () => select(chain[parseInt(b.dataset.i, 10)])));
+    const slot = selected.getAttribute('data-slot');
+    if (slot) badge.innerHTML = `<span class="pol-slot-badge">Editable content slot: ${esc(slot)}</span>`;
+  }
+
+  // Helpers for reading current values
+  const cs = () => getComputedStyle(selected);
+  const px = v => Math.round(parseFloat(v) || 0);
+  function rgbToHex(rgb) {
+    const m = String(rgb).match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+    if (!m) return '#000000';
+    return '#' + [m[1], m[2], m[3]].map(n => (+n).toString(16).padStart(2, '0')).join('');
+  }
+
+  function renderPanel() {
+    const panel = $('#pol-panel');
+    if (!selected) {
+      panel.innerHTML = `<div class="pol-empty">Click any text, shape, or image on the slide to select it.</div>`;
+      return;
+    }
+    const c = cs();
+    const isAbs = c.position === 'absolute' || c.position === 'fixed';
+    const hasText = [...selected.childNodes].some(n => n.nodeType === 3 && n.textContent.trim());
+    const shadowPreset = detectShadow(c.boxShadow);
+
+    panel.innerHTML = `
+      ${hasText || selected.children.length === 0 ? `
+      <div class="pol-sec">
+        <div class="pol-sec__title">Text</div>
+        <div class="pol-row"><span>Size</span>${stepper('fontSize', px(c.fontSize), 'px')}</div>
+        <div class="pol-row"><span>Thickness</span>
+          <select class="pol-sel" data-prop="fontWeight">
+            ${[['400','Normal'],['500','Medium'],['600','Semibold'],['700','Bold'],['800','Extra bold']].map(([v,l]) =>
+              `<option value="${v}" ${String(c.fontWeight) === v ? 'selected' : ''}>${l}</option>`).join('')}
+          </select></div>
+        <div class="pol-row"><span>Line spacing</span>${stepper('lineHeight', c.lineHeight === 'normal' ? Math.round(px(c.fontSize) * 1.2) : px(c.lineHeight), 'px')}</div>
+        <div class="pol-row"><span>Letter spacing</span>${stepper('letterSpacing', c.letterSpacing === 'normal' ? 0 : Math.round(parseFloat(c.letterSpacing) * 10) / 10, 'px', 0.5)}</div>
+        <div class="pol-row"><span>Alignment</span>
+          <div class="pol-seg" data-seg="textAlign">
+            ${['left','center','right'].map(a => `<button data-v="${a}" class="${c.textAlign === a ? 'on' : ''}">${a === 'left' ? '⇤' : a === 'center' ? '↔' : '⇥'}</button>`).join('')}
+          </div></div>
+        <div class="pol-row"><span>Text color</span><div class="pol-color"><input type="color" data-prop="color" value="${rgbToHex(c.color)}"></div></div>
+      </div>` : ''}
+
+      <div class="pol-sec">
+        <div class="pol-sec__title">Spacing</div>
+        <div class="pol-row"><span>Space inside</span>${stepper('padding', px(c.paddingTop), 'px')}</div>
+        <details class="pol-fine"><summary>fine-tune each side (inside)</summary>
+          ${['Top','Right','Bottom','Left'].map(s => `<div class="pol-row"><span>${s}</span>${stepper('padding' + s, px(c['padding' + s]), 'px')}</div>`).join('')}
+        </details>
+        <div class="pol-row"><span>Space around</span>${stepper('margin', px(c.marginTop), 'px')}</div>
+        <details class="pol-fine"><summary>fine-tune each side (around)</summary>
+          ${['Top','Right','Bottom','Left'].map(s => `<div class="pol-row"><span>${s}</span>${stepper('margin' + s, px(c['margin' + s]), 'px')}</div>`).join('')}
+        </details>
+      </div>
+
+      <div class="pol-sec">
+        <div class="pol-sec__title">Size &amp; position</div>
+        <div class="pol-row"><span>Width</span>${stepper('width', px(c.width), 'px')}</div>
+        <div class="pol-row"><span>Height</span>${stepper('height', px(c.height), 'px')}</div>
+        ${isAbs ? `
+        <div class="pol-row"><span>From left</span>${stepper('left', px(c.left), 'px')}</div>
+        <div class="pol-row"><span>From top</span>${stepper('top', px(c.top), 'px')}</div>
+        <div class="pol-hint">Free-floating element — drag values or use arrow keys to nudge.</div>` : `
+        <div class="pol-hint">This element flows with the layout — use the spacing controls (or arrow keys, which adjust its space) to move it.</div>`}
+      </div>
+
+      <div class="pol-sec">
+        <div class="pol-sec__title">Appearance</div>
+        <div class="pol-row"><span>Fill color</span><div class="pol-color"><input type="color" data-prop="backgroundColor" value="${rgbToHex(c.backgroundColor)}"></div></div>
+        <div class="pol-row"><span>Corner rounding</span>${stepper('borderRadius', px(c.borderRadius), 'px')}</div>
+        <div class="pol-row"><span>Shadow</span>
+          <select class="pol-sel" data-shadow>
+            ${[['none','None'],['subtle','Subtle'],['medium','Medium'],['strong','Strong']].map(([v,l]) =>
+              `<option value="${v}" ${shadowPreset === v ? 'selected' : ''}>${l}</option>`).join('')}
+            ${shadowPreset === 'custom' ? '<option value="custom" selected>Custom (as designed)</option>' : ''}
+          </select></div>
+        <div class="pol-row"><span>See-through</span><input type="range" data-opacity min="10" max="100" value="${Math.round(parseFloat(c.opacity) * 100)}"></div>
+      </div>
+
+      <div class="pol-sec">
+        <div class="pol-sec__title">Element</div>
+        <div class="pol-actions">
+          <button data-act="hide">${c.display === 'none' ? 'Show' : 'Hide'}</button>
+          <button data-act="dup">Duplicate</button>
+          <button data-act="del" class="danger">Delete</button>
+        </div>
+        <div class="pol-hint">Deleting can't be undone after you save — but every save keeps a restorable version.</div>
+      </div>`;
+
+    wirePanel();
+  }
+
+  function stepper(prop, value, unit, step = 1) {
+    return `<div class="pol-step" data-stepper="${prop}" data-step="${step}">
+      <button data-d="-1">−</button><input type="text" value="${value}"><button data-d="1">+</button>
+    </div>`;
+  }
+
+  function detectShadow(v) {
+    if (!v || v === 'none') return 'none';
+    if (v.includes('2px 8px')) return 'subtle';
+    if (v.includes('6px 20px')) return 'medium';
+    if (v.includes('12px 36px')) return 'strong';
+    return 'custom';
+  }
+  const SHADOWS = { none: 'none', subtle: '0 2px 8px rgba(0,0,0,0.12)', medium: '0 6px 20px rgba(0,0,0,0.18)', strong: '0 12px 36px rgba(0,0,0,0.28)' };
+
+  // ── Mutations (all inline-style, all undoable) ───────────────────────────
+  function beginEdit() {
+    if (editGesture || !frameDoc) return;
+    undoStack.push(frameDoc.documentElement.innerHTML);
+    if (undoStack.length > 60) undoStack.shift();
+    editGesture = true;
+    setTimeout(() => { editGesture = false; }, 600);
+    setDirty(true);
+    $('#pol-undo').disabled = false;
+  }
+
+  function setStyle(prop, value) {
+    if (!selected) return;
+    beginEdit();
+    // 'padding'/'margin' shorthand steppers move all four sides together,
+    // relative to their current (possibly asymmetric) values.
+    if (prop === 'padding' || prop === 'margin') {
+      const c = cs();
+      const base = px(c[prop + 'Top']);
+      const delta = value - base;
+      for (const side of ['Top', 'Right', 'Bottom', 'Left']) {
+        selected.style[prop + side] = Math.max(0, px(c[prop + side]) + delta) + 'px';
+      }
+    } else {
+      selected.style[prop] = typeof value === 'number' ? value + 'px' : value;
+    }
+    drawBoxes();
+  }
+
+  function wirePanel() {
+    const panel = $('#pol-panel');
+
+    panel.querySelectorAll('[data-stepper]').forEach(st => {
+      const prop = st.dataset.stepper;
+      const step = parseFloat(st.dataset.step) || 1;
+      const input = st.querySelector('input');
+      st.querySelectorAll('button').forEach(b => b.addEventListener('click', (e) => {
+        const mult = e.shiftKey ? 10 : 1;
+        const cur = parseFloat(input.value) || 0;
+        const next = Math.round((cur + parseInt(b.dataset.d, 10) * step * mult) * 10) / 10;
+        input.value = next;
+        setStyle(prop, next);
+      }));
+      input.addEventListener('change', () => {
+        const v = parseFloat(input.value);
+        if (!Number.isNaN(v)) setStyle(prop, v);
+      });
+    });
+
+    panel.querySelectorAll('select[data-prop]').forEach(sel =>
+      sel.addEventListener('change', () => setStyle(sel.dataset.prop, sel.value)));
+
+    panel.querySelectorAll('input[type=color][data-prop]').forEach(inp =>
+      inp.addEventListener('input', () => setStyle(inp.dataset.prop, inp.value)));
+
+    panel.querySelectorAll('[data-seg]').forEach(seg => {
+      const prop = seg.dataset.seg;
+      seg.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+        setStyle(prop, b.dataset.v);
+        seg.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+      }));
+    });
+
+    const shadowSel = panel.querySelector('select[data-shadow]');
+    if (shadowSel) shadowSel.addEventListener('change', () => {
+      if (SHADOWS[shadowSel.value] !== undefined) setStyle('boxShadow', SHADOWS[shadowSel.value]);
+    });
+
+    const op = panel.querySelector('input[data-opacity]');
+    if (op) op.addEventListener('input', () => setStyle('opacity', String(op.value / 100)));
+
+    panel.querySelectorAll('[data-act]').forEach(b => b.addEventListener('click', () => elementAction(b.dataset.act)));
+  }
+
+  function elementAction(act) {
+    if (!selected) return;
+    if (act === 'hide') {
+      beginEdit();
+      selected.style.display = cs().display === 'none' ? '' : 'none';
+      renderPanel(); drawBoxes();
+    } else if (act === 'dup') {
+      beginEdit();
+      const clone = selected.cloneNode(true);
+      // A cloned slot would get double-filled by the AI — strip slot markers.
+      clone.removeAttribute?.('data-slot');
+      clone.querySelectorAll?.('[data-slot]').forEach(n => n.removeAttribute('data-slot'));
+      selected.after(clone);
+      select(clone);
+    } else if (act === 'del') {
+      const slot = selected.getAttribute('data-slot') ||
+        (selected.querySelector('[data-slot]')?.getAttribute('data-slot'));
+      const msg = slot
+        ? `This element ${selected.getAttribute('data-slot') ? 'is' : 'contains'} the editable content slot "${slot}". Deleting it means AI-filled text for that slot won't appear on this slide. Delete anyway?`
+        : 'Delete this element?';
+      if (!confirm(msg)) return;
+      beginEdit();
+      selected.remove();
+      deselect();
+    }
+  }
+
+  // ── Keyboard ─────────────────────────────────────────────────────────────
+  function onKeydown(e) { handleKeys(e); }
+  window.addEventListener('keydown', handleKeys);
+  function handleKeys(e) {
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); return; }
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') { e.preventDefault(); save(); return; }
+    if (e.key === 'Escape') { deselect(); return; }
+    if (!selected) return;
+    if (e.target && /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
+    const arrows = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+    if (!arrows[e.key]) return;
+    e.preventDefault();
+    const [dx, dy] = arrows[e.key].map(n => n * (e.shiftKey ? 10 : 1));
+    const c = cs();
+    beginEdit();
+    if (c.position === 'absolute' || c.position === 'fixed') {
+      if (dx) selected.style.left = (px(c.left) + dx) + 'px';
+      if (dy) selected.style.top = (px(c.top) + dy) + 'px';
+    } else {
+      // In-flow: nudge via margins
+      if (dx) selected.style.marginLeft = (px(c.marginLeft) + dx) + 'px';
+      if (dy) selected.style.marginTop = (px(c.marginTop) + dy) + 'px';
+    }
+    drawBoxes();
+  }
+
+  // ── Undo ─────────────────────────────────────────────────────────────────
+  function undo() {
+    if (!undoStack.length || !frameDoc) return;
+    frameDoc.documentElement.innerHTML = undoStack.pop();
+    deselect();
+    if (!undoStack.length) $('#pol-undo').disabled = true;
+    setDirty(true);
+  }
+  $('#pol-undo').addEventListener('click', undo);
+
+  function setDirty(v) {
+    dirty = v;
+    $('#pol-save').disabled = !v;
+    $('#pol-dirty').textContent = v ? 'Unsaved changes' : '';
+  }
+  window.addEventListener('beforeunload', e => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
+
+  // ── Save (existing versioned endpoint — snapshots before overwrite) ─────
+  async function save() {
+    if (!dirty || !frameDoc) return;
+    const btn = $('#pol-save');
+    btn.disabled = true; btn.textContent = 'Saving…';
+    try {
+      const html = '<!DOCTYPE html>\n' + frameDoc.documentElement.outerHTML;
+      const r = await adminFetch(`/admin/html-templates/${templateId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ html, original_image_id: templateId }),
+      });
+      const data = await r.json();
+      if (!data.ok) throw new Error(data.error || 'Save failed');
+      setDirty(false);
+      $('#pol-save-note').textContent = 'Saved ✓ — version snapshotted' + (data.thumbnailWarning ? ' (thumbnail warning: ' + data.thumbnailWarning + ')' : '');
+    } catch (err) {
+      alert('Save failed: ' + err.message);
+      btn.disabled = false;
+    } finally {
+      btn.textContent = 'Save';
+      if (dirty) btn.disabled = false;
+    }
+  }
+  $('#pol-save').addEventListener('click', save);
+</script>
+</body>
+</html>

@@ -2345,6 +2345,44 @@ document.getElementById('intent-interview')?.addEventListener('click', () => {
   chatInput?.focus();
 });
 
+// Programmatic entry into the interview coach with a pre-filled brief. Used by
+// the "Talk it out" voice-capture flow (talk-it-out.js) after it structures a
+// spoken transcript. Reuses the exact coach path — the user reviews/edits the
+// pre-filled brief in the input, then sends to enter chat-intake + generate.
+window.startInterviewWithBrief = function (briefText, label) {
+  if (document.getElementById('plan-gate-banner')) return;
+  document.querySelectorAll('.intent-card').forEach(p => p.classList.remove('active'));
+  document.getElementById('intent-interview')?.classList.add('active');
+  document.getElementById('intent-ideas')?.classList.remove('active');
+  const pillQ = document.getElementById('pill-question');
+  if (pillQ) { pillQ.textContent = ''; pillQ.classList.remove('visible'); }
+  const vaultPanel = document.getElementById('vault-panel');
+  if (vaultPanel) { vaultPanel.style.display = 'none'; vaultPanel.innerHTML = ''; }
+
+  selectedType        = 'reach';
+  selectedVaultIdeaId = null;
+
+  const genHeader         = document.querySelector('.gen-header');
+  const startingPills     = document.getElementById('starting-pills');
+  const guidedHeaderRow   = document.getElementById('guided-header-row');
+  const selectedTypeLabel = document.getElementById('selected-type-label');
+  const guidedProgress    = document.getElementById('guided-progress');
+  if (genHeader)         genHeader.style.display       = 'none';
+  if (startingPills)     startingPills.style.display   = 'none';
+  if (guidedHeaderRow)   guidedHeaderRow.style.display = 'flex';
+  if (selectedTypeLabel) selectedTypeLabel.textContent = label || '💬 From your voice note';
+  if (guidedProgress)    guidedProgress.style.display  = 'none';
+
+  chat.init('reach');
+  if (briefText) {
+    chatInput.value = briefText;
+    chatInput.style.height = 'auto';
+    chatInput.style.height = chatInput.scrollHeight + 'px';
+    chatInput.dispatchEvent(new Event('input'));
+  }
+  chatInput.focus();
+};
+
 /* ── Chat input wiring ───────────────────────────────────────── */
 chatSendBtn.addEventListener('click', () => { voiceCtrl?.stop(); chat.advance(); });
 

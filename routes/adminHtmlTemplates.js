@@ -463,6 +463,27 @@ router.get('/:id/thumbnail', async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// GET /:id/original — the uploaded design image (onion-skin overlay source in
+// the slide polisher). Stored as .bin; content type sniffed from magic bytes.
+// ---------------------------------------------------------------------------
+
+router.get('/:id/original', async (req, res) => {
+  try {
+    const buf = await storage.downloadAdmin(storage.buildOriginalImageKey(req.params.id));
+    let type = 'application/octet-stream';
+    if (buf.length > 12) {
+      if (buf[0] === 0x89 && buf[1] === 0x50) type = 'image/png';
+      else if (buf[0] === 0xFF && buf[1] === 0xD8) type = 'image/jpeg';
+      else if (buf.slice(0, 4).toString() === 'RIFF' && buf.slice(8, 12).toString() === 'WEBP') type = 'image/webp';
+      else if (buf.slice(0, 5).toString() === '<?xml' || buf.slice(0, 4).toString() === '<svg') type = 'image/svg+xml';
+    }
+    res.set('Content-Type', type).set('Cache-Control', 'no-store').send(buf);
+  } catch (err) {
+    res.status(404).json({ ok: false, error: 'original_not_found' });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // POST /:id/regenerate-thumbnail — re-generate when render service was down
 // ---------------------------------------------------------------------------
 

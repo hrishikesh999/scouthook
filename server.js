@@ -1166,6 +1166,20 @@ if (process.env.NODE_ENV !== 'test') {
 }
 
 // ---------------------------------------------------------------------------
+// LinkedIn metrics sync — nightly engagement pull so the performance-insights
+// layer has fresh reaction/comment counts to learn from (Authentic Client Engine).
+// ---------------------------------------------------------------------------
+const { syncAllWorkspaceMetrics } = require('./workers/metricsSync');
+if (process.env.NODE_ENV !== 'test') {
+  setTimeout(() => {
+    syncAllWorkspaceMetrics().catch(err => console.error('[metricsSync] initial run failed:', err.message));
+    setInterval(() => {
+      syncAllWorkspaceMetrics().catch(err => console.error('[metricsSync] scheduled run failed:', err.message));
+    }, 24 * 60 * 60 * 1000);
+  }, 35 * 60 * 1000);
+}
+
+// ---------------------------------------------------------------------------
 // Scheduler (BullMQ worker — only starts if Redis is configured)
 // ---------------------------------------------------------------------------
 

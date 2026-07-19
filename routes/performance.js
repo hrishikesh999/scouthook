@@ -94,6 +94,22 @@ router.post('/:postId/performance', async (req, res) => {
 
 // GET /api/posts/performance-summary
 // Returns aggregated performance data for the Content Intelligence dashboard card.
+// GET /api/posts/insights
+// Author-relative "what's working" — engagement-based, guarded by a sample
+// minimum. Consumed by the dashboard card and the daily idea email.
+router.get('/insights', async (req, res) => {
+  const { userId, tenantId } = req;
+  if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
+  try {
+    const { getWorkspaceInsights } = require('../services/performanceInsights');
+    const result = await getWorkspaceInsights(tenantId);
+    return res.json({ ok: true, ...result });
+  } catch (err) {
+    console.error('[performance] GET /insights error:', err.message);
+    return res.json({ ok: true, insufficient_data: true, reason: 'error' });
+  }
+});
+
 router.get('/performance-summary', async (req, res) => {
   const userId   = req.userId;
   const tenantId = req.tenantId;

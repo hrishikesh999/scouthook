@@ -154,6 +154,7 @@ async function syncWorkspaceMetrics(workspaceId) {
     SELECT id, linkedin_post_id, last_synced_at
     FROM   generated_posts
     WHERE  tenant_id = ? AND status = 'published' AND linkedin_post_id IS NOT NULL
+      AND  published_at > now() - interval '30 days'
   `).all(workspaceId);
 
   let synced = 0, skipped = 0, errors = 0;

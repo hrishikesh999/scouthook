@@ -734,7 +734,7 @@ router.get('/post/:postId', async (req, res) => {
       SELECT id, content, quality_score, quality_flags, passed_gate,
              hook_b, hook_b_archetype, cta_alternatives, format_slug, funnel_type,
              asset_url, asset_preview_url, asset_type, asset_slide_count, first_comment,
-             archetype_used, idea_input, post_type, quality_verdict
+             archetype_used, idea_input, post_type, quality_verdict, status, miy_spans_edited
       FROM generated_posts
       WHERE id = ? AND tenant_id = ?
     `).get(postId, tenantId);
@@ -778,6 +778,8 @@ router.get('/post/:postId', async (req, res) => {
       assetPreviewUrl:     row.asset_preview_url || null,
       assetType:           row.asset_type        || null,
       assetSlideCount:     row.asset_slide_count || 0,
+      status:              row.status || null,
+      miy_spans_edited:    row.miy_spans_edited || 0,
     },
   });
 });
@@ -1365,6 +1367,74 @@ router.post('/improve', async (req, res) => {
     }
     console.error('[improve] Error:', err.message);
     return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/generate/make-it-yours
+// Suggests 2–3 spans (hook / punchline / bridge) the author should rewrite in
+// their own words. Non-blocking: always 200 with { spans: [] } on any failure
+// so the UI can silently skip the step.
+// Body: { postId?, postText }
+// ---------------------------------------------------------------------------
+router.post('/make-it-yours', async (req, res) => {
+  const { tenantId } = req;
+  const { postId, postText } = req.body;
+
+  const text = (postText || '').trim();
+  if (!text) return res.json({ ok: true, spans: [] });
+
+  try {
+    let profile = {};
+    if (tenantId) {
+      profile = await db.prepare(`
+        SELECT bvp.brand_description
+        FROM   profiles p
+        LEFT JOIN brand_voice_profiles bvp ON bvp.profile_id = p.id
+        WHERE  p.workspace_id = ? AND p.is_default = true
+      `).get(tenantId) || {};
+    }
+
+    const { suggestPersonalSpans } = require('../services/makeItYours');
+    const { spans } = await suggestPersonalSpans(text, profile);
+    return res.json({ ok: true, spans, postId: postId || null });
+  } catch (err) {
+    console.error('[make-it-yours] error (non-fatal):', err.message);
+    return res.json({ ok: true, spans: [] });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/generate/miy-edited
+// Records that the author personalised a post — edit distance + spans touched.
+// Feeds the Phase 4 "posts you touched perform better" correlation and the
+// admin funnel. Non-blocking; best-effort UPDATE + event.
+// Body: { postId, humanEditChars, spansEdited }
+// ---------------------------------------------------------------------------
+router.post('/miy-edited', async (req, res) => {
+  const { userId, tenantId } = req;
+  const postId       = parseInt(req.body.postId, 10) || null;
+  const humanEditChars = Math.max(0, parseInt(req.body.humanEditChars, 10) || 0);
+  const spansEdited    = Math.max(0, parseInt(req.body.spansEdited, 10) || 0);
+  if (!postId) return res.json({ ok: true });
+
+  try {
+    await db.prepare(`
+      UPDATE generated_posts
+      SET    human_edit_chars = ?, miy_spans_edited = ?
+      WHERE  id = ? AND tenant_id = ?
+    `).run(humanEditChars, spansEdited, postId, tenantId);
+
+    Promise.resolve(db.prepare(`
+      INSERT INTO platform_events (event_type, user_id, workspace_id, metadata)
+      VALUES ('miy_completed', ?, ?, ?)
+    `).run(userId, tenantId, JSON.stringify({ post_id: postId, spans_edited: spansEdited, edit_chars: humanEditChars })))
+      .catch(() => {});
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('[miy-edited] error (non-fatal):', err.message);
+    return res.json({ ok: true });
   }
 });
 

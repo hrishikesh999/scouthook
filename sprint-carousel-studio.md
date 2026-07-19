@@ -121,6 +121,20 @@ Shipped:
 > template manifest). Renderer parity: `resolveColorSlots` now honors `def.brandRole` via the
 > shared `resolveBrandRole` (exported from templateRenderer), precedence
 > override > brandRole > legacy default:'brand' > hex. Admin list SELECT returns slot_manifest.
+>
+> **Slide Polisher v1 (2026-07-19):** visual no-code editor for the last-10% conversion fixes,
+> replacing raw-HTML editing as the primary polish path. `public/admin-slide-polisher.html`:
+> click-to-select any element (pristine iframe — parent-side listeners, sandbox no-scripts),
+> plain-language inspector (text/spacing/size+position/appearance/element ops), onion-skin
+> overlay of the original upload (`GET /admin/html-templates/:id/original`, magic-byte sniffed),
+> arrow-key nudge (absolute → left/top; in-flow → margins), undo stack, save via the existing
+> versioned PUT. **Manifest guard:** docs lacking an embedded template-meta block get the DB
+> manifest injected on load — otherwise the PUT's readSlotManifest would silently wipe slots/
+> brand mappings and reset dims to square. Pack form's per-slide button now opens the Polisher
+> ("✨ Polish slide"); raw editor remains an escape hatch inside it. Decision: build focused
+> in-house tool over GrapesJS-class builders (component-model round-trip mangles script tags →
+> would corrupt the manifest; whole-slide "Refine" stays deprecated in favor of future
+> element-scoped AI fix = Polisher v2).
 
 ## Phase 2 — Studio UI ✅ DONE 2026-07-18 (code) ← MVP line
 

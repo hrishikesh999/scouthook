@@ -136,6 +136,9 @@
               <button id="asset-chip-remove" class="asset-chip-remove" aria-label="Remove attached asset">×</button>
             </div>
 
+            <!-- Format recommendation nudge (Authentic Client Engine, Phase 3) -->
+            <div id="format-reco-chip" class="freco-chip" hidden></div>
+
             <!-- Make It Yours — 60-second personalisation pass (Authentic Client Engine) -->
             <div id="miy-panel" class="miy-panel" hidden></div>
           </div>
@@ -717,6 +720,11 @@ async function loadPost(id) {
     if (window.MakeItYours && !scheduleEditLocked
         && p.status !== 'published' && !(p.miy_spans_edited > 0)) {
       window.MakeItYours.init({ postId: id }).catch(() => {});
+    }
+
+    // Format recommendation nudge — dwell-heavy formats for draft text posts.
+    if (window.FormatReco && p.formatReco && !scheduleEditLocked && p.status !== 'published') {
+      window.FormatReco.init({ postId: id, reco: p.formatReco });
     }
 
   } catch {
@@ -4652,6 +4660,7 @@ document.addEventListener('DOMContentLoaded', init);
   <script src="/js/carousel-studio.js"></script>
   <script src="/js/voice-input.js"></script>
   <script src="/js/make-it-yours.js"></script>
+  <script src="/js/format-reco.js"></script>
   <script src="/js/session.js"></script>
   <script src="/js/ui-toast.js"></script>
   <script src="/js/account-bar.js"></script>

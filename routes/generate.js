@@ -753,6 +753,17 @@ router.get('/post/:postId', async (req, res) => {
   try { flags = JSON.parse(row.quality_flags || '[]'); } catch {}
   let ctaAlternatives = [];
   try { ctaAlternatives = JSON.parse(row.cta_alternatives || '[]'); } catch {}
+
+  // Format recommendation (Phase 3) — dwell-time steering. Only suggested for
+  // plain-text drafts that don't already carry an asset; pure/instant heuristic.
+  let formatReco = null;
+  try {
+    if (!row.asset_url && row.format_slug !== 'carousel') {
+      const { recommendFormat } = require('../services/formatRecommender');
+      const reco = recommendFormat({ postType: row.post_type || '', brief: row.idea_input || '', content: row.content || '' });
+      if (reco && reco.format !== 'text') formatReco = reco;
+    }
+  } catch { /* non-fatal */ }
   // Re-run the slim gate on current content to get phrase matches for in-editor highlighting.
   let freshMatches = {};
   try {
@@ -780,6 +791,7 @@ router.get('/post/:postId', async (req, res) => {
       assetSlideCount:     row.asset_slide_count || 0,
       status:              row.status || null,
       miy_spans_edited:    row.miy_spans_edited || 0,
+      formatReco,
     },
   });
 });
@@ -1493,6 +1505,27 @@ router.post('/miy-edited', async (req, res) => {
     console.error('[miy-edited] error (non-fatal):', err.message);
     return res.json({ ok: true });
   }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/generate/format-reco
+// Logs whether the author accepted or dismissed a format recommendation, so
+// Phase 4 can validate the recommender against real performance. Non-blocking.
+// Body: { postId, format, action: 'accepted' | 'dismissed' }
+// ---------------------------------------------------------------------------
+router.post('/format-reco', async (req, res) => {
+  const { userId, tenantId } = req;
+  const postId = parseInt(req.body.postId, 10) || null;
+  const format = typeof req.body.format === 'string' ? req.body.format.slice(0, 40) : null;
+  const action = req.body.action === 'accepted' ? 'accepted' : 'dismissed';
+
+  try {
+    Promise.resolve(db.prepare(`
+      INSERT INTO platform_events (event_type, user_id, workspace_id, metadata)
+      VALUES ('format_reco', ?, ?, ?)
+    `).run(userId, tenantId, JSON.stringify({ post_id: postId, format, action }))).catch(() => {});
+  } catch { /* non-fatal */ }
+  return res.json({ ok: true });
 });
 
 module.exports = router;

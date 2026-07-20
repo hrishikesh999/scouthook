@@ -2387,6 +2387,33 @@ window.startInterviewWithBrief = function (briefText, label) {
 // runs its own adaptive Q&A loop). Skips the on-page coach entirely and hands the
 // provenance-labelled { initialInput, exchanges } payload straight to generation
 // (default Medium length; the user tunes length/voice in the editor afterward).
+// Generate WITHOUT navigating — returns { id, post } so Captain Scout can show a
+// preview inside its modal before the user opens it in the editor. Non-streaming.
+window.generatePreviewFromInterview = async function (initialInput, exchanges, postType, opts) {
+  opts = opts || {};
+  const body = {
+    path:                 'idea',
+    raw_idea:             initialInput,
+    interview:            { initialInput, exchanges: Array.isArray(exchanges) ? exchanges : [] },
+    post_type:            postType || 'reach',
+    skip_substance_check: true,
+    length_preference:    opts.length || 'Medium',
+  };
+  if (opts.mode)            body.generation_mode = opts.mode;
+  if (_selectedProfileId)   body.profileId       = _selectedProfileId;
+
+  const res  = await fetch('/api/generate', {
+    method: 'POST', headers: apiHeaders(), body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (!res.ok || !data.ok || !data.post) {
+    const err = new Error(data.error || 'generation_failed');
+    err.code = data.error;
+    throw err;
+  }
+  return { id: data.id, post: data.post };
+};
+
 window.startGenerationFromInterview = function (initialInput, exchanges, postType, opts) {
   if (document.getElementById('plan-gate-banner')) return;
   opts = opts || {};

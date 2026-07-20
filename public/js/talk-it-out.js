@@ -34,6 +34,7 @@
   let _exchanges = [];        // assembleBrief exchanges: [{question, gap, answer, from_skip_suggestion}]
   let _count = 0;             // follow-ups answered
   let _pendingQ = null, _pendingGap = null;
+  let _draftId = null;        // generated post id (for the "open in editor" handoff)
 
   // Post-type chips shown in the confirmation step (friendly labels).
   const TYPE_LABELS = {
@@ -154,6 +155,15 @@
           </div>
         </div>
 
+        <div id="tio-preview" hidden>
+          <p class="tio-preview-label">Here's your post — in your words:</p>
+          <div class="tio-preview-text" id="tio-preview-text"></div>
+          <div class="tio-actions">
+            <button type="button" class="tio-skip" id="tio-rewrite">↻ Try again</button>
+            <button type="button" class="tio-go" id="tio-open-editor">Open in editor →</button>
+          </div>
+        </div>
+
         <p class="tio-status" id="tio-status" hidden></p>
       </div>`;
     document.body.appendChild(overlay);
@@ -180,8 +190,10 @@
     overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
     goBtn.addEventListener('click', submitAnswer);
     overlay.querySelector('#tio-skip').addEventListener('click', finishInterview);
-    overlay.querySelector('#tio-write').addEventListener('click', generate);
+    overlay.querySelector('#tio-write').addEventListener('click', writeDraft);
     overlay.querySelector('#tio-back').addEventListener('click', backToInterview);
+    overlay.querySelector('#tio-rewrite').addEventListener('click', rewriteDraft);
+    overlay.querySelector('#tio-open-editor').addEventListener('click', openInEditor);
 
     // Captain Scout controls
     const replayBtn = overlay.querySelector('#tio-replay');
@@ -206,12 +218,18 @@
 
   function resetState() {
     _phase = 'opener'; _brief = ''; _history = []; _exchanges = [];
-    _count = 0; _pendingQ = null; _pendingGap = null; _chosenType = 'story';
+    _count = 0; _pendingQ = null; _pendingGap = null; _chosenType = 'story'; _draftId = null;
     if (_ta) _ta.value = '';
     const iv = document.getElementById('tio-interview');
     const cf = document.getElementById('tio-confirm');
+    const pv = document.getElementById('tio-preview');
     if (iv) iv.hidden = false;
     if (cf) cf.hidden = true;
+    if (pv) pv.hidden = true;
+    // Re-enable any actions disabled by a prior write.
+    ['tio-write', 'tio-back', 'tio-rewrite', 'tio-open-editor'].forEach(id => {
+      const el = document.getElementById(id); if (el) el.disabled = false;
+    });
   }
 
   function setStatus(msg) {
@@ -382,34 +400,67 @@
     setTimeout(() => _ta?.focus(), 60);
   }
 
-  function generate() {
-    _phase = 'done';
-    stopRecording();
-
+  // Generate the organized draft and PREVIEW it in the modal (no page takeover).
+  async function writeDraft() {
+    if (_phase === 'writing') return;
     const initialInput = _brief;
     const exchanges = _exchanges.slice();
     const chosenType = _chosenType || POST_TYPE;
 
-    captainAsk('Aye — writing it in your words now.');
-    setStatus('Organising your post…');
+    _phase = 'writing';
+    stopRecording();
+    // Disable the confirm/preview actions while we write.
+    ['tio-write', 'tio-back', 'tio-rewrite', 'tio-open-editor'].forEach(id => {
+      const el = document.getElementById(id); if (el) el.disabled = true;
+    });
+    captainAsk('Aye — organising it in your words now.');
+    setStatus('Writing your draft…');
 
-    setTimeout(() => {
+    // Fallback: if the preview generator isn't available, use the old handoff.
+    if (typeof window.generatePreviewFromInterview !== 'function') {
       close();
       if (typeof window.startGenerationFromInterview === 'function') {
-        // organize mode: the AI edits/organises the author's exact words, it does not write.
         window.startGenerationFromInterview(initialInput, exchanges, chosenType, { mode: 'organize' });
-      } else if (typeof window.startInterviewWithBrief === 'function') {
-        window.startInterviewWithBrief(composeFallbackBrief(initialInput, exchanges), '💬 Captain Scout');
       }
-    }, 500);
+      return;
+    }
+
+    try {
+      const { id, post } = await window.generatePreviewFromInterview(
+        initialInput, exchanges, chosenType, { mode: 'organize' }
+      );
+      _draftId = id;
+      showPreview(post);
+    } catch (err) {
+      setStatus('');
+      _phase = 'confirm';
+      ['tio-write', 'tio-back'].forEach(id => { const el = document.getElementById(id); if (el) el.disabled = false; });
+      toast(err.code === 'monthly_quota_reached' ? 'You\'ve hit your monthly limit.' : 'Couldn\'t write that one — try again.');
+    }
   }
 
-  // Fallback only if startGenerationFromInterview isn't present: a readable brief
-  // for the on-page coach.
-  function composeFallbackBrief(initialInput, exchanges) {
-    const parts = [initialInput];
-    for (const e of exchanges) if (e.answer) parts.push(e.answer);
-    return parts.filter(Boolean).join('\n\n');
+  function showPreview(post) {
+    _phase = 'preview';
+    setStatus('');
+    const txt = document.getElementById('tio-preview-text');
+    if (txt) txt.textContent = post;
+    document.getElementById('tio-confirm').hidden = true;
+    document.getElementById('tio-interview').hidden = true;
+    document.getElementById('tio-preview').hidden = false;
+    ['tio-rewrite', 'tio-open-editor'].forEach(id => { const el = document.getElementById(id); if (el) el.disabled = false; });
+    captainAsk("Here's your post — give it a read. Open it in the editor to polish and publish, or have me try again.");
+  }
+
+  function openInEditor() {
+    if (!_draftId) return;
+    try { window.speechSynthesis?.cancel(); } catch {}
+    window.location.href = `/editor/${encodeURIComponent(_draftId)}`;
+  }
+
+  // "Try again" — regenerate a fresh draft from the same interview.
+  function rewriteDraft() {
+    document.getElementById('tio-preview').hidden = true;
+    writeDraft();
   }
 
   function toast(msg) { if (window.toast) window.toast(msg); }

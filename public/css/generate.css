@@ -1385,8 +1385,10 @@
     .tio-sub { margin: 0 0 18px; font-size: 13.5px; color: var(--text-secondary); line-height: 1.5; }
     .tio-rec-row { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
     .tio-mic {
-      width: 56px; height: 56px; flex-shrink: 0; border-radius: 50%; border: 2px solid var(--brand, #0f766e);
-      background: color-mix(in srgb, var(--brand, #0f766e) 8%, var(--bg-surface)); cursor: pointer; font-size: 24px;
+      display: flex; align-items: center; justify-content: center;
+      width: 56px; height: 56px; flex-shrink: 0; padding: 0; border-radius: 50%; border: 2px solid var(--brand, #0f766e);
+      background: color-mix(in srgb, var(--brand, #0f766e) 8%, var(--bg-surface)); cursor: pointer;
+      font-size: 24px; line-height: 1;
       transition: transform 0.1s, background 0.12s;
     }
     .tio-mic:hover { transform: scale(1.05); }

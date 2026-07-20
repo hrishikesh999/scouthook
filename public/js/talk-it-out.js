@@ -18,6 +18,56 @@
   let _modal = null;
   let _voiceCtrl = null;
   let _ta = null;
+  let _lastLine = '';
+
+  // Captain Scout's opening lines — one is spoken + shown each time the modal opens.
+  const CAPTAIN_OPENERS = [
+    "Ahoy — Captain Scout here. Let's find your next post. Tell me: what's one thing from your work this week that stuck with you?",
+    "Captain Scout, reporting in. Forget writing for a second — just talk. What happened recently that you'd tell a colleague about?",
+    "Ahoy! Captain Scout at the helm. What's a win, a lesson, or a moment from this week worth sharing? Say it however it comes out.",
+    "Captain Scout here. Every good post starts with a real story. What's yours this week — a client moment, a decision, a surprise?",
+  ];
+
+  function muted() {
+    try { return localStorage.getItem('tio_captain_muted') === '1'; } catch { return false; }
+  }
+  function setMuted(v) {
+    try { localStorage.setItem('tio_captain_muted', v ? '1' : '0'); } catch {}
+  }
+
+  // Browser-native TTS — no external service, CSP-safe. Picks a stable English
+  // voice when available (voices load async, so we re-query at speak time).
+  function pickVoice() {
+    if (!('speechSynthesis' in window)) return null;
+    const voices = window.speechSynthesis.getVoices() || [];
+    if (!voices.length) return null;
+    return voices.find(v => /en[-_]GB/i.test(v.lang)) // a touch more "Captain"
+        || voices.find(v => /en[-_]US/i.test(v.lang))
+        || voices.find(v => /^en/i.test(v.lang))
+        || voices[0];
+  }
+
+  function speak(text) {
+    if (muted() || !('speechSynthesis' in window)) return;
+    try {
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      const v = pickVoice();
+      if (v) u.voice = v;
+      u.rate = 0.98; u.pitch = 0.95;
+      // Invite the user to answer once the Captain finishes talking.
+      u.onend = () => document.getElementById('tio-mic')?.classList.add('tio-mic--invite');
+      window.speechSynthesis.speak(u);
+    } catch { /* speech is best-effort */ }
+  }
+
+  function captainAsk(line) {
+    _lastLine = line;
+    const says = document.getElementById('tio-captain-says');
+    if (says) says.textContent = line;
+    document.getElementById('tio-mic')?.classList.remove('tio-mic--invite');
+    speak(line);
+  }
 
   function headers() {
     return (typeof window.apiHeaders === 'function')
@@ -30,13 +80,26 @@
     overlay.className = 'tio-overlay';
     overlay.hidden = true;
     overlay.innerHTML = `
-      <div class="tio-modal" role="dialog" aria-modal="true" aria-label="Talk it out">
+      <div class="tio-modal" role="dialog" aria-modal="true" aria-label="Talk it out with Captain Scout">
         <button type="button" class="tio-close" aria-label="Close">×</button>
-        <h2 class="tio-title">Talk it out</h2>
-        <p class="tio-sub">Tell me what happened this week — a client win, a lesson, a moment that stuck. Speak like you'd tell a colleague. I'll shape it into a post.</p>
+
+        <div class="tio-captain">
+          <div class="tio-captain-avatar" aria-hidden="true">🧭</div>
+          <div class="tio-captain-bubble">
+            <div class="tio-captain-name">
+              Captain Scout
+              <span class="tio-captain-tools">
+                <button type="button" class="tio-captain-btn" id="tio-replay" aria-label="Replay" title="Hear it again">🔊</button>
+                <button type="button" class="tio-captain-btn" id="tio-mute" aria-label="Mute Captain Scout" title="Mute">🔈</button>
+              </span>
+            </div>
+            <p class="tio-captain-says" id="tio-captain-says" aria-live="polite">…</p>
+          </div>
+        </div>
+
         <div class="tio-rec-row">
           <button type="button" class="tio-mic" id="tio-mic" aria-label="Start recording">🎙</button>
-          <span class="tio-hint" id="tio-hint">Tap the mic and start talking</span>
+          <span class="tio-hint" id="tio-hint">Tap the mic and answer the Captain</span>
         </div>
         <textarea id="tio-transcript" class="tio-transcript" rows="6" placeholder="…or type it here" aria-label="What you said"></textarea>
         <div class="tio-actions">
@@ -53,6 +116,8 @@
 
     const refreshGo = () => { goBtn.disabled = (_ta.value.trim().length < 15); };
     _ta.addEventListener('input', refreshGo);
+    // Stop the "answer me" pulse once the user engages the mic.
+    micBtn.addEventListener('click', () => micBtn.classList.remove('tio-mic--invite'));
 
     if (typeof window.initVoiceInput === 'function') {
       try {
@@ -68,6 +133,24 @@
     overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
     goBtn.addEventListener('click', submit);
 
+    // Captain Scout controls
+    const replayBtn = overlay.querySelector('#tio-replay');
+    const muteBtn   = overlay.querySelector('#tio-mute');
+    const syncMuteBtn = () => {
+      muteBtn.textContent = muted() ? '🔇' : '🔈';
+      muteBtn.setAttribute('aria-label', muted() ? 'Unmute Captain Scout' : 'Mute Captain Scout');
+      muteBtn.classList.toggle('active', muted());
+    };
+    syncMuteBtn();
+    replayBtn.addEventListener('click', () => { if (_lastLine) speak(_lastLine); });
+    muteBtn.addEventListener('click', () => {
+      const nowMuted = !muted();
+      setMuted(nowMuted);
+      syncMuteBtn();
+      if (nowMuted) { try { window.speechSynthesis?.cancel(); } catch {} }
+      else if (_lastLine) speak(_lastLine);
+    });
+
     return overlay;
   }
 
@@ -75,11 +158,16 @@
     if (document.getElementById('plan-gate-banner')) return;
     if (!_modal) _modal = build();
     _modal.hidden = false;
-    setTimeout(() => _ta?.focus(), 50);
+    // Captain Scout greets and asks the first question (spoken + shown). The
+    // short delay lets the modal paint and gives TTS voices a beat to load.
+    const line = CAPTAIN_OPENERS[Math.floor(Math.random() * CAPTAIN_OPENERS.length)];
+    setTimeout(() => captainAsk(line), 120);
+    setTimeout(() => _ta?.focus(), 60);
   }
 
   function close() {
     try { _voiceCtrl?.stop?.(); } catch {}
+    try { window.speechSynthesis?.cancel(); } catch {}
     if (_modal) _modal.hidden = true;
   }
 

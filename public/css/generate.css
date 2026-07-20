@@ -1393,6 +1393,41 @@
     }
     .tio-mic:hover { transform: scale(1.05); }
     .tio-mic.recording { background: #dc2626; border-color: #dc2626; animation: tio-pulse 1.2s infinite; }
+    /* Gentle pulse to invite the user to answer once the Captain finishes talking */
+    .tio-mic--invite { animation: tio-invite 1.6s ease-in-out infinite; }
+    @keyframes tio-invite {
+      0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand, #0f766e) 45%, transparent); }
+      50%      { box-shadow: 0 0 0 8px color-mix(in srgb, var(--brand, #0f766e) 0%, transparent); }
+    }
+
+    /* ── Captain Scout persona ── */
+    .tio-captain {
+      display: flex; align-items: flex-start; gap: 12px; margin: 4px 0 18px;
+    }
+    .tio-captain-avatar {
+      flex-shrink: 0; width: 46px; height: 46px; display: flex; align-items: center; justify-content: center;
+      font-size: 24px; line-height: 1; border-radius: 50%;
+      background: color-mix(in srgb, var(--brand, #0f766e) 12%, var(--bg-surface));
+      border: 2px solid color-mix(in srgb, var(--brand, #0f766e) 35%, transparent);
+    }
+    .tio-captain-bubble {
+      position: relative; flex: 1; padding: 10px 14px; border-radius: 4px 12px 12px 12px;
+      background: color-mix(in srgb, var(--brand, #0f766e) 6%, var(--bg-surface));
+      border: 1px solid color-mix(in srgb, var(--brand, #0f766e) 20%, var(--border));
+    }
+    .tio-captain-name {
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      font-size: 12px; font-weight: 700; letter-spacing: 0.02em; color: var(--brand, #0f766e);
+      margin-bottom: 3px;
+    }
+    .tio-captain-tools { display: inline-flex; gap: 2px; }
+    .tio-captain-btn {
+      border: none; background: none; cursor: pointer; font-size: 14px; line-height: 1;
+      padding: 2px 4px; border-radius: 6px; opacity: 0.75;
+    }
+    .tio-captain-btn:hover { opacity: 1; background: color-mix(in srgb, var(--brand, #0f766e) 10%, transparent); }
+    .tio-captain-btn.active { opacity: 1; }
+    .tio-captain-says { margin: 0; font-size: 14.5px; line-height: 1.5; color: var(--text, #111); }
     @keyframes tio-pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(220,38,38,0.4); } 50% { box-shadow: 0 0 0 10px rgba(220,38,38,0); } }
     .tio-hint { font-size: 13px; color: var(--text-secondary); }
     .tio-transcript {

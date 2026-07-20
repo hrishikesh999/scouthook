@@ -149,6 +149,14 @@ Shipped:
 > "no original".
 > **Dropped:** element-scoped AI fix (user decision 2026-07-20) — direct manipulation is
 > deterministic and pairs with the onion-skin; scoped AI still carries quality variance.
+>
+> **Polisher extended to design templates (2026-07-20):** the Polisher is template-generic
+> (operates on any html_templates row by id), so design templates get it for free — onion-skin
+> works because design-from-image already stores originals via `POST upload-original/:id`.
+> Entry points: "✨ Polish" button in the design-template list (admin-html-templates.html) and
+> "✨ Polish visually" in the template form header (edit mode). Polisher back button is now
+> context-aware (pack param → pack form; else → design-template list). Raw-HTML-editor escape
+> hatch already round-trips for both.
 
 ## Phase 2 — Studio UI ✅ DONE 2026-07-18 (code) ← MVP line
 

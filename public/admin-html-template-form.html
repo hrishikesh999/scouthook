@@ -390,7 +390,11 @@
   async function showMain() {
     document.getElementById('auth-screen').classList.add('hidden');
     document.getElementById('main').classList.remove('hidden');
-    if (templateId) await loadTemplate();
+    if (templateId) {
+      const pv = document.getElementById('btn-polish-visual');
+      if (pv) { pv.href = `/admin-slide-polisher.html?id=${encodeURIComponent(templateId)}`; pv.style.display = ''; }
+      await loadTemplate();
+    }
   }
 
   // ── Wizard navigation (new) / Tab navigation (edit) ──────────────────────

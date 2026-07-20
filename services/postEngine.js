@@ -20,10 +20,39 @@
  */
 
 const Anthropic = require('@anthropic-ai/sdk');
-const { getSetting } = require('../db');
+const { db, getSetting } = require('../db');
 const { getRecipe } = require('./postRecipes');
-const { buildAuthenticityCore, buildSharedAuthorContext, sanitiseAiTells } = require('./generationCore');
+const { buildAuthenticityCore, buildSharedAuthorContext, sanitiseAiTells, classifyHookShape } = require('./generationCore');
 const { fetchPublishedExamples } = require('./ideaPath');
+
+// Anti-repetition (Authentic Client Engine, Phase 6): when the author's two most
+// recent posts opened with the same hook shape, tell the model to open this one
+// differently. Placed in the USER prompt (not the cached system prefix) so it
+// never invalidates the prompt cache. Returns '' when there's no repetition.
+function firstLineOf(content) {
+  return (String(content || '').split('\n').map(s => s.trim()).find(Boolean) || '').slice(0, 80);
+}
+
+async function buildHookAvoidance(profileId) {
+  if (!profileId) return '';
+  try {
+    const rows = await db.prepare(`
+      SELECT content, hook_shape FROM generated_posts
+      WHERE  profile_id = ? AND content IS NOT NULL
+        AND  status IN ('published', 'scheduled', 'draft')
+      ORDER  BY created_at DESC
+      LIMIT  3
+    `).all(profileId);
+    if (rows.length < 2) return '';
+    // Fall back to on-the-fly classification for rows stamped before Phase 6.
+    const shapeOf = r => r.hook_shape || classifyHookShape(r.content);
+    const s0 = shapeOf(rows[0]);
+    const s1 = shapeOf(rows[1]);
+    if (!s0 || s0 !== s1) return '';
+    const lines = rows.map(r => `- [${shapeOf(r)}] "${firstLineOf(r.content)}"`).join('\n');
+    return `RECENT HOOKS (the author's last posts all opened the same way — do NOT reuse these shapes or rhythms):\n${lines}\nOpen this post with a different kind of first line.`;
+  } catch { return ''; }
+}
 
 const SONNET_MODEL = 'claude-sonnet-4-6';
 
@@ -105,7 +134,9 @@ async function generate(slug, rawIdea, profile, { lengthPreference = 'Medium', c
 
   const examplesBlock = await fetchPublishedExamples(profile.id);
   const systemPrompt  = buildSystemPrompt(recipe, profile, examplesBlock);
-  const userPrompt    = buildUserPrompt(recipe, rawIdea, lengthPreference, ctaIntent);
+  const avoidance     = await buildHookAvoidance(profile.id);
+  const userPrompt    = buildUserPrompt(recipe, rawIdea, lengthPreference, ctaIntent)
+    + (avoidance ? `\n\n${avoidance}` : '');
 
   const message = await client.messages.create({
     model:       SONNET_MODEL,

@@ -189,7 +189,11 @@
     $('#auth-screen').classList.add('hidden');
     $('#main').classList.remove('hidden');
     if (!templateId) { $('#pol-title').textContent = 'No template id in URL'; return; }
-    if (backPack) $('#pol-back').href = `/admin-carousel-pack-form.html?id=${encodeURIComponent(backPack)}`;
+    // Back target is context-aware: a carousel pack → its pack form; otherwise
+    // (design templates) → the design-template list.
+    $('#pol-back').href = backPack
+      ? `/admin-carousel-pack-form.html?id=${encodeURIComponent(backPack)}`
+      : '/admin-html-templates.html';
     $('#pol-raw-link').href = `/admin-html-template-form.html?id=${encodeURIComponent(templateId)}`;
     await loadTemplate();
   }

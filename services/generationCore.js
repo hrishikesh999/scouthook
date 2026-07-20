@@ -100,6 +100,42 @@ function extractAuthorRealText(rawIdea) {
 }
 
 // ---------------------------------------------------------------------------
+// classifyHookShape — coarse archetype of a post's first line (Authentic Client
+// Engine, Phase 6). Each post can pass the quality gate while the *feed* still
+// looks machine-stamped — same opening move every time. Stamping a hook shape at
+// generation lets the engine avoid repeating an author's recent opener.
+//
+// Pure, heuristic (regex only). Returns one of:
+//   question | number_lead | contrast | confession | quote |
+//   second_person | scene | statement
+// ---------------------------------------------------------------------------
+function classifyHookShape(firstLine) {
+  const raw = String(firstLine || '').trim();
+  if (!raw) return 'statement';
+  // First non-empty line only.
+  const line = raw.split('\n').map(s => s.trim()).find(Boolean) || raw;
+  const lower = line.toLowerCase();
+
+  if (/[?]\s*$/.test(line)) return 'question';
+  // Opens with a quotation mark (someone's words).
+  if (/^["“'']/.test(line)) return 'quote';
+  // Leads with a number / money / percentage / multiplier.
+  if (/^(the\s+)?[$£€]?\d/.test(lower) || /^\d+\s*(%|x\b)/.test(lower)) return 'number_lead';
+  // Confession: past mistake / wrong belief.
+  if (/\bi\s+(was\s+wrong|used to|thought|believed|failed|screwed|lost|quit|made a mistake)\b/.test(lower)
+      || /^(i\s+)?(was\s+wrong|my\s+biggest\s+mistake)/.test(lower)) return 'confession';
+  // Contrast: "X but Y", "everyone thinks… / most people…", "not X, Y".
+  if (/\bbut\b/.test(lower) || /^(everyone|most people|nobody|they all)\b/.test(lower)
+      || /\bisn['’]?t\b|\bit['’]?s not\b/.test(lower)) return 'contrast';
+  // Scene: opens with a time/place anchor.
+  if (/^(last|this|yesterday|today|a few|three|two|one)\s+(week|month|year|monday|tuesday|wednesday|thursday|friday|morning|night|day|days|weeks|years|months)\b/.test(lower)
+      || /^(in|back in|it was)\s+\d{4}\b/.test(lower)) return 'scene';
+  // Second person: speaks directly to the reader.
+  if (/^(you|your|you['’]re|if you)\b/.test(lower)) return 'second_person';
+  return 'statement';
+}
+
+// ---------------------------------------------------------------------------
 // assembleBrief — turn an interview (initial idea + coach exchanges) into a
 // single provenance-labelled brief string for the generator.
 //
@@ -327,6 +363,7 @@ module.exports = {
   AI_SUGGESTED_CLOSE,
   extractAuthorRealText,
   assembleBrief,
+  classifyHookShape,
   buildAuthenticityCore,
   // Author context + phrase library.
   buildPhraseLibraryBlock,

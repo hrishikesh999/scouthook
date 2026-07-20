@@ -21,7 +21,20 @@ const { sendEmailToUser } = require('../emails');
 const { resolveProfile } = require('../lib/resolveProfile');
 const { planHasFeature } = require('../lib/planFeatures');
 const { buildVaultContextBlock } = require('../services/vaultContext');
-const { extractAuthorRealText, assembleBrief } = require('../services/generationCore');
+const { extractAuthorRealText, assembleBrief, classifyHookShape } = require('../services/generationCore');
+
+// Stamp the post's hook-shape archetype (Phase 6 variance). Fire-and-forget —
+// never blocks the response; a missing hook_shape just means no avoidance signal
+// for the next post.
+function stampHookShape(postId, content) {
+  if (!postId) return;
+  try {
+    const shape = classifyHookShape(content);
+    Promise.resolve(
+      db.prepare('UPDATE generated_posts SET hook_shape = ? WHERE id = ?').run(shape, postId)
+    ).catch(() => {});
+  } catch { /* non-fatal */ }
+}
 
 // ---------------------------------------------------------------------------
 // Sliding window rate limiter — 10 generations per hour per user.
@@ -515,6 +528,7 @@ router.post('/', async (req, res) => {
           post_type, gate.verdict || null
         );
         const primaryId = primaryInsert.lastInsertRowid;
+        stampHookShape(primaryId, result.post);
 
         const primaryQuality = buildQualityPayload(gate, 1, true);
 
@@ -675,6 +689,7 @@ router.post('/', async (req, res) => {
         primaryGate.verdict || null
       );
       const primaryId = primaryInsert.lastInsertRowid;
+      stampHookShape(primaryId, post);
 
       // Link vault idea to this post and mark as used
       if (vaultIdea) {

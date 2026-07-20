@@ -194,3 +194,27 @@ describe('generationCore — assembleBrief (interview provenance)', () => {
     expect(core.assembleBrief()).toBe('');
   });
 });
+
+describe('generationCore — classifyHookShape (Phase 6 variance)', () => {
+  const cases = [
+    ['What if your best client is the one you almost fired?', 'question'],
+    ['"I will never hire an agency again," she said.', 'quote'],
+    ['$40k lost in a single afternoon.', 'number_lead'],
+    ['3x more replies once I stopped following up.', 'number_lead'],
+    ['I was wrong about cold outreach for years.', 'confession'],
+    ['Everyone tells you to niche down. They are wrong.', 'contrast'],
+    ['Great salespeople listen, but the best ones stay silent.', 'contrast'],
+    ['Last Tuesday a client called me at 6am.', 'scene'],
+    ['You are pricing your services wrong.', 'second_person'],
+    ['Consistency beats intensity in B2B content.', 'statement'],
+  ];
+  test.each(cases)('classifies %j as %s', (line, expected) => {
+    expect(core.classifyHookShape(line)).toBe(expected);
+  });
+
+  test('uses the first non-empty line and never throws', () => {
+    expect(core.classifyHookShape('\n\n  Why does this keep happening?\nmore text')).toBe('question');
+    expect(core.classifyHookShape('')).toBe('statement');
+    expect(core.classifyHookShape(null)).toBe('statement');
+  });
+});

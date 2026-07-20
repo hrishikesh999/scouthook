@@ -136,6 +136,7 @@
         </div>
         <div class="template-row__actions">
           <button class="btn btn--secondary btn--sm js-edit">Edit</button>
+          <button class="btn btn--secondary btn--sm js-polish" title="Visual editor — click any element to adjust position, spacing, and colors. No code.">✨ Polish</button>
           <button class="btn btn--secondary btn--sm js-toggle">${t.active ? 'Deactivate' : 'Activate'}</button>
           <button class="btn btn--secondary btn--sm js-regen">⟳ Thumbnail</button>
           <button class="btn btn--secondary btn--sm btn--danger js-delete">Delete</button>
@@ -149,6 +150,10 @@
 
       row.querySelector('.js-edit').addEventListener('click', () => {
         location.href = `/admin-html-template-form.html?id=${id}`;
+      });
+
+      row.querySelector('.js-polish')?.addEventListener('click', () => {
+        location.href = `/admin-slide-polisher.html?id=${id}`;
       });
 
       row.querySelector('.js-toggle').addEventListener('click', () => toggleTemplate(id));

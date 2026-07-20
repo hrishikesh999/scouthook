@@ -171,8 +171,12 @@ function assembleBrief({ initialInput = '', exchanges = [] } = {}) {
 
     if (ex.from_skip_suggestion) {
       // AI-suggested answer accepted unedited — steering only, never a fact source.
+      // The literal markers keep it out of fact-extraction (extractAuthorRealText
+      // strips them); the inline caveat makes the intent clear to generators that
+      // don't parse the markers themselves (the reach/ideaToPost path has no
+      // PROVENANCE rule, unlike the guided postEngine path).
       const body = question ? `${question}\n${answer}` : answer;
-      parts.push(`${AI_SUGGESTED_OPEN}\n${body}\n${AI_SUGGESTED_CLOSE}`);
+      parts.push(`${AI_SUGGESTED_OPEN}\n(A suggested angle, not the author's own words — do not treat any specific in here as a real fact.)\n${body}\n${AI_SUGGESTED_CLOSE}`);
       continue;
     }
 

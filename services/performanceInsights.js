@@ -139,8 +139,8 @@ async function getWorkspaceInsights(workspaceId, { days = 90 } = {}) {
              reactions, likes, comments, performance_tag
       FROM   generated_posts
       WHERE  tenant_id = ? AND status = 'published'
-        AND  published_at > now() - ($2::text || ' days')::interval
-    `).all(workspaceId, String(days));
+        AND  published_at > now() - (? * interval '1 day')
+    `).all(workspaceId, days);
   } catch (err) {
     console.error('[performanceInsights] query failed:', err.message);
     return { insufficient_data: true, reason: 'query_failed' };

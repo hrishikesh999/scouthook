@@ -749,7 +749,7 @@ router.get('/post/:postId', async (req, res) => {
       SELECT id, content, quality_score, quality_flags, passed_gate,
              hook_b, hook_b_archetype, cta_alternatives, format_slug, funnel_type,
              asset_url, asset_preview_url, asset_type, asset_slide_count, first_comment,
-             archetype_used, idea_input, post_type, quality_verdict, status, miy_spans_edited
+             archetype_used, idea_input, post_type, quality_verdict, status, miy_spans_edited, created_at
       FROM generated_posts
       WHERE id = ? AND tenant_id = ?
     `).get(postId, tenantId);
@@ -806,6 +806,7 @@ router.get('/post/:postId', async (req, res) => {
       assetSlideCount:     row.asset_slide_count || 0,
       status:              row.status || null,
       miy_spans_edited:    row.miy_spans_edited || 0,
+      created_at:          row.created_at || null,
       formatReco,
     },
   });

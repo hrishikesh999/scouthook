@@ -715,10 +715,14 @@ async function loadPost(id) {
 
     checkIfScheduled(currentPostId);
 
-    // Make It Yours — offer the personalisation pass on draft posts that haven't
-    // been scheduled/published yet and haven't already been personalised.
+    // Make It Yours — offer the personalisation pass on RECENT draft posts that
+    // haven't been scheduled/published or already personalised. The recency gate
+    // keeps it from firing a suggestion call on the user's whole back-catalogue
+    // every time they open an old draft.
+    const _miyFresh = p.created_at
+      && (Date.now() - new Date(p.created_at).getTime()) < 7 * 24 * 60 * 60 * 1000;
     if (window.MakeItYours && !scheduleEditLocked
-        && p.status !== 'published' && !(p.miy_spans_edited > 0)) {
+        && p.status !== 'published' && !(p.miy_spans_edited > 0) && _miyFresh) {
       window.MakeItYours.init({ postId: id }).catch(() => {});
     }
 

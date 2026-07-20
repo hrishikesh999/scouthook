@@ -1448,6 +1448,21 @@
     }
     .tio-skip:hover { color: var(--brand, #0f766e); }
     .tio-skip:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* Confirm step — Captain proposes the post-type/format before writing */
+    .tio-confirm-label { margin: 6px 0 10px; font-size: 13px; font-weight: 700; color: var(--text, #111); }
+    .tio-confirm-types { display: flex; flex-wrap: wrap; gap: 8px; }
+    .tio-type-chip {
+      border: 1.5px solid var(--border); background: var(--bg-surface, #fff); color: var(--text-secondary);
+      cursor: pointer; font-size: 13px; font-weight: 600; padding: 7px 14px; border-radius: 999px;
+      transition: border-color 0.12s, color 0.12s, background 0.12s;
+    }
+    .tio-type-chip:hover { border-color: var(--brand, #0f766e); color: var(--brand, #0f766e); }
+    .tio-type-chip.active {
+      border-color: var(--brand, #0f766e); color: var(--brand, #0f766e);
+      background: color-mix(in srgb, var(--brand, #0f766e) 8%, var(--bg-surface, #fff));
+    }
+    .tio-confirm-format { margin: 12px 0 0; font-size: 12.5px; color: var(--text-secondary); line-height: 1.45; }
     .tio-go {
       border: none; background: var(--brand, #0f766e); color: #fff; cursor: pointer;
       font-size: 14px; font-weight: 600; padding: 9px 18px; border-radius: 9px;

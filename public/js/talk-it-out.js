@@ -35,6 +35,24 @@
   let _count = 0;             // follow-ups answered
   let _pendingQ = null, _pendingGap = null;
 
+  // Post-type chips shown in the confirmation step (friendly labels).
+  const TYPE_LABELS = {
+    story:           'Story',
+    lessons_learned: 'Lesson learned',
+    results:         'Result / case study',
+    contrarian:      'Hot take',
+    framework:       'How-to',
+    bts:             'Behind the scenes',
+    trust:           'Insight',
+  };
+  const TYPE_ORDER = ['story', 'lessons_learned', 'results', 'contrarian', 'framework', 'bts', 'trust'];
+  const FORMAT_PHRASE = {
+    'text':        'as a text post',
+    'carousel':    'as a carousel',
+    'text+visual': 'as a text post with a visual',
+  };
+  let _chosenType = 'story';
+
   const CAPTAIN_OPENERS = [
     "Ahoy — Captain Scout here. Let's find your next post. Tell me: what's one thing from your work this week that stuck with you?",
     "Captain Scout, reporting in. Forget writing for a second — just talk. What happened recently that you'd tell a colleague about?",
@@ -113,16 +131,29 @@
           </div>
         </div>
 
-        <div class="tio-rec-row">
-          <button type="button" class="tio-mic" id="tio-mic" aria-label="Start recording">🎙</button>
-          <span class="tio-hint" id="tio-hint">Tap the mic and answer the Captain</span>
+        <div id="tio-interview">
+          <div class="tio-rec-row">
+            <button type="button" class="tio-mic" id="tio-mic" aria-label="Start recording">🎙</button>
+            <span class="tio-hint" id="tio-hint">Tap the mic and answer the Captain</span>
+          </div>
+          <textarea id="tio-transcript" class="tio-transcript" rows="4" placeholder="…or type your answer here" aria-label="Your answer"></textarea>
+          <div class="tio-actions">
+            <button type="button" class="tio-cancel">Cancel</button>
+            <button type="button" class="tio-skip" id="tio-skip">Just write it →</button>
+            <button type="button" class="tio-go" id="tio-go" disabled>Answer →</button>
+          </div>
         </div>
-        <textarea id="tio-transcript" class="tio-transcript" rows="4" placeholder="…or type your answer here" aria-label="Your answer"></textarea>
-        <div class="tio-actions">
-          <button type="button" class="tio-cancel">Cancel</button>
-          <button type="button" class="tio-skip" id="tio-skip">Just write it →</button>
-          <button type="button" class="tio-go" id="tio-go" disabled>Answer →</button>
+
+        <div id="tio-confirm" hidden>
+          <p class="tio-confirm-label">What kind of post is this?</p>
+          <div class="tio-confirm-types" id="tio-confirm-types" role="group" aria-label="Post type"></div>
+          <p class="tio-confirm-format" id="tio-confirm-format"></p>
+          <div class="tio-actions">
+            <button type="button" class="tio-skip" id="tio-back">← Keep talking</button>
+            <button type="button" class="tio-go" id="tio-write">Write it in my words →</button>
+          </div>
         </div>
+
         <p class="tio-status" id="tio-status" hidden></p>
       </div>`;
     document.body.appendChild(overlay);
@@ -149,6 +180,8 @@
     overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
     goBtn.addEventListener('click', submitAnswer);
     overlay.querySelector('#tio-skip').addEventListener('click', finishInterview);
+    overlay.querySelector('#tio-write').addEventListener('click', generate);
+    overlay.querySelector('#tio-back').addEventListener('click', backToInterview);
 
     // Captain Scout controls
     const replayBtn = overlay.querySelector('#tio-replay');
@@ -173,8 +206,12 @@
 
   function resetState() {
     _phase = 'opener'; _brief = ''; _history = []; _exchanges = [];
-    _count = 0; _pendingQ = null; _pendingGap = null;
+    _count = 0; _pendingQ = null; _pendingGap = null; _chosenType = 'story';
     if (_ta) _ta.value = '';
+    const iv = document.getElementById('tio-interview');
+    const cf = document.getElementById('tio-confirm');
+    if (iv) iv.hidden = false;
+    if (cf) cf.hidden = true;
   }
 
   function setStatus(msg) {
@@ -258,10 +295,10 @@
     captainAsk(_pendingQ);
   }
 
-  // Compose the interview payload from whatever's captured (plus any un-sent text
-  // in the box) and hand straight to generation.
+  // Interview done — capture any un-sent text, then move to the confirm step
+  // (Captain proposes the post-type/format before writing).
   function finishInterview() {
-    if (_phase === 'done') return;
+    if (_phase === 'done' || _phase === 'confirm') return;
     const pending = (_ta.value || '').trim();
     if (_phase === 'opener') {
       if (pending) _brief = pending;
@@ -269,39 +306,102 @@
       _exchanges.push({ question: _pendingQ, gap: _pendingGap, answer: pending, from_skip_suggestion: false });
     }
     if (!_brief && !_exchanges.length) { toast('Tell the Captain a bit first'); return; }
-    generate();
+    enterConfirm();
+  }
+
+  // Captain detects the post-type + format (and banks leftover stories), then
+  // asks the user to confirm before generating.
+  async function enterConfirm() {
+    _phase = 'confirm';
+    stopRecording();
+    setBusy(true);
+    setStatus('Captain Scout is sizing it up…');
+
+    const transcript = [_brief, ..._exchanges.map(e => e.answer)].filter(Boolean).join('\n\n');
+    let data = {};
+    try {
+      const res = await fetch(STRUCTURE_API, {   // also banks leftover stories server-side
+        method: 'POST',
+        headers: { ...headers(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transcript }),
+      });
+      data = await res.json();
+    } catch { data = {}; }
+
+    setStatus('');
+    setBusy(false);
+
+    const detectedType = TYPE_LABELS[data.suggested_post_type] ? data.suggested_post_type : 'story';
+    const format = data.recommended_format || 'text';
+    _chosenType = detectedType;
+
+    renderTypeChips(detectedType);
+    const fmtEl = document.getElementById('tio-confirm-format');
+    if (fmtEl) {
+      const phrase = FORMAT_PHRASE[format] || 'as a text post';
+      fmtEl.textContent = format === 'text'
+        ? "I'll write it as a text post — you can turn it into a carousel in the editor."
+        : `Looks like this could land well ${phrase} — you can set that up in the editor.`;
+    }
+
+    document.getElementById('tio-interview').hidden = true;
+    document.getElementById('tio-confirm').hidden = false;
+
+    captainAsk(`Here's what I'm hearing — a ${TYPE_LABELS[detectedType].toLowerCase()}. I'll organise it in your own words. Sound right? Pick another if not.`);
+  }
+
+  function renderTypeChips(selected) {
+    const wrap = document.getElementById('tio-confirm-types');
+    if (!wrap) return;
+    // Show the ordered set, plus the detected type if it's outside the set.
+    const types = TYPE_ORDER.includes(selected) ? TYPE_ORDER : [selected, ...TYPE_ORDER];
+    wrap.innerHTML = '';
+    types.forEach(t => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'tio-type-chip' + (t === selected ? ' active' : '');
+      b.textContent = TYPE_LABELS[t] || t;
+      b.addEventListener('click', () => {
+        _chosenType = t;
+        wrap.querySelectorAll('.tio-type-chip').forEach(c => c.classList.remove('active'));
+        b.classList.add('active');
+      });
+      wrap.appendChild(b);
+    });
+  }
+
+  // "Keep talking" — return to the interview to add more before writing.
+  function backToInterview() {
+    _phase = 'followup';
+    _pendingQ = 'Anything else worth adding before I write it?';
+    _pendingGap = null;
+    document.getElementById('tio-confirm').hidden = true;
+    document.getElementById('tio-interview').hidden = false;
+    if (_ta) _ta.value = '';
+    captainAsk(_pendingQ);
+    setTimeout(() => _ta?.focus(), 60);
   }
 
   function generate() {
     _phase = 'done';
     stopRecording();
-    bankLeftovers(); // fire-and-forget: mine any extra stories into the vault
 
     const initialInput = _brief;
     const exchanges = _exchanges.slice();
+    const chosenType = _chosenType || POST_TYPE;
 
-    captainAsk('Aye — writing your post now.');
-    setStatus('Charting your post…');
+    captainAsk('Aye — writing it in your words now.');
+    setStatus('Organising your post…');
 
     setTimeout(() => {
       close();
       if (typeof window.startGenerationFromInterview === 'function') {
-        window.startGenerationFromInterview(initialInput, exchanges, POST_TYPE);
+        // organize mode: the AI edits/organises the author's exact words, it does not write.
+        window.startGenerationFromInterview(initialInput, exchanges, chosenType, { mode: 'organize' });
       } else if (typeof window.startInterviewWithBrief === 'function') {
         window.startInterviewWithBrief(composeFallbackBrief(initialInput, exchanges), '💬 Captain Scout');
       }
     }, 500);
-  }
-
-  // Bank extra stories the founder mentioned (server dedupes / guards). Best-effort.
-  function bankLeftovers() {
-    const transcript = [_brief, ..._exchanges.map(e => e.answer)].filter(Boolean).join('\n\n');
-    if (transcript.trim().length < 40) return;
-    fetch(STRUCTURE_API, {
-      method: 'POST',
-      headers: { ...headers(), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ transcript }),
-    }).catch(() => {});
   }
 
   // Fallback only if startGenerationFromInterview isn't present: a readable brief

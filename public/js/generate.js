@@ -2387,8 +2387,9 @@ window.startInterviewWithBrief = function (briefText, label) {
 // runs its own adaptive Q&A loop). Skips the on-page coach entirely and hands the
 // provenance-labelled { initialInput, exchanges } payload straight to generation
 // (default Medium length; the user tunes length/voice in the editor afterward).
-window.startGenerationFromInterview = function (initialInput, exchanges, postType) {
+window.startGenerationFromInterview = function (initialInput, exchanges, postType, opts) {
   if (document.getElementById('plan-gate-banner')) return;
+  opts = opts || {};
   selectedType        = postType || 'reach';
   selectedVaultIdeaId = null;
   chat.init(selectedType); // reset coach state + placeholders before we take over
@@ -2396,6 +2397,7 @@ window.startGenerationFromInterview = function (initialInput, exchanges, postTyp
     enrichedIdea:       initialInput,
     interview:          { initialInput, exchanges: Array.isArray(exchanges) ? exchanges : [] },
     skipSubstanceCheck: true,
+    generationMode:     opts.mode || null,   // 'organize' → editor, not writer
   });
 };
 
@@ -2499,6 +2501,7 @@ async function triggerGenerate(opts = {}) {
     if (_ideaCard.active && _ideaCard.answers.length)   body.idea_answers         = _ideaCard.answers.join('\n');
     if (opts.enrichedIdea || opts.skipSubstanceCheck)   body.skip_substance_check = true;
     if (opts.interview)                                 body.interview            = opts.interview;
+    if (opts.generationMode)                            body.generation_mode      = opts.generationMode;
     if (shouldStream)                                   body.streaming            = true;
     // Unified Short/Medium/Long choice — every flow (guided, reach/convert coach,
     // idea-card and vault) collects it through the shared length picker.

@@ -221,7 +221,10 @@ router.post('/', async (req, res) => {
 
   const { path: genPath, vault_idea_id, skip_substance_check, interview_answers, interview, funnel_type: bodyFunnelType,
           archetype_override, source, post_type, convert_cta_intent,
-          tension_statement, length_preference, cta_intent } = req.body;
+          tension_statement, length_preference, cta_intent, generation_mode } = req.body;
+  // "Organize" mode (Captain Scout): the AI acts as an editor, not a writer —
+  // it organises the author's own words rather than composing new prose.
+  const organizeMode = generation_mode === 'organize';
   let { raw_idea } = req.body;
 
   // Idea Engine: generations that started from a dashboard "Today's 3" card carry
@@ -477,15 +480,25 @@ router.post('/', async (req, res) => {
       try {
         const dispatch = POST_TYPE_DISPATCH[post_type];
         const isLegacy = !dispatch && LEGACY_ARCHETYPES.includes(post_type);
-        if (!dispatch && !isLegacy) {
+        if (!organizeMode && !dispatch && !isLegacy) {
           sseWrite('error', { error: 'post_type_required' });
           return res.end();
         }
 
-        sseWrite('step', { step: 'analyzing', label: dispatch ? dispatch.label : 'Crafting your post...' });
+        sseWrite('step', { step: 'analyzing', label: organizeMode ? 'Organising your words...' : (dispatch ? dispatch.label : 'Crafting your post...') });
 
         let result, gate, archetypeUsed = null, contentFeedback = null;
-        if (dispatch) {
+        if (organizeMode) {
+          const { organizePost } = require('../services/organizePost');
+          const org = await organizePost(raw_idea, profile, { postType: post_type, lengthPreference: length_preference });
+          result = { post: org.post, synthesis: org.synthesis };
+          gate = runQualityGate(
+            result.post,
+            { ...gateOptions({ format_slug: IDEA_SLUG, content: result.post }, profile, 'idea', null, post_type),
+              postType: post_type,
+              authorRealText: extractAuthorRealText(raw_idea) }
+          );
+        } else if (dispatch) {
           ({ result, gate } = await runGuidedGeneration(post_type, raw_idea, profile, { length_preference, cta_intent }));
         } else {
           const legacy = await ideaToPost(raw_idea, profile, {
@@ -558,8 +571,19 @@ router.post('/', async (req, res) => {
       }
     }
 
+    // ── Organize mode (non-streaming) — editor, not writer ───────────────────
+    if (organizeMode) {
+      const { organizePost } = require('../services/organizePost');
+      const org = await organizePost(raw_idea, profile, { postType: post_type, lengthPreference: length_preference });
+      const primaryGate = runQualityGate(
+        org.post,
+        { ...gateOptions({ format_slug: IDEA_SLUG, content: org.post }, profile, 'idea', null, post_type),
+          postType: post_type,
+          authorRealText: extractAuthorRealText(raw_idea) }
+      );
+      ideaResult = { synthesis: org.synthesis, post: org.post, archetypeUsed: null, primaryGate, contentFeedback: null };
+    } else if (POST_TYPE_DISPATCH[post_type]) {
     // ── Guided post-type path (non-streaming) — all 10 types via one dispatch ─
-    if (POST_TYPE_DISPATCH[post_type]) {
       const { result, gate } = await runGuidedGeneration(post_type, raw_idea, profile, { length_preference, cta_intent });
       ideaResult = {
         synthesis:       result.synthesis,
@@ -1152,6 +1176,13 @@ router.post('/structure-brief', async (req, res) => {
     const { structureBrief } = require('../services/briefStructurer');
     const structured = await structureBrief(transcript);
 
+    // Recommended format for the Captain Scout confirmation step (pure heuristic).
+    let recommendedFormat = 'text';
+    try {
+      const { recommendFormat } = require('../services/formatRecommender');
+      recommendedFormat = recommendFormat({ postType: structured.suggested_post_type || '', brief: transcript }).format;
+    } catch { /* default text */ }
+
     // Bank leftover stories for future posts (fire-and-forget, never blocks the response).
     const leftovers = Array.isArray(structured.leftover_facts) ? structured.leftover_facts : [];
     if (leftovers.length) {
@@ -1181,6 +1212,7 @@ router.post('/structure-brief', async (req, res) => {
       tension:             structured.tension,
       audience_hook:       structured.audience_hook,
       suggested_post_type: structured.suggested_post_type,
+      recommended_format:  recommendedFormat,
       leftover_count:      leftovers.length,
     });
   } catch (err) {

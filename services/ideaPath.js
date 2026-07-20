@@ -41,10 +41,16 @@ function firstBelief(profile) {
 async function fetchPublishedExamples(profileId) {
   if (!profileId) return '';
   try {
+    // Prefer the author's highest-engagement published posts as the voice
+    // calibration set (comments weighted 3× — they're the conversation signal),
+    // falling back to quality score then recency. Un-synced posts score 0 and
+    // fall to the tie-breakers, so this degrades to the old behaviour when no
+    // metrics exist yet. (Authentic Client Engine, Phase 4.3.)
     const rows = await db.prepare(`
       SELECT content FROM generated_posts
       WHERE profile_id = ? AND status = 'published' AND content IS NOT NULL
-      ORDER BY quality_score DESC, published_at DESC
+      ORDER BY (COALESCE(reactions, 0) + 3 * COALESCE(comments, 0)) DESC,
+               quality_score DESC, published_at DESC
       LIMIT 3
     `).all(profileId);
     if (!rows.length) return '';

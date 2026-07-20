@@ -17,7 +17,23 @@ async function init() {
   loadVoiceProfileBar();
   loadVaultNudge();
   loadPerformance();
+  loadWhatsWorking();
   loadLinkedInExpiryBanner();
+}
+
+/* ── What's working — author-relative performance insight ────── */
+async function loadWhatsWorking() {
+  const el = document.getElementById('whats-working');
+  const txt = document.getElementById('ww-text');
+  if (!el || !txt) return;
+  try {
+    const res = await fetch('/api/posts/insights', { headers: apiHeaders() });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!data.ok || data.insufficient_data || !data.insights || !data.insights.length) return;
+    txt.textContent = data.insights[0].text;
+    el.hidden = false;
+  } catch { /* non-fatal */ }
 }
 
 window.__pageInit = init;

@@ -4516,6 +4516,29 @@ body.has-trial-banner #main-content {
   margin-top: var(--space-6);
 }
 
+/* What's working — performance insight banner (Authentic Client Engine) */
+.whats-working {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin-top: var(--space-6);
+  padding: 14px 18px;
+  border: 1px solid color-mix(in srgb, var(--brand) 30%, var(--border));
+  border-radius: var(--radius-lg, 14px);
+  background: color-mix(in srgb, var(--brand) 6%, var(--bg-surface, #fff));
+  text-decoration: none;
+  transition: border-color 0.14s, box-shadow 0.14s;
+}
+.whats-working:hover {
+  border-color: var(--brand);
+  box-shadow: 0 2px 14px rgba(15, 118, 110, 0.12);
+}
+.whats-working .ww-icon { flex-shrink: 0; font-size: 18px; }
+.whats-working .ww-text { flex: 1; font-size: 14px; line-height: 1.45; color: var(--text-body, var(--text)); font-weight: 500; }
+.whats-working .ww-cta { flex-shrink: 0; font-size: 13px; font-weight: 700; color: var(--brand); white-space: nowrap; }
+
 .voice-profile-link {
   box-sizing: border-box;
   display: flex;

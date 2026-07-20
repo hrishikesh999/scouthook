@@ -170,6 +170,14 @@ async function getRecommendedType(tenantId) {
     if (total < 4) return 'reach';
     const counts = { reach: 0, trust: 0, convert: 0 };
     for (const row of rows) counts[row.post_type] = Number(row.n);
+
+    // Performance bias (Authentic Client Engine, Phase 4.3): when the author has
+    // a clear, well-sampled engagement winner among reach/trust/convert, anchor
+    // Today's 3 to it — UNLESS it's already dominating the last 30 days (>55%),
+    // in which case fall back to mix-balance so the feed keeps some variety.
+    const winner = await getEngagementWinner(tenantId);
+    if (winner && counts[winner] / total < 0.55) return winner;
+
     const targets = { reach: 0.50, trust: 0.30, convert: 0.20 };
     let worstType = 'reach', worstDelta = -Infinity;
     for (const [type, target] of Object.entries(targets)) {
@@ -178,6 +186,37 @@ async function getRecommendedType(tenantId) {
     }
     return worstType;
   } catch { return 'reach'; }
+}
+
+// The author's best-performing funnel type by engagement (comments weighted 3×),
+// or null when there isn't enough signal. Guards: ≥6 scored posts, winner has
+// ≥3 posts and beats the runner-up average by ≥1.5×. Never throws.
+async function getEngagementWinner(tenantId) {
+  try {
+    const rows = await db.prepare(`
+      SELECT post_type,
+             COUNT(*) AS n,
+             AVG(COALESCE(reactions, 0) + 3 * COALESCE(comments, 0)) AS avg_eng
+      FROM   generated_posts
+      WHERE  tenant_id = ?
+        AND  status = 'published'
+        AND  post_type IN ('reach', 'trust', 'convert')
+        AND  published_at > NOW() - INTERVAL '90 days'
+      GROUP  BY post_type
+    `).all(tenantId);
+    const total = rows.reduce((s, r) => s + Number(r.n), 0);
+    if (total < 6) return null;
+
+    const ranked = rows
+      .filter(r => Number(r.n) >= 3)
+      .map(r => ({ type: r.post_type, avg: Number(r.avg_eng) || 0 }))
+      .sort((a, b) => b.avg - a.avg);
+    if (ranked.length < 2) return null;
+
+    const [top, next] = ranked;
+    if (top.avg <= 0) return null;
+    return top.avg >= 1.5 * Math.max(next.avg, 0.0001) ? top.type : null;
+  } catch { return null; }
 }
 
 // ---------------------------------------------------------------------------

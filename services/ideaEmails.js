@@ -109,9 +109,17 @@ async function getTodaysCards(userId, workspaceId) {
   return cards;
 }
 
-function buildVars(card, cardCount, cadence) {
+function buildVars(card, cardCount, cadence, insightText = '') {
   const appUrl = APP_URL();
   const hook = String(card.hook || '').trim();
+  // "What's working" line — only rendered when there's a well-sampled insight.
+  // The variable holds the full HTML block (empty string ⇒ nothing renders),
+  // since the email engine is a plain {{token}} string replace with no sections.
+  const safeInsight = String(insightText || '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const whats_working_line = safeInsight
+    ? `<p style="margin:20px 0 0;font-size:13px;color:#0F766E;font-weight:600;">📈 ${safeInsight}</p>`
+    : '';
   const writeParams = new URLSearchParams({
     type: URL_TYPE[card.post_type] || 'reach',
     idea: card.is_question ? hook : (card.textarea_input || hook),
@@ -128,6 +136,7 @@ function buildVars(card, cardCount, cadence) {
     more_ideas_line: others > 0
       ? `${others} more idea${others === 1 ? '' : 's'} waiting on your dashboard.`
       : 'More ideas waiting on your dashboard.',
+    whats_working_line,
     cadence_label: CADENCE_LABEL[cadence || 'weekly'] || 'weekly',
   };
 }
@@ -189,10 +198,18 @@ async function runIdeaEmailCron() {
       // Card #1: first regular card; a question card only if that's all there is
       const card = cards.find(c => !c.is_question) || cards[0];
 
+      // What's-working insight (guarded; empty string when the sample is thin).
+      let insightText = '';
+      try {
+        const { getWorkspaceInsights } = require('./performanceInsights');
+        const ins = await getWorkspaceInsights(u.workspace_id);
+        if (ins && !ins.insufficient_data && ins.insights?.length) insightText = ins.insights[0].text;
+      } catch { /* non-fatal */ }
+
       await sendEmailToUser(
         u.user_id,
         'daily-ideas',
-        buildVars(card, cards.length, cadence),
+        buildVars(card, cards.length, cadence, insightText),
         { dedupKey, withinHours: 24 }
       );
       logCardEvent('idea_email_sent', u.user_id, u.workspace_id, {

@@ -133,8 +133,22 @@ Shipped:
 > brand mappings and reset dims to square. Pack form's per-slide button now opens the Polisher
 > ("✨ Polish slide"); raw editor remains an escape hatch inside it. Decision: build focused
 > in-house tool over GrapesJS-class builders (component-model round-trip mangles script tags →
-> would corrupt the manifest; whole-slide "Refine" stays deprecated in favor of future
-> element-scoped AI fix = Polisher v2).
+> would corrupt the manifest; whole-slide "Refine" stays deprecated).
+>
+> **Slide Polisher v2 (2026-07-20) — direct manipulation:** drag-to-move (positioned elements)
+> + 8/3 resize handles, hand-rolled on the existing parent-overlay boxes (no library — Moveable
+> rejected: cross-iframe + CSS-scale coordinate friction outweighs hand-rolling on our pristine-
+> iframe architecture). Screen→canvas coords via `#pol-boxes` rect ÷ scale; position deltas map
+> 1:1. Snap-to canvas edges/center (left/center/right, top/mid/bottom) with rose guide lines,
+> 6px threshold; undo snapshot deferred until real motion (a plain click never dirties). Handles
+> counter-scaled to stay constant on-screen at any zoom. Box-sizing-aware resize base (offsetW
+> for border-box, computed width for content-box) prevents jump.
+> **Onion-skin fix:** carousel conversion now stores each slide's uploaded source at
+> `buildOriginalImageKey(templateId)` (main + variant paths) — the v1 onion-skin overlay and
+> `GET :id/original` had no source for carousel slides before this; it silently always showed
+> "no original".
+> **Dropped:** element-scoped AI fix (user decision 2026-07-20) — direct manipulation is
+> deterministic and pairs with the onion-skin; scoped AI still carries quality variance.
 
 ## Phase 2 — Studio UI ✅ DONE 2026-07-18 (code) ← MVP line
 

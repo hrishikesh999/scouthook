@@ -174,6 +174,14 @@ async function _runConversionJob(jobId, images, roles, meta) {
       const htmlKey = storage.buildCarouselSlideKey(templateId);
       await storage.uploadAdmin(Buffer.from(cleanHtml, 'utf8'), htmlKey, 'text/html');
 
+      // Store the uploaded source image as the slide's "original" — the Slide
+      // Polisher's onion-skin overlay and element-scoped AI fix both read it.
+      try {
+        await storage.uploadAdmin(images[i].buffer, storage.buildOriginalImageKey(templateId), images[i].contentType || 'image/png');
+      } catch (err) {
+        console.warn('[adminCarouselPacks] original image store failed for slide %d: %s', i + 1, err.message);
+      }
+
       let thumbnailKey = null;
       try {
         const thumbBuf = await generateTemplateThumbnail(cleanHtml, manifest);
@@ -410,6 +418,12 @@ async function _runVariantJob(jobId, pack, base, role, images) {
       const templateId = crypto.randomUUID();
       const htmlKey = storage.buildCarouselSlideKey(templateId);
       await storage.uploadAdmin(Buffer.from(cleanHtml, 'utf8'), htmlKey, 'text/html');
+
+      try {
+        if (images[i]) await storage.uploadAdmin(images[i].buffer, storage.buildOriginalImageKey(templateId), images[i].contentType || 'image/png');
+      } catch (err) {
+        console.warn('[adminCarouselPacks] variant original store failed: %s', err.message);
+      }
 
       let thumbnailKey = null;
       try {

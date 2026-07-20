@@ -21,7 +21,17 @@
     .pol-box { position:absolute; pointer-events:none; }
     .pol-box--hover { outline:1.5px dashed rgba(15,118,110,.65); }
     .pol-box--sel { outline:2.5px solid #0f766e; }
-    .pol-box--sel .pol-box__tag { position:absolute; top:-22px; left:-2px; background:#0f766e; color:#fff; font:600 10.5px/1 Inter,sans-serif; padding:4px 8px; border-radius:4px 4px 0 0; white-space:nowrap; }
+    .pol-box--sel.movable { pointer-events:auto; cursor:move; }
+    .pol-box--sel .pol-box__tag { position:absolute; top:-22px; left:-2px; background:#0f766e; color:#fff; font:600 10.5px/1 Inter,sans-serif; padding:4px 8px; border-radius:4px 4px 0 0; white-space:nowrap; pointer-events:none; }
+    /* Resize handles — sized in canvas px, so they look right at any zoom via counter-scale */
+    .pol-h { position:absolute; width:11px; height:11px; background:#fff; border:2px solid #0f766e; border-radius:50%; pointer-events:auto; transform:translate(-50%,-50%); z-index:2; }
+    .pol-h[data-h="nw"]{cursor:nwse-resize} .pol-h[data-h="ne"]{cursor:nesw-resize}
+    .pol-h[data-h="se"]{cursor:nwse-resize} .pol-h[data-h="sw"]{cursor:nesw-resize}
+    .pol-h[data-h="n"]{cursor:ns-resize} .pol-h[data-h="s"]{cursor:ns-resize}
+    .pol-h[data-h="e"]{cursor:ew-resize} .pol-h[data-h="w"]{cursor:ew-resize}
+    .pol-guide { position:absolute; background:#f43f5e; pointer-events:none; z-index:1; }
+    .pol-guide--v { width:1px; top:0; height:100%; }
+    .pol-guide--h { height:1px; left:0; width:100%; }
     /* ── Toolbar over stage ── */
     .pol-stagebar { position:absolute; top:10px; left:50%; transform:translateX(-50%); z-index:5; display:flex; gap:8px; align-items:center; background:#fff; border:1px solid var(--border,#e5e7eb); border-radius:99px; padding:6px 14px; box-shadow:0 4px 16px rgba(0,0,0,.1); font-size:12px; }
     .pol-stagebar select { font-size:12px; border:0; background:none; cursor:pointer; }
@@ -296,21 +306,168 @@
   });
 
   // ── Selection boxes (drawn inside the scaled wrapper → 1:1 coords) ──────
+  // Handles are counter-scaled so they stay a constant on-screen size, and
+  // dragged in canvas coords (screen delta ÷ scale). Move applies to
+  // left/top of positioned elements; resize adjusts width/height (+ edge
+  // repositioning for absolutely-positioned elements).
+  let selBox = null;
+
+  function isPositioned(el) {
+    const p = getComputedStyle(el).position;
+    return p === 'absolute' || p === 'fixed';
+  }
+
   function drawBoxes() {
     const layer = $('#pol-boxes');
-    layer.innerHTML = '';
+    layer.querySelectorAll('.pol-box, .pol-guide').forEach(n => n.remove());
+    selBox = null;
     if (hovered && hovered !== selected && hovered.isConnected) layer.appendChild(makeBox(hovered, 'pol-box--hover'));
-    if (selected && selected.isConnected) layer.appendChild(makeBox(selected, 'pol-box--sel', boxTag(selected)));
+    if (selected && selected.isConnected) { selBox = makeBox(selected, 'pol-box--sel', boxTag(selected)); layer.appendChild(selBox); }
   }
+
   function makeBox(el, cls, tag) {
     const r = el.getBoundingClientRect();
     const d = document.createElement('div');
     d.className = 'pol-box ' + cls;
     d.style.left = r.left + 'px'; d.style.top = r.top + 'px';
     d.style.width = r.width + 'px'; d.style.height = r.height + 'px';
-    if (tag) d.innerHTML = `<span class="pol-box__tag">${esc(tag)}</span>`;
+    if (tag) d.innerHTML = `<span class="pol-box__tag" style="transform:scale(${1/scale});transform-origin:bottom left">${esc(tag)}</span>`;
+
+    if (cls.includes('sel')) {
+      const positioned = isPositioned(el);
+      if (positioned) d.classList.add('movable');
+      // Which handles: positioned → all 8; in-flow → only e/s/se (width/height only)
+      const handles = positioned ? ['nw','n','ne','e','se','s','sw','w'] : ['e','se','s'];
+      const pos = { nw:[0,0], n:[.5,0], ne:[1,0], e:[1,.5], se:[1,1], s:[.5,1], sw:[0,1], w:[0,.5] };
+      for (const h of handles) {
+        const [fx, fy] = pos[h];
+        const hd = document.createElement('div');
+        hd.className = 'pol-h'; hd.dataset.h = h;
+        hd.style.left = (fx * r.width) + 'px';
+        hd.style.top = (fy * r.height) + 'px';
+        hd.style.transform = `translate(-50%,-50%) scale(${1/scale})`;
+        hd.addEventListener('pointerdown', e => startGesture(e, 'resize', h));
+        d.appendChild(hd);
+      }
+      d.addEventListener('pointerdown', e => { if (positioned && e.target === d) startGesture(e, 'move', null); });
+    }
     return d;
   }
+
+  // ── Drag / resize gestures with snapping ─────────────────────────────────
+  const SNAP = 6; // canvas px
+  let gesture = null;
+
+  function screenToCanvas(clientX, clientY) {
+    const b = $('#pol-boxes').getBoundingClientRect();
+    return { x: (clientX - b.left) / scale, y: (clientY - b.top) / scale };
+  }
+
+  function startGesture(e, mode, handle) {
+    if (!selected) return;
+    e.preventDefault(); e.stopPropagation();
+    const c = getComputedStyle(selected);
+    const borderBox = c.boxSizing === 'border-box';
+    const start = screenToCanvas(e.clientX, e.clientY);
+    gesture = {
+      mode, handle,
+      startX: start.x, startY: start.y,
+      left: selected.offsetLeft, top: selected.offsetTop,
+      width: borderBox ? selected.offsetWidth : parseFloat(c.width),
+      height: borderBox ? selected.offsetHeight : parseFloat(c.height),
+      positioned: isPositioned(selected),
+      begun: false,
+    };
+    e.target.setPointerCapture?.(e.pointerId);
+    window.addEventListener('pointermove', onGestureMove);
+    window.addEventListener('pointerup', endGesture, { once: true });
+  }
+
+  function onGestureMove(e) {
+    if (!gesture) return;
+    const p = screenToCanvas(e.clientX, e.clientY);
+    let dx = p.x - gesture.startX, dy = p.y - gesture.startY;
+    // Snapshot for undo only once real movement starts (a plain click must not
+    // dirty the slide).
+    if (!gesture.begun) {
+      if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
+      gesture.begun = true;
+      beginEdit();
+    }
+    let { left, top, width, height } = gesture;
+
+    if (gesture.mode === 'move') {
+      left += dx; top += dy;
+    } else {
+      const h = gesture.handle;
+      if (h.includes('e')) width = gesture.width + dx;
+      if (h.includes('s')) height = gesture.height + dy;
+      if (h.includes('w')) { width = gesture.width - dx; if (gesture.positioned) left = gesture.left + dx; }
+      if (h.includes('n')) { height = gesture.height - dy; if (gesture.positioned) top = gesture.top + dy; }
+      width = Math.max(4, width); height = Math.max(4, height);
+    }
+
+    // Snapping — canvas edges + center. Move snaps left/center/right & top/mid/bottom;
+    // resize snaps the moving edge only.
+    clearGuides();
+    const vTargets = [0, dims.width / 2, dims.width];
+    const hTargets = [0, dims.height / 2, dims.height];
+    const snap = (val, targets) => { for (const t of targets) if (Math.abs(val - t) <= SNAP) return { t, hit: true }; return { t: val, hit: false }; };
+
+    if (gesture.mode === 'move') {
+      const edgesX = [['l', left], ['c', left + width / 2], ['r', left + width]];
+      for (const [k, v] of edgesX) { const s = snap(v, vTargets); if (s.hit) { left += s.t - v; drawGuide('v', s.t); break; } }
+      const edgesY = [['t', top], ['m', top + height / 2], ['b', top + height]];
+      for (const [k, v] of edgesY) { const s = snap(v, hTargets); if (s.hit) { top += s.t - v; drawGuide('h', s.t); break; } }
+    } else {
+      const h = gesture.handle;
+      if (h.includes('e')) { const s = snap(left + width, vTargets); if (s.hit) { width = s.t - left; drawGuide('v', s.t); } }
+      if (h.includes('w')) { const s = snap(left, vTargets); if (s.hit) { const nl = s.t; width += left - nl; left = nl; drawGuide('v', s.t); } }
+      if (h.includes('s')) { const s = snap(top + height, hTargets); if (s.hit) { height = s.t - top; drawGuide('h', s.t); } }
+      if (h.includes('n')) { const s = snap(top, hTargets); if (s.hit) { const nt = s.t; height += top - nt; top = nt; drawGuide('h', s.t); } }
+    }
+
+    // Apply
+    if (gesture.mode === 'move') {
+      selected.style.left = Math.round(left) + 'px';
+      selected.style.top = Math.round(top) + 'px';
+    } else {
+      selected.style.width = Math.round(width) + 'px';
+      selected.style.height = Math.round(height) + 'px';
+      if (gesture.positioned) { selected.style.left = Math.round(left) + 'px'; selected.style.top = Math.round(top) + 'px'; }
+    }
+    positionBox(selected);
+  }
+
+  function endGesture() {
+    gesture = null;
+    clearGuides();
+    window.removeEventListener('pointermove', onGestureMove);
+    drawBoxes();
+    renderPanel();
+  }
+
+  // Cheap live box reposition during a gesture (avoids full redraw / handle churn)
+  function positionBox(el) {
+    if (!selBox) return;
+    const r = el.getBoundingClientRect();
+    selBox.style.left = r.left + 'px'; selBox.style.top = r.top + 'px';
+    selBox.style.width = r.width + 'px'; selBox.style.height = r.height + 'px';
+    selBox.querySelectorAll('.pol-h').forEach(hd => {
+      const map = { nw:[0,0], n:[.5,0], ne:[1,0], e:[1,.5], se:[1,1], s:[.5,1], sw:[0,1], w:[0,.5] };
+      const [fx, fy] = map[hd.dataset.h];
+      hd.style.left = (fx * r.width) + 'px';
+      hd.style.top = (fy * r.height) + 'px';
+    });
+  }
+
+  function drawGuide(dir, at) {
+    const g = document.createElement('div');
+    g.className = 'pol-guide pol-guide--' + dir;
+    if (dir === 'v') g.style.left = at + 'px'; else g.style.top = at + 'px';
+    $('#pol-boxes').appendChild(g);
+  }
+  function clearGuides() { $('#pol-boxes').querySelectorAll('.pol-guide').forEach(n => n.remove()); }
   function boxTag(el) {
     const slot = el.getAttribute('data-slot');
     return slot ? `✎ ${slot}` : friendlyName(el);

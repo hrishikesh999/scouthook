@@ -2383,6 +2383,22 @@ window.startInterviewWithBrief = function (briefText, label) {
   chatInput.focus();
 };
 
+// Generate immediately from a completed interview (used by Captain Scout, which
+// runs its own adaptive Q&A loop). Skips the on-page coach entirely and hands the
+// provenance-labelled { initialInput, exchanges } payload straight to generation
+// (default Medium length; the user tunes length/voice in the editor afterward).
+window.startGenerationFromInterview = function (initialInput, exchanges, postType) {
+  if (document.getElementById('plan-gate-banner')) return;
+  selectedType        = postType || 'reach';
+  selectedVaultIdeaId = null;
+  chat.init(selectedType); // reset coach state + placeholders before we take over
+  triggerGenerate({
+    enrichedIdea:       initialInput,
+    interview:          { initialInput, exchanges: Array.isArray(exchanges) ? exchanges : [] },
+    skipSubstanceCheck: true,
+  });
+};
+
 /* ── Chat input wiring ───────────────────────────────────────── */
 chatSendBtn.addEventListener('click', () => { voiceCtrl?.stop(); chat.advance(); });
 

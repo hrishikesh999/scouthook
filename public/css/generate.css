@@ -1436,11 +1436,18 @@
       background: var(--bg-surface, #fff); color: var(--text-primary, #111);
     }
     .tio-transcript:focus { outline: none; border-color: var(--brand, #0f766e); }
-    .tio-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
+    .tio-actions { display: flex; align-items: center; gap: 10px; margin-top: 16px; }
     .tio-cancel {
       border: 1px solid var(--border); background: none; color: var(--text-secondary); cursor: pointer;
       font-size: 14px; padding: 9px 16px; border-radius: 9px;
     }
+    /* "Just write it" — subtle secondary, pushed to sit before the primary on the right */
+    .tio-skip {
+      margin-left: auto; border: none; background: none; color: var(--text-secondary); cursor: pointer;
+      font-size: 13px; padding: 9px 6px; border-radius: 8px; text-decoration: underline; text-underline-offset: 2px;
+    }
+    .tio-skip:hover { color: var(--brand, #0f766e); }
+    .tio-skip:disabled { opacity: 0.5; cursor: not-allowed; }
     .tio-go {
       border: none; background: var(--brand, #0f766e); color: #fff; cursor: pointer;
       font-size: 14px; font-weight: 600; padding: 9px 18px; border-radius: 9px;

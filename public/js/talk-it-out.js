@@ -1,26 +1,40 @@
 'use strict';
 
 /**
- * talk-it-out.js — "Talk it out" voice capture (Authentic Client Engine, Phase 1.3).
+ * talk-it-out.js — "Talk it out" with Captain Scout (Authentic Client Engine).
  *
- * A founder speaks for ~60–90s; Web Speech transcribes locally (no audio leaves
- * the browser). We send the transcript to /api/generate/structure-brief, compose
- * a clean first-person brief from what was heard, and hand it to the interview
- * coach via window.startInterviewWithBrief() — reusing the entire existing
- * generate pipeline. Any leftover stories the founder mentioned are banked
- * server-side as vault ideas.
+ * Captain Scout is a voice-guided host who INTERVIEWS the founder inside the
+ * modal: he speaks an opener, listens (Web Speech, local — no audio leaves the
+ * browser), then asks up to a few intelligent counter-questions grounded in the
+ * user's voice profile + audience via /api/generate/chat-intake (the same
+ * adaptive endpoint the on-page coach uses — it scores moment/proof/tension/
+ * audience and returns the single most useful follow-up). When the brief is
+ * strong enough (or the user taps "Just write it"), Captain composes a
+ * provenance-labelled interview payload and hands it straight to generation.
  *
- * Self-contained: builds its own modal on first open, reuses window.initVoiceInput
- * for the recorder. Trigger: a click on #talk-it-out-cta.
+ * Self-contained: builds its own modal, reuses window.initVoiceInput for the
+ * recorder and window.startGenerationFromInterview to generate. TTS is
+ * browser-native (CSP-safe) and degrades to text-only if unavailable/muted.
  */
 (function () {
-  const API = '/api/generate/structure-brief';
+  const INTAKE_API   = '/api/generate/chat-intake';
+  const STRUCTURE_API = '/api/generate/structure-brief'; // used only to bank leftover stories
+  const POST_TYPE    = 'reach';   // narrative archetype; matches the interview front door
+  const MAX_FOLLOWUPS = 3;
+
   let _modal = null;
   let _voiceCtrl = null;
   let _ta = null;
   let _lastLine = '';
 
-  // Captain Scout's opening lines — one is spoken + shown each time the modal opens.
+  // Interview state (reset each open)
+  let _phase = 'opener';      // 'opener' | 'followup' | 'done'
+  let _brief = '';            // the first answer — the seed / initialInput
+  let _history = [];          // chat-intake history: [{role:'user'|'coach', content}]
+  let _exchanges = [];        // assembleBrief exchanges: [{question, gap, answer, from_skip_suggestion}]
+  let _count = 0;             // follow-ups answered
+  let _pendingQ = null, _pendingGap = null;
+
   const CAPTAIN_OPENERS = [
     "Ahoy — Captain Scout here. Let's find your next post. Tell me: what's one thing from your work this week that stuck with you?",
     "Captain Scout, reporting in. Forget writing for a second — just talk. What happened recently that you'd tell a colleague about?",
@@ -35,38 +49,40 @@
     try { localStorage.setItem('tio_captain_muted', v ? '1' : '0'); } catch {}
   }
 
-  // Browser-native TTS — no external service, CSP-safe. Picks a stable English
-  // voice when available (voices load async, so we re-query at speak time).
   function pickVoice() {
     if (!('speechSynthesis' in window)) return null;
     const voices = window.speechSynthesis.getVoices() || [];
     if (!voices.length) return null;
-    return voices.find(v => /en[-_]GB/i.test(v.lang)) // a touch more "Captain"
+    return voices.find(v => /en[-_]GB/i.test(v.lang))
         || voices.find(v => /en[-_]US/i.test(v.lang))
         || voices.find(v => /^en/i.test(v.lang))
         || voices[0];
   }
 
+  // Returns true if speech actually started (so callers can fall back to a
+  // visual cue when TTS is muted/unavailable).
   function speak(text) {
-    if (muted() || !('speechSynthesis' in window)) return;
+    if (muted() || !('speechSynthesis' in window)) return false;
     try {
       window.speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(text);
       const v = pickVoice();
       if (v) u.voice = v;
       u.rate = 0.98; u.pitch = 0.95;
-      // Invite the user to answer once the Captain finishes talking.
       u.onend = () => document.getElementById('tio-mic')?.classList.add('tio-mic--invite');
       window.speechSynthesis.speak(u);
-    } catch { /* speech is best-effort */ }
+      return true;
+    } catch { return false; }
   }
 
   function captainAsk(line) {
     _lastLine = line;
     const says = document.getElementById('tio-captain-says');
     if (says) says.textContent = line;
-    document.getElementById('tio-mic')?.classList.remove('tio-mic--invite');
-    speak(line);
+    const mic = document.getElementById('tio-mic');
+    mic?.classList.remove('tio-mic--invite');
+    // If the Captain can't speak (muted/unsupported), invite the answer immediately.
+    if (!speak(line)) mic?.classList.add('tio-mic--invite');
   }
 
   function headers() {
@@ -101,10 +117,11 @@
           <button type="button" class="tio-mic" id="tio-mic" aria-label="Start recording">🎙</button>
           <span class="tio-hint" id="tio-hint">Tap the mic and answer the Captain</span>
         </div>
-        <textarea id="tio-transcript" class="tio-transcript" rows="6" placeholder="…or type it here" aria-label="What you said"></textarea>
+        <textarea id="tio-transcript" class="tio-transcript" rows="4" placeholder="…or type your answer here" aria-label="Your answer"></textarea>
         <div class="tio-actions">
           <button type="button" class="tio-cancel">Cancel</button>
-          <button type="button" class="tio-go" id="tio-go" disabled>Turn this into a post →</button>
+          <button type="button" class="tio-skip" id="tio-skip">Just write it →</button>
+          <button type="button" class="tio-go" id="tio-go" disabled>Answer →</button>
         </div>
         <p class="tio-status" id="tio-status" hidden></p>
       </div>`;
@@ -114,9 +131,8 @@
     const micBtn = overlay.querySelector('#tio-mic');
     const goBtn  = overlay.querySelector('#tio-go');
 
-    const refreshGo = () => { goBtn.disabled = (_ta.value.trim().length < 15); };
+    const refreshGo = () => { goBtn.disabled = (_ta.value.trim().length < 2 || _phase === 'done'); };
     _ta.addEventListener('input', refreshGo);
-    // Stop the "answer me" pulse once the user engages the mic.
     micBtn.addEventListener('click', () => micBtn.classList.remove('tio-mic--invite'));
 
     if (typeof window.initVoiceInput === 'function') {
@@ -125,13 +141,14 @@
       } catch { /* mic optional — typing still works */ }
     } else {
       micBtn.style.display = 'none';
-      overlay.querySelector('#tio-hint').textContent = 'Type what happened below';
+      overlay.querySelector('#tio-hint').textContent = 'Type your answer below';
     }
 
     overlay.querySelector('.tio-close').addEventListener('click', close);
     overlay.querySelector('.tio-cancel').addEventListener('click', close);
     overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
-    goBtn.addEventListener('click', submit);
+    goBtn.addEventListener('click', submitAnswer);
+    overlay.querySelector('#tio-skip').addEventListener('click', finishInterview);
 
     // Captain Scout controls
     const replayBtn = overlay.querySelector('#tio-replay');
@@ -154,73 +171,153 @@
     return overlay;
   }
 
+  function resetState() {
+    _phase = 'opener'; _brief = ''; _history = []; _exchanges = [];
+    _count = 0; _pendingQ = null; _pendingGap = null;
+    if (_ta) _ta.value = '';
+  }
+
+  function setStatus(msg) {
+    const s = document.getElementById('tio-status');
+    if (!s) return;
+    if (msg) { s.hidden = false; s.textContent = msg; } else { s.hidden = true; s.textContent = ''; }
+  }
+
+  function setBusy(busy) {
+    const go = document.getElementById('tio-go');
+    const skip = document.getElementById('tio-skip');
+    if (go) go.disabled = busy || (_ta.value.trim().length < 2);
+    if (skip) skip.disabled = busy;
+  }
+
+  function stopRecording() { try { _voiceCtrl?.stop?.(); } catch {} }
+
   function open() {
     if (document.getElementById('plan-gate-banner')) return;
     if (!_modal) _modal = build();
+    resetState();
     _modal.hidden = false;
-    // Captain Scout greets and asks the first question (spoken + shown). The
-    // short delay lets the modal paint and gives TTS voices a beat to load.
     const line = CAPTAIN_OPENERS[Math.floor(Math.random() * CAPTAIN_OPENERS.length)];
+    setStatus('');
     setTimeout(() => captainAsk(line), 120);
     setTimeout(() => _ta?.focus(), 60);
   }
 
   function close() {
-    try { _voiceCtrl?.stop?.(); } catch {}
+    stopRecording();
     try { window.speechSynthesis?.cancel(); } catch {}
     if (_modal) _modal.hidden = true;
   }
 
-  function composeBrief(f, transcript) {
-    const parts = [];
-    if (f.moment)        parts.push(f.moment);
-    if (f.tension)       parts.push(f.tension);
-    if (f.proof)         parts.push(`What happened: ${f.proof}`);
-    if (f.audience_hook) parts.push(`Who this helps: ${f.audience_hook}`);
-    const composed = parts.join('\n\n').trim();
-    // Fall back to the raw transcript if structuring found nothing — the coach
-    // will still ask the right questions.
-    return composed || transcript;
+  // User answered the current question — record it, then let Captain decide the
+  // next move via chat-intake.
+  function submitAnswer() {
+    const answer = (_ta.value || '').trim();
+    if (answer.length < 2 || _phase === 'done') return;
+    stopRecording();
+
+    if (_phase === 'opener') {
+      _brief = answer;
+      _history = [{ role: 'user', content: answer }];
+    } else {
+      if (_pendingQ) _exchanges.push({ question: _pendingQ, gap: _pendingGap, answer, from_skip_suggestion: false });
+      _history.push({ role: 'user', content: answer });
+      _count++;
+    }
+    _ta.value = '';
+    askIntake();
   }
 
-  async function submit() {
-    const transcript = (_ta.value || '').trim();
-    if (transcript.length < 15) return;
-    try { _voiceCtrl?.stop?.(); } catch {}
+  async function askIntake() {
+    setBusy(true);
+    setStatus('Captain Scout is thinking…');
 
-    const status = _modal.querySelector('#tio-status');
-    const goBtn  = _modal.querySelector('#tio-go');
-    goBtn.disabled = true;
-    if (status) { status.hidden = false; status.textContent = 'Listening back to what you said…'; }
-
-    let data = {};
+    let data = { ready: true };
     try {
-      const res = await fetch(API, {
+      const res = await fetch(INTAKE_API, {
         method: 'POST',
         headers: { ...headers(), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ transcript }),
+        body: JSON.stringify({ brief: _brief, history: _history, post_type: POST_TYPE, exchange_count: _count }),
       });
       data = await res.json();
-    } catch { data = {}; }
+    } catch { data = { ready: true }; }
 
-    const brief = composeBrief(data || {}, transcript);
+    setStatus('');
+    setBusy(false);
 
-    if (data && data.leftover_count > 0 && status) {
-      status.textContent = `Saved ${data.leftover_count} other idea${data.leftover_count > 1 ? 's' : ''} to your vault.`;
+    if (data.ready || _count >= MAX_FOLLOWUPS || !data.question) {
+      finishInterview();
+      return;
     }
-
-    close();
-
-    if (typeof window.startInterviewWithBrief === 'function') {
-      window.startInterviewWithBrief(brief, '💬 From your voice note');
-    }
+    _pendingQ = data.question;
+    _pendingGap = data.gap || null;
+    _history.push({ role: 'coach', content: _pendingQ });
+    _phase = 'followup';
+    const hint = document.getElementById('tio-hint');
+    if (hint) hint.textContent = 'Answer the Captain — or tap "Just write it" anytime';
+    captainAsk(_pendingQ);
   }
+
+  // Compose the interview payload from whatever's captured (plus any un-sent text
+  // in the box) and hand straight to generation.
+  function finishInterview() {
+    if (_phase === 'done') return;
+    const pending = (_ta.value || '').trim();
+    if (_phase === 'opener') {
+      if (pending) _brief = pending;
+    } else if (pending && _pendingQ) {
+      _exchanges.push({ question: _pendingQ, gap: _pendingGap, answer: pending, from_skip_suggestion: false });
+    }
+    if (!_brief && !_exchanges.length) { toast('Tell the Captain a bit first'); return; }
+    generate();
+  }
+
+  function generate() {
+    _phase = 'done';
+    stopRecording();
+    bankLeftovers(); // fire-and-forget: mine any extra stories into the vault
+
+    const initialInput = _brief;
+    const exchanges = _exchanges.slice();
+
+    captainAsk('Aye — writing your post now.');
+    setStatus('Charting your post…');
+
+    setTimeout(() => {
+      close();
+      if (typeof window.startGenerationFromInterview === 'function') {
+        window.startGenerationFromInterview(initialInput, exchanges, POST_TYPE);
+      } else if (typeof window.startInterviewWithBrief === 'function') {
+        window.startInterviewWithBrief(composeFallbackBrief(initialInput, exchanges), '💬 Captain Scout');
+      }
+    }, 500);
+  }
+
+  // Bank extra stories the founder mentioned (server dedupes / guards). Best-effort.
+  function bankLeftovers() {
+    const transcript = [_brief, ..._exchanges.map(e => e.answer)].filter(Boolean).join('\n\n');
+    if (transcript.trim().length < 40) return;
+    fetch(STRUCTURE_API, {
+      method: 'POST',
+      headers: { ...headers(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ transcript }),
+    }).catch(() => {});
+  }
+
+  // Fallback only if startGenerationFromInterview isn't present: a readable brief
+  // for the on-page coach.
+  function composeFallbackBrief(initialInput, exchanges) {
+    const parts = [initialInput];
+    for (const e of exchanges) if (e.answer) parts.push(e.answer);
+    return parts.filter(Boolean).join('\n\n');
+  }
+
+  function toast(msg) { if (window.toast) window.toast(msg); }
 
   document.getElementById('talk-it-out-cta')?.addEventListener('click', open);
   window.TalkItOut = { open };
 
-  // Deep link: /generate.html?talk=1 (used by the dashboard entry card) opens
-  // the capture modal on load.
+  // Deep link: /generate.html?talk=1 (dashboard entry card) opens the modal.
   try {
     if (new URLSearchParams(window.location.search).get('talk') === '1') {
       setTimeout(open, 300);

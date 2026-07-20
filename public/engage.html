@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Engage — Scouthook</title>
+  <link rel="stylesheet" href="/css/main.css">
+  <style>
+    .engage-page { max-width: 720px; margin: 0 auto; padding: 40px 24px 64px; }
+    .engage-head h1 { font-size: 1.75rem; font-weight: 800; letter-spacing: -0.02em; margin: 0 0 6px; }
+    .engage-head p { color: var(--text-muted, var(--text-secondary)); margin: 0 0 24px; line-height: 1.5; }
+    .engage-tabs { display: flex; gap: 6px; margin-bottom: 20px; border-bottom: 1px solid var(--border); }
+    .engage-tab { border: none; background: none; cursor: pointer; padding: 10px 14px; font-size: 14px; font-weight: 600;
+      color: var(--text-secondary); border-bottom: 2px solid transparent; }
+    .engage-tab.active { color: var(--brand); border-bottom-color: var(--brand); }
+    .engage-panel { display: none; }
+    .engage-panel.active { display: block; }
+    .engage-card { border: 1px solid var(--border); border-radius: 14px; padding: 20px; background: var(--bg-surface, #fff); }
+    .engage-field { margin-bottom: 14px; }
+    .engage-field label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+    .engage-field textarea, .engage-field input {
+      width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1px solid var(--border); border-radius: 9px;
+      font-family: inherit; font-size: 14px; line-height: 1.5; background: var(--bg-surface, #fff); color: var(--text, #111);
+    }
+    .engage-field textarea:focus, .engage-field input:focus { outline: none; border-color: var(--brand); }
+    .engage-mode { display: inline-flex; gap: 6px; margin-bottom: 14px; }
+    .engage-mode button { border: 1px solid var(--border); background: none; cursor: pointer; padding: 6px 14px;
+      border-radius: 999px; font-size: 13px; font-weight: 600; color: var(--text-secondary); }
+    .engage-mode button.active { border-color: var(--brand); color: var(--brand); background: color-mix(in srgb, var(--brand) 7%, transparent); }
+    .engage-btn { border: none; background: var(--brand); color: #fff; cursor: pointer; font-size: 14px; font-weight: 600;
+      padding: 10px 20px; border-radius: 9px; }
+    .engage-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .engage-result { margin-top: 18px; border: 1px solid color-mix(in srgb, var(--brand) 30%, var(--border));
+      border-radius: 12px; padding: 16px; background: color-mix(in srgb, var(--brand) 4%, var(--bg-surface, #fff)); }
+    .engage-result[hidden] { display: none; }
+    .engage-draft { white-space: pre-wrap; font-size: 14.5px; line-height: 1.6; color: var(--text, #111); }
+    .engage-copy { margin-top: 12px; border: 1px solid var(--brand); background: none; color: var(--brand); cursor: pointer;
+      font-size: 13px; font-weight: 600; padding: 7px 14px; border-radius: 8px; }
+    .audit-score { font-size: 2rem; font-weight: 800; color: var(--brand); }
+    .audit-block { margin-top: 14px; }
+    .audit-block h4 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-secondary); margin: 0 0 6px; }
+    .audit-list { margin: 0; padding-left: 18px; }
+    .audit-list li { margin-bottom: 6px; line-height: 1.5; font-size: 14px; }
+    .engage-hint { font-size: 12.5px; color: var(--text-secondary); margin: 6px 0 0; line-height: 1.4; }
+  </style>
+</head>
+<body>
+
+  <script src="/js/cached-fetch.js"></script>
+  <script src="/js/sidebar.js"></script>
+
+  <div id="main-content">
+    <div class="engage-page">
+      <div class="engage-head">
+        <h1>Engage</h1>
+        <p>Posts start conversations; conversations win clients. Draft replies in your voice, and make sure your profile converts the readers your posts send there.</p>
+      </div>
+
+      <div class="engage-tabs" role="tablist">
+        <button class="engage-tab active" data-tab="reply" role="tab">Reply &amp; DM drafts</button>
+        <button class="engage-tab" data-tab="audit" role="tab">Profile audit</button>
+      </div>
+
+      <!-- Reply / DM drafts -->
+      <section class="engage-panel active" data-panel="reply">
+        <div class="engage-card">
+          <div class="engage-mode" id="reply-mode">
+            <button data-mode="reply" class="active" type="button">Reply to a comment</button>
+            <button data-mode="dm_opener" type="button">DM opener</button>
+          </div>
+          <div class="engage-field">
+            <label for="reply-comment">The comment (or their message)</label>
+            <textarea id="reply-comment" rows="3" placeholder="Paste the comment you received…"></textarea>
+          </div>
+          <div class="engage-field">
+            <label for="reply-post">Your post it's on <span style="font-weight:400;color:var(--text-secondary)">(optional, improves the reply)</span></label>
+            <textarea id="reply-post" rows="3" placeholder="Paste your post for context…"></textarea>
+          </div>
+          <div class="engage-field">
+            <label for="reply-name">Their name <span style="font-weight:400;color:var(--text-secondary)">(optional)</span></label>
+            <input id="reply-name" type="text" placeholder="e.g. Priya" />
+          </div>
+          <button class="engage-btn" id="reply-go" type="button">Draft it →</button>
+          <p class="engage-hint">Nothing is posted automatically — you copy the draft and reply on LinkedIn yourself.</p>
+
+          <div class="engage-result" id="reply-result" hidden>
+            <div class="engage-draft" id="reply-draft"></div>
+            <button class="engage-copy" id="reply-copy" type="button">Copy</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Profile audit -->
+      <section class="engage-panel" data-panel="audit">
+        <div class="engage-card">
+          <div class="engage-field">
+            <label for="audit-headline">Your LinkedIn headline</label>
+            <input id="audit-headline" type="text" placeholder="Paste your headline…" />
+          </div>
+          <div class="engage-field">
+            <label for="audit-about">Your About section <span style="font-weight:400;color:var(--text-secondary)">(optional)</span></label>
+            <textarea id="audit-about" rows="6" placeholder="Paste your About section…"></textarea>
+          </div>
+          <button class="engage-btn" id="audit-go" type="button">Audit my profile →</button>
+          <p class="engage-hint">Scored against your ideal audience and offer. We can't read your profile automatically — paste it here.</p>
+
+          <div class="engage-result" id="audit-result" hidden></div>
+        </div>
+      </section>
+    </div>
+
+    <footer class="app-footer">
+      <div class="app-footer-inner">
+        <a href="https://www.scouthook.com/privacy" target="_blank" rel="noopener">Privacy Policy</a>
+        <span class="app-footer-sep">|</span>
+        <a href="https://www.scouthook.com/terms" target="_blank" rel="noopener">Terms of Service</a>
+        <span class="app-footer-sep">|</span>
+        <a href="/help.html">Help</a>
+        <p class="app-footer-legal">&copy; 2026 CopyPower Digital LLP. ScoutHook is an AI-powered authority engine.</p>
+      </div>
+    </footer>
+  </div><!-- /main-content -->
+
+  <script src="/js/session.js"></script>
+  <script src="/js/ui-toast.js"></script>
+  <script src="/js/account-bar.js"></script>
+  <script src="/js/app-router.js"></script>
+  <script src="/js/engage.js"></script>
+</body>
+</html>

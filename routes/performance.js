@@ -94,6 +94,33 @@ router.post('/:postId/performance', async (req, res) => {
 
 // GET /api/posts/performance-summary
 // Returns aggregated performance data for the Content Intelligence dashboard card.
+// POST /api/posts/reply-draft
+// Conversation layer (Phase 5): draft a substantive reply — or a DM opener — in
+// the author's voice for a comment they paste in. Never auto-posts; copy-to-clipboard.
+// Body: { commentText, postText?, commenterName?, mode? }
+router.post('/reply-draft', async (req, res) => {
+  const { userId, tenantId } = req;
+  if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
+  const { commentText, postText, commenterName, mode } = req.body;
+  if (!commentText || !commentText.trim()) {
+    return res.status(400).json({ ok: false, error: 'comment_required' });
+  }
+  try {
+    const { resolveProfile } = require('../lib/resolveProfile');
+    const profile = (await resolveProfile(tenantId)) || {};
+    const { draftReply } = require('../services/replyDrafts');
+    const { draft } = await draftReply({
+      commentText, postText: postText || '', commenterName: commenterName || '',
+      profile, mode: mode === 'dm_opener' ? 'dm_opener' : 'reply',
+    });
+    if (!draft) return res.status(503).json({ ok: false, error: 'draft_unavailable' });
+    return res.json({ ok: true, draft });
+  } catch (err) {
+    console.error('[performance] POST /reply-draft error:', err.message);
+    return res.status(500).json({ ok: false, error: 'draft_failed' });
+  }
+});
+
 // GET /api/posts/insights
 // Author-relative "what's working" — engagement-based, guarded by a sample
 // minimum. Consumed by the dashboard card and the daily idea email.

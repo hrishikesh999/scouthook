@@ -167,6 +167,8 @@ LinkedIn's member API exposes reactions/comments only — **no impressions/dwell
 
 **Estimate:** 2–3 sessions (5.1 spike + 5.2 paste-mode + 5.4 first; comment-sync mode when scope is approved).
 
+**SHIPPED (2026-07-20, paste-mode):** replyDrafts.js (reply + dm_opener modes), profileAudit.js, `POST /api/posts/reply-draft`, `POST /api/profile/linkedin-audit`, and a self-contained `engage.html`/`engage.js` page (Engage sidebar tab). **DEFERRED pending LinkedIn `r_member_social` approval** (applied for, not yet granted): 5.1 comment fetch, migration 078 `post_comments`, the auto-populated Engage queue, and DM-opener auto-surfacing from real commenters. When approved: add `fetchPostComments` to linkedinMetrics, migration 078, and sync in workers/metricsSync.js — the reply/DM services already exist and just need a real comment feed.
+
 ---
 
 ## Phase 6 — Structural variance enforcement

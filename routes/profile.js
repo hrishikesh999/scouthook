@@ -883,4 +883,32 @@ router.post('/audience/generate', async (req, res) => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// POST /api/profile/linkedin-audit
+// Profile-as-landing-page audit (Authentic Client Engine, Phase 5.4). The user
+// pastes their headline + About (OAuth doesn't expose About text); we score it
+// against their ICP + offer and return concrete rewrites in their voice.
+// Body: { headline, about? }
+// ---------------------------------------------------------------------------
+router.post('/linkedin-audit', async (req, res) => {
+  const { userId, tenantId } = req;
+  if (!userId) return res.status(400).json({ ok: false, error: 'missing_user_id' });
+  const headline = typeof req.body.headline === 'string' ? req.body.headline : '';
+  const about    = typeof req.body.about === 'string' ? req.body.about : '';
+  if (!headline.trim() && !about.trim()) {
+    return res.status(400).json({ ok: false, error: 'headline_or_about_required' });
+  }
+  try {
+    const { resolveProfile } = require('../lib/resolveProfile');
+    const profile = (await resolveProfile(tenantId)) || {};
+    const { auditProfile } = require('../services/profileAudit');
+    const result = await auditProfile({ headline, about, profile });
+    if (!result) return res.status(503).json({ ok: false, error: 'audit_unavailable' });
+    return res.json({ ok: true, audit: result });
+  } catch (err) {
+    console.error('[profile/linkedin-audit] error:', err.message);
+    return res.status(500).json({ ok: false, error: 'audit_failed' });
+  }
+});
+
 module.exports = router;

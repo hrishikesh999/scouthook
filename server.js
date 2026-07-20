@@ -771,6 +771,7 @@ app.get([
   '/dashboard.html',
   '/generate.html',
   '/drafts.html',
+  '/engage.html',
   '/schedule.html',
   '/published.html',
   '/post.html',

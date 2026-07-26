@@ -44,22 +44,6 @@
     <!-- LinkedIn reconnect nudge — shown when token expires within 7 days -->
     <div id="linkedin-expiry-banner" class="linkedin-expiry-banner" hidden role="alert"></div>
 
-    <!-- Voice profile completion — links to the voice wizard, auto-hides at 100% -->
-    <div id="voice-profile-bar" class="voice-profile-bar" hidden role="region" aria-label="Voice profile completion">
-      <a href="/settings.html" class="voice-profile-link">
-        <div class="voice-profile-top">
-          <div>
-            <p class="voice-profile-title">Voice Profile Strength</p>
-            <p class="voice-profile-label" id="voice-profile-label">Fill in more stages to improve post quality</p>
-          </div>
-          <span class="voice-profile-pct" id="voice-profile-pct-text">0%</span>
-        </div>
-        <div class="voice-profile-bar-wrap">
-          <div class="voice-profile-bar-fill" id="voice-profile-bar-fill" style="width:0%"></div>
-        </div>
-      </a>
-    </div>
-
     <!-- Vault nudge — shown until the workspace has at least one document -->
     <div id="vault-nudge-banner" class="vault-nudge-banner" hidden role="alert"></div>
 
@@ -85,6 +69,22 @@
         </div>
       </div>
       <div id="pipeline-insight" class="pipeline-insight" hidden></div>
+    </div>
+
+    <!-- Voice profile completion — links to the voice wizard, auto-hides at 100% -->
+    <div id="voice-profile-bar" class="voice-profile-bar" hidden role="region" aria-label="Voice profile completion">
+      <a href="/settings.html" class="voice-profile-link">
+        <div class="voice-profile-top">
+          <div>
+            <p class="voice-profile-title">Voice Profile Strength</p>
+            <p class="voice-profile-label" id="voice-profile-label">Fill in more stages to improve post quality</p>
+          </div>
+          <span class="voice-profile-pct" id="voice-profile-pct-text">0%</span>
+        </div>
+        <div class="voice-profile-bar-wrap">
+          <div class="voice-profile-bar-fill" id="voice-profile-bar-fill" style="width:0%"></div>
+        </div>
+      </a>
     </div>
 
   </div><!-- /dashboard-page -->

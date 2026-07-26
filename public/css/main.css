@@ -4545,17 +4545,18 @@ body.has-trial-banner #main-content {
   flex-direction: column;
   gap: var(--space-4);
   width: 100%;
-  background: linear-gradient(135deg, var(--brand) 0%, #14b8a6 100%);
+  background: color-mix(in srgb, var(--brand) 5%, var(--bg-surface, #fff));
+  border: 1px solid color-mix(in srgb, var(--brand) 22%, var(--border));
   border-radius: var(--radius-lg);
   padding: var(--space-6);
   text-decoration: none;
   overflow: hidden;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
-  transition: box-shadow 150ms ease, transform 150ms ease;
+  transition: border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
 }
 
 .voice-profile-link:hover {
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+  border-color: color-mix(in srgb, var(--brand) 45%, var(--border));
+  box-shadow: 0 2px 14px rgba(15, 118, 110, 0.10);
   transform: translateY(-1px);
 }
 
@@ -4574,7 +4575,7 @@ body.has-trial-banner #main-content {
 .voice-profile-title {
   font-size: 15px;
   font-weight: 700;
-  color: #fff;
+  color: var(--text, #111827);
   font-family: var(--font-sans);
   margin: 0 0 3px;
   letter-spacing: -0.01em;
@@ -4582,7 +4583,7 @@ body.has-trial-banner #main-content {
 
 .voice-profile-label {
   font-size: 13px;
-  color: rgba(255, 255, 255, 0.75);
+  color: var(--text-muted, #6b7280);
   margin: 0;
   font-family: var(--font-sans);
 }
@@ -4592,24 +4593,23 @@ body.has-trial-banner #main-content {
   font-weight: 800;
   line-height: 1;
   letter-spacing: -0.03em;
-  color: #fff;
+  color: var(--brand);
   flex-shrink: 0;
   white-space: nowrap;
 }
 
 .voice-profile-bar-wrap {
   height: 10px;
-  background: rgba(255, 255, 255, 0.15);
+  background: color-mix(in srgb, var(--brand) 12%, var(--border));
   border-radius: 100px;
   overflow: hidden;
 }
 
 .voice-profile-bar-fill {
   height: 100%;
-  background: linear-gradient(90deg, #0d9488 0%, #2dd4bf 100%);
+  background: linear-gradient(90deg, var(--brand) 0%, #2dd4bf 100%);
   border-radius: 100px;
   transition: width 0.7s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 0 8px rgba(45, 212, 191, 0.5);
 }
 
 /* ── Vault nudge — no source material uploaded yet ────────────── */

@@ -10,135 +10,152 @@
 </head>
 <body>
 
-  <script src="/js/cached-fetch.js"></script>
-  <script src="/js/sidebar.js"></script>
-
-  <!-- ── Main content ──────────────────────────────────────── -->
   <div id="main-content">
+
+    <header class="help-topbar">
+      <a href="/" class="help-topbar-logo">
+        <img src="/images/sh-logo-dark.png" alt="ScoutHook" class="help-topbar-logo-img">
+      </a>
+      <a href="#" id="help-topbar-link" class="help-topbar-link" hidden></a>
+    </header>
+
     <div class="help-page">
 
-      <div class="page-header">
-        <div>
+      <div class="help-layout">
+
+        <!-- ── Left: FAQ ────────────────────────────────────── -->
+        <div class="help-col help-col-faq">
           <h1 class="help-heading">Help Centre</h1>
           <p class="help-subheading">Answers to common questions, and a way to reach us if you need more.</p>
+
+          <p class="help-section-title">Frequently asked questions</p>
+          <ul class="faq-list" role="list">
+
+            <li class="faq-item">
+              <button class="faq-btn" aria-expanded="false" aria-controls="faq-1">
+                How do I connect my LinkedIn account?
+                <svg class="faq-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+              </button>
+              <div id="faq-1" class="faq-body" role="region">
+                <p>Go to Account Settings and click <strong>Connect LinkedIn</strong>. You'll be redirected to LinkedIn to authorise ScoutHook — this takes about 30 seconds.</p>
+                <p>If the button is greyed out or the connection fails, try signing out of LinkedIn in your browser first, then reconnect. LinkedIn tokens expire after 60 days; ScoutHook will notify you before that happens.</p>
+              </div>
+            </li>
+
+            <li class="faq-item">
+              <button class="faq-btn" aria-expanded="false" aria-controls="faq-2">
+                Why does my voice profile take a few posts to improve?
+                <svg class="faq-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+              </button>
+              <div id="faq-2" class="faq-body" role="region">
+                <p>Your voice profile is built from examples you provide and the posts you generate. The AI needs a few samples to learn your tone, vocabulary, and style before posts start to feel consistently like you.</p>
+                <p>You can improve results faster by filling out your Voice Profile in detail — especially your niche, audience, and preferred writing style.</p>
+              </div>
+            </li>
+
+            <li class="faq-item">
+              <button class="faq-btn" aria-expanded="false" aria-controls="faq-3">
+                What are Hooks and which one should I use?
+                <svg class="faq-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+              </button>
+              <div id="faq-3" class="faq-body" role="region">
+                <p>Hooks are the opening style of your post — the first line that makes someone stop scrolling. ScoutHook uses 8 archetypes: <strong>Number</strong>, <strong>Contrarian</strong>, <strong>Confession</strong>, <strong>Pattern Interrupt</strong>, <strong>Direct Address</strong>, <strong>Stakes</strong>, <strong>Before/After</strong>, and <strong>Insight</strong>.</p>
+                <p>ScoutHook automatically selects the best hook for your idea. You can swap to a different archetype on the preview screen if you want a different feel.</p>
+              </div>
+            </li>
+
+            <li class="faq-item">
+              <button class="faq-btn" aria-expanded="false" aria-controls="faq-4">
+                My post didn't publish to LinkedIn — what happened?
+                <svg class="faq-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+              </button>
+              <div id="faq-4" class="faq-body" role="region">
+                <p>The most common causes are an expired LinkedIn token (reconnect via Account Settings) or a temporary LinkedIn API outage.</p>
+                <p>If your token is still valid, wait a few minutes and try publishing again. LinkedIn occasionally rate-limits or rejects posts — if it keeps failing, submit a ticket and include any error message you saw.</p>
+              </div>
+            </li>
+
+            <li class="faq-item">
+              <button class="faq-btn" aria-expanded="false" aria-controls="faq-5">
+                How does scheduling work?
+                <svg class="faq-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+              </button>
+              <div id="faq-5" class="faq-body" role="region">
+                <p>On the preview screen, click <strong>Schedule</strong> instead of Publish Now. Pick a date and time, and ScoutHook will publish automatically at that moment — you don't need to be logged in.</p>
+                <p>You can view, edit, or cancel scheduled posts from the Schedule page. Your LinkedIn token must still be valid at publish time.</p>
+              </div>
+            </li>
+
+            <li class="faq-item">
+              <button class="faq-btn" aria-expanded="false" aria-controls="faq-6">
+                How do I upgrade, downgrade, or cancel my plan?
+                <svg class="faq-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+              </button>
+              <div id="faq-6" class="faq-body" role="region">
+                <p>Go to Subscription to manage your plan. You can upgrade immediately; downgrades and cancellations take effect at the end of your current billing period.</p>
+                <p>If you have a billing question that isn't answered there, submit a ticket and select <strong>Billing</strong> as the topic.</p>
+              </div>
+            </li>
+
+          </ul>
         </div>
-      </div>
 
-      <!-- ── FAQ ──────────────────────────────────────────── -->
-      <p class="help-section-title">Frequently asked questions</p>
-      <ul class="faq-list" role="list">
+        <!-- ── Right: Ticket form ───────────────────────────── -->
+        <div class="help-col help-col-form">
+          <div class="support-card">
+            <p class="support-card-title">Submit a ticket</p>
+            <p class="support-card-sub">We reply within 24 hours. Pro plan members get priority responses.</p>
 
-        <li class="faq-item">
-          <button class="faq-btn" aria-expanded="false" aria-controls="faq-1">
-            How do I connect my LinkedIn account?
-            <svg class="faq-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
-          </button>
-          <div id="faq-1" class="faq-body" role="region">
-            <p>Go to <a href="/account.html">Account Settings</a> and click <strong>Connect LinkedIn</strong>. You'll be redirected to LinkedIn to authorise ScoutHook — this takes about 30 seconds.</p>
-            <p>If the button is greyed out or the connection fails, try signing out of LinkedIn in your browser first, then reconnect. LinkedIn tokens expire after 60 days; ScoutHook will notify you before that happens.</p>
+            <form id="support-form" novalidate>
+              <div class="support-field" id="support-email-field" hidden>
+                <label class="support-label" for="support-email">Email</label>
+                <input
+                  type="email"
+                  id="support-email"
+                  class="support-select"
+                  placeholder="you@example.com"
+                  autocomplete="email"
+                />
+              </div>
+
+              <div class="support-field">
+                <label class="support-label" for="support-topic">Topic</label>
+                <select id="support-topic" class="support-select" required>
+                  <option value="" disabled selected>Select a topic…</option>
+                  <option value="LinkedIn connection">LinkedIn connection</option>
+                  <option value="Publishing issue">Publishing issue</option>
+                  <option value="Scheduling">Scheduling</option>
+                  <option value="Billing">Billing</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+
+              <div class="support-field">
+                <label class="support-label" for="support-message">Message</label>
+                <textarea
+                  id="support-message"
+                  class="support-textarea"
+                  placeholder="Describe what's happening…"
+                  maxlength="2000"
+                  required
+                ></textarea>
+              </div>
+
+              <div id="support-error" class="support-error" role="alert"></div>
+
+              <div class="support-actions">
+                <button type="submit" id="support-submit">Submit ticket</button>
+              </div>
+            </form>
+
+            <div id="support-success" class="support-success" role="status">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#166534" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+              <span>Ticket submitted! Check your email for a confirmation. We'll be in touch within 24 hours.</span>
+            </div>
           </div>
-        </li>
-
-        <li class="faq-item">
-          <button class="faq-btn" aria-expanded="false" aria-controls="faq-2">
-            Why does my voice profile take a few posts to improve?
-            <svg class="faq-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
-          </button>
-          <div id="faq-2" class="faq-body" role="region">
-            <p>Your voice profile is built from examples you provide and the posts you generate. The AI needs a few samples to learn your tone, vocabulary, and style before posts start to feel consistently like you.</p>
-            <p>You can improve results faster by filling out your <a href="/settings.html">Voice Profile</a> in detail — especially your niche, audience, and preferred writing style.</p>
-          </div>
-        </li>
-
-        <li class="faq-item">
-          <button class="faq-btn" aria-expanded="false" aria-controls="faq-3">
-            What are Hooks and which one should I use?
-            <svg class="faq-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
-          </button>
-          <div id="faq-3" class="faq-body" role="region">
-            <p>Hooks are the opening style of your post — the first line that makes someone stop scrolling. ScoutHook uses 8 archetypes: <strong>Number</strong>, <strong>Contrarian</strong>, <strong>Confession</strong>, <strong>Pattern Interrupt</strong>, <strong>Direct Address</strong>, <strong>Stakes</strong>, <strong>Before/After</strong>, and <strong>Insight</strong>.</p>
-            <p>ScoutHook automatically selects the best hook for your idea. You can swap to a different archetype on the preview screen if you want a different feel.</p>
-          </div>
-        </li>
-
-        <li class="faq-item">
-          <button class="faq-btn" aria-expanded="false" aria-controls="faq-4">
-            My post didn't publish to LinkedIn — what happened?
-            <svg class="faq-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
-          </button>
-          <div id="faq-4" class="faq-body" role="region">
-            <p>The most common causes are an expired LinkedIn token (reconnect via <a href="/account.html">Account Settings</a>) or a temporary LinkedIn API outage.</p>
-            <p>If your token is still valid, wait a few minutes and try publishing again. LinkedIn occasionally rate-limits or rejects posts — if it keeps failing, submit a request below and include any error message you saw.</p>
-          </div>
-        </li>
-
-        <li class="faq-item">
-          <button class="faq-btn" aria-expanded="false" aria-controls="faq-5">
-            How does scheduling work?
-            <svg class="faq-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
-          </button>
-          <div id="faq-5" class="faq-body" role="region">
-            <p>On the preview screen, click <strong>Schedule</strong> instead of Publish Now. Pick a date and time, and ScoutHook will publish automatically at that moment — you don't need to be logged in.</p>
-            <p>You can view, edit, or cancel scheduled posts from the <a href="/schedule.html">Schedule</a> page. Your LinkedIn token must still be valid at publish time.</p>
-          </div>
-        </li>
-
-        <li class="faq-item">
-          <button class="faq-btn" aria-expanded="false" aria-controls="faq-6">
-            How do I upgrade, downgrade, or cancel my plan?
-            <svg class="faq-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
-          </button>
-          <div id="faq-6" class="faq-body" role="region">
-            <p>Go to <a href="/billing.html">Subscription</a> to manage your plan. You can upgrade immediately; downgrades and cancellations take effect at the end of your current billing period.</p>
-            <p>If you have a billing question that isn't answered there, use the form below and select <strong>Billing</strong> as the topic.</p>
-          </div>
-        </li>
-
-      </ul>
-
-      <!-- ── Support form ──────────────────────────────────── -->
-      <p class="help-section-title">Still need help?</p>
-      <div class="support-card">
-        <p class="support-card-title">Send us a message</p>
-        <p class="support-card-sub">We reply within 24 hours. Pro plan members get priority responses.</p>
-
-        <form id="support-form" novalidate>
-          <div class="support-field">
-            <label class="support-label" for="support-topic">Topic</label>
-            <select id="support-topic" class="support-select" required>
-              <option value="" disabled selected>Select a topic…</option>
-              <option value="LinkedIn connection">LinkedIn connection</option>
-              <option value="Publishing issue">Publishing issue</option>
-              <option value="Scheduling">Scheduling</option>
-              <option value="Billing">Billing</option>
-              <option value="Other">Other</option>
-            </select>
-          </div>
-
-          <div class="support-field">
-            <label class="support-label" for="support-message">Message</label>
-            <textarea
-              id="support-message"
-              class="support-textarea"
-              placeholder="Describe what's happening…"
-              maxlength="2000"
-              required
-            ></textarea>
-          </div>
-
-          <div id="support-error" class="support-error" role="alert"></div>
-
-          <div class="support-actions">
-            <button type="submit" id="support-submit">Send message</button>
-          </div>
-        </form>
-
-        <div id="support-success" class="support-success" role="status">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#166534" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
-          <span>Message sent! Check your email for a confirmation. We'll be in touch within 24 hours.</span>
         </div>
-      </div>
 
+      </div>
     </div><!-- /help-page -->
 
     <footer class="app-footer" role="contentinfo">
@@ -154,11 +171,6 @@
 
   </div><!-- /main-content -->
 
-  <script src="/js/auth-guard.js"></script>
-  <script src="/js/account-bar.js"></script>
-  <script src="/js/app-router.js"></script>
-  <script src="/js/idea-cards.js"></script>
-  <script src="/js/ideas-pill.js"></script>
   <script>
     // ── FAQ accordion ──────────────────────────────────────────
     document.querySelectorAll('.faq-btn').forEach((btn) => {
@@ -171,10 +183,46 @@
       });
     });
 
+    // ── Auth-aware ticket form ──────────────────────────────────
+    // Logged-in visitors are identified by their session — no email needed.
+    // Logged-out visitors must give us an email so we can reply.
+    const emailField = document.getElementById('support-email-field');
+    const emailInput = document.getElementById('support-email');
+    const topbarLink = document.getElementById('help-topbar-link');
+    let isLoggedIn = false;
+
+    fetch('/api/auth/me', { credentials: 'same-origin' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        isLoggedIn = !!data?.user;
+        if (isLoggedIn) {
+          emailField.hidden = true;
+          emailInput.required = false;
+          topbarLink.textContent = 'Back to Dashboard';
+          topbarLink.href = '/dashboard.html';
+        } else {
+          emailField.hidden = false;
+          emailInput.required = true;
+          topbarLink.textContent = 'Log in';
+          topbarLink.href = '/login.html';
+        }
+        topbarLink.hidden = false;
+      })
+      .catch(() => {
+        // Assume logged out if the check fails — safer to ask for an email
+        // than to silently drop a ticket we can't reply to.
+        emailField.hidden = false;
+        emailInput.required = true;
+        topbarLink.textContent = 'Log in';
+        topbarLink.href = '/login.html';
+        topbarLink.hidden = false;
+      });
+
     // ── Support form ───────────────────────────────────────────
     document.getElementById('support-form').addEventListener('submit', async (e) => {
       e.preventDefault();
 
+      const email   = emailInput.value.trim();
       const topic   = document.getElementById('support-topic').value;
       const message = document.getElementById('support-message').value.trim();
       const errorEl = document.getElementById('support-error');
@@ -183,6 +231,12 @@
       errorEl.textContent = '';
       errorEl.classList.remove('visible');
 
+      if (!isLoggedIn && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        errorEl.textContent = 'Please enter a valid email address.';
+        errorEl.classList.add('visible');
+        emailInput.focus();
+        return;
+      }
       if (!topic) {
         errorEl.textContent = 'Please select a topic.';
         errorEl.classList.add('visible');
@@ -204,7 +258,7 @@
           method: 'POST',
           credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ topic, message }),
+          body: JSON.stringify(isLoggedIn ? { topic, message } : { topic, message, email }),
         });
 
         const data = await res.json().catch(() => ({}));
@@ -216,10 +270,10 @@
         document.getElementById('support-form').style.display = 'none';
         document.getElementById('support-success').classList.add('visible');
       } catch (err) {
-        errorEl.textContent = 'Could not send your message — please try again.';
+        errorEl.textContent = 'Could not send your ticket — please try again.';
         errorEl.classList.add('visible');
         submitBtn.disabled = false;
-        submitBtn.textContent = 'Send message';
+        submitBtn.textContent = 'Submit ticket';
       }
     });
   </script>

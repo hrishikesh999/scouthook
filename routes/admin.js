@@ -850,9 +850,10 @@ router.get('/support', requireAdminPassword, (req, res) => {
     if (status && VALID_STATUSES.includes(status)) {
       rows = await db.prepare(`
         SELECT sr.id, sr.topic, sr.message, sr.status, sr.admin_note, sr.created_at,
-               up.email, up.display_name, us.plan
+               COALESCE(up.email, sr.guest_email) AS email,
+               COALESCE(up.display_name, sr.guest_name) AS display_name, us.plan
         FROM support_requests sr
-        JOIN user_profiles up ON up.user_id = sr.user_id
+        LEFT JOIN user_profiles up ON up.user_id = sr.user_id
         LEFT JOIN user_subscriptions us ON us.user_id = sr.user_id
         WHERE sr.status = ?
         ORDER BY sr.created_at DESC
@@ -860,9 +861,10 @@ router.get('/support', requireAdminPassword, (req, res) => {
     } else {
       rows = await db.prepare(`
         SELECT sr.id, sr.topic, sr.message, sr.status, sr.admin_note, sr.created_at,
-               up.email, up.display_name, us.plan
+               COALESCE(up.email, sr.guest_email) AS email,
+               COALESCE(up.display_name, sr.guest_name) AS display_name, us.plan
         FROM support_requests sr
-        JOIN user_profiles up ON up.user_id = sr.user_id
+        LEFT JOIN user_profiles up ON up.user_id = sr.user_id
         LEFT JOIN user_subscriptions us ON us.user_id = sr.user_id
         ORDER BY sr.created_at DESC
       `).all();
@@ -882,9 +884,11 @@ router.get('/support/:id', requireAdminPassword, (req, res) => {
 
     const row = await db.prepare(`
       SELECT sr.id, sr.topic, sr.message, sr.status, sr.admin_note, sr.replies, sr.created_at,
-             up.email, up.display_name, us.plan, us.status AS sub_status
+             COALESCE(up.email, sr.guest_email) AS email,
+             COALESCE(up.display_name, sr.guest_name) AS display_name,
+             us.plan, us.status AS sub_status
       FROM support_requests sr
-      JOIN user_profiles up ON up.user_id = sr.user_id
+      LEFT JOIN user_profiles up ON up.user_id = sr.user_id
       LEFT JOIN user_subscriptions us ON us.user_id = sr.user_id
       WHERE sr.id = ?
     `).get(ticketId);
@@ -911,9 +915,10 @@ router.post('/support/:id/reply', requireAdminPassword, (req, res) => {
 
     const ticket = await db.prepare(`
       SELECT sr.id, sr.topic, sr.message AS original_message, sr.status, sr.user_id,
-             up.email, up.display_name
+             COALESCE(up.email, sr.guest_email) AS email,
+             COALESCE(up.display_name, sr.guest_name) AS display_name
       FROM support_requests sr
-      JOIN user_profiles up ON up.user_id = sr.user_id
+      LEFT JOIN user_profiles up ON up.user_id = sr.user_id
       WHERE sr.id = ?
     `).get(ticketId);
     if (!ticket) return res.status(404).json({ ok: false, error: 'ticket_not_found' });

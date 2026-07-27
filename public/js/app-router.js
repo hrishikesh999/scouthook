@@ -22,7 +22,6 @@
     '/media.html':      '/js/media.js',
     '/workspace.html':  '/js/members.js',
     '/post.html':       '/js/post.js',
-    '/help.html':       null,
   };
 
   // Scripts shared across all pages — never re-inject these

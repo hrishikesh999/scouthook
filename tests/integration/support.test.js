@@ -5,9 +5,28 @@ const { agent, createUser, loginAs, truncateAll } = require('./helpers/setup');
 afterEach(truncateAll);
 
 describe('Support — POST /', () => {
-  test('returns 401 without session', async () => {
+  test('returns 400 without session and without email', async () => {
     const res = await agent().post('/api/support').send({ topic: 'Billing', message: 'help' });
-    expect(res.status).toBe(401);
+    expect(res.status).toBe(400);
+  });
+
+  test('returns 200 without session when a valid email is supplied', async () => {
+    const res = await agent().post('/api/support').send({
+      topic: 'Billing',
+      message: 'help',
+      email: 'guest@example.com',
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+  });
+
+  test('returns 400 without session when email is invalid', async () => {
+    const res = await agent().post('/api/support').send({
+      topic: 'Billing',
+      message: 'help',
+      email: 'not-an-email',
+    });
+    expect(res.status).toBe(400);
   });
 
   test('returns 400 for missing topic', async () => {

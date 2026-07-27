@@ -1,0 +1,196 @@
+/* ── Signup page: full-bleed hero gradient, single floating card ──────────
+   Scoped to .signup-page so it never leaks onto the other pages that share
+   login.css (login, forgot-password, invite-accept, etc). Uses the marketing
+   site's palette/fonts (not the app's teal --brand) for message continuity
+   from the homepage hero the visitor just came from. */
+
+.signup-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 56px 24px;
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(115deg, #0b2f4a 0%, #10574f 46%, #1d6b45 100%);
+}
+.signup-page::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(900px 620px at 18% 6%, rgba(181, 224, 90, 0.18), transparent 70%);
+}
+
+.su-stack {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 400px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.su-logo {
+  height: 28px;
+  width: auto;
+  margin: 0 0 24px;
+  display: block;
+}
+
+.su-card {
+  width: 100%;
+  background: #ffffff;
+  border-radius: 20px;
+  padding: 40px 36px 34px;
+  box-shadow: 0 40px 90px rgba(0, 0, 0, 0.32), 0 4px 16px rgba(0, 0, 0, 0.08);
+  text-align: center;
+}
+
+.su-headline {
+  font-family: "Plus Jakarta Sans", var(--font-sans);
+  font-size: 26px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  color: #09090b;
+  margin: 0 0 8px;
+}
+.su-headline .accent { color: #12654e; font-weight: 700; }
+
+.su-value {
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  margin: 0 0 26px;
+}
+
+.su-error {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.08);
+  color: var(--text-danger);
+  font-size: 13px;
+  text-align: left;
+}
+
+.su-divider { display: flex; align-items: center; gap: 10px; margin: 18px 0; }
+.su-divider hr { flex: 1; border: none; border-top: 1px solid var(--border); margin: 0; }
+.su-divider span { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+
+.su-field-group { text-align: left; margin-bottom: 12px; }
+.su-field-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  display: block;
+  margin-bottom: 6px;
+}
+.su-field-input {
+  width: 100%;
+  height: 44px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1.5px solid var(--border);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  color: var(--text-primary);
+  background: #ffffff;
+  outline: none;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+.su-field-input:focus {
+  border-color: #18a06a;
+  box-shadow: 0 0 0 3px rgba(24, 160, 106, 0.14);
+}
+.su-field-input::placeholder { color: var(--text-muted); }
+
+.su-submit {
+  display: block;
+  width: 100%;
+  text-align: center;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  padding: 14px 20px;
+  border-radius: 12px;
+  cursor: pointer;
+  color: #fff;
+  background: #18a06a;
+  border: 1px solid #18a06a;
+  box-shadow: 0 10px 26px rgba(24, 160, 106, 0.28);
+  margin-top: 4px;
+  transition: transform 120ms ease, box-shadow 120ms ease, background 120ms ease;
+}
+.su-submit:hover:not(:disabled) {
+  background: #13835a;
+  border-color: #13835a;
+  transform: translateY(-1px);
+  box-shadow: 0 14px 32px rgba(24, 160, 106, 0.32);
+}
+.su-submit:disabled { opacity: 0.7; cursor: default; }
+
+.su-note {
+  margin: 14px 0 0;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #12654e;
+  text-align: center;
+}
+.su-meta {
+  margin: 14px 0 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  text-align: center;
+}
+.su-meta a { color: var(--text-muted); }
+
+.su-signin {
+  margin: 18px 0 0;
+  font-size: 13.5px;
+  color: var(--text-muted);
+  text-align: center;
+}
+.su-signin a { color: #12654e; font-weight: 600; text-decoration: none; }
+.su-signin a:hover { text-decoration: underline; }
+
+/* ── Google button (same shape as the shared login-page style) ────────── */
+.google-btn {
+  width: 100%;
+  height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border-radius: 12px;
+  background: #fff;
+  color: #1a1a1a;
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 14px;
+  border: 1.5px solid var(--border);
+  cursor: pointer;
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+.google-btn:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+.google-btn:active { transform: translateY(0); }
+.google-icon {
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+@media (max-width: 480px) {
+  .su-card { padding: 32px 24px 28px; }
+}

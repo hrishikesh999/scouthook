@@ -21,6 +21,17 @@ function isValidPassword(str) {
   return typeof str === 'string' && str.length >= 8;
 }
 
+// Signup no longer collects a name up front (onboarding asks for it later),
+// so derive a placeholder display name from the email's local part.
+function deriveDisplayNameFromEmail(email) {
+  const local = String(email).split('@')[0].replace(/[._-]+/g, ' ').trim();
+  return local
+    .split(' ')
+    .filter(Boolean)
+    .map(w => w[0].toUpperCase() + w.slice(1))
+    .join(' ') || 'there';
+}
+
 async function createPersonalWorkspaceForUser(userId, displayName) {
   return db.transaction(async (tx) => {
     const wsRow = await tx.prepare(
@@ -86,10 +97,8 @@ router.post('/signup', async (req, res) => {
   try {
     const { name, email, password } = req.body || {};
 
-    if (!name || typeof name !== 'string' || name.trim().length < 1) {
-      return res.status(400).json({ ok: false, error: 'name_required' });
-    }
-    if (name.trim().length > 100) {
+    const rawName = typeof name === 'string' ? name.trim() : '';
+    if (rawName.length > 100) {
       return res.status(400).json({ ok: false, error: 'name_too_long' });
     }
     if (!isValidEmail(email)) {
@@ -100,7 +109,7 @@ router.post('/signup', async (req, res) => {
     }
 
     const normalizedEmail = email.trim().toLowerCase();
-    const displayName     = name.trim();
+    const displayName     = rawName || deriveDisplayNameFromEmail(email.trim());
 
     // Check if email already registered via any auth method (email provider OR OAuth)
     const existingProvider = await db.prepare(

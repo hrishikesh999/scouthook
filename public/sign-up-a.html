@@ -244,6 +244,9 @@
         font-size: clamp(24px, 6.4vw, 32px);
         line-height: 1.15;
       }
+      /* The desktop clamp floors the gap under the logo far too tall on phones —
+         tighten the space between the topbar logo and the hero headline. */
+      .a-hero-inner { padding-top: 28px; }
     }
 
     /* ============ Transform (before/after) — reused from homepage ============ */
@@ -390,6 +393,28 @@
     section.a-final h2 { color: #fff; font-size: clamp(26px, 3.4vw, 36px); }
     .a-final-sub { color: rgba(238,243,245,0.78); font-size: 18px; line-height: 1.6; margin: 12px 0 32px; }
     .a-final .a-card { margin: 0 auto; text-align: left; }
+    .a-final-cta {
+      display: inline-block;
+      font-family: var(--font-body);
+      font-size: 17px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      text-decoration: none;
+      color: #fff;
+      background: var(--brand);
+      border: 1px solid var(--brand);
+      padding: 16px 40px;
+      border-radius: 12px;
+      box-shadow: 0 14px 32px rgba(24, 160, 106, 0.32);
+      transition: transform 120ms ease, box-shadow 120ms ease, background 120ms ease;
+    }
+    .a-final-cta:hover {
+      background: var(--brand-hover);
+      border-color: var(--brand-hover);
+      transform: translateY(-1px);
+      box-shadow: 0 18px 38px rgba(24, 160, 106, 0.36);
+    }
+    .a-final-cta-note { margin: 16px 0 0; font-size: 13.5px; color: rgba(238,243,245,0.7); }
 
     /* ============ Footer: legal only ============ */
     .a-footer { padding: 28px 0 40px; text-align: center; }
@@ -404,7 +429,6 @@
   <section class="a-hero">
     <div class="a-topbar">
       <img src="/images/scout-hook-logo.png" alt="ScoutHook" class="a-topbar-logo" />
-      <p class="a-topbar-signin">Already have an account? <a href="/login.html">Sign in</a></p>
     </div>
 
     <div class="a-hero-inner">
@@ -419,7 +443,7 @@
         </ul>
       </div>
 
-      <div class="a-card">
+      <div class="a-card" id="signup">
         <h2>Create your free account</h2>
         <p class="a-card-sub">Takes less than a minute.</p>
 
@@ -551,7 +575,7 @@
           <div class="feat-desc">A quality gate that keeps generic AI writing out of your posts.</div>
         </div>
         <div class="feat-tile">
-          <div class="feat-shot"><img src="/images/Idea-Stream.png" alt="ScoutHook idea stream" loading="lazy" /></div>
+          <div class="feat-shot feat-shot--left"><img src="/images/Idea-Stream.png" alt="ScoutHook idea stream" loading="lazy" /></div>
           <div class="feat-title">Idea Stream</div>
           <div class="feat-desc">Get post-worthy ideas every day.</div>
         </div>
@@ -566,7 +590,7 @@
           <div class="feat-desc">Turn docs, PDFs, and slides into insightful posts.</div>
         </div>
         <div class="feat-tile">
-          <div class="feat-shot"><img src="/images/Multiple-Workspaces.png" alt="ScoutHook multiple workspaces" loading="lazy" /></div>
+          <div class="feat-shot feat-shot--left"><img src="/images/Multiple-Workspaces.png" alt="ScoutHook multiple workspaces" loading="lazy" /></div>
           <div class="feat-title">Multiple Workspaces</div>
           <div class="feat-desc">Manage multiple LinkedIn accounts from one place.</div>
         </div>
@@ -638,36 +662,8 @@
       <h2>Your first post is one conversation away</h2>
       <p class="a-final-sub">Join ScoutHook free. No credit card required.</p>
 
-      <div class="a-card">
-        <div id="errorBox2" class="a-error" hidden></div>
-
-        <a href="/auth/google" class="google-btn">
-          <svg viewBox="0 0 48 48" width="18" height="18">
-            <path fill="#EA4335" d="M24 9.5c3.54 0 6.08 1.53 7.48 2.81l5.1-4.9C33.44 4.59 29.17 2.5 24 2.5 14.74 2.5 6.94 7.82 3.1 15.6l6.35 4.93C11.34 14.1 17.14 9.5 24 9.5z"/>
-            <path fill="#4285F4" d="M46.1 24.5c0-1.34-.12-2.63-.34-3.88H24v7.34h12.5c-.54 2.9-2.18 5.35-4.64 7.02v5.8h7.5c4.38-4.03 6.74-9.97 6.74-16.28z"/>
-            <path fill="#FBBC05" d="M9.45 28.53c-.47-1.4-.74-2.9-.74-4.53s.27-3.13.74-4.53l-6.35-4.93C1.77 17.23 1 20.52 1 24s.77 6.77 2.1 9.46l6.35-4.93z"/>
-            <path fill="#34A853" d="M24 45.5c5.17 0 9.5-1.7 12.66-4.62l-7.5-5.8c-2.08 1.4-4.74 2.23-5.16 2.23-6.86 0-12.66-4.6-14.55-11.03l-6.35 4.93C6.94 40.18 14.74 45.5 24 45.5z"/>
-            <path fill="none" d="M1 1h46v46H1z"/>
-          </svg>
-          <span>Sign up with Google</span>
-        </a>
-        <div class="a-divider"><hr /><span>or</span><hr /></div>
-
-        <form id="signupForm2" data-error="errorBox2" data-submit="submit2" novalidate>
-          <div class="a-field-group">
-            <label class="a-field-label" for="su-email-2">Email</label>
-            <input id="su-email-2" type="email" class="a-field-input" placeholder="you@example.com" autocomplete="email" required />
-          </div>
-          <div class="a-field-group">
-            <label class="a-field-label" for="su-password-2">Password</label>
-            <input id="su-password-2" type="password" class="a-field-input" placeholder="At least 8 characters" autocomplete="new-password" required />
-          </div>
-          <button type="submit" id="submit2" class="a-submit">Create account</button>
-        </form>
-
-        <p class="a-note">No credit card required &middot; Cancel anytime</p>
-        <p class="a-meta">By continuing you agree to our <a href="/terms.html">Terms</a> and <a href="/privacy.html">Privacy Policy</a>. Need help? <a href="https://app.scouthook.com/help.html" target="_blank" rel="noopener">Visit our help center</a>.</p>
-      </div>
+      <a href="#signup" class="a-final-cta">Free Sign up</a>
+      <p class="a-final-cta-note">No credit card required &middot; Cancel anytime.</p>
     </div>
   </section>
 
@@ -743,7 +739,6 @@
     }
 
     wireForm('signupForm1');
-    wireForm('signupForm2');
   })();
   </script>
 

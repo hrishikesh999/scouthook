@@ -212,6 +212,8 @@ router.post('/verify-email', async (req, res) => {
     } else {
       workspaceId = await createPersonalWorkspaceForUser(row.user_id, row.display_name);
       seedTrialSubscription(row.user_id).catch(() => {});
+      // Brand-new signup — stamp the ad that produced it, if any.
+      require('../services/attribution').attachFromRequest(row.user_id, req).catch(() => {});
       sendEmailToUser(row.user_id, 'welcome', { app_url: APP_URL },
         { dedupKey: `welcome:${row.user_id}`, withinHours: 365 * 24 }).catch(() => {});
       require('../services/mailerlite').addFreeSubscriber(row.email, row.display_name).catch(() => {});

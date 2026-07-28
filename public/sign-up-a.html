@@ -529,8 +529,8 @@
       </div>
 
       <div class="a-card" id="signup">
-        <h2>Create your free account</h2>
-        <p class="a-card-sub">Takes less than a minute.</p>
+        <h2>Start your 7 days free</h2>
+        <p class="a-card-sub">No credit card. Takes less than a minute.</p>
 
         <div id="errorBox1" class="a-error" hidden></div>
 
@@ -555,10 +555,10 @@
             <label class="a-field-label" for="su-password-1">Password</label>
             <input id="su-password-1" type="password" class="a-field-input" placeholder="At least 8 characters" autocomplete="new-password" required />
           </div>
-          <button type="submit" id="submit1" class="a-submit">Create account</button>
+          <button type="submit" id="submit1" class="a-submit">Start free</button>
         </form>
 
-        <p class="a-note">No credit card required &middot; Cancel anytime</p>
+        <p class="a-note">7 days free &middot; No credit card required</p>
         <p class="a-meta">By continuing you agree to our <a href="https://www.scouthook.com/terms" target="_blank" rel="noopener">Terms</a> and <a href="https://www.scouthook.com/privacy" target="_blank" rel="noopener">Privacy Policy</a>. Need help? <a href="https://app.scouthook.com/help.html" target="_blank" rel="noopener">Visit our help center</a>.</p>
       </div>
     </div>
@@ -736,7 +736,7 @@
         </details>
         <details class="a-faq-item">
           <summary>What if it's not for me?</summary>
-          <div class="a-faq-a">You can cancel anytime, and you are covered by a 14-day money-back guarantee. There is no credit card required to start.</div>
+          <div class="a-faq-a">Your first 7 days are free and we never ask for a card to start &mdash; so if ScoutHook isn't for you, there's nothing to cancel and nothing charged. You only decide about paying once you've actually used it.</div>
         </details>
       </div>
     </div>
@@ -745,10 +745,10 @@
   <section class="a-final">
     <div class="container">
       <h2>Your first post is one conversation away</h2>
-      <p class="a-final-sub">Join ScoutHook free. No credit card required.</p>
+      <p class="a-final-sub">Try ScoutHook free for 7 days. No credit card required.</p>
 
-      <a href="#signup" class="a-final-cta">Free Sign up</a>
-      <p class="a-final-cta-note">No credit card required &middot; Cancel anytime.</p>
+      <a href="#signup" class="a-final-cta">Start free</a>
+      <p class="a-final-cta-note">7 days free &middot; No credit card required.</p>
     </div>
   </section>
 
@@ -757,7 +757,7 @@
   </footer>
 
   <div class="a-sticky" id="stickyCta">
-    <a href="#signup" class="a-sticky-btn">Free Sign up</a>
+    <a href="#signup" class="a-sticky-btn">Start free</a>
   </div>
 
   <script>
@@ -813,6 +813,17 @@
           const data = await res.json();
 
           if (data.ok && data.redirect) {
+            // Mid-funnel signal. Registration isn't complete until the emailed
+            // code is entered (CompleteRegistration fires on onboarding.html),
+            // but at low daily volume that event alone is too sparse for Meta to
+            // optimise against — Lead gives the algorithm a denser signal from
+            // the one step we can verify here: a real email was submitted.
+            if (typeof window.fbq === 'function') {
+              window.fbq('track', 'Lead', {
+                content_name:     params.get('utm_content')  || 'organic',
+                content_category: params.get('utm_campaign') || 'organic',
+              });
+            }
             window.location.href = data.redirect;
             return;
           }
@@ -822,7 +833,7 @@
           showError('Network error. Please check your connection and try again.');
         } finally {
           btn.disabled    = false;
-          btn.textContent = 'Create account';
+          btn.textContent = 'Start free';
         }
       });
     }

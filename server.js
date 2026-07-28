@@ -18,6 +18,7 @@ const { sendEmail, sendEmailToUser } = require('./emails');
 const { seedTrialSubscription } = require('./services/subscription');
 const affiliatesService = require('./services/affiliates');
 const { scheduleReconciler } = require('./services/affiliateReconciler');
+const attribution = require('./services/attribution');
 const cookie = require('cookie');
 
 // Initialise DB adapter (schema is managed by migrations)
@@ -190,7 +191,10 @@ if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
     clientID: GOOGLE_CLIENT_ID,
     clientSecret: GOOGLE_CLIENT_SECRET,
     callbackURL: GOOGLE_CALLBACK_URL || '/auth/google/callback',
-  }, async (accessToken, refreshToken, profile, done) => {
+    // req is needed to read the sh_attr attribution cookie when this strategy
+    // creates a brand-new user (see the workspace-creation branch below).
+    passReqToCallback: true,
+  }, async (req, accessToken, refreshToken, profile, done) => {
     const email = profile?.emails?.[0]?.value ? profile.emails[0].value.trim().toLowerCase() : null;
     const photo = profile?.photos?.[0]?.value || null;
     const googleId = profile?.id || null;
@@ -278,6 +282,8 @@ if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
           } else {
             workspaceId = await createPersonalWorkspace(userId, displayName);
             seedTrialSubscription(userId).catch(() => {});
+            // Brand-new signup — stamp the ad that produced it, if any.
+            attribution.attachFromRequest(userId, req).catch(() => {});
             // Welcome email only on brand-new signup (new workspace = new user)
             if (email) {
               const appUrl = process.env.APP_URL || '';
@@ -321,6 +327,11 @@ app.use((req, res, next) => {
   }
   next();
 });
+
+// Paid-acquisition attribution — capture utm_* / fbclid into the sh_attr cookie.
+// Sits above express.static so it also fires for plain HTML landing pages
+// (/sign-up-a.html), which is where all Meta ad traffic arrives.
+app.use(attribution.capture);
 
 // After passport restores req.user — attach tenant_id and user_id for API routes.
 // Both values are derived exclusively from the authenticated session; headers are

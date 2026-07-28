@@ -24,6 +24,26 @@
   /></noscript>
   <!-- End Meta Pixel Code -->
 
+  <!-- Signup conversion — this is the first authenticated page a brand-new user
+       reaches, so it's where CompleteRegistration belongs. The server decides
+       whether to fire (see POST /api/events/signup-conversion): it claims the
+       event atomically, so revisiting onboarding never double-counts. -->
+  <script>
+  (function () {
+    fetch('/api/events/signup-conversion', { method: 'POST' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        if (!d || !d.fire || typeof window.fbq !== 'function') return;
+        window.fbq('track', 'CompleteRegistration', {
+          content_name: d.utm_content  || 'organic',
+          content_category: d.utm_campaign || 'organic',
+          status: true,
+        });
+      })
+      .catch(function () { /* never block onboarding on a tracking call */ });
+  })();
+  </script>
+
   <link rel="stylesheet" href="/css/main.css" />
   <link rel="stylesheet" href="/css/onboarding.css" />
   <script src="/js/confetti.min.js"></script>

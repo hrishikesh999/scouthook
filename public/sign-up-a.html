@@ -1,5 +1,8 @@
 <!DOCTYPE html>
-<html lang="en">
+<!-- data-variant is the message-match switch. It ships as "a" so the page is
+     correct with no JavaScript and on a direct visit; the resolver script at
+     the end of <head> rewrites it before first paint when the URL says otherwise. -->
+<html lang="en" data-variant="a">
 <head>
   <meta charset="UTF-8" />
   <link rel="icon" type="image/png" href="/favicon.png">
@@ -507,9 +510,105 @@
     .a-footer a { color: var(--text-muted); text-decoration: none; }
     .a-footer a:hover { text-decoration: underline; }
     .a-footer .sep { margin: 0 8px; opacity: 0.5; }
+
+    /* ============ Message-match variants ============ */
+    /* Every variant ships in the HTML and is hidden by CSS; the resolver in
+       <head> picks one before first paint. No flicker, no extra request, and
+       the page still renders variant A if the script never runs. */
+    .v-block { display: none; }
+    html[data-variant="a"] .v-block[data-v="a"],
+    html[data-variant="b"] .v-block[data-v="b"],
+    html[data-variant="c"] .v-block[data-v="c"],
+    html[data-variant="d"] .v-block[data-v="d"] { display: block; }
+
+    /* ============ Echo strip — finishes the sentence the ad started ============ */
+    section.a-echo { padding: 56px 0; background: #f9fafb; border-bottom: 1px solid var(--border); }
+    .echo-h2 {
+      font-family: var(--font-heading);
+      font-weight: 700;
+      font-size: clamp(23px, 2.9vw, 32px);
+      letter-spacing: -0.02em;
+      line-height: 1.25;
+      color: var(--text-heading);
+      text-align: center;
+      max-width: 20ch;
+      margin: 0 auto;
+    }
+    .echo-grid { margin-top: 34px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+    .echo-card {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 24px 22px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.05);
+    }
+    .echo-icon {
+      width: 38px; height: 38px;
+      border-radius: 11px;
+      background: rgba(24, 160, 106, 0.1);
+      color: var(--brand);
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: 14px;
+    }
+    .echo-icon svg { width: 20px; height: 20px; }
+    .echo-icon--num {
+      font-family: var(--font-heading);
+      font-weight: 800;
+      font-size: 17px;
+      background: var(--brand);
+      color: #fff;
+    }
+    .echo-title { font-family: var(--font-heading); font-weight: 700; font-size: 16.5px; color: var(--text-heading); margin-bottom: 6px; }
+    .echo-desc { font-size: 14.5px; line-height: 1.6; color: var(--text-muted); }
+    @media (max-width: 820px) {
+      section.a-echo { padding: 40px 0; }
+      .echo-grid { grid-template-columns: 1fr; gap: 14px; margin-top: 26px; }
+      .echo-h2 { max-width: none; }
+    }
   </style>
+
+  <!-- Variant resolver. Runs synchronously in <head>, so data-variant is set
+       before the body is painted — the visitor never sees the wrong headline.
+       Order matters: an explicit ?v= (for QA) beats the campaign, and a
+       retargeting campaign beats the ad-level utm_content. Anything
+       unrecognised falls through to A. -->
+  <script>
+  (function () {
+    var VALID = { a: 1, b: 1, c: 1, d: 1 };
+    var p = new URLSearchParams(window.location.search);
+    var v = (p.get('v') || '').toLowerCase();
+
+    if (!VALID[v]) {
+      var campaign = (p.get('utm_campaign') || '').toLowerCase();
+      var content  = (p.get('utm_content')  || '').toLowerCase();
+
+      // Retargeting sends utm_content={{ad.name}} — the ad name is whatever the
+      // winning prospecting ad was called, so the campaign is the only reliable
+      // signal here. It has to be checked before the utm_content mapping below.
+      if (campaign.indexOf('retarget') !== -1)                            v = 'd';
+      else if (content.indexOf('ad2_') === 0 || content.indexOf('consistency') !== -1) v = 'b';
+      else if (content.indexOf('ad3_') === 0 || content.indexOf('depth')       !== -1) v = 'c';
+      else                                                                v = 'a';
+    }
+
+    document.documentElement.setAttribute('data-variant', v);
+  })();
+  </script>
 </head>
 <body>
+
+  <!-- Icon sprite — the hero bullets and echo cards repeat these across four
+       variants, so define once and <use> them rather than inlining 20 copies. -->
+  <svg style="display:none" aria-hidden="true" focusable="false">
+    <symbol id="ico-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></symbol>
+    <symbol id="ico-bulb" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></symbol>
+    <symbol id="ico-calendar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></symbol>
+    <symbol id="ico-vault" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="12" cy="12" r="4"/><path d="M12 8v1M12 15v1"/></symbol>
+    <symbol id="ico-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="ico-message" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
+    <symbol id="ico-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></symbol>
+    <symbol id="ico-pen" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></symbol>
+  </svg>
 
   <section class="a-hero">
     <div class="a-topbar">
@@ -518,14 +617,58 @@
 
     <div class="a-hero-inner">
       <div class="a-hero-copy">
-        <span class="a-hero-tag">For founders, consultants &amp; operators</span>
-        <h1>Turn your ideas into <span class="accent">LinkedIn posts</span> that build your authority</h1>
-        <p class="a-hero-sub">Build your audience without turning it into a second job.</p>
-        <ul class="a-hero-bullets">
-          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Turn your best ideas into scroll-stopping posts</li>
-          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Zero AI-Slop</li>
-          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Build authority in about an hour a week</li>
-        </ul>
+
+        <!-- A — Invisible Expert · AD-1 "Your expertise deserves an audience" -->
+        <div class="v-block" data-v="a">
+          <span class="a-hero-tag">For founders, consultants &amp; operators</span>
+          <!-- Verbatim from the AD-1 creative — the exact line the visitor
+               just tapped, so the page reads as confirmation, not a new pitch. -->
+          <h1>You're the expert. <span class="accent">So why does your LinkedIn look empty?</span></h1>
+          <p class="a-hero-sub">ScoutHook learns what you know, asks the right questions, and turns your real expertise into posts that sound like you.</p>
+          <ul class="a-hero-bullets">
+            <li><svg><use href="#ico-check"/></svg> It learns your expertise, not just your topic</li>
+            <li><svg><use href="#ico-check"/></svg> Every post is your thinking, never a template</li>
+            <li><svg><use href="#ico-check"/></svg> About an hour a week</li>
+          </ul>
+        </div>
+
+        <!-- B — Consistency Cycle · AD-2 "Never run out of things to post" -->
+        <div class="v-block" data-v="b">
+          <span class="a-hero-tag">For founders, consultants &amp; operators</span>
+          <h1>Consistency isn't a willpower problem. <span class="accent">It's a system problem.</span></h1>
+          <p class="a-hero-sub">An Idea Vault stocked with topics matched to your expertise, and a scheduler that keeps you planned weeks ahead. You always know what's next.</p>
+          <ul class="a-hero-bullets">
+            <li><svg><use href="#ico-check"/></svg> Post-worthy ideas waiting every morning</li>
+            <li><svg><use href="#ico-check"/></svg> Plan weeks ahead in one sitting</li>
+            <li><svg><use href="#ico-check"/></svg> Never open a blank page again</li>
+          </ul>
+        </div>
+
+        <!-- C — Depth, Not Templates · AD-3 "Posts with your depth, in your voice" -->
+        <div class="v-block" data-v="c">
+          <span class="a-hero-tag">For founders, consultants &amp; operators</span>
+          <h1>The hardest part isn't writing. <span class="accent">It's getting what's in your head onto the page.</span></h1>
+          <p class="a-hero-sub">ScoutHook works like a great interviewer — it asks about your work, your wins, your hard-earned lessons, then shapes your answers into posts that carry real weight.</p>
+          <ul class="a-hero-bullets">
+            <li><svg><use href="#ico-check"/></svg> It asks the right questions about your work</li>
+            <li><svg><use href="#ico-check"/></svg> You answer from real experience</li>
+            <li><svg><use href="#ico-check"/></svg> A post with real weight — in your voice</li>
+          </ul>
+        </div>
+
+        <!-- D — Retargeting. Warm traffic already knows the problem; this one
+             argues for acting now rather than re-explaining the pain. -->
+        <div class="v-block" data-v="d">
+          <span class="a-hero-tag">Welcome back</span>
+          <h1>You already know the problem. <span class="accent">Here's the fix.</span></h1>
+          <p class="a-hero-sub">Your knowledge, your voice, about an hour a week. Try it free for 7 days — we don't ask for a card.</p>
+          <ul class="a-hero-bullets">
+            <li><svg><use href="#ico-check"/></svg> Your first post is one conversation away</li>
+            <li><svg><use href="#ico-check"/></svg> 7 days free, no credit card</li>
+            <li><svg><use href="#ico-check"/></svg> You approve every post before it goes live</li>
+          </ul>
+        </div>
+
       </div>
 
       <div class="a-card" id="signup">
@@ -561,6 +704,99 @@
         <p class="a-note">7 days free &middot; No credit card required</p>
         <p class="a-meta">By continuing you agree to our <a href="https://www.scouthook.com/terms" target="_blank" rel="noopener">Terms</a> and <a href="https://www.scouthook.com/privacy" target="_blank" rel="noopener">Privacy Policy</a>. Need help? <a href="https://app.scouthook.com/help.html" target="_blank" rel="noopener">Visit our help center</a>.</p>
       </div>
+    </div>
+  </section>
+
+  <!-- Echo strip. The one block below the fold that still belongs to the ad:
+       it confirms the promise the visitor just tapped before the shared body
+       (before/after, stats, features, founder, FAQ) takes over for everyone. -->
+  <section class="a-echo">
+    <div class="container">
+
+      <div class="v-block" data-v="a">
+        <h2 class="echo-h2">The expertise is already there. Being seen is what's missing.</h2>
+        <div class="echo-grid">
+          <div class="echo-card">
+            <div class="echo-icon"><svg><use href="#ico-vault"/></svg></div>
+            <div class="echo-title">You know things worth saying</div>
+            <div class="echo-desc">Years of hard-won judgement that never makes it past your own head.</div>
+          </div>
+          <div class="echo-card">
+            <div class="echo-icon"><svg><use href="#ico-message"/></svg></div>
+            <div class="echo-title">ScoutHook asks the right questions</div>
+            <div class="echo-desc">It interviews you about your work the way a good journalist would — so the substance comes out.</div>
+          </div>
+          <div class="echo-card">
+            <div class="echo-icon"><svg><use href="#ico-eye"/></svg></div>
+            <div class="echo-title">Your audience finally sees it</div>
+            <div class="echo-desc">Posts that carry your expertise, in language that reads like you wrote them.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="v-block" data-v="b">
+        <h2 class="echo-h2">Week 3 is where everyone stops. Here's what changes it.</h2>
+        <div class="echo-grid">
+          <div class="echo-card">
+            <div class="echo-icon"><svg><use href="#ico-bulb"/></svg></div>
+            <div class="echo-title">Idea Stream</div>
+            <div class="echo-desc">Post-worthy ideas matched to your expertise, already waiting when you sit down.</div>
+          </div>
+          <div class="echo-card">
+            <div class="echo-icon"><svg><use href="#ico-vault"/></svg></div>
+            <div class="echo-title">Idea Vault</div>
+            <div class="echo-desc">Park a thought the moment it lands. It's still there on the day you need something to say.</div>
+          </div>
+          <div class="echo-card">
+            <div class="echo-icon"><svg><use href="#ico-calendar"/></svg></div>
+            <div class="echo-title">Scheduler</div>
+            <div class="echo-desc">Queue weeks ahead in one sitting, so a busy week never breaks the streak.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="v-block" data-v="c">
+        <h2 class="echo-h2">Not a template. An interview.</h2>
+        <div class="echo-grid">
+          <div class="echo-card">
+            <div class="echo-icon echo-icon--num">1</div>
+            <div class="echo-title">It asks</div>
+            <div class="echo-desc">Questions about the actual work — the call that went sideways, the thing you'd do differently now.</div>
+          </div>
+          <div class="echo-card">
+            <div class="echo-icon echo-icon--num">2</div>
+            <div class="echo-title">You answer from experience</div>
+            <div class="echo-desc">In your own words. Talk it out loud if you'd rather not type a thing.</div>
+          </div>
+          <div class="echo-card">
+            <div class="echo-icon echo-icon--num">3</div>
+            <div class="echo-title">It takes shape</div>
+            <div class="echo-desc">A post with a real argument and a real point of view — because the thinking is yours.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="v-block" data-v="d">
+        <h2 class="echo-h2">Still thinking about it? Start with one post.</h2>
+        <div class="echo-grid">
+          <div class="echo-card">
+            <div class="echo-icon"><svg><use href="#ico-message"/></svg></div>
+            <div class="echo-title">It takes one sitting</div>
+            <div class="echo-desc">Answer a few questions about something you already know. That's the whole thing.</div>
+          </div>
+          <div class="echo-card">
+            <div class="echo-icon"><svg><use href="#ico-shield"/></svg></div>
+            <div class="echo-title">Nothing to lose</div>
+            <div class="echo-desc">7 days free and no card up front. If it isn't for you, there's nothing to cancel.</div>
+          </div>
+          <div class="echo-card">
+            <div class="echo-icon"><svg><use href="#ico-pen"/></svg></div>
+            <div class="echo-title">You stay in control</div>
+            <div class="echo-desc">Every post is yours to edit, rewrite, or bin before anything goes live.</div>
+          </div>
+        </div>
+      </div>
+
     </div>
   </section>
 
@@ -744,8 +980,24 @@
 
   <section class="a-final">
     <div class="container">
-      <h2>Your first post is one conversation away</h2>
-      <p class="a-final-sub">Try ScoutHook free for 7 days. No credit card required.</p>
+      <!-- Closes on the same promise the ad opened with — these headlines are
+           the ad headlines almost verbatim, so the visit ends where it began. -->
+      <div class="v-block" data-v="a">
+        <h2>Your expertise deserves an audience</h2>
+        <p class="a-final-sub">Try ScoutHook free for 7 days. No credit card required.</p>
+      </div>
+      <div class="v-block" data-v="b">
+        <h2>Never run out of things to post</h2>
+        <p class="a-final-sub">Try ScoutHook free for 7 days. No credit card required.</p>
+      </div>
+      <div class="v-block" data-v="c">
+        <h2>Posts with your depth, in your voice</h2>
+        <p class="a-final-sub">Try ScoutHook free for 7 days. No credit card required.</p>
+      </div>
+      <div class="v-block" data-v="d">
+        <h2>Your first post is one conversation away</h2>
+        <p class="a-final-sub">Try ScoutHook free for 7 days. No credit card required.</p>
+      </div>
 
       <a href="#signup" class="a-final-cta">Start free</a>
       <p class="a-final-cta-note">7 days free &middot; No credit card required.</p>

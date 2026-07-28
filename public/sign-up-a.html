@@ -416,6 +416,63 @@
     }
     .a-final-cta-note { margin: 16px 0 0; font-size: 13.5px; color: rgba(238,243,245,0.7); }
 
+    /* ============ Sticky sign-up CTA (appears after the hero form scrolls away) ============ */
+    .a-sticky {
+      position: fixed;
+      z-index: 50;
+      right: 24px;
+      bottom: 24px;
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(16px);
+      transition: opacity 200ms ease, transform 200ms ease, visibility 200ms ease;
+    }
+    .a-sticky.is-visible { opacity: 1; visibility: visible; transform: translateY(0); }
+    .a-sticky-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-family: var(--font-body);
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      text-decoration: none;
+      color: #fff;
+      background: var(--brand);
+      border: 1px solid var(--brand);
+      padding: 13px 24px;
+      border-radius: 999px;
+      box-shadow: 0 12px 30px rgba(24, 160, 106, 0.38);
+      transition: transform 120ms ease, box-shadow 120ms ease, background 120ms ease;
+    }
+    .a-sticky-btn:hover {
+      background: var(--brand-hover);
+      border-color: var(--brand-hover);
+      transform: translateY(-1px);
+      box-shadow: 0 16px 36px rgba(24, 160, 106, 0.42);
+    }
+    /* Mobile: full-width bar pinned to the bottom edge */
+    @media (max-width: 640px) {
+      .a-sticky {
+        right: 0;
+        left: 0;
+        bottom: 0;
+        padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
+        background: rgba(255, 255, 255, 0.92);
+        -webkit-backdrop-filter: blur(8px);
+        backdrop-filter: blur(8px);
+        border-top: 1px solid var(--border);
+        box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.08);
+      }
+      .a-sticky-btn {
+        width: 100%;
+        justify-content: center;
+        font-size: 16px;
+        padding: 15px 24px;
+        border-radius: 12px;
+      }
+    }
+
     /* ============ Footer: legal only ============ */
     .a-footer { padding: 28px 0 40px; text-align: center; }
     .a-footer p { margin: 0; font-size: 12.5px; color: var(--text-muted); }
@@ -671,6 +728,10 @@
     <p>&copy; ScoutHook &middot; <a href="/terms.html">Terms</a><span class="sep">&middot;</span><a href="/privacy.html">Privacy</a><span class="sep">&middot;</span><a href="https://app.scouthook.com/help.html" target="_blank" rel="noopener">Help</a></p>
   </footer>
 
+  <div class="a-sticky" id="stickyCta">
+    <a href="#signup" class="a-sticky-btn">Free Sign up</a>
+  </div>
+
   <script>
   (function () {
     const ERROR_MESSAGES = {
@@ -739,6 +800,34 @@
     }
 
     wireForm('signupForm1');
+
+    // Sticky sign-up CTA: show once the hero form scrolls out of view, and hide
+    // again while the final CTA section is on screen (so they never stack).
+    (function () {
+      const sticky = document.getElementById('stickyCta');
+      const hero   = document.getElementById('signup');
+      const final  = document.querySelector('.a-final');
+      if (!sticky || !hero) return;
+
+      let heroVisible  = true;   // hero form on screen at load
+      let finalVisible = false;
+
+      function sync() {
+        sticky.classList.toggle('is-visible', !heroVisible && !finalVisible);
+      }
+
+      new IntersectionObserver(([e]) => {
+        heroVisible = e.isIntersecting;
+        sync();
+      }).observe(hero);
+
+      if (final) {
+        new IntersectionObserver(([e]) => {
+          finalVisible = e.isIntersecting;
+          sync();
+        }).observe(final);
+      }
+    })();
   })();
   </script>
 

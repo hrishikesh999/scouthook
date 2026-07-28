@@ -31,14 +31,32 @@ const app = express();
 // Security middleware
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Security headers.
+//
+// ⚠️  ANALYTICS HOSTS BELOW ARE LOAD-BEARING — DO NOT PRUNE THEM.
+// Removing connect.facebook.net or the clarity.ms hosts produces no error
+// anywhere: the Meta Pixel's inline snippet installs a stub that queues events
+// until the real script loads, so window.fbq stays a function, every guard in
+// the app still passes, and the queue simply grows and dies with the tab.
+// Events Manager just shows nothing. This exact silence hid a completely dead
+// pixel — no PageView, Lead, or CompleteRegistration ever reached Meta — while
+// the app looked healthy from every angle. If you touch this block, verify with
+// Events Manager → Test Events, not by reading the console.
+// ---------------------------------------------------------------------------
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc:     ["'self'"],
-      scriptSrc:      ["'self'", "'unsafe-inline'", "https://cdn.paddle.com", "https://public.profitwell.com", "https://assets.calendly.com"],
+      // connect.facebook.net → Meta Pixel (fbevents.js).
+      // *.clarity.ms (not just www) → the Clarity tag loads its real payload
+      // from scripts.clarity.ms, so a www-only entry silently half-works.
+      scriptSrc:      ["'self'", "'unsafe-inline'", "https://cdn.paddle.com", "https://public.profitwell.com", "https://assets.calendly.com", "https://connect.facebook.net", "https://*.clarity.ms"],
       styleSrc:       ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdn.paddle.com", "https://assets.calendly.com"],
-      imgSrc:         ["'self'", "data:", "blob:", "*.licdn.com", "media.licdn.com", "*.googleusercontent.com", "*.amazonaws.com", "images.pexels.com", "api.iconify.design", "*.r2.dev"],
-      connectSrc:     ["'self'", "https://sandbox-api.paddle.com", "https://api.paddle.com", "https://cdn.paddle.com", "https://buy.paddle.com", "https://sandbox-buy.paddle.com", "https://calendly.com"],
+      // www.facebook.com → pixel /tr beacon + <noscript> fallback; clarity/bing → c.gif tracking pixels
+      imgSrc:         ["'self'", "data:", "blob:", "*.licdn.com", "media.licdn.com", "*.googleusercontent.com", "*.amazonaws.com", "images.pexels.com", "api.iconify.design", "*.r2.dev", "https://www.facebook.com", "https://*.clarity.ms", "https://c.bing.com"],
+      // facebook → sendBeacon/fetch event delivery; clarity + c.bing.com → session ingest
+      connectSrc:     ["'self'", "https://sandbox-api.paddle.com", "https://api.paddle.com", "https://cdn.paddle.com", "https://buy.paddle.com", "https://sandbox-buy.paddle.com", "https://calendly.com", "https://connect.facebook.net", "https://www.facebook.com", "https://*.clarity.ms", "https://c.bing.com"],
       fontSrc:        ["'self'", "https://fonts.gstatic.com"],
       objectSrc:      ["'none'"],
       frameAncestors: ["'none'"],

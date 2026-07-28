@@ -335,19 +335,11 @@
     .tx-pill-ready { position: absolute; bottom: 16px; right: 16px; z-index: 3; background: #0b3d2c; color: #fff; font-family: var(--font-heading); font-weight: 700; font-size: 12px; padding: 7px 13px; border-radius: 999px; display: flex; align-items: center; gap: 7px; box-shadow: 0 10px 24px rgba(0,0,0,0.25); }
     .tx-pill-ready .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
 
-    .tx-steps-kicker { margin-top: 60px; text-align: center; font-family: var(--font-heading); font-weight: 700; font-size: 27px; letter-spacing: -0.01em; color: var(--text-heading); }
-    .how-steps { margin-top: 26px; list-style: none; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
-    .how-steps-item { background: #fff; border: 1px solid var(--border); border-radius: 16px; padding: 26px 24px; box-shadow: 0 12px 32px rgba(0,0,0,0.07); display: flex; flex-direction: column; gap: 12px; }
-    .how-steps-num { width: 44px; height: 44px; border-radius: 13px; background: var(--brand); color: #fff; font-family: var(--font-heading); font-weight: 800; font-size: 20px; display: flex; align-items: center; justify-content: center; box-shadow: 0 8px 18px rgba(24, 160, 106, 0.30); }
-    .how-steps-title { font-family: var(--font-heading); font-weight: 700; font-size: 18px; color: var(--text-heading); line-height: 1.35; margin-bottom: 2px; }
-    .how-steps-desc { font-size: 15px; color: var(--text-muted); line-height: 1.6; }
-
     @media (max-width: 820px) {
       .tx-panel { padding: 40px 22px 32px; }
       .tx-arc { display: none; }
       .tx-grid { grid-template-columns: 1fr; gap: 30px; }
       .tx-before { transform: none; }
-      .how-steps { grid-template-columns: 1fr; gap: 20px; }
     }
 
     /* ============ Stat band (Edelman — the checkable one) ============ */
@@ -834,30 +826,12 @@
         </div>
       </div>
 
-      <p class="tx-steps-kicker">From a rough thought to a post worth reading</p>
-      <ol class="how-steps">
-        <li class="how-steps-item">
-          <span class="how-steps-num">1</span>
-          <div>
-            <div class="how-steps-title">Answer a few questions, or just talk it out</div>
-            <div class="how-steps-desc">The interview engine pulls the idea out of your head.</div>
-          </div>
-        </li>
-        <li class="how-steps-item">
-          <span class="how-steps-num">2</span>
-          <div>
-            <div class="how-steps-title">ScoutHook builds the hook, story, and structure</div>
-            <div class="how-steps-desc">A scroll-stopping opener and a clear narrative, shaped for LinkedIn.</div>
-          </div>
-        </li>
-        <li class="how-steps-item">
-          <span class="how-steps-num">3</span>
-          <div>
-            <div class="how-steps-title">Publish in your voice</div>
-            <div class="how-steps-desc">It sounds like you wrote it, because it's your thinking, not generic AI.</div>
-          </div>
-        </li>
-      </ol>
+      <!-- The numbered "how it works" steps that used to sit here were removed
+           once every variant gained its own echo strip above: they retold the
+           mechanism a second time, in weaker and more generic language, right
+           after the before/after panel had already shown it. Variant C made the
+           duplication obvious (two numbered three-step lists in one scroll), but
+           it applied to A as well. The panel carries this section on its own. -->
     </div>
   </section>
 

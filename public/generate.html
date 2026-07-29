@@ -312,6 +312,9 @@
   <script src="/js/ideas-pill.js"></script>
   <script id="pricing-modal-script" src="/js/pricing-modal.js"></script>
   <script src="/js/voice-input.js"></script>
+  <!-- Shared with the server's input router (services/inputMaturity.js re-exports
+       this file) — must load before generate.js, which gates the coach on it. -->
+  <script src="/js/input-maturity.js"></script>
   <script src="/js/generate.js"></script>
 </body>
 </html>

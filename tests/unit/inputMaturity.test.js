@@ -1,7 +1,9 @@
 'use strict';
 
 // Pure unit tests for the input router — no DB, no network.
-const { classifyInputMaturity, shouldOrganize, countWords, countSentences } = require('../../services/inputMaturity');
+const {
+  classifyInputMaturity, shouldOrganize, isAuthoredDraft, countWords, countSentences,
+} = require('../../services/inputMaturity');
 
 const AUTHORED_POST = `I lost our biggest client in March.
 
@@ -65,6 +67,43 @@ describe('inputMaturity — authored tier (a finished post must never be rewritt
     expect(r.tier).toBe('authored');
     expect(r.reason).toBe('long_multi_sentence');
     expect(shouldOrganize(AUTHORED_POST)).toBe(true);
+  });
+});
+
+describe('inputMaturity — regression: reflective post with no numbers', () => {
+  // A real post that the content coach interrogated the author about. The old
+  // client-side gate (isBriefRich) required a digit or a "last/this/past/next
+  // week|month|year|quarter" phrase as proof of substance — a test built for
+  // seeds. This post is finished and contains neither, so it fell through and
+  // got coached. Maturity and specificity are different questions; pinning the
+  // real text here so they do not get conflated again.
+  const REFLECTIVE_POST = `I've been thinking about starting my publication for so long. For the most part of my career, people close to me always said something along these lines - "Rishi, you need to write."
+
+But I've been putting it off.
+
+Often times, I would start, get busy with setting up a fancy Wordpress site, write an article or two and then I am done.
+
+When I sat down to reflect on this silent resistance, I realized a deeper truth.
+
+It was the fear of being judged. Going one level deeper, it was - the fear of crticism.
+
+That realization was confronting and empowering.
+
+It gave me the courage to make a choice. Stay stuck in the fear or go beyond it.
+
+Today, I am making a different choice.
+
+The choice was always available. I just exercised it.
+
+What different choice will you make today?`;
+
+  test('classifies as authored despite containing no digits or dates', () => {
+    expect(/\d/.test(REFLECTIVE_POST)).toBe(false);
+    expect(classifyInputMaturity(REFLECTIVE_POST).tier).toBe('authored');
+  });
+
+  test('isAuthoredDraft is true, so the coach is skipped', () => {
+    expect(isAuthoredDraft(REFLECTIVE_POST)).toBe(true);
   });
 });
 

@@ -1708,6 +1708,33 @@ const chat = (() => {
       return;
     }
 
+    // Already a finished draft — generate straight away.
+    //
+    // Every branch below this point exists to pull material out of someone who
+    // has not written it yet: the guided type flows, the adaptive coach, the
+    // length picker. Run any of them against a post the author already wrote and
+    // the product interrogates them about their own writing, which is the single
+    // most annoying thing it can do.
+    //
+    // This deliberately outranks isBriefRich(), which only skips the coach when a
+    // brief is long AND carries a digit or a calendar phrase. That is a substance
+    // test built for seeds; a finished reflective post with no numbers in it fails
+    // it and gets coached. Maturity and specificity are different questions.
+    //
+    // The length picker is skipped too — length is already decided by what they
+    // wrote, and organizePost is explicitly told not to pad to a word count.
+    //
+    // Same classifier the server routes on (public/js/input-maturity.js), so the
+    // coach cannot be skipped here only for the ghostwriter to run there.
+    if (window.InputMaturity?.isAuthoredDraft(val)) {
+      addUser(val);
+      chatThread.style.display = '';
+      chatInput.value        = '';
+      chatInput.style.height = '';
+      triggerGenerate({ enrichedIdea: val, skipSubstanceCheck: true });
+      return;
+    }
+
     // Authority/Expertise: three-step chat flow.
     // Step 0 — idea, Step 1 — misconception, Step 2 — length chips.
     if (selectedType === 'trust') {

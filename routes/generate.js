@@ -224,7 +224,11 @@ router.post('/', async (req, res) => {
           tension_statement, length_preference, cta_intent, generation_mode } = req.body;
   // "Organize" mode (Captain Scout): the AI acts as an editor, not a writer —
   // it organises the author's own words rather than composing new prose.
-  const organizeMode = generation_mode === 'organize';
+  // Explicitly requested here; also auto-selected by input maturity further down
+  // (see the input router after the raw_idea guard), which is why this is `let`.
+  let organizeMode = generation_mode === 'organize';
+  // Escape hatch: the user pressed "Rewrite it instead" on the router's notice.
+  const forceWriteMode = generation_mode === 'write';
   let { raw_idea } = req.body;
 
   // Idea Engine: generations that started from a dashboard "Today's 3" card carry
@@ -354,6 +358,27 @@ router.post('/', async (req, res) => {
 
   if (!raw_idea?.trim()) {
     return res.status(400).json({ ok: false, error: 'missing_raw_idea' });
+  }
+
+  // ── Input router ─────────────────────────────────────────────────────────
+  // Everything typed here used to go to postEngine.generate(), which is told it
+  // has "full authority over the hook, structure, and phrasing" at temperature
+  // 0.8. Right for a ten-word seed; destructive for someone who already wrote
+  // their post — it came back competent and generic, in nobody's voice.
+  //
+  // So once the input carries real authored substance, switch to organizePost
+  // (editor, not writer). Placed here deliberately: raw_idea is still exactly
+  // what the user typed — interview answers have been folded in, but the vault
+  // and RAG enrichment below have not yet spliced other people's text into it.
+  //
+  // Skipped for vault and idea-card flows: their raw_idea is seeded from source
+  // documents or an AI-drafted angle, so its length says nothing about how much
+  // of it the author actually wrote.
+  let inputMaturity = null;
+  if (!organizeMode && !forceWriteMode && !vault_idea_id && !ideaCardId) {
+    const { classifyInputMaturity } = require('../services/inputMaturity');
+    inputMaturity = classifyInputMaturity(extractAuthorRealText(raw_idea));
+    if (inputMaturity.tier !== 'seed') organizeMode = true;
   }
 
   // Resolve vault idea + source chunk (+ neighboring chunks) when growing from a seed
@@ -487,11 +512,13 @@ router.post('/', async (req, res) => {
 
         sseWrite('step', { step: 'analyzing', label: organizeMode ? 'Organising your words...' : (dispatch ? dispatch.label : 'Crafting your post...') });
 
-        let result, gate, archetypeUsed = null, contentFeedback = null;
+        let result, gate, archetypeUsed = null, contentFeedback = null, retention = null, hookWasWritten = false;
         if (organizeMode) {
           const { organizePost } = require('../services/organizePost');
           const org = await organizePost(raw_idea, profile, { postType: post_type, lengthPreference: length_preference });
           result = { post: org.post, synthesis: org.synthesis };
+          retention = org.retention;
+          hookWasWritten = !!org.hookWasWritten;
           gate = runQualityGate(
             result.post,
             { ...gateOptions({ format_slug: IDEA_SLUG, content: result.post }, profile, 'idea', null, post_type),
@@ -555,6 +582,12 @@ router.post('/', async (req, res) => {
           post_type:        post_type,
           stage1Blueprint:  null,
           content_feedback: contentFeedback,
+          // How much of the post is the author's own words, and why we chose the
+          // editor over the writer — the UI shows both, with a rewrite override.
+          retention:        retention,
+          hook_was_written: hookWasWritten,
+          generation_mode:  organizeMode ? 'organize' : 'write',
+          input_maturity:   inputMaturity,
         });
         return res.end();
 
@@ -581,7 +614,7 @@ router.post('/', async (req, res) => {
           postType: post_type,
           authorRealText: extractAuthorRealText(raw_idea) }
       );
-      ideaResult = { synthesis: org.synthesis, post: org.post, archetypeUsed: null, primaryGate, contentFeedback: null };
+      ideaResult = { synthesis: org.synthesis, post: org.post, archetypeUsed: null, primaryGate, contentFeedback: null, retention: org.retention, hookWasWritten: !!org.hookWasWritten };
     } else if (POST_TYPE_DISPATCH[post_type]) {
     // ── Guided post-type path (non-streaming) — all 10 types via one dispatch ─
       const { result, gate } = await runGuidedGeneration(post_type, raw_idea, profile, { length_preference, cta_intent });
@@ -655,6 +688,8 @@ router.post('/', async (req, res) => {
         archetypeUsed,
         primaryGate,
         contentFeedback,
+        retention,
+        hookWasWritten,
       } = ideaResult;
 
       if (typeof post !== 'string' || !post.trim()) {
@@ -739,6 +774,10 @@ router.post('/', async (req, res) => {
         post_type: post_type || null,
         vault_source_ref: vaultSourceRef,
         content_feedback: contentFeedback || null,
+        retention: retention || null,
+        hook_was_written: !!hookWasWritten,
+        generation_mode: organizeMode ? 'organize' : 'write',
+        input_maturity: inputMaturity,
       });
     }
 

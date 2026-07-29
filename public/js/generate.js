@@ -2363,11 +2363,25 @@ voiceCtrl = initVoiceInput({
 /* Hand the freshly generated post to the editor: flag the fresh-from-gen entry
  * and stash the post text keyed by id so the editor can paint it instantly —
  * no empty-textarea flash while its own /api/generate/post fetch is in flight. */
-function handOffToEditor(postId, postContent) {
+function handOffToEditor(postId, postContent, meta = {}) {
   try {
     sessionStorage.setItem('sh_from_gen', '1');
     if (postId && typeof postContent === 'string' && postContent.trim()) {
       sessionStorage.setItem('sh_gen_post', JSON.stringify({ id: postId, content: postContent }));
+    }
+    // Provenance for the editor's "your words" banner. Carries the source idea so
+    // the "rewrite from scratch" override can re-run the generation in write mode
+    // without making the author retype what they already wrote.
+    if (meta.generation_mode === 'organize') {
+      sessionStorage.setItem('sh_gen_provenance', JSON.stringify({
+        id:        postId,
+        mode:      meta.generation_mode,
+        retention: meta.retention || null,
+        hookWritten: !!meta.hook_was_written,
+        maturity:  meta.input_maturity || null,
+        source:    meta.source_idea || '',
+        post_type: meta.post_type || null,
+      }));
     }
   } catch { /* storage unavailable — editor still hydrates via its own fetch */ }
 }
@@ -2379,6 +2393,11 @@ chatImproveInput.addEventListener('click', () => {
   chatInput.style.height = '';
   chatInput.focus();
 });
+
+// Set when the author returns from the editor via "rewrite it from scratch" —
+// their input has real substance, so the router would route it to the editor
+// again. One-shot: cleared after the next generation starts.
+let _forceWriteMode = false;
 
 async function triggerGenerate(opts = {}) {
   hideChatError();
@@ -2413,13 +2432,16 @@ async function triggerGenerate(opts = {}) {
     if (_ideaCard.active && _ideaCard.answers.length)   body.idea_answers         = _ideaCard.answers.join('\n');
     if (opts.enrichedIdea || opts.skipSubstanceCheck)   body.skip_substance_check = true;
     if (opts.interview)                                 body.interview            = opts.interview;
-    if (opts.generationMode)                            body.generation_mode      = opts.generationMode;
+    // 'write' forces the ghostwriter even though the input router would have
+    // picked the editor — set only by the editor's "rewrite from scratch" override.
+    if (opts.generationMode || _forceWriteMode)         body.generation_mode      = opts.generationMode || 'write';
     if (shouldStream)                                   body.streaming            = true;
     // Unified Short/Medium/Long choice — every flow (guided, reach/convert coach,
     // idea-card and vault) collects it through the shared length picker.
     body.length_preference = _lengthPreference || 'Medium';
     // CTA intent is Authority-only (the guided Authority flow captures it).
     if (selectedType === 'trust') body.cta_intent = _authorityCtaIntent || '';
+    _forceWriteMode = false; // one-shot — already captured in `body`
 
     const res = await fetch('/api/generate', {
       method: 'POST', headers: apiHeaders(), body: JSON.stringify(body), signal: controller.signal,
@@ -2472,7 +2494,7 @@ async function triggerGenerate(opts = {}) {
 
       if (!sseResult?.post_id) throw new Error('stream_incomplete');
 
-      handOffToEditor(sseResult.post_id, sseResult.post);
+      handOffToEditor(sseResult.post_id, sseResult.post, { ...sseResult, source_idea: idea });
       await sleep(250);
       const card1 = document.getElementById('guided-chat');
       if (card1) { card1.style.transition = 'opacity 0.25s ease'; card1.style.opacity = '0'; }
@@ -2493,7 +2515,7 @@ async function triggerGenerate(opts = {}) {
     }
 
     finaliseProcessingSteps(data);
-    handOffToEditor(data.id, data.post);
+    handOffToEditor(data.id, data.post, { ...data, source_idea: idea });
     await sleep(250);
     const card2 = document.getElementById('guided-chat');
     if (card2) { card2.style.transition = 'opacity 0.25s ease'; card2.style.opacity = '0'; }
@@ -3001,6 +3023,27 @@ async function init() {
     chatInput.style.height = 'auto';
     chatInput.style.height = chatInput.scrollHeight + 'px';
   }
+
+  restoreRewriteRequest();
+}
+
+/* "Rewrite it from scratch" in the editor sends the author back here with their
+   original words intact and the input router overridden. Runs last in init() so
+   selectType() (which resets input state) can't clobber the restored text. */
+function restoreRewriteRequest() {
+  let req = null;
+  try {
+    req = JSON.parse(sessionStorage.getItem('sh_rewrite_request') || 'null');
+    sessionStorage.removeItem('sh_rewrite_request');
+  } catch { return; }
+  if (!req || typeof req.idea !== 'string' || !req.idea.trim()) return;
+
+  if (req.post_type && CHAT_CONFIGS[req.post_type]) selectType(req.post_type);
+  chatInput.value        = req.idea;
+  chatInput.style.height = 'auto';
+  chatInput.style.height = chatInput.scrollHeight + 'px';
+  _forceWriteMode = true;
+  chatInput.focus();
 }
 
 

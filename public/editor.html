@@ -94,6 +94,16 @@
             </div>
           </div>
 
+          <!-- Your-words banner — shown when the input router chose the editor over
+               the writer, i.e. the author arrived with real material of their own. -->
+          <div id="your-words-bar" hidden>
+            <div class="ywb-inner">
+              <span class="ywb-dot" aria-hidden="true"></span>
+              <span id="ywb-label"></span>
+              <button type="button" id="ywb-rewrite" class="ywb-rewrite">Rewrite from scratch instead</button>
+            </div>
+          </div>
+
           <div class="post-edit-card">
             <div id="post-toolbar" role="toolbar" aria-label="Formatting toolbar">
               <div class="ptb-group">
@@ -4173,6 +4183,54 @@ function prefillFromGeneration() {
   syncBackdrop();
 }
 
+/* Show the "your words" bar when the generator acted as an editor rather than a
+   writer, with the measured share of the post that is the author's own wording
+   (services/retention.js). The number is the honest part: it is what stops
+   "we preserve your voice" from being a claim nobody can check.
+
+   Also wires the escape hatch — some drafts genuinely do want a full rewrite,
+   and the author should not have to fight the router to get one. */
+function showYourWordsBar() {
+  let prov = null;
+  try { prov = JSON.parse(sessionStorage.getItem('sh_gen_provenance') || 'null'); } catch { prov = null; }
+  sessionStorage.removeItem('sh_gen_provenance');
+  if (!prov || String(prov.id) !== String(postId) || prov.mode !== 'organize') return;
+
+  const bar   = document.getElementById('your-words-bar');
+  const label = document.getElementById('ywb-label');
+  if (!bar || !label) return;
+
+  const pct = prov.retention && typeof prov.retention.score === 'number'
+    ? Math.round(prov.retention.score * 100) : null;
+  // A written hook is disclosed rather than averaged into the headline number:
+  // it is one line out of ~150 words, so it barely moves the percentage, but it
+  // is the line the author is most likely to want to take back. Naming it is
+  // also what makes the rest of the claim believable.
+  const hookNote = prov.hookWritten
+    ? ' Nothing in your draft worked as an opener, so the first line is ours — rewrite it in your words.'
+    : '';
+  label.innerHTML = (pct !== null
+    ? `Edited, not rewritten — <strong>${pct}% your words</strong>.`
+    : 'Edited, not rewritten — this is built from your own words.') + hookNote;
+
+  const rewriteBtn = document.getElementById('ywb-rewrite');
+  if (prov.source) {
+    rewriteBtn.addEventListener('click', () => {
+      try {
+        sessionStorage.setItem('sh_rewrite_request', JSON.stringify({
+          idea: prov.source, post_type: prov.post_type || null,
+        }));
+      } catch { /* storage unavailable — generate page just starts empty */ }
+      window.location.href = '/generate.html';
+    });
+  } else {
+    // No source text stashed — offering the override would 404 the author's words.
+    rewriteBtn.hidden = true;
+  }
+
+  bar.hidden = false;
+}
+
 /* Celebrate a freshly created post — a light confetti burst (deliberately gentler
    than the publish celebration, which stays the bigger moment). */
 function celebrateCreation() {
@@ -4198,6 +4256,7 @@ function init() {
     // empty textarea while loadPost()'s own fetch is in flight (loadPost reconciles
     // with the canonical content + metadata a moment later).
     prefillFromGeneration();
+    showYourWordsBar();
     switchTab('preview');
     celebrateCreation();
   }

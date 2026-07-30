@@ -310,6 +310,16 @@ async function mineDocumentById(docId, userId, tenantId) {
   const n = await classifyAndStoreDoc(docId, unmined, filename, userProfile, userId, tenantId);
 
   console.log(`[vault] doc=${docId} classified into ${n} insights`);
+
+  // Second stage: bundle the insights into angles. Deliberately NOT awaited, and
+  // deliberately after classifyAndStoreDoc has already flipped status to 'ready'.
+  // Insights must be visible the instant they exist — making the user wait on
+  // another Sonnet call for a surface they have not opened yet would make every
+  // upload feel slower. The panel polls and picks angles up when they land.
+  // buildAnglesForDocument never throws, so this cannot surface as a rejection.
+  require('../services/vaultAngles')
+    .buildAnglesForDocument(docId, userId, tenantId)
+    .then(count => { if (count) console.log(`[vault] doc=${docId} built ${count} angles`); });
 }
 
 // ---------------------------------------------------------------------------
@@ -454,6 +464,61 @@ router.get('/insights', async (req, res) => {
     .map(cat => ({ category: cat, label: LABELS[cat] || cat, items: byCat.get(cat) }));
 
   return res.json({ ok: true, total: rows.length, groups });
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/vault/angles?document_id= — bundled angles for a document, with each
+// role's insight resolved. Shape is what the panel renders and what the generate
+// endpoint reads, so roles arrive as an ordered array rather than a bare id map.
+// ---------------------------------------------------------------------------
+router.get('/angles', async (req, res) => {
+  const { tenantId } = req;
+  if (!requireUser(req, res)) return;
+
+  const documentId = Number(req.query.document_id);
+  if (!Number.isInteger(documentId) || documentId <= 0) {
+    return res.status(400).json({ ok: false, error: 'document_id_required' });
+  }
+
+  const { ROLE_ORDER } = require('../services/vaultBrief');
+
+  const angles = await db.prepare(`
+    SELECT id, title, roles, insight_ids, used_count, last_used_at
+    FROM   vault_angles
+    WHERE  document_id = ? AND tenant_id = ?
+    ORDER  BY id ASC
+  `).all(documentId, tenantId);
+
+  if (!angles.length) return res.json({ ok: true, angles: [] });
+
+  // One query for every insight referenced by any angle, then stitch in memory —
+  // a document has ≤4 angles over ≤20 insights, so per-angle queries would be
+  // pure round-trip cost.
+  const allIds = [...new Set(angles.flatMap(a => (a.insight_ids || []).map(Number)))];
+  const rows = allIds.length
+    ? await db.prepare(`
+        SELECT id, category, content, source_ref
+        FROM   vault_insights
+        WHERE  tenant_id = ? AND id = ANY(?)
+      `).all(tenantId, allIds)
+    : [];
+  const byId = new Map(rows.map(r => [Number(r.id), r]));
+
+  const shaped = angles.map(a => {
+    const roleMap = typeof a.roles === 'string' ? JSON.parse(a.roles || '{}') : (a.roles || {});
+    const roles = ROLE_ORDER
+      .filter(role => roleMap[role] != null && byId.has(Number(roleMap[role])))
+      .map(role => {
+        const ins = byId.get(Number(roleMap[role]));
+        return { role, insight_id: ins.id, category: ins.category, content: ins.content, source_ref: ins.source_ref };
+      });
+    // "includes a number" — the honest at-a-glance signal of whether the post will
+    // carry a specific. Computed here so the panel does not re-derive it.
+    const hasNumber = roles.some(r => /\d/.test(r.content));
+    return { id: a.id, title: a.title, roles, insight_count: roles.length, has_number: hasNumber, used_count: a.used_count };
+  });
+
+  return res.json({ ok: true, angles: shaped });
 });
 
 // ---------------------------------------------------------------------------

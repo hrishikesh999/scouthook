@@ -515,7 +515,10 @@ router.post('/', async (req, res) => {
         let result, gate, archetypeUsed = null, contentFeedback = null, retention = null, hookWasWritten = false;
         if (organizeMode) {
           const { organizePost } = require('../services/organizePost');
-          const org = await organizePost(raw_idea, profile, { postType: post_type, lengthPreference: length_preference });
+          // fromInterview: a coached brief is the author's answers concatenated, so
+          // the editor needs licence to write the joins between them (the seams are
+          // our artifact, not the author's). See BRIEF_MODE_AMENDMENT.
+          const org = await organizePost(raw_idea, profile, { postType: post_type, lengthPreference: length_preference, fromInterview: isInterviewPath });
           result = { post: org.post, synthesis: org.synthesis };
           retention = org.retention;
           hookWasWritten = !!org.hookWasWritten;
@@ -607,7 +610,7 @@ router.post('/', async (req, res) => {
     // ── Organize mode (non-streaming) — editor, not writer ───────────────────
     if (organizeMode) {
       const { organizePost } = require('../services/organizePost');
-      const org = await organizePost(raw_idea, profile, { postType: post_type, lengthPreference: length_preference });
+      const org = await organizePost(raw_idea, profile, { postType: post_type, lengthPreference: length_preference, fromInterview: isInterviewPath });
       const primaryGate = runQualityGate(
         org.post,
         { ...gateOptions({ format_slug: IDEA_SLUG, content: org.post }, profile, 'idea', null, post_type),

@@ -122,7 +122,51 @@ If it reads like a copywriter wrote it, you have failed. It must read like the a
 
 ${AI_TELLS_PROHIBITION}`;
 
-async function organizePost(rawIdea, profile, { postType = 'reach', lengthPreference = null } = {}) {
+// Second prompt mode: the brief came from the content coach, not from a draft.
+//
+// Why this exists. A coached brief is the author's answers to separate questions,
+// concatenated. Every sentence in it is genuinely theirs, so the editor's fidelity
+// rules apply — but the SEAMS between answers are not theirs. Two sentences that
+// now sit adjacent were replies to different questions and were never written to
+// follow each other. "You may cut, you may not add" leaves the editor unable to
+// repair that, so the post comes out as a list of unconnected assertions: every
+// beat correct, nothing joined. That is the one defect the author cannot fix by
+// giving better material, because it is an artifact of how we collected it.
+//
+// So brief mode opens a SECOND narrow exception alongside the hook: the editor may
+// write the joins. Fenced the same way — phrasing, never substance. It must amend
+// the base prompt explicitly, because EDITOR_SYSTEM states outright that the hook
+// is the only line where writing is ever on the table, and an un-retracted rule
+// contradicting a new one is how prompts start behaving unpredictably.
+const BRIEF_MODE_AMENDMENT = `---
+
+AMENDMENT — THIS BRIEF IS AN INTERVIEW, NOT A DRAFT.
+
+The material below is not a piece of writing. It is the author's answers to questions we asked, arriving as separate labelled blocks (RAW IDEA, THE MOMENT, PROOF / NUMBERS, THE TENSION, WHO THIS IS FOR, or plain Q:/A: pairs).
+
+- Those labels are our scaffolding, not the author's words. Never echo a label in the post.
+- The blocks are in the order they were ASKED, not the order they should be READ. Reordering is expected here, not a liberty you are taking.
+- Because each block was written on its own, the blocks do not join up. Sentences that now sit next to each other were answers to different questions and were never meant to be adjacent.
+
+THEREFORE, superseding "the hook is the only line where writing is ever on the table": you must also write the JOINS between the author's beats. This is the second and last exception, and it is a REQUIREMENT, not a permission — a post whose beats sit next to each other as unconnected assertions has failed this brief just as surely as one that rewrote the author's words.
+
+DO THIS EXPLICITLY, as a final pass before you output: read your assembled draft once from the top. At every point where two adjacent beats came from different answers and land as a jump — a new subject with no bridge from the one before it — write the bridge. Then check every bridge you wrote against the fence below and delete any that fails it.
+
+Every one of these binds:
+
+- A join carries NO fact, number, name, date, outcome, claim, or opinion that is not already in the author's material. Its only job is to carry the reader from one of their points to the next. It never makes a point of its own.
+- Build joins from the author's own vocabulary. Use the words they used.
+- Keep them short — a few words to one sentence. If a "join" is doing more work than the beats around it, you are writing the post, which is not your job.
+- AT MOST TWO joins in the entire post. Find the two worst seams and bridge those; leave every other transition alone. If only one seam is genuinely bad, write one. This cap is absolute — it is what keeps you an editor.
+- Add one only where a seam actually exists. Where two of their beats already run on naturally, leave them alone.
+- A join must carry the reader forward. It is never a soft landing or a beat of commentary on what was just said ("this is worth sitting with", "that changes everything", "let that sink in"). If your join could be deleted without the reader losing the thread, it was never a join — delete it.
+- A join is a NEW sentence placed between two of theirs. It may not absorb, merge, compress, or restate a sentence the author wrote. If you catch yourself rewriting one of their beats to make it flow into the next, stop: put your join between them and leave both of their sentences exactly as they were.
+- No copywriter connectives. Not "Here's the thing", not "And that's when it hit me", not "The lesson?", not "But here's what nobody tells you". Join it the plain way this author talks, or do not join it at all.
+- The author's own sentences stay verbatim. A join goes BETWEEN their sentences; it never rewrites one or gets spliced into the middle of one.
+
+Everything else in the HARD RULES still binds exactly as written. You may cut, and you may now join. You still may not rewrite their sentences, upgrade their vocabulary, or introduce substance of your own.`;
+
+async function organizePost(rawIdea, profile, { postType = 'reach', lengthPreference = null, fromInterview = false } = {}) {
   const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
   if (!apiKey) throw new Error('anthropic_api_key not configured');
   const client = new Anthropic({ apiKey });
@@ -131,7 +175,14 @@ async function organizePost(rawIdea, profile, { postType = 'reach', lengthPrefer
   const authorContext = buildSharedAuthorContext(profile || {}, { includePhraseLibrary: true });
   const shape = TYPE_SHAPES[postType] || TYPE_SHAPES.reach;
 
-  const systemPrompt = `${EDITOR_SYSTEM}\n\nAUTHOR VOICE (match register only — the words below are theirs):\n${authorContext}`;
+  // Brief mode is appended AFTER the base rules so it reads as an amendment to
+  // them, and before the voice block so the voice context stays the last thing in
+  // the system prompt (unchanged for draft mode).
+  const editorRules = fromInterview
+    ? `${EDITOR_SYSTEM}\n\n${BRIEF_MODE_AMENDMENT}`
+    : EDITOR_SYSTEM;
+
+  const systemPrompt = `${editorRules}\n\nAUTHOR VOICE (match register only — the words below are theirs):\n${authorContext}`;
 
   const userPrompt = `The author told me this, in their own words (labelled by what each part is):
 
@@ -184,9 +235,13 @@ Organise it into the post now. Output only the post as plain text — no preambl
   // Measurement, not a retry trigger. Logged so drift is visible in aggregate,
   // returned so the UI can report it honestly rather than claiming a fidelity we
   // did not verify.
+  // Brief mode is the mode that can erode this: joins are novel words by design,
+  // so the mode is logged alongside the score. If brief-mode retention starts
+  // trending toward the floor, the joins have stopped being joins and the fence
+  // needs tightening — that is not visible from an undifferentiated average.
   if (retention.score < ORGANIZE_MIN_RETENTION) {
-    console.warn('[organizePost] low retention %s (min %s) post_type=%s — the editor rewrote more than it organised',
-      retention.score, ORGANIZE_MIN_RETENTION, postType);
+    console.warn('[organizePost] low retention %s (min %s) post_type=%s mode=%s — the editor rewrote more than it organised',
+      retention.score, ORGANIZE_MIN_RETENTION, postType, fromInterview ? 'brief' : 'draft');
   }
   // Not an error — rung 3 is legitimate. But it should be the exception, and a
   // rising rate means the lift rungs are failing, not that drafts got worse.
@@ -201,7 +256,9 @@ Organise it into the post now. Output only the post as plain text — no preambl
     hookRetention,
     hookWasWritten,
     synthesis: {
-      mode:              'organize',
+      // 'organize' stays the value for draft mode so existing rows and any
+      // consumer switching on mode keep working; brief mode is a new value.
+      mode:              fromInterview ? 'organize_brief' : 'organize',
       post_type:         postType,
       length_preference: lengthPreference || null,
       retention_score:   retention.score,

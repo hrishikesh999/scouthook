@@ -7526,6 +7526,89 @@ body.has-trial-banner #main-content {
   font-size: 0.875rem;
 }
 
+/* Length control — the only generation option in the insights panel */
+.vault-ideas-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-5);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.vault-length-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.vault-length-seg {
+  display: inline-flex;
+  background: var(--bg-pill);
+  border-radius: var(--radius-md);
+  padding: 2px;
+  gap: 2px;
+}
+
+.vault-length-opt {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  padding: 5px 12px;
+  border-radius: var(--radius-sm);
+  transition: background 0.15s, color 0.15s;
+}
+.vault-length-opt:hover { color: var(--text-heading); }
+.vault-length-opt.is-active {
+  background: var(--bg-surface);
+  color: var(--text-heading);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+}
+
+/* Insight row — the insight line plus its generate action. The button stays
+   quiet until hover so the panel still reads as a list, not a wall of CTAs. */
+.vault-insight-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.vault-insight-gen {
+  align-self: flex-start;
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s, border-color 0.15s, background 0.15s;
+}
+.vault-insight-row:hover .vault-insight-gen,
+.vault-insight-gen:focus-visible,
+.vault-insight-gen.is-loading { opacity: 1; }
+
+.vault-insight-gen:hover:not(:disabled) {
+  color: var(--brand);
+  border-color: var(--brand);
+  background: var(--bg-pill);
+}
+.vault-insight-gen:disabled { cursor: default; }
+.vault-insight-gen.is-loading { color: var(--brand); border-color: var(--brand); }
+
+/* Touch and keyboard users get no hover — always show the action there. */
+@media (hover: none) {
+  .vault-insight-gen { opacity: 1; }
+}
+
 /* Insight groups (knowledge-store panel) — categorized reference material */
 .vault-insight-group {
   display: flex;

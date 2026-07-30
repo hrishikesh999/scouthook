@@ -457,6 +457,260 @@ router.get('/insights', async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// POST /api/vault/insights/:id/generate — one insight → one finished post.
+//
+// The insight line itself is a condensed restatement and far too thin to write
+// from. What makes this path work is that the insight is an INDEX into the
+// author's own document: we resolve it back to the source passage and organise
+// THAT. So generation runs through organizePost (editor, not writer) — the
+// material is already the author's words, and the job is shaping, not composing.
+//
+// The only user-facing option is length. Post type is inferred from the material.
+// ---------------------------------------------------------------------------
+const INSIGHT_TYPE_FALLBACK = {
+  key_insight:   'trust',
+  strategy:      'framework',
+  advice:        'framework',
+  lesson:        'lessons_learned',
+  mindset_shift: 'contrarian',
+  quote:         'trust',
+};
+// Types reachable from document material. 'announcement' is excluded (nothing in
+// a document is news) and so is 'reach' (too vague to shape anything).
+const INSIGHT_POST_TYPES = ['trust', 'framework', 'lessons_learned', 'contrarian', 'story', 'results', 'pis', 'bts', 'lead_gen'];
+const VALID_LENGTHS = new Set(['short', 'medium', 'long']);
+
+// Resolve an insight back to the chunk it came from. vault_insights stores only a
+// display label (source_ref), not a chunk id, so this degrades through three
+// strategies rather than assuming the label round-trips: the classifier is told to
+// copy the bracket label verbatim, but chunk labels carry an optional " — display"
+// suffix that the model sometimes includes and sometimes doesn't.
+async function resolveInsightChunk(insight, tenantId) {
+  const docId = insight.document_id;
+
+  // 1. Label match — exact, or the insight's label starting with the chunk's.
+  if (insight.source_ref) {
+    const byRef = await db.prepare(`
+      SELECT id, content, chunk_index FROM vault_chunks
+      WHERE  document_id = ? AND tenant_id = ? AND source_ref IS NOT NULL
+        AND  (source_ref = ? OR ? LIKE source_ref || '%')
+      ORDER  BY length(source_ref) DESC, chunk_index ASC
+      LIMIT  1
+    `).get(docId, tenantId, insight.source_ref, insight.source_ref);
+    if (byRef) return byRef;
+  }
+
+  // 2. Substring match — reliable for 'quote', whose content is verbatim.
+  // Escape LIKE metacharacters — insight text is arbitrary prose and a stray '%'
+  // would silently match the wrong chunk.
+  const probe = String(insight.content || '').trim().slice(0, 60).replace(/[\\%_]/g, '\\$&');
+  if (probe.length >= 20) {
+    const byText = await db.prepare(`
+      SELECT id, content, chunk_index FROM vault_chunks
+      WHERE  document_id = ? AND tenant_id = ? AND content ILIKE ? ESCAPE '\\'
+      ORDER  BY chunk_index ASC LIMIT 1
+    `).get(docId, tenantId, `%${probe}%`);
+    if (byText) return byText;
+  }
+
+  // 3. Full-text, OR-joined. plainto_tsquery ANDs every term, which a condensed
+  // one-line insight almost never satisfies against its own source chunk — so
+  // build an OR query from the distinctive tokens instead. Tokens are filtered
+  // to [a-z0-9] before interpolation, so there is nothing left to inject.
+  const tokens = String(insight.content || '')
+    .toLowerCase().split(/[^a-z0-9]+/).filter(t => t.length > 3).slice(0, 12);
+  if (tokens.length) {
+    const tsq = tokens.join(' | ');
+    const byFts = await db.prepare(`
+      SELECT id, content, chunk_index,
+             ts_rank(to_tsvector('english', content), to_tsquery('english', ?)) AS rank
+      FROM   vault_chunks
+      WHERE  document_id = ? AND tenant_id = ?
+        AND  to_tsvector('english', content) @@ to_tsquery('english', ?)
+      ORDER  BY rank DESC LIMIT 1
+    `).get(tsq, docId, tenantId, tsq);
+    if (byFts) return byFts;
+  }
+
+  return null;
+}
+
+// Pick the post shape from the material. Haiku, constrained to the shapes
+// organizePost knows; the category map is the fallback so a failed or malformed
+// classification never blocks generation.
+async function selectPostType(insight, passage, apiKey) {
+  const fallback = INSIGHT_TYPE_FALLBACK[insight.category] || 'trust';
+  if (!apiKey) return fallback;
+  try {
+    const client = new (require('@anthropic-ai/sdk'))({ apiKey });
+    const message = await client.messages.create({
+      model:       HAIKU_MODEL,
+      max_tokens:  20,
+      temperature: 0,
+      system:      'You classify source material into one LinkedIn post shape. Reply with one word from the list and nothing else.',
+      messages: [{
+        role: 'user',
+        content: `Shapes:
+- trust: teaches one idea or explains a non-obvious truth
+- framework: a named method, system, or set of steps
+- lessons_learned: a lesson drawn from an experience
+- contrarian: a reframe, or a view that contradicts conventional wisdom
+- story: a specific event with a turn
+- results: leads with a concrete outcome or number
+- pis: a problem, its real cause, and the fix
+- bts: process and decisions, in the order they happened
+- lead_gen: value-first with a soft next step
+
+THE POINT: ${String(insight.content || '').slice(0, 400)}
+
+SOURCE MATERIAL: ${String(passage || '').slice(0, 1500)}
+
+Which shape does this material actually support? One word.`,
+      }],
+    });
+    const raw = (message.content.find(b => b.type === 'text')?.text || '').trim().toLowerCase().replace(/[^a-z_]/g, '');
+    return INSIGHT_POST_TYPES.includes(raw) ? raw : fallback;
+  } catch (err) {
+    console.warn('[vault/generate] post-type classification failed, using category fallback:', err.message);
+    return fallback;
+  }
+}
+
+router.post('/insights/:id/generate', async (req, res) => {
+  const { userId, tenantId } = req;
+  if (!requireUser(req, res)) return;
+
+  const insightId = Number(req.params.id);
+  if (!Number.isInteger(insightId) || insightId <= 0) {
+    return res.status(400).json({ ok: false, error: 'invalid_insight_id' });
+  }
+
+  const length = String(req.body?.length || 'medium').toLowerCase();
+  if (!VALID_LENGTHS.has(length)) {
+    return res.status(400).json({ ok: false, error: 'invalid_length' });
+  }
+
+  const { canGeneratePost } = require('../services/subscription');
+  const planCheck = await canGeneratePost(userId);
+  if (!planCheck.allowed) {
+    return res.status(403).json({
+      ok: false, error: 'plan_limit_exceeded',
+      plan: planCheck.plan, current: planCheck.current, limit: planCheck.limit,
+    });
+  }
+
+  try {
+    const insight = await db.prepare(`
+      SELECT vi.id, vi.document_id, vi.category, vi.content, vi.source_ref,
+             vd.filename
+      FROM   vault_insights vi
+      LEFT   JOIN vault_documents vd ON vd.id = vi.document_id
+      WHERE  vi.id = ? AND vi.tenant_id = ?
+    `).get(insightId, tenantId);
+    if (!insight) return res.status(404).json({ ok: false, error: 'insight_not_found' });
+
+    const { resolveProfile } = require('../lib/resolveProfile');
+    const profile = await resolveProfile(tenantId);
+    if (!profile) return res.status(400).json({ ok: false, error: 'complete_profile_first' });
+
+    const chunk = await resolveInsightChunk(insight, tenantId);
+
+    // Neighbouring chunks give the passage its before/after, which is usually
+    // where the specifics live (the number is in one chunk, what it cost is in
+    // the next). Same treatment the vault_ideas path already gives its seeds.
+    let neighbours = '';
+    if (chunk) {
+      const rows = await db.prepare(`
+        SELECT content FROM vault_chunks
+        WHERE  document_id = ? AND tenant_id = ? AND chunk_index IN (?, ?)
+        ORDER  BY chunk_index
+      `).all(insight.document_id, tenantId, chunk.chunk_index - 1, chunk.chunk_index + 1);
+      neighbours = rows.map(r => r.content).join('\n\n');
+    }
+
+    const docLabel = [insight.filename, insight.source_ref].filter(Boolean).join(' · ');
+    // When the passage resolved, the insight is the ANGLE and the passage is the
+    // material. When it didn't, the insight is all we have — say it once rather
+    // than handing the editor the same sentence under two headings, which reads
+    // as two sources agreeing and invites it to pad.
+    const brief = chunk
+      ? [
+          `[The author's own words, from their document${docLabel ? ` "${docLabel}"` : ''}:]`,
+          chunk.content,
+          neighbours ? `\n[Surrounding context from the same document:]\n${neighbours}` : '',
+          `\n---\n[The specific point this post is about:]\n${insight.content}`,
+        ].filter(Boolean).join('\n')
+      : `[The author's own words, from their document${docLabel ? ` "${docLabel}"` : ''}:]\n${insight.content}`;
+
+    const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await require('../db').getSetting('anthropic_api_key'));
+    const postType = await selectPostType(insight, chunk?.content || insight.content, apiKey);
+
+    const { organizePost } = require('../services/organizePost');
+    const org = await organizePost(brief, profile, { postType, lengthPreference: length });
+
+    const { runQualityGate }        = require('../services/qualityGate');
+    const { extractAuthorRealText, classifyHookShape } = require('../services/generationCore');
+    const gate = runQualityGate(org.post, {
+      voiceProfile:   profile,
+      archetypeUsed:  null,
+      formatSlug:     'idea',
+      path:           'idea',
+      funnelType:     postType,
+      postType,
+      authorRealText: extractAuthorRealText(brief),
+    });
+
+    const runResult = await db.prepare(`
+      INSERT INTO generation_runs (user_id, tenant_id, path, input_data, synthesis)
+      VALUES (?, ?, ?, ?, ?) RETURNING id
+    `).run(
+      userId, tenantId, 'vault_insight',
+      JSON.stringify({ raw_idea: brief, vault_insight_id: insight.id, length }),
+      JSON.stringify(org.synthesis),
+    );
+
+    const insertResult = await db.prepare(`
+      INSERT INTO generated_posts
+        (run_id, user_id, tenant_id, profile_id, format_slug, content, ai_content,
+         quality_score, quality_flags, passed_gate, funnel_type, vault_source_ref,
+         idea_input, archetype_used, source, post_type, quality_verdict)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      RETURNING id
+    `).run(
+      runResult.lastInsertRowid, userId, tenantId, profile.id, 'idea',
+      org.post, org.post, gate.score, JSON.stringify(gate.flags), gate.passed_gate ? 1 : 0,
+      postType, insight.source_ref || null, brief, null, 'vault_insight',
+      postType, gate.verdict || null,
+    );
+    const postId = insertResult.lastInsertRowid;
+
+    // Fire-and-forget signals — none of these may block the response.
+    try {
+      const shape = classifyHookShape(org.post);
+      Promise.resolve(db.prepare('UPDATE generated_posts SET hook_shape = ? WHERE id = ?').run(shape, postId)).catch(() => {});
+    } catch { /* non-fatal */ }
+    Promise.resolve(db.prepare(
+      'UPDATE vault_insights SET used_count = used_count + 1, last_used_at = now() WHERE id = ? AND tenant_id = ?'
+    ).run(insight.id, tenantId)).catch(() => {});
+    require('../services/streak').recordStreakAction(userId, tenantId, 'generate');
+    require('../services/trialEmails').scheduleTrialEvaluation(userId, tenantId);
+
+    console.log(`[vault/generate] insight=${insight.id} type=${postType} length=${length} grounded=${!!chunk} retention=${org.retention?.score} post=${postId}`);
+
+    return res.json({
+      ok: true, id: postId, post: org.post, post_type: postType,
+      length, grounded: !!chunk, retention: org.retention || null,
+    });
+  } catch (err) {
+    if (err.status === 429 || err.status === 529) {
+      return res.status(503).json({ ok: false, error: 'high_demand', retry_after_sec: 30 });
+    }
+    console.error('[vault/generate] error:', err);
+    return res.status(500).json({ ok: false, error: err.message || 'generation_failed' });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // GET /api/vault/ideas — list ideas
 // Query params: status (fresh|saved|discarded|used), funnel_type (reach|trust|convert),
 //               source (mined|idea_engine), document_id

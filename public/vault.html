@@ -146,6 +146,14 @@
         </div>
         <button id="vault-ideas-close" class="vault-ideas-close" aria-label="Close insights panel">✕</button>
       </div>
+      <div class="vault-ideas-toolbar">
+        <span class="vault-length-label">Post length</span>
+        <div class="vault-length-seg" id="vault-length-seg" role="radiogroup" aria-label="Post length">
+          <button type="button" class="vault-length-opt" data-length="short"  role="radio" aria-checked="false">Short</button>
+          <button type="button" class="vault-length-opt" data-length="medium" role="radio" aria-checked="true">Medium</button>
+          <button type="button" class="vault-length-opt" data-length="long"   role="radio" aria-checked="false">Long</button>
+        </div>
+      </div>
       <div id="vault-ideas-body" class="vault-ideas-body" aria-live="polite"></div>
     </div>
   </div>
@@ -611,12 +619,23 @@
   // A category section: heading + a list of insight lines. Quotes render
   // italic; mindset shifts ("From: X → To: Y") split onto two labelled lines.
   function renderInsightGroup(group) {
-    const items = (group.items || []).map(it => renderInsightItem(group.category, it.content)).join('');
+    const items = (group.items || []).map(it => renderInsightRow(group.category, it)).join('');
     return `
       <section class="vault-insight-group">
         <h3 class="vault-insight-group-title">${escHtml(group.label)}</h3>
         <div class="vault-insight-list">${items}</div>
       </section>`;
+  }
+
+  // Each insight is one post's worth of material, so the action lives on the
+  // insight, not on the panel: the server resolves this line back to its source
+  // passage and organises that into a post.
+  function renderInsightRow(category, item) {
+    return `
+      <div class="vault-insight-row">
+        ${renderInsightItem(category, item.content)}
+        <button class="vault-insight-gen" type="button" data-insight-id="${Number(item.id)}">Generate post</button>
+      </div>`;
   }
 
   function renderInsightItem(category, content) {
@@ -634,6 +653,74 @@
       }
     }
     return `<p class="vault-insight-item"><span class="vault-insight-tick" aria-hidden="true">✓</span>${escHtml(text)}</p>`;
+  }
+
+  // ── Insight → post ────────────────────────────────────────────────────────
+  // Length is the only choice the user makes here; post type is inferred server
+  // side from the source material. The preference is sticky because it is a
+  // standing preference, not a per-post decision.
+  const LENGTHS = new Set(['short', 'medium', 'long']);
+  let insightLength = localStorage.getItem('vault_insight_length') || 'medium';
+  if (!LENGTHS.has(insightLength)) insightLength = 'medium';
+
+  const lengthSeg = document.getElementById('vault-length-seg');
+
+  function paintLengthSeg() {
+    lengthSeg.querySelectorAll('.vault-length-opt').forEach(btn => {
+      const on = btn.dataset.length === insightLength;
+      btn.classList.toggle('is-active', on);
+      btn.setAttribute('aria-checked', on ? 'true' : 'false');
+    });
+  }
+
+  lengthSeg.addEventListener('click', (e) => {
+    const btn = e.target.closest('.vault-length-opt');
+    if (!btn) return;
+    insightLength = btn.dataset.length;
+    localStorage.setItem('vault_insight_length', insightLength);
+    paintLengthSeg();
+  });
+  paintLengthSeg();
+
+  ideasBody.addEventListener('click', (e) => {
+    const btn = e.target.closest('.vault-insight-gen');
+    if (btn && !btn.disabled) generateFromInsight(btn);
+  });
+
+  async function generateFromInsight(btn) {
+    const insightId = btn.dataset.insightId;
+    const allButtons = Array.from(ideasBody.querySelectorAll('.vault-insight-gen'));
+    // Lock the whole panel, not just this row: a second generation while one is
+    // in flight burns a Sonnet call the user is about to navigate away from.
+    allButtons.forEach(b => { b.disabled = true; });
+    btn.classList.add('is-loading');
+    btn.textContent = 'Writing…';
+
+    try {
+      const res = await fetch(`/api/vault/insights/${encodeURIComponent(insightId)}/generate`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ length: insightLength }),
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok || !data.ok) {
+        if (data.error === 'plan_limit_exceeded') {
+          window.PricingModal?.open({ feature: 'vault' });
+          throw new Error('You have reached your plan’s post limit.');
+        }
+        if (data.error === 'high_demand')          throw new Error('High demand right now — try again in a moment.');
+        if (data.error === 'complete_profile_first') throw new Error('Finish your brand voice profile first.');
+        throw new Error(data.error || 'Could not generate the post.');
+      }
+
+      window.location.href = `/editor/${encodeURIComponent(data.id)}`;
+    } catch (err) {
+      window.toast?.error(err.message || 'Could not generate the post.');
+      allButtons.forEach(b => { b.disabled = false; });
+      btn.classList.remove('is-loading');
+      btn.textContent = 'Generate post';
+    }
   }
 
   loadDocuments();

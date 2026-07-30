@@ -82,6 +82,25 @@ LINES 2-3: LinkedIn cuts to "see more" after roughly three lines, and most reade
 
 FINAL THIRD: keep their sharpest remaining insight for the end so finishing the post is worth it. If their best line is now the hook, use their second-best to close. Do not spend everything above the fold.`;
 
+// Length, expressed the only way an editor can honour it: as how much of the
+// author's material to KEEP. The default (null) stays "match what they gave you"
+// — the original behaviour, and the right one when the brief is a short spoken
+// answer. A length is meaningful when the brief is large (a document passage,
+// where there is genuinely more material than one post should use), so the
+// instruction is phrased as selection and never licenses padding.
+const LENGTH_DIRECTIVES = {
+  short:  'LENGTH — SHORT (~60-110 words): keep only the single sharpest beat. One idea, carried by their best lines. Cut everything that merely supports it.',
+  medium: 'LENGTH — MEDIUM (~130-200 words): keep the main idea plus the specifics that prove it. Drop secondary threads.',
+  long:   'LENGTH — LONG (~250-360 words): keep the fuller arc — the situation, the specifics, and the turn — while still cutting anything repetitive or slack.',
+};
+
+function lengthDirective(lengthPreference) {
+  const key = String(lengthPreference || '').trim().toLowerCase();
+  const directive = LENGTH_DIRECTIVES[key];
+  if (!directive) return '';
+  return `\n\n${directive}\nThis is a SELECTION instruction, not a word count to fill. Reach the length by choosing how much of their material to keep — never by padding, restating, or adding a line they did not say. If their material genuinely runs short of the range, the post is short. That is correct.`;
+}
+
 const EDITOR_SYSTEM = `You are a LinkedIn post EDITOR, not a writer. The author told you something in their own words. Your job is to ORGANISE it into a scroll-stopping post — never to rewrite it.
 
 HARD RULES (non-negotiable):
@@ -120,7 +139,7 @@ async function organizePost(rawIdea, profile, { postType = 'reach', lengthPrefer
 ${rawIdea}
 """
 
-${shape}
+${shape}${lengthDirective(lengthPreference)}
 
 Organise it into the post now. Output only the post as plain text — no preamble, labels, or explanation. The first line of your response is the first line of the post.`;
 

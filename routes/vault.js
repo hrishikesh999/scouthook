@@ -648,56 +648,36 @@ Which shape does this material actually support? One word.`,
 // form would put unmarked machine text in the brief — which retention would still
 // score as faithful. See Flaw 3 in sprint-vault-angles.md.
 // ---------------------------------------------------------------------------
-router.post('/angles/:id/generate', async (req, res) => {
-  const { userId, tenantId } = req;
-  if (!requireUser(req, res)) return;
+// Load one angle with its document filename. Used by the angle route and by the
+// per-insight upgrade path.
+async function fetchAngle(angleId, tenantId) {
+  return db.prepare(`
+    SELECT va.id, va.document_id, va.title, va.roles, vd.filename
+    FROM   vault_angles va
+    LEFT   JOIN vault_documents vd ON vd.id = va.document_id
+    WHERE  va.id = ? AND va.tenant_id = ?
+  `).get(angleId, tenantId);
+}
 
-  const angleId = Number(req.params.id);
-  if (!Number.isInteger(angleId) || angleId <= 0) {
-    return res.status(400).json({ ok: false, error: 'invalid_angle_id' });
-  }
-
-  const length = String(req.body?.length || 'medium').toLowerCase();
-  if (!VALID_LENGTHS.has(length)) {
-    return res.status(400).json({ ok: false, error: 'invalid_length' });
-  }
-
-  const { canGeneratePost } = require('../services/subscription');
-  const planCheck = await canGeneratePost(userId);
-  if (!planCheck.allowed) {
-    return res.status(403).json({
-      ok: false, error: 'plan_limit_exceeded',
-      plan: planCheck.plan, current: planCheck.current, limit: planCheck.limit,
-    });
-  }
-
-  try {
-    const angle = await db.prepare(`
-      SELECT va.id, va.document_id, va.title, va.roles, vd.filename
-      FROM   vault_angles va
-      LEFT   JOIN vault_documents vd ON vd.id = va.document_id
-      WHERE  va.id = ? AND va.tenant_id = ?
-    `).get(angleId, tenantId);
-    if (!angle) return res.status(404).json({ ok: false, error: 'angle_not_found' });
-
+// ---------------------------------------------------------------------------
+// Shared angle generation. Extracted so the per-insight path can reuse it when
+// the clicked insight is an angle's spine (Phase 4) rather than duplicating the
+// brief assembly, type inference, gate and insert.
+// Throws with .status on caller-fixable problems; returns the new post's row.
+// ---------------------------------------------------------------------------
+async function generateFromAngleRow(angle, { userId, tenantId, length, profile, source }) {
     const roleMap = typeof angle.roles === 'string' ? JSON.parse(angle.roles || '{}') : (angle.roles || {});
     const { ROLE_ORDER } = require('../services/vaultBrief');
     const roleIds = ROLE_ORDER
       .filter(r => roleMap[r] != null)
       .map(r => ({ role: r, id: Number(roleMap[r]) }));
-    if (!roleIds.some(r => r.role === 'spine')) {
-      return res.status(422).json({ ok: false, error: 'angle_has_no_spine' });
-    }
+    if (!roleIds.some(r => r.role === 'spine')) throw Object.assign(new Error('angle_has_no_spine'), { status: 422 });
 
     const insightRows = await db.prepare(`
       SELECT id, document_id, category, content, source_ref
       FROM   vault_insights WHERE tenant_id = ? AND id = ANY(?)
     `).all(tenantId, roleIds.map(r => r.id));
     const byId = new Map(insightRows.map(r => [Number(r.id), r]));
-
-    const { resolveProfile } = require('../lib/resolveProfile');
-    const profile = await resolveProfile(tenantId);
-    if (!profile) return res.status(400).json({ ok: false, error: 'complete_profile_first' });
 
     // Resolve a passage for EVERY role, sequentially — a handful of cheap indexed
     // lookups, and the ordering keeps the brief's blocks deterministic.
@@ -716,9 +696,7 @@ router.post('/angles/:id/generate', async (req, res) => {
         sourceRef: ins.source_ref || null,
       });
     }
-    if (!blocks.some(b => b.role === 'spine')) {
-      return res.status(422).json({ ok: false, error: 'spine_insight_missing' });
-    }
+    if (!blocks.some(b => b.role === 'spine')) throw Object.assign(new Error('spine_insight_missing'), { status: 422 });
 
     // Neighbours for the spine only. Pulling them for every role would triple the
     // brief for context that is background by definition.
@@ -766,7 +744,7 @@ router.post('/angles/:id/generate', async (req, res) => {
       INSERT INTO generation_runs (user_id, tenant_id, path, input_data, synthesis)
       VALUES (?, ?, ?, ?, ?) RETURNING id
     `).run(
-      userId, tenantId, 'vault_angle',
+      userId, tenantId, source,
       JSON.stringify({ raw_idea: brief, vault_angle_id: angle.id, roles: roleMap, length }),
       JSON.stringify(org.synthesis),
     );
@@ -781,7 +759,7 @@ router.post('/angles/:id/generate', async (req, res) => {
     `).run(
       runResult.lastInsertRowid, userId, tenantId, profile.id, 'idea',
       org.post, org.post, gate.score, JSON.stringify(gate.flags), gate.passed_gate ? 1 : 0,
-      postType, spineBlock?.sourceRef || null, brief, null, 'vault_angle',
+      postType, spineBlock?.sourceRef || null, brief, null, source,
       postType, gate.verdict || null,
     );
     const postId = insertResult.lastInsertRowid;
@@ -799,16 +777,54 @@ router.post('/angles/:id/generate', async (req, res) => {
     // grounded = how many roles reached a real passage. A low ratio means the post
     // was built largely from condensed paraphrase, which retention cannot reveal.
     const grounded = blocks.filter(b => b.passage).length;
-    console.log(`[vault/angle] angle=${angle.id} type=${postType} length=${length} roles=${blocks.length} grounded=${grounded}/${blocks.length} retention=${org.retention?.score} post=${postId}`);
+    console.log(`[vault/angle] angle=${angle.id} src=${source} type=${postType} length=${length} roles=${blocks.length} grounded=${grounded}/${blocks.length} retention=${org.retention?.score} post=${postId}`);
 
-    return res.json({
-      ok: true, id: postId, post: org.post, post_type: postType, length,
-      roles: blocks.map(b => b.role), grounded, retention: org.retention || null,
+    return { id: postId, post: org.post, post_type: postType, length,
+             roles: blocks.map(b => b.role), grounded, retention: org.retention || null };
+}
+
+router.post('/angles/:id/generate', async (req, res) => {
+  const { userId, tenantId } = req;
+  if (!requireUser(req, res)) return;
+
+  const angleId = Number(req.params.id);
+  if (!Number.isInteger(angleId) || angleId <= 0) {
+    return res.status(400).json({ ok: false, error: 'invalid_angle_id' });
+  }
+
+  const length = String(req.body?.length || 'medium').toLowerCase();
+  if (!VALID_LENGTHS.has(length)) {
+    return res.status(400).json({ ok: false, error: 'invalid_length' });
+  }
+
+  const { canGeneratePost } = require('../services/subscription');
+  const planCheck = await canGeneratePost(userId);
+  if (!planCheck.allowed) {
+    return res.status(403).json({
+      ok: false, error: 'plan_limit_exceeded',
+      plan: planCheck.plan, current: planCheck.current, limit: planCheck.limit,
     });
+  }
+
+  try {
+    const angle = await fetchAngle(angleId, tenantId);
+    if (!angle) return res.status(404).json({ ok: false, error: 'angle_not_found' });
+
+    const { resolveProfile } = require('../lib/resolveProfile');
+    const profile = await resolveProfile(tenantId);
+    if (!profile) return res.status(400).json({ ok: false, error: 'complete_profile_first' });
+
+    const out = await generateFromAngleRow(angle, { userId, tenantId, length, profile, source: 'vault_angle' });
+    return res.json({ ok: true, ...out });
   } catch (err) {
+    // Capacity errors first: they arrive from the Anthropic SDK carrying .status,
+    // so a generic `if (err.status)` above this would answer 429 with the SDK's
+    // own message instead of the high_demand 503 the client knows how to retry.
     if (err.status === 429 || err.status === 529) {
       return res.status(503).json({ ok: false, error: 'high_demand', retry_after_sec: 30 });
     }
+    // Our own caller-fixable failures (angle_has_no_spine, spine_insight_missing).
+    if (err.status) return res.status(err.status).json({ ok: false, error: err.message });
     console.error('[vault/angle] error:', err);
     return res.status(500).json({ ok: false, error: err.message || 'generation_failed' });
   }
@@ -861,6 +877,43 @@ router.post('/insights/:id/generate', async (req, res) => {
     const { resolveProfile } = require('../lib/resolveProfile');
     const profile = await resolveProfile(tenantId);
     if (!profile) return res.status(400).json({ ok: false, error: 'complete_profile_first' });
+
+    // Phase 4 — upgrade a lone insight to its angle, but ONLY when the clicked
+    // insight is that angle's SPINE.
+    //
+    // The sprint doc said to upgrade whenever any angle contains the insight.
+    // That is wrong: if the user clicks "throughput rose 23%" and it is merely the
+    // PROOF inside an angle whose claim is something else, they get a post about a
+    // different subject than the one they clicked. Being surprised is not being
+    // helped. Spine-only means the post is still about what they clicked — the
+    // angle simply brings the tension and proof the single-insight path lacks.
+    //
+    // Scoped by document because angles never span documents, which also keeps
+    // this on idx_vault_angles_document.
+    const spineAngle = await db.prepare(`
+      SELECT id FROM vault_angles
+      WHERE  tenant_id = ? AND document_id = ? AND (roles->>'spine')::bigint = ?
+      ORDER  BY id ASC LIMIT 1
+    `).get(tenantId, insight.document_id, insightId);
+
+    if (spineAngle) {
+      const angle = await fetchAngle(Number(spineAngle.id), tenantId);
+      if (angle) {
+        try {
+          // Distinct source so Phase 5 can separate a deliberate angle click from
+          // an upgraded insight click when comparing conversion and edit distance.
+          const out = await generateFromAngleRow(angle, {
+            userId, tenantId, length, profile, source: 'vault_angle_via_insight',
+          });
+          console.log(`[vault/generate] insight=${insightId} upgraded to angle=${angle.id}`);
+          return res.json({ ok: true, ...out, via_angle: angle.id });
+        } catch (upgradeErr) {
+          // An angle referencing a since-deleted insight must not cost the user
+          // their post — fall through to the single-insight path below.
+          console.warn(`[vault/generate] angle upgrade failed for insight=${insightId}, falling back:`, upgradeErr.message);
+        }
+      }
+    }
 
     const chunk = await resolveInsightChunk(insight, tenantId);
 

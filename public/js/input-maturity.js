@@ -35,6 +35,13 @@
   const AUTHORED_MIN_WORDS = 120;
   const AUTHORED_MIN_SENTS = 4;
 
+  // Some finished posts are short by design (a quote plus a tight breakdown)
+  // but are unmistakably composed, not notes: dense, complete sentences well
+  // past the raw floor. Require a much higher sentence count than the normal
+  // path so choppy raw notes don't slip through on sentence count alone.
+  const AUTHORED_DENSE_MIN_WORDS = 80;
+  const AUTHORED_DENSE_MIN_SENTS = 8;
+
   /** Content words, ignoring markdown bullets and stray punctuation. */
   function countWords(text) {
     const m = String(text || '').match(/[A-Za-z0-9][A-Za-z0-9'’\-]*/g);
@@ -73,6 +80,9 @@
     if (words >= AUTHORED_MIN_WORDS && sentences >= AUTHORED_MIN_SENTS) {
       return { tier: 'authored', words, sentences, reason: 'long_multi_sentence' };
     }
+    if (words >= AUTHORED_DENSE_MIN_WORDS && sentences >= AUTHORED_DENSE_MIN_SENTS) {
+      return { tier: 'authored', words, sentences, reason: 'dense_short_form' };
+    }
     if (words >= RAW_MIN_WORDS) {
       return { tier: 'raw', words, sentences, reason: 'has_substance' };
     }
@@ -107,5 +117,7 @@
     RAW_MIN_WORDS,
     AUTHORED_MIN_WORDS,
     AUTHORED_MIN_SENTS,
+    AUTHORED_DENSE_MIN_WORDS,
+    AUTHORED_DENSE_MIN_SENTS,
   };
 }));

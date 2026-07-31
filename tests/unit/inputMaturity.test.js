@@ -107,6 +107,38 @@ What different choice will you make today?`;
   });
 });
 
+describe('inputMaturity — regression: short but dense post still coaches unnecessarily', () => {
+  // A finished quote-plus-breakdown post: 95 words, 8 sentences, well under the
+  // 120-word authored floor but unmistakably composed, not raw notes. It fell
+  // through to 'raw' and the content coach interrogated the author about a post
+  // they had already polished.
+  const QUOTE_POST = `There are two kinds of people in this world: givers and takers.
+The takers may eat better, but the givers sleep better." - Zig Ziglar
+
+Here is how they differ:
+
+Givers: Focused on value, service, and lifting others up. This underpins his ultimate philosophy: "You can have everything in life you want, if you will just help other people get what they want."
+
+Takers: Focused on personal gain, consumption, and what they can acquire from a situation or relationship. While they might find short-term material comfort ("eat better"), they lack long-term peace of mind ("sleep better").`;
+
+  test('classifies as authored despite being under the word floor', () => {
+    const r = classifyInputMaturity(QUOTE_POST);
+    expect(r.words).toBeLessThan(120);
+    expect(r.tier).toBe('authored');
+    expect(r.reason).toBe('dense_short_form');
+  });
+
+  test('isAuthoredDraft is true, so the coach is skipped', () => {
+    expect(isAuthoredDraft(QUOTE_POST)).toBe(true);
+  });
+});
+
+describe('inputMaturity — dense-short-form path does not swallow choppy raw notes', () => {
+  test('bulleted notes stay raw even though they are made of short sentences', () => {
+    expect(classifyInputMaturity(BULLETS).tier).toBe('raw');
+  });
+});
+
 describe('inputMaturity — counting helpers', () => {
   test('line breaks count as sentence boundaries', () => {
     // LinkedIn drafts routinely omit terminal punctuation. Counting only ./!/?

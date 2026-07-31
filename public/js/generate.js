@@ -1698,6 +1698,19 @@ const chat = (() => {
 
     // Not in coach yet — this is the initial brief submission
 
+    // Every branch below sends a post_type to the server, sourced from
+    // selectedType. The chat textarea is usable before any intent card is
+    // tapped, so someone can type/paste straight in and hit enter with
+    // selectedType still null — the old behaviour ran the whole coach/length-
+    // picker round trip (clearing the textarea along the way) only to have
+    // triggerGenerate reject it at the very end, losing the input. Catch it
+    // here instead, before anything consumes val.
+    if (!selectedType) {
+      showChatInputError('Choose a post type to continue.');
+      document.getElementById('starting-pills')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      return;
+    }
+
     // Vault idea: brief is already complete — ask length, then generate.
     if (selectedVaultIdeaId) {
       addUser(val);

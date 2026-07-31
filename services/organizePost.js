@@ -186,7 +186,51 @@ Every one of these binds:
 
 Everything else in the HARD RULES still binds exactly as written. You may cut, and you may now join. You still may not rewrite their sentences, upgrade their vocabulary, or introduce substance of your own.`;
 
-async function organizePost(rawIdea, profile, { postType = 'reach', lengthPreference = null, fromInterview = false, maxJoins = DEFAULT_MAX_JOINS } = {}) {
+// Third amendment: the material is a DOCUMENT, not the author's speech.
+//
+// Why this has to be a system-prompt amendment and not a line in the brief. The
+// vault brief header already said "phrasing is not binding" — and it lost.
+// EDITOR_SYSTEM asserts some form of "preserve the author's exact words" at least
+// five times; one polite disagreement in the user prompt does not survive that at
+// temperature 0.25. Observed on a real generation: whole sentences of blog prose
+// carried through intact ("Once the problem is defined, the team formulates
+// hypotheses about potential solutions"), which is the copywriter's register, not
+// the author's — the precise failure the header was written to prevent.
+//
+// The join permission failed the same way and was fixed the same way: name the
+// rules, retract them explicitly, and replace them with a positive instruction.
+// A permission loses; a supersession wins.
+const DOCUMENT_MODE_AMENDMENT = `---
+
+AMENDMENT — THIS IS A DOCUMENT, NOT SOMETHING THE AUTHOR JUST SAID.
+
+Everything above assumes the author spoke this to you in their own words, and tells you to preserve their phrasing verbatim. That assumption is FALSE here. What follows is a document from the author's business — a case study, an article, a report. It is their WORK, but it is not their WRITING: it was drafted formally, frequently by marketing or an agency, for a reader who is not on LinkedIn.
+
+THESE INSTRUCTIONS FROM ABOVE ARE SUSPENDED for the source material below:
+- "Use the author's EXACT words and phrasing. Preserve their sentences verbatim wherever possible."
+- "Do NOT paraphrase, upgrade their vocabulary, or 'improve' their voice."
+- "nearly every content word in your output should be a word the author already used."
+- "if you find yourself reaching for a phrase they did not say, cut instead of composing."
+
+Preserving this document's phrasing does not preserve the author's voice. It preserves a copywriter's. Here that is the failure, and it is worse than paraphrasing.
+
+WHAT IS STILL ABSOLUTELY BINDING — none of this is relaxed:
+Every fact, number, name, date, outcome and named method in the material. Carry them across exactly. Invent NOTHING that is not there: no new claim, no rounded figure, no example of your own, no consequence the document does not state. You are changing HOW it is said, never WHAT is said.
+
+WHAT YOU MUST DO INSTEAD:
+- Re-say the substance in the register described in AUTHOR VOICE. Short sentences. First or second person. The way this person talks on LinkedIn — not the way the document is written.
+- Delete these on sight. They are the document's register and never a person's:
+  · third-person process description ("the team formulates hypotheses about potential solutions")
+  · passive or agentless construction ("Once the problem is defined")
+  · marketing triples ("unlock new opportunities, mitigate risks, and stay ahead of the competition")
+  · abstract nouns doing a verb's job ("adapting to changing market dynamics and user feedback")
+- Where a sentence in the document is already sharp and sounds like a person said it, keep it word for word. Verbatim is still ALLOWED — it is simply no longer REQUIRED.
+
+DO NOT COVER THE DOCUMENT. Pick the one claim worth making and cut everything that merely defines, explains, or restates it. A definition is not an argument. If the material makes the same point twice, keep the stronger one once and delete the other.
+
+HOOK: in a document the most striking line is almost never the opening one, and it is never a definition. Find the sentence that contradicts what the reader currently assumes, and open with that.`;
+
+async function organizePost(rawIdea, profile, { postType = 'reach', lengthPreference = null, fromInterview = false, maxJoins = DEFAULT_MAX_JOINS, sourceIsDocument = false } = {}) {
   const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
   if (!apiKey) throw new Error('anthropic_api_key not configured');
   const client = new Anthropic({ apiKey });
@@ -198,9 +242,11 @@ async function organizePost(rawIdea, profile, { postType = 'reach', lengthPrefer
   // Brief mode is appended AFTER the base rules so it reads as an amendment to
   // them, and before the voice block so the voice context stays the last thing in
   // the system prompt (unchanged for draft mode).
-  const editorRules = fromInterview
-    ? `${EDITOR_SYSTEM}\n\n${BRIEF_MODE_AMENDMENT(maxJoins)}`
-    : EDITOR_SYSTEM;
+  // Amendments stack, and order matters: the document amendment goes LAST so its
+  // suspension of the verbatim rules is the most recent thing the model reads.
+  let editorRules = EDITOR_SYSTEM;
+  if (fromInterview)    editorRules += `\n\n${BRIEF_MODE_AMENDMENT(maxJoins)}`;
+  if (sourceIsDocument) editorRules += `\n\n${DOCUMENT_MODE_AMENDMENT}`;
 
   const systemPrompt = `${editorRules}\n\nAUTHOR VOICE (match register only — the words below are theirs):\n${authorContext}`;
 
@@ -259,7 +305,16 @@ Organise it into the post now. Output only the post as plain text — no preambl
   // so the mode is logged alongside the score. If brief-mode retention starts
   // trending toward the floor, the joins have stopped being joins and the fence
   // needs tightening — that is not visible from an undifferentiated average.
-  if (retention.score < ORGANIZE_MIN_RETENTION) {
+  // Document mode LOWERS retention by design — it instructs the editor to re-say
+  // the substance rather than carry the document's wording across. So the 0.7
+  // floor, which exists to catch an editor that quietly rewrote the author, would
+  // fire on correct behaviour here. Retention still matters, but as a fabrication
+  // signal rather than a fidelity one: the facts must survive even though the
+  // phrasing should not. Logged at info, not warn, and never against that floor.
+  if (sourceIsDocument) {
+    console.info('[organizePost] document mode retention %s post_type=%s (re-voiced by design; floor not applied)',
+      retention.score, postType);
+  } else if (retention.score < ORGANIZE_MIN_RETENTION) {
     console.warn('[organizePost] low retention %s (min %s) post_type=%s mode=%s — the editor rewrote more than it organised',
       retention.score, ORGANIZE_MIN_RETENTION, postType, fromInterview ? 'brief' : 'draft');
   }
@@ -279,6 +334,7 @@ Organise it into the post now. Output only the post as plain text — no preambl
       // 'organize' stays the value for draft mode so existing rows and any
       // consumer switching on mode keep working; brief mode is a new value.
       mode:              fromInterview ? 'organize_brief' : 'organize',
+      source_is_document: !!sourceIsDocument,
       post_type:         postType,
       length_preference: lengthPreference || null,
       retention_score:   retention.score,

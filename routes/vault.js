@@ -758,6 +758,10 @@ async function generateFromAngleRow(angle, { userId, tenantId, length, profile, 
       lengthPreference: length,
       fromInterview:    true,
       maxJoins:         ROLE_BRIEF_MAX_JOINS,
+      // The brief is a document, so EDITOR_SYSTEM's "preserve their exact words"
+      // rules must be suspended — preserving a case study's phrasing preserves
+      // marketing prose, not the author's voice.
+      sourceIsDocument: true,
     });
 
     const { runQualityGate } = require('../services/qualityGate');
@@ -980,7 +984,9 @@ router.post('/insights/:id/generate', async (req, res) => {
     const postType = await selectPostType(insight, chunk?.content || insight.content, apiKey);
 
     const { organizePost } = require('../services/organizePost');
-    const org = await organizePost(brief, profile, { postType, lengthPreference: length });
+    const org = await organizePost(brief, profile, {
+      postType, lengthPreference: length, sourceIsDocument: true,
+    });
 
     const { runQualityGate }        = require('../services/qualityGate');
     const { extractAuthorRealText, classifyHookShape } = require('../services/generationCore');

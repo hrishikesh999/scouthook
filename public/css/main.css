@@ -7453,7 +7453,9 @@ body.has-trial-banner #main-content {
 }
 
 .vault-ideas-panel {
-  width: 440px;
+  /* 600, not 440: an angle card carries a title plus up to five roled insights,
+     and 440 forced every one of them to wrap to three lines. */
+  width: 600px;
   max-width: 100vw;
   height: 100%;
   background: var(--bg-surface);
@@ -7524,6 +7526,149 @@ body.has-trial-banner #main-content {
   padding: var(--space-12) var(--space-6);
   color: var(--text-muted);
   font-size: 0.875rem;
+}
+
+/* Tabs — Suggested posts (default) / Insights */
+.vault-tabs {
+  display: flex;
+  gap: var(--space-1);
+  padding: 0 var(--space-5);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.vault-tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  padding: var(--space-3) var(--space-3);
+  margin-bottom: -1px;
+  transition: color 0.15s, border-color 0.15s;
+}
+.vault-tab:hover { color: var(--text-heading); }
+.vault-tab.is-active {
+  color: var(--brand);
+  border-bottom-color: var(--brand);
+}
+
+.vault-tab-count {
+  display: inline-block;
+  min-width: 18px;
+  padding: 0 5px;
+  margin-left: 4px;
+  border-radius: 9px;
+  background: var(--bg-pill);
+  font-size: 0.6875rem;
+  line-height: 18px;
+  text-align: center;
+}
+.vault-tab-count:empty { display: none; }
+
+/* Angle card — expanded by default: the composition IS the evidence */
+.vault-angle {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  background: var(--bg-surface);
+}
+
+.vault-angle-title {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--text-heading);
+  margin: 0 0 2px;
+  line-height: 1.35;
+}
+
+.vault-angle-meta {
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+  margin: 0 0 var(--space-3);
+}
+
+.vault-angle-roles {
+  list-style: none;
+  margin: 0 0 var(--space-3);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.vault-angle-role {
+  display: grid;
+  grid-template-columns: 92px 1fr;
+  gap: var(--space-2);
+  align-items: baseline;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+
+.vault-angle-role-name {
+  font-size: 0.625rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--brand);
+  padding-top: 2px;
+}
+
+/* Two-line clamp keeps a five-role card from filling the panel; the full text is
+   in the generated post anyway, this is a "what is this built from" summary. */
+.vault-angle-role-text {
+  color: var(--text-secondary);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.vault-angle-gen {
+  border: 1px solid var(--brand);
+  background: var(--brand);
+  color: #fff;
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: opacity 0.15s, background 0.15s;
+}
+.vault-angle-gen:hover:not(:disabled) { opacity: 0.88; }
+.vault-angle-gen:disabled { cursor: default; opacity: 0.45; }
+.vault-angle-gen.is-loading { opacity: 1; }
+
+/* Empty state — a dedicated tab cannot silently render nothing, so it has to say
+   what happened and where to go instead. */
+.vault-angles-empty {
+  padding: var(--space-8) var(--space-4);
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+  line-height: 1.55;
+  text-align: center;
+}
+.vault-angles-empty p { margin: 0 0 var(--space-2); }
+.vault-angles-empty-title {
+  font-weight: 700;
+  color: var(--text-heading);
+  font-size: 0.875rem;
+}
+
+.vault-linkish {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--brand);
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
 }
 
 /* Length control — the only generation option in the insights panel */

@@ -146,6 +146,16 @@
         </div>
         <button id="vault-ideas-close" class="vault-ideas-close" aria-label="Close insights panel">✕</button>
       </div>
+      <div class="vault-tabs" role="tablist" aria-label="Document contents">
+        <button type="button" class="vault-tab is-active" id="vault-tab-angles"
+                role="tab" aria-selected="true" aria-controls="vault-pane-angles" data-tab="angles">
+          Suggested posts <span class="vault-tab-count" id="vault-count-angles"></span>
+        </button>
+        <button type="button" class="vault-tab" id="vault-tab-insights"
+                role="tab" aria-selected="false" aria-controls="vault-pane-insights" data-tab="insights">
+          Insights <span class="vault-tab-count" id="vault-count-insights"></span>
+        </button>
+      </div>
       <div class="vault-ideas-toolbar">
         <span class="vault-length-label">Post length</span>
         <div class="vault-length-seg" id="vault-length-seg" role="radiogroup" aria-label="Post length">
@@ -154,7 +164,10 @@
           <button type="button" class="vault-length-opt" data-length="long"   role="radio" aria-checked="false">Long</button>
         </div>
       </div>
-      <div id="vault-ideas-body" class="vault-ideas-body" aria-live="polite"></div>
+      <div id="vault-pane-angles" class="vault-ideas-body" role="tabpanel"
+           aria-labelledby="vault-tab-angles" aria-live="polite"></div>
+      <div id="vault-ideas-body" class="vault-ideas-body" role="tabpanel"
+           aria-labelledby="vault-tab-insights" aria-live="polite" hidden></div>
     </div>
   </div>
 
@@ -198,6 +211,11 @@
   const ideasClose   = document.getElementById('vault-ideas-close');
   const ideasTitle   = document.getElementById('vault-ideas-panel-title');
   const ideasSub     = document.getElementById('vault-ideas-panel-sub');
+  const anglesPane   = document.getElementById('vault-pane-angles');
+  const tabAngles    = document.getElementById('vault-tab-angles');
+  const tabInsights  = document.getElementById('vault-tab-insights');
+  const countAngles  = document.getElementById('vault-count-angles');
+  const countInsights = document.getElementById('vault-count-insights');
 
   // ── Add Knowledge modal ─────────────────────────────────────────────────────
   addBtn.addEventListener('click', openAddModal);
@@ -436,14 +454,22 @@
     const errMsg  = doc.status === 'error' && doc.error_message
       ? `<p style="font-size:0.75rem;color:var(--text-danger);margin:4px 0 0 0">${escHtml(doc.error_message)}</p>` : '';
 
+    // The card must advertise what the panel will actually open on. It opens on
+    // Suggested posts, so lead with the angle count — and fall back to the
+    // insight-only wording when there are none, rather than promising ideas the
+    // panel would then have to explain away.
+    const nAngles  = doc.angle_count || 0;
+    const angleStr = nAngles ? `${nAngles} post idea${nAngles !== 1 ? 's' : ''}` : '';
+    const summary  = [angleStr, nInsights ? `${nInsights} insight${nInsights !== 1 ? 's' : ''}` : ''].filter(Boolean).join(' · ');
+
     const isNewlyMined = newlyMinedIds.has(doc.id) && !!nInsights;
-    const bodyAttrs = `data-id="${doc.id}" data-name="${escHtml(doc.filename)}" data-count="${nInsights}"`;
+    const bodyAttrs = `data-id="${doc.id}" data-name="${escHtml(doc.filename)}" data-count="${nInsights}" data-angles="${nAngles}"`;
     const bodyStart = nInsights
-      ? `<button class="vault-doc-card-body-btn" type="button" title="View ${nInsights} insight${nInsights !== 1 ? 's' : ''}" ${bodyAttrs}>`
+      ? `<button class="vault-doc-card-body-btn" type="button" title="Open ${summary}" ${bodyAttrs}>`
       : `<div class="vault-doc-body">`;
     const bodyEnd   = nInsights ? `</button>` : `</div>`;
     const ctaLine   = isNewlyMined
-      ? `<p class="vault-doc-card-cta">✨ ${nInsights} insight${nInsights !== 1 ? 's' : ''} organized — tap to view <span class="vault-doc-card-cta-arrow">→</span></p>`
+      ? `<p class="vault-doc-card-cta">✨ ${escHtml(summary)} — tap to view <span class="vault-doc-card-cta-arrow">→</span></p>`
       : '';
 
     return `
@@ -588,16 +614,24 @@
   }
 
   async function openIdeasPanel(docId, docFilename, insightCount) {
+    // Whether mining finished in THIS session is the only honest way to tell
+    // "angles are still building" from "this document has none" — angle-building
+    // is a background stage with no status of its own.
+    const justMined = newlyMinedIds.has(docId);
     newlyMinedIds.delete(docId);
     dismissMineBanner();
     const card = docList.querySelector(`.vault-doc-card[data-id="${docId}"]`);
     if (card) card.removeAttribute('data-newly-mined');
 
     ideasOverlay.dataset.docId = String(docId);
-    ideasTitle.textContent     = `${insightCount} insight${insightCount !== 1 ? 's' : ''} organized`;
-    ideasSub.textContent       = docFilename;
+    ideasTitle.textContent     = docFilename;
+    ideasSub.textContent       = `${insightCount} insight${insightCount !== 1 ? 's' : ''} organized`;
+    anglesPane.innerHTML       = '<p class="vault-ideas-loading">Loading…</p>';
     ideasBody.innerHTML        = '<p class="vault-ideas-loading">Loading insights…</p>';
+    setTab('angles');
     ideasOverlay.style.display = 'flex';
+
+    loadAngles(docId, justMined);
 
     try {
       const res  = await fetch(`/api/vault/insights?document_id=${docId}`);
@@ -605,6 +639,7 @@
       if (!data.ok) throw new Error(data.error || 'Failed to load insights');
 
       const groups = data.groups || [];
+      countInsights.textContent = groups.reduce((n, g) => n + (g.items || []).length, 0) || '';
       if (!groups.length) {
         ideasBody.innerHTML = '<p class="vault-ideas-empty">No insights found for this document yet.</p>';
         return;
@@ -613,6 +648,128 @@
       ideasBody.innerHTML = groups.map(renderInsightGroup).join('');
     } catch (err) {
       ideasBody.innerHTML = `<p class="vault-ideas-empty" style="color:var(--text-danger)">Could not load insights: ${escHtml(err.message)}</p>`;
+    }
+  }
+
+  // ── Tabs ──────────────────────────────────────────────────────────────────
+  // Suggested posts is the default. The vault's job is producing posts, not
+  // storing reference material — opening on Insights would bury the feature.
+  function setTab(name) {
+    const onAngles = name === 'angles';
+    tabAngles.classList.toggle('is-active', onAngles);
+    tabInsights.classList.toggle('is-active', !onAngles);
+    tabAngles.setAttribute('aria-selected', String(onAngles));
+    tabInsights.setAttribute('aria-selected', String(!onAngles));
+    anglesPane.hidden = !onAngles;
+    ideasBody.hidden  = onAngles;
+  }
+
+  document.querySelector('.vault-tabs').addEventListener('click', (e) => {
+    const btn = e.target.closest('.vault-tab');
+    if (btn) setTab(btn.dataset.tab);
+  });
+
+  // ── Suggested posts ───────────────────────────────────────────────────────
+  const ROLE_LABELS = {
+    spine:       'Claim',
+    tension:     'Contradicts',
+    proof:       'Proof',
+    mechanism:   'Why it works',
+    consequence: 'What to do',
+  };
+
+  async function loadAngles(docId, justMined, attempt = 0) {
+    try {
+      const res  = await fetch(`/api/vault/angles?document_id=${docId}`);
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || 'Failed to load');
+
+      const angles = data.angles || [];
+      countAngles.textContent = angles.length || '';
+
+      if (angles.length) {
+        anglesPane.innerHTML = angles.map(renderAngle).join('');
+        return;
+      }
+
+      // Clustering runs after mining and takes ~20-30s. Only claim to be looking
+      // when we know mining just finished; otherwise this document genuinely has
+      // none and saying "finding…" forever would be a lie.
+      if (justMined && attempt < 6) {
+        anglesPane.innerHTML = '<p class="vault-ideas-loading">Finding post ideas…</p>';
+        setTimeout(() => loadAngles(docId, justMined, attempt + 1), 5000);
+        return;
+      }
+
+      anglesPane.innerHTML = `
+        <div class="vault-angles-empty">
+          <p class="vault-angles-empty-title">No post ideas from this document.</p>
+          <p>Its insights don’t connect into a single argument — that usually means the document covers a lot of ground shallowly.</p>
+          <p>You can still write from any individual insight in the <button type="button" class="vault-linkish" data-goto-insights>Insights</button> tab.</p>
+        </div>`;
+    } catch (err) {
+      anglesPane.innerHTML = `<p class="vault-ideas-empty" style="color:var(--text-danger)">Could not load post ideas: ${escHtml(err.message)}</p>`;
+    }
+  }
+
+  // Cards render EXPANDED. The composition is the evidence that this idea is built
+  // from real material — a bare title is indistinguishable from the generic idea
+  // cards that nobody clicked.
+  function renderAngle(a) {
+    const roles = (a.roles || []).map(r => `
+      <li class="vault-angle-role">
+        <span class="vault-angle-role-name">${escHtml(ROLE_LABELS[r.role] || r.role)}</span>
+        <span class="vault-angle-role-text">${escHtml(r.content)}</span>
+      </li>`).join('');
+    const meta = [
+      `${a.insight_count} insight${a.insight_count !== 1 ? 's' : ''}`,
+      a.has_number ? 'includes a number' : null,
+    ].filter(Boolean).join(' · ');
+
+    return `
+      <article class="vault-angle" data-angle-id="${Number(a.id)}">
+        <h3 class="vault-angle-title">${escHtml(a.title)}</h3>
+        <p class="vault-angle-meta">${escHtml(meta)}</p>
+        <ul class="vault-angle-roles">${roles}</ul>
+        <button class="vault-angle-gen" type="button" data-angle-id="${Number(a.id)}">Generate post</button>
+      </article>`;
+  }
+
+  anglesPane.addEventListener('click', (e) => {
+    if (e.target.closest('[data-goto-insights]')) { setTab('insights'); return; }
+    const btn = e.target.closest('.vault-angle-gen');
+    if (btn && !btn.disabled) generateFromAngle(btn);
+  });
+
+  async function generateFromAngle(btn) {
+    const angleId = btn.dataset.angleId;
+    const all = Array.from(anglesPane.querySelectorAll('.vault-angle-gen'));
+    all.forEach(b => { b.disabled = true; });
+    btn.classList.add('is-loading');
+    btn.textContent = 'Writing…';
+
+    try {
+      const res = await fetch(`/api/vault/angles/${encodeURIComponent(angleId)}/generate`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ length: insightLength }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) {
+        if (data.error === 'plan_limit_exceeded') {
+          window.PricingModal?.open({ feature: 'vault' });
+          throw new Error('You have reached your plan’s post limit.');
+        }
+        if (data.error === 'high_demand')            throw new Error('High demand right now — try again in a moment.');
+        if (data.error === 'complete_profile_first') throw new Error('Finish your brand voice profile first.');
+        throw new Error(data.error || 'Could not generate the post.');
+      }
+      window.location.href = `/editor/${encodeURIComponent(data.id)}`;
+    } catch (err) {
+      window.toast?.error(err.message || 'Could not generate the post.');
+      all.forEach(b => { b.disabled = false; });
+      btn.classList.remove('is-loading');
+      btn.textContent = 'Generate post';
     }
   }
 

@@ -445,6 +445,26 @@ router.get('/users/:userId/workspaces', requireAdminPassword, (req, res) => {
 // ---------------------------------------------------------------------------
 // GET /admin/dashboard/metrics?start=&end=&granularity=day|week|month
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// GET /api/admin/vault-paths — does synthesising angles beat single insights?
+//
+// Phase 5 of sprint-vault-angles.md. Publish rate says whether people ship the
+// draft; median_kept says how much of what we wrote survived to publication. A
+// path can convert well and still be producing drafts people have to repair, and
+// only the second number reveals that.
+// ---------------------------------------------------------------------------
+router.get('/vault-paths', requireAdminPassword, (req, res) => {
+  (async () => {
+    const days = Math.min(Math.max(parseInt(req.query.days, 10) || 90, 1), 730);
+    const { buildVaultPathReport } = require('../services/vaultPathReport');
+    const report = await buildVaultPathReport({ days, tenantId: req.query.tenant_id || null });
+    return res.json({ ok: true, ...report });
+  })().catch(err => {
+    console.error('[admin/vault-paths]', err);
+    res.status(500).json({ ok: false, error: err.message });
+  });
+});
+
 router.get('/dashboard/metrics', requireAdminPassword, (req, res) => {
   (async () => {
     const GRAN_MAP = { day: 'day', week: 'week', month: 'month' };

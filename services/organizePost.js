@@ -94,10 +94,33 @@ const LENGTH_DIRECTIVES = {
   long:   'LENGTH — LONG (~250-360 words): keep the fuller arc — the situation, the specifics, and the turn — while still cutting anything repetitive or slack.',
 };
 
-function lengthDirective(lengthPreference) {
+// Document briefs need the opposite reading of "longer".
+//
+// The directives above are written for a coach brief, where the author's answers
+// form one story and "keep the fuller arc" means keep more of THAT story. A
+// document has no single arc — it has coverage. So on a document, "keep the fuller
+// arc" means keep more of the article, which is how a Long post ends up touching
+// the definition, the process, two case studies and a culture claim in 430 words.
+// Breadth is exactly what makes a post forgettable.
+//
+// So for documents, length scales DEPTH on the one claim, never the number of
+// claims. The ranges are unchanged; what changes is where the words come from.
+const DOCUMENT_LENGTH_DIRECTIVES = {
+  short:  'LENGTH — SHORT (~60-110 words): the claim and the single strongest specific behind it. Nothing else. No second example, no definition, no process.',
+  medium: 'LENGTH — MEDIUM (~130-200 words): the claim, what it contradicts, and the specific that proves it. Still ONE claim and ONE example.',
+  long:   'LENGTH — LONG (~250-360 words): still ONE claim and normally ONE example. The extra length comes from going DEEPER, never wider: how the thing actually worked, why the obvious alternative fails, what it means for the reader to do differently. Develop the single claim; do not add a second one.',
+};
+
+function lengthDirective(lengthPreference, sourceIsDocument = false) {
   const key = String(lengthPreference || '').trim().toLowerCase();
-  const directive = LENGTH_DIRECTIVES[key];
+  const directive = (sourceIsDocument ? DOCUMENT_LENGTH_DIRECTIVES : LENGTH_DIRECTIVES)[key];
   if (!directive) return '';
+
+  if (sourceIsDocument) {
+    return `\n\n${directive}\nLength comes from DEPTH, never from COVERAGE. If you find yourself introducing a second subject, a second case study, or a definition of the topic in order to reach the range, stop — a shorter post that presses one claim beats a longer one that tours three. The document contains far more than this post should use, and most of it must be left out.
+
+THE RANGE IS A CEILING, NOT A TARGET. Once you have narrowed to one claim and one example, the material behind them is often thinner than the range, and there is exactly one acceptable response: END THE POST. Come in well under the range. Do not reach the word count by inventing detail the document does not contain — no colour, no scene-setting, no "they knocked on doors", no consequence the material never states, no illustrative aside of your own. Padding with invented specifics is the single worst failure available to you here, far worse than a post that is only 140 words. If in doubt, stop writing.`;
+  }
   return `\n\n${directive}\nThis is a SELECTION instruction, not a word count to fill. Reach the length by choosing how much of their material to keep — never by padding, restating, or adding a line they did not say. If their material genuinely runs short of the range, the post is short. That is correct.`;
 }
 
@@ -228,6 +251,8 @@ WHAT YOU MUST DO INSTEAD:
 
 DO NOT COVER THE DOCUMENT. Pick the one claim worth making and cut everything that merely defines, explains, or restates it. A definition is not an argument. If the material makes the same point twice, keep the stronger one once and delete the other.
 
+ONE EXAMPLE ONLY. The material will often hand you several companies, cases or stories — the brief is assembled from different parts of the document, so more than one frequently arrives even when the claim needs just one. Choose the SINGLE strongest and delete the rest completely. Two examples of the same point do not make it twice as convincing; they make it a survey, and the second one is where the post stops being about anything. Depth on one case beats a tour of three, every time.
+
 HOOK: in a document the most striking line is almost never the opening one, and it is never a definition. Find the sentence that contradicts what the reader currently assumes, and open with that.`;
 
 async function organizePost(rawIdea, profile, { postType = 'reach', lengthPreference = null, fromInterview = false, maxJoins = DEFAULT_MAX_JOINS, sourceIsDocument = false } = {}) {
@@ -256,7 +281,7 @@ async function organizePost(rawIdea, profile, { postType = 'reach', lengthPrefer
 ${rawIdea}
 """
 
-${shape}${lengthDirective(lengthPreference)}
+${shape}${lengthDirective(lengthPreference, sourceIsDocument)}
 
 Organise it into the post now. Output only the post as plain text — no preamble, labels, or explanation. The first line of your response is the first line of the post.`;
 

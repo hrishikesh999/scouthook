@@ -648,6 +648,34 @@ Which shape does this material actually support? One word.`,
 // form would put unmarked machine text in the brief — which retention would still
 // score as faithful. See Flaw 3 in sprint-vault-angles.md.
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// POST /api/vault/documents/:id/angles — (re)build a document's angles from the
+// insights it already has.
+//
+// Needed because angle-building only ever ran as a stage of mining, so every
+// document mined before it shipped has none — and with the per-insight generate
+// button removed, a document with no angles has no way to produce a post at all.
+// Chunks and insights are already stored, so this is one Sonnet call, not a
+// re-mine. Awaited rather than fire-and-forget: the user is looking at an empty
+// tab and needs to know whether it worked.
+// ---------------------------------------------------------------------------
+router.post('/documents/:id/angles', async (req, res) => {
+  const { userId, tenantId } = req;
+  if (!requireUser(req, res)) return;
+
+  const docId = Number(req.params.id);
+  if (!Number.isInteger(docId) || docId <= 0) {
+    return res.status(400).json({ ok: false, error: 'invalid_document_id' });
+  }
+
+  const doc = await db.prepare('SELECT id FROM vault_documents WHERE id = ? AND tenant_id = ?').get(docId, tenantId);
+  if (!doc) return res.status(404).json({ ok: false, error: 'document_not_found' });
+
+  const { buildAnglesForDocument } = require('../services/vaultAngles');
+  const count = await buildAnglesForDocument(docId, userId, tenantId);
+  return res.json({ ok: true, angles: count });
+});
+
 // Load one angle with its document filename. Used by the angle route and by the
 // per-insight upgrade path.
 async function fetchAngle(angleId, tenantId) {

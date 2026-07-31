@@ -7715,40 +7715,17 @@ body.has-trial-banner #main-content {
   box-shadow: 0 1px 2px rgba(0,0,0,0.06);
 }
 
-/* Insight row — the insight line plus its generate action. The action is always
-   visible: turning an insight into a post is the whole point of this panel, so
-   hiding it behind hover made the feature undiscoverable. */
+/* Insight row — reference material only. The per-insight generate button was
+   removed: 17 identical CTAs down the panel was noise, and it undercut the split
+   the tabs exist to make (insights are browsed, suggested posts are acted on).
+   The separator stays because a long list still needs to be scannable. */
 .vault-insight-row {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
   padding-bottom: var(--space-3);
   border-bottom: 1px solid var(--border);
 }
 /* Keep the breathing room on the last row — only the rule is redundant there,
    the space is not (the next group's heading follows immediately). */
 .vault-insight-row:last-child { border-bottom: none; }
-
-.vault-insight-gen {
-  align-self: flex-start;
-  border: 1px solid var(--brand);
-  background: var(--bg-surface);
-  color: var(--brand);
-  font-family: inherit;
-  font-size: 0.6875rem;
-  font-weight: 600;
-  padding: 4px 10px;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: color 0.15s, border-color 0.15s, background 0.15s, opacity 0.15s;
-}
-
-.vault-insight-gen:hover:not(:disabled) {
-  background: var(--brand);
-  color: #fff;
-}
-.vault-insight-gen:disabled { cursor: default; opacity: 0.45; }
-.vault-insight-gen.is-loading { opacity: 1; }
 
 /* Insight groups (knowledge-store panel) — categorized reference material */
 .vault-insight-group {

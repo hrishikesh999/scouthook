@@ -701,11 +701,15 @@
         return;
       }
 
+      // Copy matters here. With the per-insight buttons gone, this tab is the only
+      // way to write from a document, so an empty one is a dead end and must say
+      // what to do about it rather than pointing at a tab with no action in it.
       anglesPane.innerHTML = `
         <div class="vault-angles-empty">
-          <p class="vault-angles-empty-title">No post ideas from this document.</p>
-          <p>Its insights don’t connect into a single argument — that usually means the document covers a lot of ground shallowly.</p>
-          <p>You can still write from any individual insight in the <button type="button" class="vault-linkish" data-goto-insights>Insights</button> tab.</p>
+          <p class="vault-angles-empty-title">No post ideas from this document yet.</p>
+          <p>Either it was added before post ideas existed, or its insights don’t connect into a single argument — which usually means the document covers a lot of ground shallowly.</p>
+          <p>Re-analysing rebuilds them from the insights already in the <button type="button" class="vault-linkish" data-goto-insights>Insights</button> tab.</p>
+          <button type="button" class="vault-angle-gen" data-reanalyse>Re-analyse document</button>
         </div>`;
     } catch (err) {
       anglesPane.innerHTML = `<p class="vault-ideas-empty" style="color:var(--text-danger)">Could not load post ideas: ${escHtml(err.message)}</p>`;
@@ -737,9 +741,35 @@
 
   anglesPane.addEventListener('click', (e) => {
     if (e.target.closest('[data-goto-insights]')) { setTab('insights'); return; }
+    const re = e.target.closest('[data-reanalyse]');
+    if (re && !re.disabled) { reanalyseDocument(re); return; }
     const btn = e.target.closest('.vault-angle-gen');
     if (btn && !btn.disabled) generateFromAngle(btn);
   });
+
+  async function reanalyseDocument(btn) {
+    const docId = ideasOverlay.dataset.docId;
+    btn.disabled = true;
+    btn.textContent = 'Analysing…';
+    try {
+      const res  = await fetch(`/api/vault/documents/${encodeURIComponent(docId)}/angles`, { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) throw new Error(data.error || 'Could not analyse this document.');
+      if (!data.angles) {
+        // An honest dead end beats a spinner that resolves to the same screen:
+        // this document's insights genuinely do not form an argument.
+        window.toast?.info('No post ideas found — this document’s insights don’t form a single argument.');
+        btn.disabled = false;
+        btn.textContent = 'Re-analyse document';
+        return;
+      }
+      loadAngles(Number(docId), false);
+    } catch (err) {
+      window.toast?.error(err.message || 'Could not analyse this document.');
+      btn.disabled = false;
+      btn.textContent = 'Re-analyse document';
+    }
+  }
 
   async function generateFromAngle(btn) {
     const angleId = btn.dataset.angleId;
@@ -784,15 +814,13 @@
       </section>`;
   }
 
-  // Each insight is one post's worth of material, so the action lives on the
-  // insight, not on the panel: the server resolves this line back to its source
-  // passage and organises that into a post.
+  // No per-insight action. A generate button on all 17 rows was a wall of
+  // identical CTAs, and it undercut the split the tabs exist to make: insights are
+  // reference material you browse, suggested posts are decisions you act on. One
+  // insight also produces the shallow post this whole design set out to fix.
+  // Generation lives in Suggested posts.
   function renderInsightRow(category, item) {
-    return `
-      <div class="vault-insight-row">
-        ${renderInsightItem(category, item.content)}
-        <button class="vault-insight-gen" type="button" data-insight-id="${Number(item.id)}">Generate post</button>
-      </div>`;
+    return `<div class="vault-insight-row">${renderInsightItem(category, item.content)}</div>`;
   }
 
   function renderInsightItem(category, content) {
@@ -838,47 +866,6 @@
     paintLengthSeg();
   });
   paintLengthSeg();
-
-  ideasBody.addEventListener('click', (e) => {
-    const btn = e.target.closest('.vault-insight-gen');
-    if (btn && !btn.disabled) generateFromInsight(btn);
-  });
-
-  async function generateFromInsight(btn) {
-    const insightId = btn.dataset.insightId;
-    const allButtons = Array.from(ideasBody.querySelectorAll('.vault-insight-gen'));
-    // Lock the whole panel, not just this row: a second generation while one is
-    // in flight burns a Sonnet call the user is about to navigate away from.
-    allButtons.forEach(b => { b.disabled = true; });
-    btn.classList.add('is-loading');
-    btn.textContent = 'Writing…';
-
-    try {
-      const res = await fetch(`/api/vault/insights/${encodeURIComponent(insightId)}/generate`, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ length: insightLength }),
-      });
-      const data = await res.json().catch(() => ({}));
-
-      if (!res.ok || !data.ok) {
-        if (data.error === 'plan_limit_exceeded') {
-          window.PricingModal?.open({ feature: 'vault' });
-          throw new Error('You have reached your plan’s post limit.');
-        }
-        if (data.error === 'high_demand')          throw new Error('High demand right now — try again in a moment.');
-        if (data.error === 'complete_profile_first') throw new Error('Finish your brand voice profile first.');
-        throw new Error(data.error || 'Could not generate the post.');
-      }
-
-      window.location.href = `/editor/${encodeURIComponent(data.id)}`;
-    } catch (err) {
-      window.toast?.error(err.message || 'Could not generate the post.');
-      allButtons.forEach(b => { b.disabled = false; });
-      btn.classList.remove('is-loading');
-      btn.textContent = 'Generate post';
-    }
-  }
 
   loadDocuments();
   </script>

@@ -215,6 +215,9 @@ module.exports = {
   buildAnglesForDocument,
   validateAngle,
   formatInsights,
+  // Exported for offline evaluation of the clustering prompt without a document
+  // in the database — same reason organizePost exports EDITOR_SYSTEM.
+  SYSTEM_PROMPT,
   ANGLE_SCHEMA,
   MIN_INSIGHTS,
   MAX_ANGLES,

@@ -329,11 +329,16 @@ router.get('/documents', async (req, res) => {
   const { userId, tenantId } = req;
   if (!requireUser(req, res)) return;
 
+  // angle_count drives the card label ("3 post ideas · 12 insights") and the
+  // default tab. It has to be on the list response, not fetched per card, or the
+  // card would advertise a count the panel might not be able to honour.
   const docs = await db.prepare(`
-    SELECT id, filename, source_type, source_url, status, chunk_count, ideas_mined, error_message, created_at
-    FROM   vault_documents
-    WHERE  tenant_id = ?
-    ORDER  BY created_at DESC
+    SELECT vd.id, vd.filename, vd.source_type, vd.source_url, vd.status, vd.chunk_count,
+           vd.ideas_mined, vd.error_message, vd.created_at,
+           (SELECT COUNT(*)::int FROM vault_angles va WHERE va.document_id = vd.id) AS angle_count
+    FROM   vault_documents vd
+    WHERE  vd.tenant_id = ?
+    ORDER  BY vd.created_at DESC
   `).all(tenantId);
 
   return res.json({ ok: true, documents: docs });
@@ -521,17 +526,6 @@ router.get('/angles', async (req, res) => {
   return res.json({ ok: true, angles: shaped });
 });
 
-// ---------------------------------------------------------------------------
-// POST /api/vault/insights/:id/generate — one insight → one finished post.
-//
-// The insight line itself is a condensed restatement and far too thin to write
-// from. What makes this path work is that the insight is an INDEX into the
-// author's own document: we resolve it back to the source passage and organise
-// THAT. So generation runs through organizePost (editor, not writer) — the
-// material is already the author's words, and the job is shaping, not composing.
-//
-// The only user-facing option is length. Post type is inferred from the material.
-// ---------------------------------------------------------------------------
 const INSIGHT_TYPE_FALLBACK = {
   key_insight:   'trust',
   strategy:      'framework',
@@ -641,6 +635,196 @@ Which shape does this material actually support? One word.`,
   }
 }
 
+// ---------------------------------------------------------------------------
+// POST /api/vault/angles/:id/generate — one angle → one synthesised post.
+//
+// The difference from the single-insight path is not "more material" — it is that
+// the material arrives with ROLES. One insight is the claim; the others prove it,
+// oppose it, or explain it. Handing a model four insights flat produces "4 lessons
+// from my case study"; labelling which serves which produces an argument.
+//
+// Every roled insight is resolved back to its source passage, not just the spine:
+// mined insights are condensed paraphrases, so a support arriving as its one-line
+// form would put unmarked machine text in the brief — which retention would still
+// score as faithful. See Flaw 3 in sprint-vault-angles.md.
+// ---------------------------------------------------------------------------
+router.post('/angles/:id/generate', async (req, res) => {
+  const { userId, tenantId } = req;
+  if (!requireUser(req, res)) return;
+
+  const angleId = Number(req.params.id);
+  if (!Number.isInteger(angleId) || angleId <= 0) {
+    return res.status(400).json({ ok: false, error: 'invalid_angle_id' });
+  }
+
+  const length = String(req.body?.length || 'medium').toLowerCase();
+  if (!VALID_LENGTHS.has(length)) {
+    return res.status(400).json({ ok: false, error: 'invalid_length' });
+  }
+
+  const { canGeneratePost } = require('../services/subscription');
+  const planCheck = await canGeneratePost(userId);
+  if (!planCheck.allowed) {
+    return res.status(403).json({
+      ok: false, error: 'plan_limit_exceeded',
+      plan: planCheck.plan, current: planCheck.current, limit: planCheck.limit,
+    });
+  }
+
+  try {
+    const angle = await db.prepare(`
+      SELECT va.id, va.document_id, va.title, va.roles, vd.filename
+      FROM   vault_angles va
+      LEFT   JOIN vault_documents vd ON vd.id = va.document_id
+      WHERE  va.id = ? AND va.tenant_id = ?
+    `).get(angleId, tenantId);
+    if (!angle) return res.status(404).json({ ok: false, error: 'angle_not_found' });
+
+    const roleMap = typeof angle.roles === 'string' ? JSON.parse(angle.roles || '{}') : (angle.roles || {});
+    const { ROLE_ORDER } = require('../services/vaultBrief');
+    const roleIds = ROLE_ORDER
+      .filter(r => roleMap[r] != null)
+      .map(r => ({ role: r, id: Number(roleMap[r]) }));
+    if (!roleIds.some(r => r.role === 'spine')) {
+      return res.status(422).json({ ok: false, error: 'angle_has_no_spine' });
+    }
+
+    const insightRows = await db.prepare(`
+      SELECT id, document_id, category, content, source_ref
+      FROM   vault_insights WHERE tenant_id = ? AND id = ANY(?)
+    `).all(tenantId, roleIds.map(r => r.id));
+    const byId = new Map(insightRows.map(r => [Number(r.id), r]));
+
+    const { resolveProfile } = require('../lib/resolveProfile');
+    const profile = await resolveProfile(tenantId);
+    if (!profile) return res.status(400).json({ ok: false, error: 'complete_profile_first' });
+
+    // Resolve a passage for EVERY role, sequentially — a handful of cheap indexed
+    // lookups, and the ordering keeps the brief's blocks deterministic.
+    const blocks = [];
+    let spineChunk = null;
+    for (const { role, id } of roleIds) {
+      const ins = byId.get(id);
+      if (!ins) continue;                       // insight deleted since clustering
+      const chunk = await resolveInsightChunk(ins, tenantId);
+      if (role === 'spine') spineChunk = chunk;
+      blocks.push({
+        role,
+        content:   ins.content,
+        passage:   chunk?.content || '',
+        chunkId:   chunk?.id ?? null,
+        sourceRef: ins.source_ref || null,
+      });
+    }
+    if (!blocks.some(b => b.role === 'spine')) {
+      return res.status(422).json({ ok: false, error: 'spine_insight_missing' });
+    }
+
+    // Neighbours for the spine only. Pulling them for every role would triple the
+    // brief for context that is background by definition.
+    let neighbours = '';
+    if (spineChunk) {
+      const rows = await db.prepare(`
+        SELECT content FROM vault_chunks
+        WHERE  document_id = ? AND tenant_id = ? AND chunk_index IN (?, ?)
+        ORDER  BY chunk_index
+      `).all(angle.document_id, tenantId, spineChunk.chunk_index - 1, spineChunk.chunk_index + 1);
+      neighbours = rows.map(r => r.content).join('\n\n');
+    }
+
+    const { buildRoleBrief } = require('../services/vaultBrief');
+    const brief = buildRoleBrief({ filename: angle.filename || '', blocks, neighbours });
+
+    // Post type from the spine plus its tension — a claim and the thing it
+    // contradicts is a far stronger signal than one sentence alone.
+    const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await require('../db').getSetting('anthropic_api_key'));
+    const spineBlock   = blocks.find(b => b.role === 'spine');
+    const tensionBlock = blocks.find(b => b.role === 'tension');
+    const typeProbe = {
+      category: byId.get(Number(roleMap.spine))?.category || 'key_insight',
+      content:  [angle.title, spineBlock?.content, tensionBlock && `Contradicts: ${tensionBlock.content}`].filter(Boolean).join('\n'),
+    };
+    const postType = await selectPostType(typeProbe, spineBlock?.passage || spineBlock?.content || '', apiKey);
+
+    const { organizePost, ROLE_BRIEF_MAX_JOINS } = require('../services/organizePost');
+    const org = await organizePost(brief, profile, {
+      postType,
+      lengthPreference: length,
+      fromInterview:    true,
+      maxJoins:         ROLE_BRIEF_MAX_JOINS,
+    });
+
+    const { runQualityGate } = require('../services/qualityGate');
+    const { extractAuthorRealText, classifyHookShape } = require('../services/generationCore');
+    const gate = runQualityGate(org.post, {
+      voiceProfile: profile, archetypeUsed: null, formatSlug: 'idea',
+      path: 'idea', funnelType: postType, postType,
+      authorRealText: extractAuthorRealText(brief),
+    });
+
+    const runResult = await db.prepare(`
+      INSERT INTO generation_runs (user_id, tenant_id, path, input_data, synthesis)
+      VALUES (?, ?, ?, ?, ?) RETURNING id
+    `).run(
+      userId, tenantId, 'vault_angle',
+      JSON.stringify({ raw_idea: brief, vault_angle_id: angle.id, roles: roleMap, length }),
+      JSON.stringify(org.synthesis),
+    );
+
+    const insertResult = await db.prepare(`
+      INSERT INTO generated_posts
+        (run_id, user_id, tenant_id, profile_id, format_slug, content, ai_content,
+         quality_score, quality_flags, passed_gate, funnel_type, vault_source_ref,
+         idea_input, archetype_used, source, post_type, quality_verdict)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      RETURNING id
+    `).run(
+      runResult.lastInsertRowid, userId, tenantId, profile.id, 'idea',
+      org.post, org.post, gate.score, JSON.stringify(gate.flags), gate.passed_gate ? 1 : 0,
+      postType, spineBlock?.sourceRef || null, brief, null, 'vault_angle',
+      postType, gate.verdict || null,
+    );
+    const postId = insertResult.lastInsertRowid;
+
+    try {
+      const shape = classifyHookShape(org.post);
+      Promise.resolve(db.prepare('UPDATE generated_posts SET hook_shape = ? WHERE id = ?').run(shape, postId)).catch(() => {});
+    } catch { /* non-fatal */ }
+    Promise.resolve(db.prepare(
+      'UPDATE vault_angles SET used_count = used_count + 1, last_used_at = now() WHERE id = ? AND tenant_id = ?'
+    ).run(angle.id, tenantId)).catch(() => {});
+    require('../services/streak').recordStreakAction(userId, tenantId, 'generate');
+    require('../services/trialEmails').scheduleTrialEvaluation(userId, tenantId);
+
+    // grounded = how many roles reached a real passage. A low ratio means the post
+    // was built largely from condensed paraphrase, which retention cannot reveal.
+    const grounded = blocks.filter(b => b.passage).length;
+    console.log(`[vault/angle] angle=${angle.id} type=${postType} length=${length} roles=${blocks.length} grounded=${grounded}/${blocks.length} retention=${org.retention?.score} post=${postId}`);
+
+    return res.json({
+      ok: true, id: postId, post: org.post, post_type: postType, length,
+      roles: blocks.map(b => b.role), grounded, retention: org.retention || null,
+    });
+  } catch (err) {
+    if (err.status === 429 || err.status === 529) {
+      return res.status(503).json({ ok: false, error: 'high_demand', retry_after_sec: 30 });
+    }
+    console.error('[vault/angle] error:', err);
+    return res.status(500).json({ ok: false, error: err.message || 'generation_failed' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/vault/insights/:id/generate — one insight → one finished post.
+//
+// The insight line itself is a condensed restatement and far too thin to write
+// from. What makes this path work is that the insight is an INDEX into the
+// author's own document: we resolve it back to the source passage and organise
+// THAT. So generation runs through organizePost (editor, not writer) — the
+// material is already the author's words, and the job is shaping, not composing.
+//
+// The only user-facing option is length. Post type is inferred from the material.
+// ---------------------------------------------------------------------------
 router.post('/insights/:id/generate', async (req, res) => {
   const { userId, tenantId } = req;
   if (!requireUser(req, res)) return;

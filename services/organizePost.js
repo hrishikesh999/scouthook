@@ -138,7 +138,27 @@ ${AI_TELLS_PROHIBITION}`;
 // the base prompt explicitly, because EDITOR_SYSTEM states outright that the hook
 // is the only line where writing is ever on the table, and an un-retracted rule
 // contradicting a new one is how prompts start behaving unpredictably.
-const BRIEF_MODE_AMENDMENT = `---
+// The cap is a parameter, not a constant, because it was tuned for one brief
+// shape and is about to meet another. Two joins is right for a coach brief, where
+// the author's answers already share a narrative thread. A role brief assembled
+// from four different parts of a document has more seams by construction, so the
+// number that keeps the editor honest there is an open question — see Phase 3 of
+// sprint-vault-angles.md. Default stays 2: the shipped coach path must not move.
+const DEFAULT_MAX_JOINS = 2;
+
+// Role briefs (vault angles) need more. Measured, n=5 per arm, sprint-vault-angles
+// Phase 3: at 2 joins the editor produced faithful but scattered posts — number,
+// then unrelated figure, then assumption, then mechanism, with a third-person
+// corporate credential line preserved verbatim mid-post. At 5 it produced a
+// coherent argument and rendered that same corporate line into the author's
+// register, at retention 0.930 (range 0.88–0.96) against a 0.7 floor. The seams in
+// a brief assembled from four parts of a document are simply more numerous than in
+// one assembled from a single conversation.
+const ROLE_BRIEF_MAX_JOINS = 5;
+
+const JOIN_WORDS = { 1: 'ONE join', 2: 'TWO joins', 3: 'THREE joins', 4: 'FOUR joins', 5: 'FIVE joins' };
+
+const BRIEF_MODE_AMENDMENT = (maxJoins) => `---
 
 AMENDMENT — THIS BRIEF IS AN INTERVIEW, NOT A DRAFT.
 
@@ -157,7 +177,7 @@ Every one of these binds:
 - A join carries NO fact, number, name, date, outcome, claim, or opinion that is not already in the author's material. Its only job is to carry the reader from one of their points to the next. It never makes a point of its own.
 - Build joins from the author's own vocabulary. Use the words they used.
 - Keep them short — a few words to one sentence. If a "join" is doing more work than the beats around it, you are writing the post, which is not your job.
-- AT MOST TWO joins in the entire post. Find the two worst seams and bridge those; leave every other transition alone. If only one seam is genuinely bad, write one. This cap is absolute — it is what keeps you an editor.
+- AT MOST ${JOIN_WORDS[maxJoins] || `${maxJoins} joins`} in the entire post. Find the worst seams and bridge those; leave every other transition alone. If only one seam is genuinely bad, write one. This cap is absolute — it is what keeps you an editor.
 - Add one only where a seam actually exists. Where two of their beats already run on naturally, leave them alone.
 - A join must carry the reader forward. It is never a soft landing or a beat of commentary on what was just said ("this is worth sitting with", "that changes everything", "let that sink in"). If your join could be deleted without the reader losing the thread, it was never a join — delete it.
 - A join is a NEW sentence placed between two of theirs. It may not absorb, merge, compress, or restate a sentence the author wrote. If you catch yourself rewriting one of their beats to make it flow into the next, stop: put your join between them and leave both of their sentences exactly as they were.
@@ -166,7 +186,7 @@ Every one of these binds:
 
 Everything else in the HARD RULES still binds exactly as written. You may cut, and you may now join. You still may not rewrite their sentences, upgrade their vocabulary, or introduce substance of your own.`;
 
-async function organizePost(rawIdea, profile, { postType = 'reach', lengthPreference = null, fromInterview = false } = {}) {
+async function organizePost(rawIdea, profile, { postType = 'reach', lengthPreference = null, fromInterview = false, maxJoins = DEFAULT_MAX_JOINS } = {}) {
   const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
   if (!apiKey) throw new Error('anthropic_api_key not configured');
   const client = new Anthropic({ apiKey });
@@ -179,7 +199,7 @@ async function organizePost(rawIdea, profile, { postType = 'reach', lengthPrefer
   // them, and before the voice block so the voice context stays the last thing in
   // the system prompt (unchanged for draft mode).
   const editorRules = fromInterview
-    ? `${EDITOR_SYSTEM}\n\n${BRIEF_MODE_AMENDMENT}`
+    ? `${EDITOR_SYSTEM}\n\n${BRIEF_MODE_AMENDMENT(maxJoins)}`
     : EDITOR_SYSTEM;
 
   const systemPrompt = `${editorRules}\n\nAUTHOR VOICE (match register only — the words below are theirs):\n${authorContext}`;
@@ -268,4 +288,4 @@ Organise it into the post now. Output only the post as plain text — no preambl
   };
 }
 
-module.exports = { organizePost, EDITOR_SYSTEM };
+module.exports = { organizePost, EDITOR_SYSTEM, DEFAULT_MAX_JOINS, ROLE_BRIEF_MAX_JOINS };

@@ -4181,7 +4181,11 @@ function showYourWordsBar() {
   let prov = null;
   try { prov = JSON.parse(sessionStorage.getItem('sh_gen_provenance') || 'null'); } catch { prov = null; }
   sessionStorage.removeItem('sh_gen_provenance');
-  if (!prov || String(prov.id) !== String(postId) || prov.mode !== 'organize') return;
+  // organize_brief is the same editor, given licence to write the joins between
+  // separately-authored blocks (coach answers, or an angle's roles). Both are
+  // "edited, not written", so both earn the bar.
+  const ORGANIZE_MODES = ['organize', 'organize_brief'];
+  if (!prov || String(prov.id) !== String(postId) || !ORGANIZE_MODES.includes(prov.mode)) return;
 
   const bar   = document.getElementById('your-words-bar');
   const label = document.getElementById('ywb-label');
@@ -4194,11 +4198,24 @@ function showYourWordsBar() {
   // is the line the author is most likely to want to take back. Naming it is
   // also what makes the rest of the claim believable.
   const hookNote = prov.hookWritten
-    ? ' Nothing in your draft worked as an opener, so the first line is ours — rewrite it in your words.'
+    ? ' Nothing in the source worked as an opener, so the first line is ours — rewrite it in your words.'
     : '';
-  label.innerHTML = (pct !== null
-    ? `Edited, not rewritten — <strong>${pct}% your words</strong>.`
-    : 'Edited, not rewritten — this is built from your own words.') + hookNote;
+
+  // A document-sourced post is measured against the DOCUMENT, not against
+  // anything the author typed. Calling that "your words" would overclaim exactly
+  // what services/vaultBrief.js deliberately refuses to assert: a case study is
+  // the author's work but often not the author's writing. So say where the
+  // wording actually came from, and name the remainder as ours rather than
+  // leaving the reader to subtract.
+  if (prov.origin === 'document') {
+    label.innerHTML = (pct !== null
+      ? `Organised from your document — <strong>${pct}% of the wording is from the source</strong>, ${100 - pct}% is ours.`
+      : 'Organised from your document rather than written from scratch.') + hookNote;
+  } else {
+    label.innerHTML = (pct !== null
+      ? `Edited, not rewritten — <strong>${pct}% your words</strong>.`
+      : 'Edited, not rewritten — this is built from your own words.') + hookNote;
+  }
 
   const rewriteBtn = document.getElementById('ywb-rewrite');
   if (prov.source) {

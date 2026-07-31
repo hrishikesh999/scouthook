@@ -771,6 +771,29 @@
     }
   }
 
+  // Hand the editor's provenance bar what it needs before navigating away. The
+  // response is otherwise discarded by the redirect, and the editor refetches the
+  // post without it — retention lives on generation_runs.synthesis, not on the
+  // post row, so it is not recoverable from /editor once we drop it here.
+  //
+  // origin:'document' matters. The score is the share of the post whose wording
+  // came from the SOURCE DOCUMENT, not from the author's own writing — a case
+  // study is often written formally or by marketing. The editor must not label
+  // this "your words".
+  function stashProvenance(data) {
+    try {
+      sessionStorage.setItem('sh_gen_provenance', JSON.stringify({
+        id:          data.id,
+        mode:        data.generation_mode || 'organize',
+        origin:      'document',
+        retention:   data.retention || null,
+        hookWritten: !!data.hook_was_written,
+        source:      '',            // no single source idea to re-run a rewrite from
+        post_type:   data.post_type || null,
+      }));
+    } catch { /* storage unavailable — the post still opens, just without the bar */ }
+  }
+
   async function generateFromAngle(btn) {
     const angleId = btn.dataset.angleId;
     const all = Array.from(anglesPane.querySelectorAll('.vault-angle-gen'));
@@ -794,6 +817,7 @@
         if (data.error === 'complete_profile_first') throw new Error('Finish your brand voice profile first.');
         throw new Error(data.error || 'Could not generate the post.');
       }
+      stashProvenance(data);
       window.location.href = `/editor/${encodeURIComponent(data.id)}`;
     } catch (err) {
       window.toast?.error(err.message || 'Could not generate the post.');

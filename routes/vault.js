@@ -808,7 +808,11 @@ async function generateFromAngleRow(angle, { userId, tenantId, length, profile, 
     console.log(`[vault/angle] angle=${angle.id} src=${source} type=${postType} length=${length} roles=${blocks.length} grounded=${grounded}/${blocks.length} retention=${org.retention?.score} post=${postId}`);
 
     return { id: postId, post: org.post, post_type: postType, length,
-             roles: blocks.map(b => b.role), grounded, retention: org.retention || null };
+             roles: blocks.map(b => b.role), grounded, retention: org.retention || null,
+             // Feeds the editor's provenance bar. Without these the bar has no
+             // score to show and no way to disclose a composed hook.
+             generation_mode: org.synthesis?.mode || 'organize',
+             hook_was_written: !!org.hookWasWritten };
 }
 
 router.post('/angles/:id/generate', async (req, res) => {
@@ -1030,6 +1034,8 @@ router.post('/insights/:id/generate', async (req, res) => {
     return res.json({
       ok: true, id: postId, post: org.post, post_type: postType,
       length, grounded: !!chunk, retention: org.retention || null,
+      generation_mode: org.synthesis?.mode || 'organize',
+      hook_was_written: !!org.hookWasWritten,
     });
   } catch (err) {
     if (err.status === 429 || err.status === 529) {

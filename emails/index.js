@@ -5,7 +5,18 @@ const path = require('path');
 const { Resend } = require('resend');
 const { db } = require('../db');
 
-const FROM = process.env.EMAIL_FROM || 'ScoutHook <noreply@scouthook.com>';
+// The display name contains an '@', which RFC 5322 treats as a special
+// character — it must stay double-quoted or strict parsers reject the header
+// and some clients render the raw address instead of the name.
+const FROM = process.env.EMAIL_FROM || '"Hrishikesh @ ScoutHook" <contact@send.scouthook.com>';
+
+// We send from a subdomain that is configured for delivery, not receipt, so
+// every message carries a reply-to on the root domain. The lifecycle emails
+// are written in first person and two of them say "just reply to this email"
+// — replies have to land in a real inbox. A per-send options.replyTo (used by
+// the support flow) still wins over this default.
+const REPLY_TO = process.env.EMAIL_REPLY_TO || 'contact@scouthook.com';
+
 const TEMPLATES_DIR = path.join(__dirname, 'templates');
 
 // Lazy — initialized on first send so the key is read after dotenv has loaded.
@@ -59,7 +70,9 @@ async function sendEmail(templateName, to, vars = {}, options = {}) {
   try {
     const { error } = await getResend().emails.send({
       from: FROM, to, subject, html,
-      ...(options.replyTo ? { reply_to: options.replyTo } : {}),
+      // camelCase — the Resend SDK maps replyTo → reply_to on the wire and
+      // silently drops a snake_case key.
+      replyTo: options.replyTo || REPLY_TO,
     });
     if (error) {
       console.error(`[email] Resend error for '${templateName}' to ${to}:`, error);

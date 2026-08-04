@@ -1,9 +1,45 @@
 'use strict';
 
+/**
+ * services/trialEmails.js — the single spine for trial lifecycle email.
+ *
+ * One email per user per day, chosen by priority:
+ *
+ *   1. Urgency        — trial-last-day (T-1)
+ *   2. Day-N sequence — the welcome/nurture story arc + the day-4 conversion ask
+ *   3. Behavioural    — the stuck-user nudge ladder, as fallback only
+ *
+ * The 7-day calendar (day 0 = signup):
+ *
+ *   day 0  welcome                     (sent at verify, routes/email-auth.js)
+ *   day 1  nurture-1                   why consistency beats ideas
+ *   day 2  nurture-2                   the almost-quit story
+ *   day 3  nurture-3                   perfection vs. compounding
+ *   day 4  trial-convert-push          if they've published
+ *          trial-expiry                otherwise (T-3 warning)
+ *   day 5  nurture-4                   the profile leak
+ *   day 6  trial-last-day              urgency
+ *   day 8+ nurture-5                   post-trial, non-buyers only
+ *
+ * Nurture emails do NOT hard-code their call to action. Each one renders
+ * {{cta_block}} from the user's actual state, so a story about publishing your
+ * first post never asks someone with nine published posts to publish their
+ * first. See buildCtaBlock().
+ *
+ * Day number comes from user_profiles.created_at, not from trial_ends_at —
+ * an admin extending a trial (routes/admin.js) shifts the end date, and
+ * deriving the day from it would rewind the sequence and resend emails.
+ */
+
 const { db } = require('../db');
 const { sendEmailToUser } = require('../emails');
+const { unsubscribeUrl } = require('./emailTokens');
 
 const APP_URL = () => process.env.APP_URL || 'https://app.scouthook.com';
+
+// Day-indexed story arc. Days absent from this map fall through to the
+// behavioural ladder (day 0) or are owned by an urgency rule (day 6).
+const SEQUENCE = { 1: 'nurture-1', 2: 'nurture-2', 3: 'nurture-3', 5: 'nurture-4' };
 
 // ---------------------------------------------------------------------------
 // Settle window
@@ -34,7 +70,8 @@ async function getUserTrialState(userId) {
       'SELECT plan, status, trial_ends_at, paddle_subscription_id FROM user_subscriptions WHERE user_id = ?'
     ).get(userId),
     db.prepare(
-      'SELECT onboarding_completed_at FROM user_profiles WHERE user_id = ?'
+      `SELECT onboarding_completed_at, created_at, lifecycle_emails_opt_out_at
+       FROM   user_profiles WHERE user_id = ?`
     ).get(userId),
   ]);
 
@@ -73,6 +110,12 @@ async function getUserTrialState(userId) {
     : null;
   const isTrialActive = !isPaid && sub?.status === 'trialing' && daysLeft !== null && daysLeft > 0;
 
+  // Whole days since signup. Day 0 is signup day.
+  const signupAt = userProfile?.created_at ? new Date(userProfile.created_at) : null;
+  const trialDay = signupAt
+    ? Math.floor((Date.now() - signupAt.getTime()) / 86400000)
+    : null;
+
   let contentThemes = [];
   try { contentThemes = profile?.content_themes ? JSON.parse(profile.content_themes) : []; } catch { /* ignore */ }
 
@@ -81,6 +124,9 @@ async function getUserTrialState(userId) {
     isPaid,
     isTrialActive,
     daysLeft,
+    trialDay,
+    trialEndsAt,
+    optedOut:     !!userProfile?.lifecycle_emails_opt_out_at,
     onboarded:    !!userProfile?.onboarding_completed_at,
     linkedin:     !!linkedin,
     postsCount:   Number(postRow?.cnt ?? 0),
@@ -90,23 +136,24 @@ async function getUserTrialState(userId) {
 }
 
 // ---------------------------------------------------------------------------
-// Email history — which trial-* templates have already been sent.
+// Email history — which lifecycle templates have already been sent.
+// Window covers the full trial plus the post-trial nurture slot.
 // ---------------------------------------------------------------------------
 async function getEmailHistory(userId) {
   const rows = await db.prepare(`
     SELECT DISTINCT template FROM email_log
-    WHERE user_id = ? AND template LIKE 'trial-%'
-      AND sent_at > now() - INTERVAL '8 days'
+    WHERE user_id = ? AND (template LIKE 'trial-%' OR template LIKE 'nurture-%')
+      AND sent_at > now() - INTERVAL '30 days'
   `).all(userId);
   return new Set(rows.map(r => r.template));
 }
 
 async function anyEmailInLastNHours(userId, hours) {
   const h = Math.max(1, Math.floor(Number(hours)));
-  // Only check trial-* emails — welcome/admin emails should not delay trial nudges.
+  // Only lifecycle email counts — transactional and welcome must not delay it.
   const row = await db.prepare(`
     SELECT id FROM email_log
-    WHERE user_id = ? AND template LIKE 'trial-%'
+    WHERE user_id = ? AND (template LIKE 'trial-%' OR template LIKE 'nurture-%')
       AND sent_at > now() - (? * INTERVAL '1 hour')
     LIMIT 1
   `).get(userId, h);
@@ -114,69 +161,108 @@ async function anyEmailInLastNHours(userId, hours) {
 }
 
 // ---------------------------------------------------------------------------
+// Behavioural ladder — the original stuck-user nudges, now a fallback that
+// only runs on days the story arc has nothing scheduled.
+// ---------------------------------------------------------------------------
+function getBehaviouralNudge(state, sent) {
+  // Post generated but LinkedIn missing — physically blocked from publishing
+  if (state.postsCount > 0 && !state.linkedin) {
+    return sent.has('trial-need-linkedin-to-publish') ? null : 'trial-need-linkedin-to-publish';
+  }
+  if (state.postsCount > 0 && !state.published) {
+    return sent.has('trial-nudge-publish-1') ? null : 'trial-nudge-publish-1';
+  }
+  if (state.linkedin && state.postsCount === 0) {
+    return sent.has('trial-nudge-generate-1') ? null : 'trial-nudge-generate-1';
+  }
+  if (state.onboarded && !state.linkedin) {
+    return sent.has('trial-nudge-linkedin-1') ? null : 'trial-nudge-linkedin-1';
+  }
+  if (!state.onboarded) {
+    return sent.has('trial-nudge-onboard-1') ? null : 'trial-nudge-onboard-1';
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
 // Decision tree — pure function, no side effects.
 // Returns the template name to send next, or null if nothing should go out.
 // ---------------------------------------------------------------------------
 function getNextEmailTemplate(state, sent) {
+  if (state.optedOut) return null;
   if (state.isPaid || !state.isTrialActive) return null;
 
-  // Urgency — bypass the 24 h inter-email cooldown at the call site
-  if (state.daysLeft <= 1 && !sent.has('trial-last-day')) return 'trial-last-day';
-  // T-3 window belongs to the existing trial-expiry cron; don't compete
-  if (state.daysLeft <= 3) return null;
-
-  // All milestones complete → push upgrade once on day 4
-  if (state.published) {
-    if (state.daysLeft <= 4 && !sent.has('trial-convert-push')) return 'trial-convert-push';
-    return null;
+  // 1. Urgency — bypasses the 24h cooldown at the call site
+  if (state.daysLeft <= 1) {
+    return sent.has('trial-last-day') ? null : 'trial-last-day';
   }
 
-  // Post generated but LinkedIn missing — user is physically blocked from publishing
-  if (state.postsCount > 0 && !state.linkedin) {
-    if (!sent.has('trial-need-linkedin-to-publish')) return 'trial-need-linkedin-to-publish';
-    return null;
+  // 2. Day-N sequence
+  const day = state.trialDay;
+  if (day !== null) {
+    // Day 4 is the conversion slot. Activated users get the upgrade push;
+    // everyone else gets the T-3 expiry warning.
+    if (day === 4) {
+      const template = state.published ? 'trial-convert-push' : 'trial-expiry';
+      if (!sent.has(template)) return template;
+      return null; // conversion day stays conversion-only
+    }
+    const scheduled = SEQUENCE[day];
+    if (scheduled && !sent.has(scheduled)) return scheduled;
   }
 
-  // Post generated + LinkedIn → one push to publish
-  if (state.postsCount > 0 && !state.published) {
-    if (!sent.has('trial-nudge-publish-1')) return 'trial-nudge-publish-1';
-    return null;
-  }
+  // 3. Behavioural fallback — only when the arc had nothing for today
+  return getBehaviouralNudge(state, sent);
+}
 
-  // LinkedIn connected, no posts yet → one nudge to generate
-  if (state.linkedin && state.postsCount === 0) {
-    if (!sent.has('trial-nudge-generate-1')) return 'trial-nudge-generate-1';
-    return null;
-  }
+// ---------------------------------------------------------------------------
+// State-aware call to action. Nurture templates render this instead of
+// hard-coding "publish your first post".
+// ---------------------------------------------------------------------------
+function link(href, label) {
+  return `<p style="margin:0 0 24px;"><a href="${href}" style="color:#0F766E;text-decoration:underline;">${label} &rarr;</a></p>`;
+}
 
-  // Onboarded but no LinkedIn → one nudge
-  if (state.onboarded && !state.linkedin) {
-    if (!sent.has('trial-nudge-linkedin-1')) return 'trial-nudge-linkedin-1';
-    return null;
+function buildCtaBlock(state) {
+  const appUrl = APP_URL();
+  if (!state.isTrialActive && !state.isPaid) {
+    return link(`${appUrl}/billing.html`, 'Pick your plan and keep publishing');
   }
-
-  // Not yet onboarded → one nudge
   if (!state.onboarded) {
-    if (!sent.has('trial-nudge-onboard-1')) return 'trial-nudge-onboard-1';
-    return null;
+    return link(`${appUrl}/onboarding.html`, 'Finish your voice profile (about 2 minutes)');
   }
-
-  return null;
+  if (!state.linkedin) {
+    return link(`${appUrl}/api/linkedin/connect?from=settings`, 'Connect LinkedIn so you can publish');
+  }
+  if (state.postsCount === 0) {
+    return link(`${appUrl}/generate.html`, 'Log in to ScoutHook and generate your first post');
+  }
+  if (!state.published) {
+    return link(`${appUrl}/generate.html`, 'Log in to ScoutHook and publish your first post');
+  }
+  return link(`${appUrl}/generate.html`, 'Log in to ScoutHook and create your next post');
 }
 
 // ---------------------------------------------------------------------------
 // Template variable bundle
 // ---------------------------------------------------------------------------
-function buildVars(state, name) {
+function buildVars(state, name, userId) {
   const appUrl = APP_URL();
+  const trialEndDate = state.trialEndsAt
+    ? state.trialEndsAt.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })
+    : '';
   return {
     name,
+    display_name:  name,
     app_url:       appUrl,
     upgrade_url:   `${appUrl}/billing.html`,
     generate_url:  `${appUrl}/generate.html`,
     settings_url:  `${appUrl}/settings.html`,
     linkedin_url:  `${appUrl}/api/linkedin/connect?from=settings`,
+    prefs_url:     unsubscribeUrl(userId),
+    cta_block:     buildCtaBlock(state),
     days_left:         String(state.daysLeft ?? ''),
+    trial_end_date:    trialEndDate,
     posts_count:       String(state.postsCount),
     posts_count_label: state.postsCount === 1 ? '1 post' : `${state.postsCount} posts`,
     industry:          'your industry',
@@ -200,6 +286,7 @@ async function evaluateAndSend(userId, callerWorkspaceId) {
     // Secondary-workspace guard (event hooks only)
     if (callerWorkspaceId && state.primaryWorkspaceId !== callerWorkspaceId) return;
 
+    if (state.optedOut) return;
     if (state.isPaid || !state.isTrialActive) return;
 
     const [sent, userInfo] = await Promise.all([
@@ -215,25 +302,69 @@ async function evaluateAndSend(userId, callerWorkspaceId) {
     const name = (userInfo.display_name || '').split(' ')[0] || 'there';
     const isUrgency = template === 'trial-last-day';
 
-    // Enforce 24 h inter-email cooldown for non-urgency emails
-    if (!isUrgency && await anyEmailInLastNHours(userId, 24)) return;
+    // One lifecycle email per day — urgency is the only thing that jumps it
+    if (!isUrgency && await anyEmailInLastNHours(userId, 20)) return;
 
     await sendEmailToUser(
       userId,
       template,
-      buildVars(state, name),
-      { dedupKey: `${template}:${userId}`, withinHours: 8 * 24 }
+      buildVars(state, name, userId),
+      { dedupKey: `${template}:${userId}`, withinHours: 30 * 24 }
     );
 
-    console.log(`[trialEmails] sent '${template}' userId=${userId} daysLeft=${state.daysLeft}`);
+    console.log(`[trialEmails] sent '${template}' userId=${userId} day=${state.trialDay} daysLeft=${state.daysLeft}`);
   } catch (err) {
     console.warn('[trialEmails] evaluateAndSend error (non-fatal):', err.message);
   }
 }
 
 // ---------------------------------------------------------------------------
+// Post-trial nurture — nurture-5 goes to trial users who never bought, one day
+// after their trial lapses. This is the only lifecycle email sent outside an
+// active trial, so it lives in its own pass rather than the day-N arc.
+// ---------------------------------------------------------------------------
+async function sendPostTrialNurture() {
+  try {
+    const users = await db.prepare(`
+      SELECT up.user_id
+      FROM   user_profiles up
+      JOIN   user_subscriptions us ON us.user_id = up.user_id
+      WHERE  us.paddle_subscription_id IS NULL
+        AND  us.status <> 'lifetime'
+        AND  us.trial_ends_at BETWEEN now() - INTERVAL '2 days' AND now()
+        AND  up.email IS NOT NULL
+        AND  up.lifecycle_emails_opt_out_at IS NULL
+    `).all();
+
+    for (const u of users) {
+      try {
+        const state = await getUserTrialState(u.user_id);
+        if (!state || state.isPaid) continue;
+
+        const info = await db.prepare(
+          'SELECT display_name FROM user_profiles WHERE user_id = ?'
+        ).get(u.user_id);
+        const name = (info?.display_name || '').split(' ')[0] || 'there';
+
+        await sendEmailToUser(
+          u.user_id,
+          'nurture-5',
+          buildVars(state, name, u.user_id),
+          { dedupKey: `nurture-5:${u.user_id}`, withinHours: 365 * 24 }
+        );
+      } catch (err) {
+        console.warn(`[trialEmails] post-trial nurture failed for ${u.user_id} (non-fatal):`, err.message);
+      }
+    }
+  } catch (err) {
+    console.warn('[trialEmails] post-trial nurture query error (non-fatal):', err.message);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Hourly cron helper — called from server.js.
-// Evaluates every active app-level trial user (no Paddle subscription yet).
+// Evaluates every active app-level trial user (no Paddle subscription yet),
+// then runs the post-trial pass for lapsed non-buyers.
 // ---------------------------------------------------------------------------
 async function runTrialEmailCron() {
   try {
@@ -245,6 +376,7 @@ async function runTrialEmailCron() {
         AND us.paddle_subscription_id IS NULL
         AND us.trial_ends_at > now()
         AND up.email IS NOT NULL
+        AND up.lifecycle_emails_opt_out_at IS NULL
     `).all();
 
     for (const u of users) {
@@ -256,6 +388,16 @@ async function runTrialEmailCron() {
   } catch (err) {
     console.warn('[trialEmails] cron query error (non-fatal):', err.message);
   }
+
+  await sendPostTrialNurture();
 }
 
-module.exports = { scheduleTrialEvaluation, evaluateAndSend, runTrialEmailCron };
+module.exports = {
+  scheduleTrialEvaluation,
+  evaluateAndSend,
+  runTrialEmailCron,
+  sendPostTrialNurture,
+  getNextEmailTemplate,
+  buildCtaBlock,
+  buildVars,
+};

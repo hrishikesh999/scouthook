@@ -124,6 +124,27 @@ async function alreadySent(userId, template, dedupKey = null, withinHours = 24) 
 }
 
 /**
+ * Lifecycle (marketing) mail vs transactional. Only the former is
+ * unsubscribable — the rest is account-essential and always delivers.
+ */
+const LIFECYCLE_PREFIXES = ['welcome', 'nurture-', 'trial-', 'daily-ideas', 'weekly-digest'];
+
+function isLifecycleTemplate(templateName) {
+  return LIFECYCLE_PREFIXES.some(p => templateName === p || templateName.startsWith(p));
+}
+
+async function hasOptedOut(userId) {
+  try {
+    const row = await db.prepare(
+      'SELECT lifecycle_emails_opt_out_at FROM user_profiles WHERE user_id = ?'
+    ).get(userId);
+    return !!row?.lifecycle_emails_opt_out_at;
+  } catch {
+    return false; // column missing (pre-migration) → fail open, don't block mail
+  }
+}
+
+/**
  * Record that an email was sent (for deduplication).
  */
 async function logEmailSent(userId, template, dedupKey = null) {
@@ -146,12 +167,25 @@ async function sendEmailToUser(userId, templateName, vars = {}, { dedupKey = nul
   const user = await getUserEmailInfo(userId);
   if (!user) return;
 
+  // Marketing/lifecycle mail honours the unsubscribe flag; transactional mail
+  // (receipts, password reset, post-failed) must always deliver and is gated
+  // here rather than at each call site so a new caller can't leak past it.
+  if (isLifecycleTemplate(templateName) && await hasOptedOut(userId)) {
+    console.log(`[email] opt-out skip '${templateName}' for userId=${userId}`);
+    return;
+  }
+
   if (dedupKey !== false && await alreadySent(userId, templateName, dedupKey, withinHours)) {
     console.log(`[email] dedup skip '${templateName}' for userId=${userId}`);
     return;
   }
 
-  await sendEmail(templateName, user.email, { name: user.name, ...vars });
+  // prefs_url is injected centrally so no template can ship a dead
+  // unsubscribe link by virtue of a call site forgetting to pass it.
+  let prefsUrl = '';
+  try { prefsUrl = require('../services/emailTokens').unsubscribeUrl(userId); } catch { /* unsigned env */ }
+
+  await sendEmail(templateName, user.email, { name: user.name, prefs_url: prefsUrl, ...vars });
 
   if (dedupKey !== false) {
     await logEmailSent(userId, templateName, dedupKey);

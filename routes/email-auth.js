@@ -214,8 +214,10 @@ router.post('/verify-email', async (req, res) => {
       seedTrialSubscription(row.user_id).catch(() => {});
       // Brand-new signup — stamp the ad that produced it, if any.
       require('../services/attribution').attachFromRequest(row.user_id, req).catch(() => {});
-      sendEmailToUser(row.user_id, 'welcome', { app_url: APP_URL },
-        { dedupKey: `welcome:${row.user_id}`, withinHours: 365 * 24 }).catch(() => {});
+      sendEmailToUser(row.user_id, 'welcome', {
+        app_url: APP_URL,
+        linkedin_url: `${APP_URL}/api/linkedin/connect?from=settings`,
+      }, { dedupKey: `welcome:${row.user_id}`, withinHours: 365 * 24 }).catch(() => {});
       require('../services/mailerlite').addFreeSubscriber(row.email, row.display_name).catch(() => {});
       require('../emails').notifyAdminsNewSignup(row.email, row.display_name, 'email').catch(() => {});
     }

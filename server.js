@@ -305,7 +305,10 @@ if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
             // Welcome email only on brand-new signup (new workspace = new user)
             if (email) {
               const appUrl = process.env.APP_URL || '';
-              sendEmailToUser(userId, 'welcome', { app_url: appUrl }, { dedupKey: `welcome:${userId}`, withinHours: 365 * 24 });
+              sendEmailToUser(userId, 'welcome', {
+                app_url: appUrl,
+                linkedin_url: `${appUrl}/api/linkedin/connect?from=settings`,
+              }, { dedupKey: `welcome:${userId}`, withinHours: 365 * 24 });
               require('./services/mailerlite').addFreeSubscriber(email, displayName).catch(() => {});
               require('./emails').notifyAdminsNewSignup(email, displayName, 'google').catch(() => {});
             }
@@ -768,6 +771,9 @@ app.use('/api/posts',         requireWorkspaceMember, require('./routes/carousel
 app.use('/api/workspaces',    require('./routes/workspaces'));
 app.use('/api/invites',       require('./routes/invites'));
 // User-scoped routes — require authenticated user, no workspace check
+// Unauthenticated by design — the reader is in their inbox, not the app.
+// Authorised by the HMAC in the link (services/emailTokens).
+app.use('/api/unsubscribe', require('./routes/unsubscribe'));
 app.use('/api/email-preferences', require('./routes/emailPreferences'));
 app.use('/api/billing',    require('./routes/billing'));
 app.use('/api/feedback',   require('./routes/feedback'));
@@ -1082,38 +1088,12 @@ if (process.env.NODE_ENV !== 'test') {
 }
 
 // ---------------------------------------------------------------------------
-// Email: trial expiry — warn trialing users 3 days before trial ends.
+// Email: trial expiry — now owned by the day-4 slot of the trial sequence in
+// services/trialEmails.js, so that activated users get trial-convert-push and
+// everyone else gets trial-expiry, never both. The standalone cron that used
+// to live here ran independently of the one-email-per-day cap and double-sent
+// alongside the nudge ladder.
 // ---------------------------------------------------------------------------
-async function sendTrialExpiryEmails() {
-  try {
-    const users = await db.prepare(`
-      SELECT up.user_id, up.email, up.display_name, us.trial_ends_at
-      FROM user_subscriptions us
-      JOIN user_profiles up ON up.user_id = us.user_id
-      WHERE us.status = 'trialing'
-        AND us.paddle_subscription_id IS NULL
-        AND us.trial_ends_at BETWEEN now() + INTERVAL '2 days' AND now() + INTERVAL '3 days'
-    `).all();
-    for (const u of users) {
-      const trialEndDate = new Date(u.trial_ends_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
-      sendEmailToUser(u.user_id, 'trial-expiry', {
-        display_name: u.display_name || 'there',
-        trial_end_date: trialEndDate,
-        days_left: '3',
-        upgrade_url: `${process.env.APP_URL || 'https://app.scouthook.com'}/billing.html`,
-      }, { dedupKey: `trial_expiry:${u.user_id}`, withinHours: 168 }).catch(() => {});
-    }
-  } catch (e) {
-    console.warn('[email-cron] trial-expiry check failed (non-fatal):', e.message);
-  }
-}
-// Runs daily — offset from other crons via immediate + interval pattern.
-if (process.env.NODE_ENV !== 'test') {
-  setTimeout(() => {
-    sendTrialExpiryEmails();
-    setInterval(sendTrialExpiryEmails, 24 * 60 * 60 * 1000);
-  }, 20 * 60 * 1000);
-}
 
 // ---------------------------------------------------------------------------
 // Email: trial engagement nudges — hourly cron.

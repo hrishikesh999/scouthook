@@ -70,12 +70,17 @@ function cadenceAllowsToday(cadence, weekday) {
 
 /**
  * Resolve a stored cadence (possibly NULL = never chose) to what the user
- * actually gets. Trial users default to 'daily'; everyone else 'weekly'.
+ * actually gets. Trial users default to '3x'; everyone else 'weekly'.
  * Shared with routes/emailPreferences.js so the settings page shows the
  * same default the cron acts on.
+ *
+ * Trial default was 'daily' until the welcome sequence landed. A trial user
+ * now receives one lifecycle email on most days of the 7-day trial, and a
+ * daily idea email on top of that put the worst case near 14 emails in a
+ * week. Mon/Wed/Fri leaves room for the sequence.
  */
 function effectiveCadence(storedCadence, isTrialing) {
-  return storedCadence || (isTrialing ? 'daily' : 'weekly');
+  return storedCadence || (isTrialing ? '3x' : 'weekly');
 }
 
 async function actedInLast24h(userId) {
@@ -159,6 +164,7 @@ async function runIdeaEmailCron() {
       JOIN   user_subscriptions us ON us.user_id = up.user_id
       WHERE  up.email IS NOT NULL
         AND  COALESCE(up.idea_email_cadence, 'weekly') <> 'off'
+        AND  up.lifecycle_emails_opt_out_at IS NULL
         AND  us.status IN ('active', 'trialing', 'lifetime')
         AND  (us.status <> 'trialing' OR us.trial_ends_at > now())
     `).all();

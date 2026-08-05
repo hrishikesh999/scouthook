@@ -160,7 +160,8 @@
     }
     .a-hero h1 .accent { color: var(--accent); font-weight: 700; }
     .a-hero-sub {
-      font-size: clamp(17px, 1.55vw, 22px);
+      /* Every value in the clamp is the original x1.2. */
+      font-size: clamp(20.4px, 1.86vw, 26.4px);
       line-height: 1.5;
       color: #eef3f5;
       margin: 0 0 28px;
@@ -185,14 +186,7 @@
       max-width: 400px;
       margin-left: auto;
     }
-    .a-card h2 {
-      font-size: 21px;
-      font-weight: 700;
-      text-align: center;
-      color: #ffffff;
-      margin: 0 0 4px;
-    }
-    .a-card-sub { text-align: center; font-size: 13.5px; color: rgba(238, 243, 245, 0.75); margin: 0 0 20px; }
+    .a-card-sub { text-align: center; font-size: 13.5px; color: rgba(238, 243, 245, 0.75); margin: 0 0 14px; }
 
     .a-error {
       margin: 0 0 14px;
@@ -267,12 +261,16 @@
       }
       /* The desktop clamp floors the gap under the logo far too tall on phones —
          tighten the space between the topbar logo and the hero headline. */
-      .a-hero-inner { padding-top: 28px; }
+      .a-hero-inner { padding-top: 28px; gap: 8px; }
 
-      /* Variant B runs its mobile headline at double the shared size — every
-         value in the clamp above is x2. B only; A, C and D keep the standard
-         scale. Revert by deleting this rule. */
-      html[data-variant="b"] .a-hero h1 { font-size: clamp(48px, 12.8vw, 64px); }
+      /* Centred on phones, matching the stacked one-column reading order.
+         The bullet lists stay left-aligned — centred check-lists read badly. */
+      .a-hero h1, .a-hero-sub { text-align: center; margin-left: auto; margin-right: auto; }
+
+      /* Close the gaps between headline, sub and the form. The desktop margins
+         leave a lot of dead space once the hero stacks. */
+      .a-hero h1   { margin-bottom: 12px; }
+      .a-hero-sub  { margin-bottom: 4px; }
     }
 
     /* ============ Transform (before/after) — reused from homepage ============ */
@@ -655,8 +653,10 @@
       </div>
 
       <div class="a-card" id="signup">
-        <h2>Sign up free</h2>
-        <p class="a-card-sub" id="cardSub1">Takes less than a minute.</p>
+        <!-- No form heading: the submit button directly below already reads
+             "Sign up free". This <p> stays as the step-2 hint slot, empty and
+             hidden until the password step reveals it. -->
+        <p class="a-card-sub" id="cardSub1" hidden></p>
 
         <div id="errorBox1" class="a-error" hidden></div>
 
@@ -665,8 +665,9 @@
              together, so /auth/signup still receives the pair it requires. -->
         <form id="signupForm1" data-error="errorBox1" data-submit="submit1" data-sub="cardSub1" novalidate>
           <div class="a-field-group">
-            <label class="a-field-label" for="su-email-1">Email</label>
-            <input id="su-email-1" type="email" class="a-field-input" placeholder="you@example.com" autocomplete="email" required />
+            <!-- Label removed by design; the placeholder carries it visually and
+                 aria-label keeps it announced to screen readers. -->
+            <input id="su-email-1" type="email" class="a-field-input" aria-label="Email" placeholder="Enter your email" autocomplete="email" required />
           </div>
           <div class="a-field-group" data-step="password" hidden>
             <label class="a-field-label" for="su-password-1">Choose a password</label>
@@ -1014,7 +1015,10 @@
         passGroup.hidden = false;
         passInput.required = true;
         btn.textContent = FINAL_LABEL;
-        if (cardSub) cardSub.textContent = 'Almost there — choose a password.';
+        if (cardSub) {
+          cardSub.textContent = 'Almost there — choose a password.';
+          cardSub.hidden      = false;
+        }
         passInput.focus();
       }
 

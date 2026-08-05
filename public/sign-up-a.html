@@ -125,6 +125,9 @@
       pointer-events: none;
       background: radial-gradient(900px 620px at 18% 6%, rgba(181, 224, 90, 0.18), transparent 70%);
     }
+    /* One centred column at every width — headline, sub, then the form. The
+       two-column split could not hold a display headline this size: the copy
+       track cramped it into four or five lines beside a much shorter form. */
     .a-hero-inner {
       position: relative;
       z-index: 1;
@@ -132,9 +135,10 @@
       margin: 0 auto;
       padding: clamp(48px, 8vh, 76px) 24px 0;
       display: grid;
-      grid-template-columns: 1.1fr 1fr;
-      align-items: start;
-      gap: 48px;
+      grid-template-columns: 1fr;
+      justify-items: center;
+      text-align: center;
+      gap: 28px;
     }
     .a-hero-tag {
       display: inline-block;
@@ -150,13 +154,15 @@
     }
     .a-hero h1 {
       font-family: var(--font-heading);
-      font-size: clamp(45.4px, 5.44vw, 69.3px);
+      font-size: clamp(42.4px, 5.08vw, 64.8px);
       font-weight: 500;
       letter-spacing: -0.02em;
       line-height: 1.12;
       color: #ffffff;
-      margin: 0 0 20px;
-      max-width: 24ch;
+      /* 18ch, not 24 — ch scales with the font, so the old cap ran the
+         headline nearly the full container width once it grew. */
+      margin: 0 auto 16px;
+      max-width: 18ch;
     }
     .a-hero h1 .accent { color: var(--accent); font-weight: 700; }
     .a-hero-sub {
@@ -164,8 +170,8 @@
       font-size: clamp(18.4px, 1.67vw, 23.8px);
       line-height: 1.5;
       color: #eef3f5;
-      margin: 0 0 28px;
-      max-width: 40ch;
+      margin: 0 auto;
+      max-width: 46ch;
     }
 
     /* ── Sign-up form. Sits directly on the hero gradient — no white card —
@@ -173,8 +179,8 @@
     .a-card {
       position: relative;
       width: 100%;
-      max-width: 400px;
-      margin-left: auto;
+      max-width: 420px;
+      margin: 0 auto;
     }
     .a-card-sub { text-align: center; font-size: 13.5px; color: rgba(238, 243, 245, 0.75); margin: 0 0 14px; }
 
@@ -237,30 +243,18 @@
     .a-meta { margin: 12px 0 0; font-size: 11.5px; color: rgba(238, 243, 245, 0.62); line-height: 1.5; text-align: center; }
     .a-meta a { color: rgba(238, 243, 245, 0.62); }
 
-    @media (max-width: 860px) {
-      .a-hero-inner { grid-template-columns: 1fr; gap: 36px; }
-      .a-card { max-width: 420px; margin: 0 auto; }
-    }
-
-    /* Matches the homepage's own hero h1 mobile override — a punchier
-       clamp + tighter line-height, not just the desktop clamp flooring out. */
+    /* The hero is one centred column at every width now, so the only thing
+       left to do on phones is shrink the type and close the gaps. Matches the
+       homepage's own h1 mobile override — a punchier clamp, tighter leading. */
     @media (max-width: 768px) {
       .a-hero h1 {
-        font-size: clamp(30.2px, 8.06vw, 40.3px);
+        font-size: clamp(33.2px, 8.87vw, 44.3px);
         line-height: 1.15;
+        margin-bottom: 12px;
       }
       /* The desktop clamp floors the gap under the logo far too tall on phones —
          tighten the space between the topbar logo and the hero headline. */
-      .a-hero-inner { padding-top: 28px; gap: 8px; }
-
-      /* Centred on phones, matching the stacked one-column reading order.
-         The bullet lists stay left-aligned — centred check-lists read badly. */
-      .a-hero h1, .a-hero-sub { text-align: center; margin-left: auto; margin-right: auto; }
-
-      /* Close the gaps between headline, sub and the form. The desktop margins
-         leave a lot of dead space once the hero stacks. */
-      .a-hero h1   { margin-bottom: 12px; }
-      .a-hero-sub  { margin-bottom: 4px; }
+      .a-hero-inner { padding-top: 28px; gap: 14px; }
     }
 
     /* ============ Transform (before/after) — reused from homepage ============ */

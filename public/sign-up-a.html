@@ -150,7 +150,7 @@
     }
     .a-hero h1 {
       font-family: var(--font-heading);
-      font-size: clamp(36px, 4.32vw, 55px);
+      font-size: clamp(43.2px, 5.18vw, 66px);
       font-weight: 500;
       letter-spacing: -0.02em;
       line-height: 1.12;
@@ -160,23 +160,13 @@
     }
     .a-hero h1 .accent { color: var(--accent); font-weight: 700; }
     .a-hero-sub {
-      /* Every value in the clamp is the original x1.2. */
-      font-size: clamp(20.4px, 1.86vw, 26.4px);
+      /* Net x1.08 on the original clamp (x1.2, then x0.9). */
+      font-size: clamp(18.4px, 1.67vw, 23.8px);
       line-height: 1.5;
       color: #eef3f5;
       margin: 0 0 28px;
       max-width: 40ch;
     }
-    .a-hero-bullets { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 12px; }
-    .a-hero-bullets li {
-      display: flex;
-      align-items: flex-start;
-      gap: 10px;
-      font-size: 15px;
-      color: rgba(238, 243, 245, 0.9);
-      font-weight: 500;
-    }
-    .a-hero-bullets svg { width: 18px; height: 18px; color: var(--accent); flex: none; margin-top: 1px; }
 
     /* ── Sign-up form. Sits directly on the hero gradient — no white card —
        so every label and note here is coloured for a dark background. ──── */
@@ -256,7 +246,7 @@
        clamp + tighter line-height, not just the desktop clamp flooring out. */
     @media (max-width: 768px) {
       .a-hero h1 {
-        font-size: clamp(24px, 6.4vw, 32px);
+        font-size: clamp(28.8px, 7.68vw, 38.4px);
         line-height: 1.15;
       }
       /* The desktop clamp floors the gap under the logo far too tall on phones —
@@ -582,12 +572,9 @@
 </head>
 <body>
 
-  <!-- Icon sprite — the hero bullets and echo cards repeat these across four
-       variants, so define once and <use> them rather than inlining 20 copies. -->
+  <!-- Icon sprite — the echo cards repeat these across the variants, so define
+       once and <use> them rather than inlining copies. -->
   <svg style="display:none" aria-hidden="true" focusable="false">
-    <symbol id="ico-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></symbol>
-    <symbol id="ico-bulb" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></symbol>
-    <symbol id="ico-calendar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></symbol>
     <symbol id="ico-vault" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="12" cy="12" r="4"/><path d="M12 8v1M12 15v1"/></symbol>
     <symbol id="ico-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></symbol>
     <symbol id="ico-message" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
@@ -610,11 +597,6 @@
                just tapped, so the page reads as confirmation, not a new pitch. -->
           <h1>You're the expert. <span class="accent">So why does your LinkedIn look empty?</span></h1>
           <p class="a-hero-sub">ScoutHook learns what you know, asks the right questions, and turns your real expertise into posts that sound like you.</p>
-          <ul class="a-hero-bullets">
-            <li><svg><use href="#ico-check"/></svg> It learns your expertise, not just your topic</li>
-            <li><svg><use href="#ico-check"/></svg> Every post is your thinking, never a template</li>
-            <li><svg><use href="#ico-check"/></svg> About an hour a week</li>
-          </ul>
         </div>
 
         <!-- B — Outcome-led. AD-2 "Never run out of things to post" still sends
@@ -630,11 +612,6 @@
         <div class="v-block" data-v="c">
           <h1>The hardest part isn't writing. <span class="accent">It's getting what's in your head onto the page.</span></h1>
           <p class="a-hero-sub">ScoutHook works like a great interviewer — it asks about your work, your wins, your hard-earned lessons, then shapes your answers into posts that carry real weight.</p>
-          <ul class="a-hero-bullets">
-            <li><svg><use href="#ico-check"/></svg> It asks the right questions about your work</li>
-            <li><svg><use href="#ico-check"/></svg> You answer from real experience</li>
-            <li><svg><use href="#ico-check"/></svg> A post with real weight — in your voice</li>
-          </ul>
         </div>
 
         <!-- D — Retargeting. Warm traffic already knows the problem; this one
@@ -643,11 +620,6 @@
           <span class="a-hero-tag">Welcome back</span>
           <h1>You already know the problem. <span class="accent">Here's the fix.</span></h1>
           <p class="a-hero-sub">Your knowledge, your voice, about an hour a week. Try it free for 7 days — we don't ask for a card.</p>
-          <ul class="a-hero-bullets">
-            <li><svg><use href="#ico-check"/></svg> Your first post is one conversation away</li>
-            <li><svg><use href="#ico-check"/></svg> 7 days free, no credit card</li>
-            <li><svg><use href="#ico-check"/></svg> You approve every post before it goes live</li>
-          </ul>
         </div>
 
       </div>

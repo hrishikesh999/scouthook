@@ -80,6 +80,14 @@
     p.section-lead { font-size: 24px; line-height: 1.55; color: #27272a; }
 
     /* ============ Top bar: logo only, no nav ============ */
+    .a-topbar-bar {
+      position: relative;
+      z-index: 2;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.07) 0%, rgba(255, 255, 255, 0.02) 100%);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow: 0 1px 0 rgba(0, 0, 0, 0.12);
+      backdrop-filter: blur(6px);
+    }
     .a-topbar {
       position: relative;
       z-index: 2;
@@ -88,7 +96,7 @@
       justify-content: space-between;
       max-width: 1120px;
       margin: 0 auto;
-      padding: 22px 24px 0;
+      padding: 18px 24px;
     }
     .a-topbar-logo-link { display: inline-flex; }
     .a-topbar-logo { height: 42px; width: auto; display: block; }
@@ -133,7 +141,7 @@
       z-index: 1;
       max-width: 1120px;
       margin: 0 auto;
-      padding: clamp(48px, 8vh, 76px) 24px 0;
+      padding: clamp(64px, 11vh, 108px) 24px 0;
       display: grid;
       grid-template-columns: 1fr;
       justify-items: center;
@@ -224,18 +232,18 @@
       padding: 14px 20px;
       border-radius: 12px;
       cursor: pointer;
-      color: #fff;
-      background: var(--brand);
-      border: 1px solid var(--brand);
-      box-shadow: 0 10px 26px rgba(24, 160, 106, 0.28);
+      color: #09301f;
+      background: var(--accent);
+      border: 1px solid var(--accent);
+      box-shadow: 0 0 0 1px rgba(181, 224, 90, 0.4), 0 10px 30px rgba(181, 224, 90, 0.45), 0 0 44px rgba(181, 224, 90, 0.3);
       margin-top: 4px;
       transition: transform 120ms ease, box-shadow 120ms ease, background 120ms ease;
     }
     .a-submit:hover:not(:disabled) {
-      background: var(--brand-hover);
-      border-color: var(--brand-hover);
+      background: #c3ec72;
+      border-color: #c3ec72;
       transform: translateY(-1px);
-      box-shadow: 0 14px 32px rgba(24, 160, 106, 0.32);
+      box-shadow: 0 0 0 1px rgba(181, 224, 90, 0.5), 0 14px 36px rgba(181, 224, 90, 0.55), 0 0 56px rgba(181, 224, 90, 0.4);
     }
     .a-submit:disabled { opacity: 0.7; cursor: default; }
 
@@ -253,8 +261,9 @@
         margin-bottom: 12px;
       }
       /* The desktop clamp floors the gap under the logo far too tall on phones —
-         tighten the space between the topbar logo and the hero headline. */
-      .a-hero-inner { padding-top: 28px; gap: 14px; }
+         tighten the space between the topbar logo and the hero headline, while
+         still giving the headline noticeably more air than it had before. */
+      .a-hero-inner { padding-top: 44px; gap: 14px; }
     }
 
     /* ============ Transform (before/after) — reused from homepage ============ */
@@ -577,9 +586,11 @@
   </svg>
 
   <section class="a-hero">
-    <div class="a-topbar">
-      <a href="https://scouthook.com" class="a-topbar-logo-link"><img src="/images/scout-hook-logo.png" alt="ScoutHook" class="a-topbar-logo" /></a>
-      <a href="#signup" class="a-topbar-cta">Sign up free</a>
+    <div class="a-topbar-bar">
+      <div class="a-topbar">
+        <a href="https://scouthook.com" class="a-topbar-logo-link"><img src="/images/scout-hook-logo.png" alt="ScoutHook" class="a-topbar-logo" /></a>
+        <a href="#signup" class="a-topbar-cta">Sign up free</a>
+      </div>
     </div>
 
     <div class="a-hero-inner">

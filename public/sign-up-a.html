@@ -305,18 +305,17 @@
          tighten the space between the topbar logo and the hero headline, while
          still giving the headline noticeably more air than it had before. */
       .a-hero-inner { padding-top: 44px; gap: 14px; }
-      /* The desktop sizing is too wide for a phone screen — its own, smaller
-         scale. Icon sized up 20%; the chip background is now shared with
-         desktop (defined on the base rule above). Margin/padding above the
-         row cut to ~30% of their prior values — the gap to the form read as
-         too big on mobile specifically. */
-      .a-hero-trust { gap: 10px 10px; max-width: 360px; margin-top: 11px; padding-top: 11px; }
+      /* Pushed as large as a single row (nowrap) allows — 3 × 90px chips +
+         gaps is ~286px, comfortably under phone viewport width. */
+      .a-hero-trust { gap: 8px 8px; max-width: 360px; margin-top: 11px; padding-top: 11px; flex-wrap: nowrap; }
       .a-hero-trust-item {
-        width: 112px;
-        padding: 12px 8px 10px;
+        width: 90px;
+        gap: 7px;
+        border-radius: 13px;
+        padding: 9px 7px 8px;
       }
-      .a-hero-trust-item svg { width: 49px; height: 49px; }
-      .a-hero-trust-item span { font-size: 14px; }
+      .a-hero-trust-item svg { width: 40px; height: 40px; }
+      .a-hero-trust-item span { font-size: 13px; line-height: 1.15; }
     }
 
     /* ============ Transform (before/after) — reused from homepage ============ */

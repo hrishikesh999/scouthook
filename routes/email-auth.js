@@ -238,7 +238,10 @@ router.post('/verify-email', async (req, res) => {
       'SELECT onboarding_complete FROM profiles WHERE workspace_id = ? AND is_default = true LIMIT 1'
     ).get(workspaceId);
 
-    const dest = brandProfile?.onboarding_complete ? '/dashboard.html' : '/onboarding.html';
+    // First run goes to /start — sign in, one question, a post — rather than the
+    // seven-screen brand interview, which now runs after the post as the "earned
+    // ask". Users who already finished setup go straight to the dashboard.
+    const dest = brandProfile?.onboarding_complete ? '/dashboard.html' : '/start.html';
     return res.redirect(dest);
   } catch (err) {
     console.error('[email-auth] verify-email POST error:', err.message);

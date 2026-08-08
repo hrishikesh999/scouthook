@@ -591,7 +591,8 @@ app.get('/auth/google/callback',
                 'UPDATE user_profiles SET onboarding_completed_at = now() WHERE user_id = ? AND onboarding_completed_at IS NULL'
               ).run(userId);
             } else {
-              return res.redirect('/onboarding.html');
+              // No posts yet — send them to the first-run flow, which is /start.
+              return res.redirect('/start.html');
             }
           }
         }
@@ -690,8 +691,9 @@ async function requireLoginHtml(req, res, next) {
   if (req.headers['x-spa-request'] === '1') return next();
 
   // Onboarding page itself is always reachable for authenticated users.
-  // Workspace-setup is also exempt (it's its own flow).
-  const exemptPaths = new Set(['/onboarding.html', '/workspace-setup.html']);
+  // Workspace-setup is also exempt (it's its own flow), as is /start — that IS
+  // the new first-run flow, so gating it would bounce users into a redirect loop.
+  const exemptPaths = new Set(['/onboarding.html', '/workspace-setup.html', '/start.html']);
   if (exemptPaths.has(req.path)) return next();
 
   // Only block the app for users who have never completed first-time onboarding.
@@ -707,7 +709,16 @@ async function requireLoginHtml(req, res, next) {
         'SELECT onboarding_complete FROM profiles WHERE workspace_id = ? AND is_default = true LIMIT 1'
       ).get(req.tenantId);
       if (!profile?.onboarding_complete) {
-        return res.redirect('/onboarding.html');
+        // Having generated a post counts as first run done, even though the brand
+        // interview hasn't been filled in — that's the whole premise of /start,
+        // where the interview is the "earned ask" AFTER the first post. Without
+        // this, a user who just made a post gets bounced out of Drafts and the
+        // editor straight back into the interview they deliberately deferred.
+        // Mirrors the same postCount check the login path already makes.
+        const posts = await db.prepare(
+          'SELECT 1 AS hit FROM generated_posts WHERE tenant_id = ? LIMIT 1'
+        ).get(req.tenantId);
+        if (!posts) return res.redirect('/start.html');
       }
     }
   }
@@ -801,6 +812,7 @@ app.get('/', (req, res) => {
 
 // Protect main app HTML (session + account UI)
 app.get([
+  '/start.html',
   '/onboarding.html',
   '/workspace-setup.html',
   '/dashboard.html',

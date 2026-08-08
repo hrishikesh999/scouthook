@@ -71,6 +71,23 @@ async function resolveConnection(tenantId, options = {}) {
   ).get(tenantId);
 }
 
+/**
+ * Whether a connection row carries the write scope.
+ *
+ * Rows created before migration 082 have `scopes` backfilled to the full set,
+ * because the pre-split flow always requested w_member_social. A null that slips
+ * through anyway is treated as publish-capable rather than locking a working
+ * account out of publishing.
+ *
+ * @param {object} connection  Row from linkedin_connections
+ * @returns {boolean}
+ */
+function connectionCanPublish(connection) {
+  const scopes = connection?.scopes;
+  if (scopes == null) return true;
+  return String(scopes).split(/\s+/).includes('w_member_social');
+}
+
 // ---------------------------------------------------------------------------
 // Token management — linkedin_connections
 // ---------------------------------------------------------------------------
@@ -557,6 +574,13 @@ async function publishNow(userId, tenantId, content, options = {}) {
   // Resolve which LinkedIn connection to use
   const connection = await resolveConnection(tenantId, options);
   if (!connection) throw new Error('not_connected');
+
+  // Scope gate. Since the /start flow asks for identity only, a connection can
+  // exist without w_member_social. Fail here with a distinct error so callers can
+  // send the user back through OAuth for the write scope instead of surfacing a
+  // confusing 403 from LinkedIn mid-publish. Null scopes predate migration 082 and
+  // were granted under the old always-publish flow (see the migration's backfill).
+  if (!connectionCanPublish(connection)) throw new Error('publish_scope_required');
 
   // Get a valid (possibly refreshed) access token
   const accessToken = await getValidConnectionToken(connection);

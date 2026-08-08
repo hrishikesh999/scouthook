@@ -17,6 +17,28 @@ function sha256Hex(s) {
   return crypto.createHash('sha256').update(String(s || ''), 'utf8').digest('hex');
 }
 
+// ---------------------------------------------------------------------------
+// Scope split
+// ---------------------------------------------------------------------------
+// SCOPE_READ is identity only. SCOPE_PUBLISH adds w_member_social, which is the
+// permission LinkedIn describes as creating/modifying/deleting posts on the
+// member's behalf — asked for at the publish moment rather than at sign-in.
+const SCOPE_READ    = 'openid profile';
+const SCOPE_PUBLISH = 'openid profile w_member_social';
+
+// Entry points that only need to know who the member is.
+const READ_ONLY_ENTRY_POINTS = new Set(['start']);
+
+const PUBLISH_SCOPE = 'w_member_social';
+
+function canPublishWith(scopes) {
+  // Rows predating migration 082 have scopes backfilled, so a null here means a
+  // write failed rather than "read-only" — treat it as publish-capable to avoid
+  // locking existing users out, matching the migration's backfill intent.
+  if (scopes == null) return true;
+  return String(scopes).split(/\s+/).includes(PUBLISH_SCOPE);
+}
+
 // Fire-and-forget: increment archetype publish count on the profile that generated the post.
 async function incrementArchetypePreference(profileId, archetype) {
   if (!archetype || !profileId) return;
@@ -242,7 +264,7 @@ router.get('/status', (req, res) => {
 
   (async () => {
     const row = await db.prepare(`
-      SELECT display_name, avatar_url, expires_at
+      SELECT display_name, avatar_url, expires_at, scopes
       FROM linkedin_connections
       WHERE workspace_id = ? AND account_type = 'personal' AND is_default = true
     `).get(tenantId);
@@ -255,6 +277,9 @@ router.get('/status', (req, res) => {
     return res.json({
       ok:              true,
       connected:       !!row,
+      // Connected is not the same as publish-capable now that /start asks for
+      // identity only. Callers that publish must check can_publish, not connected.
+      can_publish:     !!row && canPublishWith(row.scopes),
       name:            row?.display_name || null,
       photo_url:       row?.avatar_url?.trim() || null,
       headline:        null,
@@ -315,7 +340,15 @@ router.get('/connect', async (req, res) => {
 
   const state = crypto.randomUUID();
   const from = req.query.from;
-  const returnTo = from === 'onboarding'
+  const returnTo = from === 'start'
+    ? '/start.html?linkedin=connected'
+    // Upgrading a read-only /start connection to the write scope. Deliberately a
+    // SEPARATE entry point from 'start' so it falls outside READ_ONLY_ENTRY_POINTS
+    // and actually asks for w_member_social — reusing 'start' here would send the
+    // user through consent again and grant nothing new.
+    : from === 'start_publish'
+    ? '/start.html?linkedin=connected&publish=1'
+    : from === 'onboarding'
     ? '/onboarding.html?linkedin=connected'
     : from === 'generate'
     ? '/generate.html?linkedin=connected'
@@ -324,14 +357,31 @@ router.get('/connect', async (req, res) => {
     : from === 'settings'
     ? '/settings.html?linkedin_connected=true#voice-stage-7'
     : '/linkedin.html';
-  await setOAuthState(state, { userId, tenantId, returnTo });
+
+  // Scope split. Sign-in surfaces (the /start flow) ask only for identity, which
+  // LinkedIn renders as "use your name and photo" — a sign-in, not a handover.
+  // w_member_social reads as "create, modify and delete posts on your behalf" and
+  // is deferred to the first publish attempt, where it argues for itself.
+  //
+  // Never downgrade: a workspace that already holds the publish scope re-authorises
+  // with it intact, even from a read-only entry point. Otherwise a user who wandered
+  // back through /start would silently lose the ability to publish.
+  let scope = READ_ONLY_ENTRY_POINTS.has(from) ? SCOPE_READ : SCOPE_PUBLISH;
+  if (scope === SCOPE_READ) {
+    const existing = await db.prepare(
+      "SELECT scopes FROM linkedin_connections WHERE workspace_id = ? AND account_type = 'personal' LIMIT 1"
+    ).get(tenantId);
+    if (existing && canPublishWith(existing.scopes)) scope = SCOPE_PUBLISH;
+  }
+
+  await setOAuthState(state, { userId, tenantId, returnTo, scope });
 
   const params = new URLSearchParams({
     response_type: 'code',
     client_id:     clientId,
     redirect_uri:  redirectUri,
     state,
-    scope:         'openid profile w_member_social',
+    scope,
   });
 
   res.redirect(`https://www.linkedin.com/oauth/v2/authorization?${params}`);
@@ -468,6 +518,10 @@ router.get('/callback', async (req, res) => {
     const refreshTokenEnc = tokens.refresh_token ? encrypt(tokens.refresh_token) : null;
     const accountKey      = linkedin_member_id ? 'person_' + linkedin_member_id : 'person_unknown_' + crypto.randomUUID();
 
+    // What LinkedIn actually granted. It echoes `scope` on the token response; if a
+    // future API version stops doing that, fall back to what we asked for in state.
+    const grantedScopes = (tokens.scope || stateData.scope || SCOPE_PUBLISH).trim();
+
     // Mirror the LinkedIn CDN photo into our own storage so avatar_url points at a
     // stable, non-expiring app URL. Falls back to the raw CDN URL if caching fails.
     if (linkedin_photo) {
@@ -488,9 +542,10 @@ router.get('/callback', async (req, res) => {
             expires_at        = ?,
             display_name      = COALESCE(?, display_name),
             avatar_url        = COALESCE(?, avatar_url),
+            scopes            = ?,
             updated_at        = now()
         WHERE workspace_id = ? AND account_key = ?
-      `).run(accessTokenEnc, refreshTokenEnc, expiresAt, linkedin_name, linkedin_photo, tenantId, accountKey);
+      `).run(accessTokenEnc, refreshTokenEnc, expiresAt, linkedin_name, linkedin_photo, grantedScopes, tenantId, accountKey);
       console.log(`[linkedin/callback] Reconnected user=${userId} connection=${existingConn.id} (${linkedin_name})`);
     } else {
       // New connection: enforce 1-personal-per-workspace limit
@@ -505,12 +560,12 @@ router.get('/callback', async (req, res) => {
         INSERT INTO linkedin_connections
           (workspace_id, authorized_by, account_type, account_key,
            display_name, avatar_url, linkedin_member_id,
-           access_token_enc, refresh_token_enc, expires_at, is_default)
-        VALUES (?, ?, 'personal', ?, ?, ?, ?, ?, ?, ?, true)
+           access_token_enc, refresh_token_enc, expires_at, is_default, scopes)
+        VALUES (?, ?, 'personal', ?, ?, ?, ?, ?, ?, ?, true, ?)
       `).run(
         tenantId, userId, accountKey,
         linkedin_name, linkedin_photo, linkedin_member_id,
-        accessTokenEnc, refreshTokenEnc, expiresAt
+        accessTokenEnc, refreshTokenEnc, expiresAt, grantedScopes
       );
       console.log(`[linkedin/callback] Connected user=${userId} as ${linkedin_name} (${linkedin_member_id})`);
       require('../services/trialEmails').scheduleTrialEvaluation(userId, tenantId);
@@ -778,6 +833,11 @@ router.post('/publish', async (req, res) => {
     if (err.message === 'plan_expired')       return res.status(403).json({ ok: false, error: 'plan_expired' });
     if (err.message === 'not_connected')      return res.status(401).json({ ok: false, error: 'not_connected' });
     if (err.message === 'reconnect_required') return res.status(401).json({ ok: false, error: 'reconnect_required' });
+    // Connected for identity but never granted w_member_social — the client sends
+    // the user back through OAuth for the write scope rather than showing a failure.
+    if (err.message === 'publish_scope_required') {
+      return res.status(403).json({ ok: false, error: 'publish_scope_required' });
+    }
     if (err.message === 'rate_limit_exceeded') return res.status(429).json({ ok: false, error: 'rate_limit_exceeded' });
     if (err.message === 'invalid_image_url') return res.status(400).json({ ok: false, error: 'invalid_image_url' });
     if (err.message === 'invalid_carousel_pdf_url') {

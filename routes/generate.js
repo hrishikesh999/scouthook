@@ -220,7 +220,7 @@ router.post('/', async (req, res) => {
   }
 
   const { path: genPath, vault_idea_id, skip_substance_check, interview_answers, interview, funnel_type: bodyFunnelType,
-          archetype_override, source, post_type, convert_cta_intent,
+          archetype_override, source, post_type: bodyPostType, convert_cta_intent,
           tension_statement, length_preference, cta_intent, generation_mode } = req.body;
   // "Organize" mode (Captain Scout): the AI acts as an editor, not a writer —
   // it organises the author's own words rather than composing new prose.
@@ -230,6 +230,15 @@ router.post('/', async (req, res) => {
   // Escape hatch: the user pressed "Rewrite it instead" on the router's notice.
   const forceWriteMode = generation_mode === 'write';
   let { raw_idea } = req.body;
+
+  // post_type: 'auto' — for callers that have the author's words but no idea what
+  // KIND of post they are (the /start first-post flow). Resolved once, here, so
+  // every downstream use (shaping, the gate, the stored row) sees a real type and
+  // 'auto' never leaks past this point. Falls back to 'reach' on its own.
+  let post_type = bodyPostType;
+  if (post_type === 'auto') {
+    post_type = require('../services/organizePost').pickPostShape(raw_idea || '');
+  }
 
   // Idea Engine: generations that started from a dashboard "Today's 3" card carry
   // idea_card_id. Every generation branch below responds via res.json with the new
@@ -518,7 +527,7 @@ router.post('/', async (req, res) => {
           // fromInterview: a coached brief is the author's answers concatenated, so
           // the editor needs licence to write the joins between them (the seams are
           // our artifact, not the author's). See BRIEF_MODE_AMENDMENT.
-          const org = await organizePost(raw_idea, profile, { postType: post_type, lengthPreference: length_preference, fromInterview: isInterviewPath });
+          const org = await organizePost(raw_idea, profile, { postType: post_type, lengthPreference: length_preference, fromInterview: isInterviewPath, enforceRetention: !!req.body.enforce_retention });
           result = { post: org.post, synthesis: org.synthesis };
           retention = org.retention;
           hookWasWritten = !!org.hookWasWritten;
@@ -610,14 +619,14 @@ router.post('/', async (req, res) => {
     // ── Organize mode (non-streaming) — editor, not writer ───────────────────
     if (organizeMode) {
       const { organizePost } = require('../services/organizePost');
-      const org = await organizePost(raw_idea, profile, { postType: post_type, lengthPreference: length_preference, fromInterview: isInterviewPath });
+      const org = await organizePost(raw_idea, profile, { postType: post_type, lengthPreference: length_preference, fromInterview: isInterviewPath, enforceRetention: !!req.body.enforce_retention });
       const primaryGate = runQualityGate(
         org.post,
         { ...gateOptions({ format_slug: IDEA_SLUG, content: org.post }, profile, 'idea', null, post_type),
           postType: post_type,
           authorRealText: extractAuthorRealText(raw_idea) }
       );
-      ideaResult = { synthesis: org.synthesis, post: org.post, archetypeUsed: null, primaryGate, contentFeedback: null, retention: org.retention, hookWasWritten: !!org.hookWasWritten };
+      ideaResult = { synthesis: org.synthesis, post: org.post, archetypeUsed: null, primaryGate, contentFeedback: null, retention: org.retention, hookWasWritten: !!org.hookWasWritten, retentionOk: org.retentionOk !== false };
     } else if (POST_TYPE_DISPATCH[post_type]) {
     // ── Guided post-type path (non-streaming) — all 10 types via one dispatch ─
       const { result, gate } = await runGuidedGeneration(post_type, raw_idea, profile, { length_preference, cta_intent });
@@ -693,6 +702,7 @@ router.post('/', async (req, res) => {
         contentFeedback,
         retention,
         hookWasWritten,
+        retentionOk,
       } = ideaResult;
 
       if (typeof post !== 'string' || !post.trim()) {
@@ -778,6 +788,10 @@ router.post('/', async (req, res) => {
         vault_source_ref: vaultSourceRef,
         content_feedback: contentFeedback || null,
         retention: retention || null,
+        // Whether the post can honestly be presented as built from the author's
+        // own words. Only meaningful in organize mode; undefined elsewhere, so
+        // the default of true keeps every existing caller unchanged.
+        retention_ok: retentionOk !== false,
         hook_was_written: !!hookWasWritten,
         generation_mode: organizeMode ? 'organize' : 'write',
         input_maturity: inputMaturity,

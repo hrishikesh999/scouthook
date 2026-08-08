@@ -42,6 +42,41 @@ const TYPE_SHAPES = {
   reach:           'Shape it as a story or observation — whatever fits what they actually said.',
 };
 
+/**
+ * Pick the shape that fits what the author actually said.
+ *
+ * Callers that don't know the post type used to pass 'reach', which is the
+ * vaguest entry in TYPE_SHAPES ("a story or observation — whatever fits"). That
+ * wastes the one instruction that tells the editor what to LEAD with: an answer
+ * containing "60% of leads were never called" should be told to open on the
+ * number, not left to decide.
+ *
+ * Pure heuristic on purpose — same reasoning as the input-maturity router. It
+ * runs on every organize generation, so it must be free, and a deterministic
+ * choice means the same brief always gets shaped the same way.
+ *
+ * Lives here, beside TYPE_SHAPES, because the two must never drift apart.
+ */
+const STRONG_NUMBER  = /(\$\s?\d[\d,.]*)|(\b\d[\d,.]*\s*%)|(\b\d+(\.\d+)?\s*x\b)|(\b(?:\d{2,}|hundred|thousand|million)\b)|(\b(?:ten|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)\s+percent\b)/i;
+const LIST_SHAPE     = /(\bstep\s*\d|\b\d[.)]\s|\bhow to\b|\b\d+\s+(ways|steps|lessons|reasons|things|rules|mistakes|tips|principles)\b|\bframework\b|\bchecklist\b)/i;
+const CONTRARIAN_CUE = /\b(everyone|everybody|most people|nobody|no one|conventional wisdom|actually|myth|wrong about|isn't|aren't|don't need|stop\b|unpopular)\b/i;
+const LESSON_CUE     = /\b(i learned|lesson|the mistake i|i got it wrong|looking back|what i'd do differently|taught me)\b/i;
+const PROBLEM_CUE    = /\b(the real (problem|cause|reason)|turns out|root cause|the actual (problem|issue)|broke|broken|nobody noticed)\b/i;
+const STORY_CUE      = /\b(a client|a customer|last (month|week|year)|i was working with|came to me|we spent|there was this)\b/i;
+
+function pickPostShape(text) {
+  const src = String(text || '');
+  if (LIST_SHAPE.test(src))                              return 'framework';
+  // A number plus a concrete situation is a results story; a number on its own
+  // is not enough, or every passing statistic would become a case study.
+  if (STRONG_NUMBER.test(src) && STORY_CUE.test(src))    return 'results';
+  if (PROBLEM_CUE.test(src))                             return 'pis';
+  if (CONTRARIAN_CUE.test(src))                          return 'contrarian';
+  if (LESSON_CUE.test(src))                              return 'lessons_learned';
+  if (STORY_CUE.test(src))                               return 'story';
+  return 'reach';
+}
+
 // Hook craft, reframed as SELECTION rather than composition.
 //
 // The writer path gets HOOK_RULES/ABOVE_THE_FOLD/DEPTH_RULE from generationCore.
@@ -255,7 +290,23 @@ ONE EXAMPLE ONLY. The material will often hand you several companies, cases or s
 
 HOOK: in a document the most striking line is almost never the opening one, and it is never a definition. Find the sentence that contradicts what the reader currently assumes, and open with that.`;
 
-async function organizePost(rawIdea, profile, { postType = 'reach', lengthPreference = null, fromInterview = false, maxJoins = DEFAULT_MAX_JOINS, sourceIsDocument = false } = {}) {
+/**
+ * Instruction appended on the second attempt when the first one rewrote more than
+ * it organised. Names the specific words it invented, because "use their words"
+ * alone is what the system prompt already said and the model already ignored.
+ */
+function retentionCorrection(retention) {
+  const novel = [...new Set(retention.novel)].slice(0, 25);
+  return `
+
+YOUR PREVIOUS ATTEMPT FAILED THE FIDELITY TEST. It scored ${retention.score.toFixed(2)} against a required ${ORGANIZE_MIN_RETENTION} — meaning you composed prose instead of organising the author's.
+
+These words appeared in your output but NOT in the author's material: ${novel.join(', ')}.
+
+Write it again using only what the author actually said. If their material is thin, the post is SHORT — three lines of their real words beats twelve lines of yours. Cut, do not compose. Do not replace their plain phrasing with better phrasing.`;
+}
+
+async function organizePost(rawIdea, profile, { postType = 'reach', lengthPreference = null, fromInterview = false, maxJoins = DEFAULT_MAX_JOINS, sourceIsDocument = false, enforceRetention = false } = {}) {
   const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim() || (await getSetting('anthropic_api_key'));
   if (!apiKey) throw new Error('anthropic_api_key not configured');
   const client = new Anthropic({ apiKey });
@@ -299,19 +350,42 @@ Organise it into the post now. Output only the post as plain text — no preambl
   // brief for a buried line and hoist it, which is a structural decision that
   // needs some room. Colder than this and it settles for whatever the author
   // opened with; warmer and it starts paraphrasing the body.
-  const message = await client.messages.create({
-    model:       SONNET_MODEL,
-    max_tokens:  1400,
-    temperature: 0.25,
-    system:      [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
-    messages:    [{ role: 'user', content: userPrompt }],
-  });
+  async function attempt(extraInstruction = '') {
+    const message = await client.messages.create({
+      model:       SONNET_MODEL,
+      max_tokens:  1400,
+      temperature: 0.25,
+      system:      [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
+      messages:    [{ role: 'user', content: userPrompt + extraInstruction }],
+    });
 
-  const raw = message.content.find(b => b.type === 'text')?.text?.trim() || '';
-  if (!raw) throw new Error('organize_generation_returned_empty');
+    const raw = message.content.find(b => b.type === 'text')?.text?.trim() || '';
+    if (!raw) throw new Error('organize_generation_returned_empty');
 
-  const post = sanitiseAiTells(raw);
-  const retention = retentionScore(authorText, post);
+    const text = sanitiseAiTells(raw);
+    return { post: text, retention: retentionScore(authorText, text) };
+  }
+
+  let { post, retention } = await attempt();
+
+  // Opt-in second pass. The comment above argues one call is right for the normal
+  // case and it still is — this fires only when the first attempt demonstrably
+  // failed the fidelity test, which is a different situation from rolling again
+  // and hoping. Callers that show the post as "your words" (the /start first-post
+  // flow) turn this on; batch and background callers leave it off and keep the
+  // single-call cost. Document mode is exempt: it re-voices by design, so the
+  // floor would fire on correct behaviour.
+  let retentionRetried = false;
+  if (enforceRetention && !sourceIsDocument && retention.score < ORGANIZE_MIN_RETENTION) {
+    retentionRetried = true;
+    const firstScore = retention.score;
+    const second = await attempt(retentionCorrection(retention));
+    // Keep whichever attempt stayed closer to the author. The retry usually wins,
+    // but a model that over-corrects into terseness can score worse.
+    if (second.retention.score > retention.score) ({ post, retention } = second);
+    console.info('[organizePost] retention retry %s → %s, kept %s (floor %s) post_type=%s',
+      firstScore, second.retention.score, retention.score, ORGANIZE_MIN_RETENTION, postType);
+  }
 
   // Score the hook on its own. The hook is the one line the editor may compose
   // (rung 3), so a whole-post score blurs exactly the distinction worth knowing:
@@ -350,9 +424,16 @@ Organise it into the post now. Output only the post as plain text — no preambl
       hookRetention.score, postType);
   }
 
+  // Whether the post can honestly be shown as "built from your words". False means
+  // the editor composed most of it — surfaces don't have to refuse it, but one that
+  // claims fidelity must not present this as the author's own.
+  const retentionOk = sourceIsDocument || retention.score >= ORGANIZE_MIN_RETENTION;
+
   return {
     post,
     retention,
+    retentionOk,
+    retentionRetried,
     hookRetention,
     hookWasWritten,
     synthesis: {
@@ -369,4 +450,4 @@ Organise it into the post now. Output only the post as plain text — no preambl
   };
 }
 
-module.exports = { organizePost, EDITOR_SYSTEM, DEFAULT_MAX_JOINS, ROLE_BRIEF_MAX_JOINS };
+module.exports = { organizePost, pickPostShape, EDITOR_SYSTEM, DEFAULT_MAX_JOINS, ROLE_BRIEF_MAX_JOINS };

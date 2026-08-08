@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Your first post — Scouthook</title>
+
+  <!-- Meta Pixel Code -->
+  <script>
+  !function(f,b,e,v,n,t,s)
+  {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+  n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+  if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+  n.queue=[];t=b.createElement(e);t.async=!0;
+  t.src=v;s=b.getElementsByTagName(e)[0];
+  s.parentNode.insertBefore(t,s)}(window, document,'script',
+  'https://connect.facebook.net/en_US/fbevents.js');
+  fbq('init', '1605989771041135');
+  fbq('track', 'PageView');
+  </script>
+  <noscript><img height="1" width="1" style="display:none"
+  src="https://www.facebook.com/tr?id=1605989771041135&ev=PageView&noscript=1"
+  /></noscript>
+  <!-- End Meta Pixel Code -->
+
+  <!-- Signup conversion — /start is now the first authenticated page a brand-new
+       user reaches, so CompleteRegistration moves here from onboarding.html. The
+       server claims the event atomically, so revisiting never double-counts. -->
+  <script>
+  (function () {
+    fetch('/api/events/signup-conversion', { method: 'POST' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        if (!d || !d.fire || typeof window.fbq !== 'function') return;
+        window.fbq('track', 'CompleteRegistration', {
+          content_name: d.utm_content  || 'organic',
+          content_category: d.utm_campaign || 'organic',
+          status: true,
+        });
+      })
+      .catch(function () { /* never block the flow on a tracking call */ });
+  })();
+  </script>
+
+  <link rel="stylesheet" href="/css/main.css" />
+  <link rel="stylesheet" href="/css/start.css" />
+  <script src="/js/confetti.min.js"></script>
+</head>
+<body class="st-shell">
+
+  <div id="st-init" aria-live="polite" aria-label="Loading">
+    <img src="/images/sh-logo-dark.png" alt="Scouthook" />
+    <div class="st-dots" aria-hidden="true"><span></span><span></span><span></span></div>
+  </div>
+
+  <header class="st-header">
+    <img src="/images/sh-logo-dark.png" alt="Scouthook" class="st-logo">
+  </header>
+
+  <!-- ── Screen 1: Sign in ─────────────────────────────────── -->
+  <section id="st-signin" class="st-screen" aria-label="Sign in with LinkedIn">
+    <div class="st-content">
+      <div class="st-li-badge" aria-hidden="true">in</div>
+
+      <h1 class="st-h1">Let's write your first post</h1>
+      <p class="st-sub">Sign in with LinkedIn and we'll draft one from your profile. Takes about 20 seconds.</p>
+
+      <div id="st-signin-error" class="st-error" hidden role="alert"></div>
+
+      <a id="st-connect" href="/api/linkedin/connect?from=start" class="st-btn st-btn--li">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.32 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.79M6.88 8.56a1.68 1.68 0 0 0 1.68-1.68c0-.93-.75-1.69-1.68-1.69a1.69 1.69 0 0 0-1.69 1.69c0 .93.76 1.68 1.69 1.68m1.39 9.94v-8.37H5.5v8.37h2.77z"/>
+        </svg>
+        Continue with LinkedIn
+      </a>
+
+      <div class="st-trust">
+        <span class="st-trust-icon" aria-hidden="true">🔒</span>
+        <p><strong>Read-only.</strong> We read your name, photo and headline. Scouthook can't post anything — we'll ask about that later, if you decide you want to publish.</p>
+      </div>
+
+      <p class="st-micro">You'll sign in on linkedin.com. Disconnect any time in Settings.</p>
+    </div>
+  </section>
+
+  <!-- ── Screen 2: One question ────────────────────────────── -->
+  <section id="st-ask" class="st-screen" aria-label="One question">
+    <div class="st-content">
+      <div id="st-ident" class="st-ident">
+        <img id="st-ident-photo" class="st-ident-photo" src="" alt="" hidden />
+        <div>
+          <p id="st-ident-name" class="st-ident-name"></p>
+          <p id="st-ident-headline" class="st-ident-headline"></p>
+        </div>
+      </div>
+
+      <h1 class="st-h1" id="st-ask-h">One question.</h1>
+      <p class="st-sub">What's something you wish more people understood?</p>
+      <p class="st-micro st-micro--tight">Thirty seconds of talking is plenty — no need to polish it.</p>
+
+      <button id="st-mic" class="st-btn st-btn--mic" type="button" hidden>
+        <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor"
+             stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="9" y="2" width="6" height="11" rx="3"/>
+          <path d="M5 10a7 7 0 0 0 14 0"/>
+          <line x1="12" y1="17" x2="12" y2="21"/>
+          <line x1="8" y1="21" x2="16" y2="21"/>
+        </svg>
+        <span id="st-mic-label">Just say it</span>
+      </button>
+
+      <div id="st-wave" class="st-wave" hidden aria-hidden="true">
+        <span></span><span></span><span></span><span></span><span></span>
+        <span></span><span></span><span></span><span></span><span></span>
+      </div>
+      <p id="st-listening" class="st-listening" hidden aria-live="polite">Listening — just start talking</p>
+
+      <p id="st-or" class="st-or" hidden>or type it</p>
+
+      <label class="st-visually-hidden" for="st-answer">What's something you wish more people understood?</label>
+      <textarea id="st-answer" class="st-textarea" rows="5" maxlength="1200"
+                placeholder="e.g. Everyone wants to spend more on ads before they've checked whether anyone is actually calling their leads back."></textarea>
+
+      <div id="st-ask-error" class="st-error" hidden role="alert"></div>
+      <p id="st-nudge" class="st-nudge" hidden aria-live="polite"></p>
+
+      <button id="st-go" class="st-btn st-btn--go" type="button">Write my post →</button>
+      <p class="st-micro">Scouthook will turn your idea into a LinkedIn post you'll be proud of.</p>
+    </div>
+  </section>
+
+  <!-- ── Screen 2b: Follow-up ──────────────────────────────────
+       Shown only when the first answer is too thin to build a post out of the
+       author's own words. Asking beats generating: with a one-liner the editor
+       has to invent the rest, and inventing is the failure this flow exists to
+       avoid. One question, same shape as the first. -->
+  <section id="st-more" class="st-screen" aria-label="One more thing">
+    <div class="st-content">
+      <blockquote id="st-echo" class="st-echo"></blockquote>
+
+      <h1 class="st-h1">Good. One more thing.</h1>
+      <p class="st-sub">When did you last see someone get this wrong?</p>
+      <p class="st-micro st-micro--tight">Thirty seconds on what actually happened — this is the part that makes the post yours.</p>
+
+      <button id="st-mic2" class="st-btn st-btn--mic" type="button" hidden>
+        <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor"
+             stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="9" y="2" width="6" height="11" rx="3"/>
+          <path d="M5 10a7 7 0 0 0 14 0"/>
+          <line x1="12" y1="17" x2="12" y2="21"/>
+          <line x1="8" y1="21" x2="16" y2="21"/>
+        </svg>
+        <span id="st-mic2-label">Just say it</span>
+      </button>
+
+      <div id="st-wave2" class="st-wave" hidden aria-hidden="true">
+        <span></span><span></span><span></span><span></span><span></span>
+        <span></span><span></span><span></span><span></span><span></span>
+      </div>
+      <p id="st-listening2" class="st-listening" hidden aria-live="polite">Listening — just start talking</p>
+
+      <p id="st-or2" class="st-or" hidden>or type it</p>
+
+      <label class="st-visually-hidden" for="st-answer2">When did you last see someone get this wrong?</label>
+      <textarea id="st-answer2" class="st-textarea" rows="5" maxlength="1200"
+                placeholder="e.g. A client last month was convinced they needed to double ad spend. We spent a day in their CRM and found 60% of their leads were never getting called."></textarea>
+
+      <div id="st-more-error" class="st-error" hidden role="alert"></div>
+
+      <button id="st-more-go" class="st-btn st-btn--go" type="button">Write my post →</button>
+      <button id="st-more-skip" class="st-btn st-btn--ghost" type="button">Just use what I've got</button>
+    </div>
+  </section>
+
+  <!-- ── Screen 3: Cooking ─────────────────────────────────── -->
+  <section id="st-cook" class="st-screen" aria-label="Writing your post">
+    <div class="st-content st-content--center">
+      <h1 class="st-h1">Cooking your idea into a post worth sharing</h1>
+
+      <svg class="st-pot" viewBox="0 0 140 128" role="img" aria-label="A pot simmering on a flame">
+        <path class="ck-steam" d="M56 34 q-6 -7 0 -13 q6 -6 0 -13"/>
+        <path class="ck-steam ck-steam--b" d="M70 30 q-6 -7 0 -13 q6 -6 0 -13"/>
+        <path class="ck-steam ck-steam--c" d="M84 34 q-6 -7 0 -13 q6 -6 0 -13"/>
+
+        <circle class="ck-bub" cx="60" cy="46" r="3"/>
+        <circle class="ck-bub ck-bub--b" cx="72" cy="44" r="2.4"/>
+        <circle class="ck-bub ck-bub--c" cx="82" cy="47" r="2.8"/>
+
+        <ellipse class="ck-lid ck-outline" cx="70" cy="52" rx="29" ry="7"/>
+        <circle class="ck-knob" cx="70" cy="45" r="4"/>
+
+        <rect class="ck-rim ck-outline" x="26" y="58" width="88" height="11" rx="5.5"/>
+        <path class="ck-pot ck-outline" d="M33 69 L37 100 Q38 107 46 107 L94 107 Q102 107 103 100 L107 69 Z"/>
+        <path class="ck-outline ck-nofill" d="M26 62 q-10 0 -10 5 t10 5"/>
+        <path class="ck-outline ck-nofill" d="M114 62 q10 0 10 5 t-10 5"/>
+
+        <path class="ck-flame ck-outline ck-flame-a" d="M56 122 C48 114 51 106 56 100 C61 106 64 114 56 122 Z"/>
+        <path class="ck-flame ck-flame--b ck-outline ck-flame-b" d="M70 124 C61 115 64 105 70 98 C76 105 79 115 70 124 Z"/>
+        <path class="ck-flame ck-flame--c ck-outline ck-flame-a" d="M84 122 C76 114 79 106 84 100 C89 106 92 114 84 122 Z"/>
+      </svg>
+
+      <div class="st-cookline"><p id="st-cookline" aria-live="polite">Reading your LinkedIn headline</p></div>
+      <div class="st-cookdots" id="st-cookdots" aria-hidden="true">
+        <span class="on"></span><span></span><span></span><span></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Screen 4: The post ────────────────────────────────── -->
+  <section id="st-post" class="st-screen" aria-label="Your first post">
+    <canvas id="st-confetti" class="st-confetti" aria-hidden="true"></canvas>
+    <div class="st-content">
+      <h1 class="st-h1">Here's your first post</h1>
+
+      <article class="st-preview">
+        <div class="st-preview-top">
+          <img id="st-preview-photo" class="st-preview-photo" src="" alt="" hidden />
+          <div>
+            <p id="st-preview-name" class="st-ident-name"></p>
+            <p class="st-ident-headline">now</p>
+          </div>
+          <!-- Verdict on the post's quality. Hidden unless it's earned — a badge
+               that always reads the same is ignored by the second post. -->
+          <span id="st-verdict" class="st-verdict" hidden></span>
+        </div>
+        <div id="st-preview-body" class="st-preview-body"></div>
+      </article>
+
+      <!-- Motivation + provenance. The first answers "is this worth doing?", the
+           second answers "is this actually me?" — the two things standing between
+           a finished post and the publish button. -->
+      <div class="st-motive">
+        <p id="st-rarity" class="st-rarity"></p>
+        <!-- Only rendered when it's true: hook_was_written tells us whether the
+             opening line was lifted from the author or composed. -->
+        <p id="st-provenance" class="st-provenance" hidden></p>
+      </div>
+
+      <div id="st-post-error" class="st-error" hidden role="alert"></div>
+
+      <div class="st-actions">
+        <button id="st-publish" class="st-btn st-btn--go" type="button">Post on LinkedIn</button>
+        <button id="st-edit" class="st-btn st-btn--quiet" type="button">Edit</button>
+      </div>
+      <p class="st-micro" style="text-align:center">You can delete it from LinkedIn any time.</p>
+      <button id="st-retry" class="st-btn st-btn--ghost" type="button">Try a different angle</button>
+    </div>
+  </section>
+
+  <!-- ── Screen 5: Earned ask ──────────────────────────────── -->
+  <section id="st-earn" class="st-screen" aria-label="Sharpen your voice">
+    <div class="st-content">
+      <h1 class="st-h1">Want the next one to sound more like you?</h1>
+      <p class="st-sub">We wrote that from your headline and one idea. Here's what would sharpen it.</p>
+
+      <div class="st-meter">
+        <div class="st-meter-top"><span>Voice profile</span><b id="st-meter-pct">25%</b></div>
+        <div class="st-meter-rail"><div id="st-meter-fill" class="st-meter-fill"></div></div>
+      </div>
+
+      <ul class="st-earn-list">
+        <li class="done"><span>✓ LinkedIn headline</span><span>done</span></li>
+        <li><span>Paste something you've written</span><span>+30%</span></li>
+        <li><span>Your website</span><span>+20%</span></li>
+        <li><span>Who you're writing for</span><span>+25%</span></li>
+      </ul>
+
+      <button id="st-earn-go" class="st-btn st-btn--go" type="button">Sharpen my voice — 2 min</button>
+      <button id="st-earn-later" class="st-btn st-btn--ghost" type="button">Later, take me to my drafts</button>
+    </div>
+  </section>
+
+  <!-- ── Publish permission modal ──────────────────────────── -->
+  <div id="st-modal" class="st-modal" hidden role="dialog" aria-modal="true" aria-labelledby="st-modal-h">
+    <div class="st-modal-card">
+      <h2 id="st-modal-h" class="st-modal-h">Put this on your feed</h2>
+      <p class="st-sub">LinkedIn needs to hand us permission first. It does one thing — publishes posts you've approved. Nothing else, ever.</p>
+      <a id="st-modal-allow" href="/api/linkedin/connect?from=start_publish" class="st-btn st-btn--li">Post on LinkedIn</a>
+      <!-- The button promises the outcome, so this has to name the redirect —
+           saying "Post" and delivering a consent screen would be a bait at the
+           exact moment we're asking to be trusted. -->
+      <p class="st-micro">You'll confirm on linkedin.com. Delete the post, or revoke this, any time.</p>
+      <button id="st-modal-copy" class="st-btn st-btn--ghost" type="button">Copy it instead</button>
+    </div>
+  </div>
+
+  <script src="/js/session.js"></script>
+  <!-- Same module the server uses to route input (services/inputMaturity.js
+       re-exports it), so the nudge below can never disagree with the path the
+       generation actually takes. -->
+  <script src="/js/input-maturity.js"></script>
+  <script src="/js/start.js" defer></script>
+</body>
+</html>

@@ -5,7 +5,7 @@ const express = require('express');
 const router  = express.Router();
 const { db, getSetting } = require('../db');
 const { encrypt, decrypt, cacheLinkedInAvatar } = require('../services/linkedinOAuth');
-const { publishNow } = require('../services/linkedinPublisher');
+const { publishNow, normaliseScopes, connectionCanPublish } = require('../services/linkedinPublisher');
 const { addScheduledJob, addCommentJob, removeScheduledJob, isSchedulerEnabled } = require('../services/scheduler');
 const { syncPostMetrics, RateLimitError } = require('../services/linkedinMetrics');
 const { getUserPlan } = require('../services/subscription');
@@ -29,14 +29,14 @@ const SCOPE_PUBLISH = 'openid profile w_member_social';
 // Entry points that only need to know who the member is.
 const READ_ONLY_ENTRY_POINTS = new Set(['start']);
 
-const PUBLISH_SCOPE = 'w_member_social';
-
+// One parser, shared with the publish gate in services/linkedinPublisher.js.
+// A second local copy is what broke publishing: it split on whitespace only,
+// while LinkedIn's token response returns scopes comma-separated.
 function canPublishWith(scopes) {
   // Rows predating migration 082 have scopes backfilled, so a null here means a
   // write failed rather than "read-only" — treat it as publish-capable to avoid
   // locking existing users out, matching the migration's backfill intent.
-  if (scopes == null) return true;
-  return String(scopes).split(/\s+/).includes(PUBLISH_SCOPE);
+  return connectionCanPublish({ scopes });
 }
 
 // Fire-and-forget: increment archetype publish count on the profile that generated the post.
@@ -520,7 +520,14 @@ router.get('/callback', async (req, res) => {
 
     // What LinkedIn actually granted. It echoes `scope` on the token response; if a
     // future API version stops doing that, fall back to what we asked for in state.
-    const grantedScopes = (tokens.scope || stateData.scope || SCOPE_PUBLISH).trim();
+    //
+    // Normalised before storage because the two ends of the same handshake use
+    // different separators: we ASK space-separated and LinkedIn ANSWERS
+    // comma-separated. Storing the answer verbatim put commas in a column every
+    // reader split on whitespace. Readers now accept both, so this is belt and
+    // braces — but it keeps the column in one shape, which is what makes the
+    // stored value legible to a human looking at a row.
+    const grantedScopes = normaliseScopes(tokens.scope || stateData.scope || SCOPE_PUBLISH);
 
     // Mirror the LinkedIn CDN photo into our own storage so avatar_url points at a
     // stable, non-expiring app URL. Falls back to the raw CDN URL if caching fails.
@@ -546,7 +553,10 @@ router.get('/callback', async (req, res) => {
             updated_at        = now()
         WHERE workspace_id = ? AND account_key = ?
       `).run(accessTokenEnc, refreshTokenEnc, expiresAt, linkedin_name, linkedin_photo, grantedScopes, tenantId, accountKey);
-      console.log(`[linkedin/callback] Reconnected user=${userId} connection=${existingConn.id} (${linkedin_name})`);
+      // Scopes logged on both branches: "connected but can't publish" is
+      // otherwise indistinguishable in the logs from "declined the write scope",
+      // and the two have completely different fixes. Not PII.
+      console.log(`[linkedin/callback] Reconnected user=${userId} connection=${existingConn.id} (${linkedin_name}) scopes="${grantedScopes}" raw="${tokens.scope || ''}"`);
     } else {
       // New connection: enforce 1-personal-per-workspace limit
       const existingPersonal = await db.prepare(
@@ -567,7 +577,7 @@ router.get('/callback', async (req, res) => {
         linkedin_name, linkedin_photo, linkedin_member_id,
         accessTokenEnc, refreshTokenEnc, expiresAt, grantedScopes
       );
-      console.log(`[linkedin/callback] Connected user=${userId} as ${linkedin_name} (${linkedin_member_id})`);
+      console.log(`[linkedin/callback] Connected user=${userId} as ${linkedin_name} (${linkedin_member_id}) scopes="${grantedScopes}" raw="${tokens.scope || ''}"`);
       require('../services/trialEmails').scheduleTrialEvaluation(userId, tenantId);
     }
 

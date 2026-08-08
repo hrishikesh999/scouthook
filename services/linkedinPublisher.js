@@ -72,6 +72,32 @@ async function resolveConnection(tenantId, options = {}) {
 }
 
 /**
+ * Split a scope string into individual scopes.
+ *
+ * Accepts BOTH separators because LinkedIn uses both, in the same handshake: the
+ * authorization request takes them space-separated ("openid profile
+ * w_member_social"), and the token response echoes them back COMMA-separated
+ * ("openid,profile,w_member_social"). We store whatever the token response says
+ * it granted, so a splitter that only knew about whitespace saw one meaningless
+ * blob and reported every freshly granted connection as read-only — the user
+ * granted publishing, we recorded it, and then failed to read our own record.
+ *
+ * Splitting on both is also what makes the stored value's format not matter,
+ * which is the property worth having here regardless of what LinkedIn does next.
+ */
+function parseScopes(scopes) {
+  return String(scopes == null ? '' : scopes)
+    .split(/[\s,]+/)
+    .map(s => s.trim())
+    .filter(Boolean);
+}
+
+/** Canonical storage form: space-separated, the shape LinkedIn's own docs use. */
+function normaliseScopes(scopes) {
+  return parseScopes(scopes).join(' ');
+}
+
+/**
  * Whether a connection row carries the write scope.
  *
  * Rows created before migration 082 have `scopes` backfilled to the full set,
@@ -85,7 +111,7 @@ async function resolveConnection(tenantId, options = {}) {
 function connectionCanPublish(connection) {
   const scopes = connection?.scopes;
   if (scopes == null) return true;
-  return String(scopes).split(/\s+/).includes('w_member_social');
+  return parseScopes(scopes).includes('w_member_social');
 }
 
 // ---------------------------------------------------------------------------
@@ -1061,4 +1087,10 @@ async function publishFirstComment(scheduledPostId) {
   console.log(`[publisher] scheduledPostId=${scheduledPostId} first comment posted`);
 }
 
-module.exports = { publishNow, publishScheduledPost, publishFirstComment };
+module.exports = {
+  publishNow, publishScheduledPost, publishFirstComment,
+  // Exported so routes/linkedin.js reads scopes through the same parser the
+  // publish gate uses. Two copies of this logic is what shipped the bug: the
+  // route's copy said "connected, can't publish" while nothing reconciled them.
+  parseScopes, normaliseScopes, connectionCanPublish,
+};

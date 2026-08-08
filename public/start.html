@@ -276,6 +276,11 @@
   <!-- ── Publish permission modal ──────────────────────────── -->
   <div id="st-modal" class="st-modal" hidden role="dialog" aria-modal="true" aria-labelledby="st-modal-h">
     <div class="st-modal-card">
+      <!-- The only way out. "Copy it instead" used to serve as the dismissal as
+           well as the alternative; with it gone the dialog would otherwise have
+           a single action and no exit, which traps anyone who opened it to read
+           what the permission does before deciding. -->
+      <button id="st-modal-close" class="st-modal-close" type="button" aria-label="Close">&times;</button>
       <h2 id="st-modal-h" class="st-modal-h">Put this on your feed</h2>
       <p class="st-sub">LinkedIn needs to hand us permission first. It does one thing — publishes posts you've approved. Nothing else, ever.</p>
       <a id="st-modal-allow" href="/api/linkedin/connect?from=start_publish" class="st-btn st-btn--li">Post on LinkedIn</a>
@@ -283,7 +288,6 @@
            saying "Post" and delivering a consent screen would be a bait at the
            exact moment we're asking to be trusted. -->
       <p class="st-micro">You'll confirm on linkedin.com. Delete the post, or revoke this, any time.</p>
-      <button id="st-modal-copy" class="st-btn st-btn--ghost" type="button">Copy it instead</button>
     </div>
   </div>
 

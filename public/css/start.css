@@ -530,6 +530,7 @@
 .st-modal[hidden] { display: none; }
 
 .st-modal-card {
+  position: relative;
   width: 100%;
   max-width: 420px;
   background: var(--st-surface);
@@ -539,6 +540,27 @@
   flex-direction: column;
   gap: 13px;
 }
+
+/* Absolute so it sits in the card's corner as chrome rather than joining the
+   flex column, where it would read as a second choice competing with the CTA.
+   44px to clear the iOS tap-target floor the mobile audit set. */
+.st-modal-close {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: none;
+  color: var(--st-ink-3);
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+}
+.st-modal-close:hover { color: var(--st-ink-2); }
 .st-modal-h {
   font-family: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
   font-size: 20px;

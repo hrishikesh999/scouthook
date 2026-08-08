@@ -17,7 +17,8 @@
 const fs   = require('fs');
 const path = require('path');
 
-const SRC = fs.readFileSync(path.join(__dirname, '../../public/js/start.js'), 'utf8');
+const SRC  = fs.readFileSync(path.join(__dirname, '../../public/js/start.js'), 'utf8');
+const HTML = fs.readFileSync(path.join(__dirname, '../../public/start.html'), 'utf8');
 
 /** The object literal passed to JSON.stringify inside the /api/generate fetch. */
 function generateRequestBody() {
@@ -46,5 +47,31 @@ describe('/start generate request', () => {
     const route = fs.readFileSync(path.join(__dirname, '../../routes/generate.js'), 'utf8');
     expect(route).toMatch(/post_type\s*===\s*'auto'/);
     expect(route).toMatch(/pickPostShape/);
+  });
+});
+
+/**
+ * The publish-permission dialog has one action — grant the write scope — and no
+ * link out of the flow. It used to carry "Copy it instead", which doubled as its
+ * dismissal; removing that alternative left the dialog with no exit at all until
+ * a close control replaced it. A dialog you cannot leave is worse than the
+ * alternative it was meant to suppress, so the exit is asserted, not assumed.
+ */
+describe('/start publish permission dialog', () => {
+  test('has a dismissal control', () => {
+    expect(HTML).toMatch(/id="st-modal-close"/);
+    expect(SRC).toMatch(/getElementById\('st-modal-close'\)\?\.addEventListener\('click', closeModal\)/);
+  });
+
+  test('Escape and a backdrop click also close it', () => {
+    expect(SRC).toMatch(/e\.key === 'Escape'/);
+    expect(SRC).toMatch(/e\.target === e\.currentTarget\) closeModal\(\)/);
+  });
+
+  test('dismissing clears the stash, or it hijacks the next visit', () => {
+    const fn = SRC.slice(SRC.indexOf('function closeModal()'));
+    const body = fn.slice(0, fn.indexOf('\n}'));
+    expect(body).toMatch(/clearStash\(\)/);
+    expect(body).toMatch(/hidden = true/);
   });
 });

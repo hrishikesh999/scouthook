@@ -551,25 +551,18 @@ async function publish() {
   }
 }
 
-async function copyPost() {
-  // Copying is a terminal exit, not a round trip — the user is NOT coming back
-  // via OAuth, so the stash that publish() wrote must be dropped here. Without
-  // this, boot() finds it on the next /start visit in this tab and restores the
-  // old post instead of the question, with no way back to a blank screen.
+// Dismiss the permission dialog and go back to the post, which is still on the
+// screen behind it — Publish reopens this, and Edit still leads to the editor.
+//
+// Clearing the stash is the whole reason this isn't a one-line hidden = true.
+// publish() writes it before opening the dialog so the post survives the round
+// trip to LinkedIn; dismissing means there is no round trip, so the stash would
+// sit in sessionStorage and hijack the next /start visit in this tab — boot()
+// would restore this post instead of the question, with no way back to a blank
+// screen short of closing the tab.
+function closeModal() {
   clearStash();
-
-  try {
-    await navigator.clipboard.writeText(state.postText);
-    const btn = document.getElementById('st-modal-copy');
-    if (btn) {
-      btn.textContent = 'Copied';
-      setTimeout(() => { btn.textContent = 'Copy the post instead'; }, 2000);
-    }
-  } catch (_) {
-    showError('st-post-error', 'Couldn’t copy automatically — select the post text above and copy it.');
-  }
   document.getElementById('st-modal').hidden = true;
-  show('earn');
 }
 
 // ── Wiring ──────────────────────────────────────────────────────────────────
@@ -657,7 +650,17 @@ function initEvents() {
   });
 
   document.getElementById('st-publish')?.addEventListener('click', publish);
-  document.getElementById('st-modal-copy')?.addEventListener('click', copyPost);
+
+  // Three ways out, because a dialog with one action and no exit is a trap:
+  // the × , the backdrop, and Escape. The backdrop check is on currentTarget so
+  // a click inside the card doesn't bubble up and close it.
+  document.getElementById('st-modal-close')?.addEventListener('click', closeModal);
+  document.getElementById('st-modal')?.addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) closeModal();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !document.getElementById('st-modal')?.hidden) closeModal();
+  });
 
   document.getElementById('st-earn-go')?.addEventListener('click', () => {
     window.location.href = '/onboarding.html';

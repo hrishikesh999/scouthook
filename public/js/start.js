@@ -83,7 +83,7 @@ function paintIdentity() {
   const first = (state.name || '').trim().split(/\s+/)[0] || '';
 
   const askH = document.getElementById('st-ask-h');
-  if (askH) askH.textContent = first ? `Got it, ${first}. One question.` : 'One question.';
+  if (askH) askH.textContent = first ? `Got it, ${first}. Just one question.` : 'Just one question.';
 
   const nameEl = document.getElementById('st-ident-name');
   if (nameEl) nameEl.textContent = state.name || '';
@@ -241,13 +241,36 @@ function fireConfetti() {
   if (!ctx) return;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
+  // Origin: the post card's own centre, not a fixed fraction of the viewport.
+  // "30% down the screen" was measured on desktop, where the whole card fits
+  // above the fold with room to spare. On a phone this screen's content (header
+  // + title + a full post + rarity line + buttons + hint) runs well past one
+  // viewport, so 30% down landed at the very top edge — on the card's author
+  // row, not its middle — and clipped a chunk of the upward burst off-screen
+  // before it was ever seen. Reading the card's real position fixes this at
+  // every viewport size instead of guessing a percentage that only held for one.
+  //
+  // Clamped rather than trusted outright: if the card is taller than the
+  // viewport or sits scrolled off-centre, its geometric centre can itself fall
+  // outside the visible area, which would silently reintroduce the same bug.
+  const cardEl = document.querySelector('.st-preview');
+  const cardRect = cardEl?.getBoundingClientRect();
+  const originX = cardRect ? cardRect.left + cardRect.width / 2 : w / 2;
+  const rawOriginY = cardRect ? cardRect.top + cardRect.height / 2 : h * 0.3;
+  const originY = Math.max(70, Math.min(h - 70, rawOriginY));
+
+  // 120, not 180. Once the origin was corrected to the card's real centre, the
+  // burst stopped being dispersed in empty space above the card and started
+  // landing squarely on the post text and the quality badge. Fewer particles and
+  // a wider initial spread thin the overlap without weakening the moment — the
+  // celebration should frame the post, not cover it.
   const parts = [];
-  for (let i = 0; i < 180; i++) {
+  for (let i = 0; i < 120; i++) {
     const a = Math.random() * Math.PI * 2;
-    const sp = 3 + Math.random() * 9;
+    const sp = 4 + Math.random() * 10;
     parts.push({
-      x: w / 2 + (Math.random() - 0.5) * 60,
-      y: h * 0.3 + (Math.random() - 0.5) * 30,
+      x: originX + (Math.random() - 0.5) * 120,
+      y: originY + (Math.random() - 0.5) * 40,
       vx: Math.cos(a) * sp,
       vy: Math.sin(a) * sp - 5,
       w: 5 + Math.random() * 7,
@@ -358,8 +381,9 @@ async function generate() {
 
     state.postId = data.id || null;
     state.postText = data.post || '';
-    // hook_was_written is the server's measurement of which rung the editor used,
-    // not the model's self-report — so the provenance line can't overclaim.
+    // hook_was_written is the server's measurement of which rung the editor used
+    // (never the model's self-report). Feeds the "Excellent" verdict tier below —
+    // lifting the hook verbatim from the author is the strongest fidelity signal.
     state.hookLifted = data.hook_was_written === false;
     state.retentionOk = data.retention_ok !== false;
     state.retentionScore = (data.retention && typeof data.retention.score === 'number') ? data.retention.score : 0;
@@ -384,20 +408,11 @@ function generationErrorMessage(status, data) {
   return 'Something went wrong writing your post. Try again in a moment.';
 }
 
-// How rare posting actually is. Left null on purpose: every "only N% of LinkedIn
-// users post" figure in circulation traces back to marketing blogs, not LinkedIn,
-// and an unverifiable statistic on the screen where we're asking for posting
-// permission undercuts the checkable honesty that got the user this far. Set it
-// to a number (e.g. 1) once there's a source you'd be happy to be quoted on and
-// the percentage framing renders automatically.
-const POSTING_PERCENTILE = null;
-
 function paintPost() {
   const body = document.getElementById('st-preview-body');
   if (body) body.textContent = state.postText;
   paintVerdict();
   paintRarity();
-  paintProvenance();
 }
 
 // Deliberately NOT the gate score. runQualityGate is an integrity check —
@@ -434,43 +449,21 @@ function paintVerdict() {
 // Future tense, not "you are among" — they haven't posted yet, and telling
 // someone they already did the thing they're hesitating over is the one claim
 // on this screen they can immediately falsify.
+// Two jobs in one line, not one: "less than 1%" answers "am I even the kind of
+// person who does this?"; "rarely wait for perfect" answers the different fear
+// of someone who's already decided to post and is stuck re-editing the third
+// line. Deliberately third-person ("the ones who do") rather than addressing the
+// reader directly — a claim about the reader ("you're about to...") has to stay
+// in future tense to stay true before they've clicked, which this sidesteps by
+// not making a claim about them at all. See the design doc for rejected drafts
+// that used an em dash / direct address instead.
 function paintRarity() {
   const el = document.getElementById('st-rarity');
   if (!el) return;
-  const line = POSTING_PERCENTILE
-    ? `You're about to join the <b>${POSTING_PERCENTILE}%</b> of people who actually post on LinkedIn.`
-    : 'Most people never post. You\'re about to be one of the few who do.';
+  const line = 'Less than 1% of people on LinkedIn ever hit post. The ones who do rarely wait for perfect.';
   // <mark> is the right element here — this is highlighted for relevance, not
   // emphasis — and it carries the highlighter styling in start.css.
   el.innerHTML = `<span class="st-rarity-icon" aria-hidden="true">🏆</span><mark>${line}</mark>`;
-}
-
-// The strongest thing we can say at the publish moment is the one thing the
-// reader can verify in two seconds: that these are their own words. So it is
-// stated only when the measurement supports it, and never as a general boast.
-//
-//   hook lifted           → the checkable version, naming the opening line
-//   hook composed, but
-//   high retention        → the weaker, still-true version about the body
-//   neither               → say nothing. An unearned fidelity claim on a post
-//                           the model largely wrote is exactly the kind of
-//                           thing a reader catches, and it costs more than
-//                           silence ever would.
-function paintProvenance() {
-  const el = document.getElementById('st-provenance');
-  if (!el) return;
-
-  if (state.hookLifted) {
-    el.innerHTML = '<span aria-hidden="true">✎</span><span>That opening line is <b>yours, word for word</b> — we changed the order, not the words.</span>';
-    el.hidden = false;
-    return;
-  }
-  if (state.retentionOk) {
-    el.innerHTML = '<span aria-hidden="true">✎</span><span>Built from <b>what you just said</b> — your words, reordered for the feed.</span>';
-    el.hidden = false;
-    return;
-  }
-  el.hidden = true;
 }
 
 // ── Surviving the OAuth round-trip ──────────────────────────────────────────
@@ -542,6 +535,9 @@ async function publish() {
       return;
     }
 
+    // Published successfully — the post is live, so a stash left over from an
+    // earlier permission round trip must not survive to hijack the next visit.
+    clearStash();
     show('earn');
   } catch (_) {
     setLoading(btn, false);
@@ -550,6 +546,12 @@ async function publish() {
 }
 
 async function copyPost() {
+  // Copying is a terminal exit, not a round trip — the user is NOT coming back
+  // via OAuth, so the stash that publish() wrote must be dropped here. Without
+  // this, boot() finds it on the next /start visit in this tab and restores the
+  // old post instead of the question, with no way back to a blank screen.
+  clearStash();
+
   try {
     await navigator.clipboard.writeText(state.postText);
     const btn = document.getElementById('st-modal-copy');
@@ -644,8 +646,6 @@ function initEvents() {
 
   document.getElementById('st-answer')?.addEventListener('input', updateNudge);
 
-  document.getElementById('st-retry')?.addEventListener('click', () => generate());
-
   document.getElementById('st-edit')?.addEventListener('click', () => {
     window.location.href = state.postId ? `/editor.html?postId=${state.postId}` : '/drafts.html';
   });
@@ -688,13 +688,23 @@ function initEvents() {
   const connected = await loadLinkedInStatus();
   document.getElementById('st-init').style.display = 'none';
 
-  if (oauthError) {
+  // Read the stash BEFORE branching on oauthError. Denying the *write-scope*
+  // upgrade also comes back with linkedin_error set, but that user is already
+  // signed in and has a finished post waiting — bouncing them to the sign-in
+  // screen would be wrong twice over (they're signed in, and their post would
+  // be stranded in the stash for the next visit to resurrect).
+  const stashed = readStash();
+
+  // A genuine sign-in failure: errored AND no usable connection.
+  if (oauthError && !connected) {
+    clearStash();
     show('signin');
     showError('st-signin-error', 'That didn’t go through. Try connecting again — nothing was shared.');
     return;
   }
 
   if (!connected) {
+    clearStash();
     show('signin');
     return;
   }
@@ -704,7 +714,6 @@ function initEvents() {
   // Returning from the write-scope grant with the post we generated before the
   // redirect: put them back on it, ready to publish, instead of a blank question
   // they've already answered.
-  const stashed = readStash();
   if (stashed) {
     clearStash();
     state.postId = stashed.id;
@@ -716,8 +725,9 @@ function initEvents() {
     paintPost();
     show('post');
     if (!state.canPublish) {
-      // They came back without granting it — say so plainly rather than letting
-      // Publish silently reopen the same modal.
+      // Came back without granting it — whether they declined on LinkedIn or hit
+      // an error, the recovery is identical, so say it plainly rather than
+      // letting Publish silently reopen the same modal.
       showError('st-post-error', 'Publishing still needs permission. Press Publish to try again, or copy the post and paste it into LinkedIn.');
     }
     return;

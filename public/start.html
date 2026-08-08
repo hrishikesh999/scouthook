@@ -95,8 +95,8 @@
         </div>
       </div>
 
-      <h1 class="st-h1" id="st-ask-h">One question.</h1>
-      <p class="st-sub">What's something you wish more people understood?</p>
+      <p class="st-greet" id="st-ask-h">Just one question.</p>
+      <h1 class="st-question">What's something you wish more people understood?</h1>
       <p class="st-micro st-micro--tight">Thirty seconds of talking is plenty — no need to polish it.</p>
 
       <button id="st-mic" class="st-btn st-btn--mic" type="button" hidden>
@@ -119,7 +119,7 @@
       <p id="st-or" class="st-or" hidden>or type it</p>
 
       <label class="st-visually-hidden" for="st-answer">What's something you wish more people understood?</label>
-      <textarea id="st-answer" class="st-textarea" rows="5" maxlength="1200"
+      <textarea id="st-answer" class="st-textarea" rows="4" maxlength="1200"
                 placeholder="e.g. Everyone wants to spend more on ads before they've checked whether anyone is actually calling their leads back."></textarea>
 
       <div id="st-ask-error" class="st-error" hidden role="alert"></div>
@@ -139,8 +139,8 @@
     <div class="st-content">
       <blockquote id="st-echo" class="st-echo"></blockquote>
 
-      <h1 class="st-h1">Good. One more thing.</h1>
-      <p class="st-sub">When did you last see someone get this wrong?</p>
+      <p class="st-greet">One more thing.</p>
+      <h1 class="st-question">When did you last see someone get this wrong?</h1>
       <p class="st-micro st-micro--tight">Thirty seconds on what actually happened — this is the part that makes the post yours.</p>
 
       <button id="st-mic2" class="st-btn st-btn--mic" type="button" hidden>
@@ -163,7 +163,7 @@
       <p id="st-or2" class="st-or" hidden>or type it</p>
 
       <label class="st-visually-hidden" for="st-answer2">When did you last see someone get this wrong?</label>
-      <textarea id="st-answer2" class="st-textarea" rows="5" maxlength="1200"
+      <textarea id="st-answer2" class="st-textarea" rows="4" maxlength="1200"
                 placeholder="e.g. A client last month was convinced they needed to double ad spend. We spent a day in their CRM and found 60% of their leads were never getting called."></textarea>
 
       <div id="st-more-error" class="st-error" hidden role="alert"></div>
@@ -227,24 +227,22 @@
         <div id="st-preview-body" class="st-preview-body"></div>
       </article>
 
-      <!-- Motivation + provenance. The first answers "is this worth doing?", the
-           second answers "is this actually me?" — the two things standing between
-           a finished post and the publish button. -->
-      <div class="st-motive">
-        <p id="st-rarity" class="st-rarity"></p>
-        <!-- Only rendered when it's true: hook_was_written tells us whether the
-             opening line was lifted from the author or composed. -->
-        <p id="st-provenance" class="st-provenance" hidden></p>
-      </div>
+      <!-- The one line between the post and the button. Everything else here has
+           been cut: at the moment someone is deciding whether to publish, each
+           extra sentence is another thing to weigh. -->
+      <p id="st-rarity" class="st-rarity"></p>
 
       <div id="st-post-error" class="st-error" hidden role="alert"></div>
 
-      <div class="st-actions">
-        <button id="st-publish" class="st-btn st-btn--go" type="button">Post on LinkedIn</button>
-        <button id="st-edit" class="st-btn st-btn--quiet" type="button">Edit</button>
+      <!-- Pinned so the primary action stays reachable however long the post
+           runs — see .st-actions--sticky. -->
+      <div class="st-actions--sticky">
+        <div class="st-actions">
+          <button id="st-publish" class="st-btn st-btn--go" type="button">Post on LinkedIn</button>
+          <button id="st-edit" class="st-btn st-btn--quiet" type="button">Edit</button>
+        </div>
+        <p class="st-micro" style="text-align:center">You can delete it from LinkedIn any time.</p>
       </div>
-      <p class="st-micro" style="text-align:center">You can delete it from LinkedIn any time.</p>
-      <button id="st-retry" class="st-btn st-btn--ghost" type="button">Try a different angle</button>
     </div>
   </section>
 
@@ -266,7 +264,11 @@
         <li><span>Who you're writing for</span><span>+25%</span></li>
       </ul>
 
-      <button id="st-earn-go" class="st-btn st-btn--go" type="button">Sharpen my voice — 2 min</button>
+      <!-- No time estimate: this routes to /onboarding.html, the full brand
+           interview, not a two-minute task. Promising "2 min" and delivering
+           seven screens is the kind of small lie that costs more than the
+           urgency it buys. -->
+      <button id="st-earn-go" class="st-btn st-btn--go" type="button">Sharpen my voice</button>
       <button id="st-earn-later" class="st-btn st-btn--ghost" type="button">Later, take me to my drafts</button>
     </div>
   </section>

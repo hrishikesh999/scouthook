@@ -57,10 +57,15 @@
 
 /* ── Frame ──────────────────────────────────────────────── */
 
-.st-header { padding: 22px 24px; }
-.st-logo { height: 26px; width: auto; }
+/* Vertical budget is the scarce resource on this flow. A mobile audit measured
+   the primary CTA 142px below the fold on iPhone 13 and 384px on iPhone SE, and
+   even the question screen's submit sitting 43px under on SE. Every value below
+   is trimmed against that: the flow's whole promise is speed, and a user who
+   has to hunt for the button doesn't feel it. */
+.st-header { padding: 14px 24px 10px; }
+.st-logo { height: 24px; width: auto; }
 
-.st-screen { display: none; padding: 8px 24px 72px; }
+.st-screen { display: none; padding: 4px 24px 40px; }
 .st-screen.active { display: block; }
 
 .st-content {
@@ -68,7 +73,7 @@
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
 }
 .st-content--center { align-items: center; text-align: center; }
 
@@ -83,6 +88,28 @@
 }
 
 .st-sub { font-size: 16px; line-height: 1.55; color: var(--st-ink-2); margin: 0; }
+
+/* The question is the only thing the user has to produce, so it gets the
+   headline treatment. It was previously .st-sub — subheadline styling on the
+   most important text on the screen, which is why it read as background. The
+   greeting above it drops to a quiet line: it's a transition, not the ask. */
+.st-greet {
+  font-size: 16px;
+  font-weight: 650;
+  color: var(--st-ink-2);
+  margin: 0;
+}
+
+.st-question {
+  font-family: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
+  font-size: clamp(19px, 3.4vw, 23px);
+  line-height: 1.32;
+  letter-spacing: -0.016em;
+  font-weight: 700;
+  color: var(--st-ink);
+  margin: 0;
+  text-wrap: balance;
+}
 
 .st-micro { font-size: 12.5px; line-height: 1.5; color: var(--st-ink-3); margin: 0; }
 .st-micro--tight { margin-top: -8px; }
@@ -119,12 +146,16 @@
 .st-btn--li { background: var(--st-li); color: #fff; }
 .st-btn--li:hover { background: #0958A8; }
 
+/* sign-up-a.html's lime "neon pop" was too bright for a signed-in app screen —
+   right family, wrong intensity. --st-accent-2 (#10B981) is this file's own
+   second brand colour: a proper green, not the blue-leaning teal (--st-accent)
+   and not a neon lime. No borrowed hex — it was already declared here. */
 .st-btn--go {
-  background: var(--st-accent);
+  background: var(--st-accent-2);
   color: #fff;
-  box-shadow: 0 6px 18px -8px rgba(15,118,110,.75);
+  box-shadow: 0 6px 16px -6px rgba(16, 185, 129, .5);
 }
-.st-btn--go:hover { background: #0E6B63; }
+.st-btn--go:hover { background: #0D9F70; }
 
 .st-btn--quiet {
   background: var(--st-surface);
@@ -133,26 +164,62 @@
 }
 .st-btn--quiet:hover { border-color: var(--st-ink-3); }
 
+/* min-height, not extra padding: these measured 37px against the 44px iOS tap
+   target guideline. Setting the floor on the box rather than inflating padding
+   keeps the visual weight unchanged — they must stay clearly secondary to the
+   primary CTA — while making the target itself compliant. */
 .st-btn--ghost {
   background: transparent;
   color: var(--st-ink-3);
   font-weight: 550;
   font-size: 14px;
   padding: 10px;
+  min-height: 44px;
 }
 .st-btn--ghost:hover { color: var(--st-ink-2); }
 
+/* Tonal, not solid: a solid-fill mic button next to the solid-fill "Write my
+   post" CTA reads as two competing primaries on the same screen. Idle state is
+   a light teal wash with a teal outline — present and inviting, but clearly
+   secondary in weight. It fills solid only once recording starts, which doubles
+   as the activation feedback and keeps the fill state (not the colour) as the
+   signal. Deliberately never touches --st-accent-2 — that's the CTA's colour now,
+   and reusing it here would make an active mic look like it had become the
+   primary action. */
 .st-btn--mic {
+  background: var(--st-accent-bg);
+  color: var(--st-accent);
+  border: 1.5px solid var(--st-accent);
+  box-shadow: none;
+}
+.st-btn--mic:hover { background: #D2E3E0; }
+.st-btn--mic.recording {
   background: var(--st-accent);
   color: #fff;
-  box-shadow: 0 6px 18px -8px rgba(15,118,110,.75);
+  border-color: var(--st-accent);
+  box-shadow: 0 6px 16px -6px rgba(15, 118, 110, .5);
 }
-.st-btn--mic:hover { background: #0E6B63; }
-.st-btn--mic.recording { background: var(--st-accent-2); }
 
 /* Post is the action; Edit is the escape. Equal widths read as an equal choice
    and split the user's attention at the moment they need a single obvious next
    step, so Edit shrinks to its content. */
+/* The post screen can't be made to fit — it contains a full generated post, so
+   trimming padding only ever moves the CTA from 142px below the fold to 88px.
+   Pinning the action row instead makes the primary button reachable at any post
+   length, on any viewport, without the user hunting for it. Sticky rather than
+   fixed so it sits naturally inline on tall screens and only pins when it would
+   otherwise fall off. */
+.st-actions--sticky {
+  position: sticky;
+  bottom: 0;
+  z-index: 35;
+  background: var(--st-paper);
+  padding: 10px 0 calc(10px + env(safe-area-inset-bottom, 0px));
+  margin-top: 2px;
+  box-shadow: 0 -10px 16px -12px rgba(9, 9, 11, .28);
+}
+.st-actions--sticky .st-micro { margin-top: 8px; }
+
 .st-actions { display: flex; gap: 10px; align-items: stretch; }
 .st-actions .st-btn { flex: 1 1 auto; }
 .st-actions .st-btn--quiet {
@@ -296,7 +363,12 @@
   /* Generous leading so the highlighter has room to sit behind the text without
      colliding with the line above. */
   line-height: 1.85;
-  font-weight: 650;
+  /* Was 650 — tied with the "Post on LinkedIn" button (also 650), so the two
+     competed on weight the same way the mic button used to compete on colour.
+     500 sits above the plain post text (400, unweighted) so it doesn't
+     disappear, but below the button and the quality badge (650/750) so neither
+     outranks the CTA. The highlighter now carries the emphasis alone. */
+  font-weight: 500;
   color: var(--st-ink);
 }
 
@@ -321,21 +393,6 @@
   -webkit-box-decoration-break: clone;
   box-decoration-break: clone;
 }
-/* The accent teal is unreadable on yellow — keep emphasis as weight, not colour. */
-.st-rarity mark b { color: var(--st-ink); font-weight: 800; }
-
-/* Provenance line — reads as a quiet fact about the post, not a sales badge. */
-.st-provenance {
-  display: flex;
-  gap: 8px;
-  align-items: flex-start;
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--st-ink-2);
-}
-.st-provenance b { color: var(--st-ink); font-weight: 650; }
-
 /* Quiet, never alarming — this is a quality hint, not a validation failure. */
 .st-nudge {
   font-size: 12.5px;
@@ -423,12 +480,12 @@
   background: var(--st-surface);
   overflow: hidden;
 }
-.st-preview-top { display: flex; gap: 10px; align-items: center; padding: 13px 14px; border-bottom: 1px solid var(--st-rule); }
+.st-preview-top { display: flex; gap: 10px; align-items: center; padding: 11px 14px; border-bottom: 1px solid var(--st-rule); }
 .st-preview-photo { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
 .st-preview-body {
-  padding: 15px 14px;
+  padding: 13px 14px;
   font-size: 14.5px;
-  line-height: 1.65;
+  line-height: 1.6;
   color: var(--st-ink);
   white-space: pre-wrap;
   word-wrap: break-word;

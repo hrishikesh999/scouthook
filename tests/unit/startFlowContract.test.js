@@ -40,6 +40,27 @@ describe('/start generate request', () => {
     expect(generateRequestBody()).toMatch(/\braw_idea:/);
   });
 
+  // The flow presents the result as the author's own words. That claim is only
+  // true on the editor path: postEngine composes at temperature 0.8 and returns
+  // retention null, so nothing downstream can even tell whether the post is the
+  // author's. Leaving the engine to the maturity router sent every answer under
+  // 40 words — which two short spoken answers routinely are — to the writer.
+  test('always asks for the editor, never the writer', () => {
+    expect(generateRequestBody()).toMatch(/generation_mode:\s*'organize'/);
+  });
+
+  test('flags brief mode so the editor may bridge the two answers', () => {
+    expect(generateRequestBody()).toMatch(/brief_mode:\s*!!state\.followUp/);
+    // The server has to honour it, or the flag is decoration.
+    const route = fs.readFileSync(path.join(__dirname, '../../routes/generate.js'), 'utf8');
+    expect(route).toMatch(/brief_mode === true/);
+    expect(route).toMatch(/fromInterview: isInterviewPath \|\| briefMode/);
+  });
+
+  test('asks for the retention floor, since it presents the post as their words', () => {
+    expect(generateRequestBody()).toMatch(/enforce_retention:\s*true/);
+  });
+
   test("post_type 'auto' is a value the server actually resolves", () => {
     expect(generateRequestBody()).toMatch(/\bpost_type:\s*'auto'/);
     // routes/generate.js maps 'auto' to a real shape via pickPostShape. If that

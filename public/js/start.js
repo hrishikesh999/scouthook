@@ -345,14 +345,30 @@ async function generate() {
         // Retry once against the fidelity floor if the first pass composes rather
         // than organises. Only surfaces that claim "your words" turn this on.
         enforce_retention: true,
-        // generation_mode is deliberately NOT set. The server's input router
-        // classifies the answer and picks the path: 40+ words of the author's own
-        // material goes to organizePost (editor — keeps their words), anything
-        // shorter is a 'seed' and goes to guided generation, which is built for
-        // the blank page. Forcing 'organize' on a one-liner makes the editor
-        // invent the other 80% of the post and ship it — retention failures only
-        // console.warn, they don't block — which is precisely the AI slop this
-        // whole flow exists to avoid.
+        // ALWAYS the editor, never the writer.
+        //
+        // This used to be left unset so the server's maturity router could pick,
+        // and the router sends anything under 40 words to guided generation
+        // (postEngine, temperature 0.8, "full authority over the hook, structure
+        // and phrasing"). Two short spoken answers are routinely under 40 words,
+        // so the flow that promises "your words" was handing most first posts to
+        // the writer. Measured on 32 words of real input: the writer returned
+        // ~130 words of fluent LinkedIn-guru prose in nobody's voice, and its
+        // retention came back NULL — the writer path does not measure fidelity at
+        // all, so retention_ok defaulted true and the safety net below could never
+        // fire. The editor, on the identical input, returned the author's own
+        // sentences at retention 0.77.
+        //
+        // The tradeoff is deliberate and is the point: thin material now yields a
+        // SHORT post instead of a long invented one. When it is too thin to be a
+        // post the quality gate says so and we ask for more, which is the only
+        // thing that actually fixes thin material.
+        generation_mode: 'organize',
+        // Two answers to two questions we asked, concatenated — beats that were
+        // written separately and were never meant to sit next to each other. This
+        // grants the editor the one extra licence that needs: writing the bridges
+        // between them. Without it the post reads as stacked fragments.
+        brief_mode: !!state.followUp,
       }),
     });
 
@@ -589,11 +605,16 @@ function updateNudge() {
   el.hidden = false;
 }
 
-// Below the router's raw threshold the editor would have to invent most of the
-// post, so ask instead of generating. Measured: 11 words → retention 0.26 with 29
-// invented words, and the quality gate passes it at 100. Asking one more question
-// is the only thing that actually fixes it — a retry has no more material to work
-// with than the first attempt did.
+// Below RAW_MIN_WORDS there isn't enough material to build a post out of, so ask
+// instead of generating. Measured: 12 words in, and the editor faithfully returns
+// the same idea three times because that is all it was given, while the quality
+// gate passes it at 100 (the gate is an integrity check, not a grade).
+//
+// The threshold no longer picks an ENGINE — /start always uses the editor — but
+// it is still the right place to ask, and it is still the same number, because
+// "enough material to organise" is the question in both cases. Asking one more
+// question is the only thing that fixes thin material; a retry has no more to
+// work with than the first attempt did.
 function needsMoreMaterial(text) {
   if (!window.InputMaturity) return false;
   return window.InputMaturity.countWords(text) < window.InputMaturity.RAW_MIN_WORDS;

@@ -231,6 +231,18 @@ router.post('/', async (req, res) => {
   const forceWriteMode = generation_mode === 'write';
   let { raw_idea } = req.body;
 
+  // brief_mode: this raw_idea is answers to questions WE asked, concatenated —
+  // not one continuous piece of writing. It turns on the same amendment the coach
+  // path gets (the editor must write the JOINS between beats that were answered
+  // separately and were never meant to be adjacent).
+  //
+  // A flag rather than the `interview_answers` payload on purpose. That branch
+  // folds our question text INTO raw_idea, and retention is scored against
+  // raw_idea — so our own questions would count as the author's words, inflating
+  // the score and licensing the editor to echo them back. The flag keeps raw_idea
+  // to what the author actually said and changes only the editor's brief.
+  const briefMode = req.body.brief_mode === true;
+
   // post_type: 'auto' — for callers that have the author's words but no idea what
   // KIND of post they are (the /start first-post flow). Resolved once, here, so
   // every downstream use (shaping, the gate, the stored row) sees a real type and
@@ -383,11 +395,18 @@ router.post('/', async (req, res) => {
   // Skipped for vault and idea-card flows: their raw_idea is seeded from source
   // documents or an AI-drafted angle, so its length says nothing about how much
   // of it the author actually wrote.
+  //
+  // Classified for the record on every free-text generation, but only allowed to
+  // ROUTE when the caller left the choice open. A caller that asked for organize
+  // outright still gets its maturity stamped on the post row — without this, every
+  // /start post landed with input_maturity null and the one number that tells us
+  // whether the question is pulling enough material out of people was missing from
+  // exactly the flow built to find out.
   let inputMaturity = null;
-  if (!organizeMode && !forceWriteMode && !vault_idea_id && !ideaCardId) {
+  if (!vault_idea_id && !ideaCardId) {
     const { classifyInputMaturity } = require('../services/inputMaturity');
     inputMaturity = classifyInputMaturity(extractAuthorRealText(raw_idea));
-    if (inputMaturity.tier !== 'seed') organizeMode = true;
+    if (!organizeMode && !forceWriteMode && inputMaturity.tier !== 'seed') organizeMode = true;
   }
 
   // Resolve vault idea + source chunk (+ neighboring chunks) when growing from a seed
@@ -527,7 +546,7 @@ router.post('/', async (req, res) => {
           // fromInterview: a coached brief is the author's answers concatenated, so
           // the editor needs licence to write the joins between them (the seams are
           // our artifact, not the author's). See BRIEF_MODE_AMENDMENT.
-          const org = await organizePost(raw_idea, profile, { postType: post_type, lengthPreference: length_preference, fromInterview: isInterviewPath, enforceRetention: !!req.body.enforce_retention });
+          const org = await organizePost(raw_idea, profile, { postType: post_type, lengthPreference: length_preference, fromInterview: isInterviewPath || briefMode, enforceRetention: !!req.body.enforce_retention });
           result = { post: org.post, synthesis: org.synthesis };
           retention = org.retention;
           hookWasWritten = !!org.hookWasWritten;
@@ -619,7 +638,7 @@ router.post('/', async (req, res) => {
     // ── Organize mode (non-streaming) — editor, not writer ───────────────────
     if (organizeMode) {
       const { organizePost } = require('../services/organizePost');
-      const org = await organizePost(raw_idea, profile, { postType: post_type, lengthPreference: length_preference, fromInterview: isInterviewPath, enforceRetention: !!req.body.enforce_retention });
+      const org = await organizePost(raw_idea, profile, { postType: post_type, lengthPreference: length_preference, fromInterview: isInterviewPath || briefMode, enforceRetention: !!req.body.enforce_retention });
       const primaryGate = runQualityGate(
         org.post,
         { ...gateOptions({ format_slug: IDEA_SLUG, content: org.post }, profile, 'idea', null, post_type),

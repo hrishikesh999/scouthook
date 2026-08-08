@@ -327,6 +327,12 @@ async function generate() {
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        // Required by /api/generate — it 400s with missing_path before it reads
+        // anything else. 'idea' is the free-text entry point every other client
+        // uses (public/js/generate.js), and it is what gets stored on the
+        // generation_runs row. NOT the same "path" as the organize/write routing
+        // decision described below, which the server makes for itself.
+        path: 'idea',
         raw_idea: combinedAnswer(),
         // Let the server read the answer and pick the shape. Hardcoding 'reach'
         // gave the editor the vaguest instruction available ("whatever fits"),

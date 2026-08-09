@@ -667,7 +667,13 @@ function initEvents() {
   document.getElementById('st-answer')?.addEventListener('input', updateNudge);
 
   document.getElementById('st-edit')?.addEventListener('click', () => {
-    window.location.href = state.postId ? `/editor.html?postId=${state.postId}` : '/drafts.html';
+    // /editor/<id>, NOT /editor.html?postId=<id>. The editor takes its id from the
+    // URL PATH (editor.html: pathname.split('/').pop()), served by the
+    // app.get('/editor/:postId') route. Given the query-param form, pathname is
+    // "/editor.html", so the id resolved to the literal string "editor.html" and
+    // the editor fetched /api/generate/post/editor.html — hence "Failed to load
+    // post" on a post that had generated and saved perfectly well.
+    window.location.href = state.postId ? `/editor/${encodeURIComponent(state.postId)}` : '/drafts.html';
   });
 
   document.getElementById('st-publish')?.addEventListener('click', publish);

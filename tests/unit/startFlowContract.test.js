@@ -72,6 +72,38 @@ describe('/start generate request', () => {
 });
 
 /**
+ * Every URL /start sends the user to. Same failure mode as the missing `path`
+ * above: browser code with no harness, linking at another page's contract.
+ */
+describe('/start navigation targets', () => {
+  test('Edit uses the path-based editor route, not a query param', () => {
+    // editor.html reads its id from pathname.split('/').pop(), so
+    // /editor.html?postId=N resolves the id to the literal "editor.html".
+    // Asserted against the navigation STATEMENT, not the file — the comment
+    // above it names the broken form on purpose.
+    const nav = SRC.split('\n').find(l => l.includes('window.location.href') && l.includes('state.postId'));
+    expect(nav).toBeDefined();
+    expect(nav).toMatch(/\/editor\/\$\{encodeURIComponent\(state\.postId\)\}/);
+    expect(nav).not.toMatch(/editor\.html/);
+  });
+
+  test('the editor refuses an id that is not a post id', () => {
+    const editor = fs.readFileSync(path.join(__dirname, '../../public/editor.html'), 'utf8');
+    expect(editor).toMatch(/postIdIsValid\s*=\s*\/\^\\d\+\$\/\.test/);
+    expect(editor).toMatch(/if \(!postIdIsValid\)/);
+  });
+
+  test('every other destination is a route the server actually serves', () => {
+    const server = fs.readFileSync(path.join(__dirname, '../../server.js'), 'utf8');
+    const targets = [...SRC.matchAll(/window\.location\.href = '([^']+)'/g)].map(m => m[1]);
+    expect(targets.length).toBeGreaterThan(0);
+    for (const t of targets) {
+      expect(server.includes(`'${t}'`)).toBe(true);
+    }
+  });
+});
+
+/**
  * The publish-permission dialog has one action — grant the write scope — and no
  * link out of the flow. It used to carry "Copy it instead", which doubled as its
  * dismissal; removing that alternative left the dialog with no exit at all until

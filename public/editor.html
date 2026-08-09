@@ -449,7 +449,14 @@
 /* ════════════════════════════════════════════════════════════════════════
    STATE
 ════════════════════════════════════════════════════════════════════════ */
+// Path-based: /editor/<id>. A caller that links here with a query param instead
+// (/editor.html?postId=<id>) lands on express.static, pathname is "/editor.html",
+// and this pops that filename as the id — which then fetches
+// /api/generate/post/editor.html and dead-ends on "Failed to load post" with the
+// real post sitting safely in Drafts. Validated below rather than trusted, so a
+// malformed link redirects somewhere useful instead of showing a load failure.
 const postId = window.location.pathname.split('/').filter(Boolean).pop();
+const postIdIsValid = /^\d+$/.test(String(postId || ''));
 
 let currentPostId        = null;
 let userPlan             = null;
@@ -4294,6 +4301,9 @@ function init() {
     .catch(() => { userPlan = 'expired'; });
 
   checkLinkedInStatus();
+  // No usable id in the URL — Drafts holds every saved post, so send them there
+  // rather than rendering an editor bound to nothing.
+  if (!postIdIsValid) { window.location.replace('/drafts.html'); return; }
   loadPost(postId);
 }
 

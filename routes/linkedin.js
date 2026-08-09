@@ -348,6 +348,18 @@ router.get('/connect', async (req, res) => {
     // user through consent again and grant nothing new.
     : from === 'start_publish'
     ? '/start.html?linkedin=connected&publish=1'
+    // Granting the write scope from inside the editor. Returns to the POST, not to
+    // a settings page: the user was mid-publish with a finished draft on screen,
+    // and 'editor' previously had no mapping at all so it fell through to
+    // /linkedin.html and stranded them.
+    //
+    // The path is built here from a digits-only id rather than echoing a
+    // caller-supplied URL, so there is no redirect for an attacker to point
+    // outward. An id we can't trust degrades to Drafts, which holds every post.
+    : from === 'editor' || from === 'editor_publish'
+    ? (/^\d+$/.test(String(req.query.post_id || ''))
+        ? `/editor/${req.query.post_id}?linkedin=connected`
+        : '/drafts.html?linkedin=connected')
     : from === 'onboarding'
     ? '/onboarding.html?linkedin=connected'
     : from === 'generate'
@@ -612,13 +624,23 @@ router.get('/connections', async (req, res) => {
   if (!tenantId) return res.status(400).json({ ok: false, error: 'missing_tenant' });
 
   try {
-    const connections = await db.prepare(`
+    const rows = await db.prepare(`
       SELECT id, account_type, account_key, display_name, avatar_url,
-             linkedin_member_id, organization_id, expires_at, is_default, authorized_by
+             linkedin_member_id, organization_id, expires_at, is_default, authorized_by, scopes
       FROM linkedin_connections
       WHERE workspace_id = ?
       ORDER BY account_type ASC, created_at ASC
     `).all(tenantId);
+
+    // can_publish per connection, not just for the workspace. A workspace can hold
+    // a read-only personal account (signed in through /start) alongside a
+    // publish-capable page, and an account picker that cannot tell them apart lets
+    // the user choose the one that will fail. The computed boolean is what callers
+    // need; the raw scope string stays server-side.
+    const connections = rows.map(({ scopes, ...conn }) => ({
+      ...conn,
+      can_publish: connectionCanPublish({ scopes }),
+    }));
 
     return res.json({ ok: true, connections });
   } catch (err) {
@@ -877,6 +899,35 @@ router.post('/schedule', async (req, res) => {
   const schedulePlan = await getUserPlan(userId);
   if (!planHasFeature(schedulePlan, 'scheduling')) {
     return res.status(403).json({ ok: false, error: 'feature_not_available', feature: 'scheduling', requiredPlan: 'pro' });
+  }
+
+  // Scope gate, at SCHEDULE time rather than only at publish time.
+  //
+  // Publishing has always checked this; scheduling only checked that a connection
+  // EXISTS. Since /start signs users in with `openid profile` alone, a brand-new
+  // account could schedule a post, get a confirmation, and have the background job
+  // hit the scope gate hours later — retry three times, mark itself failed, and
+  // never tell anyone. A post that silently never publishes is worse than one that
+  // refuses to schedule, so this fails now, in front of the user, with the same
+  // error the publish path returns and the client already knows how to recover from.
+  //
+  // Sits up here with the request validations, ahead of the scheduler-availability
+  // checks below, because "you have not granted posting permission" is a fact about
+  // the request that the user can act on, while "the queue is down" is weather.
+  // Reporting the actionable one first is the more useful ordering.
+  //
+  // Resolved the way publishScheduledPost will resolve it — the selected connection
+  // if one was chosen, otherwise the workspace's default personal account — so the
+  // check and the eventual publish cannot disagree. No connection at all falls
+  // through to the not_connected check further down.
+  const schedulingConn = connectionId
+    ? await db.prepare('SELECT scopes FROM linkedin_connections WHERE id = ? AND workspace_id = ?')
+        .get(Number(connectionId), tenantId)
+    : await db.prepare(
+        "SELECT scopes FROM linkedin_connections WHERE workspace_id = ? AND account_type = 'personal' AND is_default = true"
+      ).get(tenantId);
+  if (schedulingConn && !connectionCanPublish(schedulingConn)) {
+    return res.status(403).json({ ok: false, error: 'publish_scope_required' });
   }
 
   if (!content?.trim()) return res.status(400).json({ ok: false, error: 'missing_content' });

@@ -4011,16 +4011,19 @@ body.has-trial-banner #main-content {
 }
 
 /* ── LinkedIn token expiry banner ───────────────────────────── */
+/* Normal text flow, NOT flex. The content is one sentence that ends in a link,
+   and flex made it two items competing for width: the link would not shrink
+   (white-space: nowrap) so it overflowed the viewport, while the sentence — an
+   anonymous flex item — was squeezed to its minimum content width and rendered
+   one word per line. Block flow wraps a sentence correctly at every width, which
+   is the whole job here. See .vault-nudge-banner, which had the same defect. */
 .linkedin-expiry-banner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-4);
   padding: var(--space-3) var(--space-6);
   background: #fff8e1;
   border: 1px solid #f59e0b;
   border-radius: var(--radius-md);
   font-size: 14px;
+  line-height: 1.5;
   color: #92400e;
 }
 
@@ -4032,7 +4035,6 @@ body.has-trial-banner #main-content {
   color: #92400e;
   font-weight: 600;
   text-decoration: underline;
-  white-space: nowrap;
 }
 
 /* ── Today's Ideas (Idea Engine) ────────────────────────────── */
@@ -4613,17 +4615,17 @@ body.has-trial-banner #main-content {
 }
 
 /* ── Vault nudge — no source material uploaded yet ────────────── */
+/* Block flow, not flex — see the note on .linkedin-expiry-banner above. On a
+   390px viewport this rendered as a one-word-per-line column with the link
+   running off the right edge of the screen. */
 .vault-nudge-banner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-4);
   margin-top: var(--space-4);
   padding: var(--space-3) var(--space-6);
   background: #fff8e1;
   border: 1px solid #f59e0b;
   border-radius: var(--radius-md);
   font-size: 14px;
+  line-height: 1.5;
   color: #92400e;
 }
 
@@ -4635,7 +4637,6 @@ body.has-trial-banner #main-content {
   color: #92400e;
   font-weight: 600;
   text-decoration: underline;
-  white-space: nowrap;
 }
 
 /* ── Vault Hero Section ─────────────────────────────────────── */

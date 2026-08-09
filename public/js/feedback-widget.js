@@ -1,6 +1,12 @@
-/* feedback-widget.js — Floating feedback button + modal for ScoutHook
+/* feedback-widget.js — Feedback modal for ScoutHook
  * Exposes window.FeedbackWidget = { open, close }
  * Loaded on all protected pages via account-bar.js
+ *
+ * The modal used to carry its own launcher: a fixed tab pinned to the right edge
+ * at 50% height, rotated 90deg. It sat on top of page content at every viewport
+ * and overlapped the dashboard's banners on mobile. Removed — the entry point is
+ * now "Send feedback" in the account menu (see account-bar.js), which is why this
+ * file still exposes open() rather than being self-contained.
  */
 (function () {
   'use strict';
@@ -8,34 +14,6 @@
   // ── Inject styles ───────────────────────────────────────────────────────────
   const style = document.createElement('style');
   style.textContent = `
-  #fb-btn {
-    position: fixed;
-    right: 0;
-    top: 50%;
-    transform-origin: right top;
-    transform: rotate(90deg) translateX(50%);
-    z-index: 800;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    background: #6366F1;
-    border: none;
-    border-radius: 0 0 8px 8px;
-    padding: 10px 14px 10px 12px;
-    font-size: 13px;
-    font-weight: 600;
-    color: #fff;
-    cursor: pointer;
-    box-shadow: -4px 0 16px rgba(99,102,241,0.30);
-    transition: box-shadow 0.15s, background 0.15s;
-    font-family: inherit;
-    white-space: nowrap;
-  }
-  #fb-btn:hover {
-    background: #4F46E5;
-    box-shadow: -6px 0 20px rgba(99,102,241,0.45);
-  }
-
   #fb-overlay {
     position: fixed;
     inset: 0;
@@ -288,14 +266,6 @@
   document.head.appendChild(style);
 
   // ── Inject HTML ─────────────────────────────────────────────────────────────
-  const floatBtn = document.createElement('button');
-  floatBtn.id = 'fb-btn';
-  floatBtn.setAttribute('aria-label', 'Share feedback');
-  floatBtn.innerHTML = `
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-    Feedback
-  `;
-
   const overlay = document.createElement('div');
   overlay.id = 'fb-overlay';
   overlay.setAttribute('role', 'dialog');
@@ -347,7 +317,6 @@
     </div>
   `;
 
-  document.body.appendChild(floatBtn);
   document.body.appendChild(overlay);
 
   // ── State ───────────────────────────────────────────────────────────────────
@@ -392,7 +361,6 @@
     clearAttachment();
   }
 
-  floatBtn.addEventListener('click', open);
   overlay.querySelector('#fb-close').addEventListener('click', close);
   overlay.querySelector('#fb-cancel').addEventListener('click', close);
 

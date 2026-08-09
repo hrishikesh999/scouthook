@@ -173,6 +173,9 @@
     const svgCard       = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>';
     const svgBuilding   = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>';
     const svgLogOut     = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>';
+    // Same speech-bubble mark the removed floating tab used, so the entry point
+    // moved rather than disappearing.
+    const svgFeedback   = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
 
     slot.innerHTML = `
       <div class="sidebar-account-menu" id="sidebar-account-menu">
@@ -186,6 +189,7 @@
           <a href="/account.html" class="sidebar-account-flyout-item" role="menuitem">${svgProfile}Profile</a>
           <a href="/billing.html" class="sidebar-account-flyout-item" role="menuitem">${svgCard}Subscription</a>
           <a href="/workspaces.html" class="sidebar-account-flyout-item" role="menuitem">${svgBuilding}Workspaces</a>
+          <button type="button" class="sidebar-account-flyout-item" id="sidebar-account-feedback" role="menuitem">${svgFeedback}Send feedback</button>
           <hr class="sidebar-account-flyout-divider">
           <button type="button" class="sidebar-account-flyout-item sidebar-account-flyout-logout" role="menuitem">${svgLogOut}Log out</button>
         </div>
@@ -226,6 +230,16 @@
     }
 
     slot.querySelector('.sidebar-account-flyout-logout').addEventListener('click', logOut);
+
+    // Feedback used to have its own fixed tab on the right edge of every page.
+    // The modal it opened is unchanged and still loaded below; only the launcher
+    // moved here. Closes the menu first so the modal isn't layered under an open
+    // flyout, and no-ops if the widget script hasn't finished loading yet.
+    slot.querySelector('#sidebar-account-feedback')?.addEventListener('click', e => {
+      e.stopPropagation();
+      closeMenu();
+      window.FeedbackWidget?.open();
+    });
   }
 
   // ── Trial banner (site-wide) ─────────────────────────────────

@@ -32,9 +32,11 @@ function detectFormat(mimeType, width, height) {
 }
 
 // ---------------------------------------------------------------------------
-// PDF thumbnail helper — rasterizes page 1 to a 400px-max JPEG, non-fatal
+// PDF preview helper — rasterizes page 1 to a 400px-max JPEG and reports the
+// total page count, so the editor can show "Document · N pages" the same
+// way it already does for native carousel_pack posts. Non-fatal.
 // ---------------------------------------------------------------------------
-async function generatePdfThumbnail(buffer) {
+async function generatePdfPreview(buffer) {
   try {
     const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs');
     const pdf = await pdfjsLib.getDocument({
@@ -44,6 +46,7 @@ async function generatePdfThumbnail(buffer) {
       isEvalSupported: false,
     }).promise;
 
+    const pageCount = pdf.numPages;
     const page = await pdf.getPage(1);
     const baseViewport = page.getViewport({ scale: 1 });
     const scale = 400 / Math.max(baseViewport.width, baseViewport.height);
@@ -53,24 +56,28 @@ async function generatePdfThumbnail(buffer) {
     const ctx = canvas.getContext('2d');
     await page.render({ canvasContext: ctx, viewport }).promise;
 
-    return await sharp(canvas.toBuffer('image/png'))
+    const thumbnailBuffer = await sharp(canvas.toBuffer('image/png'))
       .flatten({ background: { r: 255, g: 255, b: 255 } })
       .jpeg({ quality: 80, progressive: true })
       .toBuffer();
+
+    return { thumbnailBuffer, pageCount };
   } catch { return null; }
 }
 
 // ---------------------------------------------------------------------------
-// Thumbnail helper — 400px max, JPEG, non-fatal
+// Thumbnail helper — 400px max, JPEG, non-fatal. Returns { thumbnailBuffer,
+// pageCount } so callers get page count for free on PDFs (null otherwise).
 // ---------------------------------------------------------------------------
 async function generateThumbnail(buffer, mimeType) {
-  if (mimeType === 'application/pdf') return generatePdfThumbnail(buffer);
+  if (mimeType === 'application/pdf') return generatePdfPreview(buffer);
   if (!mimeType.startsWith('image/') || mimeType === 'image/gif') return null;
   try {
-    return await sharp(buffer)
+    const thumbnailBuffer = await sharp(buffer)
       .resize(400, 400, { fit: 'inside', withoutEnlargement: true })
       .jpeg({ quality: 80, progressive: true })
       .toBuffer();
+    return { thumbnailBuffer, pageCount: null };
   } catch { return null; }
 }
 
@@ -83,7 +90,7 @@ router.get('/', (req, res) => {
 
   (async () => {
     const files = await db.prepare(`
-      SELECT id, filename, mime_type, file_size, width, height, format_tag, url, thumbnail_url, created_at
+      SELECT id, filename, mime_type, file_size, width, height, format_tag, url, thumbnail_url, page_count, created_at
       FROM   media_files
       WHERE  user_id = ? AND tenant_id = ?
       ORDER  BY created_at DESC
@@ -139,21 +146,22 @@ router.post('/upload', express.raw({ type: '*/*', limit: '25mb' }), async (req, 
 
   await storage.upload(buffer, { tenantId, userId, type: 'uploads', filename: storedName, mimeType });
 
-  // Generate and store thumbnail for image files
-  let thumbnailUrl = null;
-  const thumbBuffer = await generateThumbnail(buffer, mimeType);
-  if (thumbBuffer) {
+  // Generate and store thumbnail (+ page count for PDFs)
+  let thumbnailUrl = null, pageCount = null;
+  const preview = await generateThumbnail(buffer, mimeType);
+  if (preview) {
+    pageCount = preview.pageCount;
     const thumbName = `thumb_${Date.now()}_${crypto.randomBytes(4).toString('hex')}.jpg`;
     thumbnailUrl = `/uploads/${thumbName}`;
-    await storage.upload(thumbBuffer, { tenantId, userId, type: 'uploads', filename: thumbName, mimeType: 'image/jpeg' });
+    await storage.upload(preview.thumbnailBuffer, { tenantId, userId, type: 'uploads', filename: thumbName, mimeType: 'image/jpeg' });
   }
 
   const row = await db.prepare(`
     INSERT INTO media_files
-      (user_id, tenant_id, filename, stored_name, mime_type, file_size, width, height, format_tag, url, thumbnail_url)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (user_id, tenant_id, filename, stored_name, mime_type, file_size, width, height, format_tag, url, thumbnail_url, page_count)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     RETURNING id
-  `).run(userId, tenantId, filename, storedName, mimeType, buffer.length, width, height, formatTag, url, thumbnailUrl);
+  `).run(userId, tenantId, filename, storedName, mimeType, buffer.length, width, height, formatTag, url, thumbnailUrl, pageCount);
 
   return res.json({
     ok: true,
@@ -167,6 +175,7 @@ router.post('/upload', express.raw({ type: '*/*', limit: '25mb' }), async (req, 
       format_tag:   formatTag,
       url,
       thumbnail_url: thumbnailUrl,
+      page_count:   pageCount,
       created_at:   new Date().toISOString(),
     },
   });
@@ -220,21 +229,22 @@ router.post('/save-generated', async (req, res) => {
   const dstKey = storage.buildMemberKey(tenantId, userId, 'uploads', storedName);
   await storage.uploadToKey(buffer, dstKey, mimeType);
 
-  // Generate and store thumbnail
-  let thumbnailUrl = null;
-  const thumbBuffer = await generateThumbnail(buffer, mimeType);
-  if (thumbBuffer) {
+  // Generate and store thumbnail (+ page count for PDFs)
+  let thumbnailUrl = null, pageCount = null;
+  const preview = await generateThumbnail(buffer, mimeType);
+  if (preview) {
+    pageCount = preview.pageCount;
     const thumbName = `thumb_${Date.now()}_${crypto.randomBytes(4).toString('hex')}.jpg`;
     thumbnailUrl = `/uploads/${thumbName}`;
-    await storage.upload(thumbBuffer, { tenantId, userId, type: 'uploads', filename: thumbName, mimeType: 'image/jpeg' });
+    await storage.upload(preview.thumbnailBuffer, { tenantId, userId, type: 'uploads', filename: thumbName, mimeType: 'image/jpeg' });
   }
 
   const row = await db.prepare(`
     INSERT INTO media_files
-      (user_id, tenant_id, filename, stored_name, mime_type, file_size, width, height, format_tag, url, thumbnail_url)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (user_id, tenant_id, filename, stored_name, mime_type, file_size, width, height, format_tag, url, thumbnail_url, page_count)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     RETURNING id
-  `).run(userId, tenantId, filename, storedName, mimeType, buffer.length, width, height, formatTag, url, thumbnailUrl);
+  `).run(userId, tenantId, filename, storedName, mimeType, buffer.length, width, height, formatTag, url, thumbnailUrl, pageCount);
 
   return res.json({
     ok: true,
@@ -248,6 +258,7 @@ router.post('/save-generated', async (req, res) => {
       format_tag:    formatTag,
       url,
       thumbnail_url: thumbnailUrl,
+      page_count:    pageCount,
       created_at:    new Date().toISOString(),
     },
   });

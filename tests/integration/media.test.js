@@ -59,7 +59,7 @@ describe('Media — POST /upload (validation)', () => {
 });
 
 describe('Media — POST /upload (PDF thumbnail)', () => {
-  test('generates a thumbnail_url for an uploaded PDF', async () => {
+  test('generates a thumbnail_url and page_count for a single-page PDF', async () => {
     const { PDFDocument } = require('pdf-lib');
     const doc  = await PDFDocument.create();
     doc.addPage([600, 800]);
@@ -77,5 +77,29 @@ describe('Media — POST /upload (PDF thumbnail)', () => {
     expect(res.body.ok).toBe(true);
     expect(res.body.file.mime_type).toBe('application/pdf');
     expect(res.body.file.thumbnail_url).toEqual(expect.stringMatching(/\.jpg$/));
+    expect(res.body.file.page_count).toBe(1);
+  });
+
+  test('reports the correct page_count for a multi-page PDF carousel', async () => {
+    const { PDFDocument } = require('pdf-lib');
+    const doc = await PDFDocument.create();
+    for (let i = 0; i < 5; i++) doc.addPage([600, 800]);
+    const pdfBuffer = Buffer.from(await doc.save());
+
+    const user = await createUser();
+    const ag   = await loginAs(user);
+    const res  = await ag
+      .post('/api/media/upload')
+      .set('Content-Type', 'application/pdf')
+      .set('X-Filename', encodeURIComponent('deck.pdf'))
+      .send(pdfBuffer);
+
+    expect(res.status).toBe(200);
+    expect(res.body.file.page_count).toBe(5);
+
+    const listRes = await ag.get('/api/media');
+    expect(listRes.status).toBe(200);
+    const uploaded = listRes.body.files.find(f => f.id === res.body.file.id);
+    expect(uploaded.page_count).toBe(5);
   });
 });

@@ -639,15 +639,16 @@ function renderPreviewAsset() {
       }
       return;
     }
+    const isDoc = attachedAssetType === 'carousel' || attachedAssetType === 'carousel_pack' || attachedAssetType === 'media_pdf';
     el.innerHTML = '';
     const img = document.createElement('img');
     img.src = attachedPreviewUrl;
-    img.alt = (attachedAssetType === 'carousel' || attachedAssetType === 'carousel_pack') ? 'Carousel preview' : 'Visual asset';
+    img.alt = isDoc ? 'Document preview' : 'Visual asset';
     el.appendChild(img);
-    if ((attachedAssetType === 'carousel' || attachedAssetType === 'carousel_pack') && attachedSlideCount > 1) {
+    if (isDoc && attachedSlideCount > 1) {
       const badge = document.createElement('div');
       badge.className = 'preview-asset-badge';
-      badge.textContent = `Document · ${attachedSlideCount} slides`;
+      badge.textContent = `Document · ${attachedSlideCount} ${attachedAssetType === 'media_pdf' ? 'pages' : 'slides'}`;
       el.appendChild(badge);
     }
     el.classList.remove('hidden');
@@ -3565,9 +3566,10 @@ function buildDrawerCard(file) {
   card.setAttribute('aria-label', `Attach ${file.filename}`);
   card.innerHTML = `
     <div class="media-thumb">
-      ${isPdf
+      ${isPdf && !file.thumbnail_url
         ? `<div class="media-pdf-thumb" aria-hidden="true"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><span>PDF</span></div>`
         : `<img src="${escHtml(thumbSrc)}" alt="${escHtml(file.filename)}" loading="lazy">`}
+      ${isPdf && file.page_count > 1 ? `<div class="media-pdf-page-badge" aria-hidden="true">${file.page_count} pages</div>` : ''}
       <div class="media-card-actions" aria-hidden="true">
         <button class="media-action-btn delete-btn" title="Delete" tabindex="-1" aria-label="Delete ${escHtml(file.filename)}">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
@@ -3579,9 +3581,10 @@ function buildDrawerCard(file) {
       <span class="media-format-tag">${escHtml(file.format_tag || 'File')}</span>
     </div>`;
   const attach = async () => {
-    const url   = file.url;
-    const aType = isPdf ? 'media_pdf' : 'media_image';
-    const pUrl  = isPdf ? (file.thumbnail_url || null) : file.url;
+    const url        = file.url;
+    const aType       = isPdf ? 'media_pdf' : 'media_image';
+    const pUrl        = isPdf ? (file.thumbnail_url || null) : file.url;
+    const slideCount  = isPdf ? (file.page_count || 0) : 0;
     // Persist the attachment to the draft and confirm it stuck before marking the
     // post as having a graphic — the binding must live on the server, not only in
     // browser state, or a reload/schedule can silently drop it (text-only post).
@@ -3591,7 +3594,7 @@ function buildDrawerCard(file) {
         const res = await fetch(`/api/posts/${encodeURIComponent(String(currentPostId))}`, {
           method: 'PATCH', credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content: getPostContent(), asset_url: url, asset_preview_url: pUrl, asset_type: aType, asset_slide_count: 0 }),
+          body: JSON.stringify({ content: getPostContent(), asset_url: url, asset_preview_url: pUrl, asset_type: aType, asset_slide_count: slideCount }),
         });
         const d = await res.json().catch(() => ({}));
         ok = res.ok && d.ok; errCode = d.error || null;
@@ -3608,7 +3611,7 @@ function buildDrawerCard(file) {
     attachedAssetUrl   = url;
     attachedAssetType  = aType;
     attachedPreviewUrl = pUrl;
-    attachedSlideCount = 0;
+    attachedSlideCount = slideCount;
     const chipLabel = document.getElementById('asset-chip-label');
     const chip      = document.getElementById('asset-chip');
     if (chipLabel) chipLabel.textContent = isPdf ? 'PDF' : (file.format_tag || 'Image');
@@ -3698,7 +3701,7 @@ function _mmAttachFile(file) {
   attachedAssetUrl   = file.url;
   attachedAssetType  = isPdf ? 'media_pdf' : 'media_image';
   attachedPreviewUrl = isPdf ? (file.thumbnail_url || null) : file.url;
-  attachedSlideCount = 0;
+  attachedSlideCount = isPdf ? (file.page_count || 0) : 0;
   const chipLabel = document.getElementById('asset-chip-label');
   const chip      = document.getElementById('asset-chip');
   if (chipLabel) chipLabel.textContent = isPdf ? 'PDF' : (file.format_tag || 'Image');

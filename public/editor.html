@@ -630,7 +630,15 @@ function normalizeFullStopSpacing(text) {
 function renderPreviewAsset() {
   ['preview-asset', 'preview-asset-li'].forEach(id => {
     const el = document.getElementById(id);
-    if (!el || !attachedPreviewUrl) return;
+    if (!el) return;
+    if (!attachedPreviewUrl) {
+      if (attachedAssetType === 'media_pdf' && attachedAssetUrl) {
+        el.innerHTML = `<div class="preview-asset-pdf-fallback"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><span>PDF attached</span></div>`;
+        el.classList.remove('hidden');
+        el.setAttribute('aria-hidden', 'false');
+      }
+      return;
+    }
     el.innerHTML = '';
     const img = document.createElement('img');
     img.src = attachedPreviewUrl;
@@ -720,7 +728,8 @@ async function loadPost(id) {
 
     if (p.assetUrl) {
       attachedAssetUrl   = p.assetUrl;
-      attachedPreviewUrl = p.assetPreviewUrl || (p.assetType !== 'carousel' ? p.assetUrl : null);
+      attachedPreviewUrl = p.assetPreviewUrl
+        || (p.assetType !== 'carousel' && p.assetType !== 'carousel_pack' && p.assetType !== 'media_pdf' ? p.assetUrl : null);
       attachedAssetType  = p.assetType || 'media_image';
       attachedSlideCount = p.assetSlideCount || 0;
       const labelMap = { media_pdf: 'PDF', media_image: 'Image', html_template: 'Design Template', carousel_pack: 'Carousel' };
@@ -3572,7 +3581,7 @@ function buildDrawerCard(file) {
   const attach = async () => {
     const url   = file.url;
     const aType = isPdf ? 'media_pdf' : 'media_image';
-    const pUrl  = isPdf ? null : file.url;
+    const pUrl  = isPdf ? (file.thumbnail_url || null) : file.url;
     // Persist the attachment to the draft and confirm it stuck before marking the
     // post as having a graphic — the binding must live on the server, not only in
     // browser state, or a reload/schedule can silently drop it (text-only post).
@@ -3688,7 +3697,7 @@ function _mmAttachFile(file) {
   const isPdf = file.mime_type === 'application/pdf';
   attachedAssetUrl   = file.url;
   attachedAssetType  = isPdf ? 'media_pdf' : 'media_image';
-  attachedPreviewUrl = isPdf ? null : file.url;
+  attachedPreviewUrl = isPdf ? (file.thumbnail_url || null) : file.url;
   attachedSlideCount = 0;
   const chipLabel = document.getElementById('asset-chip-label');
   const chip      = document.getElementById('asset-chip');

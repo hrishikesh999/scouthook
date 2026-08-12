@@ -5,8 +5,14 @@ const router   = express.Router();
 const crypto   = require('crypto');
 const sharp    = require('sharp');
 const path     = require('path');
+const { pathToFileURL } = require('url');
+const { createCanvas } = require('@napi-rs/canvas');
 const { db }   = require('../db');
 const storage  = require('../services/storage');
+
+const PDF_STANDARD_FONT_DATA_URL = pathToFileURL(
+  path.join(require.resolve('pdfjs-dist/package.json'), '..', 'standard_fonts') + path.sep
+).href;
 
 const MAX_BYTES    = 20 * 1024 * 1024; // 20 MB
 const ALLOWED_MIME = new Set([
@@ -26,9 +32,39 @@ function detectFormat(mimeType, width, height) {
 }
 
 // ---------------------------------------------------------------------------
+// PDF thumbnail helper — rasterizes page 1 to a 400px-max JPEG, non-fatal
+// ---------------------------------------------------------------------------
+async function generatePdfThumbnail(buffer) {
+  try {
+    const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs');
+    const pdf = await pdfjsLib.getDocument({
+      data: new Uint8Array(buffer),
+      standardFontDataUrl: PDF_STANDARD_FONT_DATA_URL,
+      disableFontFace: true,
+      isEvalSupported: false,
+    }).promise;
+
+    const page = await pdf.getPage(1);
+    const baseViewport = page.getViewport({ scale: 1 });
+    const scale = 400 / Math.max(baseViewport.width, baseViewport.height);
+    const viewport = page.getViewport({ scale: Math.min(2, Math.max(0.1, scale)) });
+
+    const canvas = createCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height));
+    const ctx = canvas.getContext('2d');
+    await page.render({ canvasContext: ctx, viewport }).promise;
+
+    return await sharp(canvas.toBuffer('image/png'))
+      .flatten({ background: { r: 255, g: 255, b: 255 } })
+      .jpeg({ quality: 80, progressive: true })
+      .toBuffer();
+  } catch { return null; }
+}
+
+// ---------------------------------------------------------------------------
 // Thumbnail helper — 400px max, JPEG, non-fatal
 // ---------------------------------------------------------------------------
 async function generateThumbnail(buffer, mimeType) {
+  if (mimeType === 'application/pdf') return generatePdfThumbnail(buffer);
   if (!mimeType.startsWith('image/') || mimeType === 'image/gif') return null;
   try {
     return await sharp(buffer)

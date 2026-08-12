@@ -2206,6 +2206,19 @@ body.has-trial-banner #main-content {
   border-radius: 10px;
   pointer-events: none;
 }
+.preview-asset-pdf-fallback {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  height: 160px;
+  background: var(--bg-archetype-badge);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: var(--font-sans);
+}
 
 /* ── Preview mode — hide editing chrome ─────────────────────── */
 #right-panel.preview-mode #post-edit-area {

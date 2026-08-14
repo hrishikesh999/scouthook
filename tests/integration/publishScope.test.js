@@ -15,7 +15,6 @@
 
 require('dotenv').config();
 const { getDb, createUser, loginAs, truncateAll } = require('./helpers/setup');
-const { seedTrialSubscription } = require('../../services/subscription');
 const {
   LINKEDIN_GRANT_IDENTITY,
   LINKEDIN_GRANT_PUBLISH,
@@ -28,17 +27,20 @@ afterEach(truncateAll);
 jest.setTimeout(60000);
 
 /**
- * A logged-in user on a trial, whose workspace holds a connection with the given
- * grant.
+ * A logged-in Pro user whose workspace holds a connection with the given grant.
  *
- * The trial matters: publish checks the PLAN before the scope, and scheduling is
+ * The plan matters: publish checks the PLAN before the scope, and scheduling is
  * a Pro feature, so a user with no subscription row is refused with plan_expired
  * or feature_not_available long before either endpoint looks at scopes — and the
  * scope behaviour under test would never run.
  */
 async function userWithConnection(scopes) {
   const user = await createUser();
-  await seedTrialSubscription(user.userId);
+  await getDb().prepare(`
+    INSERT INTO user_subscriptions (user_id, plan, status)
+    VALUES (?, 'pro', 'active')
+    ON CONFLICT (user_id) DO UPDATE SET plan = 'pro', status = 'active'
+  `).run(user.userId);
   const ag = await loginAs(user);
   if (scopes) await connectLinkedIn(user.workspaceId, user.userId, { scopes });
   return { user, ag };

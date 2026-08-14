@@ -179,7 +179,8 @@
 
     function statusBadge(plan, status) {
       if (status === 'lifetime') return `<span class="badge badge--lifetime">Lifetime &#8734;</span>`;
-      if (!status || status === 'expired' || status === 'free' || (!plan && !status)) return `<span class="badge badge--free">Expired</span>`;
+      if (status === 'free') return `<span class="badge badge--free">Free</span>`;
+      if (!status || status === 'expired' || (!plan && !status)) return `<span class="badge badge--free">Expired</span>`;
       if (status === 'active' && plan === 'pro') return `<span class="badge badge--pro">Pro</span>`;
       if (status === 'trialing') return `<span class="badge badge--trialing">Trialing</span>`;
       if (status === 'canceled') return `<span class="badge badge--canceled">Canceled</span>`;
@@ -267,9 +268,6 @@
       document.getElementById('so-name').textContent  = profile.display_name || '—';
       document.getElementById('so-email').textContent = profile.email || '—';
 
-      const trialEnds = subscription?.trial_ends_at
-        ? new Date(subscription.trial_ends_at).toLocaleDateString()
-        : null;
       const periodEnd = subscription?.current_period_end
         ? new Date(subscription.current_period_end).toLocaleDateString()
         : null;
@@ -287,7 +285,6 @@
         <div class="slide-over__section">
           <div class="slide-over__section-title">Subscription</div>
           <div class="detail-row"><span class="detail-row__label">Plan</span><span>${statusBadge(subscription?.plan, subscription?.status)}</span></div>
-          ${trialEnds ? `<div class="detail-row"><span class="detail-row__label">Trial ends</span><span>${trialEnds}</span></div>` : ''}
           ${periodEnd ? `<div class="detail-row"><span class="detail-row__label">Renewal</span><span>${periodEnd}</span></div>` : ''}
         </div>
 
@@ -296,15 +293,24 @@
           <div class="slide-over__section-title">Usage This Month</div>
           ${(() => {
             if (!usage) return '<p class="empty-section-text">No usage data.</p>';
-            const postPct  = usage.internal_post_cap   > 0 ? Math.round((usage.posts_this_month   / usage.internal_post_cap)   * 100) : 0;
+            const hasPostCap = usage.internal_post_cap > 0;
+            const postPct  = hasPostCap ? Math.round((usage.posts_this_month   / usage.internal_post_cap)   * 100) : 0;
             const vissPct  = usage.internal_visual_cap > 0 ? Math.round((usage.visuals_this_month / usage.internal_visual_cap) * 100) : 0;
             const postWarn  = postPct >= 80;
             const vissWarn  = vissPct >= 80;
-            return `
+            const freePostsRow = usage.free_posts_limit != null ? `
               <div class="detail-row">
-                <span class="detail-row__label">Posts generated</span>
-                <span class="${postWarn ? 'text-error-sm' : ''}" title="Internal cap: ${usage.internal_post_cap}/mo">
-                  ${usage.posts_this_month} <span class="text-xs-muted">/ ${usage.internal_post_cap} cap</span>
+                <span class="detail-row__label">Free posts (lifetime)</span>
+                <span class="${usage.free_posts_used >= usage.free_posts_limit ? 'text-error-sm' : ''}">
+                  ${usage.free_posts_used} <span class="text-xs-muted">/ ${usage.free_posts_limit}</span>
+                </span>
+              </div>` : '';
+            return `
+              ${freePostsRow}
+              <div class="detail-row">
+                <span class="detail-row__label">Posts generated${hasPostCap ? ' this month' : ''}</span>
+                <span class="${postWarn ? 'text-error-sm' : ''}" title="${hasPostCap ? `Internal cap: ${usage.internal_post_cap}/mo` : ''}">
+                  ${usage.posts_this_month}${hasPostCap ? ` <span class="text-xs-muted">/ ${usage.internal_post_cap} cap</span>` : ''}
                   ${postWarn ? '<span class="badge badge--pastdue badge--xs">HIGH</span>' : ''}
                 </span>
               </div>
@@ -318,13 +324,13 @@
           })()}
         </div>
 
-        <!-- Trial extension -->
+        <!-- Bonus free posts -->
         <div class="slide-over__section">
-          <div class="slide-over__section-title">Extend Trial</div>
+          <div class="slide-over__section-title">Grant Free Posts</div>
           <div class="trial-extend-row">
-            <input type="number" id="trial-days" value="7" min="1" max="90" class="trial-days-input" />
-            <span class="trial-days-label">days</span>
-            <button class="btn btn--primary btn--sm" id="extend-btn" data-uid="${esc(profile.user_id)}">Extend trial</button>
+            <input type="number" id="bonus-posts" value="3" min="1" max="100" class="trial-days-input" />
+            <span class="trial-days-label">posts</span>
+            <button class="btn btn--primary btn--sm" id="extend-btn" data-uid="${esc(profile.user_id)}">Grant bonus posts</button>
           </div>
           <div id="extend-msg" class="extend-msg"></div>
         </div>
@@ -437,20 +443,20 @@
       `;
 
       document.getElementById('extend-btn')?.addEventListener('click', async () => {
-        const days = parseInt(document.getElementById('trial-days').value);
+        const count = parseInt(document.getElementById('bonus-posts').value);
         const uid  = document.getElementById('extend-btn').dataset.uid;
         const msg  = document.getElementById('extend-msg');
         msg.style.display = 'block';
         msg.style.color = '#6B7280';
-        msg.textContent = 'Extending…';
-        const r = await fetch(`/admin/users/${encodeURIComponent(uid)}/extend-trial`, {
+        msg.textContent = 'Granting…';
+        const r = await fetch(`/admin/users/${encodeURIComponent(uid)}/grant-free-posts`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-Admin-Password': adminPw },
-          body: JSON.stringify({ days }),
+          body: JSON.stringify({ count }),
         });
         const data = await r.json();
         msg.style.color = data.ok ? 'var(--color-success, #0FA87F)' : 'var(--color-error)';
-        msg.textContent = data.ok ? `Trial extended by ${days} day${days !== 1 ? 's' : ''}.` : (data.error || 'Failed.');
+        msg.textContent = data.ok ? `Granted ${count} bonus post${count !== 1 ? 's' : ''}.` : (data.error || 'Failed.');
       });
 
       document.getElementById('grant-lifetime-btn')?.addEventListener('click', async () => {

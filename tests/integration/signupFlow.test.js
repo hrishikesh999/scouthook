@@ -85,24 +85,26 @@ describe('Signup → first post → edit → publish', () => {
     expect(verify.headers.location).toBe('/start.html');
   });
 
-  test('verifying seeds the trial — without it, generate 429s before it validates anything', async () => {
+  test('verifying seeds the free tier — without it, canGeneratePost has no row to count against', async () => {
     const email = uniqueEmail();
     await signUpAndVerify(email);
 
     const { userId } = await accountFor(email);
     expect(userId).toBeTruthy();
     const db = getDb();
-    // seedTrialSubscription is fire-and-forget in the verify handler, so the row
+    // seedFreeSubscription is fire-and-forget in the verify handler, so the row
     // can land just after the redirect returns.
     const sub = await eventually(() =>
-      db.prepare('SELECT plan, status FROM user_subscriptions WHERE user_id = ?').get(userId));
+      db.prepare('SELECT plan, status, free_posts_limit FROM user_subscriptions WHERE user_id = ?').get(userId));
 
-    // There is no free plan. A signup with no subscription row is 'expired', and
-    // canGeneratePost denies at INTERNAL_POST_CAP_EXPIRED=0 — a 429 that arrives
-    // BEFORE every validation gate, which is what makes its absence so confusing.
+    // New signups get 3 lifetime free generations (services/subscription.js
+    // canGeneratePost), not a time-boxed trial. plan stays 'expired' — the DB
+    // check constraint only allows 'expired'|'solo'|'pro' as a plan value —
+    // while status='free' distinguishes never-subscribed users from lapsed ones.
     expect(sub).toBeTruthy();
-    expect(sub.plan).toBe('pro');
-    expect(sub.status).toBe('trialing');
+    expect(sub.plan).toBe('expired');
+    expect(sub.status).toBe('free');
+    expect(sub.free_posts_limit).toBe(3);
   });
 
   test('/start.html requires a session', async () => {

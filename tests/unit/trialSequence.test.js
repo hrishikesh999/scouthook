@@ -1,22 +1,21 @@
 'use strict';
 
-// Pure unit tests for the trial lifecycle sequence — no DB, no network.
+// Pure unit tests for the post-count-based lifecycle emails — no DB, no network.
 const fs = require('fs');
 const path = require('path');
-const { getNextEmailTemplate, buildCtaBlock } = require('../../services/trialEmails');
+const { getBehaviouralNudge, buildCtaBlock } = require('../../services/postLifecycleEmails');
 const { sign, verify } = require('../../services/emailTokens');
 
 const TEMPLATES_DIR = path.join(__dirname, '../../emails/templates');
 
-/** A trialing user who has done everything. Override per test. */
+/** A free-tier user who has done everything. Override per test. */
 function state(overrides = {}) {
   return {
     isPaid: false,
-    isTrialActive: true,
+    freeCapReached: false,
+    freePostsUsed: 1,
+    freePostsLimit: 3,
     optedOut: false,
-    daysLeft: 6,
-    trialDay: 1,
-    trialEndsAt: new Date('2026-08-10T00:00:00Z'),
     onboarded: true,
     linkedin: true,
     postsCount: 3,
@@ -28,80 +27,39 @@ function state(overrides = {}) {
 
 const none = new Set();
 
-describe('trial sequence — day calendar', () => {
-  test.each([
-    [1, 6, 'nurture-1'],
-    [2, 5, 'nurture-2'],
-    [3, 4, 'nurture-3'],
-    [5, 2, 'nurture-4'],
-  ])('day %i sends %s', (trialDay, daysLeft, expected) => {
-    expect(getNextEmailTemplate(state({ trialDay, daysLeft }), none)).toBe(expected);
+describe('behavioural nudge ladder', () => {
+  test('un-onboarded users get the onboarding nudge', () => {
+    const s = state({ onboarded: false });
+    expect(getBehaviouralNudge(s, none)).toBe('trial-nudge-onboard-1');
   });
 
-  test('day 4 sends the upgrade push to an activated user', () => {
-    const s = state({ trialDay: 4, daysLeft: 3, published: true });
-    expect(getNextEmailTemplate(s, none)).toBe('trial-convert-push');
+  test('onboarded users without LinkedIn get the LinkedIn nudge', () => {
+    const s = state({ linkedin: false, postsCount: 0 });
+    expect(getBehaviouralNudge(s, none)).toBe('trial-nudge-linkedin-1');
   });
 
-  test('day 4 sends the expiry warning to a user who never published', () => {
-    const s = state({ trialDay: 4, daysLeft: 3, published: false, postsCount: 0 });
-    expect(getNextEmailTemplate(s, none)).toBe('trial-expiry');
+  test('a nudge is never sent twice', () => {
+    const s = state({ linkedin: false, postsCount: 0 });
+    expect(getBehaviouralNudge(s, new Set(['trial-nudge-linkedin-1']))).toBeNull();
   });
 
-  test('day 4 stays conversion-only — no nudge backfill once it has sent', () => {
-    const s = state({ trialDay: 4, daysLeft: 3, published: false, postsCount: 0 });
-    expect(getNextEmailTemplate(s, new Set(['trial-expiry']))).toBeNull();
-  });
-
-  test('last day beats everything, including an unsent sequence email', () => {
-    const s = state({ trialDay: 6, daysLeft: 1, onboarded: false });
-    expect(getNextEmailTemplate(s, none)).toBe('trial-last-day');
-  });
-
-  test('a sequence email is never sent twice', () => {
-    const s = state({ trialDay: 2, daysLeft: 5 });
-    expect(getNextEmailTemplate(s, new Set(['nurture-2']))).toBeNull();
-  });
-});
-
-describe('trial sequence — behavioural fallback', () => {
-  test('day 0 has no story email, so the stuck-user ladder runs', () => {
-    const s = state({ trialDay: 0, daysLeft: 7, onboarded: false });
-    expect(getNextEmailTemplate(s, none)).toBe('trial-nudge-onboard-1');
-  });
-
-  test('the ladder fills a day whose sequence email already went out', () => {
-    const s = state({ trialDay: 1, daysLeft: 6, linkedin: false, postsCount: 0 });
-    expect(getNextEmailTemplate(s, new Set(['nurture-1']))).toBe('trial-nudge-linkedin-1');
+  test('LinkedIn connected but no posts yet gets the generate nudge', () => {
+    const s = state({ postsCount: 0 });
+    expect(getBehaviouralNudge(s, none)).toBe('trial-nudge-generate-1');
   });
 
   test('a user blocked on LinkedIn with posts written gets the unblock email', () => {
-    const s = state({ trialDay: 0, daysLeft: 7, linkedin: false, postsCount: 2, published: false });
-    expect(getNextEmailTemplate(s, none)).toBe('trial-need-linkedin-to-publish');
+    const s = state({ linkedin: false, postsCount: 2, published: false });
+    expect(getBehaviouralNudge(s, none)).toBe('trial-need-linkedin-to-publish');
+  });
+
+  test('drafts sitting unpublished get the publish nudge', () => {
+    const s = state({ postsCount: 2, published: false });
+    expect(getBehaviouralNudge(s, none)).toBe('trial-nudge-publish-1');
   });
 
   test('a fully activated user with nothing scheduled gets nothing', () => {
-    const s = state({ trialDay: 0, daysLeft: 7 });
-    expect(getNextEmailTemplate(s, none)).toBeNull();
-  });
-});
-
-describe('trial sequence — suppression', () => {
-  test('opted-out users get nothing, even on the last day', () => {
-    expect(getNextEmailTemplate(state({ optedOut: true, daysLeft: 1, trialDay: 6 }), none)).toBeNull();
-  });
-
-  test('paying users get nothing', () => {
-    expect(getNextEmailTemplate(state({ isPaid: true }), none)).toBeNull();
-  });
-
-  test('lapsed trials get nothing from the in-trial arc', () => {
-    expect(getNextEmailTemplate(state({ isTrialActive: false, daysLeft: 0 }), none)).toBeNull();
-  });
-
-  test('an admin-extended trial past day 5 falls through without repeating', () => {
-    const s = state({ trialDay: 9, daysLeft: 4 });
-    expect(getNextEmailTemplate(s, new Set(['nurture-1', 'nurture-2']))).toBeNull();
+    expect(getBehaviouralNudge(state(), none)).toBeNull();
   });
 });
 
@@ -124,8 +82,8 @@ describe('state-aware CTA', () => {
     expect(html).toContain('publish your first post');
   });
 
-  test('a lapsed non-buyer is pointed at billing', () => {
-    const html = buildCtaBlock(state({ isTrialActive: false, isPaid: false }));
+  test('a user who hit the free-post cap is pointed at billing', () => {
+    const html = buildCtaBlock(state({ freeCapReached: true }));
     expect(html).toContain('/billing.html');
   });
 
@@ -163,10 +121,9 @@ describe('unsubscribe tokens', () => {
 describe('lifecycle templates', () => {
   const LIFECYCLE = [
     'welcome',
-    'nurture-1', 'nurture-2', 'nurture-3', 'nurture-4', 'nurture-5',
     'trial-nudge-onboard-1', 'trial-nudge-linkedin-1', 'trial-nudge-generate-1',
     'trial-need-linkedin-to-publish', 'trial-nudge-publish-1',
-    'trial-convert-push', 'trial-expiry', 'trial-last-day',
+    'free-post-remaining', 'free-cap-reached', 'free-cap-followup',
   ];
 
   const read = name => fs.readFileSync(path.join(TEMPLATES_DIR, `${name}.html`), 'utf8');
@@ -197,21 +154,22 @@ describe('lifecycle templates', () => {
     expect(read(name)).toContain('text-align:left');
   });
 
-  const DYNAMIC_CTA = ['nurture-1', 'nurture-2', 'nurture-3', 'nurture-5'];
+  const DYNAMIC_CTA = ['free-post-remaining'];
   test.each(DYNAMIC_CTA)('%s defers its call to action to user state', name => {
     expect(read(name)).toContain('{{cta_block}}');
   });
 
-  test('nurture-4 sends the reader to their LinkedIn profile, not a dead link', () => {
-    const html = read('nurture-4');
-    expect(html).toContain('https://www.linkedin.com/in/me/');
-    expect(html).not.toMatch(/href="\s*"/);
+  test.each(LIFECYCLE)('%s mentions no trial or day-count language', name => {
+    const html = read(name).toLowerCase();
+    expect(html).not.toContain('trial');
+    expect(html).not.toContain('days_left');
   });
 
   test.each(LIFECYCLE)('%s leaves no unreplaced token beyond the known set', name => {
     const known = new Set([
       'name', 'display_name', 'app_url', 'upgrade_url', 'generate_url', 'settings_url',
-      'linkedin_url', 'prefs_url', 'cta_block', 'days_left', 'trial_end_date',
+      'linkedin_url', 'prefs_url', 'cta_block',
+      'free_posts_used', 'free_posts_limit', 'free_posts_remaining',
       'posts_count', 'posts_count_label', 'industry', 'content_theme',
     ]);
     const tokens = [...read(name).matchAll(/\{\{(\w+)\}\}/g)].map(m => m[1]);

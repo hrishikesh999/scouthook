@@ -399,7 +399,7 @@
           if (data.name !== 'checkout.completed') return;
           const tid = checkoutCompletedTransactionId(data);
           try { if (tid) sessionStorage.setItem(PENDING_PADDLE_TXN_KEY, tid); } catch { /* private mode */ }
-          // Bust cached subscription so initTrialBanner() and renderSidebarUpgrade()
+          // Bust cached subscription so initFreeTierBanner() and renderSidebarUpgrade()
           // don't serve a stale trial_expired:true response after the user upgrades.
           if (window.cachedFetch) cachedFetch.bust('/api/billing/subscription');
           fetch('/api/billing/sync', {

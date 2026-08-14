@@ -15,7 +15,7 @@ const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const { db } = require('./db');
 const { pool: dbPool } = require('./db/pg');
 const { sendEmail, sendEmailToUser } = require('./emails');
-const { seedTrialSubscription } = require('./services/subscription');
+const { seedFreeSubscription } = require('./services/subscription');
 const affiliatesService = require('./services/affiliates');
 const { scheduleReconciler } = require('./services/affiliateReconciler');
 const attribution = require('./services/attribution');
@@ -299,7 +299,7 @@ if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
             workspaceId = pendingInvite.workspace_id;
           } else {
             workspaceId = await createPersonalWorkspace(userId, displayName);
-            seedTrialSubscription(userId).catch(() => {});
+            seedFreeSubscription(userId).catch(() => {});
             // Brand-new signup — stamp the ad that produced it, if any.
             attribution.attachFromRequest(userId, req).catch(() => {});
             // Welcome email only on brand-new signup (new workspace = new user)
@@ -1100,23 +1100,18 @@ if (process.env.NODE_ENV !== 'test') {
 }
 
 // ---------------------------------------------------------------------------
-// Email: trial expiry — now owned by the day-4 slot of the trial sequence in
-// services/trialEmails.js, so that activated users get trial-convert-push and
-// everyone else gets trial-expiry, never both. The standalone cron that used
-// to live here ran independently of the one-email-per-day cap and double-sent
-// alongside the nudge ladder.
-// ---------------------------------------------------------------------------
-
-// ---------------------------------------------------------------------------
-// Email: trial engagement nudges — hourly cron.
-// Evaluates every app-level trialing user and sends the next contextual email
-// if their state warrants one and the 12 h inter-email cooldown has passed.
+// Email: free-post-cap follow-up — daily cron.
+// The behavioral nudge ladder and the "1 left"/"cap reached" milestone
+// emails are event-triggered (see services/postLifecycleEmails.js, called
+// from generate.js/vault.js/profile.js/linkedin.js). The only remaining
+// time-based check is the 3-day "still hasn't upgraded" follow-up, since
+// "did nothing after hitting the cap" can't be event-triggered.
 // ---------------------------------------------------------------------------
 if (process.env.NODE_ENV !== 'test') {
-  const { runTrialEmailCron } = require('./services/trialEmails');
+  const { runFreeCapFollowupCron } = require('./services/postLifecycleEmails');
   setTimeout(() => {
-    runTrialEmailCron();
-    setInterval(runTrialEmailCron, 60 * 60 * 1000);
+    runFreeCapFollowupCron();
+    setInterval(runFreeCapFollowupCron, 24 * 60 * 60 * 1000);
   }, 30 * 60 * 1000);
 }
 

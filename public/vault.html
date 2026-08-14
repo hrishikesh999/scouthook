@@ -387,7 +387,7 @@
     if (planData?.plan === 'pro') {
       return `Monthly vault limit reached (${planData.current}/${planData.limit} docs this month). Resets at the start of next month.`;
     }
-    return `Knowledge Vault requires a paid plan. <button type="button" onclick="window.PricingModal?.open({ feature: 'vault' })" style="background:none;border:none;padding:0;color:var(--brand);font-weight:600;cursor:pointer;font-size:inherit">Upgrade →</button>`;
+    return `You've used your free Vault upload (${planData?.current ?? 1}/${planData?.limit ?? 1}). Upgrade to Pro for unlimited documents. <button type="button" onclick="window.PricingModal?.open({ feature: 'vault' })" style="background:none;border:none;padding:0;color:var(--brand);font-weight:600;cursor:pointer;font-size:inherit">Upgrade →</button>`;
   }
 
   function guessMime(filename) {

@@ -6,8 +6,8 @@ const { getSetting, setSetting, getAllSettings, db } = require('../db');
 const { pool } = require('../db/pg');
 const {
   getPaddle, upsertSubscription, getUserPlan,
-  INTERNAL_POST_CAP_FREE, INTERNAL_POST_CAP_PRO,
-  INTERNAL_VISUAL_CAP_FREE, INTERNAL_VISUAL_CAP_PRO,
+  INTERNAL_POST_CAP_PRO,
+  INTERNAL_VISUAL_CAP_EXPIRED, INTERNAL_VISUAL_CAP_PRO,
 } = require('../services/subscription');
 const mailerlite = require('../services/mailerlite');
 const { getUserEmailInfo } = require('../emails');
@@ -94,7 +94,7 @@ router.get('/diagnostics', requireAdminPassword, (req, res) => {
         up.created_at           AS profile_created_at,
         us.plan,
         us.status,
-        us.trial_ends_at,
+        us.free_posts_limit,
         us.current_period_end,
         us.paddle_subscription_id,
         COUNT(DISTINCT wm.workspace_id) AS workspace_count,
@@ -104,6 +104,12 @@ router.get('/diagnostics', requireAdminPassword, (req, res) => {
           WHERE wm2.user_id = up.user_id
         ) AS post_count,
         (
+          SELECT COUNT(*) FROM generated_posts gp
+          JOIN workspace_members wm4 ON wm4.workspace_id = gp.tenant_id
+          WHERE wm4.user_id = up.user_id AND gp.passed_gate = 1
+            AND gp.created_at >= COALESCE(us.free_tier_started_at, '-infinity'::timestamptz)
+        ) AS free_posts_used,
+        (
           SELECT COUNT(*) FROM vault_documents vd
           JOIN workspace_members wm3 ON wm3.workspace_id = vd.tenant_id
           WHERE wm3.user_id = up.user_id
@@ -112,7 +118,7 @@ router.get('/diagnostics', requireAdminPassword, (req, res) => {
       LEFT JOIN user_subscriptions us ON us.user_id = up.user_id
       LEFT JOIN workspace_members wm ON wm.user_id = up.user_id
       GROUP BY up.user_id, up.email, up.display_name, up.created_at,
-               us.plan, us.status, us.trial_ends_at,
+               us.plan, us.status, us.free_posts_limit, us.free_tier_started_at,
                us.current_period_end, us.paddle_subscription_id
       ORDER BY up.created_at DESC
       LIMIT 100
@@ -478,7 +484,7 @@ router.get('/dashboard/metrics', requireAdminPassword, (req, res) => {
 
     const bucket = `date_trunc('${gran}', created_at)::date`;
 
-    const [signupsR, upgradesR, cancelsR, postsR, linkedinR, mrrR, trialExpiredR, funnelOnboardingR, funnelFirstPostR] =
+    const [signupsR, upgradesR, cancelsR, postsR, linkedinR, mrrR, freeCapReachedR, funnelOnboardingR, funnelFirstPostR] =
       await Promise.all([
         // signups
         db.prepare(`
@@ -519,13 +525,21 @@ router.get('/dashboard/metrics', requireAdminPassword, (req, res) => {
           SELECT COUNT(*) AS active_pro FROM user_subscriptions
           WHERE status = 'active' AND plan = 'pro'
         `).get(),
-        // trial expired — trial ended in period without converting to active
+        // free-post cap hit — the Nth (limit-th) free-tier generation per user
         db.prepare(`
-          SELECT date_trunc('${gran}', trial_ends_at)::date AS bucket, COUNT(*) AS count
-          FROM user_subscriptions
-          WHERE trial_ends_at IS NOT NULL
-            AND trial_ends_at BETWEEN ? AND ?::date + INTERVAL '1 day'
-            AND status != 'active'
+          SELECT date_trunc('${gran}', cap_hit_at)::date AS bucket, COUNT(*) AS count
+          FROM (
+            SELECT gp.created_at AS cap_hit_at,
+                   ROW_NUMBER() OVER (PARTITION BY gp.user_id ORDER BY gp.created_at) AS rn,
+                   us.free_posts_limit
+            FROM generated_posts gp
+            JOIN user_subscriptions us ON us.user_id = gp.user_id
+            WHERE gp.passed_gate = 1
+              AND us.plan NOT IN ('solo', 'pro')
+              AND gp.created_at >= COALESCE(us.free_tier_started_at, '-infinity'::timestamptz)
+          ) ranked
+          WHERE rn = free_posts_limit
+            AND cap_hit_at BETWEEN ? AND ?::date + INTERVAL '1 day'
           GROUP BY 1 ORDER BY 1
         `).all(start, end),
         // funnel: onboarding completed in period
@@ -580,7 +594,7 @@ router.get('/dashboard/metrics', requireAdminPassword, (req, res) => {
         linkedin_connections: toSeries(linkedinR),
         linkedin_disconnects: toSeries(disconnectsR),
         logins:               toSeries(loginsR),
-        trial_expired:        toSeries(trialExpiredR),
+        free_cap_reached:      toSeries(freeCapReachedR),
       },
       funnel: {
         signups:    sumSeries(signupsR),
@@ -611,10 +625,14 @@ router.get('/users', requireAdminPassword, (req, res) => {
     const users = await db.prepare(`
       SELECT
         up.user_id, up.email, up.display_name, up.country, up.created_at,
-        us.plan, us.status, us.trial_ends_at,
+        us.plan, us.status, us.free_posts_limit,
         (SELECT COUNT(*) FROM generated_posts gp
          JOIN workspace_members wm ON wm.workspace_id = gp.tenant_id
          WHERE wm.user_id = up.user_id) AS post_count,
+        (SELECT COUNT(*) FROM generated_posts gp
+         JOIN workspace_members wm ON wm.workspace_id = gp.tenant_id
+         WHERE wm.user_id = up.user_id AND gp.passed_gate = 1
+           AND gp.created_at >= COALESCE(us.free_tier_started_at, '-infinity'::timestamptz)) AS free_posts_used,
         (SELECT MAX(gp.created_at) FROM generated_posts gp
          JOIN workspace_members wm ON wm.workspace_id = gp.tenant_id
          WHERE wm.user_id = up.user_id) AS last_active
@@ -639,10 +657,10 @@ router.get('/users/:userId', requireAdminPassword, (req, res) => {
     const now = new Date();
     const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
 
-    const [profile, subscription, workspaces, connections, profiles, recentPosts, postsThisMonth, visualsThisMonth] =
+    const [profile, subscription, workspaces, connections, profiles, recentPosts, postsThisMonth, visualsThisMonth, freePostsUsed] =
       await Promise.all([
         db.prepare('SELECT * FROM user_profiles WHERE user_id = ?').get(userId),
-        db.prepare('SELECT plan, status, trial_ends_at, current_period_end, canceled_at FROM user_subscriptions WHERE user_id = ?').get(userId),
+        db.prepare('SELECT plan, status, current_period_end, canceled_at, free_posts_limit, free_tier_started_at FROM user_subscriptions WHERE user_id = ?').get(userId),
         db.prepare(`
           SELECT w.id, w.name, w.deleted_at,
                  (SELECT COUNT(*) FROM workspace_members WHERE workspace_id = w.id) AS member_count,
@@ -682,16 +700,26 @@ router.get('/users/:userId', requireAdminPassword, (req, res) => {
           FROM visual_generation_log
           WHERE user_id = ? AND created_at >= ?
         `).get(userId, monthStart),
+        db.prepare(`
+          SELECT COUNT(*) AS cnt
+          FROM generated_posts
+          WHERE user_id = ? AND passed_gate = 1
+            AND created_at >= COALESCE((SELECT free_tier_started_at FROM user_subscriptions WHERE user_id = ?), '-infinity'::timestamptz)
+        `).get(userId, userId),
       ]);
 
     if (!profile) return res.status(404).json({ ok: false, error: 'user_not_found' });
 
-    const userIsPro = subscription?.plan === 'pro';
+    const userIsPro = ['solo', 'pro'].includes(subscription?.plan);
     const usage = {
       posts_this_month:    parseInt(postsThisMonth?.cnt  ?? 0, 10),
       visuals_this_month:  parseInt(visualsThisMonth?.cnt ?? 0, 10),
-      internal_post_cap:   userIsPro ? INTERNAL_POST_CAP_PRO   : INTERNAL_POST_CAP_FREE,
-      internal_visual_cap: userIsPro ? INTERNAL_VISUAL_CAP_PRO : INTERNAL_VISUAL_CAP_FREE,
+      // internal_post_cap only has monthly meaning for paid plans now — free
+      // tier's real cap is lifetime (free_posts_used/free_posts_limit below).
+      internal_post_cap:   userIsPro ? INTERNAL_POST_CAP_PRO : null,
+      internal_visual_cap: userIsPro ? INTERNAL_VISUAL_CAP_PRO : INTERNAL_VISUAL_CAP_EXPIRED,
+      free_posts_used:     userIsPro ? null : parseInt(freePostsUsed?.cnt ?? 0, 10),
+      free_posts_limit:    userIsPro ? null : (subscription?.free_posts_limit ?? 3),
     };
 
     return res.json({ ok: true, profile, subscription, workspaces, connections, profiles, recent_posts: recentPosts, usage });
@@ -783,23 +811,24 @@ router.get('/users/:userId/activity', requireAdminPassword, (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
-// POST /admin/users/:userId/extend-trial
-// Body: { days: 7 }
+// POST /admin/users/:userId/grant-free-posts
+// Body: { count: 3 }
+// Grants bonus free generations to a free-tier user by raising their
+// free_posts_limit. Replaces the old extend-trial action.
 // ---------------------------------------------------------------------------
-router.post('/users/:userId/extend-trial', requireAdminPassword, (req, res) => {
+router.post('/users/:userId/grant-free-posts', requireAdminPassword, (req, res) => {
   (async () => {
     const { userId } = req.params;
-    const days = parseInt(req.body?.days);
-    if (!Number.isFinite(days) || days < 1 || days > 90) {
-      return res.status(400).json({ ok: false, error: 'days must be 1–90' });
+    const count = parseInt(req.body?.count);
+    if (!Number.isFinite(count) || count < 1 || count > 100) {
+      return res.status(400).json({ ok: false, error: 'count must be 1–100' });
     }
 
     await db.prepare(`
       UPDATE user_subscriptions
-      SET trial_ends_at = GREATEST(COALESCE(trial_ends_at, NOW()), NOW()) + ($1 * INTERVAL '1 day'),
-          status = 'trialing'
+      SET free_posts_limit = free_posts_limit + $1
       WHERE user_id = $2
-    `).run(days, userId);
+    `).run(count, userId);
 
     return res.json({ ok: true });
   })().catch(err => res.status(500).json({ ok: false, error: err.message }));

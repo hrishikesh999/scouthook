@@ -239,26 +239,21 @@ router.get('/subscription', requireAuth, async (req, res) => {
   ]);
 
   const extraWorkspaces = sub.extra_workspaces ?? 0;
-  // Only flag app-level trials (no price_id = no Paddle subscription yet).
-  // Paddle-managed trials have their own status lifecycle; excluding them here
-  // prevents a false-positive banner during the Paddle trial→active transition window.
-  const trialExpired = sub.status === 'trialing'
-    && !sub.price_id
-    && !!sub.trial_ends_at
-    && new Date(sub.trial_ends_at) <= new Date();
 
   // Never expose the internal 'lifetime' status to users — they see 'active'.
   const effectiveStatus = sub.status === 'lifetime' ? 'active' : sub.status;
 
   return res.json({
     ok: true,
-    plan: genCheck.plan,  // effective plan: 'expired' once trial/grace period has expired
+    plan: genCheck.plan,  // effective plan: 'expired' = free tier (lifetime cap) once no active paid plan
     status: effectiveStatus,
     price_id: sub.price_id ?? null,
     current_period_end: sub.current_period_end ?? null,
     canceled_at: sub.canceled_at ?? null,
-    trial_ends_at: sub.trial_ends_at ?? null,
-    trial_expired: trialExpired,
+    trial_ends_at: sub.trial_ends_at ?? null, // legacy field, kept for backward compat; no longer meaningful
+    // Free tier only: lifetime post count/cap, mirrors `generations` below.
+    free_posts_used: genCheck.plan === 'expired' ? genCheck.current : null,
+    free_posts_limit: genCheck.plan === 'expired' ? genCheck.limit : null,
     extra_workspaces: extraWorkspaces,
     workspace_limit: getWorkspaceLimit(genCheck.plan, extraWorkspaces),
     workspace_count: wsStats?.owned_count ?? 0,

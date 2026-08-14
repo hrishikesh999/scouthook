@@ -8,9 +8,9 @@
  *   PUT /api/email-preferences  { cadence?, timezone? }
  *
  * cadence: 'daily' | '3x' | 'weekly' | 'off'. Stored NULL until the user
- * first saves — the email cron resolves NULL via effectiveCadence(): 'daily'
- * while trialing (habit-formation window), 'weekly' after. GET mirrors that
- * resolution so the settings dropdown shows what the cron actually does.
+ * first saves — the email cron resolves NULL via effectiveCadence(): '3x'
+ * while on the free tier (habit-formation window), 'weekly' after. GET
+ * mirrors that resolution so the settings dropdown shows what the cron does.
  * timezone: IANA name, validated by probing Intl; invalid input is rejected
  * rather than silently stored (the cron would just fall back, but a saved-
  * then-ignored setting is worse than an error).
@@ -49,15 +49,15 @@ router.get('/', async (req, res) => {
         'SELECT idea_email_cadence, idea_email_timezone FROM user_profiles WHERE user_id = ?'
       ).get(req.userId),
       db.prepare(
-        'SELECT status, trial_ends_at FROM user_subscriptions WHERE user_id = ?'
+        'SELECT status FROM user_subscriptions WHERE user_id = ?'
       ).get(req.userId),
     ]);
-    // Same trial-validity rule as the cron's candidate query
-    const trialing = !!sub && sub.status === 'trialing' &&
-      (!sub.trial_ends_at || new Date(sub.trial_ends_at) > new Date());
+    // Same rule as the cron's candidate query — free tier is the
+    // habit-formation window.
+    const onFreeTier = !!sub && sub.status === 'free';
     return res.json({
       ok: true,
-      cadence: effectiveCadence(row?.idea_email_cadence, trialing),
+      cadence: effectiveCadence(row?.idea_email_cadence, onFreeTier),
       cadence_is_default: !row?.idea_email_cadence,
       timezone: row?.idea_email_timezone || null,
     });

@@ -71,7 +71,7 @@
               <option value="signups">New Sign Ups</option>
               <option value="paid_upgrades">New Upgrades</option>
               <option value="cancellations">Cancellations</option>
-              <option value="trial_expired">Trial Expired</option>
+              <option value="free_cap_reached">Free Cap Reached</option>
             </select>
           </div>
           <div class="chart-card__canvas chart-card__canvas--lg">
@@ -216,7 +216,7 @@
       // Each chart render is isolated — one failure can't break the others
       lastSeries = s;
       const lineMetric = document.getElementById('line-metric-select').value;
-      const lineColorMap = { signups: COLORS.accent, paid_upgrades: COLORS.primary, cancellations: COLORS.error, trial_expired: COLORS.amber };
+      const lineColorMap = { signups: COLORS.accent, paid_upgrades: COLORS.primary, cancellations: COLORS.error, free_cap_reached: COLORS.amber };
       safeRender(() => renderLineChart('chart-line-overview', s[lineMetric] || [], lineColorMap[lineMetric]));
 
       if (data.funnel) safeRender(() => renderFunnel(data.funnel));
@@ -236,18 +236,18 @@
       const r = await fetch('/admin/diagnostics', { headers: { 'X-Admin-Password': adminPw } });
       const data = await r.json();
       if (!data.ok) return;
-      const counts = { pro: 0, trialing: 0, expired: 0, canceled: 0 };
+      const counts = { pro: 0, free: 0, expired: 0, canceled: 0 };
       for (const u of data.users) {
-        const s = u.status || 'expired';
-        const p = u.plan || 'expired';
+        const s = u.status || 'free';
+        const p = u.plan || 'free';
         if (s === 'active' && p === 'pro') counts.pro++;
-        else if (s === 'trialing') counts.trialing++;
+        else if (s === 'free') counts.free++;
         else if (s === 'canceled') counts.canceled++;
         else counts.expired++;
       }
       renderDonut('chart-plans', [
         { label: 'Pro', value: counts.pro, color: COLORS.primary },
-        { label: 'Trialing', value: counts.trialing, color: COLORS.amber },
+        { label: 'Free', value: counts.free, color: COLORS.amber },
         { label: 'Expired', value: counts.expired, color: COLORS.muted },
         { label: 'Canceled', value: counts.canceled, color: COLORS.error },
       ]);
@@ -396,7 +396,7 @@
     document.getElementById('line-metric-select').addEventListener('change', e => {
       if (!lastSeries) return;
       const metric = e.target.value;
-      const colorMap = { signups: COLORS.accent, paid_upgrades: COLORS.primary, cancellations: COLORS.error, trial_expired: COLORS.amber };
+      const colorMap = { signups: COLORS.accent, paid_upgrades: COLORS.primary, cancellations: COLORS.error, free_cap_reached: COLORS.amber };
       renderLineChart('chart-line-overview', lastSeries[metric] || [], colorMap[metric]);
     });
 

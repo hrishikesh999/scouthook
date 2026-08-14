@@ -804,7 +804,8 @@ async function generateFromAngleRow(angle, { userId, tenantId, length, profile, 
       'UPDATE vault_angles SET used_count = used_count + 1, last_used_at = now() WHERE id = ? AND tenant_id = ?'
     ).run(angle.id, tenantId)).catch(() => {});
     require('../services/streak').recordStreakAction(userId, tenantId, 'generate');
-    require('../services/trialEmails').scheduleTrialEvaluation(userId, tenantId);
+    require('../services/postLifecycleEmails').schedulePostLifecycleEvaluation(userId, tenantId);
+    require('../services/postLifecycleEmails').evaluateMilestoneEmail(userId).catch(() => {});
 
     // grounded = how many roles reached a real passage. A low ratio means the post
     // was built largely from condensed paraphrase, which retention cannot reveal.
@@ -1033,7 +1034,8 @@ router.post('/insights/:id/generate', async (req, res) => {
       'UPDATE vault_insights SET used_count = used_count + 1, last_used_at = now() WHERE id = ? AND tenant_id = ?'
     ).run(insight.id, tenantId)).catch(() => {});
     require('../services/streak').recordStreakAction(userId, tenantId, 'generate');
-    require('../services/trialEmails').scheduleTrialEvaluation(userId, tenantId);
+    require('../services/postLifecycleEmails').schedulePostLifecycleEvaluation(userId, tenantId);
+    require('../services/postLifecycleEmails').evaluateMilestoneEmail(userId).catch(() => {});
 
     console.log(`[vault/generate] insight=${insight.id} type=${postType} length=${length} grounded=${!!chunk} retention=${org.retention?.score} post=${postId}`);
 

@@ -7,7 +7,7 @@ const { rateLimit, ipKeyGenerator } = require('express-rate-limit');
 const router     = express.Router();
 const { db }     = require('../db');
 const { sendEmail, sendEmailToUser } = require('../emails');
-const { seedTrialSubscription } = require('../services/subscription');
+const { seedFreeSubscription } = require('../services/subscription');
 
 const APP_URL = process.env.APP_URL || '';
 
@@ -211,7 +211,7 @@ router.post('/verify-email', async (req, res) => {
       workspaceId = membership.workspace_id;
     } else {
       workspaceId = await createPersonalWorkspaceForUser(row.user_id, row.display_name);
-      seedTrialSubscription(row.user_id).catch(() => {});
+      seedFreeSubscription(row.user_id).catch(() => {});
       // Brand-new signup — stamp the ad that produced it, if any.
       require('../services/attribution').attachFromRequest(row.user_id, req).catch(() => {});
       sendEmailToUser(row.user_id, 'welcome', {

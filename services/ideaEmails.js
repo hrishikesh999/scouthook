@@ -12,8 +12,8 @@
  * Cadence (user_profiles.idea_email_cadence):
  *   'daily'  → every day          '3x' → Mon/Wed/Fri
  *   'weekly' → Monday             'off' → never
- *   NULL (user never chose) → 'daily' while trialing, 'weekly' after — the
- *   trial IS the habit-formation window, and the 24h-activity suppression
+ *   NULL (user never chose) → '3x' while on the free tier, 'weekly' after — the
+ *   free tier IS the habit-formation window, and the 24h-activity suppression
  *   below already keeps engaged users from being nagged. An explicit user
  *   choice always wins (see effectiveCadence).
  *
@@ -165,8 +165,7 @@ async function runIdeaEmailCron() {
       WHERE  up.email IS NOT NULL
         AND  COALESCE(up.idea_email_cadence, 'weekly') <> 'off'
         AND  up.lifecycle_emails_opt_out_at IS NULL
-        AND  us.status IN ('active', 'trialing', 'lifetime')
-        AND  (us.status <> 'trialing' OR us.trial_ends_at > now())
+        AND  us.status IN ('active', 'free', 'lifetime')
     `).all();
   } catch (err) {
     console.warn('[idea-emails] cron query error (non-fatal):', err.message);
@@ -179,9 +178,9 @@ async function runIdeaEmailCron() {
 
       const clock = localClock(u.idea_email_timezone);
       if (!clock || clock.hour < SEND_FROM_HOUR || clock.hour >= SEND_TO_HOUR) continue;
-      // sub_status 'trialing' here is always an unexpired trial — the
-      // candidate query already filters expired trials out entirely.
-      const cadence = effectiveCadence(u.idea_email_cadence, u.sub_status === 'trialing');
+      // Free tier (no active paid plan yet) is the habit-formation window —
+      // same '3x' default the old trial period used.
+      const cadence = effectiveCadence(u.idea_email_cadence, u.sub_status === 'free');
       if (!cadenceAllowsToday(cadence, clock.weekday)) continue;
 
       // Explicit dedup up front (sendEmailToUser would catch it too, but this

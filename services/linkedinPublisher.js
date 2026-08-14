@@ -587,12 +587,22 @@ async function waitForDocumentAvailable(accessToken, documentUrn) {
  * @returns {Promise<{ linkedin_post_id: string }>}
  */
 async function publishNow(userId, tenantId, content, options = {}) {
-  // Plan gate — publishing requires an active plan. Checked here (the single
-  // choke point) so it covers both immediate publishes and scheduled posts
-  // whose plan expired between scheduling and fire time.
-  const { getUserPlan } = require('./subscription');
+  // Plan gate — checked here (the single choke point) so it covers both
+  // immediate publishes and scheduled posts whose plan expired between
+  // scheduling and fire time.
+  //
+  // 'expired' now covers two different populations: free-tier users who
+  // never subscribed (no paddle_subscription_id — they should be able to
+  // publish the free posts they generated, same as before this cap existed)
+  // and genuinely lapsed former Paddle subscribers (paddle_subscription_id
+  // set, but their paid period ended — publishing should still be blocked
+  // for them, same as pre-existing behavior). Only the latter is refused.
+  const { getUserPlan, getUserSubscription } = require('./subscription');
   const plan = await getUserPlan(userId);
-  if (plan === 'expired') throw new Error('plan_expired');
+  if (plan === 'expired') {
+    const sub = await getUserSubscription(userId);
+    if (sub.paddle_subscription_id) throw new Error('plan_expired');
+  }
 
   // Rate limit — 1 post/hour
   await checkRateLimit(userId, tenantId);
@@ -819,8 +829,8 @@ async function publishScheduledPost(scheduledPostId, { attemptsMade = 0, maxAtte
         WHERE id = ? AND user_id = ? AND tenant_id = ?
       `).run(linkedin_post_id, row.asset_type || null, row.asset_url || null, row.post_id, row.user_id, row.tenant_id);
 
-      // Trial email — evaluate immediately after first publish (no settle needed)
-      require('./trialEmails').evaluateAndSend(row.user_id, row.tenant_id).catch(() => {});
+      // Behavioral nudge ladder — evaluate immediately after first publish (no settle needed)
+      require('./postLifecycleEmails').evaluateAndSend(row.user_id, row.tenant_id).catch(() => {});
 
       // Track archetype preference for hook bias (fire-and-forget)
       try {

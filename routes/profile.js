@@ -439,7 +439,7 @@ router.post('/', async (req, res) => {
       console.error('[profile] generateContentPillars failed (non-fatal):', err.message)
     );
 
-    require('../services/trialEmails').scheduleTrialEvaluation(userId, req.tenantId);
+    require('../services/postLifecycleEmails').schedulePostLifecycleEvaluation(userId, req.tenantId);
   }
 
   return res.json({ ok: true, profile_id: profileId, fingerprint_updated: samplesChanged });

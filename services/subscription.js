@@ -59,6 +59,8 @@ async function getUserSubscription(userId) {
     status: 'expired',
     current_period_end: null,
     canceled_at: null,
+    free_tier_started_at: null,
+    free_posts_limit: 3,
   };
 }
 
@@ -66,7 +68,9 @@ async function getUserSubscription(userId) {
 // getUserPlan
 // Returns 'expired' | 'solo' | 'pro'.
 // A canceled subscription retains access until current_period_end.
-// Users without a valid subscription get 'expired' — there is no free plan.
+// Users without an active paid subscription (never subscribed, or lapsed) get
+// 'expired' — canGeneratePost() gives that tier a lifetime free-post cap
+// rather than zero access; see free_tier_started_at/free_posts_limit.
 // ---------------------------------------------------------------------------
 async function getUserPlan(userId) {
   const sub = await getUserSubscription(userId);
@@ -85,12 +89,6 @@ async function getUserPlan(userId) {
     const GRACE_MS = 14 * 24 * 60 * 60 * 1000;
     if (new Date(sub.current_period_end).getTime() + GRACE_MS < Date.now()) return 'expired';
   }
-  // App-level trial: enforce expiry via trial_ends_at (no Paddle subscription involved).
-  if (sub.status === 'trialing' && sub.trial_ends_at && new Date(sub.trial_ends_at) <= new Date()) {
-    return 'expired';
-  }
-
-
   return tier; // 'solo' | 'pro'
 }
 
@@ -121,13 +119,37 @@ function calendarMonthBounds() {
 
 // ---------------------------------------------------------------------------
 // canGeneratePost
-// Counts quality-gate-passing posts this calendar month, per user (across all
-// workspaces — user-governs model). Returns { allowed, current, limit, plan, resets_at }.
-// Only rows with passed_gate = 1 count toward the limit.
+// solo/pro: counts quality-gate-passing posts this calendar month, per user
+// (across all workspaces — user-governs model), against the plan's monthly quota.
+// expired (free tier, incl. never-subscribed and lapsed users): counts
+// quality-gate-passing posts since free_tier_started_at (lifetime, no reset)
+// against free_posts_limit (default 3).
+// Only rows with passed_gate = 1 count toward either limit.
+// Returns { allowed, current, limit, plan, resets_at }.
 // ---------------------------------------------------------------------------
 async function canGeneratePost(userId) {
-  const plan = await getUserPlan(userId);
-  const rawLimit = getMonthlyPostLimit(plan); // 5 | 20 | Infinity
+  const [sub, plan] = await Promise.all([getUserSubscription(userId), getUserPlan(userId)]);
+
+  if (plan !== 'solo' && plan !== 'pro') {
+    const limit = sub.free_posts_limit ?? 3;
+    let current = 0;
+    try {
+      const row = await db.prepare(`
+        SELECT COUNT(*) AS cnt
+        FROM generated_posts
+        WHERE user_id = ?
+          AND passed_gate = 1
+          AND created_at >= COALESCE(?, '-infinity'::timestamptz)
+      `).get(userId, sub.free_tier_started_at ?? null);
+      current = parseInt(row?.cnt ?? 0, 10);
+    } catch (err) {
+      console.error('[subscription] canGeneratePost count error:', err.message);
+      return { allowed: true, current: 0, limit, plan: 'expired', resets_at: null };
+    }
+    return { allowed: current < limit, current, limit, plan: 'expired', resets_at: null };
+  }
+
+  const rawLimit = getMonthlyPostLimit(plan); // 20 | Infinity
   const limit = rawLimit === Infinity ? null : rawLimit;
   const [start, end] = calendarMonthBounds();
 
@@ -148,6 +170,9 @@ async function canGeneratePost(userId) {
     return { allowed: true, current: 0, limit, plan, resets_at: end };
   }
 
+  // Preserves pre-existing solo/pro internal-cap behavior unchanged; the
+  // free tier (handled above) no longer shares INTERNAL_POST_CAP_EXPIRED,
+  // since that env var defaulting to 0 would zero out the new 3-post cap.
   const internalCap = plan === 'pro' ? INTERNAL_POST_CAP_PRO : INTERNAL_POST_CAP_EXPIRED;
   const allowedByQuota = limit === null || current < limit;
   const allowedByCap   = current < internalCap;
@@ -203,9 +228,28 @@ async function logVisualGeneration(userId, tenantId = 'default', postId, visualT
 }
 
 // ---------------------------------------------------------------------------
-// canUploadVaultDoc — unrestricted for all plans.
-async function canUploadVaultDoc(_userId) {
-  return { allowed: true, current: 0, limit: null, plan: null };
+// canUploadVaultDoc
+// solo/pro: unrestricted. Free tier (expired): capped at 1 lifetime document,
+// counted per-user across all their workspaces.
+// ---------------------------------------------------------------------------
+async function canUploadVaultDoc(userId) {
+  const plan = await getUserPlan(userId);
+  if (plan === 'solo' || plan === 'pro') {
+    return { allowed: true, current: 0, limit: null, plan };
+  }
+
+  const FREE_VAULT_DOC_LIMIT = 1;
+  let current = 0;
+  try {
+    const row = await db.prepare(
+      'SELECT COUNT(*) AS cnt FROM vault_documents WHERE user_id = ?'
+    ).get(userId);
+    current = parseInt(row?.cnt ?? 0, 10);
+  } catch (err) {
+    console.error('[subscription] canUploadVaultDoc count error:', err.message);
+    return { allowed: true, current: 0, limit: FREE_VAULT_DOC_LIMIT, plan: 'expired' };
+  }
+  return { allowed: current < FREE_VAULT_DOC_LIMIT, current, limit: FREE_VAULT_DOC_LIMIT, plan: 'expired' };
 }
 
 // ---------------------------------------------------------------------------
@@ -313,20 +357,22 @@ async function forceSyncSubscriptionForUser(userId) {
 }
 
 // ---------------------------------------------------------------------------
-// seedTrialSubscription
-// Called on new-user signup. Inserts a 7-day Pro trial row.
-// ON CONFLICT DO NOTHING ensures it never overwrites an existing subscription.
+// seedFreeSubscription
+// Called on new-user signup. Inserts a free-tier row (3 lifetime free posts,
+// enforced by canGeneratePost). ON CONFLICT DO NOTHING ensures it never
+// overwrites an existing subscription.
 // ---------------------------------------------------------------------------
-async function seedTrialSubscription(userId) {
-  const trialEnd = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+async function seedFreeSubscription(userId) {
   try {
+    // plan stays 'expired' — chk_plan_values only allows 'expired'|'solo'|'pro'
+    // (migration 066 removed 'free' as a plan value); 'free' is a status only.
     await db.prepare(`
-      INSERT INTO user_subscriptions (user_id, plan, status, trial_ends_at)
-      VALUES (?, 'pro', 'trialing', ?)
+      INSERT INTO user_subscriptions (user_id, plan, status)
+      VALUES (?, 'expired', 'free')
       ON CONFLICT (user_id) DO NOTHING
-    `).run(userId, trialEnd.toISOString());
+    `).run(userId);
   } catch (err) {
-    console.error('[subscription] seedTrialSubscription error (non-fatal):', err.message);
+    console.error('[subscription] seedFreeSubscription error (non-fatal):', err.message);
   }
 }
 
@@ -336,7 +382,7 @@ module.exports = {
   getUserSubscription,
   getUserPlan,
   getFoundingTierInfo,
-  seedTrialSubscription,
+  seedFreeSubscription,
   canGeneratePost,
   canGenerateVisual,
   logVisualGeneration,

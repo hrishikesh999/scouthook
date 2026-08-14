@@ -590,7 +590,7 @@ router.get('/callback', async (req, res) => {
         accessTokenEnc, refreshTokenEnc, expiresAt, grantedScopes
       );
       console.log(`[linkedin/callback] Connected user=${userId} as ${linkedin_name} (${linkedin_member_id}) scopes="${grantedScopes}" raw="${tokens.scope || ''}"`);
-      require('../services/trialEmails').scheduleTrialEvaluation(userId, tenantId);
+      require('../services/postLifecycleEmails').schedulePostLifecycleEvaluation(userId, tenantId);
     }
 
     // Fire-and-forget: discover org pages the user administers

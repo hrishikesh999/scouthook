@@ -197,12 +197,21 @@ router.post('/', async (req, res) => {
 
   const planCheck = await canGeneratePost(userId);
   if (!planCheck.allowed) {
-    // Send limit-reached email once per calendar month.
-    const monthKey = `limit-reached:${new Date().toISOString().slice(0, 7)}`;
-    sendEmailToUser(userId, 'limit-reached', {
-      resets_on: new Date(planCheck.resets_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric' }),
-      app_url: process.env.APP_URL || '',
-    }, { dedupKey: monthKey, withinHours: 30 * 24 });
+    // Free tier has no reset — same template/dedup key as the proactive
+    // "you just used your last free post" send in evaluateMilestoneEmail(),
+    // so whichever fires first is the only one that goes out.
+    // Paid tiers reset monthly, so dedup on the calendar month instead.
+    if (planCheck.plan === 'expired') {
+      sendEmailToUser(userId, 'free-cap-reached', {
+        app_url: process.env.APP_URL || '',
+      }, { dedupKey: `free-cap-reached:${userId}`, withinHours: 365 * 24 });
+    } else {
+      const monthKey = `limit-reached:${new Date().toISOString().slice(0, 7)}`;
+      sendEmailToUser(userId, 'limit-reached', {
+        resets_on: new Date(planCheck.resets_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric' }),
+        app_url: process.env.APP_URL || '',
+      }, { dedupKey: monthKey, withinHours: 30 * 24 });
+    }
     return res.status(429).json({
       ok: false,
       error: 'monthly_quota_reached',
@@ -519,7 +528,8 @@ router.post('/', async (req, res) => {
       const sseWrite = (event, data) => {
         res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
         if (event === 'done') {
-          require('../services/trialEmails').scheduleTrialEvaluation(userId, tenantId);
+          require('../services/postLifecycleEmails').schedulePostLifecycleEvaluation(userId, tenantId);
+          require('../services/postLifecycleEmails').evaluateMilestoneEmail(userId).catch(() => {});
           // Idea Engine origin stamp — streaming path never reaches res.json
           if (ideaCardId && data.post_id) {
             require('../services/ideaEngine').stampIdeaCard(ideaCardId, data.post_id, userId, tenantId);
@@ -791,7 +801,8 @@ router.post('/', async (req, res) => {
 
       const primaryQuality = buildQualityPayload(primaryGate, 1, true);
 
-      require('../services/trialEmails').scheduleTrialEvaluation(userId, tenantId);
+      require('../services/postLifecycleEmails').schedulePostLifecycleEvaluation(userId, tenantId);
+      require('../services/postLifecycleEmails').evaluateMilestoneEmail(userId).catch(() => {});
 
       return res.json({
         ok: true,

@@ -242,16 +242,21 @@
     });
   }
 
-  // ── Trial banner (site-wide) ─────────────────────────────────
-  // Active trial: dismissible indigo bar with countdown.
-  // Expired trial: non-dismissible amber bar nudging upgrade.
-  async function initTrialBanner() {
+  // ── Free-tier banner (site-wide) ─────────────────────────────
+  // Posts remaining: dismissible indigo bar with a "N free posts left" count.
+  // Cap reached: non-dismissible amber bar nudging upgrade.
+  async function initFreeTierBanner() {
     try {
       const sub = await cachedFetch('/api/billing/subscription', { credentials: 'same-origin' });
       if (!sub.ok) return;
+      if (sub.free_posts_limit == null) return; // not on the free tier
 
-      // ── Post-trial: show non-dismissible amber bar ──────────
-      if (sub.trial_expired) {
+      const used = sub.free_posts_used ?? 0;
+      const limit = sub.free_posts_limit;
+      const left = Math.max(0, limit - used);
+
+      // ── Cap reached: show non-dismissible amber bar ──────────
+      if (left <= 0) {
         const banner = document.createElement('div');
         banner.id = 'trial-banner';
         banner.style.cssText = [
@@ -262,7 +267,7 @@
           'font-size:14px', 'font-weight:500',
         ].join(';');
         banner.innerHTML = `
-          <span>Your free trial has ended.</span>
+          <span>You've used all your free posts.</span>
           <button type="button" class="trial-banner-upgrade"
             style="background:#fff;border:none;color:#b45309;font-weight:700;cursor:pointer;font-size:13px;padding:4px 12px;border-radius:6px"
           >Upgrade to Pro →</button>
@@ -282,11 +287,8 @@
         return;
       }
 
-      // ── Active trial: dismissible countdown bar ─────────────
+      // ── Posts remaining: dismissible bar ─────────────────────
       if (localStorage.getItem('trial_banner_dismissed')) return;
-      if (sub.status !== 'trialing' || !sub.trial_ends_at) return;
-      const daysLeft = Math.max(0, Math.ceil((new Date(sub.trial_ends_at) - Date.now()) / 86400000));
-      if (daysLeft <= 0) return;
 
       const banner = document.createElement('div');
       banner.id = 'trial-banner';
@@ -298,13 +300,13 @@
         'font-size:14px', 'font-weight:500',
       ].join(';');
       banner.innerHTML = `
-        <span>${daysLeft} day${daysLeft !== 1 ? 's' : ''} left in your free trial.</span>
+        <span>${left} free post${left !== 1 ? 's' : ''} left.</span>
         <button type="button" class="trial-banner-upgrade"
           style="background:none;border:none;color:#fff;font-weight:700;text-decoration:underline;cursor:pointer;font-size:14px;padding:0"
         >Upgrade now →</button>
         <button type="button"
           style="background:none;border:none;color:rgba(255,255,255,0.7);cursor:pointer;font-size:18px;line-height:1;padding:0 4px"
-          aria-label="Dismiss trial banner">✕</button>
+          aria-label="Dismiss free posts banner">✕</button>
       `;
       document.body.prepend(banner);
       document.body.classList.add('has-trial-banner');
@@ -636,7 +638,7 @@
         renderSidebarUpgrade();
         renderSidebarHelp();
         renderSidebarRefer();
-        initTrialBanner();
+        initFreeTierBanner();
         initMiniOnboarding();
       })
       .catch(() => { /* offline */ });

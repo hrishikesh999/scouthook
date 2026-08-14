@@ -2,6 +2,7 @@
 
 const { db } = require('../db');
 const { getValidAccessToken } = require('./linkedinOAuth');
+const { throwIfAuthFailure, isReconnectRequired, markWorkspaceConnectionDead } = require('./linkedinHealth');
 
 const LINKEDIN_API_BASE    = 'https://api.linkedin.com';
 const LINKEDIN_API_VERSION = '202501';
@@ -56,6 +57,10 @@ async function fetchLinkedInMetrics(accessToken, shareUrn) {
 
   if (!response.ok) {
     const body = await response.text().catch(() => '');
+    // A metrics 401 is the same news as a publish 401 — the token is dead. Callers
+    // that know the workspace turn this into a reconnect flag, which is often how
+    // we learn about a revocation before the user next tries to post.
+    throwIfAuthFailure(response.status, body);
     throw new Error(`LinkedIn API error ${response.status}: ${body}`);
   }
 
@@ -119,7 +124,15 @@ async function syncPostMetrics(postId, tenantId) {
   }
 
   const accessToken = await resolveWorkspaceToken(tenantId);
-  const { likes, comments, reactions } = await fetchLinkedInMetrics(accessToken, row.linkedin_post_id);
+  let likes, comments, reactions;
+  try {
+    ({ likes, comments, reactions } = await fetchLinkedInMetrics(accessToken, row.linkedin_post_id));
+  } catch (err) {
+    if (isReconnectRequired(err)) {
+      await markWorkspaceConnectionDead(tenantId, err.linkedinAuthReason || 'unauthorized');
+    }
+    throw err;
+  }
   const lastSynced = new Date().toISOString();
 
   await db.prepare(`
@@ -177,6 +190,13 @@ async function syncWorkspaceMetrics(workspaceId) {
     } catch (err) {
       if (err instanceof RateLimitError) {
         console.warn(`[linkedinMetrics] rate limited during workspace sync, stopping early`);
+        break;
+      }
+      if (isReconnectRequired(err)) {
+        // The token is dead, so every remaining post in this workspace would fail
+        // the same way. Flag once, stop, and let the reconnect prompt do its work.
+        await markWorkspaceConnectionDead(workspaceId, err.linkedinAuthReason || 'unauthorized');
+        console.warn(`[linkedinMetrics] workspace=${workspaceId} needs reconnect, stopping sync`);
         break;
       }
       errors++;

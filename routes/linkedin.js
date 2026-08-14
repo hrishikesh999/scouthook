@@ -8,6 +8,7 @@ const { encrypt, decrypt, cacheLinkedInAvatar } = require('../services/linkedinO
 const { publishNow, normaliseScopes, connectionCanPublish } = require('../services/linkedinPublisher');
 const { addScheduledJob, addCommentJob, removeScheduledJob, isSchedulerEnabled } = require('../services/scheduler');
 const { syncPostMetrics, RateLimitError } = require('../services/linkedinMetrics');
+const { clearWorkspaceReconnectFlags } = require('../services/linkedinHealth');
 const { getUserPlan } = require('../services/subscription');
 const { planHasFeature } = require('../lib/planFeatures');
 const { canonicalAssetType } = require('../lib/assetType');
@@ -264,7 +265,7 @@ router.get('/status', (req, res) => {
 
   (async () => {
     const row = await db.prepare(`
-      SELECT display_name, avatar_url, expires_at, scopes
+      SELECT display_name, avatar_url, expires_at, scopes, needs_reconnect_at
       FROM linkedin_connections
       WHERE workspace_id = ? AND account_type = 'personal' AND is_default = true
     `).get(tenantId);
@@ -274,12 +275,18 @@ router.get('/status', (req, res) => {
       expiresInDays = Math.ceil((new Date(row.expires_at) - Date.now()) / 86400000);
     }
 
+    // A flagged connection is one LinkedIn has told us it will not accept. It stays
+    // `connected: true` — the row, the name and the avatar are all still real, and
+    // the UI needs them to say WHICH account to reconnect — but it cannot publish.
+    const needsReconnect = !!row?.needs_reconnect_at;
+
     return res.json({
       ok:              true,
       connected:       !!row,
       // Connected is not the same as publish-capable now that /start asks for
       // identity only. Callers that publish must check can_publish, not connected.
-      can_publish:     !!row && canPublishWith(row.scopes),
+      can_publish:     !!row && canPublishWith(row.scopes) && !needsReconnect,
+      needs_reconnect: needsReconnect,
       name:            row?.display_name || null,
       photo_url:       row?.avatar_url?.trim() || null,
       headline:        null,
@@ -368,6 +375,10 @@ router.get('/connect', async (req, res) => {
     ? '/editor.html?linkedin=connected'
     : from === 'settings'
     ? '/settings.html?linkedin_connected=true#voice-stage-7'
+    // Reconnecting from the dashboard banner — back to the dashboard, where the
+    // banner they just acted on will have cleared itself.
+    : from === 'dashboard'
+    ? '/dashboard.html?linkedin=connected'
     : '/linkedin.html';
 
   // Scope split. Sign-in surfaces (the /start flow) ask only for identity, which
@@ -562,6 +573,9 @@ router.get('/callback', async (req, res) => {
             display_name      = COALESCE(?, display_name),
             avatar_url        = COALESCE(?, avatar_url),
             scopes            = ?,
+            needs_reconnect_at = NULL,
+            last_error        = NULL,
+            last_verified_at  = now(),
             updated_at        = now()
         WHERE workspace_id = ? AND account_key = ?
       `).run(accessTokenEnc, refreshTokenEnc, expiresAt, linkedin_name, linkedin_photo, grantedScopes, tenantId, accountKey);
@@ -592,6 +606,18 @@ router.get('/callback', async (req, res) => {
       console.log(`[linkedin/callback] Connected user=${userId} as ${linkedin_name} (${linkedin_member_id}) scopes="${grantedScopes}" raw="${tokens.scope || ''}"`);
       require('../services/postLifecycleEmails').schedulePostLifecycleEvaluation(userId, tenantId);
     }
+
+    // The user just proved this workspace's LinkedIn access works, so clear any
+    // reconnect flag and retire the outstanding prompts. Org-page rows are cleared
+    // too: they ride the same member token that was just renewed, and leaving them
+    // flagged would keep publishing blocked behind a button already pressed.
+    await clearWorkspaceReconnectFlags(tenantId);
+    try {
+      await db.prepare(`
+        UPDATE notifications SET read_at = now()
+        WHERE tenant_id = ? AND type = 'reconnect_required' AND read_at IS NULL
+      `).run(tenantId);
+    } catch { /* non-fatal — the flag is what gates publishing */ }
 
     // Fire-and-forget: discover org pages the user administers
     discoverOrgPages(tokens.access_token, userId, tenantId, expiresAt)
@@ -626,7 +652,8 @@ router.get('/connections', async (req, res) => {
   try {
     const rows = await db.prepare(`
       SELECT id, account_type, account_key, display_name, avatar_url,
-             linkedin_member_id, organization_id, expires_at, is_default, authorized_by, scopes
+             linkedin_member_id, organization_id, expires_at, is_default, authorized_by,
+             scopes, needs_reconnect_at
       FROM linkedin_connections
       WHERE workspace_id = ?
       ORDER BY account_type ASC, created_at ASC
@@ -637,9 +664,13 @@ router.get('/connections', async (req, res) => {
     // publish-capable page, and an account picker that cannot tell them apart lets
     // the user choose the one that will fail. The computed boolean is what callers
     // need; the raw scope string stays server-side.
-    const connections = rows.map(({ scopes, ...conn }) => ({
+    //
+    // A revoked connection fails can_publish for the same reason: the picker must
+    // not offer an account that LinkedIn has already stopped accepting.
+    const connections = rows.map(({ scopes, needs_reconnect_at, ...conn }) => ({
       ...conn,
-      can_publish: connectionCanPublish({ scopes }),
+      can_publish:     connectionCanPublish({ scopes }) && !needs_reconnect_at,
+      needs_reconnect: !!needs_reconnect_at,
     }));
 
     return res.json({ ok: true, connections });
@@ -921,13 +952,20 @@ router.post('/schedule', async (req, res) => {
   // check and the eventual publish cannot disagree. No connection at all falls
   // through to the not_connected check further down.
   const schedulingConn = connectionId
-    ? await db.prepare('SELECT scopes FROM linkedin_connections WHERE id = ? AND workspace_id = ?')
+    ? await db.prepare('SELECT scopes, needs_reconnect_at FROM linkedin_connections WHERE id = ? AND workspace_id = ?')
         .get(Number(connectionId), tenantId)
     : await db.prepare(
-        "SELECT scopes FROM linkedin_connections WHERE workspace_id = ? AND account_type = 'personal' AND is_default = true"
+        "SELECT scopes, needs_reconnect_at FROM linkedin_connections WHERE workspace_id = ? AND account_type = 'personal' AND is_default = true"
       ).get(tenantId);
   if (schedulingConn && !connectionCanPublish(schedulingConn)) {
     return res.status(403).json({ ok: false, error: 'publish_scope_required' });
+  }
+  // Same argument as the scope gate directly above, for the same reason: a post
+  // scheduled against a revoked token is a post that fails silently in a queue
+  // hours from now. Refusing in front of the user, while they can still fix it,
+  // beats a confirmation followed by three retries and a not_sent row.
+  if (schedulingConn?.needs_reconnect_at) {
+    return res.status(401).json({ ok: false, error: 'reconnect_required' });
   }
 
   if (!content?.trim()) return res.status(400).json({ ok: false, error: 'missing_content' });

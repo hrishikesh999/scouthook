@@ -2,6 +2,13 @@
 
 const { db } = require('../db');
 const { encrypt, decrypt, fetchLinkedInPhotoUrl, cacheLinkedInAvatar } = require('./linkedinOAuth');
+const {
+  classifyAuthFailure,
+  throwIfAuthFailure,
+  isReconnectRequired,
+  markConnectionDead,
+  markConnectionAlive,
+} = require('./linkedinHealth');
 const { sendEmailToUser } = require('../emails');
 const path = require('path');
 const storage = require('./storage');
@@ -207,6 +214,15 @@ async function refreshConnectionToken(connection) {
  * @returns {Promise<string>}
  */
 async function getValidConnectionToken(connection) {
+  // Health is checked before expiry, because a revoked token has a perfectly
+  // valid-looking expires_at. Skipping this check is exactly how a known-dead
+  // connection still got handed to the API.
+  if (connection.needs_reconnect_at) {
+    throw Object.assign(new Error('reconnect_required'), {
+      linkedinAuthReason: connection.last_error || 'unauthorized',
+    });
+  }
+
   const expiresAt = new Date(connection.expires_at);
   const hoursUntilExpiry = (expiresAt - Date.now()) / 3_600_000;
 
@@ -215,62 +231,36 @@ async function getValidConnectionToken(connection) {
   }
 
   if (!connection.refresh_token_enc) {
-    await notifyWorkspaceReconnect(connection);
+    await markConnectionDead(connection, 'no_refresh_token');
     throw new Error('reconnect_required');
   }
 
   try {
     return await refreshConnectionToken(connection);
   } catch (e) {
+    // Revocation kills the refresh token too, so this is where a revoked
+    // connection surfaces if it happens to be near expiry — LinkedIn answers the
+    // refresh with invalid_grant. Either way the user must re-authorise.
     console.warn(`[publisher] Token refresh failed for connection=${connection.id}:`, e.message);
-    await notifyWorkspaceReconnect(connection);
+    await markConnectionDead(connection, 'refresh_failed');
     throw new Error('reconnect_required');
   }
 }
 
-/**
- * Create in-app and email reconnect notifications for every workspace member.
- * One notification per user at a time — deduped on an existing unread row.
- * Fire-and-forget — errors are swallowed.
- *
- * @param {object} connection  Row from linkedin_connections
- */
-async function notifyWorkspaceReconnect(connection) {
-  try {
-    const members = await db.prepare(
-      'SELECT user_id FROM workspace_members WHERE workspace_id = ?'
-    ).all(connection.workspace_id);
-
-    const connName = connection.display_name || 'your LinkedIn account';
-    const appUrl   = process.env.APP_URL || '';
-
-    for (const m of members) {
-      try {
-        const existing = await db.prepare(`
-          SELECT id FROM notifications
-          WHERE user_id = ? AND tenant_id = ? AND type = 'reconnect_required' AND read_at IS NULL
-          LIMIT 1
-        `).get(m.user_id, connection.workspace_id);
-        if (existing) continue;
-
-        await db.prepare(`
-          INSERT INTO notifications (user_id, tenant_id, type, title, body, ref_type)
-          VALUES (?, ?, 'reconnect_required', 'LinkedIn reconnection needed', ?, 'linkedin_connection')
-        `).run(
-          m.user_id,
-          connection.workspace_id,
-          `The LinkedIn connection for "${connName}" has expired. Please reconnect to continue publishing.`
-        );
-
-        sendEmailToUser(m.user_id, 'linkedin-reconnect', { app_url: appUrl },
-          { dedupKey: `reconnect_${connection.workspace_id}_${connection.id}`, withinHours: 24 });
-      } catch { /* per-member errors are non-fatal */ }
-    }
-  } catch { /* non-fatal */ }
-}
+// Reconnect notifications used to live here as a near-duplicate of the copy in
+// linkedinOAuth.js. Both now go through linkedinHealth.markConnectionDead, so the
+// notification, the DB flag, and the UI gate can never disagree about whether a
+// connection is broken.
 
 // ---------------------------------------------------------------------------
 // Core LinkedIn publish helpers
+//
+// Every one of these ends its error branch with throwIfAuthFailure before
+// building a generic message. A dead token has to be recognised on each call,
+// not just the final post — the image and document uploads run first, and an
+// unhandled 401 in one of them is what used to reach the user as raw LinkedIn
+// JSON with no reconnect prompt behind it. publishNow catches the normalised
+// error once and flags the connection.
 // ---------------------------------------------------------------------------
 
 /**
@@ -303,6 +293,7 @@ async function registerFeedshareImageUpload(accessToken, ownerUrn) {
   if (!res.ok) {
     if (res.status === 426) throw new Error('linkedin_api_version_error');
     const text = await res.text();
+    throwIfAuthFailure(res.status, text);
     throw new Error(`LinkedIn assets registerUpload error ${res.status}: ${text}`);
   }
 
@@ -333,6 +324,7 @@ async function uploadFeedshareImageBinary(accessToken, uploadUrl, buffer, extraH
   if (!res.ok) {
     if (res.status === 426) throw new Error('linkedin_api_version_error');
     const text = await res.text();
+    throwIfAuthFailure(res.status, text);
     throw new Error(`LinkedIn feedshare image upload error ${res.status}: ${text}`);
   }
 }
@@ -376,6 +368,7 @@ async function createUgcPostWithImage(accessToken, ownerUrn, content, assetUrn) 
   if (!res.ok) {
     if (res.status === 426) throw new Error('linkedin_api_version_error');
     const text = await res.text();
+    throwIfAuthFailure(res.status, text);
     throw new Error(`LinkedIn API error ${res.status}: ${text}`);
   }
 
@@ -416,6 +409,7 @@ async function callLinkedInAPI(accessToken, ownerUrn, content) {
   if (!res.ok) {
     if (res.status === 426) throw new Error('linkedin_api_version_error');
     const text = await res.text();
+    throwIfAuthFailure(res.status, text);
     throw new Error(`LinkedIn API error ${res.status}: ${text}`);
   }
 
@@ -456,6 +450,7 @@ async function createRestPostWithMedia(accessToken, ownerUrn, commentary, mediaP
   if (!res.ok) {
     if (res.status === 426) throw new Error('linkedin_api_version_error');
     const text = await res.text();
+    throwIfAuthFailure(res.status, text);
     throw new Error(`LinkedIn rest/posts error ${res.status}: ${text}`);
   }
 
@@ -514,6 +509,7 @@ async function initializeDocumentUpload(accessToken, ownerUrn) {
   if (!res.ok) {
     if (res.status === 426) throw new Error('linkedin_api_version_error');
     const text = await res.text();
+    throwIfAuthFailure(res.status, text);
     throw new Error(`LinkedIn document initializeUpload error ${res.status}: ${text}`);
   }
 
@@ -542,6 +538,7 @@ async function uploadDocumentPdf(accessToken, uploadUrl, buffer) {
   if (!res.ok) {
     if (res.status === 426) throw new Error('linkedin_api_version_error');
     const text = await res.text();
+    throwIfAuthFailure(res.status, text);
     throw new Error(`LinkedIn document upload error ${res.status}: ${text}`);
   }
 }
@@ -564,6 +561,10 @@ async function waitForDocumentAvailable(accessToken, documentUrn) {
       if (doc.status === 'PROCESSING_FAILED') {
         throw new Error('linkedin_document_processing_failed');
       }
+    } else {
+      // Without this, a token revoked mid-upload turns into 45 pointless polls and
+      // a 'not ready' timeout — a misleading diagnosis of an auth problem.
+      throwIfAuthFailure(res.status, await res.text().catch(() => ''));
     }
     await sleep(1500);
   }
@@ -626,6 +627,31 @@ async function publishNow(userId, tenantId, content, options = {}) {
     ? `urn:li:organization:${connection.organization_id}`
     : `urn:li:person:${connection.linkedin_member_id}`;
 
+  // Every LinkedIn call below is wrapped once, here, rather than each helper
+  // recording its own health: the helpers take an access token, not a connection
+  // row, and this is the nearest frame that knows which connection the token came
+  // from. One catch means an auth failure on the image upload flags the connection
+  // exactly the same way one on the final post does.
+  try {
+    const result = await publishToLinkedIn(accessToken, ownerUrn, content, options, userId, tenantId);
+    // Publishing is the strongest possible evidence the token works — worth
+    // recording so the daily sweep can skip freshly-verified connections.
+    markConnectionAlive(connection).catch(() => {});
+    return result;
+  } catch (err) {
+    if (isReconnectRequired(err)) {
+      await markConnectionDead(connection, err.linkedinAuthReason || 'unauthorized');
+      throw new Error('reconnect_required');
+    }
+    throw err;
+  }
+}
+
+/**
+ * The LinkedIn side of publishNow — asset upload (if any) plus the post itself.
+ * Split out so publishNow can wrap the whole sequence in a single health check.
+ */
+async function publishToLinkedIn(accessToken, ownerUrn, content, options, userId, tenantId) {
   if (options.carousel_pdf_url) {
     const pdfBytes = await readStoredFileBytes(options.carousel_pdf_url, userId, tenantId);
     if (!pdfBytes) throw new Error('invalid_carousel_pdf_url');
@@ -950,7 +976,10 @@ async function publishScheduledPost(scheduledPostId, { attemptsMade = 0, maxAtte
             : 'the scheduled time';
           const errorReasonMap = {
             plan_expired:                        'Your ScoutHook plan has expired — renew your subscription to continue publishing.',
-            reconnect_required:                  'Your LinkedIn connection has expired — please reconnect.',
+            // Not "expired" — the common cause is the member revoking access on
+            // LinkedIn, and pointing them at an expiry date sends them hunting for
+            // the wrong problem.
+            reconnect_required:                  'Your LinkedIn connection is no longer valid — reconnect LinkedIn to publish again.',
             not_connected:                       'Your LinkedIn account is not connected.',
             rate_limit_exceeded:                 'You reached LinkedIn\'s posting rate limit (1 post/hour).',
             invalid_image_url:                   'The attached image could not be accessed.',
@@ -1079,7 +1108,13 @@ async function publishFirstComment(scheduledPostId) {
     if (res.status === 429 || res.status >= 500) {
       throw new Error(`first_comment_transient_${res.status}`);
     }
-    await markFirstCommentFailed(scheduledPostId, row.tenant_id, row.user_id, `${res.status} ${errText}`);
+    // The post itself went out minutes ago, so a 401 here means the token died in
+    // between — worth flagging, because the same token is about to fail the next
+    // scheduled post too.
+    const authReason = classifyAuthFailure(res.status, errText);
+    if (authReason) await markConnectionDead(conn, authReason);
+    await markFirstCommentFailed(scheduledPostId, row.tenant_id, row.user_id,
+      authReason ? 'reconnect_required' : `${res.status} ${errText}`);
     // Do not throw — the status is persisted and the guard above prevents retries.
     return;
   }

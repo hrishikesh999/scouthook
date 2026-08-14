@@ -71,6 +71,16 @@ async function establishSession(req, userId, workspaceId) {
   await new Promise((resolve, reject) =>
     req.session.save(err => err ? reject(err) : resolve())
   );
+
+  // Ask LinkedIn whether this workspace's token still works, in the background.
+  // Revocation happens outside the app and leaves expires_at looking healthy, so
+  // without a probe the first symptom is a 401 mid-publish. Doing it at session
+  // start means the dashboard the user is about to land on already knows, and the
+  // reconnect prompt is waiting for them. Never awaited — login must not depend on
+  // LinkedIn being reachable.
+  require('../services/linkedinHealth')
+    .probeWorkspaceConnections(workspaceId)
+    .catch(() => {});
 }
 
 // ── Rate limiters ─────────────────────────────────────────────────────────────

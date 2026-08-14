@@ -218,6 +218,18 @@ async function loadLinkedInExpiryBanner() {
     if (!res.ok) return;
     const data = await res.json();
 
+    // A revoked connection outranks the expiry countdown: the token is dead NOW,
+    // and its expires_at still reads weeks out, so the countdown would either say
+    // nothing or reassure the user while publishing is broken.
+    if (data.needs_reconnect) {
+      banner.innerHTML = `
+        <span>LinkedIn is no longer accepting your connection — publishing and scheduled posts will fail until you reconnect. This usually means access was revoked in your LinkedIn settings.</span>
+        <a href="/api/linkedin/connect?from=dashboard">Reconnect LinkedIn →</a>
+      `;
+      banner.hidden = false;
+      return;
+    }
+
     if (!data.connected || data.expires_in_days === null || data.expires_in_days > 7) return;
 
     const days = data.expires_in_days;

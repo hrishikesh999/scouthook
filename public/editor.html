@@ -469,6 +469,11 @@ let linkedinConnected    = false;
 // Separate from linkedinConnected on purpose: /start connects with the identity
 // scope only, so an account can be fully connected and still unable to post.
 let linkedinCanPublish   = false;
+// Third state, distinct from both of the above: the account is connected and was
+// granted publishing, but LinkedIn has since stopped accepting the token — almost
+// always because the member revoked ScoutHook's access. Nothing about the account
+// changed on our side, so it needs its own message and its own recovery.
+let linkedinNeedsReconnect = false;
 let linkedinProfileName  = '';
 let linkedinProfilePhoto = '';
 let linkedinConnections  = [];
@@ -935,6 +940,7 @@ async function checkLinkedInStatus() {
     // w_member_social to the first publish. Reading `connected` alone showed a
     // clean editor to accounts that could not publish or schedule anything.
     linkedinCanPublish = !!data.can_publish;
+    linkedinNeedsReconnect = !!data.needs_reconnect;
 
     // Populate connections array for the account selector
     if (connRes.ok) {
@@ -955,7 +961,16 @@ async function checkLinkedInStatus() {
     // — which reads as broken, not as "one permission missing". It opens the
     // normal modal; the permission is asked for at the point of publishing, where
     // it argues for itself, and the banner above explains it before then.
-    if (linkedinConnected && !linkedinCanPublish) {
+    // Revocation is checked first: a revoked connection also fails can_publish, and
+    // telling someone to grant a permission they already granted sends them into a
+    // loop that cannot fix anything.
+    if (linkedinConnected && linkedinNeedsReconnect) {
+      paintReconnectBanner();
+      if (schedBtn && !scheduleEditLocked) {
+        schedBtn.disabled = true;
+        schedBtn.title = 'Reconnect LinkedIn to schedule';
+      }
+    } else if (linkedinConnected && !linkedinCanPublish) {
       paintPermissionBanner();
       if (schedBtn && !scheduleEditLocked) {
         schedBtn.disabled = false;
@@ -1029,6 +1044,33 @@ function paintPermissionBanner() {
     cta.textContent = 'Allow posting →';
     cta.href = publishScopeUrl();
     cta.setAttribute('aria-label', 'Allow ScoutHook to publish to your LinkedIn');
+  }
+  strip.hidden = false;
+}
+
+/**
+ * Swap the banner into its "LinkedIn stopped accepting this connection" form.
+ *
+ * Worth keeping separate from the permission banner: there, the user genuinely has
+ * not granted something. Here they granted everything and LinkedIn revoked it —
+ * usually because they removed ScoutHook under LinkedIn's own permitted-services
+ * settings, sometimes after a password change. Saying "allow posting" would be
+ * both wrong and unfixable-sounding; saying what happened and offering one button
+ * is the whole recovery.
+ */
+function paintReconnectBanner() {
+  const strip = document.getElementById('no-linkedin-actions');
+  const title = document.getElementById('linkedin-banner-title');
+  const body  = document.getElementById('linkedin-banner-body');
+  const cta   = document.getElementById('connect-publish-btn');
+  if (!strip) return;
+
+  if (title) title.textContent = 'Reconnect LinkedIn to keep publishing';
+  if (body)  body.textContent  = 'LinkedIn is no longer accepting this connection — this usually means access was revoked from your LinkedIn settings. Reconnecting takes a few seconds and your drafts are untouched.';
+  if (cta) {
+    cta.textContent = 'Reconnect LinkedIn →';
+    cta.href = publishScopeUrl();
+    cta.setAttribute('aria-label', 'Reconnect your LinkedIn account');
   }
   strip.hidden = false;
 }
@@ -3988,6 +4030,16 @@ function wireSchedule() {
           await goGrantPublishScope();
           return;
         }
+        // Revoked between page load and this click — the server refuses to queue a
+        // post it knows will fail, so this leads to re-authorisation rather than an
+        // error the user cannot act on.
+        if (data.error === 'reconnect_required' || data.error === 'not_connected') {
+          linkedinNeedsReconnect = true;
+          linkedinCanPublish = false;
+          paintReconnectBanner();
+          await goGrantPublishScope();
+          return;
+        }
         const errMap = {
           scheduling_unavailable: 'Scheduling is temporarily unavailable. Please try again in a few minutes.',
           scheduled_for_too_soon: 'Please schedule at least 5 minutes from now.',
@@ -4019,6 +4071,16 @@ function wireSchedule() {
     if (!content) {
       modalErr.textContent = 'Your post is empty. Add some content before publishing.';
       modalErr.classList.add('visible');
+      return;
+    }
+    // Revoked: send them straight to re-authorisation rather than through a
+    // request that can only come back 401. Checked ahead of the scope branch
+    // because a revoked connection fails that test too, for the wrong reason.
+    if (linkedinConnected && linkedinNeedsReconnect) {
+      modalErr.textContent = 'LinkedIn stopped accepting this connection. Taking you there to reconnect — your post is saved.';
+      modalErr.classList.add('visible');
+      btn.disabled = true;
+      await goGrantPublishScope();
       return;
     }
     // Missing the write scope: ask for it instead of sending a request that can
@@ -4060,6 +4122,16 @@ function wireSchedule() {
         if (data.error === 'publish_scope_required') {
           linkedinCanPublish = false;
           paintPermissionBanner();
+          await goGrantPublishScope();
+          return;
+        }
+        // The case that used to dump a raw LinkedIn 401 body into this red text.
+        // The token is dead; the only thing that fixes it is re-authorising, so go
+        // there instead of reporting a failure the user cannot act on.
+        if (data.error === 'reconnect_required') {
+          linkedinNeedsReconnect = true;
+          linkedinCanPublish = false;
+          paintReconnectBanner();
           await goGrantPublishScope();
           return;
         }

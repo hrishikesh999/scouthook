@@ -517,6 +517,13 @@ app.get('/auth/google/callback',
     return passport.authenticate('google', { failureRedirect: '/login.html?error=oauth_failed' })(req, res, next);
   },
   async (req, res) => {
+    // Same LinkedIn liveness probe the email-login path runs (see establishSession
+    // in routes/email-auth.js): a revoked connection must be flagged by the time
+    // the user reaches the dashboard, not when they next press Publish.
+    require('./services/linkedinHealth')
+      .probeWorkspaceConnections(req.user.tenant_id)
+      .catch(() => {});
+
     // Track login event + capture country on first login
     try {
       await db.prepare(
@@ -1167,6 +1174,32 @@ if (process.env.NODE_ENV !== 'test') {
     sendLinkedInTokenExpiryWarnings();
     setInterval(sendLinkedInTokenExpiryWarnings, 24 * 60 * 60 * 1000);
   }, 30 * 60 * 1000);
+}
+
+// ---------------------------------------------------------------------------
+// LinkedIn connection health sweep — daily.
+//
+// The expiry warning above only sees connections whose expires_at is running
+// down. Revocation is invisible to it: LinkedIn kills the token while our stored
+// expiry still reads months out. This sweep asks LinkedIn directly, so a user who
+// revoked access (or was revoked by a password change) gets the reconnect email
+// while their scheduled posts are still in the future — rather than finding out
+// when the queue quietly fails to publish them.
+// ---------------------------------------------------------------------------
+async function runLinkedInHealthSweep() {
+  try {
+    await require('./services/linkedinHealth').sweepConnectionHealth();
+  } catch (e) {
+    console.warn('[linkedin-health-cron] sweep failed (non-fatal):', e.message);
+  }
+}
+// Offset 45 min from startup — after the expiry cron, so the two do not compete
+// for LinkedIn's rate limit on boot.
+if (process.env.NODE_ENV !== 'test') {
+  setTimeout(() => {
+    runLinkedInHealthSweep();
+    setInterval(runLinkedInHealthSweep, 24 * 60 * 60 * 1000);
+  }, 45 * 60 * 1000);
 }
 
 // ---------------------------------------------------------------------------

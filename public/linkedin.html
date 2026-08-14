@@ -75,12 +75,24 @@
 
       function renderConnRow(c, confirmMsg) {
         const expired = c.expires_at && new Date(c.expires_at) < new Date();
+        // Revocation outranks the expiry check: a revoked token keeps a future
+        // expires_at, so this row would otherwise read "Connected" for an account
+        // LinkedIn has already stopped accepting.
+        const status = c.needs_reconnect
+          ? '<div style="font-size:11px;color:var(--text-danger)">LinkedIn revoked access — reconnect to publish</div>'
+          : expired
+          ? '<div style="font-size:11px;color:var(--text-danger)">Token expired — reconnect</div>'
+          : '<div style="font-size:11px;color:var(--text-muted)">Connected</div>';
+        const reconnect = (c.needs_reconnect || expired)
+          ? '<a href="/api/linkedin/connect?from=settings" style="font-size:12px;padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--teal,#0F766E);text-decoration:none">Reconnect</a>'
+          : '';
         return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
           ${c.avatar_url ? `<img src="${escapeHtml(c.avatar_url)}" style="width:32px;height:32px;border-radius:50%;object-fit:cover" alt="" />` : '<div style="width:32px;height:32px;border-radius:50%;background:var(--bg-input,#111);border:1px solid var(--border);display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg></div>'}
           <div style="flex:1;min-width:0">
             <div style="font-size:13px;font-weight:600;color:var(--text)">${escapeHtml(c.display_name || c.account_key)}</div>
-            ${expired ? '<div style="font-size:11px;color:var(--text-danger)">Token expired — reconnect</div>' : '<div style="font-size:11px;color:var(--text-muted)">Connected</div>'}
+            ${status}
           </div>
+          ${reconnect}
           <button data-disconnect="${c.id}" data-confirm="${escapeHtml(confirmMsg)}" type="button" style="font-size:12px;padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--text-danger);cursor:pointer">Disconnect</button>
         </div>`;
       }

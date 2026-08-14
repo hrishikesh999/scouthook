@@ -116,6 +116,10 @@ async function getValidAccessToken(workspaceId) {
 
   if (!row) throw new Error('not_connected');
 
+  // Checked before expiry: a revoked token keeps a healthy-looking expires_at, so
+  // the date alone never reveals it. See linkedinHealth for how the flag is set.
+  if (row.needs_reconnect_at) throw new Error('reconnect_required');
+
   const expiresAt = new Date(row.expires_at);
   const hoursUntilExpiry = (expiresAt - Date.now()) / 3_600_000;
 
@@ -123,8 +127,10 @@ async function getValidAccessToken(workspaceId) {
     return decrypt(row.access_token_enc);
   }
 
+  const { markConnectionDead } = require('./linkedinHealth');
+
   if (!row.refresh_token_enc) {
-    await notifyAllWorkspaceMembersReconnect(workspaceId, row.display_name);
+    await markConnectionDead(row, 'no_refresh_token');
     throw new Error('reconnect_required');
   }
 
@@ -132,7 +138,7 @@ async function getValidAccessToken(workspaceId) {
     const newToken = await refreshConnectionToken(row);
     return newToken;
   } catch {
-    await notifyAllWorkspaceMembersReconnect(workspaceId, row.display_name);
+    await markConnectionDead(row, 'refresh_failed');
     throw new Error('reconnect_required');
   }
 }

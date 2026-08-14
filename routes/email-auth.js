@@ -335,7 +335,11 @@ router.post('/login', loginLimiter, async (req, res) => {
     const brandProfile = await db.prepare(
       'SELECT onboarding_complete FROM profiles WHERE workspace_id = ? AND is_default = true LIMIT 1'
     ).get(workspaceId);
-    const dest = brandProfile?.onboarding_complete ? '/dashboard.html' : '/onboarding.html';
+    // Same soft entry point as verify-email — a returning user who signed up
+    // through /start and never finished the full brand interview should land
+    // back on /start (sign in, one question, a post), not be walled behind the
+    // seven-screen wizard a second time.
+    const dest = brandProfile?.onboarding_complete ? '/dashboard.html' : '/start.html';
     return res.json({ ok: true, redirect: dest });
   } catch (err) {
     console.error('[email-auth] login error:', err.message);
@@ -474,7 +478,11 @@ router.post('/reset-password', async (req, res) => {
     const brandProfile = await db.prepare(
       'SELECT onboarding_complete FROM profiles WHERE workspace_id = ? AND is_default = true LIMIT 1'
     ).get(workspaceId);
-    const dest = brandProfile?.onboarding_complete ? '/dashboard.html' : '/onboarding.html';
+    // Same soft entry point as verify-email — a returning user who signed up
+    // through /start and never finished the full brand interview should land
+    // back on /start (sign in, one question, a post), not be walled behind the
+    // seven-screen wizard a second time.
+    const dest = brandProfile?.onboarding_complete ? '/dashboard.html' : '/start.html';
     return res.json({ ok: true, redirect: dest });
   } catch (err) {
     console.error('[email-auth] reset-password error:', err.message);

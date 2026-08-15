@@ -70,7 +70,7 @@ function normaliseLength(pref) {
  *   'monthly_quota_reached' | 'no_voice_profile' | 'missing_substance' | 'empty_post'
  */
 async function generatePost({ userId, tenantId, rawIdea, postType = null, lengthPreference = 'medium',
-                              ctaIntent = '', source = 'mcp', ideaCardId = null }) {
+                              ctaIntent = '', source = 'mcp' }) {
   const idea = (rawIdea || '').trim();
   if (!idea) throw new GenerateError('empty_input');
 
@@ -153,11 +153,6 @@ async function generatePost({ userId, tenantId, rawIdea, postType = null, length
   );
   const postId = postInsert.lastInsertRowid;
 
-  // 6. Side effects mirrored from the route (fire-and-forget, never block).
-  try {
-    require('./streak').recordStreakAction(userId, tenantId, 'generate');
-    if (ideaCardId) require('./ideaEngine').stampIdeaCard(ideaCardId, postId, userId, tenantId);
-  } catch { /* best-effort */ }
 
   const appUrl = (process.env.APP_URL || '').replace(/\/$/, '');
   return {

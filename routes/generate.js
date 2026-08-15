@@ -261,26 +261,6 @@ router.post('/', async (req, res) => {
     post_type = require('../services/organizePost').pickPostShape(raw_idea || '');
   }
 
-  // Idea Engine: generations that started from a dashboard "Today's 3" card carry
-  // idea_card_id. Every generation branch below responds via res.json with the new
-  // post's `id`, so one interception here stamps the origin onto the post row
-  // (the north-star metric) without touching all 11 insert sites.
-  const ideaCardId = parseInt(req.body.idea_card_id, 10) || null;
-  {
-    const origJson = res.json.bind(res);
-    res.json = (payload) => {
-      if (payload && payload.ok && payload.id) {
-        if (ideaCardId) {
-          require('../services/ideaEngine').stampIdeaCard(ideaCardId, payload.id, userId, tenantId);
-        }
-        // Consistency streak (Phase 2): any successful generation feeds the
-        // pipeline, card-originated or not. Fire-and-forget.
-        require('../services/streak').recordStreakAction(userId, tenantId, 'generate');
-      }
-      return origJson(payload);
-    };
-  }
-
   // Interview path: build the generator brief from the coach exchanges.
   // The structured `interview` payload is preferred — assembleBrief() labels
   // each answer by slot and wraps any coach skip-suggestion the user accepted
@@ -304,7 +284,7 @@ router.post('/', async (req, res) => {
     isInterviewPath = true;
   }
 
-  // Idea Engine auto-memories: mine the user's typed input for reusable facts
+  // Auto-memories: mine the user's typed input for reusable facts
   // (fire-and-forget, never blocks). Captured here — after interview answers
   // are folded in, but before RAG enrichment mutates raw_idea — so extraction
   // only ever sees what the user actually wrote or spoke.
@@ -314,28 +294,9 @@ router.post('/', async (req, res) => {
   const userTypedInput = isInterviewPath
     ? extractAuthorRealText(raw_idea).trim()
     : (raw_idea || '').trim();
-  // Idea-card 2-question flow sends the user's two answers separately — those
-  // are the real first-person material to mine (raw_idea is a composed brief
-  // that also contains the AI-drafted idea context, which we must NOT remember).
-  const ideaAnswers = typeof req.body.idea_answers === 'string' ? req.body.idea_answers.trim() : '';
-  if (ideaCardId && ideaAnswers.length >= 80 && !vault_idea_id) {
+  if (userTypedInput.length >= 80 && !vault_idea_id) {
     const { extractFactsFromInput } = require('../services/factExtraction');
-    extractFactsFromInput(userId, tenantId, ideaAnswers);
-  } else if (userTypedInput.length >= 80 && !vault_idea_id) {
-    const { extractFactsFromInput } = require('../services/factExtraction');
-    if (ideaCardId) {
-      // Legacy card path (no 2-question answers): input starts AI-drafted — only
-      // mine it if the user actually edited it, or we'd "remember" AI-invented facts.
-      Promise.resolve(
-        db.prepare('SELECT textarea_input FROM idea_cards WHERE id = ? AND tenant_id = ?').get(ideaCardId, tenantId)
-      ).then(card => {
-        if (!card || (card.textarea_input || '').trim() !== userTypedInput) {
-          extractFactsFromInput(userId, tenantId, userTypedInput);
-        }
-      }).catch(() => {});
-    } else {
-      extractFactsFromInput(userId, tenantId, userTypedInput);
-    }
+    extractFactsFromInput(userId, tenantId, userTypedInput);
   }
 
   if (!genPath) return res.status(400).json({ ok: false, error: 'missing_path' });
@@ -401,9 +362,8 @@ router.post('/', async (req, res) => {
   // what the user typed — interview answers have been folded in, but the vault
   // and RAG enrichment below have not yet spliced other people's text into it.
   //
-  // Skipped for vault and idea-card flows: their raw_idea is seeded from source
-  // documents or an AI-drafted angle, so its length says nothing about how much
-  // of it the author actually wrote.
+  // Skipped for the vault flow: its raw_idea is seeded from source documents,
+  // so its length says nothing about how much of it the author actually wrote.
   //
   // Classified for the record on every free-text generation, but only allowed to
   // ROUTE when the caller left the choice open. A caller that asked for organize
@@ -412,7 +372,7 @@ router.post('/', async (req, res) => {
   // whether the question is pulling enough material out of people was missing from
   // exactly the flow built to find out.
   let inputMaturity = null;
-  if (!vault_idea_id && !ideaCardId) {
+  if (!vault_idea_id) {
     const { classifyInputMaturity } = require('../services/inputMaturity');
     inputMaturity = classifyInputMaturity(extractAuthorRealText(raw_idea));
     if (!organizeMode && !forceWriteMode && inputMaturity.tier !== 'seed') organizeMode = true;
@@ -530,13 +490,6 @@ router.post('/', async (req, res) => {
         if (event === 'done') {
           require('../services/postLifecycleEmails').schedulePostLifecycleEvaluation(userId, tenantId);
           require('../services/postLifecycleEmails').evaluateMilestoneEmail(userId).catch(() => {});
-          // Idea Engine origin stamp — streaming path never reaches res.json
-          if (ideaCardId && data.post_id) {
-            require('../services/ideaEngine').stampIdeaCard(ideaCardId, data.post_id, userId, tenantId);
-          }
-          if (data.post_id) {
-            require('../services/streak').recordStreakAction(userId, tenantId, 'generate');
-          }
         }
       };
 

@@ -147,7 +147,7 @@ async function alreadySent(userId, template, dedupKey = null, withinHours = 24) 
  * Lifecycle (marketing) mail vs transactional. Only the former is
  * unsubscribable — the rest is account-essential and always delivers.
  */
-const LIFECYCLE_PREFIXES = ['welcome', 'nurture-', 'trial-', 'free-', 'daily-ideas', 'weekly-digest'];
+const LIFECYCLE_PREFIXES = ['welcome', 'nurture-', 'trial-', 'free-', 'weekly-digest'];
 
 function isLifecycleTemplate(templateName) {
   return LIFECYCLE_PREFIXES.some(p => templateName === p || templateName.startsWith(p));

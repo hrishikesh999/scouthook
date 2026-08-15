@@ -25,14 +25,6 @@ async function purgeWeakVault(tenantId = null) {
     const deleted = await db.prepare(`DELETE FROM vault_ideas WHERE ${where}`).run();
     console.log(`✓ Deleted ${deleted.changes} weak vault entries${tenantId ? ` for tenant ${tenantId}` : ' (all tenants)'}`);
 
-    // Also purge idea_cards that referenced those facts
-    const cardDeleted = await db.prepare(`
-      DELETE FROM idea_cards
-      WHERE tenant_id = ?
-        AND provenance_ref LIKE 'vault_idea:%'
-    `).run(tenantId || '%');
-    console.log(`✓ Cleaned up ${cardDeleted.changes} stale idea cards`);
-
     process.exit(0);
   } catch (err) {
     console.error('Error:', err.message);

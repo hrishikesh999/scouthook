@@ -8,7 +8,6 @@
   // have module-level const DOM references that cannot be safely re-executed).
   const PAGE_SCRIPTS = {
     '/dashboard.html':  '/js/dashboard.js',
-    '/ideas.html':      '/js/ideas.js',
     '/vault.html':      null,
     '/drafts.html':     '/js/drafts.js',
     '/schedule.html':   '/js/schedule.js',
@@ -35,8 +34,6 @@
     '/js/feedback-widget.js',
     '/js/confetti.min.js',
     '/js/app-router.js',
-    '/js/idea-cards.js',
-    '/js/ideas-pill.js',
   ]);
 
   // Track which page scripts have already been injected this session
@@ -59,7 +56,6 @@
   // Pages whose primary API call uses cachedFetch — warm the cache at click-time
   // so init() finds the data ready or in-flight (cachedFetch deduplicates).
   const ROUTE_PREFETCHES = {
-    '/ideas.html':     () => cachedFetch('/api/ideas/queue',              { credentials: 'same-origin' }, 60_000),
     '/drafts.html':    () => cachedFetch('/api/posts',                    { credentials: 'same-origin' }, 60_000),
     '/published.html': () => cachedFetch('/api/posts?status=published',   { credentials: 'same-origin' }, 60_000),
     '/schedule.html':  () => cachedFetch('/api/linkedin/scheduled',       { credentials: 'same-origin' }, 60_000),

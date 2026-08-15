@@ -99,14 +99,6 @@
               <span class="intent-card-desc">Prove your impact with data</span>
             </div>
           </button>
-          <!-- Get ideas — full-width CTA at bottom of grid -->
-          <button class="intent-ideas-cta" id="intent-ideas" type="button">
-            <span class="intent-card-icon">✨</span>
-            <div class="intent-card-body">
-              <span class="intent-card-title">Get ideas from your vault</span>
-              <span class="intent-card-desc">ScoutHook suggests posts based on your content</span>
-            </div>
-          </button>
         </div>
 
         <!-- Active pill question (legacy — kept for reach/convert freeform) -->
@@ -117,9 +109,6 @@
 
           <!-- Vault quality banner (if no docs) -->
           <div id="vault-quality-banner" style="display:none"></div>
-
-          <!-- Vault / suggested ideas (loaded on demand by "Get ideas") -->
-          <div id="vault-panel" class="vault-panel" style="display:none"></div>
 
           <!-- Back button + selected type label -->
           <div id="guided-header-row" style="display:none">
@@ -219,97 +208,12 @@
       </div>
     </footer>
 
-  <!-- ── Post type picker for vault ideas ──────────────────────────────── -->
-  <div id="gen-vault-type-picker-overlay" class="vault-add-overlay" style="display:none" role="dialog" aria-modal="true" aria-label="Choose a post type">
-    <div class="vault-add-modal vault-type-picker-modal">
-      <div class="vault-add-modal-header">
-        <span style="min-width:60px"></span>
-        <h2 class="vault-add-modal-title">Choose a post type</h2>
-        <button id="gen-vault-type-picker-close" class="vault-add-close" type="button" aria-label="Close">✕</button>
-      </div>
-      <div class="vault-type-grid">
-        <button class="gen-vault-type-card vault-type-card" data-type="trust">
-          <span class="vault-type-card-icon">✏️</span>
-          <div class="vault-type-card-body">
-            <span class="vault-type-card-title">Authority / Expertise</span>
-            <span class="vault-type-card-desc">Teach or clarify a concept</span>
-          </div>
-        </button>
-        <button class="gen-vault-type-card vault-type-card" data-type="story">
-          <span class="vault-type-card-icon">📖</span>
-          <div class="vault-type-card-body">
-            <span class="vault-type-card-title">Story / Experience</span>
-            <span class="vault-type-card-desc">A moment that shaped you</span>
-          </div>
-        </button>
-        <button class="gen-vault-type-card vault-type-card" data-type="bts">
-          <span class="vault-type-card-icon">🎬</span>
-          <div class="vault-type-card-body">
-            <span class="vault-type-card-title">Behind the Scenes</span>
-            <span class="vault-type-card-desc">Show your process</span>
-          </div>
-        </button>
-        <button class="gen-vault-type-card vault-type-card" data-type="contrarian">
-          <span class="vault-type-card-icon">🔥</span>
-          <div class="vault-type-card-body">
-            <span class="vault-type-card-title">Contrarian / Hot Take</span>
-            <span class="vault-type-card-desc">Challenge a belief</span>
-          </div>
-        </button>
-        <button class="gen-vault-type-card vault-type-card" data-type="framework">
-          <span class="vault-type-card-icon">📚</span>
-          <div class="vault-type-card-body">
-            <span class="vault-type-card-title">Framework / How-To</span>
-            <span class="vault-type-card-desc">Step-by-step guidance</span>
-          </div>
-        </button>
-        <button class="gen-vault-type-card vault-type-card" data-type="announcement">
-          <span class="vault-type-card-icon">🎉</span>
-          <div class="vault-type-card-body">
-            <span class="vault-type-card-title">Announcement</span>
-            <span class="vault-type-card-desc">Share news or a launch</span>
-          </div>
-        </button>
-        <button class="gen-vault-type-card vault-type-card" data-type="lead_gen">
-          <span class="vault-type-card-icon">🎯</span>
-          <div class="vault-type-card-body">
-            <span class="vault-type-card-title">Lead Gen / Offer</span>
-            <span class="vault-type-card-desc">Attract your ideal client</span>
-          </div>
-        </button>
-        <button class="gen-vault-type-card vault-type-card" data-type="lessons_learned">
-          <span class="vault-type-card-icon">📝</span>
-          <div class="vault-type-card-body">
-            <span class="vault-type-card-title">Lessons Learned</span>
-            <span class="vault-type-card-desc">Wisdom from experience</span>
-          </div>
-        </button>
-        <button class="gen-vault-type-card vault-type-card" data-type="pis">
-          <span class="vault-type-card-icon">💡</span>
-          <div class="vault-type-card-body">
-            <span class="vault-type-card-title">Problem-Insight-Solution</span>
-            <span class="vault-type-card-desc">Diagnose a problem</span>
-          </div>
-        </button>
-        <button class="gen-vault-type-card vault-type-card" data-type="results">
-          <span class="vault-type-card-icon">📊</span>
-          <div class="vault-type-card-body">
-            <span class="vault-type-card-title">Results / Case Study</span>
-            <span class="vault-type-card-desc">Prove your impact</span>
-          </div>
-        </button>
-      </div>
-    </div>
-  </div>
-
   </div>
 
   <script src="/js/session.js"></script>
   <script src="/js/ui-toast.js"></script>
   <script src="/js/account-bar.js"></script>
   <script src="/js/app-router.js"></script>
-  <script src="/js/idea-cards.js"></script>
-  <script src="/js/ideas-pill.js"></script>
   <script id="pricing-modal-script" src="/js/pricing-modal.js"></script>
   <script src="/js/voice-input.js"></script>
   <!-- Shared with the server's input router (services/inputMaturity.js re-exports

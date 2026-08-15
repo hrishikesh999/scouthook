@@ -21,7 +21,6 @@ const { z } = require('zod');
 const { db } = require('../db');
 const { verifyToken } = require('../lib/mcpTokens');
 const { getUserPlan, canGeneratePost } = require('../services/subscription');
-const { getDailyCards } = require('../services/ideaEngine');
 const { generatePost, GenerateError, GUIDED_POST_TYPES } = require('../services/mcpGenerate');
 
 const router = express.Router();
@@ -105,83 +104,6 @@ function buildServer({ userId, tenantId, scopes = ['read'] }) {
     }
   );
 
-  server.registerTool(
-    'list_todays_ideas',
-    {
-      title: "Today's post ideas",
-      description:
-        "Return today's suggested LinkedIn post ideas (idea cards) for the user's workspace. Each idea has a hook, a topic title, a post type, and prefill text the user can turn into a full post. Use this when the user asks what they should post about today.",
-      inputSchema: {},
-      annotations: { readOnlyHint: true, openWorldHint: false },
-    },
-    async () => {
-      const { cards, fresh } = await getDailyCards(userId, tenantId);
-      const ideas = (cards || []).map(c => ({
-        id: c.id ?? null,
-        hook: c.hook,
-        title: c.title,
-        post_type: c.post_type,
-        provenance_label: c.provenance_label || null,
-        prefill_text: c.textarea_input || null,
-        is_question: !!c.is_question,
-      }));
-      return jsonResult({ generated_fresh_today: !!fresh, count: ideas.length, ideas });
-    }
-  );
-
-  server.registerTool(
-    'get_idea_queue',
-    {
-      title: 'Saved idea queue',
-      description:
-        "Return the user's queued content: idea cards they saved for later, and questions they answered that ScoutHook can turn into posts. Use this when the user asks what's in their queue or what they've saved.",
-      inputSchema: {
-        limit: z.number().int().min(1).max(100).optional()
-          .describe('Max saved cards to return (default 25).'),
-      },
-      annotations: { readOnlyHint: true, openWorldHint: false },
-    },
-    async ({ limit }) => {
-      const cap = limit || 25;
-      const [saved, answered] = await Promise.all([
-        db.prepare(
-          `SELECT id, hook, title, post_type, tier, provenance_label, textarea_input, updated_at
-           FROM   idea_cards
-           WHERE  tenant_id = ? AND status = 'saved'
-           ORDER  BY updated_at ASC
-           LIMIT  ?`
-        ).all(tenantId, cap),
-        db.prepare(
-          `SELECT id, seed_text, source_ref, hook_preview, funnel_type, created_at, status
-           FROM   vault_ideas
-           WHERE  tenant_id = ? AND source = 'daily_question'
-           ORDER  BY created_at DESC
-           LIMIT  15`
-        ).all(tenantId),
-      ]);
-      return jsonResult({
-        saved: saved.map(c => ({
-          id: c.id,
-          hook: c.hook,
-          title: c.title,
-          post_type: c.post_type,
-          provenance_label: c.provenance_label || null,
-          prefill_text: c.textarea_input || null,
-          saved_on: c.updated_at,
-        })),
-        answered_questions: answered.map(a => ({
-          vault_idea_id: a.id,
-          question: (a.source_ref || '').replace(/^You answered: "|"$/g, ''),
-          answer: a.seed_text,
-          hook: a.hook_preview,
-          post_type: a.funnel_type,
-          answered_at: a.created_at,
-          already_used: a.status !== 'fresh',
-        })),
-      });
-    }
-  );
-
   // --- Write tools (Phase 2) ------------------------------------------------
   // Gated on the token carrying 'write' scope. Each routes through
   // services/mcpGenerate.js, which enforces the same monthly quota as the web app.
@@ -244,53 +166,6 @@ function buildServer({ userId, tenantId, scopes = ['read'] }) {
         });
         return jsonResult({
           post_id: r.id,
-          post: r.post,
-          post_type: r.funnel_type,
-          quality: r.quality,
-          edit_url: r.edit_url,
-        });
-      } catch (err) {
-        return translateGenerateError(err);
-      }
-    }
-  );
-
-  server.registerTool(
-    'generate_from_idea',
-    {
-      title: 'Draft a post from a saved idea',
-      description:
-        'Turn one of the user\'s idea cards (from list_todays_ideas or get_idea_queue) into a full LinkedIn ' +
-        'post in their voice, using the idea\'s prefill text and post type. Returns the draft and an edit link. ' +
-        'Counts against the monthly generation quota.',
-      inputSchema: {
-        idea_card_id: z.number().int().positive().describe('The id of an idea card from list_todays_ideas / get_idea_queue.'),
-        length_preference: z.enum(['short', 'medium', 'long']).optional(),
-      },
-      annotations: { title: 'Draft a post from a saved idea', readOnlyHint: false, destructiveHint: false, openWorldHint: false },
-    },
-    async ({ idea_card_id, length_preference }) => {
-      if (!canWrite) return requireWrite();
-      const card = await db.prepare(
-        `SELECT id, hook, title, textarea_input, post_type
-         FROM   idea_cards WHERE id = ? AND tenant_id = ?`
-      ).get(idea_card_id, tenantId);
-      if (!card) {
-        return errorResult(`No idea card ${idea_card_id} found in this workspace.`);
-      }
-      const seed = (card.textarea_input || '').trim() || (card.hook || '').trim();
-      if (!seed) {
-        return errorResult('That idea card has no prefill text to write from. Open it in ScoutHook and add detail.');
-      }
-      try {
-        const r = await generatePost({
-          userId, tenantId, rawIdea: seed,
-          postType: card.post_type || null, lengthPreference: length_preference || 'medium',
-          ideaCardId: card.id,
-        });
-        return jsonResult({
-          post_id: r.id,
-          from_idea_card: card.id,
           post: r.post,
           post_type: r.funnel_type,
           quality: r.quality,

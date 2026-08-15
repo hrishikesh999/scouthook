@@ -51,19 +51,12 @@ let chatStep            = 0;
 let chatAnswers         = {};
 let mixRecommended      = null;
 let selectedVaultIdeaId  = null; // set when user picks a vault idea
-let selectedIdeaCardId   = null; // set when arriving from a dashboard "Today's 3" card
-let _ideaCardModePending = false; // true from init until startIdeaCardMode settles — blocks mix-recommendation override
-let _ideaCard = { active: false, card: null, step: 0, answers: [] }; // idea-card 2-question flow
-let _pendingVaultIdeaId  = null; // vault idea awaiting type selection in picker
-let _pendingVaultIdeaSeed = '';  // brief/seed text for pending vault idea
 let _tensionResult      = null; // { tension, missing } from silent extraction
 let _tensionDebounce    = null; // debounce timer for extraction on input
 let _nichePlaceholders  = [];   // niche-specific placeholder examples loaded from profile
 let _nicheProfile       = null; // cached profile for niche-aware nudge (brand_description)
 let _shownVaultIds      = new Set(); // vault idea IDs shown this session — rotates on each click
 let _shownAITopics      = [];        // AI topic titles shown this session — passed as exclusion list
-let _shownIdeaHooks     = [];        // idea engine hook lines shown — passed as exclude_hooks
-let _currentPostTypeFilter = null;   // active filter chip in the idea engine
 let _lengthPreference = 'Medium'; // unified Short/Medium/Long choice — drives length_preference on every flow
 let _awaitingLength   = false;    // true while the length pills are shown — blocks stray send/advance
 let _authorityCtaIntent        = '';       // CTA intent for Authority/Expertise posts
@@ -104,12 +97,6 @@ let _resultsChatStep         = 0;  // 0=outcome, 1=mechanism, 2=who_for, 3=lengt
 let _resultsOutcome          = '';
 let _resultsMechanism        = '';
 let _resultsWhoFor           = '';
-let _prefetchedIdeas    = null;      // prefetched result from /api/vault/generate-ideas
-let _prefetchPromise    = null;      // in-flight prefetch promise (reused if user clicks early)
-let _allFreshIdeas      = [];        // all fetched fresh ideas — filters applied client-side
-let _lastIcpSummary     = '';        // icp_summary from last fetch
-let _ideaInteracted     = false;     // true once user clicks a card — prevents mid-interaction refresh
-let _vaultHasDocs       = true;      // false when workspace has no vault documents
 // ── Conversational coach state ────────────────────────────────
 let _coach = {
   active:         false,  // coach is running
@@ -410,30 +397,6 @@ function renderStepDots(current, total) {
 
 /* ── Type selection ──────────────────────────────────────────── */
 
-// Lead magnet chip
-// Get ideas chip
-document.getElementById('intent-ideas')?.addEventListener('click', () => {
-  if (document.getElementById('plan-gate-banner')) return;
-  document.querySelectorAll('.intent-card[data-type]').forEach(p => p.classList.remove('active'));
-  const _pq = document.getElementById('pill-question');
-  if (_pq) { _pq.textContent = ''; _pq.classList.remove('visible'); }
-  document.getElementById('intent-ideas').classList.add('active');
-
-  // Mirror selectType() guided-flow pattern: hide header + pills, surface the back button
-  const genHeader         = document.querySelector('.gen-header');
-  const startingPills     = document.getElementById('starting-pills');
-  const guidedHeaderRow   = document.getElementById('guided-header-row');
-  const selectedTypeLabel = document.getElementById('selected-type-label');
-  if (genHeader)         genHeader.style.display         = 'none';
-  if (startingPills)     startingPills.style.display     = 'none';
-  if (guidedHeaderRow)   guidedHeaderRow.style.display   = 'flex';
-  if (selectedTypeLabel) selectedTypeLabel.textContent   = '✨ Get ideas';
-
-  loadVaultPanel(null, () => {
-    document.getElementById('intent-ideas')?.classList.remove('active');
-  }, { reset: true });
-});
-
 function selectType(type) {
   if (document.getElementById('plan-gate-banner')) return;
   selectedType        = type;
@@ -442,8 +405,6 @@ function selectType(type) {
   selectedVaultIdeaId = null;
   _tensionResult      = null;
   clearTimeout(_tensionDebounce);
-
-  document.getElementById('intent-ideas')?.classList.remove('active');
 
   hideChatError();
   hideSubstanceWarning();
@@ -498,373 +459,16 @@ async function loadMixRecommendation() {
     }
 
     markRecommendedBtn();
-    // Never override an active idea-card / vault-idea handoff: those set the type
-    // deliberately and drive the 2-question flow, whose chat input is empty by
-    // design. Without this guard, a mix-recommendation resolving after
-    // startIdeaCardMode wipes the 2-question flow back to the generic step 1.
+    // Never override an active vault-idea handoff: it sets the type
+    // deliberately, whose chat input is empty by design.
     if (mixRecommended && mixRecommended !== selectedType && !chatInput.value.trim()
-        && !selectedIdeaCardId && !selectedVaultIdeaId && !_ideaCardModePending) {
+        && !selectedVaultIdeaId) {
       selectType(mixRecommended);
     }
   } catch { /* non-fatal */ }
 }
 
 function markRecommendedBtn() { /* no-op — lead magnet chip removed */ }
-
-/* ── Vault panel / Idea Engine ───────────────────────────────── */
-
-// Active tab: 'fresh' | 'saved'
-let _ideaTab = 'fresh';
-
-async function loadVaultPanel(type, onItemSelected, { reset = false } = {}) {
-  if (reset) { _shownIdeaHooks = []; _currentPostTypeFilter = null; _ideaTab = 'fresh'; _allFreshIdeas = []; _lastIcpSummary = ''; _ideaInteracted = false; }
-  const panel = document.getElementById('vault-panel');
-  if (!panel) return;
-  panel.style.display = '';
-
-  if (_ideaTab === 'saved') {
-    await loadSavedIdeas(panel, onItemSelected);
-  } else {
-    await loadFreshIdeas(panel, type, onItemSelected);
-  }
-}
-
-async function prefetchIdeas() {
-  _prefetchPromise = (async () => {
-    try {
-      const res  = await fetch('/api/vault/generate-ideas', { headers: apiHeaders() });
-      const data = await res.json();
-      return data.ideas?.length ? data : null;
-    } catch { return null; }
-  })();
-  const data = await _prefetchPromise;
-  if (data) _prefetchedIdeas = data;
-}
-
-function _parseCachedIdeaRows(rows) {
-  return rows.map(row => {
-    let parsed = {};
-    try { parsed = JSON.parse(row.seed_text); } catch { parsed = {}; }
-    return {
-      id:            row.id,
-      hook:          row.hook_preview || parsed.hook || '',
-      angle:         parsed.angle     || '',
-      story_prompt:  parsed.story_prompt || '',
-      icp_resonance: row.source_ref   || '',
-      post_type:     row.funnel_type  || 'reach',
-      tension_type:  row.hook_archetype || null,
-      vault_anchor:  null,
-      saved:         false,
-    };
-  }).filter(i => i.hook);
-}
-
-async function loadFreshIdeas(panel, type, onItemSelected) {
-  // Phase A — immediately render previously generated ideas from DB (fast SQL, no AI)
-  let phaseARendered = false;
-  try {
-    const cacheRes  = await fetch('/api/vault/ideas?source=idea_engine&status=fresh&limit=3', { headers: apiHeaders() });
-    const cacheData = await cacheRes.json();
-    const cachedIdeas = _parseCachedIdeaRows(cacheData.ideas || []);
-    if (cachedIdeas.length && !_allFreshIdeas.length) {
-      // Show stale ideas with a refreshing indicator — user gets instant content
-      renderIdeaEngineWithRefreshing(panel, cachedIdeas, _lastIcpSummary, onItemSelected);
-      phaseARendered = true;
-    }
-  } catch { /* non-fatal — fall through to spinner */ }
-
-  if (!phaseARendered) {
-    renderIdeaLoadingState(panel, 'fresh', onItemSelected);
-  }
-
-  // Phase B — fetch fresh AI-generated ideas (uses prefetch promise if available)
-  try {
-    let data;
-    if (_prefetchedIdeas && !_shownIdeaHooks.length) {
-      data = _prefetchedIdeas;
-      _prefetchedIdeas = null;
-    } else if (_prefetchPromise && !_shownIdeaHooks.length) {
-      data = await _prefetchPromise;
-      _prefetchedIdeas = null;
-    } else {
-      const params = new URLSearchParams();
-      if (_shownIdeaHooks.length) params.set('exclude_hooks', JSON.stringify(_shownIdeaHooks.slice(-12)));
-      const res = await fetch(`/api/vault/generate-ideas?${params}`, { headers: apiHeaders() });
-      data = await res.json();
-    }
-
-    const ideas = data?.ideas || [];
-    if (!ideas.length && !_allFreshIdeas.length) {
-      panel.innerHTML = `
-        ${renderIdeaTabBar('fresh')}
-        <p class="idea-empty-saved">Complete your <a href="/settings.html" style="color:var(--brand)">brand voice profile</a> to generate post ideas.</p>`;
-      panel.querySelectorAll('.idea-tab').forEach(tab => {
-        tab.addEventListener('click', () => { _ideaTab = tab.dataset.tab; loadVaultPanel(null, onItemSelected); });
-      });
-      return;
-    }
-
-    if (ideas.length) {
-      _shownIdeaHooks.push(...ideas.map(i => i.hook));
-      _allFreshIdeas.push(...ideas);
-      _lastIcpSummary = data.icp_summary || _lastIcpSummary;
-    }
-
-    // Only update the panel if the user hasn't interacted with a card yet
-    if (!_ideaInteracted) {
-      renderFilteredIdeas(panel, onItemSelected);
-    }
-  } catch {
-    if (!phaseARendered) {
-      panel.innerHTML = `
-        ${renderIdeaTabBar('fresh')}
-        <p class="idea-empty-saved">Couldn't load ideas right now — try again in a moment.</p>`;
-      panel.querySelectorAll('.idea-tab').forEach(tab => {
-        tab.addEventListener('click', () => { _ideaTab = tab.dataset.tab; loadVaultPanel(null, onItemSelected); });
-      });
-    }
-    // If Phase A already rendered, silently swallow — user has stale ideas to read
-  }
-}
-
-function renderIdeaEngineWithRefreshing(panel, ideas, icpSummary, onItemSelected) {
-  // Renders Phase A (stale) ideas with a subtle refreshing badge in the header.
-  // Phase B will call renderFilteredIdeas() to replace these once AI resolves.
-  _allFreshIdeas = ideas;
-  renderIdeaEngine(panel, ideas, icpSummary, 'fresh', onItemSelected, true);
-}
-
-function renderFilteredIdeas(panel, onItemSelected) {
-  const visible = _currentPostTypeFilter
-    ? _allFreshIdeas.filter(idea => idea.post_type === _currentPostTypeFilter)
-    : _allFreshIdeas;
-  renderIdeaEngine(panel, visible, _lastIcpSummary, 'fresh', onItemSelected);
-}
-
-async function loadSavedIdeas(panel, onItemSelected) {
-  renderIdeaLoadingState(panel, 'saved', onItemSelected);
-
-  try {
-    const res  = await fetch('/api/vault/ideas?source=idea_engine&status=saved', { headers: apiHeaders() });
-    const data = await res.json();
-    // Map DB rows — seed_text is stored as JSON for idea_engine rows
-    const ideas = (data.ideas || []).map(row => {
-      let parsed = {};
-      try { parsed = JSON.parse(row.seed_text); } catch { parsed = {}; }
-      return {
-        id:            row.id,
-        hook:          row.hook_preview || parsed.hook || row.seed_text.split('\n')[0] || '',
-        angle:         parsed.angle     || row.seed_text.split('\n\n')[1] || row.seed_text,
-        story_prompt:  parsed.story_prompt || '',
-        icp_resonance: row.source_ref   || '',
-        post_type:     row.funnel_type  || 'reach',
-        vault_anchor:  null,
-        tension_type:  row.hook_archetype || null,
-        saved:         true,
-      };
-    });
-
-    if (!ideas.length) {
-      renderIdeaEmptySaved(panel, onItemSelected);
-      return;
-    }
-    renderIdeaEngine(panel, ideas, '', 'saved', onItemSelected);
-  } catch { panel.style.display = 'none'; panel.innerHTML = ''; }
-}
-
-function renderIdeaTabBar(activeTab, onTabSwitch) {
-  return `<div class="idea-tab-bar">
-    <button class="idea-tab${activeTab === 'fresh' ? ' active' : ''}" type="button" data-tab="fresh">Fresh ideas</button>
-    <button class="idea-tab${activeTab === 'saved' ? ' active' : ''}" type="button" data-tab="saved">Saved</button>
-  </div>`;
-}
-
-function renderIdeaLoadingState(panel, activeTab, onItemSelected) {
-  panel.innerHTML = `
-    ${renderIdeaTabBar(activeTab)}
-    <div class="idea-engine-loading">
-      <span class="idea-spinner"></span>
-      <span>${activeTab === 'saved' ? 'Loading saved ideas…' : 'Generating ideas for your audience…'}</span>
-    </div>`;
-  panel.querySelectorAll('.idea-tab').forEach(tab => {
-    tab.addEventListener('click', () => {
-      _ideaTab = tab.dataset.tab;
-      loadVaultPanel(null, onItemSelected);
-    });
-  });
-}
-
-function renderIdeaEmptySaved(panel, onItemSelected) {
-  panel.innerHTML = `
-    ${renderIdeaTabBar('saved')}
-    <p class="idea-empty-saved">No saved ideas yet. Generate fresh ideas and bookmark the ones you want to come back to.</p>`;
-  panel.querySelectorAll('.idea-tab').forEach(tab => {
-    tab.addEventListener('click', () => {
-      _ideaTab = tab.dataset.tab;
-      loadVaultPanel(null, onItemSelected);
-    });
-  });
-}
-
-function renderIdeaEngine(panel, ideas, icpSummary, activeTab, onItemSelected, isRefreshing = false) {
-  const PILL = {
-    reach:   { bg: '#eff6ff', color: '#1d4ed8', label: 'Reach' },
-    trust:   { bg: '#f0fdf4', color: '#166534', label: 'Trust' },
-    convert: { bg: '#fff7ed', color: '#9a3412', label: 'Convert' },
-  };
-
-  const isFreshTab = activeTab === 'fresh';
-
-  const filterRow = isFreshTab ? (() => {
-    const activeFilter = _currentPostTypeFilter;
-    return `<div class="idea-filter-chips">${['all','reach','trust','convert'].map(t =>
-      `<button class="idea-filter-chip${(!activeFilter && t === 'all') || activeFilter === t ? ' active' : ''}" type="button" data-filter="${t}">${t === 'all' ? 'All' : t.charAt(0).toUpperCase() + t.slice(1)}</button>`
-    ).join('')}</div>`;
-  })() : '';
-
-  const cards = ideas.map((idea, idx) => {
-    const pill = PILL[idea.post_type] || PILL.reach;
-    const isSaved = !!idea.saved;
-    return `<div class="idea-engine-card-wrap" data-idx="${idx}">
-      <button class="idea-engine-card" type="button" data-idx="${idx}">
-        <span class="idea-hook">${escapeHtml(idea.hook)}</span>
-        <span class="idea-angle">${escapeHtml(idea.angle)}</span>
-        ${idea.icp_resonance ? `<span class="idea-icp-resonance">${escapeHtml(idea.icp_resonance)}</span>` : ''}
-        <span class="idea-card-footer">
-          <span class="idea-type-pill" style="background:${pill.bg};color:${pill.color}">${pill.label}</span>
-          ${idea.vault_anchor ? '<span class="idea-vault-badge">From your vault</span>' : ''}
-        </span>
-      </button>
-      <div class="idea-card-actions">
-        <button class="idea-bookmark${isSaved ? ' saved' : ''}" type="button" data-idx="${idx}" aria-label="${isSaved ? 'Unsave idea' : 'Save idea'}" title="${isSaved ? 'Remove from saved' : 'Save for later'}">${isSaved ? '★' : '☆'}</button>
-        <button class="idea-discard" type="button" data-idx="${idx}" aria-label="Discard idea" title="Discard">×</button>
-      </div>
-    </div>`;
-  }).join('');
-
-  const vaultNudge = (isFreshTab && !_vaultHasDocs)
-    ? `<div class="idea-vault-nudge">Ideas from your brand voice &amp; audience · <a href="/vault.html">Add vault docs for richer, more specific ideas →</a></div>`
-    : '';
-
-  panel.innerHTML = `
-    ${renderIdeaTabBar(activeTab)}
-    <div class="idea-engine-header">
-      <div class="idea-engine-header-row">
-        ${icpSummary ? `<span class="idea-icp-summary">IDEAS FOR: ${escapeHtml(icpSummary)}</span>` : ''}
-        ${isFreshTab ? `<span class="idea-autosave-note">${isRefreshing ? '<span class="idea-refreshing-chip"><span class="idea-spinner-sm"></span> Refreshing…</span>' : 'Auto-saved · discard any you don\'t need'}</span>` : ''}
-      </div>
-      ${filterRow}
-    </div>
-    <div class="idea-engine-grid">${cards}</div>
-    ${vaultNudge}
-    ${isFreshTab ? `<button class="idea-load-more" type="button" id="idea-load-more-btn">Load more ideas →</button>` : ''}`;
-
-  // Card click — fetch brief, store pending vault data, open type picker
-  panel.querySelectorAll('.idea-engine-card').forEach((btn, i) => {
-    btn.addEventListener('click', async () => {
-      _ideaInteracted = true;
-      const idea     = ideas[i];
-      const seedText = `${idea.hook}\n\n${idea.angle}`;
-
-      // Fetch expanded brief
-      let brief = seedText;
-      if (idea.id) {
-        showSpecificityNudge('Preparing your idea…');
-        try {
-          const r = await fetch(`/api/vault/brief-idea?id=${encodeURIComponent(idea.id)}`, { headers: apiHeaders() });
-          const d = await r.json();
-          if (d.ok && d.brief && d.brief.trim().length > 60) brief = d.brief.trim();
-        } catch { /* non-fatal — keep seedText */ }
-        hideSpecificityNudge();
-      }
-
-      // Close vault panel and open type picker
-      panel.style.display = 'none';
-      document.getElementById('intent-ideas')?.classList.remove('active');
-
-      _pendingVaultIdeaId   = idea.id || null;
-      _pendingVaultIdeaSeed = brief;
-      openGenVaultTypePicker();
-    });
-  });
-
-  // Bookmark toggle
-  panel.querySelectorAll('.idea-bookmark').forEach((btn, i) => {
-    btn.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      const idea    = ideas[i];
-      if (!idea.id) return;
-      const isSaved = btn.classList.contains('saved');
-      const newStatus = isSaved ? 'fresh' : 'saved';
-      try {
-        await fetch(`/api/vault/ideas/${idea.id}`, {
-          method: 'PATCH',
-          headers: { ...apiHeaders(), 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status: newStatus }),
-        });
-        btn.classList.toggle('saved', !isSaved);
-        btn.textContent   = isSaved ? '☆' : '★';
-        btn.title         = isSaved ? 'Save for later' : 'Remove from saved';
-        btn.setAttribute('aria-label', isSaved ? 'Save idea' : 'Unsave idea');
-        idea.saved = !isSaved;
-        // If we're on the saved tab and just unsaved, remove the card
-        if (activeTab === 'saved' && isSaved) {
-          btn.closest('.idea-engine-card-wrap')?.remove();
-          const remaining = panel.querySelectorAll('.idea-engine-card-wrap');
-          if (!remaining.length) renderIdeaEmptySaved(panel, onItemSelected);
-        }
-      } catch { /* non-fatal */ }
-    });
-  });
-
-  // Discard button — removes from UI immediately, patches DB async
-  panel.querySelectorAll('.idea-discard').forEach((btn, i) => {
-    btn.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      const idea = ideas[i];
-      const wrap = btn.closest('.idea-engine-card-wrap');
-      if (wrap) {
-        wrap.classList.add('idea-discard-out');
-        setTimeout(() => wrap.remove(), 200);
-      }
-      // Remove from in-memory list so it doesn't reappear on filter changes
-      _allFreshIdeas = _allFreshIdeas.filter(x => x.id !== idea.id);
-      ideas.splice(i, 1);
-      if (!idea.id) return;
-      try {
-        await fetch(`/api/vault/ideas/${idea.id}`, {
-          method: 'PATCH',
-          headers: { ...apiHeaders(), 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status: 'discarded' }),
-        });
-      } catch { /* non-fatal */ }
-    });
-  });
-
-  // Filter chips (fresh tab only) — client-side filter, no API call
-  panel.querySelectorAll('.idea-filter-chip').forEach(chip => {
-    chip.addEventListener('click', () => {
-      _currentPostTypeFilter = chip.dataset.filter === 'all' ? null : chip.dataset.filter;
-      renderFilteredIdeas(panel, onItemSelected);
-    });
-  });
-
-  // Tab switch
-  panel.querySelectorAll('.idea-tab').forEach(tab => {
-    tab.addEventListener('click', () => {
-      _ideaTab = tab.dataset.tab;
-      loadVaultPanel(null, onItemSelected);
-    });
-  });
-
-  // Load more (fresh tab only)
-  panel.querySelector('#idea-load-more-btn')?.addEventListener('click', () => {
-    _ideaInteracted = false;
-    loadFreshIdeas(panel, null, onItemSelected);
-  });
-
-  panel.style.display = '';
-}
 
 
 /* ── Chat module ─────────────────────────────────────────────── */
@@ -1540,9 +1144,6 @@ const chat = (() => {
     _type          = type;
     _tensionResult = null;
     selectedVaultIdeaId    = null;
-    // Switching post type exits idea-card mode (thread is cleared below anyway).
-    // selectedIdeaCardId is intentionally kept so funnel stamping still works.
-    _ideaCard = { active: false, card: null, step: 0, answers: [] };
     _lengthPreference      = 'Medium';
     _awaitingLength        = false;
     _authorityIdeaBrief    = '';
@@ -1651,9 +1252,7 @@ const chat = (() => {
 
     const val = chatInput.value.trim();
     if (!val) { showChatInputError('Add something before generating.'); chatInput.focus(); return; }
-    // Idea-card answers are often short and specific ("doubled it", "$40k in Q3")
-    // — don't hold them to the 15-char brief minimum.
-    if (val.length < 15 && !_ideaCard.active) { showChatInputError('Add a bit more to work with.'); chatInput.focus(); return; }
+    if (val.length < 15) { showChatInputError('Add a bit more to work with.'); chatInput.focus(); return; }
 
     // Coach is active — user is answering a question
     if (_coach.active) {
@@ -1669,30 +1268,6 @@ const chat = (() => {
       }
       _coach.exchangeCount++;
       runCoach();
-      return;
-    }
-
-    // Idea-card 2-question flow — user is answering Q1 or Q2. The two answers
-    // become the brief; the card's AI-drafted angle rides along as labeled
-    // context (composeIdeaBrief), never as the user's words.
-    if (_ideaCard.active) {
-      addUser(val);
-      chatInput.value       = '';
-      chatInput.style.height = '';
-      _ideaCard.answers.push(val);
-      const items = _ideaCard.card.questions.items;
-      if (_ideaCard.step === 0) {
-        _ideaCard.step = 1;
-        addQuestionBubble(items[1].q, items[1].help);
-        chatInput.placeholder = '1–3 sentences, plain words…';
-        renderStepDots(1, 3);
-        chatInput.focus();
-        return;
-      }
-      // Q2 answered — compose the brief, ask length, then generate.
-      const ideaBrief = composeIdeaBrief();
-      renderStepDots(2, 3);
-      showLengthQuestion({ onPick: () => triggerGenerate({ enrichedIdea: ideaBrief, skipSubstanceCheck: true }) });
       return;
     }
 
@@ -2182,121 +1757,7 @@ const chat = (() => {
     }
   }
 
-  // Compose the generator brief from an idea card + the user's two answers.
-  // The card's AI-drafted angle is clearly labeled as context (NOT the author's
-  // words); the answers are marked as the real experience to build on. Mirrors
-  // the vault-enrichment labeling in routes/generate.js so the prompt keeps them
-  // distinct.
-  function composeIdeaBrief() {
-    const c = _ideaCard.card;
-    const items = c.questions.items;
-    const parts = [];
-    // Provenance tags (Phase 4) — the backend's authenticity core and the
-    // FABRICATED_SPECIFIC quality gate rely on these exact markers.
-    // Question cards: the hook is a prompt and textarea_input is the author's own
-    // real answer. Regular cards: hook + textarea_input are an AI-suggested angle,
-    // steering only — the model must not lift facts/numbers from them.
-    const angle = c.hook + (c.textarea_input ? '\n' + c.textarea_input : '');
-    if (c.is_question) {
-      parts.push('[AUTHOR-REAL]\n' + angle + '\n[/AUTHOR-REAL]');
-    } else {
-      parts.push('[AI-SUGGESTED]\n' + angle + '\n[/AI-SUGGESTED]');
-    }
-    const qa = _ideaCard.answers
-      .map((a, i) => `Q: ${items[i] ? items[i].q : ''}\nA: ${a}`)
-      .join('\n');
-    parts.push('[AUTHOR-REAL] The author\'s own answers, the real experience to build on:\n' + qa + '\n[/AUTHOR-REAL]');
-    return parts.join('\n\n');
-  }
-
-  // Entry point for the idea-card 2-question flow. Called by the page init when
-  // the URL carries idea_card=. Fetches the card (with its pre-minted questions)
-  // and either enters the 2-question flow or falls back to the legacy prefill.
-  async function startIdeaCardMode(cardId, fallbackIdea) {
-    const legacy = (card) => {
-      const text = fallbackIdea || (card && (card.textarea_input || card.hook)) || '';
-      if (text) {
-        chatInput.value        = text;
-        chatInput.style.height = 'auto';
-        chatInput.style.height = chatInput.scrollHeight + 'px';
-        chatInput.dispatchEvent(new Event('input'));
-      }
-    };
-
-    // Bail to legacy if the user already started typing/switched before the fetch.
-    if (chatInput.value.trim()) { return; }
-
-    let card = null;
-    try {
-      const res = await fetch('/api/ideas/' + cardId, { headers: apiHeaders() });
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data.ok) card = data.card;
-      }
-    } catch { /* network — fall through to legacy */ }
-
-    const items = card && card.questions && Array.isArray(card.questions.items) ? card.questions.items : null;
-    // Cards predating migration 073, or a failed fetch → legacy. Question cards
-    // are allowed here once answered: POST /:id/answer mints their two follow-ups
-    // and stashes the answer in textarea_input, so they run the same 2-question
-    // flow grounded in the user's own answer.
-    if (!card || !items || items.length !== 2) {
-      legacy(card);
-      return;
-    }
-
-    // Staleness guard: if the user typed/switched during the fetch, don't hijack.
-    if (chatInput.value.trim() || !_type) { legacy(card); return; }
-
-    _ideaCard = { active: true, card, step: 0, answers: [] };
-
-    // Enter focused mode: hide the generic header + type pills (the "step 1"
-    // chrome) so a reach/convert card doesn't flash the default screen behind
-    // the 2-question flow. Mirrors selectType()'s guided-flow branch.
-    const _genHeader = document.querySelector('.gen-header');
-    const _startingPills = document.getElementById('starting-pills');
-    const _pillQ = document.getElementById('pill-question');
-    if (_genHeader)     _genHeader.style.display     = 'none';
-    if (_startingPills) _startingPills.style.display = 'none';
-    if (_pillQ)        { _pillQ.textContent = ''; _pillQ.classList.remove('visible'); }
-
-    chatThread.innerHTML = '';
-    chatThread.style.display = '';
-
-    // Pinned idea context: the hook as the headline, the AI-drafted angle shown
-    // muted and clearly labeled so the user knows their answers are what matters.
-    const ctx = document.createElement('div');
-    ctx.className = 'chat-bubble-bot idea-context-bubble';
-    const hookEl = document.createElement('div');
-    hookEl.className   = 'chat-bubble-main';
-    hookEl.textContent = card.hook;
-    ctx.appendChild(hookEl);
-    if (card.provenance_label) {
-      const prov = document.createElement('p');
-      prov.className   = 'chat-q-help';
-      prov.textContent = card.provenance_label;
-      ctx.appendChild(prov);
-    }
-    if (card.textarea_input) {
-      const angle = document.createElement('p');
-      angle.className   = 'chat-q-help idea-context-angle';
-      angle.style.opacity = '0.7';
-      // Question cards store the user's own answer here (real words); regular
-      // cards store an AI-drafted angle. Label each honestly.
-      angle.textContent = card.is_question
-        ? 'Your answer: ' + card.textarea_input
-        : 'Suggested angle (AI-drafted — we\'ll use your words below): ' + card.textarea_input;
-      ctx.appendChild(angle);
-    }
-    chatThread.appendChild(ctx);
-
-    addQuestionBubble(items[0].q, items[0].help);
-    chatInput.placeholder = '1–3 sentences, plain words…';
-    renderStepDots(0, 3);
-    chatInput.focus();
-  }
-
-  return { init, advance, fireTensionExtraction, startIdeaCardMode };
+  return { init, advance, fireTensionExtraction };
 })();
 
 /* ── Post type intent cards ──────────────────────────────────── */
@@ -2332,10 +1793,6 @@ document.getElementById('back-to-pills')?.addEventListener('click', () => {
   chatInput.style.height = '';
   chatInput.placeholder  = 'What do you want to post about?';
 
-  const vaultPanel = document.getElementById('vault-panel');
-  if (vaultPanel) { vaultPanel.style.display = 'none'; vaultPanel.innerHTML = ''; }
-  document.getElementById('intent-ideas')?.classList.remove('active');
-
   chatInput.focus();
 });
 
@@ -2347,8 +1804,6 @@ document.querySelectorAll('.intent-card[data-type]').forEach(pill => {
     pill.classList.add('active');
     const pillQ = document.getElementById('pill-question');
     if (pillQ) { pillQ.textContent = ''; pillQ.classList.remove('visible'); }
-    const vaultPanel = document.getElementById('vault-panel');
-    if (vaultPanel) vaultPanel.style.display = 'none';
     selectType(pill.dataset.type);
   });
 });
@@ -2466,10 +1921,6 @@ async function triggerGenerate(opts = {}) {
     if (_selectedProfileId)                             body.profileId            = _selectedProfileId;
     if (tensionStmt)                                    body.tension_statement    = tensionStmt;
     if (selectedVaultIdeaId)                            body.vault_idea_id        = selectedVaultIdeaId;
-    if (selectedIdeaCardId)                             body.idea_card_id         = selectedIdeaCardId;
-    // Idea-card flow: send just the user's two answers so the server mines those
-    // for vault facts (not the composed brief, which also holds the AI angle).
-    if (_ideaCard.active && _ideaCard.answers.length)   body.idea_answers         = _ideaCard.answers.join('\n');
     if (opts.enrichedIdea || opts.skipSubstanceCheck)   body.skip_substance_check = true;
     if (opts.interview)                                 body.interview            = opts.interview;
     // 'write' forces the ghostwriter even though the input router would have
@@ -2761,56 +2212,6 @@ function hideSpecificityNudge() {
   clearTimeout(_nudgeDebounce);
 }
 
-function showVaultContextNote(type) {
-  const el = document.getElementById('vault-context-note');
-  if (!el) return;
-  if (type) {
-    const label = CHAT_CONFIGS[type]?.label || type;
-    el.innerHTML = `Writing this as <strong>${label}</strong> — edit or generate when ready.`;
-  } else {
-    el.textContent = 'Choose a post type above to continue.';
-  }
-  el.classList.add('visible');
-}
-
-function openGenVaultTypePicker() {
-  const overlay = document.getElementById('gen-vault-type-picker-overlay');
-  if (overlay) overlay.style.display = 'flex';
-}
-
-function closeGenVaultTypePicker() {
-  const overlay = document.getElementById('gen-vault-type-picker-overlay');
-  if (overlay) overlay.style.display = 'none';
-}
-
-function initGenVaultTypePicker() {
-  const overlay   = document.getElementById('gen-vault-type-picker-overlay');
-  const closeBtn  = document.getElementById('gen-vault-type-picker-close');
-  if (!overlay) return;
-
-  closeBtn?.addEventListener('click', closeGenVaultTypePicker);
-  overlay.addEventListener('click', e => { if (e.target === overlay) closeGenVaultTypePicker(); });
-  document.addEventListener('keydown', e => {
-    if (e.key === 'Escape' && overlay.style.display !== 'none') closeGenVaultTypePicker();
-  });
-
-  overlay.querySelectorAll('.gen-vault-type-card').forEach(card => {
-    card.addEventListener('click', () => {
-      const type = card.dataset.type;
-      closeGenVaultTypePicker();
-      selectType(type);
-      selectedVaultIdeaId = _pendingVaultIdeaId;
-      if (_pendingVaultIdeaSeed) {
-        chatInput.value        = _pendingVaultIdeaSeed;
-        chatInput.style.height = 'auto';
-        chatInput.style.height = chatInput.scrollHeight + 'px';
-        chatInput.dispatchEvent(new Event('input'));
-      }
-      showVaultContextNote(type);
-      chatInput.focus();
-    });
-  });
-}
 function hideVaultContextNote() {
   const el = document.getElementById('vault-context-note');
   if (el) el.classList.remove('visible');
@@ -2938,7 +2339,6 @@ async function checkVaultEmptyState() {
     const res  = await fetch('/api/vault/documents', { headers: apiHeaders() });
     const data = await res.json();
     if (!data.ok || (data.documents || []).length > 0) return;
-    _vaultHasDocs = false;
     const banner = document.getElementById('vault-quality-banner');
     if (banner) {
       banner.innerHTML =
@@ -2946,7 +2346,6 @@ async function checkVaultEmptyState() {
         '<a class="vqb-cta" href="/vault.html">Upload a case study →</a>';
       banner.style.display = '';
     }
-    // No longer hiding the ideas button — idea engine works on brand voice alone
   } catch { /* non-fatal */ }
 }
 
@@ -3020,8 +2419,6 @@ async function loadProfileSelector() {
 async function init() {
   await window.scouthookAuthReady;
 
-  initGenVaultTypePicker();
-
   const planBlocked = await checkPlanGate();
   if (planBlocked) return;
 
@@ -3029,31 +2426,20 @@ async function init() {
   const urlType        = urlParams.get('type');
   const urlIdea        = urlParams.get('idea');
   const urlVaultIdeaId = urlParams.get('vault_idea_id');
-  const urlIdeaCardId  = urlParams.get('idea_card');
-
-  // Set BEFORE loadMixRecommendation fires so its (async) result can never
-  // override the idea-card 2-question flow back to the generic step 1.
-  _ideaCardModePending = !!urlIdeaCardId;
 
   // Default to reach immediately; loadMixRecommendation may update this
   selectType('reach');
 
   loadMixRecommendation();    // fire-and-forget — updates active btn if mix recommends a type
   checkProfileGate();         // fire-and-forget — nudge appears if profile is empty
-  checkVaultEmptyState();     // fire-and-forget — hides "Get ideas" if vault has no documents
-  prefetchIdeas();            // fire-and-forget — warms idea cache for instant vault panel
+  checkVaultEmptyState();     // fire-and-forget — shows vault quality banner if vault has no documents
   loadProfileSelector();      // fire-and-forget — shows "Creating for" selector if >1 profile
 
   if (urlType && CHAT_CONFIGS[urlType]) {
     selectType(urlType);
     // Restore vault idea id AFTER selectType (selectType clears it)
     if (urlVaultIdeaId) selectedVaultIdeaId = parseInt(urlVaultIdeaId, 10) || null;
-    if (urlIdeaCardId)  selectedIdeaCardId  = parseInt(urlIdeaCardId, 10) || null;
-    // Idea card → 2-question flow (fetches questions by id; urlIdea is the
-    // legacy fallback). Do NOT prefill the chat box here — the flow owns it.
-    if (selectedIdeaCardId) {
-      chat.startIdeaCardMode(selectedIdeaCardId, urlIdea);
-    } else if (urlIdea) {
+    if (urlIdea) {
       chatInput.value        = urlIdea;
       chatInput.style.height = 'auto';
       chatInput.style.height = chatInput.scrollHeight + 'px';

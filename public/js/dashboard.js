@@ -8,10 +8,7 @@ let _perfTimer1 = null, _perfTimer2 = null;
 async function init() {
   const pipelineCard = document.getElementById('pipeline-card');
   if (!pipelineCard) return; // not on dashboard
-  const authData = await window.scouthookAuthReady;
-  personalizeGreeting(authData);
-  loadTodaysIdeas();
-  loadStreak();
+  await window.scouthookAuthReady;
   loadFunnel();
   loadPipeline();
   loadVoiceProfileBar();
@@ -44,68 +41,6 @@ window.__pageCleanup = function () {
 };
 
 init();
-
-function personalizeGreeting(authData) {
-  const firstName = (authData?.user?.displayName || '').split(' ')[0];
-  if (!firstName) return;
-  const heading = document.querySelector('.ti-heading');
-  if (heading) heading.textContent = `Today's ideas, ${firstName}`;
-}
-
-/* ── Today's Ideas (Idea Engine) ─────────────────────────────── */
-async function loadTodaysIdeas() {
-  const zone = document.getElementById('todays-ideas');
-  if (!zone) return;
-  zone.hidden = false;
-  try {
-    // Shared with the Ideas pill (1h TTL, busted by card actions) — in-flight
-    // dedup also stops a same-page double generation on the first load of the day.
-    const data = await cachedFetch('/api/ideas/today', { credentials: 'same-origin' }, 60 * 60 * 1000);
-    if (!data || !data.ok || !Array.isArray(data.cards) || !data.cards.length) throw new Error('no_cards');
-    renderIdeaCards(data.cards);
-  } catch {
-    // The supply ladder never runs dry, so this is a fetch/auth failure —
-    // a one-line inline state replaces the old hero-banner fallback block.
-    const wrap = document.getElementById('ti-cards');
-    if (wrap) wrap.innerHTML = `<div class="ti-empty">Couldn't load today's ideas — <a href="/generate.html?new=1">write your own →</a></div>`;
-  }
-}
-
-function renderIdeaCards(cards) {
-  const wrap = document.getElementById('ti-cards');
-  if (!wrap || !window.ScoutIdeaCards) return;
-  wrap.innerHTML = '';
-  const onRemoved = () => {
-    if (!wrap.querySelector('.ti-card')) {
-      wrap.innerHTML = `<div class="ti-empty">That's all for today — fresh ideas tomorrow. <a href="/generate.html?new=1">Or write your own →</a></div>`;
-    }
-  };
-  cards.forEach(card => {
-    wrap.appendChild(window.ScoutIdeaCards.buildCard(card, { mode: 'today', onRemoved }));
-  });
-}
-
-/* ── Consistency streak (Idea Engine Phase 2) ────────────────── */
-async function loadStreak() {
-  const chip = document.getElementById('ti-streak');
-  if (!chip) return;
-  try {
-    const res = await fetch('/api/ideas/streak', { headers: apiHeaders() });
-    if (!res.ok) return;
-    const data = await res.json();
-    if (!data.ok || !data.streak_count) return; // 0 → stay quiet, no pressure
-    // A plain "🔥 N-day streak" reads instantly; the old "Consistency / counted
-    // today" wording confused new users. Tooltip carries the how-to-keep-it detail.
-    const n   = data.streak_count;
-    const tip = data.active_today
-      ? "You've shown up today — nice."
-      : 'Save, answer, or write a post today to keep it going.';
-    chip.innerHTML = `<span class="ti-streak-value" title="${tip}">🔥 ${n}-day streak</span>`;
-    chip.hidden = false;
-  } catch {
-    // Non-fatal — the chip is a progressive enhancement
-  }
-}
 
 /* ── Content funnel — actual vs target mix, last 30 days ─────── */
 const FUNNEL_META = {

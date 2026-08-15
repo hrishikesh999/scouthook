@@ -782,7 +782,6 @@ app.use('/api/events',        requireWorkspaceMember, require('./routes/events')
 app.use('/api/media',         requireWorkspaceMember, require('./routes/media'));
 app.use('/api/notifications', requireWorkspaceMember, require('./routes/notifications'));
 app.use('/api/vault',         requireWorkspaceMember, requireWorkspaceActive, requireVaultFeatureForWrites, require('./routes/vault'));
-app.use('/api/ideas',         requireWorkspaceMember, requireWorkspaceActive, require('./routes/ideas'));
 app.use('/api/funnel',        requireWorkspaceMember, require('./routes/funnel'));
 app.use('/api/posts',         requireWorkspaceMember, require('./routes/performance'));
 app.use('/api/posts',         requireWorkspaceMember, require('./routes/carouselDrafts'));
@@ -792,7 +791,6 @@ app.use('/api/invites',       require('./routes/invites'));
 // Unauthenticated by design — the reader is in their inbox, not the app.
 // Authorised by the HMAC in the link (services/emailTokens).
 app.use('/api/unsubscribe', require('./routes/unsubscribe'));
-app.use('/api/email-preferences', require('./routes/emailPreferences'));
 app.use('/api/billing',    require('./routes/billing'));
 app.use('/api/feedback',   require('./routes/feedback'));
 app.use('/api/support',    require('./routes/support'));
@@ -837,7 +835,6 @@ app.get([
   '/settings.html',
   '/billing.html',
   '/vault.html',
-  '/ideas.html',
   '/workspace.html',
   '/workspaces.html',
   '/members.html',
@@ -1120,26 +1117,6 @@ if (process.env.NODE_ENV !== 'test') {
     runFreeCapFollowupCron();
     setInterval(runFreeCapFollowupCron, 24 * 60 * 60 * 1000);
   }, 30 * 60 * 1000);
-}
-
-// ---------------------------------------------------------------------------
-// Idea Engine Phase 2: nightly pre-compute + daily ideas email.
-// Pre-compute tick fires every 30 min but runs at most once per UTC day
-// (>= 06:00 UTC, guarded via platform_settings) — warms idea_cards so the
-// email cron and first dashboard load hit cache. Email cron is hourly with a
-// 7–10am local-time send window (restart-safe: email_log dedup + wide window).
-// ---------------------------------------------------------------------------
-if (process.env.NODE_ENV !== 'test') {
-  const { ideaPrecomputeTick } = require('./services/ideaPrecompute');
-  const { runIdeaEmailCron }   = require('./services/ideaEmails');
-  setTimeout(() => {
-    ideaPrecomputeTick();
-    setInterval(ideaPrecomputeTick, 30 * 60 * 1000);
-  }, 10 * 60 * 1000);
-  setTimeout(() => {
-    runIdeaEmailCron();
-    setInterval(runIdeaEmailCron, 60 * 60 * 1000);
-  }, 35 * 60 * 1000); // staggered after the pre-compute tick and trial cron
 }
 
 // ---------------------------------------------------------------------------

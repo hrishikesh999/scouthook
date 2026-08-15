@@ -79,7 +79,6 @@ router.post('/', async (req, res) => {
     await db.prepare(`
       UPDATE user_profiles
       SET    lifecycle_emails_opt_out_at = now(),
-             idea_email_cadence = 'off',
              updated_at = now()
       WHERE  user_id = ?
     `).run(String(u));

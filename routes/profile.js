@@ -82,6 +82,65 @@ router.get('/completion', async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// POST /api/profile/starter
+// The two questions /start asks before anything else: what you do, who you want
+// to reach. Body: { expertise, audience }.
+//
+// Why this endpoint exists rather than reusing POST /api/profile: that handler
+// takes the full onboarding payload and touches user_profiles, workspaces and
+// both voice tables. /start needs two strings written by someone who has been a
+// user for ninety seconds, so this is deliberately the narrowest possible write.
+//
+// What it buys: brand_description and audience_description were empty on 21 of
+// 21 workspaces created in the fortnight before this shipped, which means the
+// AUDIENCE RESONANCE block in buildSharedAuthorContext — marked non-negotiable
+// in the prompt — had nothing to bite on for any new user. These two fields feed
+// every post that author ever generates, not just their first.
+//
+// Registered above the GET /:user_id? wildcard for the same reason /completion
+// is, even though a POST could not be swallowed by a GET route: the ordering is
+// the convention in this file and the next wildcard added may not be a GET.
+// ---------------------------------------------------------------------------
+const STARTER_FIELD_MAX = 300;
+
+router.post('/starter', async (req, res) => {
+  const tenantId = req.tenantId;
+  if (!tenantId) return res.status(400).json({ ok: false, error: 'missing_workspace' });
+
+  const clean = (value) => {
+    if (typeof value !== 'string') return null;
+    const trimmed = value.trim();
+    return trimmed ? trimmed.slice(0, STARTER_FIELD_MAX) : null;
+  };
+
+  const expertise = clean(req.body?.expertise);
+  const audience  = clean(req.body?.audience);
+
+  // Nothing usable is a client bug, not a user error — /start gates its own
+  // button on both fields being filled.
+  if (!expertise && !audience) {
+    return res.status(400).json({ ok: false, error: 'nothing_to_save' });
+  }
+
+  try {
+    const profile = await db.prepare(
+      'SELECT id FROM profiles WHERE workspace_id = ? AND is_default = true LIMIT 1'
+    ).get(tenantId);
+    if (!profile) return res.status(404).json({ ok: false, error: 'profile_not_found' });
+
+    // Both upserts COALESCE, so a null field leaves any existing value alone —
+    // a user who returns to /start and fills only one box cannot blank the other.
+    await upsertBrandVoice(profile.id, { brand_description: expertise });
+    await upsertAudienceProfile(profile.id, { audience_description: audience });
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('[profile] POST /starter error:', err.message);
+    return res.status(500).json({ ok: false, error: 'starter_save_failed' });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // GET /api/profile/:user_id?
 // Assembles profile from: user_profiles (identity), workspaces (brand settings),
 // profiles + brand_voice_profiles + audience_profiles (voice DNA). Returns the

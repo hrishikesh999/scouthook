@@ -36,6 +36,35 @@ function stampHookShape(postId, content) {
   } catch { /* non-fatal */ }
 }
 
+// Persist the two first-post signals the organize path produces and used to drop
+// on the floor: the retention score (computed on every organize generation, sent
+// to the browser, never stored) and the /start template the author tapped.
+//
+// Stamped after the INSERT rather than added to it because only the organize
+// branch has a retention score, while three separate INSERT sites share that
+// column list — same reasoning as stampHookShape above. Fire-and-forget: losing
+// a measurement must never cost the author their post.
+function stampFirstPostSignals(postId, { retention, starterTemplate } = {}) {
+  if (!postId) return;
+  const score = typeof retention?.score === 'number' && Number.isFinite(retention.score)
+    ? retention.score
+    : null;
+  const template = typeof starterTemplate === 'string' && starterTemplate.trim()
+    ? starterTemplate.trim().slice(0, 40)
+    : null;
+  if (score === null && template === null) return;
+  try {
+    Promise.resolve(
+      db.prepare(`
+        UPDATE generated_posts
+        SET retention_score  = COALESCE(?, retention_score),
+            starter_template = COALESCE(?, starter_template)
+        WHERE id = ?
+      `).run(score, template, postId)
+    ).catch(() => {});
+  } catch { /* non-fatal */ }
+}
+
 // ---------------------------------------------------------------------------
 // Sliding window rate limiter — 10 generations per hour per user.
 // Uses Redis when available (consistent across multiple instances); falls back
@@ -563,6 +592,7 @@ router.post('/', async (req, res) => {
         );
         const primaryId = primaryInsert.lastInsertRowid;
         stampHookShape(primaryId, result.post);
+        stampFirstPostSignals(primaryId, { retention, starterTemplate: req.body?.starter_template });
 
         const primaryQuality = buildQualityPayload(gate, 1, true);
 

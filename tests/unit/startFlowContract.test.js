@@ -61,13 +61,88 @@ describe('/start generate request', () => {
     expect(generateRequestBody()).toMatch(/enforce_retention:\s*true/);
   });
 
-  test("post_type 'auto' is a value the server actually resolves", () => {
-    expect(generateRequestBody()).toMatch(/\bpost_type:\s*'auto'/);
-    // routes/generate.js maps 'auto' to a real shape via pickPostShape. If that
-    // branch is ever removed, 'auto' falls through to post_type_required.
+  // post_type used to be the literal 'auto', which made the server guess the
+  // shape from the author's wording via pickPostShape. The tapped template is
+  // strictly better information, so it now carries the shape — but 'auto' is
+  // still the escape hatch's value and the server branch that resolves it must
+  // stay, or "something else on my mind" 400s with post_type_required.
+  test('post_type comes from the chosen template', () => {
+    expect(generateRequestBody()).toMatch(/\bpost_type:\s*\(state\.template \|\| OPEN_TEMPLATE\)\.postType/);
+  });
+
+  test("'auto' is still a value the server resolves, for the escape hatch", () => {
+    expect(SRC).toMatch(/const OPEN_TEMPLATE = \{[\s\S]*?postType:\s*'auto'/);
     const route = fs.readFileSync(path.join(__dirname, '../../routes/generate.js'), 'utf8');
     expect(route).toMatch(/post_type\s*===\s*'auto'/);
     expect(route).toMatch(/pickPostShape/);
+  });
+
+  test('sends starter_template, or the per-template funnel is unreadable', () => {
+    expect(generateRequestBody()).toMatch(/\bstarter_template:\s*\(state\.template \|\| OPEN_TEMPLATE\)\.id/);
+    // The server has to persist it, or the field is decoration.
+    const route = fs.readFileSync(path.join(__dirname, '../../routes/generate.js'), 'utf8');
+    expect(route).toMatch(/starterTemplate:\s*req\.body\?\.starter_template/);
+  });
+});
+
+/**
+ * The template → TYPE_SHAPES contract.
+ *
+ * organizePost resolves the shape as `TYPE_SHAPES[postType] || TYPE_SHAPES.reach`.
+ * An unrecognised postType therefore does NOT error — it silently degrades to
+ * reach, "a story or observation, whatever fits", which is the vaguest
+ * instruction in the table and precisely what the templates exist to replace.
+ *
+ * The live trap is 'announcement': it is a real key in POST_TYPE_DISPATCH, so it
+ * reads as a valid post type everywhere else in the codebase, and it is NOT in
+ * TYPE_SHAPES. Anyone adding a fourth template from the dispatch list would ship
+ * a silently vague card.
+ */
+describe('/start templates map to real editor shapes', () => {
+  const ORG = fs.readFileSync(path.join(__dirname, '../../services/organizePost.js'), 'utf8');
+
+  function typeShapeKeys() {
+    const block = ORG.match(/const TYPE_SHAPES = \{([\s\S]*?)\n\};/);
+    expect(block).not.toBeNull();
+    return [...block[1].matchAll(/^\s{2}([a-z_]+):/gm)].map(m => m[1]);
+  }
+
+  function templatePostTypes() {
+    return [...SRC.matchAll(/postType:\s*'([^']+)'/g)].map(m => m[1]);
+  }
+
+  test('every template postType is a TYPE_SHAPES key (or the escape hatch)', () => {
+    const shapes = typeShapeKeys();
+    expect(shapes.length).toBeGreaterThan(0);
+
+    const used = templatePostTypes();
+    expect(used.length).toBeGreaterThan(1);
+
+    for (const t of used) {
+      if (t === 'auto') continue;
+      expect(shapes).toContain(t);
+    }
+  });
+
+  test("'announcement' is still absent from TYPE_SHAPES — the trap is real", () => {
+    // If this ever starts failing, the trap is gone and the guard above is
+    // cheaper than it looks. Until then it documents why the check exists.
+    expect(typeShapeKeys()).not.toContain('announcement');
+  });
+
+  test('each of the three templates carries a question and an example', () => {
+    const block = SRC.match(/const TEMPLATES = \[([\s\S]*?)\n\];/);
+    expect(block).not.toBeNull();
+
+    const ids       = [...block[1].matchAll(/id:\s*'([^']+)'/g)].map(m => m[1]);
+    const questions = [...block[1].matchAll(/question:\s*'/g)].length
+                    + [...block[1].matchAll(/question:\s*"/g)].length;
+    const examples  = [...block[1].matchAll(/example:\s*'/g)].length
+                    + [...block[1].matchAll(/example:\s*"/g)].length;
+
+    expect(ids).toHaveLength(3);
+    expect(questions).toBe(3);
+    expect(examples).toBe(3);
   });
 });
 

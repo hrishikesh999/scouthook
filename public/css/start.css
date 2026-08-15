@@ -298,6 +298,89 @@
 .st-textarea:focus { outline: none; border-color: var(--st-accent); box-shadow: 0 0 0 3px var(--st-accent-bg); }
 .st-textarea::placeholder { color: var(--st-ink-3); }
 
+/* ── Who you are: two single-line fields ─────────────────────────────────────
+   Same box as .st-textarea so the two screens read as one flow, minus the
+   resize handle — these answers are a line each and a drag affordance on a
+   one-line field invites the wrong amount of writing. */
+.st-field-label {
+  display: block;
+  margin: 18px 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--st-ink-2);
+}
+.st-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 13px 14px;
+  border: 1.5px solid var(--st-rule);
+  border-radius: 10px;
+  background: var(--st-surface);
+  font-family: inherit;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--st-ink);
+}
+.st-input:focus { outline: none; border-color: var(--st-accent); box-shadow: 0 0 0 3px var(--st-accent-bg); }
+.st-input::placeholder { color: var(--st-ink-3); }
+
+/* ── Pick a way in: the three template cards ─────────────────────────────────
+   Full-width stacked rather than a grid: three side-by-side tiles on a phone
+   force the labels to truncate, and the label is the entire decision. */
+.st-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 22px 0 18px;
+}
+.st-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 16px;
+  border: 1.5px solid var(--st-rule);
+  border-radius: 12px;
+  background: var(--st-surface);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color .15s ease, box-shadow .15s ease, transform .06s ease;
+}
+.st-card:hover { border-color: var(--st-accent); box-shadow: 0 0 0 3px var(--st-accent-bg); }
+.st-card:focus-visible { outline: none; border-color: var(--st-accent); box-shadow: 0 0 0 3px var(--st-accent-bg); }
+.st-card:active { transform: translateY(1px); }
+.st-card-label { font-size: 15.5px; font-weight: 600; color: var(--st-ink); line-height: 1.35; }
+/* The input requirement, stated up front. It is what stops someone picking a
+   shape their material cannot fill and getting a mangled post for it. */
+.st-card-need { font-size: 13px; color: var(--st-ink-2); line-height: 1.5; }
+
+/* The chosen template, pinned above the question on the ask screen. */
+.st-chip {
+  display: inline-block;
+  margin: 0 0 14px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  background: var(--st-accent-bg);
+  color: var(--st-accent);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+/* "84% your words." Sits directly under the post, before the publish button —
+   it is the last thing read before the decision it exists to unblock. */
+.st-ownership {
+  margin: 14px 0 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--st-accent-bg);
+  color: var(--st-ink-2);
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+.st-ownership b { color: var(--st-accent); }
+
 .st-or { text-align: center; font-size: 12.5px; color: var(--st-ink-3); margin: -4px 0; }
 
 /* Their first answer, echoed on the follow-up screen so the second question

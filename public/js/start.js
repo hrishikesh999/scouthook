@@ -12,13 +12,76 @@
 
 'use strict';
 
-const SCREENS = ['signin', 'ask', 'more', 'cook', 'post', 'earn'];
+const SCREENS = ['signin', 'who', 'pick', 'ask', 'more', 'cook', 'post', 'earn'];
+
+// The three ways in.
+//
+// Every one is a RECALL prompt, never an analysis prompt: it asks the author to
+// remember something they already lived rather than to conclude something about
+// their industry. That is the entire selection rule. Two earlier candidates were
+// cut for failing it — "what's broken in your field" demands authority a new user
+// doesn't feel entitled to claim, and "a mistake I made" demands a confession as
+// your opening act in front of your professional network.
+//
+// postType MUST be a TYPE_SHAPES key from services/organizePost.js. It is passed
+// through /api/generate straight into organizePost({ postType }), which resolves
+// `TYPE_SHAPES[postType] || TYPE_SHAPES.reach` — so an unrecognised value does not
+// error, it silently degrades to "a story or observation, whatever fits", the
+// vaguest instruction in the table. 'announcement' is the live trap: it exists in
+// POST_TYPE_DISPATCH but NOT in TYPE_SHAPES, so it reads as valid and fails quietly.
+//
+// The examples are deliberately unpolished. People mirror both the specificity and
+// the REGISTER of what they are shown: a finished-looking sample makes someone try
+// to write a finished post and freeze. These are what talking sounds like.
+const TEMPLATES = [
+  {
+    id:       'conversation',
+    postType: 'story',
+    label:    'A conversation from this week',
+    need:     'Something a client, colleague or prospect said that stuck with you.',
+    question: 'Who were you talking to — and what did they say?',
+    example:  "e.g. A prospect told me she'd been through three agencies before us. I asked what went wrong and she said none of them ever asked what we actually sell. That stopped me.",
+  },
+  {
+    id:       'explain',
+    postType: 'trust',
+    label:    'The thing you explain over and over',
+    need:     "Advice you've given more than once.",
+    question: 'What do you keep having to explain — and what do people assume instead?',
+    example:  "e.g. Everyone comes to me asking how to get more traffic. And I keep saying the same thing — traffic isn't the problem, nobody knows what to do when they land.",
+  },
+  {
+    id:       'surprise',
+    postType: 'lessons_learned',
+    label:    'Something that surprised you',
+    need:     'A recent result that went differently than you expected.',
+    question: 'What did you expect would happen — and what actually happened?',
+    example:  'e.g. I was sure the long onboarding call was why clients stuck around. Turns out the ones who stayed were the ones who replied to our first email.',
+  },
+];
+
+// The escape hatch. Someone whose material fits none of the three must not be
+// forced into a shape that mangles it — that is the one failure mode a fixed
+// template set introduces, and it costs a single option to remove. 'auto' is not
+// a TYPE_SHAPES key on purpose: the server reads it as "you decide" and runs
+// pickPostShape over the author's words, which is exactly the old behaviour.
+const OPEN_TEMPLATE = {
+  id:       'open',
+  postType: 'auto',
+  label:    'Something else on my mind',
+  need:     null,
+  question: "What's on your mind?",
+  example:  "e.g. Everyone wants to spend more on ads before they've checked whether anyone is actually calling their leads back.",
+};
 
 const state = {
   name: null,
   photo: null,
   headline: null,
   canPublish: false,
+  expertise: '',
+  audience: '',
+  template: null,
   answer: '',
   followUp: '',
   postId: null,
@@ -107,6 +170,102 @@ function paintIdentity() {
     pPhoto.alt = '';
     pPhoto.hidden = false;
   }
+}
+
+// ── Who you are ─────────────────────────────────────────────────────────────
+
+// Prefilled so a returning user isn't retyping what they already told us. Fired
+// in parallel with the LinkedIn status call in boot(), so it costs no extra wait.
+async function loadExistingProfile() {
+  try {
+    const r = await fetch('/api/profile', { credentials: 'same-origin' });
+    const d = await r.json();
+    const p = d?.profile;
+    if (!p) return;
+    state.expertise = p.brand_description   || '';
+    state.audience  = p.audience_description || '';
+    const exp = document.getElementById('st-expertise');
+    const aud = document.getElementById('st-audience');
+    if (exp && state.expertise) exp.value = state.expertise;
+    if (aud && state.audience)  aud.value = state.audience;
+  } catch (_) { /* prefill is a convenience — never block the flow on it */ }
+}
+
+// Fire-and-forget on purpose. These two lines make every future post better, but
+// none of them is required to write THIS one, and a failed write must not strand
+// someone two screens from their first post.
+function saveProfile() {
+  const payload = { expertise: state.expertise, audience: state.audience };
+  try {
+    fetch('/api/profile/starter', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }).catch(() => {});
+  } catch (_) { /* non-fatal */ }
+}
+
+// ── Pick a way in ───────────────────────────────────────────────────────────
+
+function paintCards() {
+  const wrap = document.getElementById('st-cards');
+  if (!wrap || wrap.childElementCount) return;
+
+  TEMPLATES.forEach((t) => {
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'st-card';
+    card.setAttribute('role', 'listitem');
+    card.dataset.templateId = t.id;
+
+    const label = document.createElement('span');
+    label.className = 'st-card-label';
+    label.textContent = t.label;
+
+    const need = document.createElement('span');
+    need.className = 'st-card-need';
+    need.textContent = t.need;
+
+    card.append(label, need);
+    card.addEventListener('click', () => chooseTemplate(t));
+    wrap.appendChild(card);
+  });
+}
+
+function chooseTemplate(template) {
+  state.template = template;
+  paintAsk();
+  show('ask');
+  // Focus the textarea, not the mic: the mic needs a deliberate tap (it asks for
+  // a permission), while a focused field lets someone who'd rather type start
+  // immediately. The transcript still lands here either way.
+  document.getElementById('st-answer')?.focus();
+}
+
+// Repaint the single question from the chosen template. Everything on the ask
+// screen that names the topic comes from here, so the pinned chip, the heading,
+// the placeholder and the hidden label can never drift apart.
+function paintAsk() {
+  const t = state.template || OPEN_TEMPLATE;
+
+  const chip = document.getElementById('st-ask-chip');
+  if (chip) {
+    chip.textContent = t.label;
+    chip.hidden = false;
+  }
+
+  const q = document.getElementById('st-ask-q');
+  if (q) q.textContent = t.question;
+
+  const answer = document.getElementById('st-answer');
+  if (answer) {
+    answer.placeholder = t.example;
+    answer.setAttribute('aria-label', t.question);
+  }
+
+  const label = document.querySelector('label[for="st-answer"]');
+  if (label) label.textContent = t.question;
 }
 
 // ── Voice input ─────────────────────────────────────────────────────────────
@@ -334,10 +493,17 @@ async function generate() {
         // decision described below, which the server makes for itself.
         path: 'idea',
         raw_idea: combinedAnswer(),
-        // Let the server read the answer and pick the shape. Hardcoding 'reach'
-        // gave the editor the vaguest instruction available ("whatever fits"),
-        // wasting the one line that tells it what to LEAD with.
-        post_type: 'auto',
+        // The tapped template's shape, not 'auto'. 'auto' makes the server run
+        // pickPostShape over the author's words, and that heuristic tests
+        // CONTRARIAN_CUE (everyone|most people|actually|isn't) BEFORE STORY_CUE —
+        // so an answer that contains both a scene and the words "most people"
+        // gets shaped as an assertion essay with the scene thrown away. The tap
+        // is better information than any regex over their phrasing, so we use it.
+        // Falls back to 'auto' for the escape hatch, which genuinely has no shape.
+        post_type: (state.template || OPEN_TEMPLATE).postType,
+        // Which way in they chose. Persisted on the post so the funnel
+        // (template → generated → published) is readable per template.
+        starter_template: (state.template || OPEN_TEMPLATE).id,
         source: 'start_flow',
         // No length_preference on purpose. The default is "match what they gave
         // you", which is the right rule for a spoken answer — a fixed 'short'
@@ -434,7 +600,42 @@ function paintPost() {
   const body = document.getElementById('st-preview-body');
   if (body) body.textContent = state.postText;
   paintVerdict();
+  paintOwnership();
   paintRarity();
+}
+
+// "84% your words." The single cheapest thing on this screen, because the number
+// was already being computed on every organize generation and discarded.
+//
+// It does two jobs at once: it is the recognition beat ("wait — I said that?"),
+// and it is permission to publish, because the fear that stops a first post is
+// not "is this good" but "is this me". Naming what we did to their sentences
+// answers that in one line.
+//
+// Gated hard on the numbers being real. Shown only when the editor genuinely
+// organised rather than composed (retention_ok) AND the share is high enough to
+// claim ownership out loud. Below that, silence — a confident ownership claim on
+// a post we largely wrote is the one lie this screen cannot afford, and it is the
+// exact claim the reader can check by rereading their own answer.
+const OWNERSHIP_MIN = 0.7;
+
+function paintOwnership() {
+  const el = document.getElementById('st-ownership');
+  if (!el) return;
+
+  const score = state.retentionScore;
+  if (!state.retentionOk || typeof score !== 'number' || score < OWNERSHIP_MIN) {
+    el.hidden = true;
+    return;
+  }
+
+  const pct = Math.round(score * 100);
+  const tail = state.hookLifted
+    ? 'Even the opening line is yours — we just moved it to the top.'
+    : 'We changed the order, not the words.';
+  el.innerHTML =
+    `<b>${pct}% your words.</b> ${tail}`;
+  el.hidden = false;
 }
 
 // Deliberately NOT the gate score. runQualityGate is an integrity check —
@@ -633,6 +834,30 @@ function combinedAnswer() {
 }
 
 function initEvents() {
+  document.getElementById('st-who-go')?.addEventListener('click', () => {
+    const expertise = document.getElementById('st-expertise')?.value.trim() || '';
+    const audience  = document.getElementById('st-audience')?.value.trim()  || '';
+
+    // Both required. This is the only place these two fields are ever collected
+    // for most users, and a blank one silently degrades every post they generate
+    // from here on — worth one line of friction to avoid.
+    if (expertise.length < 3 || audience.length < 2) {
+      showError('st-who-error', 'Both lines, even roughly — they shape every post we write for you.');
+      return;
+    }
+
+    state.expertise = expertise;
+    state.audience  = audience;
+    clearError('st-who-error');
+    saveProfile();
+    paintCards();
+    show('pick');
+  });
+
+  document.getElementById('st-pick-open')?.addEventListener('click', () => {
+    chooseTemplate(OPEN_TEMPLATE);
+  });
+
   document.getElementById('st-go')?.addEventListener('click', () => {
     const val = document.getElementById('st-answer').value.trim();
     if (val.length < 10) {
@@ -721,7 +946,10 @@ function initEvents() {
     history.replaceState({}, '', window.location.pathname);
   }
 
-  const connected = await loadLinkedInStatus();
+  // Both in parallel, both behind the same loader: the profile prefill only feeds
+  // the two fields on the first screen, so paying for it serially would show an
+  // empty form and then populate it, or leave a blank beat after the loader hides.
+  const [connected] = await Promise.all([loadLinkedInStatus(), loadExistingProfile()]);
   document.getElementById('st-init').style.display = 'none';
 
   // Read the stash BEFORE branching on oauthError. Denying the *write-scope*
@@ -769,6 +997,8 @@ function initEvents() {
     return;
   }
 
-  show('ask');
-  document.getElementById('st-answer')?.focus();
+  // Fresh run: who → pick → ask. A returning user finds their own answers already
+  // in the two fields (prefilled above) and can pass straight through.
+  show('who');
+  document.getElementById('st-expertise')?.focus();
 })();

@@ -84,6 +84,51 @@
     </div>
   </section>
 
+  <!-- ── Screen 1b: Who you are ────────────────────────────────
+       Two lines, asked before anything is generated. They are not throat-clearing:
+       brand_description and audience_description were empty on 21 of 21 workspaces
+       created in the fortnight before this shipped, which left the AUDIENCE
+       RESONANCE block in the generator prompt — marked non-negotiable there — with
+       nothing to bite on for any new user. These two answers improve every post
+       this person ever generates, not just the first one. -->
+  <section id="st-who" class="st-screen" aria-label="About you">
+    <div class="st-content">
+      <p class="st-greet" id="st-who-h">First, two quick lines.</p>
+      <h1 class="st-question">Who are you, and who are you writing for?</h1>
+
+      <label class="st-field-label" for="st-expertise">What do you do?</label>
+      <input id="st-expertise" class="st-input" type="text" maxlength="300" autocomplete="off"
+             placeholder="e.g. I help B2B SaaS founders fix their onboarding emails" />
+      <p class="st-micro st-micro--tight">A specific sentence beats a job title — it's what makes the post sound like you.</p>
+
+      <label class="st-field-label" for="st-audience">Who do you want to reach?</label>
+      <input id="st-audience" class="st-input" type="text" maxlength="300" autocomplete="off"
+             placeholder="e.g. Early-stage founders" />
+
+      <div id="st-who-error" class="st-error" hidden role="alert"></div>
+
+      <button id="st-who-go" class="st-btn st-btn--go" type="button">Next →</button>
+    </div>
+  </section>
+
+  <!-- ── Screen 1c: Pick a way in ──────────────────────────────
+       Three options, not six, and none of them named after the internal post-type
+       taxonomy — the user recognises "a conversation from this week", not "PIS".
+       The tap does double duty: it decides which single question we ask, and it
+       sets post_type directly, so the server's pickPostShape heuristic never has
+       to guess from the author's wording. -->
+  <section id="st-pick" class="st-screen" aria-label="Choose what to write about">
+    <div class="st-content">
+      <p class="st-greet" id="st-pick-h">Nice. Now pick a way in.</p>
+      <h1 class="st-question">What do you feel like writing about?</h1>
+      <p class="st-micro st-micro--tight">Pick whichever you already have an answer to. There's no wrong one.</p>
+
+      <div id="st-cards" class="st-cards" role="list"></div>
+
+      <button id="st-pick-open" class="st-btn st-btn--ghost" type="button">Something else on my mind</button>
+    </div>
+  </section>
+
   <!-- ── Screen 2: One question ────────────────────────────── -->
   <section id="st-ask" class="st-screen" aria-label="One question">
     <div class="st-content">
@@ -95,9 +140,19 @@
         </div>
       </div>
 
+      <!-- The chosen template, pinned. Without it the question arrives with no
+           context and the author is answering into a void two taps after they
+           chose the thing they wanted to talk about. -->
+      <p id="st-ask-chip" class="st-chip" hidden></p>
+
       <p class="st-greet" id="st-ask-h">Just one question.</p>
-      <h1 class="st-question">What's something you wish more people understood?</h1>
-      <p class="st-micro st-micro--tight">Thirty seconds of talking is plenty — no need to polish it.</p>
+      <h1 class="st-question" id="st-ask-q">What's something you wish more people understood?</h1>
+      <!-- Sixty seconds, not thirty. Input volume is the constraint on whether the
+           post can be good at all — measured median first answer is 55 words typed
+           — and the old copy capped the one variable we most want to raise. People
+           also narrate when they speak and abstract when they type, so spoken
+           answers arrive containing scenes on their own. -->
+      <p class="st-micro st-micro--tight" id="st-ask-micro">A minute of talking is plenty — no need to polish it.</p>
 
       <button id="st-mic" class="st-btn st-btn--mic" type="button" hidden>
         <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor"
@@ -226,6 +281,14 @@
         </div>
         <div id="st-preview-body" class="st-preview-body"></div>
       </article>
+
+      <!-- Proof the post is theirs. The retention score was already computed on
+           every organize generation and thrown away; stating it converts "an AI
+           wrote this" into "you wrote this, we arranged it", which is the thing
+           that makes publishing under your own name feel safe. Hidden unless the
+           number is genuinely high — a claim of ownership on a post that was
+           largely composed would be the one lie this screen cannot afford. -->
+      <p id="st-ownership" class="st-ownership" hidden></p>
 
       <!-- The one line between the post and the button. Everything else here has
            been cut: at the moment someone is deciding whether to publish, each

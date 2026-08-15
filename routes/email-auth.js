@@ -6,7 +6,7 @@ const bcrypt     = require('bcryptjs');
 const { rateLimit, ipKeyGenerator } = require('express-rate-limit');
 const router     = express.Router();
 const { db }     = require('../db');
-const { sendEmail, sendEmailToUser } = require('../emails');
+const { sendEmail, sendEmailToUser, logEmailSent } = require('../emails');
 const { seedFreeSubscription } = require('../services/subscription');
 
 const APP_URL = process.env.APP_URL || '';
@@ -155,11 +155,16 @@ router.post('/signup', async (req, res) => {
       VALUES (?, 'email', ?, ?, ?, ?)
     `).run(newUserId, normalizedEmail, credentialHash, verifyToken, verifyExpiresAt.toISOString());
 
-    // Send verification email (fire-and-forget — don't block the response)
+    // Send verification email (fire-and-forget — don't block the response).
+    // Logged to email_log so the admin activity timeline can distinguish "we
+    // never sent it" from "they never opened it" — the difference between a
+    // deliverability incident and a funnel problem. sendEmail() (unlike
+    // sendEmailToUser) does not log for itself, so the call site must.
     sendEmail('verify-email', normalizedEmail, {
       display_name: displayName,
       verify_pin:   verifyToken,
-    }).catch(err => console.error('[email-auth] verify email failed:', err.message));
+    }).then(sent => { if (sent) logEmailSent(newUserId, 'verify-email', 'signup'); })
+      .catch(err => console.error('[email-auth] verify email failed:', err.message));
 
     return res.json({ ok: true, redirect: `/check-email.html?reason=signup&email=${encodeURIComponent(normalizedEmail)}` });
   } catch (err) {
@@ -408,7 +413,8 @@ router.post('/forgot-password', async (req, res) => {
         sendEmail('reset-password', normalizedEmail, {
           reset_url: `${APP_URL}/reset-password.html?token=${resetToken}`,
           app_url:   APP_URL,
-        }).catch(err => console.error('[email-auth] reset email failed:', err.message));
+        }).then(sent => { if (sent) logEmailSent(row.user_id, 'reset-password', null); })
+          .catch(err => console.error('[email-auth] reset email failed:', err.message));
       }
     }
 
@@ -519,7 +525,8 @@ router.post('/resend-verification', resendLimiter, async (req, res) => {
         sendEmail('verify-email', normalizedEmail, {
           display_name: row.display_name,
           verify_pin:   verifyToken,
-        }).catch(() => {});
+        }).then(sent => { if (sent) logEmailSent(row.user_id, 'verify-email', 'resend'); })
+          .catch(() => {});
       }
     }
 

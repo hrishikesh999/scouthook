@@ -748,6 +748,15 @@ router.get('/users/:userId/activity', requireAdminPassword, (req, res) => {
 
         UNION ALL
 
+        -- Email verified (derived). Scoped to provider='email' because OAuth
+        -- users have no PIN step and never get a verified_at — see the
+        -- verification block below, which is what renders the absence.
+        SELECT verified_at, 'email_verified', NULL
+        FROM auth_providers
+        WHERE user_id = $1 AND provider = 'email' AND verified_at IS NOT NULL
+
+        UNION ALL
+
         -- Logins
         SELECT created_at, 'login' AS event_type, NULL AS meta
         FROM platform_events WHERE user_id = $1 AND event_type = 'login'
@@ -806,7 +815,50 @@ router.get('/users/:userId/activity', requireAdminPassword, (req, res) => {
       LIMIT 200
     `, [userId]);
 
-    return res.json({ ok: true, activity: rows.rows });
+    // Verification state is returned separately from the event list because the
+    // informative case here is the NEGATIVE one. An unverified user contributes
+    // no row to the UNION above, so the timeline would read "Account created"
+    // and then silence — identical to a user who verified, signed in and did
+    // nothing. That ambiguity is what made an outside-the-front-door user look
+    // like an abandoned-in-app user. This block renders the gap explicitly.
+    const vres = await pool.query(`
+      SELECT ap.verified_at,
+             ap.verify_expires_at,
+             up.created_at AS signed_up_at,
+             (SELECT max(sent_at) FROM email_log
+               WHERE user_id = $1 AND template = 'verify-email') AS last_email_sent_at
+      FROM auth_providers ap
+      JOIN user_profiles up ON up.user_id = ap.user_id
+      WHERE ap.user_id = $1 AND ap.provider = 'email'
+      LIMIT 1
+    `, [userId]);
+
+    // No email provider row → OAuth-only account, which has no verification
+    // step at all. Returning null (not 'pending') keeps every Google user from
+    // being flagged as stuck forever.
+    let verification = null;
+    const v = vres.rows[0];
+    if (v) {
+      const expiresAt = v.verify_expires_at ? new Date(v.verify_expires_at) : null;
+      const status = v.verified_at
+        ? 'verified'
+        // The PIN lives 24h (see routes/email-auth.js). Past that the code is
+        // dead and the user cannot self-recover without a resend, which is a
+        // different situation from "hasn't got round to it yet".
+        : (expiresAt && expiresAt > new Date() ? 'pending' : 'expired');
+
+      verification = {
+        status,
+        verified_at:        v.verified_at        || null,
+        expires_at:         v.verify_expires_at  || null,
+        last_email_sent_at: v.last_email_sent_at || null,
+        // Pre-dates the email_log write for verify-email, so old accounts fall
+        // back to signup time rather than showing a blank waiting period.
+        waiting_since:      v.last_email_sent_at || v.signed_up_at || null,
+      };
+    }
+
+    return res.json({ ok: true, activity: rows.rows, verification });
   })().catch(err => res.status(500).json({ ok: false, error: err.message }));
 });
 

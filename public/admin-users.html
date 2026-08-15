@@ -395,10 +395,46 @@
           <div class="slide-over__section-title">Activity Log${profile.country ? ` <span style="font-weight:400;color:#6b7280;font-size:12px;">· ${profile.country}</span>` : ''}</div>
           ${(() => {
             const events = activityData.activity || [];
+            const verif  = activityData.verification || null;
             if (!events.length) return '<p class="empty-section-text">No activity recorded yet.</p>';
+
+            // The stalled-verification row. Rendered above the events because
+            // "still waiting, as of now" is the most recent fact about this
+            // user, and the log runs newest-first. Without it an unverified
+            // account is indistinguishable from an idle one: both show a
+            // signup and nothing after it.
+            const waitLabel = (since) => {
+              if (!since) return '';
+              const hrs = Math.floor((Date.now() - new Date(since)) / 3600000);
+              if (hrs < 1)  return 'under an hour';
+              if (hrs < 48) return `${hrs}h`;
+              return `${Math.floor(hrs / 24)}d`;
+            };
+            const stalledRow = (() => {
+              if (!verif || verif.status === 'verified') return '';
+              const expired = verif.status === 'expired';
+              const waited  = waitLabel(verif.waiting_since);
+              const color   = expired ? '#ef4444' : '#f59e0b';
+              const label   = expired
+                ? 'Verification expired — PIN dead, needs a resend'
+                : 'Awaiting email verification';
+              // No verify-email row in email_log means either the send predates
+              // this logging or Resend rejected it. Say so rather than implying
+              // the user ignored an email that may never have arrived.
+              const note = verif.last_email_sent_at
+                ? `Verification email sent · waiting ${waited}`
+                : `No verification email on record · ${waited} since signup`;
+              return `<div class="activity-log__row">
+                <span class="activity-log__dot" style="background:${color}"></span>
+                <div class="activity-log__time">now <span class="activity-log__tz">UTC</span></div>
+                <div class="activity-log__label" style="color:${color}">${label}</div>
+                <div class="activity-log__meta">${esc(note)}</div>
+              </div>`;
+            })();
 
             const labelMap = {
               signup:             'Account created',
+              email_verified:     'Email verified',
               login:              'Signed in',
               onboarding_complete:'Onboarding completed',
               linkedin_connect:   'LinkedIn connected',
@@ -412,6 +448,7 @@
             };
             const dotColor = {
               signup:              '#0F766E',
+              email_verified:      '#0F766E',
               login:               '#9ca3af',
               onboarding_complete: '#0F766E',
               linkedin_connect:    '#0077b5',
@@ -424,7 +461,7 @@
               upgrade:             '#16a34a',
             };
 
-            return `<div class="activity-log">${events.map(e => {
+            return `<div class="activity-log">${stalledRow}${events.map(e => {
               const label   = labelMap[e.event] || e.event;
               const color   = dotColor[e.event] || '#d1d5db';
               const ts      = e.created_at ? new Date(e.created_at) : null;

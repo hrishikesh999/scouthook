@@ -38,10 +38,10 @@ function getResend() {
  * Variables are replaced as {{variable_name}} tokens.
  */
 async function sendEmail(templateName, to, vars = {}, options = {}) {
-  if (process.env.NODE_ENV === 'test') return;
+  if (process.env.NODE_ENV === 'test') return false;
   if (!process.env.RESEND_API_KEY) {
     console.warn(`[email] RESEND_API_KEY not set — skipping send of '${templateName}' to ${to}`);
-    return;
+    return false;
   }
 
   let html;
@@ -49,14 +49,14 @@ async function sendEmail(templateName, to, vars = {}, options = {}) {
     html = fs.readFileSync(path.join(TEMPLATES_DIR, `${templateName}.html`), 'utf8');
   } catch (err) {
     console.error(`[email] Template not found: ${templateName}.html`);
-    return;
+    return false;
   }
 
   // Extract subject from first HTML comment: <!-- subject: Your subject here -->
   const subjectMatch = html.match(/<!--\s*subject:\s*(.+?)\s*-->/);
   if (!subjectMatch) {
     console.error(`[email] No subject comment found in ${templateName}.html`);
-    return;
+    return false;
   }
   let subject = subjectMatch[1];
 
@@ -67,6 +67,11 @@ async function sendEmail(templateName, to, vars = {}, options = {}) {
     html = html.replace(token, value ?? '');
   }
 
+  // Returns true only when Resend actually accepted the message. Callers that
+  // record the send (see logEmailSent) must gate on this — sendEmail swallows
+  // its own failures so a rejected send still resolves, and logging on mere
+  // resolution would turn "Resend refused it" into "we sent it", erasing the
+  // one distinction the log exists to make.
   try {
     const { error } = await getResend().emails.send({
       from: FROM, to, subject, html,
@@ -76,12 +81,14 @@ async function sendEmail(templateName, to, vars = {}, options = {}) {
     });
     if (error) {
       console.error(`[email] Resend error for '${templateName}' to ${to}:`, error);
-    } else {
-      console.log(`[email] Sent '${templateName}' to ${to}`);
+      return false;
     }
+    console.log(`[email] Sent '${templateName}' to ${to}`);
+    return true;
   } catch (err) {
     // Non-fatal — never let email failures break the main flow
     console.error(`[email] Failed to send '${templateName}' to ${to}:`, err.message);
+    return false;
   }
 }
 
@@ -214,4 +221,4 @@ async function notifyAdminsNewSignup(email, name, method = 'email') {
   }
 }
 
-module.exports = { sendEmail, sendEmailToUser, getUserEmailInfo, notifyAdminsNewSignup };
+module.exports = { sendEmail, sendEmailToUser, getUserEmailInfo, logEmailSent, notifyAdminsNewSignup };

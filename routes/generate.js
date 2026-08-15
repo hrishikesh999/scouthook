@@ -532,7 +532,7 @@ router.post('/', async (req, res) => {
 
         sseWrite('step', { step: 'analyzing', label: organizeMode ? 'Organising your words...' : (dispatch ? dispatch.label : 'Crafting your post...') });
 
-        let result, gate, archetypeUsed = null, contentFeedback = null, retention = null, hookWasWritten = false;
+        let result, gate, archetypeUsed = null, contentFeedback = null, retention = null, hookWasWritten = false, enrichment = null;
         if (organizeMode) {
           const { organizePost } = require('../services/organizePost');
           // fromInterview: a coached brief is the author's answers concatenated, so
@@ -542,6 +542,31 @@ router.post('/', async (req, res) => {
           result = { post: org.post, synthesis: org.synthesis };
           retention = org.retention;
           hookWasWritten = !!org.hookWasWritten;
+
+          // Enrichment — the one pass allowed to write rather than arrange. Opt-in
+          // per request so no existing caller changes behaviour; /start asks for it.
+          //
+          // Deliberately AFTER retention is captured: the score describes the
+          // author's organised core, and enriching first would dilute the number
+          // the UI uses to claim "your words" without anyone noticing.
+          //
+          // Skipped when the editor already composed too much (retention_ok false).
+          // That post is on its way to the follow-up screen to ask for more
+          // material; layering invention on top of invention is how a flow that
+          // promises the author's voice ends up publishing neither theirs nor
+          // anything defensible.
+          if (req.body?.enrich === true && org.retention?.ok !== false) {
+            const { enrichPost } = require('../services/enrichPost');
+            const enriched = await enrichPost(result.post, profile, { audienceHint: req.body?.audience_hint });
+            if (enriched.changed) {
+              result.post = enriched.post;
+              enrichment = { device: enriched.device, line: enriched.line };
+            }
+          }
+
+          // Gate runs on the FINAL text, enrichment included — an added line is
+          // exactly the kind of content FABRICATED_SPECIFIC exists to catch, and
+          // gating the pre-enrichment post would wave it through unchecked.
           gate = runQualityGate(
             result.post,
             { ...gateOptions({ format_slug: IDEA_SLUG, content: result.post }, profile, 'idea', null, post_type),
@@ -610,6 +635,11 @@ router.post('/', async (req, res) => {
           // editor over the writer — the UI shows both, with a rewrite override.
           retention:        retention,
           hook_was_written: hookWasWritten,
+          // Present only when a line was actually added. The UI must disclose it:
+          // retention describes the organised core, so an undisclosed addition
+          // would let "84% your words" describe a post that also contains one
+          // sentence nobody in this conversation wrote.
+          enrichment:       enrichment,
           generation_mode:  organizeMode ? 'organize' : 'write',
           input_maturity:   inputMaturity,
         });

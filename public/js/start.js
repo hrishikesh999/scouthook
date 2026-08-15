@@ -511,6 +511,15 @@ async function generate() {
         // Retry once against the fidelity floor if the first pass composes rather
         // than organises. Only surfaces that claim "your words" turn this on.
         enforce_retention: true,
+        // Let the enrichment pass add at most one metaphor or named belief on top
+        // of the organised post. Opt-in per request: the editor alone produces a
+        // faithful post that is often forgettable (measured: 42 words in, 57 out),
+        // and the missing beat is one the author's material implies but never
+        // states. Server skips it entirely when retention already failed.
+        enrich: true,
+        // Who they're writing for, so the added line lands in their world rather
+        // than in general-business-metaphor land.
+        audience_hint: state.audience || null,
         // ALWAYS the editor, never the writer.
         //
         // This used to be left unset so the server's maturity router could pick,
@@ -576,6 +585,10 @@ async function generate() {
     state.retentionOk = data.retention_ok !== false;
     state.retentionScore = (data.retention && typeof data.retention.score === 'number') ? data.retention.score : 0;
     state.gatePassed = !data.quality || data.quality.passed !== false;
+    // Null unless the enrichment pass actually added a line. Retention describes
+    // the organised core, so this has to be disclosed alongside it — see
+    // paintOwnership.
+    state.enrichment = data.enrichment || null;
 
     stopCookLines();
     paintPost();
@@ -630,11 +643,19 @@ function paintOwnership() {
   }
 
   const pct = Math.round(score * 100);
-  const tail = state.hookLifted
-    ? 'Even the opening line is yours — we just moved it to the top.'
-    : 'We changed the order, not the words.';
-  el.innerHTML =
-    `<b>${pct}% your words.</b> ${tail}`;
+
+  // The enrichment pass adds a line the author did not write. Retention was
+  // measured before that, so the percentage is still true of their core — but
+  // stating "your words" over a post containing an undisclosed added sentence
+  // is exactly the kind of small lie this screen cannot afford, and it is
+  // trivially checkable by rereading their own answer. So name it.
+  const tail = state.enrichment
+    ? 'We added one line to sharpen it — everything else is yours, in your order.'
+    : (state.hookLifted
+        ? 'Even the opening line is yours — we just moved it to the top.'
+        : 'We changed the order, not the words.');
+
+  el.innerHTML = `<b>${pct}% your words.</b> ${tail}`;
   el.hidden = false;
 }
 

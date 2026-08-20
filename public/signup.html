@@ -85,6 +85,20 @@
 
   <script>
   (function () {
+    // Same reset as login.html: signing up from a tab that was signed in as
+    // someone else must not leave that account's cached plan/workspaces behind
+    // for the new account to read. Verification finishes with a server-side
+    // redirect straight into the app, so there is no later point to clear it.
+    try {
+      Object.keys(sessionStorage)
+        .filter(k => k.startsWith('cf:'))
+        .forEach(k => sessionStorage.removeItem(k));
+      localStorage.removeItem('scouthook_uid');
+      localStorage.removeItem('scouthook_tid');
+      localStorage.removeItem('scouthook_session');
+      localStorage.removeItem('trial_banner_dismissed');
+    } catch { /* storage unavailable — nothing to clear */ }
+
     const errorBox = document.getElementById('errorBox');
 
     // Show URL-based error params (e.g. from OAuth redirect)

@@ -35,9 +35,17 @@
         headers: { 'Content-Type': 'application/json' },
       });
     } catch { /* still redirect */ }
+    // Wipe every trace of the outgoing account before the next one signs in.
+    // sessionStorage is per-tab and outlives logout, so without this the next
+    // account to log in here reads the previous account's plan, workspaces and
+    // identity out of the cache for the rest of the TTL.
     try {
       localStorage.removeItem('scouthook_uid');
+      localStorage.removeItem('scouthook_tid');
+      localStorage.removeItem('trial_banner_dismissed');
+      localStorage.removeItem('scouthook_session');
     } catch { /* ignore */ }
+    window.cachedFetch?.bustAll();
     window.location.href = '/login.html';
   }
 

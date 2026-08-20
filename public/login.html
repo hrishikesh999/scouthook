@@ -62,6 +62,21 @@
 
   <script>
   (function () {
+    // Reaching the login screen means the previous session is over. sessionStorage
+    // is per-tab and survives logout, so clear the fetch cache and the cached
+    // identity here too — not every exit runs logOut() (session expiry, an
+    // /auth/logout that failed, a bookmarked /login.html). Without this the
+    // account signing in next can render the previous account's plan.
+    try {
+      Object.keys(sessionStorage)
+        .filter(k => k.startsWith('cf:'))
+        .forEach(k => sessionStorage.removeItem(k));
+      localStorage.removeItem('scouthook_uid');
+      localStorage.removeItem('scouthook_tid');
+      localStorage.removeItem('scouthook_session');
+      localStorage.removeItem('trial_banner_dismissed');
+    } catch { /* storage unavailable — nothing to clear */ }
+
     const errorBox = document.getElementById('errorBox');
 
     // URL-based errors (from OAuth or redirects)

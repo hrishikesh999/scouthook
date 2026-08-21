@@ -269,6 +269,18 @@
 
       if (left > 0) return; // still has posts — say nothing
 
+      // One ask per screen. Where the page itself already carries a dedicated
+      // upgrade ask, this bar would repeat it a few hundred pixels higher:
+      //   /generate.html — the plan gate banner, on exactly the same condition,
+      //     so a path check here is equivalent and has no ordering to get wrong.
+      //   the editor — the panel under a post that just spent the last free
+      //     post, which sets body[data-free-tier-ask] when it decides to show.
+      // The editor case is a race either way round, so it is handled from both
+      // ends: the flag suppresses a bar that has not rendered yet, and the panel
+      // removes one that already has.
+      if (window.location.pathname === '/generate.html') return;
+      if (document.body.dataset.freeTierAsk === '1') return;
+
       const banner = document.createElement('div');
       banner.id = 'trial-banner';
       banner.style.cssText = [

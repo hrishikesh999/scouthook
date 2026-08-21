@@ -4496,6 +4496,18 @@ function showFreeTierPanel() {
   const panel = document.getElementById('free-tier-panel');
   if (!panel) return;
 
+  // Claim the ask for this screen, so the site-wide cap-reached bar does not say
+  // the same thing a few hundred pixels higher. Set before the fetch below and
+  // paired with removing an already-rendered bar, because account-bar.js decides
+  // asynchronously and can land either side of this function.
+  document.body.dataset.freeTierAsk = '1';
+  const siteBar = document.getElementById('trial-banner');
+  if (siteBar) {
+    siteBar.remove();
+    document.body.classList.remove('has-trial-banner');
+    document.documentElement.style.removeProperty('--trial-bar-h');
+  }
+
   // Name the real number when we know it — an admin grant can make it something
   // other than the default, and "your 4 free posts" would then be wrong.
   fetch('/api/billing/subscription', { credentials: 'same-origin' })

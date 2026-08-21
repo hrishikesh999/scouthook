@@ -251,8 +251,12 @@
   }
 
   // ── Free-tier banner (site-wide) ─────────────────────────────
-  // Posts remaining: dismissible indigo bar with a "N free posts left" count.
-  // Cap reached: non-dismissible amber bar nudging upgrade.
+  // Shown only once every free post is spent. There is deliberately no running
+  // "N free posts left" countdown any more: it put a price tag at the top of
+  // every screen from the first minute of the account, nagging hardest while
+  // the user had done the least and had the least reason to pay. The ask now
+  // lands once, after the post that spends the last one — in the editor beside
+  // that post, and here as the site-wide bar.
   async function initFreeTierBanner() {
     try {
       const sub = await cachedFetch('/api/billing/subscription', { credentials: 'same-origin' });
@@ -263,58 +267,22 @@
       const limit = sub.free_posts_limit;
       const left = Math.max(0, limit - used);
 
-      // ── Cap reached: show non-dismissible amber bar ──────────
-      if (left <= 0) {
-        const banner = document.createElement('div');
-        banner.id = 'trial-banner';
-        banner.style.cssText = [
-          'position:fixed', 'top:0', 'left:0', 'right:0', 'z-index:8000',
-          'background:#b45309', 'color:#fff',
-          'display:flex', 'align-items:center', 'justify-content:center',
-          'gap:12px', 'padding:10px 16px',
-          'font-size:14px', 'font-weight:500',
-        ].join(';');
-        banner.innerHTML = `
-          <span>You've used all your free posts.</span>
-          <button type="button" class="trial-banner-upgrade"
-            style="background:#fff;border:none;color:#b45309;font-weight:700;cursor:pointer;font-size:13px;padding:4px 12px;border-radius:6px"
-          >Upgrade to Pro →</button>
-        `;
-        document.body.prepend(banner);
-        document.body.classList.add('has-trial-banner');
-        requestAnimationFrame(() => {
-          document.documentElement.style.setProperty('--trial-bar-h', banner.offsetHeight + 'px');
-        });
-        banner.querySelector('.trial-banner-upgrade').addEventListener('click', () => {
-          if (window.PricingModal) {
-            window.PricingModal.open();
-          } else {
-            window.location.href = '/billing.html?upgrade=1';
-          }
-        });
-        return;
-      }
-
-      // ── Posts remaining: dismissible bar ─────────────────────
-      if (localStorage.getItem('trial_banner_dismissed')) return;
+      if (left > 0) return; // still has posts — say nothing
 
       const banner = document.createElement('div');
       banner.id = 'trial-banner';
       banner.style.cssText = [
         'position:fixed', 'top:0', 'left:0', 'right:0', 'z-index:8000',
-        'background:#4f46e5', 'color:#fff',
+        'background:#b45309', 'color:#fff',
         'display:flex', 'align-items:center', 'justify-content:center',
-        'gap:16px', 'padding:10px 16px',
+        'gap:12px', 'padding:10px 16px',
         'font-size:14px', 'font-weight:500',
       ].join(';');
       banner.innerHTML = `
-        <span>${left} free post${left !== 1 ? 's' : ''} left.</span>
+        <span>You've used all your free posts.</span>
         <button type="button" class="trial-banner-upgrade"
-          style="background:none;border:none;color:#fff;font-weight:700;text-decoration:underline;cursor:pointer;font-size:14px;padding:0"
-        >Upgrade now →</button>
-        <button type="button"
-          style="background:none;border:none;color:rgba(255,255,255,0.7);cursor:pointer;font-size:18px;line-height:1;padding:0 4px"
-          aria-label="Dismiss free posts banner">✕</button>
+          style="background:#fff;border:none;color:#b45309;font-weight:700;cursor:pointer;font-size:13px;padding:4px 12px;border-radius:6px"
+        >Upgrade to Pro →</button>
       `;
       document.body.prepend(banner);
       document.body.classList.add('has-trial-banner');
@@ -327,12 +295,6 @@
         } else {
           window.location.href = '/billing.html?upgrade=1';
         }
-      });
-      banner.querySelector('button[aria-label]').addEventListener('click', () => {
-        localStorage.setItem('trial_banner_dismissed', '1');
-        banner.remove();
-        document.body.classList.remove('has-trial-banner');
-        document.documentElement.style.removeProperty('--trial-bar-h');
       });
     } catch { /* non-fatal */ }
   }

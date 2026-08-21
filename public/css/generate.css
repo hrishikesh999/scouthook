@@ -28,6 +28,20 @@
       margin: 0 0 10px;
       letter-spacing: -0.03em;
     }
+    /* First-visit header — the marketing page's promise, carried over. Longer
+       than the standing question, so it steps down a size and is held to a
+       readable measure instead of running the full width of the form. */
+    .gen-question-first {
+      font-size: 1.75rem;
+      max-width: 28ch;
+      margin-left: auto;
+      margin-right: auto;
+      margin-bottom: 12px;
+    }
+    .gen-question-accent { color: #0F766E; }
+    @media (max-width: 600px) {
+      .gen-question-first { font-size: 1.5rem; max-width: none; }
+    }
     .gen-subtitle {
       font-size: 1rem;
       color: var(--text-muted);

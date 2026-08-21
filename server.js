@@ -598,8 +598,9 @@ app.get('/auth/google/callback',
                 'UPDATE user_profiles SET onboarding_completed_at = now() WHERE user_id = ? AND onboarding_completed_at IS NULL'
               ).run(userId);
             } else {
-              // No posts yet — send them to the first-run flow, which is /start.
-              return res.redirect('/start.html');
+              // No posts yet — send them straight to the generator. That IS the
+              // first-run flow now; there is no separate onboarding generator.
+              return res.redirect('/generate.html?new=1&first=1');
             }
           }
         }
@@ -685,51 +686,16 @@ app.get('/api/auth/me', async (req, res) => {
 });
 
 
-async function requireLoginHtml(req, res, next) {
+// Authenticated-HTML gate. Auth is the only condition: onboarding is no longer a
+// wall in front of the app. Signup is three steps — create the account, enter the
+// emailed code, write — and after that every page is open. The brand interview at
+// /onboarding.html is still reachable for anyone who wants to fill it in, but
+// nothing redirects into it and nothing is gated behind it.
+function requireLoginHtml(req, res, next) {
   if (!req.isAuthenticated?.()) {
     const returnTo = encodeURIComponent(req.originalUrl || '/dashboard.html');
     return res.redirect(`/login.html?returnTo=${returnTo}`);
   }
-
-  // SPA navigations (app-router sends X-SPA-Request: 1) are already running
-  // inside an authenticated session — skip the onboarding DB check so we
-  // don't add 2 extra Neon round-trips to every client-side page transition.
-  // The HTML is just a static skeleton; all data is gated by API-level auth.
-  if (req.headers['x-spa-request'] === '1') return next();
-
-  // Onboarding page itself is always reachable for authenticated users.
-  // Workspace-setup is also exempt (it's its own flow), as is /start — that IS
-  // the new first-run flow, so gating it would bounce users into a redirect loop.
-  const exemptPaths = new Set(['/onboarding.html', '/workspace-setup.html', '/start.html']);
-  if (exemptPaths.has(req.path)) return next();
-
-  // Only block the app for users who have never completed first-time onboarding.
-  // Returning users who create additional workspaces (onboarding_complete = false
-  // on the new workspace) are never blocked — workspace-setup.html handles their
-  // new workspace setup without gating the rest of the app.
-  if (req.tenantId && req.userId) {
-    const userRow = await db.prepare(
-      'SELECT onboarding_completed_at FROM user_profiles WHERE user_id = ?'
-    ).get(req.userId);
-    if (!userRow?.onboarding_completed_at) {
-      const profile = await db.prepare(
-        'SELECT onboarding_complete FROM profiles WHERE workspace_id = ? AND is_default = true LIMIT 1'
-      ).get(req.tenantId);
-      if (!profile?.onboarding_complete) {
-        // Having generated a post counts as first run done, even though the brand
-        // interview hasn't been filled in — that's the whole premise of /start,
-        // where the interview is the "earned ask" AFTER the first post. Without
-        // this, a user who just made a post gets bounced out of Drafts and the
-        // editor straight back into the interview they deliberately deferred.
-        // Mirrors the same postCount check the login path already makes.
-        const posts = await db.prepare(
-          'SELECT 1 AS hit FROM generated_posts WHERE tenant_id = ? LIMIT 1'
-        ).get(req.tenantId);
-        if (!posts) return res.redirect('/start.html');
-      }
-    }
-  }
-
   return next();
 }
 

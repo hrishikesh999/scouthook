@@ -77,12 +77,14 @@ function uniqueEmail() {
 }
 
 describe('Signup → first post → edit → publish', () => {
-  test('a new signup lands on /start, not the brand interview', async () => {
+  test('a new signup lands on the generator, not the brand interview', async () => {
     const { verify } = await signUpAndVerify(uniqueEmail());
     expect(verify.status).toBe(302);
     // The whole activation bet: time-to-first-output over profile completeness.
-    // If this ever points at /onboarding.html again, the inversion was undone.
-    expect(verify.headers.location).toBe('/start.html');
+    // Signup is three steps and no more — account, emailed code, write — so the
+    // third step is the REGULAR generator. If this ever points at
+    // /onboarding.html again, the inversion was undone.
+    expect(verify.headers.location).toBe('/generate.html?new=1&first=1');
   });
 
   test('verifying seeds the free tier — without it, canGeneratePost has no row to count against', async () => {

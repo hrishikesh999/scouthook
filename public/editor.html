@@ -99,6 +99,14 @@
             </div>
           </div>
 
+          <!-- First-post banner — the account's very first generated post. Signup
+               runs straight into the generator now, so this replaces the old
+               onboarding flow's celebration. Auto-dismisses after ~7s. -->
+          <div id="first-post-banner" hidden>
+            <span class="fpb-icon" aria-hidden="true">🎉</span>
+            <span class="fpb-text"><strong>That's your first post.</strong> Edit it here, then publish or schedule it — everything else in ScoutHook is now open to you.</span>
+          </div>
+
           <!-- Your-words banner — shown when the input router chose the editor over
                the writer, i.e. the author arrived with real material of their own. -->
           <div id="your-words-bar" hidden>
@@ -4443,6 +4451,28 @@ function celebrateCreation() {
   }, 180);
 }
 
+/* The very first post the account ever generates. Signup now runs straight into
+   the generator — account, emailed code, write — so this is the moment the old
+   onboarding flow used to celebrate. Bigger than celebrateCreation() and paired
+   with a banner, and it fires INSTEAD of it so the two never stack. */
+function celebrateFirstPost() {
+  const bar = document.getElementById('first-post-banner');
+  if (bar) {
+    bar.hidden = false;
+    setTimeout(() => { bar.classList.add('is-fading'); }, 7000);
+    setTimeout(() => { bar.hidden = true; bar.classList.remove('is-fading'); }, 7600);
+  }
+  if (typeof confetti !== 'function') return;
+  const opts = { disableForReducedMotion: true, zIndex: 9999 };
+  setTimeout(() => {
+    confetti({ ...opts, particleCount: 90, angle: 60,  spread: 65, origin: { x: 0, y: 0.7 } });
+    confetti({ ...opts, particleCount: 90, angle: 120, spread: 65, origin: { x: 1, y: 0.7 } });
+    setTimeout(() => {
+      confetti({ ...opts, particleCount: 60, spread: 90, origin: { x: 0.5, y: 0.55 } });
+    }, 260);
+  }, 180);
+}
+
 /* ════════════════════════════════════════════════════════════════════════
    INIT
 ════════════════════════════════════════════════════════════════════════ */
@@ -4459,7 +4489,12 @@ function init() {
     prefillFromGeneration();
     showYourWordsBar();
     switchTab('preview');
-    celebrateCreation();
+    if (sessionStorage.getItem('sh_first_post') === '1') {
+      sessionStorage.removeItem('sh_first_post');
+      celebrateFirstPost();
+    } else {
+      celebrateCreation();
+    }
   }
 
   bindEvents();

@@ -214,6 +214,19 @@ router.get('/posts/mix-recommendation', async (req, res) => {
       GROUP  BY post_type
     `).all(tenantId);
 
+    // Has this workspace ever generated anything? Distinct from the mix maths
+    // below, which counts only PUBLISHED posts from the last 30 days. The
+    // generator uses this to decide whether its header greets a first-time
+    // author or prompts a returning one — signup now lands straight on
+    // /generate.html, so both readers hit the same page.
+    let hasPosts = true;
+    try {
+      const seen = await db.prepare(
+        'SELECT 1 AS hit FROM generated_posts WHERE tenant_id = ? LIMIT 1'
+      ).get(tenantId);
+      hasPosts = !!seen;
+    } catch { /* non-fatal — default to the returning-user header */ }
+
     const total = rows.reduce((s, r) => s + Number(r.n), 0);
     const counts = { reach: 0, trust: 0, convert: 0 };
     for (const row of rows) counts[row.post_type] = Number(row.n);
@@ -222,7 +235,7 @@ router.get('/posts/mix-recommendation', async (req, res) => {
     if (total < 4) {
       // counts/targets still returned so the dashboard funnel can decide
       // (it hides itself below the data threshold)
-      return res.json({ ok: true, has_enough_data: false, recommended_type: null, nudge: null, counts, total, targets });
+      return res.json({ ok: true, has_enough_data: false, has_posts: hasPosts, recommended_type: null, nudge: null, counts, total, targets });
     }
     let worstType = null;
     let worstDelta = -Infinity;
@@ -245,6 +258,7 @@ router.get('/posts/mix-recommendation', async (req, res) => {
     return res.json({
       ok: true,
       has_enough_data: true,
+      has_posts: hasPosts,
       recommended_type: worstType,
       nudge,
       counts,

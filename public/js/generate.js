@@ -442,6 +442,40 @@ function selectType(type) {
   }
 }
 
+/* ── First-visit header ──────────────────────────────────────────
+ * /generate.html serves two readers now that signup lands here directly: someone
+ * seconds past the PIN screen, and someone writing their fortieth post. The
+ * first gets the promise they read on the marketing page, carried over word for
+ * word so it reads as the same product; the second gets a working prompt, since
+ * repeating a pitch to someone who already bought is noise.
+ *
+ * Painted from ?first=1 (set by the post-signup redirect) so there is no flash
+ * of the returning-user header on the one visit that matters most, and re-applied
+ * from the has_posts flag for anyone who wandered off before writing anything. */
+// Two clauses, two lines, the second in brand teal — the same stacked, two-tone
+// treatment the marketing page gives this sentence, so the carry-over is visual
+// as well as verbal. Constants, never user input, so innerHTML is safe here.
+const FIRST_VISIT_HEADING_HTML =
+  "You've the expertise.<br><span class=\"gen-question-accent\">Let's get it in front of the right clients.</span>";
+const FIRST_VISIT_SUBTITLE = 'Start with a raw thought. ScoutHook asks the questions and shapes the post, in your words.';
+
+let firstVisitHeaderPainted = false;
+
+function paintFirstVisitHeader() {
+  if (firstVisitHeaderPainted) return;
+  const heading  = document.getElementById('gen-question');
+  const subtitle = document.querySelector('.gen-subtitle');
+  if (!heading) return;
+  heading.innerHTML = FIRST_VISIT_HEADING_HTML;
+  heading.classList.add('gen-question-first');
+  if (subtitle) subtitle.textContent = FIRST_VISIT_SUBTITLE;
+  firstVisitHeaderPainted = true;
+}
+
+try {
+  if (new URLSearchParams(window.location.search).get('first') === '1') paintFirstVisitHeader();
+} catch { /* no URLSearchParams — the standing header is a fine fallback */ }
+
 /* ── Mix recommendation ──────────────────────────────────────── */
 async function loadMixRecommendation() {
   try {
@@ -450,6 +484,10 @@ async function loadMixRecommendation() {
     if (!data.ok) return;
 
     mixRecommended = data.recommended_type || null;
+
+    // Nothing written yet — they're still on their first post even if they left
+    // and came back, so keep the welcome rather than the working prompt.
+    if (data.has_posts === false) paintFirstVisitHeader();
 
     if (data.has_enough_data && data.nudge && mixRecommended) {
       const nudgeEl    = document.getElementById('mix-nudge');
@@ -1861,6 +1899,9 @@ voiceCtrl = initVoiceInput({
 function handOffToEditor(postId, postContent, meta = {}) {
   try {
     sessionStorage.setItem('sh_from_gen', '1');
+    // The generator is the first-run flow now, so the first post someone ever
+    // makes is a moment worth marking. The editor reads this and celebrates.
+    if (meta.first_post) sessionStorage.setItem('sh_first_post', '1');
     if (postId && typeof postContent === 'string' && postContent.trim()) {
       sessionStorage.setItem('sh_gen_post', JSON.stringify({ id: postId, content: postContent }));
     }

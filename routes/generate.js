@@ -65,6 +65,20 @@ function stampFirstPostSignals(postId, { retention, starterTemplate } = {}) {
   } catch { /* non-fatal */ }
 }
 
+// Is the post we just inserted the workspace's very first? The generate flow is
+// now the first-run flow (signup → code → write), so this is what earns the
+// celebration the old onboarding flow used to fire. Counted after the insert,
+// so 1 means "this one and nothing before it".
+async function isFirstPostForTenant(tenantId, postId) {
+  if (!tenantId || !postId) return false;
+  try {
+    const row = await db.prepare(
+      'SELECT COUNT(*) AS cnt FROM generated_posts WHERE tenant_id = ?'
+    ).get(tenantId);
+    return Number(row?.cnt || 0) <= 1;
+  } catch { return false; }
+}
+
 // ---------------------------------------------------------------------------
 // Sliding window rate limiter — 10 generations per hour per user.
 // Uses Redis when available (consistent across multiple instances); falls back
@@ -620,9 +634,11 @@ router.post('/', async (req, res) => {
         stampFirstPostSignals(primaryId, { retention, starterTemplate: req.body?.starter_template });
 
         const primaryQuality = buildQualityPayload(gate, 1, true);
+        const firstPost = await isFirstPostForTenant(tenantId, primaryId);
 
         sseWrite('done', {
           post_id:          primaryId,
+          first_post:       firstPost,
           run_id:           runId,
           post:             result.post,
           quality:          { ...primaryQuality, verdict: gate.verdict },
@@ -823,6 +839,7 @@ router.post('/', async (req, res) => {
         synthesis,
         post,
         id: primaryId,
+        first_post: await isFirstPostForTenant(tenantId, primaryId),
         archetypeUsed,
         quality: { ...primaryQuality, verdict: primaryGate.verdict },
         alternative: null,
@@ -1149,6 +1166,7 @@ router.post('/from-doc', async (req, res) => {
       synthesis,
       post,
       id:              primaryId,
+      first_post:      await isFirstPostForTenant(tenantId, primaryId),
       archetypeUsed,
       quality:         primaryQuality,
       alternative:     null,

@@ -253,10 +253,12 @@ router.post('/verify-email', async (req, res) => {
       'SELECT onboarding_complete FROM profiles WHERE workspace_id = ? AND is_default = true LIMIT 1'
     ).get(workspaceId);
 
-    // First run goes to /start — sign in, one question, a post — rather than the
-    // seven-screen brand interview, which now runs after the post as the "earned
-    // ask". Users who already finished setup go straight to the dashboard.
-    const dest = brandProfile?.onboarding_complete ? '/dashboard.html' : '/start.html';
+    // Signup is three steps and no more: create the account, enter the code,
+    // start writing. There is no separate onboarding generator any more — the
+    // regular /generate flow IS the first-run flow, so a freshly verified user
+    // lands there directly. Returning users who already finished setup go to
+    // the dashboard.
+    const dest = brandProfile?.onboarding_complete ? '/dashboard.html' : '/generate.html?new=1&first=1';
     return res.redirect(dest);
   } catch (err) {
     console.error('[email-auth] verify-email POST error:', err.message);
@@ -337,15 +339,10 @@ router.post('/login', loginLimiter, async (req, res) => {
       }
     } catch { /* platform_events table may not exist yet */ }
 
-    const brandProfile = await db.prepare(
-      'SELECT onboarding_complete FROM profiles WHERE workspace_id = ? AND is_default = true LIMIT 1'
-    ).get(workspaceId);
-    // Same soft entry point as verify-email — a returning user who signed up
-    // through /start and never finished the full brand interview should land
-    // back on /start (sign in, one question, a post), not be walled behind the
-    // seven-screen wizard a second time.
-    const dest = brandProfile?.onboarding_complete ? '/dashboard.html' : '/start.html';
-    return res.json({ ok: true, redirect: dest });
+    // Returning users always land on the dashboard. The brand interview is no
+    // longer a wall in front of the app: someone who signed up and never filled
+    // it in still gets the whole product, with /generate one click away.
+    return res.json({ ok: true, redirect: '/dashboard.html' });
   } catch (err) {
     console.error('[email-auth] login error:', err.message);
     return res.status(500).json({ ok: false, error: 'login_failed' });
@@ -481,15 +478,10 @@ router.post('/reset-password', async (req, res) => {
 
     await establishSession(req, row.user_id, workspaceId);
 
-    const brandProfile = await db.prepare(
-      'SELECT onboarding_complete FROM profiles WHERE workspace_id = ? AND is_default = true LIMIT 1'
-    ).get(workspaceId);
-    // Same soft entry point as verify-email — a returning user who signed up
-    // through /start and never finished the full brand interview should land
-    // back on /start (sign in, one question, a post), not be walled behind the
-    // seven-screen wizard a second time.
-    const dest = brandProfile?.onboarding_complete ? '/dashboard.html' : '/start.html';
-    return res.json({ ok: true, redirect: dest });
+    // Returning users always land on the dashboard. The brand interview is no
+    // longer a wall in front of the app: someone who signed up and never filled
+    // it in still gets the whole product, with /generate one click away.
+    return res.json({ ok: true, redirect: '/dashboard.html' });
   } catch (err) {
     console.error('[email-auth] reset-password error:', err.message);
     return res.status(500).json({ ok: false, error: 'reset_failed' });

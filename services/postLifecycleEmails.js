@@ -12,9 +12,9 @@
  *                      from the old trial system, just re-gated on
  *                      "still free tier, cap not reached" instead of
  *                      "trial active"
- *   2nd free post      free-post-remaining         one free post left
- *   3rd free post       limit-reached               cap hit (same template
- *                      (cap hit)                    Pro users see for monthly quota)
+ *   1 post remaining   free-post-remaining         one free post left
+ *   cap hit            limit-reached               (same template Pro users
+ *                                                  see for their monthly quota)
  *   +3 days after cap  free-cap-followup           still hasn't upgraded
  *
  * Milestone emails (free-post-remaining / limit-reached) fire immediately,
@@ -33,6 +33,7 @@
 const { db } = require('../db');
 const { sendEmailToUser } = require('../emails');
 const { unsubscribeUrl } = require('./emailTokens');
+const { FREE_POSTS_LIMIT } = require('./subscription');
 
 const APP_URL = () => process.env.APP_URL || 'https://app.scouthook.com';
 
@@ -102,7 +103,7 @@ async function getUserFreeTierState(userId) {
   ]);
 
   const isPaid = !!sub?.paddle_subscription_id || sub?.status === 'lifetime';
-  const freePostsLimit = sub?.free_posts_limit ?? 3;
+  const freePostsLimit = sub?.free_posts_limit ?? FREE_POSTS_LIMIT;
   const freePostsUsed  = Number(freeCountRow?.cnt ?? 0);
   const freeCapReached = !isPaid && freePostsUsed >= freePostsLimit;
   const capHitAt = freeCountRow?.last_at ? new Date(freeCountRow.last_at) : null;
@@ -238,25 +239,36 @@ async function getFirstName(userId) {
 // successful free-tier generation, so the "1 left" / "cap reached" emails
 // fire immediately rather than waiting for the settle window.
 // ---------------------------------------------------------------------------
+/**
+ * Which milestone template — if any — this state has just earned.
+ *
+ * Split out as a pure function so the thresholds can be tested without a
+ * database or a mail provider: sendEmailToUser() returns early under
+ * NODE_ENV=test before writing email_log, so an integration test can never
+ * observe these sends by looking for the row. Deliberately relative to the
+ * account's own cap rather than a fixed post number — free_posts_limit moved
+ * from 3 to 4 (migration 091) and admin grants move it per user, so anything
+ * keyed on "after the 3rd post" would silently drift.
+ */
+function milestoneTemplateFor(state) {
+  if (!state || state.isPaid || state.optedOut) return null;
+  const remaining = state.freePostsLimit - state.freePostsUsed;
+  if (remaining === 1) return 'free-post-remaining';
+  if (remaining <= 0)  return 'free-cap-reached';
+  return null;
+}
+
 async function evaluateMilestoneEmail(userId) {
   try {
     const state = await getUserFreeTierState(userId);
-    if (!state || state.isPaid || state.optedOut) return;
+    const template = milestoneTemplateFor(state);
+    if (!template) return;
 
-    const remaining = state.freePostsLimit - state.freePostsUsed;
     const name = await getFirstName(userId);
-
-    if (remaining === 1) {
-      await sendEmailToUser(
-        userId, 'free-post-remaining', buildVars(state, name, userId),
-        { dedupKey: `free-post-remaining:${userId}`, withinHours: 365 * 24 }
-      );
-    } else if (remaining <= 0) {
-      await sendEmailToUser(
-        userId, 'free-cap-reached', buildVars(state, name, userId),
-        { dedupKey: `free-cap-reached:${userId}`, withinHours: 365 * 24 }
-      );
-    }
+    await sendEmailToUser(
+      userId, template, buildVars(state, name, userId),
+      { dedupKey: `${template}:${userId}`, withinHours: 365 * 24 }
+    );
   } catch (err) {
     console.warn('[postLifecycleEmails] evaluateMilestoneEmail error (non-fatal):', err.message);
   }
@@ -339,6 +351,7 @@ async function runFreeCapFollowupCron() {
 }
 
 module.exports = {
+  milestoneTemplateFor,
   schedulePostLifecycleEvaluation,
   evaluateAndSend,
   evaluateMilestoneEmail,

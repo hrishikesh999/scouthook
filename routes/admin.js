@@ -719,7 +719,7 @@ router.get('/users/:userId', requireAdminPassword, (req, res) => {
       internal_post_cap:   userIsPro ? INTERNAL_POST_CAP_PRO : null,
       internal_visual_cap: userIsPro ? INTERNAL_VISUAL_CAP_PRO : INTERNAL_VISUAL_CAP_EXPIRED,
       free_posts_used:     userIsPro ? null : parseInt(freePostsUsed?.cnt ?? 0, 10),
-      free_posts_limit:    userIsPro ? null : (subscription?.free_posts_limit ?? 3),
+      free_posts_limit:    userIsPro ? null : (subscription?.free_posts_limit ?? FREE_POSTS_LIMIT),
     };
 
     return res.json({ ok: true, profile, subscription, workspaces, connections, profiles, recent_posts: recentPosts, usage });

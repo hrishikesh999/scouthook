@@ -4,6 +4,15 @@ const { db } = require('../db');
 const { Paddle, Environment } = require('@paddle/paddle-node-sdk');
 const { getMonthlyPostLimit } = require('../lib/planFeatures');
 
+// How many posts a free-tier account gets, for the lifetime of the account —
+// there is no monthly reset below the paid plans. Four, not three, because the
+// fourth post is where the upgrade ask lives: it generates normally and the ask
+// arrives in the editor beneath it, rather than replacing the generation the
+// user was trying to run. Per-user overrides live in
+// user_subscriptions.free_posts_limit (admin grants); this is the default for a
+// row that has none, and is kept in step with migration 091's column default.
+const FREE_POSTS_LIMIT = 4;
+
 // Internal hard caps — never shown to users; exist to prevent runaway abuse.
 // Env vars allow tuning without a deploy. Values are per user per calendar month.
 const INTERNAL_POST_CAP_EXPIRED = parseInt(process.env.INTERNAL_POST_CAP_EXPIRED || '0',   10);
@@ -60,7 +69,7 @@ async function getUserSubscription(userId) {
     current_period_end: null,
     canceled_at: null,
     free_tier_started_at: null,
-    free_posts_limit: 3,
+    free_posts_limit: FREE_POSTS_LIMIT,
   };
 }
 
@@ -131,7 +140,7 @@ async function canGeneratePost(userId) {
   const [sub, plan] = await Promise.all([getUserSubscription(userId), getUserPlan(userId)]);
 
   if (plan !== 'solo' && plan !== 'pro') {
-    const limit = sub.free_posts_limit ?? 3;
+    const limit = sub.free_posts_limit ?? FREE_POSTS_LIMIT;
     let current = 0;
     try {
       const row = await db.prepare(`
@@ -358,9 +367,10 @@ async function forceSyncSubscriptionForUser(userId) {
 
 // ---------------------------------------------------------------------------
 // seedFreeSubscription
-// Called on new-user signup. Inserts a free-tier row (3 lifetime free posts,
-// enforced by canGeneratePost). ON CONFLICT DO NOTHING ensures it never
-// overwrites an existing subscription.
+// Called on new-user signup. Inserts a free-tier row; the lifetime post cap
+// comes from the free_posts_limit column default (migration 091 — FREE_POSTS_LIMIT
+// here must match it), and is enforced by canGeneratePost. ON CONFLICT DO NOTHING
+// ensures it never overwrites an existing subscription.
 // ---------------------------------------------------------------------------
 async function seedFreeSubscription(userId) {
   try {
@@ -377,6 +387,7 @@ async function seedFreeSubscription(userId) {
 }
 
 module.exports = {
+  FREE_POSTS_LIMIT,
   getPaddle,
   getPaddleEnvironment,
   getUserSubscription,

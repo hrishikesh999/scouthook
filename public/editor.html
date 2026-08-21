@@ -117,6 +117,21 @@
             </div>
           </div>
 
+          <!-- Free tier spent. Shown after the post that used the last one, so the
+               ask sits next to something that worked rather than in front of the
+               generation the author was trying to run. The post itself stays
+               fully editable, schedulable and publishable — taking it back after
+               showing it would be a bait-and-switch. -->
+          <div id="free-tier-panel" hidden>
+            <button type="button" id="ftp-dismiss" class="ftp-dismiss" aria-label="Dismiss">&times;</button>
+            <p class="ftp-heading" id="ftp-heading">That's your free posts.</p>
+            <p class="ftp-sub">This one is yours — edit it, schedule it, publish it. To write the next one, pick up Pro.</p>
+            <div class="ftp-actions">
+              <button type="button" class="ftp-upgrade">Upgrade to Pro &mdash; $29/mo &rarr;</button>
+              <button type="button" class="ftp-later">Maybe later</button>
+            </div>
+          </div>
+
           <div class="post-edit-card">
             <div id="post-toolbar" role="toolbar" aria-label="Formatting toolbar">
               <div class="ptb-group">
@@ -4473,6 +4488,40 @@ function celebrateFirstPost() {
   }, 180);
 }
 
+/* The account just spent its last free post on the post now on screen. Deliberately
+   not a modal: they made a thing a second ago, and a dialog over it makes the
+   product feel like it is holding the work hostage. Nothing here disables Edit,
+   Schedule or Publish. */
+function showFreeTierPanel() {
+  const panel = document.getElementById('free-tier-panel');
+  if (!panel) return;
+
+  // Name the real number when we know it — an admin grant can make it something
+  // other than the default, and "your 4 free posts" would then be wrong.
+  fetch('/api/billing/subscription', { credentials: 'same-origin' })
+    .then(r => r.json())
+    .then(sub => {
+      const limit = Number(sub?.free_posts_limit);
+      const heading = document.getElementById('ftp-heading');
+      if (heading && Number.isFinite(limit) && limit > 0) {
+        heading.textContent = `That's your ${limit} free posts.`;
+      }
+    })
+    .catch(() => { /* the generic heading already reads correctly */ });
+
+  const close = () => { panel.hidden = true; };
+  panel.querySelector('#ftp-dismiss')?.addEventListener('click', close);
+  panel.querySelector('.ftp-later')?.addEventListener('click', close);
+  panel.querySelector('.ftp-upgrade')?.addEventListener('click', () => {
+    if (window.PricingModal) window.PricingModal.open({ feature: 'generate' });
+    else window.location.href = '/billing.html?upgrade=1';
+  });
+
+  // After the post has painted and any celebration has fired, so the ask never
+  // lands on top of the thing it is asking about.
+  setTimeout(() => { panel.hidden = false; }, 900);
+}
+
 /* ════════════════════════════════════════════════════════════════════════
    INIT
 ════════════════════════════════════════════════════════════════════════ */
@@ -4494,6 +4543,10 @@ function init() {
       celebrateFirstPost();
     } else {
       celebrateCreation();
+    }
+    if (sessionStorage.getItem('sh_free_tier_spent') === '1') {
+      sessionStorage.removeItem('sh_free_tier_spent');
+      showFreeTierPanel();
     }
   }
 

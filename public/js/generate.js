@@ -1902,6 +1902,9 @@ function handOffToEditor(postId, postContent, meta = {}) {
     // The generator is the first-run flow now, so the first post someone ever
     // makes is a moment worth marking. The editor reads this and celebrates.
     if (meta.first_post) sessionStorage.setItem('sh_first_post', '1');
+    // Last free post just spent. The ask goes in the editor, beside the finished
+    // post, rather than in front of the generation the author was trying to run.
+    if (meta.free_tier_exhausted) sessionStorage.setItem('sh_free_tier_spent', '1');
     if (postId && typeof postContent === 'string' && postContent.trim()) {
       sessionStorage.setItem('sh_gen_post', JSON.stringify({ id: postId, content: postContent }));
     }

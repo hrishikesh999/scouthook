@@ -65,6 +65,19 @@ function stampFirstPostSignals(postId, { retention, starterTemplate } = {}) {
   } catch { /* non-fatal */ }
 }
 
+// Did this generation just spend the account's last free post? The upgrade ask
+// used to take the place of the 4th generation; now the 4th generates and the
+// ask arrives in the editor underneath it, so the client needs to know at
+// hand-off time. Derived from the plan check already made at the top of the
+// request plus this post's own gate result — only gate-passing posts count
+// against the free cap (services/subscription.js), so a post that failed the
+// gate spends nothing and must not trigger the ask.
+function freeTierExhausted(planCheck, passedGate) {
+  if (!planCheck || planCheck.plan !== 'expired') return false;
+  if (!Number.isFinite(planCheck.current) || !Number.isFinite(planCheck.limit)) return false;
+  return planCheck.current + (passedGate ? 1 : 0) >= planCheck.limit;
+}
+
 // Is the post we just inserted the workspace's very first? The generate flow is
 // now the first-run flow (signup → code → write), so this is what earns the
 // celebration the old onboarding flow used to fire. Counted after the insert,
@@ -639,6 +652,7 @@ router.post('/', async (req, res) => {
         sseWrite('done', {
           post_id:          primaryId,
           first_post:       firstPost,
+          free_tier_exhausted: freeTierExhausted(planCheck, gate.passed_gate),
           run_id:           runId,
           post:             result.post,
           quality:          { ...primaryQuality, verdict: gate.verdict },
@@ -840,6 +854,7 @@ router.post('/', async (req, res) => {
         post,
         id: primaryId,
         first_post: await isFirstPostForTenant(tenantId, primaryId),
+        free_tier_exhausted: freeTierExhausted(planCheck, primaryGate.passed_gate),
         archetypeUsed,
         quality: { ...primaryQuality, verdict: primaryGate.verdict },
         alternative: null,
@@ -1167,6 +1182,7 @@ router.post('/from-doc', async (req, res) => {
       post,
       id:              primaryId,
       first_post:      await isFirstPostForTenant(tenantId, primaryId),
+      free_tier_exhausted: freeTierExhausted(planCheck, primaryGate.passed_gate),
       archetypeUsed,
       quality:         primaryQuality,
       alternative:     null,

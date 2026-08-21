@@ -2288,22 +2288,57 @@ function hideSubstanceWarning() {
   document.getElementById('chat-generate-anyway')?.remove();
 }
 
-/* ── Plan gate (blocks expired / non-Pro users at type selection) ── */
+/* ── Plan gate ───────────────────────────────────────────────────
+ * Blocks the page only for a free-tier user who has actually spent every free
+ * post. It used to block on `plan !== 'pro'`, which caught a brand-new free user
+ * with 0 of 3 used and Solo subscribers alike — survivable only while /start was
+ * the first-run flow and bypassed this file entirely. Signup lands here now, so
+ * that read walled every new account on the page it was just sent to.
+ *
+ * Paid tiers are never gated here: their monthly quota is enforced server-side
+ * at generation time, where the count is authoritative.
+ *
+ * The decision is split out as a pure function so it can be unit tested without
+ * a DOM — this file is browser code with no harness, and three production
+ * breakages have come out of that gap. See tests/unit/planGate.test.js. */
+function planGateDecision(sub) {
+  if (!sub || !sub.ok) return { blocked: false };
+  if (sub.plan !== 'expired') return { blocked: false };
+
+  // Free tier. Both fields are non-null for this plan (routes/billing.js), but a
+  // missing limit must fail open — a display bug should never wall the app.
+  // Tested explicitly against null, which Number() turns into a finite 0 and
+  // would otherwise read as "cap of zero, everyone blocked".
+  if (sub.free_posts_limit == null || sub.free_posts_used == null) return { blocked: false };
+  const limit = Number(sub.free_posts_limit);
+  const used  = Number(sub.free_posts_used);
+  if (!Number.isFinite(limit) || !Number.isFinite(used)) return { blocked: false };
+  if (used < limit) return { blocked: false };
+
+  // A lapsed subscriber also lands on 'expired', and telling them they've used
+  // their free posts would be news to someone who has been paying for months.
+  return { blocked: true, limit, lapsed: !!(sub.canceled_at || sub.price_id) };
+}
+
 async function checkPlanGate() {
   try {
     const sub = await cachedFetch('/api/billing/subscription', { credentials: 'same-origin' });
-    if (!sub || !sub.ok) return false;
-    if (sub.plan === 'pro') return false;
+    const decision = planGateDecision(sub);
+    if (!decision.blocked) return false;
 
     const pills = document.getElementById('starting-pills');
     if (pills) pills.classList.add('plan-blocked');
+
+    const heading = decision.lapsed
+      ? 'Your plan has ended'
+      : `You've used all ${decision.limit} free posts`;
 
     const banner = document.createElement('div');
     banner.id = 'plan-gate-banner';
     banner.className = 'plan-gate-banner';
     banner.innerHTML = `
-      <strong>Your trial has ended</strong>
-      <p>Upgrade to Pro to keep generating posts with ScoutHook.</p>
+      <strong>${heading}</strong>
+      <p>Your drafts stay yours. Pro reopens writing, with 20 posts a month.</p>
       <button type="button" class="plan-gate-upgrade-btn">Upgrade to Pro &mdash; $29/mo &rarr;</button>
     `;
     if (pills) pills.insertAdjacentElement('beforebegin', banner);

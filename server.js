@@ -718,9 +718,26 @@ app.get('/healthz', async (req, res) => {
 
 const { requireFeature } = require('./middleware/requireFeature');
 
-// Vault write gate — POST/PUT/PATCH/DELETE require the 'vault' feature (Solo+)
+// Vault write gate — POST/PUT/PATCH/DELETE require the 'vault' feature (Solo+),
+// except the one write the free tier is entitled to.
+//
+// The free plan includes a single document. That allowance lives in
+// canUploadVaultDoc() (services/subscription.js, FREE_VAULT_DOC_LIMIT = 1) and
+// was unreachable: this gate refused free users before routes/vault.js could
+// apply it, so uploading returned feature_not_available and the free-tier
+// allowance was dead code. Exempting the upload path hands enforcement back to
+// the route, which caps at one and returns plan_limit_exceeded on the second.
+//
+// Deliberately just this path. Mining, angles and idea edits stay Solo+; the
+// upload alone is enough for the document to be useful, because processFile()
+// mines it automatically on the way in (routes/vault.js), so a free user's one
+// document reaches generation without any further vault write.
+const VAULT_FREE_TIER_WRITES = new Set(['/upload']);
+
 function requireVaultFeatureForWrites(req, res, next) {
   if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) return next();
+  // req.path is relative to the '/api/vault' mount point.
+  if (VAULT_FREE_TIER_WRITES.has(req.path)) return next();
   return requireFeature('vault')(req, res, next);
 }
 

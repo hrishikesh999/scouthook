@@ -238,8 +238,14 @@ async function logVisualGeneration(userId, tenantId = 'default', postId, visualT
 
 // ---------------------------------------------------------------------------
 // canUploadVaultDoc
-// solo/pro: unrestricted. Free tier (expired): capped at 1 lifetime document,
-// counted per-user across all their workspaces.
+// solo/pro: unrestricted. Free tier (expired): capped at 1 document, counted
+// per-user across all their workspaces. Not lifetime — the count is of rows
+// that exist now, so deleting the document frees the slot.
+//
+// This is the only vault write the free tier gets; server.js exempts the upload
+// path from the vault feature gate specifically so this cap is the thing that
+// applies. Keep the two in step: re-gating /upload there makes this dead code
+// again, which is how it spent months unreachable.
 // ---------------------------------------------------------------------------
 async function canUploadVaultDoc(userId) {
   const plan = await getUserPlan(userId);

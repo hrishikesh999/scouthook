@@ -124,25 +124,37 @@ test('signup through the 4-free-post cap, billing, publish, vault, and admin gra
   // told their plan expired when they never had one to begin with.
   expect(publish.body.error).toBe('publish_scope_required');
 
-  // ── 7. Vault: a free user cannot write to it at all ─────────────────────────
-  //      This step used to assert the opposite — first upload 200, second capped
-  //      at 1 with plan_limit_exceeded — and had been unreachable for months
-  //      behind an earlier assertion that aborted the run, so nobody saw it stop
-  //      being true. server.js mounts /api/vault behind requireVaultFeatureForWrites
-  //      and lib/planFeatures.js grants 'vault' to solo/pro only, so the write is
-  //      refused before routes/vault.js consults its own free-tier allowance.
-  //
-  //      Asserted as it behaves today, NOT as an endorsement: the free-tier
-  //      allowance in canUploadVaultDoc is now unreachable code, and whether the
-  //      gate or the allowance is the real rule is an open product question.
-  //      Fix that first, then make this step say whichever answer wins.
+  // ── 7. Vault: the free plan's single document ───────────────────────────────
+  //      The first upload succeeds and the second is capped. This assertion was
+  //      right all along, but spent months unreachable behind an earlier failing
+  //      step, during which requireVaultFeatureForWrites (server.js) started
+  //      refusing free users outright and made the allowance in
+  //      canUploadVaultDoc dead code. Nobody saw it because nothing ran it.
+  //      Guards the exemption that hands enforcement back to the route.
   const doc1 = await ag.post('/api/vault/upload')
     .set('Content-Type', 'text/plain')
     .set('X-Filename', encodeURIComponent('notes.txt'))
     .send('Some notes about my niche and audience.');
-  expect(doc1.status).toBe(403);
-  expect(doc1.body.ok).toBe(false);
-  expect(doc1.body.error).toBe('feature_not_available');
+  expect(doc1.status).toBe(200);
+  expect(doc1.body.ok).toBe(true);
+
+  const doc2 = await ag.post('/api/vault/upload')
+    .set('Content-Type', 'text/plain')
+    .set('X-Filename', encodeURIComponent('notes2.txt'))
+    .send('More notes.');
+  expect(doc2.status).toBe(403);
+  expect(doc2.body.ok).toBe(false);
+  // plan_limit_exceeded, NOT feature_not_available — the free tier HAS this
+  // feature, they have simply used their one document.
+  expect(doc2.body.error).toBe('plan_limit_exceeded');
+  expect(doc2.body.current).toBe(1);
+  expect(doc2.body.limit).toBe(1);
+
+  // Writes the free tier does NOT get, asserted so the exemption above cannot
+  // silently widen into "free users can do anything in the vault".
+  const mine = await ag.post('/api/vault/mine').send({});
+  expect(mine.status).toBe(403);
+  expect(mine.body.error).toBe('feature_not_available');
 
   // ── 8. Admin grants 3 bonus posts — generation should now succeed again ────
   if (!ADMIN_PASSWORD) {

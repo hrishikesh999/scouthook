@@ -5,10 +5,10 @@ const path = require('path');
 const { Resend } = require('resend');
 const { db } = require('../db');
 
-// The display name contains an '@', which RFC 5322 treats as a special
-// character — it must stay double-quoted or strict parsers reject the header
-// and some clients render the raw address instead of the name.
-const FROM = process.env.EMAIL_FROM || '"Hrishikesh @ ScoutHook" <contact@send.scouthook.com>';
+// Plain display name — no RFC 5322 special characters, so no quoting needed.
+// If this ever gains an '@', '.', or ',', it must be double-quoted or strict
+// parsers reject the header and some clients render the raw address instead.
+const FROM = process.env.EMAIL_FROM || 'ScoutHook <contact@send.scouthook.com>';
 
 // We send from a subdomain that is configured for delivery, not receipt, so
 // every message carries a reply-to on the root domain. The lifecycle emails

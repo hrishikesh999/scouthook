@@ -37,6 +37,12 @@
     const panel = document.getElementById(containerId);
     if (!panel || !reco || !reco.format || reco.format === 'text') return;
 
+    // The carousel entry point is hidden in the editor (editor.css), and this
+    // chip's accept button works by clicking it — so a carousel recommendation
+    // would render a CTA that silently does nothing. Media recommendations are
+    // unaffected; that control is still there.
+    if (reco.format === 'carousel') return;
+
     const cta = reco.format === 'carousel' ? 'Make it a carousel' : 'Add a visual';
     panel.innerHTML = `
       <span class="freco-icon">💡</span>

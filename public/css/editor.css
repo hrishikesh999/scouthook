@@ -57,6 +57,12 @@
       color: var(--text-secondary); transition: border-color 0.15s, background 0.15s, color 0.15s, transform 0.1s;
       box-shadow: 0 1px 4px rgba(0,0,0,0.08);
     }
+    /* Carousel entry point hidden. The whole carousel pipeline — packs, Studio,
+       rendering — is left intact behind it; this is the one control that reaches
+       it from the editor, so hiding it here takes the feature off the surface
+       without unpicking anything. format-reco.js drops the matching "make it a
+       carousel" nudge for the same reason: accepting it clicks this button. */
+    #vab-carousel-btn { display: none; }
     .vab-btn:hover { border-color: var(--brand, #0f766e); color: var(--brand, #0f766e); background: rgba(15,118,110,0.04); transform: scale(1.05); }
     .vab-btn:active { transform: scale(0.97); }
     .vab-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; line-height: 1; white-space: nowrap; }

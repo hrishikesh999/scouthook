@@ -217,35 +217,90 @@
     .version-revert-btn { background: none; border: none; cursor: pointer; font-size: 12px; color: var(--text-muted); font-family: inherit; padding: 0; }
     .version-revert-btn:hover { color: var(--text-heading); text-decoration: underline; }
 
-    /* ── Free-tier panel — the upgrade ask, shown under the post that spent the
-          last free generation. Accented, not alarming: this is an invitation
-          next to finished work, not an error. ── */
-    #free-tier-panel {
-      position: relative;
-      border: 2px solid #0F766E;
-      border-radius: var(--radius-md, 8px);
-      background: #f0fdfa;
-      padding: 16px 20px;
-      margin-bottom: 14px;
+    /* ── Free-tier overlay — the upgrade ask, over the post that spent the last
+          free post. Glass, not a curtain: the tint and blur are deliberately
+          slight, because the post underneath is the argument. The panel itself
+          stays opaque — it is the one thing that must be readable at a glance,
+          and translucency there would fight the post text behind it. ── */
+    #editor { position: relative; }
+    #free-tier-overlay {
+      position: absolute; inset: 0; z-index: 60;
+      /* Anchored low on purpose. Centred, the panel sits square on top of the
+         LinkedIn card (554px) and covers nearly all of it — the post stops being
+         visible at all, which defeats the point of the glass. Bottom-aligned,
+         the hook and opening lines stay in the clear, and those are the part
+         that proves the thing worked. */
+      display: flex; align-items: flex-end; justify-content: center;
+      padding: 20px 20px 26px;
+      background: rgba(255, 255, 255, 0.22);
+      backdrop-filter: blur(1.5px);
+      -webkit-backdrop-filter: blur(1.5px);
     }
-    #free-tier-panel[hidden] { display: none; }
-    .ftp-heading { font-size: 15px; font-weight: 600; color: var(--text-heading); margin: 0 0 4px; }
-    .ftp-sub { font-size: 13px; line-height: 1.5; color: var(--text-secondary); margin: 0 0 14px; max-width: 46ch; }
-    .ftp-actions { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
-    .ftp-upgrade {
+    #free-tier-overlay[hidden] { display: none; }
+
+    .fto-panel {
+      position: relative;
+      width: 100%; max-width: 500px;
+      background: var(--bg-surface, #fff);
+      border: 2px solid #0F766E;
+      border-radius: 14px;
+      padding: 22px 26px;
+      box-shadow: 0 12px 32px rgba(15, 23, 42, 0.16);
+      max-height: 100%; overflow-y: auto;
+    }
+    .fto-close {
+      position: absolute; top: 8px; right: 12px;
+      background: none; border: none; cursor: pointer;
+      font-size: 20px; line-height: 1; color: var(--text-muted); padding: 2px 6px;
+    }
+    .fto-close:hover { color: var(--text-heading); }
+
+    .fto-eyebrow {
+      font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+      color: #0F766E; margin: 0 0 8px;
+    }
+    .fto-heading { font-size: 19px; font-weight: 700; line-height: 1.3; color: var(--text-heading); margin: 0 0 8px; }
+    .fto-sub { font-size: 13px; line-height: 1.6; color: var(--text-secondary); margin: 0 0 15px; }
+
+    .fto-features {
+      list-style: none; margin: 0 0 16px; padding: 0;
+      display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px 16px;
+    }
+    .fto-features li {
+      display: flex; gap: 7px; align-items: flex-start;
+      font-size: 12px; line-height: 1.4; color: var(--text-heading);
+    }
+    .fto-tick { color: #0F766E; font-weight: 700; flex-shrink: 0; }
+
+    .fto-actions { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+    .fto-upgrade {
       background: #0F766E; color: #fff; border: none; cursor: pointer;
       font-family: inherit; font-size: 13px; font-weight: 600;
-      padding: 9px 18px; border-radius: var(--radius-md, 8px);
+      padding: 11px 22px; border-radius: 8px;
     }
-    .ftp-upgrade:hover { background: #115e56; }
-    .ftp-later { background: none; border: none; cursor: pointer; font-family: inherit; font-size: 12px; color: var(--text-muted); padding: 0; }
-    .ftp-later:hover { color: var(--text-heading); text-decoration: underline; }
-    .ftp-dismiss {
-      position: absolute; top: 8px; right: 10px;
-      background: none; border: none; cursor: pointer;
-      font-size: 18px; line-height: 1; color: var(--text-muted); padding: 2px 6px;
+    .fto-upgrade:hover { background: #115e56; }
+    .fto-cancel { font-size: 12px; color: var(--text-muted); }
+
+    .fto-foot {
+      font-size: 12px; color: var(--text-muted);
+      margin: 12px 0 0; padding-top: 10px; border-top: 1px solid var(--border);
     }
-    .ftp-dismiss:hover { color: var(--text-heading); }
+
+    @media (max-width: 600px) {
+      #free-tier-overlay { padding: 20px 12px 12px; }
+      .fto-panel { padding: 18px 18px; }
+      .fto-features { grid-template-columns: 1fr; gap: 8px; }
+    }
+
+    /* Glass costs a compositor pass on every scroll frame. Where the reader has
+       asked for less of it — or the browser cannot do it — fall back to a plain
+       tint, which still separates panel from post. */
+    @media (prefers-reduced-transparency: reduce) {
+      #free-tier-overlay { backdrop-filter: none; -webkit-backdrop-filter: none; background: rgba(255, 255, 255, 0.82); }
+    }
+    @supports not (backdrop-filter: blur(1px)) {
+      #free-tier-overlay { background: rgba(255, 255, 255, 0.86); }
+    }
 
     /* First-post celebration banner (fires once, on the account's first post). */
     #first-post-banner { display: flex; align-items: flex-start; gap: 10px; background: linear-gradient(90deg, #ecfdf5, #f0fdfa); border: 1px solid #6ee7b7; border-radius: var(--radius-md, 8px); padding: 11px 14px; margin-bottom: 12px; transition: opacity .55s ease; }

@@ -137,38 +137,36 @@
   #pm-context-banner.visible { display: block; }
 
   /* Feature highlights grid above the plan card */
-  .pm-feature-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px 20px;
-    margin-bottom: 24px;
-    padding: 20px;
-    background: var(--bg-subtle, #FAFAFA);
-    border: 1px solid var(--border, #E4E4E7);
-    border-radius: 12px;
-  }
-  .pm-feature-grid-item {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 13px;
-    color: var(--text-body, #27272A);
-    font-weight: 500;
-  }
-  .pm-feature-grid-item svg { color: #10B981; flex-shrink: 0; }
-
   .pm-cards {
     display: grid;
-    grid-template-columns: 1fr;
+    /* auto-fit, not a fixed two columns: before PADDLE_PRICE_ID_DELUXE is set
+       only Pro is purchasable, and a lone card should fill the row rather than
+       sit beside an empty column. */
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
     gap: 14px;
+    align-items: start;
   }
+  .pm-rec {
+    position: absolute; top: 14px; right: 14px;
+    background: #ecfdf5; color: #0D9488;
+    font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+    padding: 3px 10px; border-radius: 99px;
+  }
+  .pm-tagline { font-size: 12px; color: var(--text-muted, #71717A); margin-top: 6px; }
+  .pm-card-features { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 9px; }
+  .pm-card-features li {
+    display: flex; gap: 8px; align-items: flex-start;
+    font-size: 13px; line-height: 1.45; color: var(--text-heading, #18181B);
+  }
+  .pm-card-features li svg { color: #10B981; flex-shrink: 0; margin-top: 3px; }
   @media (max-width: 600px) {
     #pm-modal-body { padding: 32px 20px 28px; }
-    .pm-feature-grid { grid-template-columns: 1fr; }
+    .pm-cards { grid-template-columns: 1fr; }
     #pm-header h2 { font-size: 22px; }
   }
 
   .pm-card {
+    position: relative;
     border: 1px solid var(--border, #E4E4E7);
     border-radius: 14px;
     padding: 24px 24px 26px;
@@ -241,6 +239,14 @@
     letter-spacing: -0.1px;
   }
   .pm-cta:active:not(:disabled) { transform: scale(0.98); }
+  /* Defined after .pm-cta, which sets border:none — and with both classes in
+     the selector, so the border survives regardless of source order. */
+  .pm-cta.pm-cta-outline {
+    background: var(--bg-surface, #fff);
+    color: #0D9488;
+    border: 1.5px solid #0D9488;
+  }
+  .pm-cta.pm-cta-outline:hover:not(:disabled) { background: #f0fdfa; }
   .pm-cta-primary {
     background: linear-gradient(135deg, #0D9488 0%, #0F766E 100%);
     color: #fff;
@@ -295,7 +301,7 @@
         <div id="pm-header">
           <div id="pm-header-badge">
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-            ScoutHook Pro
+            ScoutHook plans
           </div>
           <h2 id="pm-title">Unlock the full ScoutHook experience</h2>
           <p id="pm-subtitle">Everything you need to build authority and grow on LinkedIn.</p>
@@ -303,48 +309,9 @@
 
         <div id="pm-context-banner"></div>
 
-        <div class="pm-feature-grid">
-          <div class="pm-feature-grid-item">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
-            Unlimited post generations
-          </div>
-          <div class="pm-feature-grid-item">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
-            Unlimited visual creations
-          </div>
-          <div class="pm-feature-grid-item">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
-            Post scheduling
-          </div>
-          <div class="pm-feature-grid-item">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
-            Knowledge Vault
-          </div>
-          <div class="pm-feature-grid-item">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
-            Team members &amp; workspaces
-          </div>
-        </div>
-
-        <div class="pm-cards">
-
-          <!-- Pro -->
-          <div class="pm-card pm-featured" id="pm-card-pro">
-            <div class="pm-card-top">
-              <div>
-                <div class="pm-plan-name pm-pro">
-                  Pro plan
-                  <span class="pm-current-chip" id="pm-pro-chip" style="display:none">Current plan</span>
-                </div>
-                <div class="pm-price"><sup>$</sup><span id="pm-pro-price">29</span></div>
-                <div class="pm-period">per month · cancel anytime</div>
-              </div>
-            </div>
-            <button class="pm-cta pm-cta-primary" id="pm-pro-btn" type="button">Upgrade now</button>
-            <div class="pm-error" id="pm-pro-error"></div>
-          </div>
-
-        </div><!-- /pm-cards -->
+        <!-- Filled by renderPlanCards() from /api/billing/config, so the plans
+             offered here are exactly the plans with a configured Paddle price. -->
+        <div class="pm-cards" id="pm-cards"></div>
 
         <div class="pm-guarantee">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
@@ -422,6 +389,112 @@
     await paddleInitPromise;
   }
 
+  // ── Plan copy ──────────────────────────────────────────────────────────────
+  /**
+   * What each plan says for itself. The single source for both this modal and
+   * the editor's free-tier overlay, which reads it via PricingModal.planCopy —
+   * two copies of a pricing table drift, and the one that drifts is always the
+   * one the customer is looking at.
+   *
+   * Prices, labels and taglines are NOT here: those come from
+   * /api/billing/config, which reflects what Paddle is configured to charge.
+   * A price printed here and changed there shows one figure and bills another.
+   */
+  const PLAN_COPY = {
+    pro: {
+      features: [
+        'Unlimited posts — never hit a cap',
+        'Repurpose your blogs, PDFs and decks',
+        'Content coach with 10+ post types',
+        'Schedule a month in one sitting',
+        'Unlimited on-brand visuals',
+        'One workspace',
+      ],
+    },
+    deluxe: {
+      recommended: true,
+      features: [
+        'Everything in Pro, plus:',
+        'Five workspaces instead of one',
+        'Manage up to 5 LinkedIn accounts',
+        'Team members',
+        'A separate voice, vault and schedule per brand',
+        'One subscription across all of them',
+      ],
+    },
+  };
+
+  function esc(str) {
+    return String(str).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  const TICK_SVG = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>';
+
+  /** Render one card per purchasable plan, then wire each card's button. */
+  function renderPlanCards(plans) {
+    const wrap = $id('pm-cards');
+    if (!wrap) return;
+
+    if (!plans || !plans.length) {
+      // No configured price means nothing can be bought. Saying so beats a
+      // button that opens a checkout we cannot complete.
+      wrap.innerHTML = '<div class="pm-error" style="display:block">Plans are unavailable right now. Please try again shortly.</div>';
+      return;
+    }
+
+    wrap.innerHTML = plans.map(function (p) {
+      const copy = PLAN_COPY[p.plan] || { features: [] };
+      const feats = copy.features.map(function (f) {
+        return '<li>' + TICK_SVG + '<span>' + esc(f) + '</span></li>';
+      }).join('');
+      return '' +
+        '<div class="pm-card' + (copy.recommended ? ' pm-featured' : '') + '" data-plan-card="' + esc(p.plan) + '">' +
+          (copy.recommended ? '<span class="pm-rec">Recommended</span>' : '') +
+          '<div class="pm-card-top">' +
+            '<div class="pm-plan-name pm-pro">' + esc(p.label) + ' plan' +
+              '<span class="pm-current-chip" data-chip="' + esc(p.plan) + '" style="display:none">Current plan</span>' +
+            '</div>' +
+            '<div class="pm-price"><sup>$</sup>' + esc(String(p.price)) + '</div>' +
+            '<div class="pm-period">per month · cancel anytime</div>' +
+            (p.tagline ? '<div class="pm-tagline">' + esc(p.tagline) + '</div>' : '') +
+          '</div>' +
+          '<ul class="pm-card-features">' + feats + '</ul>' +
+          '<button class="pm-cta ' + (copy.recommended ? 'pm-cta-primary' : 'pm-cta-outline') + '" data-plan-btn="' + esc(p.plan) + '" type="button">Choose ' + esc(p.label) + '</button>' +
+          '<div class="pm-error" data-error="' + esc(p.plan) + '"></div>' +
+        '</div>';
+    }).join('');
+
+    wrap.querySelectorAll('[data-plan-btn]').forEach(function (btn) {
+      btn.addEventListener('click', function () { onPlanButton(btn); });
+    });
+  }
+
+  /** Checkout for a plan the user is not on; billing portal for the one they are. */
+  async function onPlanButton(btn) {
+    if (btn.disabled) return;
+    const plan = btn.dataset.planBtn;
+    const errorEl = $id('pm-cards').querySelector('[data-error="' + plan + '"]');
+
+    if (currentPlan === plan) {
+      btn.disabled = true;
+      const orig = btn.textContent;
+      btn.textContent = 'Loading…';
+      try {
+        const r = await fetch('/api/billing/portal');
+        const d = await r.json();
+        if (d.portalUrl) { window.location.href = d.portalUrl; return; }
+      } catch { /* fall through to the error below */ }
+      if (errorEl) { errorEl.textContent = 'Unable to open billing portal.'; errorEl.style.display = ''; }
+      btn.disabled = false;
+      btn.textContent = orig;
+      return;
+    }
+
+    startPlanCheckout(plan, btn, errorEl);
+  }
+
   // ── Config fetch ───────────────────────────────────────────────────────────
   async function loadConfig() {
     if (configLoaded) return;
@@ -431,8 +504,6 @@
       const d = await r.json();
       paddleConfig = d;
       configLoaded = true;
-      const proPriceEl = $id('pm-pro-price');
-      if (proPriceEl && d.proMonthlyPrice) proPriceEl.textContent = d.proMonthlyPrice;
     } catch { /* no-op */ }
   }
 
@@ -527,42 +598,10 @@
     }
   }
 
-  // ── Pro button — checkout or billing portal for Pro users ─────────────────
-  $id('pm-pro-btn').addEventListener('click', async function () {
-    if (this.disabled) return;
-
-    if (currentPlan === 'pro') {
-      this.disabled    = true;
-      this.textContent = 'Loading…';
-      try {
-        const r = await fetch('/api/billing/portal');
-        const d = await r.json();
-        if (d.portalUrl) { window.location.href = d.portalUrl; return; }
-      } catch { /* fall through */ }
-      $id('pm-pro-error').textContent   = 'Unable to open billing portal.';
-      $id('pm-pro-error').style.display = '';
-      this.disabled    = false;
-      this.textContent = 'Upgrade now';
-      return;
-    }
-
-    startPlanCheckout('pro', this, $id('pm-pro-error'));
-  });
-
   // ── open(options) ──────────────────────────────────────────────────────────
   async function open(options) {
     const opts    = (options && typeof options === 'object') ? options : {};
     const feature = opts.feature || null;
-
-    // — Reset chips and errors
-    $id('pm-pro-chip').style.display = 'none';
-    $id('pm-pro-error').style.display = 'none';
-
-    // — Reset button to default (will be updated after sub loads)
-    const proBtn = $id('pm-pro-btn');
-    proBtn.disabled     = false;
-    proBtn.textContent  = 'Upgrade now';
-    proBtn.className    = 'pm-cta pm-cta-primary';
 
     // — Context banner
     const bannerEl = $id('pm-context-banner');
@@ -588,12 +627,18 @@
     const isAppTrial = sub.status === 'trialing' && !sub.trial_expired;
     currentPlan = isAppTrial ? 'expired' : (sub.plan || 'expired');
 
-    // — Apply plan state to UI
-    if (currentPlan === 'pro') {
-      $id('pm-pro-chip').style.display = '';
-      proBtn.textContent = 'Upgrade now';
-      proBtn.className   = 'pm-cta pm-cta-primary';
-    }
+    // — Cards come from config, so only plans with a configured Paddle price
+    //   are shown. Rendered after the fetches so the current-plan state below
+    //   has something to mark.
+    renderPlanCards(paddleConfig?.plans || []);
+
+    // — Mark the plan they are already on: its button manages the subscription
+    //   rather than starting a second checkout.
+    const cardsEl = $id('pm-cards');
+    const chip = cardsEl?.querySelector('[data-chip="' + currentPlan + '"]');
+    if (chip) chip.style.display = '';
+    const ownBtn = cardsEl?.querySelector('[data-plan-btn="' + currentPlan + '"]');
+    if (ownBtn) ownBtn.textContent = 'Manage subscription';
   }
 
   // ── Post-checkout sync on success redirect ─────────────────────────────────
@@ -626,5 +671,5 @@
     return startPlanCheckout(plan, btn || null, null);
   }
 
-  window.PricingModal = { open, close, checkout };
+  window.PricingModal = { open, close, checkout, planCopy: PLAN_COPY };
 })();

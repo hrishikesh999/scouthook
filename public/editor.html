@@ -4460,41 +4460,20 @@ function celebrateFirstPost() {
   }, 180);
 }
 
-/* What each plan says for itself in the upgrade overlay.
-   Copy only — the price, the label and whether a plan is offered at all come
-   from /api/billing/config, which reflects what Paddle is actually configured
-   to charge. Keeping the numbers server-side is deliberate: a price printed
-   here and changed there would show one figure and bill another. */
-const FTO_PLAN_COPY = {
-  pro: {
-    features: [
-      'Unlimited posts — never hit a cap',
-      'Repurpose your blogs, PDFs and decks',
-      'Content coach with 10+ post types',
-      'Schedule a month in one sitting',
-      'Unlimited on-brand visuals',
-      'One workspace',
-    ],
-  },
-  deluxe: {
-    recommended: true,
-    features: [
-      'Everything in Pro, plus:',
-      'Five workspaces instead of one',
-      'Manage up to 5 LinkedIn accounts',
-      'Team members',
-      'A separate voice, vault and schedule per brand',
-      'One subscription across all of them',
-    ],
-  },
-};
+/* Plan copy lives in pricing-modal.js and is shared, so the overlay and the
+   pricing modal cannot drift apart — the one that drifts is always the one the
+   customer happens to be looking at. pricing-modal.js is a plain script tag on
+   this page, so it has loaded by the time anything here runs. */
+function ftoPlanCopy(plan) {
+  return (window.PricingModal?.planCopy || {})[plan] || { features: [] };
+}
 
 function renderFreeTierPlans(plans) {
   const wrap = document.getElementById('fto-plans');
   if (!wrap) return;
 
   wrap.innerHTML = plans.map(p => {
-    const copy = FTO_PLAN_COPY[p.plan] || { features: [] };
+    const copy = ftoPlanCopy(p.plan);
     const feats = copy.features.map(f =>
       `<li><span class="ftp-tick" aria-hidden="true">&#10003;</span>${escHtml(f)}</li>`
     ).join('');

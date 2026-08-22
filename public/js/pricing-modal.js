@@ -48,6 +48,19 @@
   }
   #pm-overlay.visible { display: flex; }
 
+  /* Frosted instead of the usual dark scrim, used when the modal is the
+     free-cap ask: the post the author just wrote stays legible behind it,
+     because that post is the argument for upgrading. Everywhere else the
+     scrim stays dark, where readability of the modal is all that matters. */
+  #pm-overlay.pm-glass {
+    background: rgba(255, 255, 255, 0.42);
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+  }
+  @media (prefers-reduced-transparency: reduce) {
+    #pm-overlay.pm-glass { backdrop-filter: none; -webkit-backdrop-filter: none; background: rgba(255,255,255,0.9); }
+  }
+
   #pm-modal {
     background: var(--bg-surface, #fff);
     border: 1px solid var(--border, #E4E4E7);
@@ -235,7 +248,6 @@
     cursor: pointer;
     border: none;
     transition: background 0.15s, opacity 0.15s, transform 0.1s;
-    margin-top: auto;
     letter-spacing: -0.1px;
   }
   .pm-cta:active:not(:disabled) { transform: scale(0.98); }
@@ -301,10 +313,10 @@
         <div id="pm-header">
           <div id="pm-header-badge">
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-            ScoutHook plans
+            <span id="pm-badge-text">ScoutHook plans</span>
           </div>
-          <h2 id="pm-title">Unlock the full ScoutHook experience</h2>
-          <p id="pm-subtitle">Everything you need to build authority and grow on LinkedIn.</p>
+          <h2 id="pm-title"></h2>
+          <p id="pm-subtitle"></p>
         </div>
 
         <div id="pm-context-banner"></div>
@@ -389,6 +401,29 @@
     await paddleInitPromise;
   }
 
+  // ── Entry-point copy ───────────────────────────────────────────────────────
+  /**
+   * The modal is opened from several places, and the header should say why.
+   * DEFAULT is the generic pitch; 'free_cap' is the moment the author has just
+   * spent their last free post, where the specific thing that happened is far
+   * more persuasive than a feature list.
+   */
+  const DEFAULT_HEADER = {
+    badge: 'ScoutHook plans',
+    title: 'Unlock the full ScoutHook experience',
+    subtitle: 'Everything you need to build authority and grow on LinkedIn.',
+  };
+
+  const CONTEXT_HEADERS = {
+    free_cap: {
+      badge: 'Free posts used',
+      title: 'The hard part is already behind you.',
+      subtitle: "What stops most people isn't ideas, it's consistency. Your ideal client is already there on LinkedIn. The question is — will you get the next post out?",
+      banner: 'This post is yours either way — close this to edit, schedule or publish it.',
+      glass: true,
+    },
+  };
+
   // ── Plan copy ──────────────────────────────────────────────────────────────
   /**
    * What each plan says for itself. The single source for both this modal and
@@ -460,8 +495,8 @@
             '<div class="pm-period">per month · cancel anytime</div>' +
             (p.tagline ? '<div class="pm-tagline">' + esc(p.tagline) + '</div>' : '') +
           '</div>' +
-          '<ul class="pm-card-features">' + feats + '</ul>' +
           '<button class="pm-cta ' + (copy.recommended ? 'pm-cta-primary' : 'pm-cta-outline') + '" data-plan-btn="' + esc(p.plan) + '" type="button">Choose ' + esc(p.label) + '</button>' +
+          '<ul class="pm-card-features">' + feats + '</ul>' +
           '<div class="pm-error" data-error="' + esc(p.plan) + '"></div>' +
         '</div>';
     }).join('');
@@ -602,11 +637,23 @@
   async function open(options) {
     const opts    = (options && typeof options === 'object') ? options : {};
     const feature = opts.feature || null;
+    const header  = CONTEXT_HEADERS[opts.context] || DEFAULT_HEADER;
+
+    // — Header copy for this entry point. Always reassigned, never only set on
+    //   the branch that needs it: the modal is a singleton, so copy left over
+    //   from a previous open would greet the next caller.
+    $id('pm-badge-text').textContent = opts.badge || header.badge;
+    $id('pm-title').textContent      = header.title;
+    $id('pm-subtitle').textContent   = header.subtitle;
+    overlay.classList.toggle('pm-glass', !!header.glass);
 
     // — Context banner
     const bannerEl = $id('pm-context-banner');
     bannerEl.classList.remove('visible');
-    if (feature && FEATURE_LABELS[feature]) {
+    if (header.banner) {
+      bannerEl.textContent = header.banner;
+      bannerEl.classList.add('visible');
+    } else if (feature && FEATURE_LABELS[feature]) {
       bannerEl.textContent = `${FEATURE_LABELS[feature]} requires the Pro plan.`;
       bannerEl.classList.add('visible');
     }

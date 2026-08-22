@@ -28,6 +28,10 @@
         <div id="post-publish-state" class="post-publish-state" aria-live="polite" hidden>
           <span id="published-label"></span>
         </div>
+        <button id="btn-improver-toggle" class="btn-improver-toggle" type="button" aria-expanded="false" aria-controls="edit-meta">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 4V2"/><path d="M15 16v-2"/><path d="M8 9h2"/><path d="M20 9h2"/><path d="M17.8 11.8 19 13"/><path d="M15 9h.01"/><path d="M17.8 6.2 19 5"/><path d="m3 21 9-9"/><path d="M12.2 6.2 11 5"/></svg>
+          Improve post
+        </button>
         <button id="btn-schedule" class="btn-primary" disabled>Schedule</button>
       </div>
       <!-- Scheduled state replaces topbar content -->
@@ -225,28 +229,6 @@
                 </div>
               </div>
             </div>
-          </div>
-        </div>
-
-        <!-- Free tier spent — shown over the post that used the last free post.
-             An overlay rather than a strip: the post stays visible through the
-             glass because it is the argument. Nothing is taken away — the close
-             button returns the editor untouched, and the post is still fully
-             editable, schedulable and publishable.
-
-             The plan cards are rendered from /api/billing/config, not hard-coded,
-             so a plan with no Paddle price configured simply does not appear. -->
-        <div id="free-tier-overlay" hidden role="region" aria-label="Upgrade">
-          <div class="fto-panel">
-            <button type="button" class="fto-close" id="fto-close" aria-label="Close">&times;</button>
-
-            <p class="fto-eyebrow" id="fto-eyebrow">Post 4 of 4</p>
-            <p class="fto-heading">The hard part is already behind you.</p>
-            <p class="fto-sub">What stops most people isn't ideas, it's consistency. Your ideal client is already there on LinkedIn. The question is &mdash; will you get the next post out?</p>
-
-            <div class="fto-plans" id="fto-plans"></div>
-
-            <p class="fto-foot">Cancel anytime. This post is yours either way &mdash; close this to edit, schedule or publish it.</p>
           </div>
         </div>
 
@@ -4460,58 +4442,46 @@ function celebrateFirstPost() {
   }, 180);
 }
 
-/* Plan copy lives in pricing-modal.js and is shared, so the overlay and the
-   pricing modal cannot drift apart — the one that drifts is always the one the
-   customer happens to be looking at. pricing-modal.js is a plain script tag on
-   this page, so it has loaded by the time anything here runs. */
-function ftoPlanCopy(plan) {
-  return (window.PricingModal?.planCopy || {})[plan] || { features: [] };
+/* ── Post Improver rail ──────────────────────────────────────────────────
+   Collapsed by default so the post gets the full column; opened from the
+   topbar. The choice is remembered per browser rather than reset every load —
+   someone who works with the improver open should not have to reopen it on
+   every post. */
+const IMPROVER_PREF_KEY = 'sh_improver_open';
+
+function setImproverOpen(open, remember) {
+  document.body.classList.toggle('improver-open', open);
+  const btn = document.getElementById('btn-improver-toggle');
+  if (btn) btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  if (remember) {
+    try { localStorage.setItem(IMPROVER_PREF_KEY, open ? '1' : '0'); } catch { /* private mode */ }
+  }
 }
 
-function renderFreeTierPlans(plans) {
-  const wrap = document.getElementById('fto-plans');
-  if (!wrap) return;
+function wireImproverToggle() {
+  let open = false;
+  try { open = localStorage.getItem(IMPROVER_PREF_KEY) === '1'; } catch { /* private mode — stay collapsed */ }
+  setImproverOpen(open, false);
 
-  wrap.innerHTML = plans.map(p => {
-    const copy = ftoPlanCopy(p.plan);
-    const feats = copy.features.map(f =>
-      `<li><span class="ftp-tick" aria-hidden="true">&#10003;</span>${escHtml(f)}</li>`
-    ).join('');
-    return `
-      <div class="fto-plan${copy.recommended ? ' fto-plan--rec' : ''}">
-        ${copy.recommended ? '<span class="fto-rec">Recommended</span>' : ''}
-        <p class="fto-plan-name">${escHtml(p.label)}</p>
-        <p class="fto-plan-price"><strong>$${escHtml(String(p.price))}</strong> / month</p>
-        <p class="fto-plan-tag">${escHtml(p.tagline || '')}</p>
-        <button type="button" class="fto-choose" data-plan="${escHtml(p.plan)}">Choose ${escHtml(p.label)}</button>
-        <ul class="fto-plan-features">${feats}</ul>
-      </div>`;
-  }).join('');
-
-  wrap.querySelectorAll('.fto-choose').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const plan = btn.dataset.plan;
-      // Straight to Paddle checkout for the chosen plan. Routing through the
-      // pricing modal would make the user pick a plan twice, and that modal
-      // only knows how to present Pro.
-      if (window.PricingModal?.checkout) window.PricingModal.checkout(plan, btn);
-      else window.location.href = `/billing.html?upgrade=1&plan=${encodeURIComponent(plan)}`;
-    });
+  document.getElementById('btn-improver-toggle')?.addEventListener('click', () => {
+    setImproverOpen(!document.body.classList.contains('improver-open'), true);
   });
 }
 
 /* The account just spent its last free post on the post now on screen.
-   An overlay over the editor rather than a strip beneath it: the post reads
-   through the glass because the post IS the argument — it is the thing that
-   just worked. Deliberately not a hostage-taking, though: closing it returns
-   the editor untouched, and nothing about editing, scheduling or publishing
-   this post is gated. */
+   Opens the pricing modal rather than a bespoke overlay. That modal is already
+   position:fixed at z-index 900 with its own scrolling, so it floats above the
+   sidebar, the topbar and the improver rail — the in-editor overlay this
+   replaces could only ever cover one column, which is what made it read as a
+   box wedged into the page rather than something on top of it.
+
+   Nothing is taken away: closing it returns the editor untouched, and editing,
+   scheduling and publishing this post were never gated. */
 function showFreeTierPanel() {
-  const overlay = document.getElementById('free-tier-overlay');
-  if (!overlay) return;
+  if (!window.PricingModal?.open) return;
 
   // Claim the ask for this screen, so the site-wide cap-reached bar does not say
-  // the same thing a few hundred pixels higher. Set before the fetches below and
+  // the same thing a few hundred pixels higher. Set before the fetch below and
   // paired with removing an already-rendered bar, because account-bar.js decides
   // asynchronously and can land either side of this function.
   document.body.dataset.freeTierAsk = '1';
@@ -4523,46 +4493,21 @@ function showFreeTierPanel() {
   }
 
   // Name the real number when we know it — an admin grant can make the cap
-  // something other than the default, and "post 4 of 4" would then be wrong.
+  // something other than the default, so "4 of 4" would be wrong.
   fetch('/api/billing/subscription', { credentials: 'same-origin' })
     .then(r => r.json())
     .then(sub => {
       const limit = Number(sub?.free_posts_limit);
-      const eyebrow = document.getElementById('fto-eyebrow');
-      if (eyebrow && Number.isFinite(limit) && limit > 0) {
-        eyebrow.textContent = `Post ${limit} of ${limit}`;
-      }
+      return Number.isFinite(limit) && limit > 0 ? `Post ${limit} of ${limit}` : null;
     })
-    .catch(() => { /* the default reads correctly for the default cap */ });
-
-  fetch('/api/billing/config', { credentials: 'same-origin' })
-    .then(r => r.json())
-    .then(cfg => {
-      const plans = Array.isArray(cfg?.plans) ? cfg.plans : [];
-      // No configured price means no purchasable plan. Showing the ask with no
-      // way to act on it is worse than not showing it at all.
-      if (!plans.length) { overlay.hidden = true; return; }
-      renderFreeTierPlans(plans);
-    })
-    .catch(() => { overlay.hidden = true; });
-
-  const close = () => {
-    overlay.hidden = true;
-    document.removeEventListener('keydown', onKey);
-  };
-  const onKey = (e) => { if (e.key === 'Escape') close(); };
-
-  overlay.querySelector('#fto-close')?.addEventListener('click', close);
-  // Clicking the glass closes; clicking inside the panel must not.
-  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
-  document.addEventListener('keydown', onKey);
-
-  // After the post has painted and any celebration has fired, so the ask never
-  // lands on top of the thing it is asking about.
-  setTimeout(() => {
-    overlay.hidden = false;
-    overlay.querySelector('#fto-close')?.focus();
-  }, 900);
+    .catch(() => null)
+    .then(badge => {
+      // After the post has painted and any celebration has fired, so the ask
+      // never lands on top of the thing it is asking about.
+      setTimeout(() => {
+        window.PricingModal.open({ context: 'free_cap', feature: 'generate', badge: badge || undefined });
+      }, 900);
+    });
 }
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -4604,6 +4549,7 @@ function init() {
   wireFormattingToolbar();
   wireVersionBar();
   wireImprover();
+  wireImproverToggle();
 
   const _ta = document.getElementById('post-body');
   if (_ta) {

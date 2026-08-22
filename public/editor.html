@@ -4443,28 +4443,21 @@ function celebrateFirstPost() {
 }
 
 /* ── Post Improver rail ──────────────────────────────────────────────────
-   Collapsed by default so the post gets the full column; opened from the
-   topbar. The choice is remembered per browser rather than reset every load —
-   someone who works with the improver open should not have to reopen it on
-   every post. */
-const IMPROVER_PREF_KEY = 'sh_improver_open';
-
-function setImproverOpen(open, remember) {
+   Closed on every load, for everyone, and opened only by the button. No
+   remembered preference on purpose: the rail is a permanent 322px column that
+   squeezes the post — the narrowest thing on a page whose job is writing posts
+   — so the writing surface gets the room by default and the improver is
+   something you reach for, per post, when you want it. */
+function setImproverOpen(open) {
   document.body.classList.toggle('improver-open', open);
   const btn = document.getElementById('btn-improver-toggle');
   if (btn) btn.setAttribute('aria-expanded', open ? 'true' : 'false');
-  if (remember) {
-    try { localStorage.setItem(IMPROVER_PREF_KEY, open ? '1' : '0'); } catch { /* private mode */ }
-  }
 }
 
 function wireImproverToggle() {
-  let open = false;
-  try { open = localStorage.getItem(IMPROVER_PREF_KEY) === '1'; } catch { /* private mode — stay collapsed */ }
-  setImproverOpen(open, false);
-
+  setImproverOpen(false);
   document.getElementById('btn-improver-toggle')?.addEventListener('click', () => {
-    setImproverOpen(!document.body.classList.contains('improver-open'), true);
+    setImproverOpen(!document.body.classList.contains('improver-open'));
   });
 }
 

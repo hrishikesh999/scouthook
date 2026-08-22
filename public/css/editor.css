@@ -42,8 +42,8 @@
        Collapsed by default. It is a permanent 322px column, and on a 1440
        screen it squeezes the writing surface between itself and the sidebar —
        the post ends up the narrowest thing on a page that exists to write
-       posts. Opened from the topbar's "Improve post" button, and the choice is
-       remembered, so anyone who wants it open keeps it open. ── */
+       posts. Opened from the topbar's "Improve post" button, and closed again on
+       every load — reached for per post, rather than a permanent fixture. ── */
     #edit-meta { flex: 0 0 322px; display: none; flex-direction: column; gap: 0; border-left: 1px solid var(--border); height: 100%; background: var(--bg-surface, #fff); }
     body.improver-open #edit-meta { display: flex; }
 

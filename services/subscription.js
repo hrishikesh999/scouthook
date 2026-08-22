@@ -2,7 +2,7 @@
 
 const { db } = require('../db');
 const { Paddle, Environment } = require('@paddle/paddle-node-sdk');
-const { getMonthlyPostLimit } = require('../lib/planFeatures');
+const { getMonthlyPostLimit, isPaidPlan } = require('../lib/planFeatures');
 
 // How many posts a free-tier account gets, for the lifetime of the account —
 // there is no monthly reset below the paid plans. Four, not three, because the
@@ -86,7 +86,7 @@ async function getUserPlan(userId) {
   // Lifetime plan: admin-granted, never expires, full Pro access.
   if (sub.status === 'lifetime') return 'pro';
   // Normalise to known tiers; unknown values fall back to expired.
-  const tier = ['solo', 'pro'].includes(sub.plan) ? sub.plan : 'expired';
+  const tier = isPaidPlan(sub.plan) ? sub.plan : 'expired';
   if (tier === 'expired') return 'expired';
   if (!['active', 'trialing', 'canceled', 'past_due', 'paused'].includes(sub.status)) return 'expired';
   if (sub.status === 'canceled') {
@@ -102,14 +102,71 @@ async function getUserPlan(userId) {
 }
 
 // ---------------------------------------------------------------------------
+// The purchasable plans, and what each costs.
+//
+// Prices are declared here and charged by Paddle; these numbers are only what
+// the UI prints. Paddle is the authority on what is actually billed, so a price
+// changed there and not here shows the customer one number and charges another.
+//
+// A plan whose price ID is unset is not offered — see purchasablePlans(). That
+// is what makes it safe to ship Deluxe before its Paddle price exists: the card
+// simply does not appear, rather than opening a checkout that 500s.
+// ---------------------------------------------------------------------------
+const PLAN_CATALOG = {
+  pro: {
+    label: 'Pro',
+    price: 19,
+    tagline: 'For one person, one brand',
+    priceIdEnv: 'PADDLE_PRICE_ID_PRO',
+  },
+  deluxe: {
+    label: 'Deluxe',
+    price: 49,
+    tagline: 'For several brands, or a team',
+    priceIdEnv: 'PADDLE_PRICE_ID_DELUXE',
+  },
+};
+
+/** Catalog entry plus its resolved Paddle price ID, or null when unconfigured. */
+function planCatalogEntry(plan) {
+  const entry = PLAN_CATALOG[plan];
+  if (!entry) return null;
+  const priceId = (process.env[entry.priceIdEnv] || '').trim();
+  return { plan, ...entry, priceId: priceId || null };
+}
+
+/** Plans that can actually be bought right now — those with a configured price. */
+function purchasablePlans() {
+  return Object.keys(PLAN_CATALOG)
+    .map(planCatalogEntry)
+    .filter(p => p && p.priceId);
+}
+
+/**
+ * Maps a Paddle price ID back to one of our plans.
+ * Returns null for an unrecognised price, which callers treat as "leave the
+ * plan alone" rather than downgrading someone over an env var we forgot to set.
+ */
+function planForPriceId(priceId) {
+  if (!priceId) return null;
+  const yearly = (process.env.PADDLE_PRICE_ID_YEARLY || '').trim();
+  if (yearly && priceId === yearly) return 'pro';
+  for (const plan of Object.keys(PLAN_CATALOG)) {
+    const entry = planCatalogEntry(plan);
+    if (entry?.priceId && entry.priceId === priceId) return plan;
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
 // getFoundingTierInfo
-// Returns the Pro price ID from PADDLE_PRICE_ID_PRO.
+// Kept for the callers that just want "the default paid plan to show".
 // ---------------------------------------------------------------------------
 async function getFoundingTierInfo() {
-  const priceId = process.env.PADDLE_PRICE_ID_PRO;
+  const pro = planCatalogEntry('pro');
   return {
-    priceId,
-    price: 29,
+    priceId: pro?.priceId,
+    price: pro?.price ?? 19,
     tier: 'pro',
     spotsRemaining: 0,
   };
@@ -139,7 +196,7 @@ function calendarMonthBounds() {
 async function canGeneratePost(userId) {
   const [sub, plan] = await Promise.all([getUserSubscription(userId), getUserPlan(userId)]);
 
-  if (plan !== 'solo' && plan !== 'pro') {
+  if (!isPaidPlan(plan)) {
     const limit = sub.free_posts_limit ?? FREE_POSTS_LIMIT;
     let current = 0;
     try {
@@ -249,7 +306,7 @@ async function logVisualGeneration(userId, tenantId = 'default', postId, visualT
 // ---------------------------------------------------------------------------
 async function canUploadVaultDoc(userId) {
   const plan = await getUserPlan(userId);
-  if (plan === 'solo' || plan === 'pro') {
+  if (isPaidPlan(plan)) {
     return { allowed: true, current: 0, limit: null, plan };
   }
 
@@ -394,6 +451,10 @@ async function seedFreeSubscription(userId) {
 
 module.exports = {
   FREE_POSTS_LIMIT,
+  PLAN_CATALOG,
+  planCatalogEntry,
+  purchasablePlans,
+  planForPriceId,
   getPaddle,
   getPaddleEnvironment,
   getUserSubscription,

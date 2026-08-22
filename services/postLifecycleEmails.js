@@ -323,7 +323,7 @@ async function runFreeCapFollowupCron() {
       JOIN   user_subscriptions us ON us.user_id = up.user_id
       WHERE  us.paddle_subscription_id IS NULL
         AND  us.status <> 'lifetime'
-        AND  COALESCE(us.plan, 'free') NOT IN ('solo', 'pro')
+        AND  COALESCE(us.plan, 'free') NOT IN ('solo', 'pro', 'deluxe')
         AND  up.email IS NOT NULL
         AND  up.lifecycle_emails_opt_out_at IS NULL
     `).all();

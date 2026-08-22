@@ -467,9 +467,11 @@
       return;
     }
 
-    btn.disabled    = true;
-    const origText  = btn.textContent;
-    btn.textContent = 'Loading…';
+    // btn is optional — callers outside this modal (the editor's upgrade overlay)
+    // may have no button to put in a loading state.
+    if (btn) btn.disabled = true;
+    const origText  = btn ? btn.textContent : '';
+    if (btn) btn.textContent = 'Loading…';
     if (errorEl) errorEl.style.display = 'none';
 
     try {
@@ -509,8 +511,7 @@
       });
 
       console.log('[checkout] step 7 — Paddle.Checkout.open() called successfully');
-      btn.disabled    = false;
-      btn.textContent = origText;
+      if (btn) { btn.disabled = false; btn.textContent = origText; }
     } catch (err) {
       console.error('[checkout] FAILED at step — error:', err);
       const msg = err.message === 'price_not_configured'
@@ -522,8 +523,7 @@
         errorEl.textContent = msg;
         errorEl.style.display = '';
       }
-      btn.disabled    = false;
-      btn.textContent = origText;
+      if (btn) { btn.disabled = false; btn.textContent = origText; }
     }
   }
 
@@ -614,5 +614,17 @@
   }
 
   // ── Expose globally ────────────────────────────────────────────────────────
-  window.PricingModal = { open, close };
+  /**
+   * Start Paddle checkout for a plan directly, with no modal in between.
+   *
+   * The upgrade overlay in the editor already shows the plans and their prices,
+   * so routing it through open() would make the user pick a plan twice — and the
+   * modal only knows how to present Pro. startPlanCheckout has always taken a
+   * plan; it simply had no caller outside this file.
+   */
+  async function checkout(plan, btn) {
+    return startPlanCheckout(plan, btn || null, null);
+  }
+
+  window.PricingModal = { open, close, checkout };
 })();

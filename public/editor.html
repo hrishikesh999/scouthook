@@ -232,8 +232,11 @@
              An overlay rather than a strip: the post stays visible through the
              glass because it is the argument. Nothing is taken away — the close
              button returns the editor untouched, and the post is still fully
-             editable, schedulable and publishable. -->
-        <div id="free-tier-overlay" hidden role="region" aria-label="Upgrade to Pro">
+             editable, schedulable and publishable.
+
+             The plan cards are rendered from /api/billing/config, not hard-coded,
+             so a plan with no Paddle price configured simply does not appear. -->
+        <div id="free-tier-overlay" hidden role="region" aria-label="Upgrade">
           <div class="fto-panel">
             <button type="button" class="fto-close" id="fto-close" aria-label="Close">&times;</button>
 
@@ -241,21 +244,9 @@
             <p class="fto-heading">The hard part is already behind you.</p>
             <p class="fto-sub">What stops most people isn't ideas, it's consistency. Your ideal client is already there on LinkedIn. The question is &mdash; will you get the next post out?</p>
 
-            <ul class="fto-features">
-              <li><span class="fto-tick" aria-hidden="true">&#10003;</span>Unlimited posts &mdash; never hit a cap</li>
-              <li><span class="fto-tick" aria-hidden="true">&#10003;</span>Repurpose your blogs, PDFs and decks into posts</li>
-              <li><span class="fto-tick" aria-hidden="true">&#10003;</span>Content coach with 10+ post types</li>
-              <li><span class="fto-tick" aria-hidden="true">&#10003;</span>Schedule a month in one sitting</li>
-              <li><span class="fto-tick" aria-hidden="true">&#10003;</span>Unlimited on-brand visuals</li>
-              <li><span class="fto-tick" aria-hidden="true">&#10003;</span>Two workspaces included</li>
-            </ul>
+            <div class="fto-plans" id="fto-plans"></div>
 
-            <div class="fto-actions">
-              <button type="button" class="fto-upgrade">Upgrade to Pro &mdash; $29/mo</button>
-              <span class="fto-cancel">Cancel anytime</span>
-            </div>
-
-            <p class="fto-foot">This post is yours either way &mdash; close this to edit, schedule or publish it.</p>
+            <p class="fto-foot">Cancel anytime. This post is yours either way &mdash; close this to edit, schedule or publish it.</p>
           </div>
         </div>
 
@@ -4469,6 +4460,67 @@ function celebrateFirstPost() {
   }, 180);
 }
 
+/* What each plan says for itself in the upgrade overlay.
+   Copy only — the price, the label and whether a plan is offered at all come
+   from /api/billing/config, which reflects what Paddle is actually configured
+   to charge. Keeping the numbers server-side is deliberate: a price printed
+   here and changed there would show one figure and bill another. */
+const FTO_PLAN_COPY = {
+  pro: {
+    features: [
+      'Unlimited posts — never hit a cap',
+      'Repurpose your blogs, PDFs and decks',
+      'Content coach with 10+ post types',
+      'Schedule a month in one sitting',
+      'Unlimited on-brand visuals',
+      'One workspace',
+    ],
+  },
+  deluxe: {
+    recommended: true,
+    features: [
+      'Everything in Pro, plus:',
+      'Five workspaces instead of one',
+      'Manage up to 5 LinkedIn accounts',
+      'Team members',
+      'A separate voice, vault and schedule per brand',
+      'One subscription across all of them',
+    ],
+  },
+};
+
+function renderFreeTierPlans(plans) {
+  const wrap = document.getElementById('fto-plans');
+  if (!wrap) return;
+
+  wrap.innerHTML = plans.map(p => {
+    const copy = FTO_PLAN_COPY[p.plan] || { features: [] };
+    const feats = copy.features.map(f =>
+      `<li><span class="ftp-tick" aria-hidden="true">&#10003;</span>${escHtml(f)}</li>`
+    ).join('');
+    return `
+      <div class="fto-plan${copy.recommended ? ' fto-plan--rec' : ''}">
+        ${copy.recommended ? '<span class="fto-rec">Recommended</span>' : ''}
+        <p class="fto-plan-name">${escHtml(p.label)}</p>
+        <p class="fto-plan-price"><strong>$${escHtml(String(p.price))}</strong> / month</p>
+        <p class="fto-plan-tag">${escHtml(p.tagline || '')}</p>
+        <button type="button" class="fto-choose" data-plan="${escHtml(p.plan)}">Choose ${escHtml(p.label)}</button>
+        <ul class="fto-plan-features">${feats}</ul>
+      </div>`;
+  }).join('');
+
+  wrap.querySelectorAll('.fto-choose').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const plan = btn.dataset.plan;
+      // Straight to Paddle checkout for the chosen plan. Routing through the
+      // pricing modal would make the user pick a plan twice, and that modal
+      // only knows how to present Pro.
+      if (window.PricingModal?.checkout) window.PricingModal.checkout(plan, btn);
+      else window.location.href = `/billing.html?upgrade=1&plan=${encodeURIComponent(plan)}`;
+    });
+  });
+}
+
 /* The account just spent its last free post on the post now on screen.
    An overlay over the editor rather than a strip beneath it: the post reads
    through the glass because the post IS the argument — it is the thing that
@@ -4480,7 +4532,7 @@ function showFreeTierPanel() {
   if (!overlay) return;
 
   // Claim the ask for this screen, so the site-wide cap-reached bar does not say
-  // the same thing a few hundred pixels higher. Set before the fetch below and
+  // the same thing a few hundred pixels higher. Set before the fetches below and
   // paired with removing an already-rendered bar, because account-bar.js decides
   // asynchronously and can land either side of this function.
   document.body.dataset.freeTierAsk = '1';
@@ -4504,6 +4556,17 @@ function showFreeTierPanel() {
     })
     .catch(() => { /* the default reads correctly for the default cap */ });
 
+  fetch('/api/billing/config', { credentials: 'same-origin' })
+    .then(r => r.json())
+    .then(cfg => {
+      const plans = Array.isArray(cfg?.plans) ? cfg.plans : [];
+      // No configured price means no purchasable plan. Showing the ask with no
+      // way to act on it is worse than not showing it at all.
+      if (!plans.length) { overlay.hidden = true; return; }
+      renderFreeTierPlans(plans);
+    })
+    .catch(() => { overlay.hidden = true; });
+
   const close = () => {
     overlay.hidden = true;
     document.removeEventListener('keydown', onKey);
@@ -4514,11 +4577,6 @@ function showFreeTierPanel() {
   // Clicking the glass closes; clicking inside the panel must not.
   overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
   document.addEventListener('keydown', onKey);
-
-  overlay.querySelector('.fto-upgrade')?.addEventListener('click', () => {
-    if (window.PricingModal) window.PricingModal.open({ feature: 'generate' });
-    else window.location.href = '/billing.html?upgrade=1';
-  });
 
   // After the post has painted and any celebration has fired, so the ask never
   // lands on top of the thing it is asking about.

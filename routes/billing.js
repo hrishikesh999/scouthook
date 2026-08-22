@@ -11,13 +11,16 @@ const {
   getUserSubscription,
   getPaddleCustomerId,
   getFoundingTierInfo,
+  planForPriceId,
+  planCatalogEntry,
+  purchasablePlans,
   canGeneratePost,
   canGenerateVisual,
   canUploadVaultDoc,
   upsertSubscription,
 } = require('../services/subscription');
 const { enforceWorkspaceLimitGrace, clearWorkspaceGracePeriods } = require('../lib/workspaceUtils');
-const { rankPlan, getWorkspaceLimit } = require('../lib/planFeatures');
+const { rankPlan, getWorkspaceLimit, isPaidPlan } = require('../lib/planFeatures');
 const { getUserPlan } = require('../services/subscription');
 const { db: billingDb } = require('../db');
 
@@ -74,10 +77,17 @@ router.get('/config', async (req, res) => {
     ok: true,
     clientToken:    process.env.PADDLE_CLIENT_TOKEN || '',
     env:            paddleEnv === Environment.production ? 'production' : 'sandbox',
-    // priceIdMonthly returns the *currently active* tier price ID (29/39)
+    // priceIdMonthly / proMonthlyPrice describe Pro specifically, and predate
+    // there being more than one purchasable plan. Kept for existing callers.
     priceIdMonthly:  tierInfo.priceId,
     priceIdYearly:   process.env.PADDLE_PRICE_ID_YEARLY || '',
     proMonthlyPrice:  tierInfo.price,
+    // Every plan the UI may offer. A plan with no Paddle price configured is
+    // absent from this list, so the UI cannot render a card that leads to a
+    // checkout we cannot open.
+    plans: purchasablePlans().map(p => ({
+      plan: p.plan, label: p.label, price: p.price, tagline: p.tagline,
+    })),
   });
 });
 
@@ -94,11 +104,6 @@ router.get('/subscription', requireAuth, async (req, res) => {
 
   // Check if a live refresh is needed before reading from DB
   const { db } = require('../db');
-  const proPriceIds = [
-    process.env.PADDLE_PRICE_ID_PRO,
-    process.env.PADDLE_PRICE_ID_YEARLY,
-  ].filter(Boolean);
-
   try {
     const row = await db.prepare(
       'SELECT paddle_customer_id, paddle_subscription_id, status, current_period_end, updated_at FROM user_subscriptions WHERE user_id = ?'
@@ -122,7 +127,7 @@ router.get('/subscription', requireAuth, async (req, res) => {
               ? (subscription.items?.find(i => i.price?.id !== addonPriceIdStale) ?? subscription.items?.[0])
               : subscription.items?.[0];
             const priceId = basePlanItemStale?.price?.id ?? null;
-            const plan    = !priceId ? 'pro' : (proPriceIds.includes(priceId) ? 'pro' : 'expired');
+            const plan    = planForPriceId(priceId) || 'pro'; // unknown price → assume paid, never downgrade on a missing env var
             await upsertSubscription({
               userId,
               paddleCustomerId:     subscription.customerId,
@@ -152,7 +157,7 @@ router.get('/subscription', requireAuth, async (req, res) => {
             // subscription state (e.g. on renewal, plan change, or cancellation).
             getUserEmailInfo(userId).then(user => {
               if (!user) return;
-              if (['solo', 'pro'].includes(plan) && ['active', 'trialing'].includes(subscription.status)) {
+              if (isPaidPlan(plan) && ['active', 'trialing'].includes(subscription.status)) {
                 mailerlite.upgradeSubscriberToPaid(user.email, user.name).catch(() => {});
               } else if (['canceled', 'past_due', 'paused'].includes(subscription.status)) {
                 mailerlite.downgradeSubscriber(user.email, user.name).catch(() => {});
@@ -198,7 +203,7 @@ router.get('/subscription', requireAuth, async (req, res) => {
 
           if (recovered) {
             const priceId = recovered.items?.[0]?.price?.id ?? null;
-            const plan    = !priceId ? 'pro' : (proPriceIds.includes(priceId) ? 'pro' : 'expired');
+            const plan    = planForPriceId(priceId) || 'pro'; // unknown price → assume paid, never downgrade on a missing env var
             await upsertSubscription({
               userId,
               paddleCustomerId:     recovered.customerId,
@@ -396,11 +401,6 @@ router.post('/sync', requireAuth, async (req, res) => {
 
   const paddle = getPaddle();
 
-  const proPriceIds = [
-    process.env.PADDLE_PRICE_ID_PRO,
-    process.env.PADDLE_PRICE_ID_YEARLY,
-  ].filter(Boolean);
-
   let subscription = null;
 
   try {
@@ -471,12 +471,11 @@ router.post('/sync', requireAuth, async (req, res) => {
   const priceId = basePlanItem?.price?.id ?? null;
   // Mirror the webhook's safe default: if priceId is absent from the REST payload
   // or not yet in our env list, keep the user on 'pro' rather than downgrading them.
-  let plan;
-  if (!priceId) {
-    plan = 'pro'; // unknown price ID — assume pro, webhook will correct if wrong
-  } else {
-    plan = proPriceIds.includes(priceId) ? 'pro' : 'expired';
-  }
+  // An unrecognised price must never downgrade a paying customer: the likeliest
+  // cause is a price ID we have not put in the environment yet, not a lapsed
+  // subscription. Defaulting to 'pro' keeps them served; the webhook corrects it
+  // if it really is something else.
+  const plan = planForPriceId(priceId) || 'pro';
 
   // Capture existing plan before the upsert so we can detect plan changes.
   const prevSub = await getUserSubscription(userId).catch(() => null);
@@ -548,7 +547,7 @@ router.post('/sync', requireAuth, async (req, res) => {
   // Sync subscription state to Mailerlite (fire-and-forget, never throws).
   getUserEmailInfo(userId).then(user => {
     if (!user) return;
-    if (['solo', 'pro'].includes(plan) && ['active', 'trialing'].includes(subscription.status)) {
+    if (isPaidPlan(plan) && ['active', 'trialing'].includes(subscription.status)) {
       mailerlite.upgradeSubscriberToPaid(user.email, user.name).catch(() => {});
     } else if (['canceled', 'past_due', 'paused'].includes(subscription.status)) {
       mailerlite.downgradeSubscriber(user.email, user.name).catch(() => {});
@@ -568,11 +567,14 @@ router.post('/sync', requireAuth, async (req, res) => {
 // ---------------------------------------------------------------------------
 router.post('/upgrade', requireAuth, async (req, res) => {
   const { plan } = req.body || {};
-  if (!['pro'].includes(plan)) { // 'solo' is not currently available for purchase
+  // Only plans in the catalog with a configured Paddle price. 'solo' is not in
+  // the catalog and so is not purchasable; Deluxe becomes purchasable the moment
+  // PADDLE_PRICE_ID_DELUXE is set, with no code change.
+  const entry = planCatalogEntry(plan);
+  if (!entry) {
     return res.status(400).json({ ok: false, error: 'invalid_plan' });
   }
-  const tierInfo = await getFoundingTierInfo();
-  const priceId = tierInfo.priceId;
+  const priceId = entry.priceId;
   if (!priceId) {
     return res.status(500).json({ ok: false, error: 'price_not_configured' });
   }

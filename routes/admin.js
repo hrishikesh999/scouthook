@@ -9,6 +9,7 @@ const {
   INTERNAL_POST_CAP_PRO,
   INTERNAL_VISUAL_CAP_EXPIRED, INTERNAL_VISUAL_CAP_PRO,
 } = require('../services/subscription');
+const { isPaidPlan } = require('../lib/planFeatures');
 const mailerlite = require('../services/mailerlite');
 const { getUserEmailInfo } = require('../emails');
 
@@ -292,7 +293,7 @@ router.post('/sync-subscription', requireAdminPassword, (req, res) => {
     // Sync MailerLite
     getUserEmailInfo(userId).then(user => {
       if (!user) return;
-      if (['solo', 'pro'].includes(plan) && ['active', 'trialing'].includes(subscription.status)) {
+      if (isPaidPlan(plan) && ['active', 'trialing'].includes(subscription.status)) {
         mailerlite.upgradeSubscriberToPaid(user.email, user.name).catch(() => {});
       } else if (['canceled', 'past_due', 'paused'].includes(subscription.status)) {
         mailerlite.downgradeSubscriber(user.email, user.name).catch(() => {});
@@ -535,7 +536,7 @@ router.get('/dashboard/metrics', requireAdminPassword, (req, res) => {
             FROM generated_posts gp
             JOIN user_subscriptions us ON us.user_id = gp.user_id
             WHERE gp.passed_gate = 1
-              AND us.plan NOT IN ('solo', 'pro')
+              AND us.plan NOT IN ('solo', 'pro', 'deluxe')
               AND gp.created_at >= COALESCE(us.free_tier_started_at, '-infinity'::timestamptz)
           ) ranked
           WHERE rn = free_posts_limit
@@ -710,7 +711,7 @@ router.get('/users/:userId', requireAdminPassword, (req, res) => {
 
     if (!profile) return res.status(404).json({ ok: false, error: 'user_not_found' });
 
-    const userIsPro = ['solo', 'pro'].includes(subscription?.plan);
+    const userIsPro = isPaidPlan(subscription?.plan);
     const usage = {
       posts_this_month:    parseInt(postsThisMonth?.cnt  ?? 0, 10),
       visuals_this_month:  parseInt(visualsThisMonth?.cnt ?? 0, 10),

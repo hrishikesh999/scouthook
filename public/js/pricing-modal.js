@@ -437,6 +437,11 @@
    */
   const PLAN_COPY = {
     pro: {
+      // The filled green button. Deliberately not the same flag as
+      // `recommended`: the badge marks the plan we point people towards, the
+      // button marks the one we want most to be easy to say yes to, and here
+      // those are different plans.
+      primaryCta: true,
       features: [
         'Unlimited posts — never hit a cap',
         'Repurpose your blogs, PDFs and decks',
@@ -495,7 +500,7 @@
             '<div class="pm-period">per month · cancel anytime</div>' +
             (p.tagline ? '<div class="pm-tagline">' + esc(p.tagline) + '</div>' : '') +
           '</div>' +
-          '<button class="pm-cta ' + (copy.recommended ? 'pm-cta-primary' : 'pm-cta-outline') + '" data-plan-btn="' + esc(p.plan) + '" type="button">Choose ' + esc(p.label) + '</button>' +
+          '<button class="pm-cta ' + (copy.primaryCta ? 'pm-cta-primary' : 'pm-cta-outline') + '" data-plan-btn="' + esc(p.plan) + '" type="button">Choose ' + esc(p.label) + '</button>' +
           '<ul class="pm-card-features">' + feats + '</ul>' +
           '<div class="pm-error" data-error="' + esc(p.plan) + '"></div>' +
         '</div>';

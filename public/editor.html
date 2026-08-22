@@ -1653,27 +1653,20 @@ async function loadHtmlTemplatePicker() {
   previewPane.innerHTML = '<div class="ai-tpl-picker" style="width:100%;align-self:flex-start;overflow-y:auto"><div class="loading-text--padded">Loading templates…</div></div>';
 
   try {
-    const [tplRes, cpRes] = await Promise.all([
-      fetch('/api/html-templates', { credentials: 'include' }),
-      fetch('/api/carousel-packs', { credentials: 'include' }),
-    ]);
+    const tplRes = await fetch('/api/html-templates', { credentials: 'include' });
     const tplData = await tplRes.json();
     _htmlTplAllTemplates = tplData.templates || [];
-    try {
-      const cpData = await cpRes.json();
-      _htmlTplAllCarousels = cpData.packs || [];
-    } catch { _htmlTplAllCarousels = []; }
   } catch {
     previewPane.innerHTML = '<p class="so-extract-error" style="padding:24px">Could not load templates.</p>';
     return;
   }
 
-  if (!_htmlTplAllTemplates.length && !_htmlTplAllCarousels.length) {
+  if (!_htmlTplAllTemplates.length) {
     previewPane.innerHTML = '<p style="padding:24px;color:var(--text-muted)">No design templates available yet.</p>';
     return;
   }
 
-  // Honor a preselected filter (e.g. the "Carousel" entry point) once, then reset
+  // Honor a preselected filter once, then reset
   _htmlTplActiveCategory = _htmlTplInitialCategory || null;
   _htmlTplInitialCategory = null;
   _renderHtmlTplPicker(_htmlTplAllTemplates);
@@ -1682,15 +1675,9 @@ async function loadHtmlTemplatePicker() {
 function _renderHtmlTplPicker(templates) {
   const previewPane = document.getElementById('html-tpl-preview-pane');
   const categories = [...new Set(templates.map(t => t.category).filter(Boolean))];
-  const hasCarousels = _htmlTplAllCarousels && _htmlTplAllCarousels.length > 0;
-
-  const isCarouselFilter = _htmlTplActiveCategory === '__carousel__';
 
   let chipsHtml = '<div class="html-tpl-category-chips">';
   chipsHtml += `<button class="html-tpl-category-chip ${!_htmlTplActiveCategory ? 'active' : ''}" data-cat="">All</button>`;
-  if (hasCarousels) {
-    chipsHtml += `<button class="html-tpl-category-chip ${isCarouselFilter ? 'active' : ''}" data-cat="__carousel__">Carousel</button>`;
-  }
   chipsHtml += categories.map(c =>
     `<button class="html-tpl-category-chip ${_htmlTplActiveCategory === c ? 'active' : ''}" data-cat="${escHtml(c)}">${escHtml(c)}</button>`
   ).join('');
@@ -1698,8 +1685,7 @@ function _renderHtmlTplPicker(templates) {
 
   let gridHtml = '';
 
-  if (!isCarouselFilter) {
-    // Show regular templates (filtered by category or all)
+  {
     const filtered = _htmlTplActiveCategory ? templates.filter(t => t.category === _htmlTplActiveCategory) : templates;
     gridHtml += filtered.map(t => {
       const initials = escHtml((t.name || '?').slice(0, 2).toUpperCase());
@@ -1711,26 +1697,6 @@ function _renderHtmlTplPicker(templates) {
         <div style="padding:8px 12px 10px">
           <div style="font-weight:600;font-size:13px">${escHtml(t.name)}</div>
           ${t.description ? `<div style="font-size:11px;color:var(--text-muted);margin-top:2px">${escHtml(t.description)}</div>` : ''}
-        </div>
-      </div>`;
-    }).join('');
-  }
-
-  if (!_htmlTplActiveCategory || isCarouselFilter) {
-    // Show carousel packs (on "All" or "Carousel" filter)
-    const carousels = _htmlTplAllCarousels || [];
-    gridHtml += carousels.map(p => {
-      const slideCount = (p.slides || []).length;
-      const firstSlide = (p.slides || [])[0];
-      const thumbSrc = firstSlide ? `/api/html-templates/${firstSlide.template_id}/thumbnail` : '';
-      const initials = escHtml((p.name || '?').slice(0, 2).toUpperCase());
-      return `<div class="ai-tpl-card" data-carousel-id="${p.id}" tabindex="0" role="button" aria-label="${escHtml(p.name)}">
-        ${thumbSrc
-          ? `<div style="position:relative"><img src="${thumbSrc}" alt="" loading="lazy" onerror="_tplThumbError(this,'${escHtml(initials)}')" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px 8px 0 0;display:block"><span style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,0.7);color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px">${slideCount} slides</span></div>`
-          : `<div style="width:100%;aspect-ratio:1;background:var(--surface-2);display:flex;align-items:center;justify-content:center;border-radius:8px 8px 0 0"><span style="font-size:24px;font-weight:700;color:var(--text-muted)">${initials}</span></div>`}
-        <div style="padding:8px 12px 10px">
-          <div style="font-weight:600;font-size:13px;display:flex;align-items:center;gap:5px">${escHtml(p.name)} <span style="background:var(--brand,#0f766e);color:#fff;font-size:9px;font-weight:700;padding:1px 6px;border-radius:99px;text-transform:uppercase">Carousel</span></div>
-          ${p.description ? `<div style="font-size:11px;color:var(--text-muted);margin-top:2px">${escHtml(p.description)}</div>` : ''}
         </div>
       </div>`;
     }).join('');
@@ -1753,11 +1719,7 @@ function _renderHtmlTplPicker(templates) {
   // Template card click
   previewPane.querySelectorAll('.ai-tpl-card').forEach(card => {
     const handler = () => {
-      if (card.dataset.carouselId) {
-        _selectCarouselPack(card.dataset.carouselId);
-      } else if (card.dataset.tplId) {
-        _selectHtmlTemplate(card.dataset.tplId);
-      }
+      if (card.dataset.tplId) _selectHtmlTemplate(card.dataset.tplId);
     };
     card.addEventListener('click', handler);
     card.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handler(); } });
@@ -4242,11 +4204,14 @@ function wireVisualButtons() {
     if (scheduleEditLocked) return;
     openHtmlTemplateModal();
   });
-  document.getElementById('vab-carousel-btn').addEventListener('click', () => {
+  // The carousel button is hidden (editor.css) and the template gallery no
+  // longer lists carousel packs, so this listener is inert. Kept, rather than
+  // deleted with the rest of the pipeline, so un-hiding the button is a
+  // one-line change — but it would now open the gallery unfiltered, and
+  // _selectCarouselPack has nothing left to reach it from.
+  document.getElementById('vab-carousel-btn')?.addEventListener('click', () => {
     if (scheduleEditLocked) return;
-    // Opens the template gallery filtered to carousel packs; picking one
-    // launches the Carousel Studio (see _selectCarouselPack).
-    openHtmlTemplateModal({ category: '__carousel__' });
+    openHtmlTemplateModal();
   });
   document.getElementById('vab-media-btn').addEventListener('click', () => {
     if (scheduleEditLocked) return;

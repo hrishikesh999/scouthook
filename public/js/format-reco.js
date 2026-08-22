@@ -5,8 +5,8 @@
  *
  * Renders a single dismissible chip in the editor when the server recommends a
  * richer format than plain text for the current post. Accepting it clicks the
- * editor's existing visual-action-bar control (carousel or media) — no new
- * handoff pipeline — and logs the choice so Phase 4 can validate the recommender.
+ * editor's existing toolbar control — no new handoff pipeline — and logs the
+ * choice so Phase 4 can validate the recommender.
  *
  * Self-contained: window.FormatReco.init({ postId, reco }).
  */
@@ -54,7 +54,10 @@
     panel.querySelector('.freco-accept').addEventListener('click', () => {
       log(postId, reco.format, 'accepted');
       // Reuse the editor's own controls — no bespoke handoff.
-      const targetId = reco.format === 'carousel' ? 'vab-carousel-btn' : 'vab-media-btn';
+      // The floating visual-action bar is gone; Media now lives in the post
+      // toolbar. Carousel recommendations never reach here (see the early
+      // return above), so media is the only target left.
+      const targetId = 'media-library-btn';
       document.getElementById(targetId)?.click();
       panel.hidden = true;
     });

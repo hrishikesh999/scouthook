@@ -13,8 +13,6 @@
       #improver-chat { max-height: 150px !important; }
       #edit-content-wrap { max-width: 100% !important; }
       #edit-main { flex: none !important; width: 100% !important; }
-      #visual-action-bar { display: none !important; }
-      .ptb-group--mobile-visual { display: flex !important; }
     }
     @media (max-width: 767px) {
       /* Account for 56px mobile topbar outside #main-content */
@@ -59,32 +57,6 @@
       color: #0F766E; border-color: #0F766E; background: #f0fdfa;
     }
 
-    /* Visual action bar — positioned at the midpoint between post card right edge and improver left edge.
-       Post card: max-width 720px, centered in #editor.  Improver: 322px from right.
-       The bar sits halfway in the gap between them, using calc() on the right offset. */
-    #visual-action-bar {
-      position: absolute; top: 65px; z-index: 10;
-      right: calc(322px + (100% - 322px - 720px) / 2 - 32px);
-      display: flex; flex-direction: column; align-items: center;
-      gap: 10px;
-    }
-    .vab-btn {
-      display: flex; flex-direction: column; align-items: center; justify-content: center;
-      gap: 3px; width: 64px; height: 62px; padding: 0 6px; box-sizing: border-box;
-      border: 1.5px solid var(--border);
-      border-radius: 12px; background: var(--bg-surface, #fff); cursor: pointer;
-      color: var(--text-secondary); transition: border-color 0.15s, background 0.15s, color 0.15s, transform 0.1s;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
-    }
-    /* Carousel entry point hidden. The whole carousel pipeline — packs, Studio,
-       rendering — is left intact behind it; this is the one control that reaches
-       it from the editor, so hiding it here takes the feature off the surface
-       without unpicking anything. format-reco.js drops the matching "make it a
-       carousel" nudge for the same reason: accepting it clicks this button. */
-    #vab-carousel-btn { display: none; }
-    .vab-btn:hover { border-color: var(--brand, #0f766e); color: var(--brand, #0f766e); background: rgba(15,118,110,0.04); transform: scale(1.05); }
-    .vab-btn:active { transform: scale(0.97); }
-    .vab-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; line-height: 1; white-space: nowrap; }
     #linkedin-preview:not([hidden]) { display: block; padding: 28px 64px 48px; }
     .post-body-wrapper { position: relative; }
     #post-body-backdrop {
@@ -174,10 +146,33 @@
     #post-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 2px; padding: 6px 10px; border-bottom: 1px solid var(--border); background: var(--bg-surface, #fff); }
     .ptb-group { display: flex; align-items: center; gap: 1px; }
     .ptb-divider { width: 1px; height: 18px; background: var(--border); margin: 0 6px; flex-shrink: 0; }
+
     .ptb-btn { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border: none; background: none; border-radius: 5px; cursor: pointer; font-size: 13px; line-height: 1; color: var(--text-secondary); transition: background 0.1s, color 0.1s; flex-shrink: 0; font-family: var(--font-sans, inherit); }
     .ptb-btn:hover { background: var(--bg-subtle, #f3f4f6); color: var(--text-heading); }
     .ptb-btn.active { background: var(--bg-subtle, #f3f4f6); color: var(--brand, #2563eb); }
     .ptb-btn.disabled { opacity: 0.35; cursor: not-allowed; pointer-events: none; }
+
+    /* Templates and Media. Previously a floating card stack absolutely
+       positioned over the post — its offset was calc()'d from a hard-coded
+       322px improver rail, so collapsing that rail left it sitting on top of
+       the author's text. In the toolbar it cannot overlap anything, and it sits
+       with the other controls that put something into the post.
+       Pushed to the right edge and labelled, so it stays prominent without
+       competing with the formatting controls for the same corner. */
+    .ptb-group--visual { margin-left: auto; gap: 4px; }
+    .ptb-btn.ptb-btn--labelled {
+      width: auto; height: 30px; padding: 0 10px; gap: 6px;
+      display: inline-flex; align-items: center;
+      font-size: 12px; font-weight: 600; color: var(--text-secondary);
+      border: 1px solid var(--border); border-radius: 7px;
+    }
+    .ptb-btn.ptb-btn--labelled:hover { color: var(--brand, #0f766e); border-color: var(--brand, #0f766e); background: rgba(15,118,110,0.04); }
+    @media (max-width: 600px) {
+      /* Labels are the first thing to go when the toolbar runs out of room. */
+      .ptb-btn.ptb-btn--labelled span { display: none; }
+      .ptb-btn.ptb-btn--labelled { padding: 0 8px; }
+    }
+
 
     /* ── Fade-in animation for fresh-from-generation editor ── */
     @keyframes editorFadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }

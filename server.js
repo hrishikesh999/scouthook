@@ -12,6 +12,7 @@ const session = require('express-session');
 const connectPgSimple = require('connect-pg-simple');
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
+const accessControl = require('./lib/accessControl');
 const { db } = require('./db');
 const { pool: dbPool } = require('./db/pg');
 const { sendEmail, sendEmailToUser } = require('./emails');
@@ -220,6 +221,15 @@ if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
     console.log(`[auth/google] login email=${email} googleId=${googleId} userId=${googleUserId}`);
     if (!googleUserId) return done(null, false);
 
+    // Sunset: the product is closed to everyone but the operator. Reject here,
+    // in the verify callback, rather than before the OAuth redirect — the email
+    // is the thing being gated on and Google only tells us who they are at this
+    // point. No user row is created for a rejected sign-in.
+    if (!accessControl.isAllowedEmail(email)) {
+      console.log(`[auth/google] sunset: blocked sign-in for ${email}`);
+      return done(null, false);
+    }
+
     try {
       const displayName = profile?.displayName || email || 'User';
 
@@ -337,6 +347,16 @@ if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
 
 app.use(passport.initialize());
 app.use(passport.session());
+
+// Sunset: revoke sessions that predate the lockdown. Session cookies live for
+// 14 days, so without this a user who was signed in before the change keeps a
+// working app until their cookie happens to expire. req.user carries the email
+// on both auth paths, so this costs no query. Logging out and continuing (not
+// erroring) lets the normal redirect-to-login behaviour take over.
+app.use((req, res, next) => {
+  if (!req.user || accessControl.isAllowedEmail(req.user.email)) return next();
+  req.logout(() => req.session?.destroy(() => next()));
+});
 
 // Affiliate referral cookie — capture ?ref=sh_XXXXXXXX and store as a 30-day cookie.
 app.use((req, res, next) => {
@@ -514,7 +534,12 @@ app.get('/auth/google/callback',
     if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
       return res.redirect('/login.html?error=google_not_configured');
     }
-    return passport.authenticate('google', { failureRedirect: '/login.html?error=oauth_failed' })(req, res, next);
+    // While sunset is on, a Google failure is overwhelmingly a blocked account
+    // rather than a broken handshake, so send them to the message that explains it.
+    const failureRedirect = accessControl.sunsetActive()
+      ? '/login.html?error=sunset'
+      : '/login.html?error=oauth_failed';
+    return passport.authenticate('google', { failureRedirect })(req, res, next);
   },
   async (req, res) => {
     // Same LinkedIn liveness probe the email-login path runs (see establishSession

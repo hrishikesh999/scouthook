@@ -628,7 +628,7 @@
   })();
   </script>
 </head>
-<body>
+<body data-sunset="signup">
 
   <!-- Icon sprite — the echo cards repeat these across the variants, so define
        once and <use> them rather than inlining copies. -->
@@ -1124,7 +1124,11 @@
         btn.textContent = 'Creating account…';
 
         try {
-          const res  = await fetch('/auth/signup', {
+          // Sunset: signup is closed to the public. A key in the page URL is
+          // forwarded to the API, which is how the operator still creates accounts.
+          const _k = new URLSearchParams(location.search).get('key');
+          const _signupUrl = '/auth/signup' + (_k ? '?key=' + encodeURIComponent(_k) : '');
+          const res  = await fetch(_signupUrl, {
             method:  'POST',
             headers: { 'Content-Type': 'application/json' },
             body:    JSON.stringify({ email, password }),
@@ -1189,5 +1193,6 @@
   })();
   </script>
 
+  <script src="/js/sunset.js"></script>
 </body>
 </html>

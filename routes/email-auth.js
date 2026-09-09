@@ -8,6 +8,7 @@ const router     = express.Router();
 const { db }     = require('../db');
 const { sendEmail, sendEmailToUser, logEmailSent } = require('../emails');
 const { seedFreeSubscription } = require('../services/subscription');
+const accessControl = require('../lib/accessControl');
 
 const APP_URL = process.env.APP_URL || '';
 
@@ -106,6 +107,14 @@ const resendLimiter = rateLimit({
 router.post('/signup', async (req, res) => {
   try {
     const { name, email, password } = req.body || {};
+
+    // Sunset: public signup is closed. The form still works for anyone who
+    // knows the key, which is how the operator creates accounts now — but an
+    // unkeyed request is refused before any row, hash or email is created.
+    const signupKey = (req.query && req.query.key) || (req.body && req.body.key);
+    if (!accessControl.signupSecretOk(signupKey)) {
+      return res.status(403).json({ ok: false, error: 'signup_closed' });
+    }
 
     const rawName = typeof name === 'string' ? name.trim() : '';
     if (rawName.length > 100) {
@@ -276,6 +285,14 @@ router.post('/login', loginLimiter, async (req, res) => {
     }
 
     const normalizedEmail = email.trim().toLowerCase();
+
+    // Sunset: only the operator's accounts may sign in. Checked before the
+    // credential lookup so no bcrypt work happens for a closed account, and
+    // the response says plainly that the product closed rather than implying
+    // the password is wrong.
+    if (!accessControl.isAllowedEmail(normalizedEmail)) {
+      return res.status(403).json({ ok: false, error: 'sunset' });
+    }
     const row = await db.prepare(`
       SELECT ap.*, up.display_name
       FROM auth_providers ap
@@ -354,7 +371,11 @@ router.post('/forgot-password', async (req, res) => {
   try {
     const { email } = req.body || {};
     // Always return 200 — prevent email enumeration
-    const normalizedEmail = isValidEmail(email) ? email.trim().toLowerCase() : null;
+    const requested = isValidEmail(email) ? email.trim().toLowerCase() : null;
+    // Sunset: a closed account has nothing to come back to, so no mail is sent.
+    // Nulling the address here rather than returning early preserves the
+    // unconditional 200 above — the anti-enumeration contract is unchanged.
+    const normalizedEmail = requested && accessControl.isAllowedEmail(requested) ? requested : null;
 
     if (normalizedEmail) {
       // First try a native email-auth account.
@@ -493,7 +514,11 @@ router.post('/resend-verification', resendLimiter, async (req, res) => {
   try {
     const { email } = req.body || {};
     // Always return 200 — prevent enumeration
-    const normalizedEmail = isValidEmail(email) ? email.trim().toLowerCase() : null;
+    const requested = isValidEmail(email) ? email.trim().toLowerCase() : null;
+    // Sunset: a closed account has nothing to come back to, so no mail is sent.
+    // Nulling the address here rather than returning early preserves the
+    // unconditional 200 above — the anti-enumeration contract is unchanged.
+    const normalizedEmail = requested && accessControl.isAllowedEmail(requested) ? requested : null;
 
     if (normalizedEmail) {
       const row = await db.prepare(`

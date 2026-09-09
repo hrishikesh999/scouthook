@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="/css/main.css" />
   <link rel="stylesheet" href="/css/signup.css" />
 </head>
-<body class="signup-page">
+<body class="signup-page" data-sunset="login">
 
   <div class="su-stack">
     <img src="/images/scout-hook-logo.png" alt="ScoutHook" class="su-logo" />
@@ -84,6 +84,7 @@
     const urlError = params.get('error');
     if (urlError) {
       const msg =
+        urlError === 'sunset'                  ? 'ScoutHook closed on Wednesday 16 September and accounts are no longer active. Thank you for using it.' :
         urlError === 'google_not_configured'   ? 'Google sign-in is not configured on the server.' :
         urlError === 'oauth_failed'            ? 'Google sign-in failed. Please try again.' :
         urlError === 'invalid_or_expired_token' ? 'This link is invalid or has expired. Please try again.' :
@@ -101,6 +102,7 @@
       email_not_verified:   'Please verify your email before signing in. Check your inbox.',
       too_many_attempts:    'Too many failed attempts. Please wait 15 minutes before trying again.',
       login_failed:         'Sign in failed. Please try again.',
+      sunset:               'ScoutHook closed on Wednesday 16 September and accounts are no longer active. Thank you for using it.',
     };
 
     document.getElementById('loginForm').addEventListener('submit', async function (e) {
@@ -145,5 +147,6 @@
   })();
   </script>
 
+  <script src="/js/sunset.js"></script>
 </body>
 </html>

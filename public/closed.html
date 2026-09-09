@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ScoutHook — Closed</title>
+  <meta name="description" content="ScoutHook has closed. Thank you to everyone who used it." />
+  <!-- No longer a live product: keep this page out of search results. -->
+  <meta name="robots" content="noindex" />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/main.css" />
+  <link rel="stylesheet" href="/css/signup.css" />
+  <style>
+    .cl-body   { font-size:15px; line-height:1.65; color:#374151; text-align:left; }
+    .cl-body p { margin:0 0 14px; }
+    .cl-sign   { margin:22px 0 0; padding-top:16px; border-top:1px solid #eaecef;
+                 font-size:14px; line-height:1.5; color:#6b7280; }
+    .cl-sign strong { display:block; color:#1f2328; font-weight:600; }
+    .cl-foot   { margin:18px 0 0; font-size:13px; color:#9aa0a6; }
+    .cl-foot a { color:#0F766E; }
+  </style>
+</head>
+<body class="signup-page">
+
+  <div class="su-stack">
+    <img src="/images/scout-hook-logo.png" alt="ScoutHook" class="su-logo" />
+
+    <div class="su-card" role="region" aria-label="ScoutHook has closed">
+      <h1 class="su-headline">ScoutHook is <span class="accent">closed</span></h1>
+
+      <div class="cl-body">
+        <p id="cl-status">ScoutHook closed on Wednesday 16 September. It is no longer open to new accounts, and existing accounts have been closed.</p>
+
+        <p>ScoutHook helped founders and consultants turn their ideas into LinkedIn posts that sounded like them rather than like AI.</p>
+
+        <p>Building it taught us something we didn&rsquo;t expect. We assumed the hard part of posting on LinkedIn was the writing, so that&rsquo;s what we built for. As things turned out, it wasn&rsquo;t the problem.</p>
+
+        <p>Thank you to everyone who gave it a try.</p>
+
+        <div class="cl-sign">
+          <strong>Hrishikesh and Chirag Jobanputra</strong>
+          Co-founders, ScoutHook
+        </div>
+
+        <p class="cl-foot">Questions? <a href="mailto:contact@scouthook.com">contact@scouthook.com</a></p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Before the closing date the page is a heads-up, not an epitaph. One
+    // element changes tense so the page is correct on both sides of the 16th
+    // without anyone having to edit it on the day.
+    (function () {
+      var CLOSE_AT = new Date('2026-09-16T00:00:00+05:30');
+      if (Date.now() >= CLOSE_AT.getTime()) return;
+      var h = document.querySelector('.su-headline');
+      var s = document.getElementById('cl-status');
+      if (h) h.innerHTML = 'ScoutHook is <span class="accent">closing</span>';
+      if (s) s.textContent = 'ScoutHook is closing on Wednesday 16 September. '
+        + 'We are no longer accepting new accounts, and existing accounts will be closed on that date.';
+    })();
+  </script>
+
+</body>
+</html>

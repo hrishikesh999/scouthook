@@ -7,49 +7,17 @@ const storage = require('./storage');
 const { readSlotManifest, injectSlots } = require('./templateSlotInjector');
 const sharp = require('sharp');
 
-const FLY_RENDER_URL    = process.env.FLY_RENDER_URL    || '';
-const FLY_RENDER_SECRET = process.env.FLY_RENDER_SECRET || '';
-
 // ---------------------------------------------------------------------------
 // Render service call
 // ---------------------------------------------------------------------------
 
-async function callRenderService(html, width, height) {
-  if (!FLY_RENDER_URL) throw Object.assign(new Error('render_service_not_configured'), { status: 503 });
-
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 15_000);
-
-  let res;
-  try {
-    res = await fetch(`${FLY_RENDER_URL}/render`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Render-Secret': FLY_RENDER_SECRET,
-      },
-      body: JSON.stringify({ html, width, height }),
-      signal: controller.signal,
-    });
-  } catch (err) {
-    clearTimeout(timer);
-    const reason = err.name === 'AbortError'
-      ? 'render_service_timeout (15s)'
-      : `render_service_unavailable: ${err.message}`;
-    throw Object.assign(new Error(reason), { status: 503, cause: err });
-  }
-  clearTimeout(timer);
-
-  if (!res.ok) {
-    const detail = await res.text().catch(() => '');
-    const msg = detail
-      ? `render_service_error (${res.status}): ${detail.slice(0, 200)}`
-      : `render_service_error (${res.status})`;
-    throw Object.assign(new Error(msg), { status: 503 });
-  }
-
-  const arrayBuf = await res.arrayBuffer();
-  return Buffer.from(arrayBuf);
+// The Puppeteer service that turned template HTML into PNGs ran on a Fly
+// machine, shut down when ScoutHook closed to the public. Nothing replaces it.
+// Kept as a throwing stub rather than deleted: five call sites still reference
+// it, and a clear 503 is a better answer than a request hanging on a host that
+// no longer resolves.
+async function callRenderService() {
+  throw Object.assign(new Error('render_service_removed'), { status: 503 });
 }
 
 // ---------------------------------------------------------------------------

@@ -1249,10 +1249,6 @@ if (require.main === module) (async () => {
     console.warn('[seed] skipped/failed:', e.message);
   }
 
-  if (!process.env.FLY_RENDER_URL) {
-    console.warn('[startup] FLY_RENDER_URL not set — HTML template rendering will fail at runtime');
-  }
-
   const httpServer = app.listen(PORT, () => {
     console.log(`[scouthook] Server running on http://localhost:${PORT}`);
     console.log(`[scouthook] Admin UI: http://localhost:${PORT}/admin.html`);

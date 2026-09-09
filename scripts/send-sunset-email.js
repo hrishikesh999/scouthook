@@ -25,6 +25,12 @@ const TEMPLATE = 'sunset';
 const SEND     = process.argv.includes('--send');
 const limitArg = process.argv.indexOf('--limit');
 const LIMIT    = limitArg > -1 ? parseInt(process.argv[limitArg + 1], 10) : null;
+// --only <email> sends a single message to one address, bypassing the recipient
+// query entirely. It exists so the real thing can be proved against a real
+// inbox — rendering, sender reputation, the unsubscribe footer — before 139
+// strangers see it. It deliberately ignores the operator-address exclusion.
+const onlyArg  = process.argv.indexOf('--only');
+const ONLY     = onlyArg > -1 ? (process.argv[onlyArg + 1] || '').trim() : null;
 
 // Resend's default rate limit is 2 requests/second; 600ms leaves headroom.
 const DELAY_MS = 600;
@@ -56,8 +62,19 @@ async function main() {
     process.exit(1);
   }
 
-  let list = await recipients();
-  if (LIMIT) list = list.slice(0, LIMIT);
+  let list;
+  if (ONLY) {
+    const row = await db.prepare(
+      'SELECT user_id, email, display_name FROM user_profiles WHERE lower(email) = lower(?) LIMIT 1'
+    ).get(ONLY);
+    // An address with no account still gets the mail, just without a first name
+    // — the point of --only is to see the message land somewhere real.
+    list = [row || { user_id: null, email: ONLY, display_name: '' }];
+    console.log(row ? `--only: matched account ${row.user_id}` : '--only: no account for that address, sending anyway');
+  } else {
+    list = await recipients();
+    if (LIMIT) list = list.slice(0, LIMIT);
+  }
 
   console.log(`${SEND ? 'SENDING' : 'DRY RUN'} — ${list.length} recipient(s), template '${TEMPLATE}'`);
   if (!SEND) {
@@ -76,7 +93,9 @@ async function main() {
         app_url: process.env.APP_URL || 'https://scouthook.com',
       });
       if (ok) {
-        await logEmailSent(r.user_id, TEMPLATE, 'sunset-2026');
+        // A --only test is not logged: logging it would mark that user as
+        // already-sent and silently skip them in the real run.
+        if (!ONLY && r.user_id) await logEmailSent(r.user_id, TEMPLATE, 'sunset-2026');
         sent++;
         console.log(`  sent -> ${r.email}`);
       } else {

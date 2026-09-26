@@ -955,7 +955,7 @@ if (storage.getBackend() === 'local') {
       }
     } catch (e) { /* non-fatal */ }
   }
-  if (process.env.NODE_ENV !== 'test') {
+  if (process.env.NODE_ENV !== 'test' && !accessControl.sunsetActive()) {
     setInterval(cleanGeneratedFiles, 60 * 60 * 1000);
   }
 }
@@ -979,7 +979,7 @@ async function metricsRetentionCleanup() {
   }
 }
 // Run once on startup, then daily
-if (process.env.NODE_ENV !== 'test') {
+if (process.env.NODE_ENV !== 'test' && !accessControl.sunsetActive()) {
   metricsRetentionCleanup();
   setInterval(metricsRetentionCleanup, 24 * 60 * 60 * 1000);
 }
@@ -1011,7 +1011,7 @@ async function sendExpiringSoonEmails() {
   }
 }
 // Stagger slightly from metrics cleanup — run daily at a random offset from startup.
-if (process.env.NODE_ENV !== 'test') {
+if (process.env.NODE_ENV !== 'test' && !accessControl.sunsetActive()) {
   setTimeout(() => {
     sendExpiringSoonEmails();
     setInterval(sendExpiringSoonEmails, 24 * 60 * 60 * 1000);
@@ -1063,7 +1063,7 @@ async function sendWeeklyDigestEmails() {
   }
 }
 // Check once every 6 hours — the Sunday guard inside ensures it only sends on Sunday.
-if (process.env.NODE_ENV !== 'test') {
+if (process.env.NODE_ENV !== 'test' && !accessControl.sunsetActive()) {
   setInterval(sendWeeklyDigestEmails, 6 * 60 * 60 * 1000);
 }
 
@@ -1104,7 +1104,7 @@ async function syncExpiredSubscriptions() {
   }
 }
 // Run 15 minutes after startup so Paddle SDK is warmed up, then daily.
-if (process.env.NODE_ENV !== 'test') {
+if (process.env.NODE_ENV !== 'test' && !accessControl.sunsetActive()) {
   setTimeout(() => {
     syncExpiredSubscriptions();
     setInterval(syncExpiredSubscriptions, 24 * 60 * 60 * 1000);
@@ -1119,7 +1119,7 @@ if (process.env.NODE_ENV !== 'test') {
 // time-based check is the 3-day "still hasn't upgraded" follow-up, since
 // "did nothing after hitting the cap" can't be event-triggered.
 // ---------------------------------------------------------------------------
-if (process.env.NODE_ENV !== 'test') {
+if (process.env.NODE_ENV !== 'test' && !accessControl.sunsetActive()) {
   const { runFreeCapFollowupCron } = require('./services/postLifecycleEmails');
   setTimeout(() => {
     runFreeCapFollowupCron();
@@ -1154,7 +1154,7 @@ async function sendLinkedInTokenExpiryWarnings() {
   }
 }
 // Runs daily — offset 30 min from startup to stagger with other crons.
-if (process.env.NODE_ENV !== 'test') {
+if (process.env.NODE_ENV !== 'test' && !accessControl.sunsetActive()) {
   setTimeout(() => {
     sendLinkedInTokenExpiryWarnings();
     setInterval(sendLinkedInTokenExpiryWarnings, 24 * 60 * 60 * 1000);
@@ -1180,7 +1180,7 @@ async function runLinkedInHealthSweep() {
 }
 // Offset 45 min from startup — after the expiry cron, so the two do not compete
 // for LinkedIn's rate limit on boot.
-if (process.env.NODE_ENV !== 'test') {
+if (process.env.NODE_ENV !== 'test' && !accessControl.sunsetActive()) {
   setTimeout(() => {
     runLinkedInHealthSweep();
     setInterval(runLinkedInHealthSweep, 24 * 60 * 60 * 1000);
@@ -1191,7 +1191,7 @@ if (process.env.NODE_ENV !== 'test') {
 // Workspace purge — hard-delete workspaces + clean up stale expired invites daily.
 // ---------------------------------------------------------------------------
 const { purgeExpiredWorkspaces, purgeExpiredInvites } = require('./workers/workspacePurge');
-if (process.env.NODE_ENV !== 'test') {
+if (process.env.NODE_ENV !== 'test' && !accessControl.sunsetActive()) {
   setTimeout(() => {
     purgeExpiredWorkspaces();
     purgeExpiredInvites();
@@ -1205,7 +1205,7 @@ if (process.env.NODE_ENV !== 'test') {
 // layer has fresh reaction/comment counts to learn from (Authentic Client Engine).
 // ---------------------------------------------------------------------------
 const { syncAllWorkspaceMetrics } = require('./workers/metricsSync');
-if (process.env.NODE_ENV !== 'test') {
+if (process.env.NODE_ENV !== 'test' && !accessControl.sunsetActive()) {
   setTimeout(() => {
     syncAllWorkspaceMetrics().catch(err => console.error('[metricsSync] initial run failed:', err.message));
     setInterval(() => {
@@ -1231,7 +1231,7 @@ initRedis().catch(err => {
 // ---------------------------------------------------------------------------
 // Affiliate commission reconciliation (daily Paddle API polling)
 // ---------------------------------------------------------------------------
-if (process.env.NODE_ENV !== 'test') {
+if (process.env.NODE_ENV !== 'test' && !accessControl.sunsetActive()) {
   scheduleReconciler();
 }
 
